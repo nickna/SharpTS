@@ -66,6 +66,32 @@ public class PrimitiveMutablePrototypeTests
         Assert.Equal("1\n", TestHarness.Run(source, ExecutionMode.Interpreted));
     }
 
+    [Fact]
+    public void BooleanPrototype_DeletedToStringFallsBackToObjectPrototype()
+    {
+        var source = """
+            delete (Boolean.prototype as any).toString;
+            console.log(Boolean.prototype.toString());
+            console.log((new Boolean() as any).toString());
+            """;
+        Assert.Equal(
+            "[object Boolean]\n[object Boolean]\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
+    [Fact]
+    public void BooleanPrototype_LooseEqualityUsesFalsePrimitiveValue()
+    {
+        var source = """
+            console.log(Boolean.prototype == false);
+            console.log(false == Boolean.prototype);
+            console.log(Boolean.prototype != false);
+            """;
+        Assert.Equal(
+            "true\ntrue\nfalse\n",
+            TestHarness.Run(source, ExecutionMode.Interpreted));
+    }
+
     // ── String.prototype mutability ──────────────────────────────────────────
 
     [Fact]

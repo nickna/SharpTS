@@ -18,15 +18,40 @@ public class SharpTSDate : ITypeCategorized
     private DateTime _utcDateTime;
     private bool _isInvalid;
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Distinguishes the intrinsic <c>Date.prototype</c> object from ordinary Date
+    /// instances. Both share the Date internal-slot representation, but only the
+    /// intrinsic owns the methods supplied by
+    /// <see cref="SharpTS.Runtime.BuiltIns.DateBuiltIns"/>.
+    /// </summary>
+    internal bool IsPrototype { get; init; }
 
     internal bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     internal object? TryGetExtra(string name) => _extras.GetProperty(name);
-    internal void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    internal void SetExtra(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
     internal bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        bool defined = _extras.DefineProperty(name, descriptor);
+        if (defined) _deletedBuiltIns.Remove(name);
+        return defined;
+    }
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
-    internal bool DeleteExtra(string name) => _extras.DeleteProperty(name);
+    internal bool IsBuiltInDeleted(string name) => _deletedBuiltIns.Contains(name);
+    internal bool DeleteExtra(string name)
+    {
+        bool deleted = _extras.DeleteProperty(name);
+        bool isPrototypeMethod = IsPrototype
+            && SharpTS.Runtime.BuiltIns.DateBuiltIns.GetMember(this, name) is not null;
+        if (isPrototypeMethod) _deletedBuiltIns.Add(name);
+        return deleted || isPrototypeMethod;
+    }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     internal void FreezeOwnProperties() => _extras.Freeze();
     internal void SealOwnProperties() => _extras.Seal();

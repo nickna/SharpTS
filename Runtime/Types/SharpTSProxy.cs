@@ -146,6 +146,21 @@ public class SharpTSProxy : ISharpTSCallable
     }
 
     /// <summary>
+    /// ECMA-262 §10.5.5 [[GetOwnProperty]]. A missing trap forwards to the target;
+    /// an explicit undefined result means the proxy reports no own descriptor.
+    /// The returned descriptor object is intentionally not read through [[Get]].
+    /// </summary>
+    public object? TrapGetOwnPropertyDescriptor(string prop, Interpreter? interp)
+    {
+        var trap = GetTrapCallable("getOwnPropertyDescriptor");
+        if (trap == null)
+            return ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop)
+                ?? SharpTSUndefined.Instance;
+
+        return InvokeTrap(trap, interp, [_target, prop]);
+    }
+
+    /// <summary>
     /// ECMA-262 10.5.11 [[OwnPropertyKeys]] trap. Returns the property names visible
     /// to enumeration (Object.keys / JSON.stringify / for-in). Falls back to forwarding
     /// to the target's own string keys when no ownKeys trap is defined. Throws if the

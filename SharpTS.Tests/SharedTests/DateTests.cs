@@ -548,6 +548,21 @@ public class DateTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
+    [Theory, ModeData]
+    public void Date_PrototypeMethods_AreOwnOnlyOnPrototype(ExecutionMode mode)
+    {
+        var source = """
+            const date = new Date(0);
+            const descriptor = Object.getOwnPropertyDescriptor(Date.prototype, 'toJSON')!;
+            console.log(Object.prototype.hasOwnProperty.call(Date.prototype, 'toJSON'));
+            console.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            console.log(Object.getOwnPropertyDescriptor(date, 'toJSON') === undefined);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue false true\ntrue\n", output);
+    }
+
     [Fact]
     public void Date_ToLocale_NoArgs_RunsStandalone()
     {

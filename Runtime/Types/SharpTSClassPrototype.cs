@@ -66,11 +66,11 @@ public sealed class SharpTSClassPrototype : ISharpTSMutableBuiltIn
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
-        if (_deletedBuiltIns.Contains(name)) return SharpTSUndefined.Instance;
+        if (_deletedBuiltIns.Contains(name)) return null;
         if (name == "constructor") return _klass;
         var method = _klass.FindMethod(name);
         if (method != null) return method;
-        return SharpTSUndefined.Instance;
+        return null;
     }
 
     public override string ToString() => $"[object {_klass.Name}]";

@@ -158,7 +158,8 @@ public partial class Interpreter
 
         // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
         if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable nsVar)
+            get.Object is Expr.Variable nsVar &&
+            nsVar.Name.Lexeme != BuiltInNames.Promise)
         {
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
@@ -450,7 +451,8 @@ public partial class Interpreter
 
         // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
         if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable nsVar)
+            get.Object is Expr.Variable nsVar &&
+            nsVar.Name.Lexeme != BuiltInNames.Promise)
         {
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
@@ -1021,7 +1023,7 @@ public partial class Interpreter
     /// Converts a boxed double to a 32-bit unsigned integer per ECMA-262 ToUint32.
     /// </summary>
     /// <seealso href="https://tc39.es/ecma262/#sec-touint32">ECMAScript ToUint32</seealso>
-    private uint ToUint32(object? value) => JsToUint32(ToNumberWithPrimitive(value));
+    internal uint ToUint32(object? value) => JsToUint32(ToNumberWithPrimitive(value));
 
     // ECMA-262 ToInt32 / ToUint32 on a double. Unlike C#'s saturating (int) cast,
     // non-finite → 0 and out-of-range doubles wrap modulo 2^32. Mirrors JsToInt32 in
@@ -1123,6 +1125,8 @@ public partial class Interpreter
             return IsBoxedPrimitiveOfType(left, "String");
         if (right is SharpTSBooleanNamespace)
             return IsBoxedPrimitiveOfType(left, "Boolean");
+        if (right is SharpTSGlobalFunction { Name: BuiltInNames.BigInt })
+            return IsBoxedPrimitiveOfType(left, "BigInt");
 
         // The Function global is represented by a namespace-style callable
         // rather than SharpTSBuiltInConstructor. OrdinaryHasInstance for it

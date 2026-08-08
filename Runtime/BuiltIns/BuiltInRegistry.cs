@@ -389,12 +389,7 @@ public sealed class BuiltInRegistry
             GetMethod: name => JSONBuiltIns.GetStaticMethod(name) as BuiltInMethod
         ));
         registry.RegisterInstanceType(typeof(Types.SharpTSJSON), (instance, name) =>
-        {
-            var json = (Types.SharpTSJSON)instance;
-            return json.HasExtra(name)
-                ? json.TryGetExtra(name)
-                : JSONBuiltIns.GetStaticMethod(name);
-        });
+            ((Types.SharpTSJSON)instance).GetMember(name));
     }
 
     private static void RegisterConsoleNamespace(BuiltInRegistry registry)

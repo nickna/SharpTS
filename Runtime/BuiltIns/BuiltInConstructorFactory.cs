@@ -387,7 +387,7 @@ public static class BuiltInConstructorFactory
         {
             // Number is the explicit BigInt-to-Number conversion; unlike implicit
             // ToNumber, both call and construct forms accept it.
-            value = (double)bigint.Value;
+            value = NumberBuiltIns.BigIntToNumber(bigint.Value);
         }
         else if (interpreter != null)
         {

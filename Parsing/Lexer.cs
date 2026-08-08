@@ -806,6 +806,14 @@ public class Lexer(string source)
                     char escaped = Advance();
                     switch (escaped)
                     {
+                        case '\r':
+                            // A CRLF sequence is a single line continuation.
+                            if (Peek() == '\n') Advance();
+                            _line++;
+                            break;
+                        case '\n':
+                            _line++;
+                            break;
                         case 'n': sb.Append('\n'); break;
                         case 't': sb.Append('\t'); break;
                         case 'r': sb.Append('\r'); break;

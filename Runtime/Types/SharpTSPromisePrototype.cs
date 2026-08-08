@@ -13,7 +13,7 @@ namespace SharpTS.Runtime.Types;
 /// is the prototype *as a value*; instance property reads still go through that dispatch.
 /// </para>
 /// </summary>
-public sealed class SharpTSPromisePrototype
+public sealed class SharpTSPromisePrototype : ISharpTSMutableBuiltIn
 {
     /// <summary>
     /// Process-wide instance. Promise.prototype carries no per-realm mutable state here
@@ -26,6 +26,7 @@ public sealed class SharpTSPromisePrototype
 
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
+    private readonly Dictionary<string, ISharpTSCallable> _builtIns = [];
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
@@ -65,7 +66,10 @@ public sealed class SharpTSPromisePrototype
         if (_deletedBuiltIns.Contains(name)) return null;
         // The unbound form: PromiseBuiltIns.GetMember binds each method to a concrete
         // promise, which is wrong for a read off the prototype itself.
-        return PromiseBuiltIns.GetPrototypeMethod(name);
+        if (_builtIns.TryGetValue(name, out var cached)) return cached;
+        var member = PromiseBuiltIns.GetPrototypeMethod(name);
+        if (member != null) _builtIns[name] = member;
+        return member;
     }
 
     public override string ToString() => "[object Promise]";

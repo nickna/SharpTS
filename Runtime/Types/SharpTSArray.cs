@@ -496,6 +496,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public void Freeze()
     {
         SetNamedPropertyIntegrityLevel(frozen: true);
+        _symbolProperties?.Freeze();
         IsFrozen = true;
         IsSealed = true; // Frozen implies sealed
         IsExtensible = false; // Frozen implies non-extensible
@@ -507,6 +508,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public void Seal()
     {
         SetNamedPropertyIntegrityLevel(frozen: false);
+        _symbolProperties?.Seal();
         IsSealed = true;
         IsExtensible = false;
     }
@@ -516,6 +518,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public void PreventExtensions()
     {
+        _symbolProperties?.PreventExtensions();
         IsExtensible = false;
     }
 
@@ -852,6 +855,62 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     private Dictionary<string, object?>? _namedProperties;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Dictionary<uint, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _indexAccessors;
+    private SharpTSObject? _symbolProperties;
+
+    private SharpTSObject SymbolProperties => _symbolProperties ??= new SharpTSObject([]);
+
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _symbolProperties?.GetSymbolPropertyNames() ?? [];
+
+    internal bool HasSymbolProperty(SharpTSSymbol symbol)
+        => _symbolProperties?.HasSymbolProperty(symbol) ?? false;
+
+    internal object? GetBySymbol(SharpTSSymbol symbol)
+        => _symbolProperties?.GetBySymbol(symbol);
+
+    internal bool TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (_symbolProperties is not null)
+            return _symbolProperties.TryGetSymbolAccessor(symbol, out getter, out setter);
+        getter = null;
+        setter = null;
+        return false;
+    }
+
+    internal void SetBySymbol(SharpTSSymbol symbol, object? value)
+    {
+        if (IsFrozen || !IsExtensible && !HasSymbolProperty(symbol)) return;
+        SymbolProperties.SetBySymbol(symbol, value);
+    }
+
+    internal void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+    {
+        if (!IsExtensible && !HasSymbolProperty(symbol))
+        {
+            if (strictMode)
+                throw StrictModeErrors.TypeError(
+                    "Cannot add symbol property to a non-extensible array");
+            return;
+        }
+        SymbolProperties.SetBySymbolStrict(symbol, value, strictMode);
+    }
+
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+    {
+        if (!HasSymbolProperty(symbol)) return true;
+        return SymbolProperties.DeleteBySymbolStrict(symbol, strictMode);
+    }
+
+    internal bool DefineProperty(
+        SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+    {
+        if (!IsExtensible && !HasSymbolProperty(symbol)) return false;
+        return SymbolProperties.DefineProperty(symbol, descriptor);
+    }
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _symbolProperties?.GetOwnPropertyDescriptor(symbol);
 
     internal bool TryGetIndexAccessor(
         long index, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
@@ -883,6 +942,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     public bool HasNamedProperty(string name)
         => _namedProperties?.ContainsKey(name) ?? false;
+
+    internal IEnumerable<string> NamedPropertyNames
+        => _namedProperties?.Keys ?? Enumerable.Empty<string>();
 
     /// <summary>
     /// Checks the array's own properties, including its non-enumerable length

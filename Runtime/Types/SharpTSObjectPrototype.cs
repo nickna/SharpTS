@@ -229,6 +229,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             {
                 SharpTSObject obj => obj.HasSymbolProperty(sym),
                 SharpTSInstance inst => inst.HasSymbolProperty(sym),
+                SharpTSMath math => math.GetOwnPropertyDescriptor(sym) is not null,
+                SharpTSStringPrototype stringPrototype
+                    => stringPrototype.GetOwnPropertyDescriptor(sym) is not null,
                 _ => false,
             };
         }
@@ -243,8 +246,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSArray array => array.HasOwnProperty(key),
             SharpTSMath math => math.HasExtra(key)
                 || (!math.IsBuiltInDeleted(key) && MathBuiltIns.GetMember(key) is not null),
-            SharpTSJSON json => json.HasExtra(key),
-            SharpTSDate date => date.HasExtra(key),
+            SharpTSJSON json => json.HasOwnProperty(key),
+            SharpTSDate date => date.HasExtra(key)
+                || (date.IsPrototype
+                    && !date.IsBuiltInDeleted(key)
+                    && DateBuiltIns.GetMember(date, key) is not null),
             SharpTSRegExp regex => regex.HasOwnProperty(key),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.HasOwnProperty(key),
             SharpTSObjectNamespace objectNamespace => objectNamespace.HasOwnProperty(key),
@@ -259,9 +265,12 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.HasOwnProperty(key),
             SharpTSObjectPrototype objectPrototype => objectPrototype.HasOwnProperty(key),
             SharpTSClassPrototype classPrototype => classPrototype.HasOwnProperty(key),
-            SharpTSClass when key is "name" or "length" or "prototype" => true,
+            SharpTSPromisePrototype promisePrototype => promisePrototype.HasOwnProperty(key),
+            SharpTSClass klass => key is "name" or "length" or "prototype"
+                || klass.HasOwnStaticMember(key),
             SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
             SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
+            SharpTSGlobalThis globalThis => globalThis.HasProperty(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
             // per ECMA-262 §17. test262's verifyProperty calls
@@ -272,6 +281,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // is observable here.
             IBuiltInFunctionMetadata meta when key is "name" or "length"
                 => meta.HasMetadataProperty(key),
+            SharpTSBuiltInConstructor constructor
+                => interpreter?.HasBuiltInConstructorOwnProperty(constructor, key)
+                    ?? constructor.GetMember(key) is not null,
             ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };
@@ -405,8 +417,13 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         {
             return target switch
             {
-                SharpTSObject obj => obj.HasSymbolProperty(symbol),
+                SharpTSObject obj
+                    => obj.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 SharpTSInstance instance => instance.HasSymbolProperty(symbol),
+                SharpTSMath math
+                    => math.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
+                SharpTSStringPrototype stringPrototype
+                    => stringPrototype.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 _ => false,
             };
         }

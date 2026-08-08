@@ -49,6 +49,19 @@ public class EvalTests
         Assert.Equal("42\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Eval_IsAvailableAsAFirstClassCallable(ExecutionMode mode)
+    {
+        var source = """
+            const indirect = eval;
+            console.log(typeof indirect);
+            console.log(indirect(42));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("function\n42\n", output);
+    }
+
     [Theory, ModeData]
     public void Eval_StatementsThenCompletionValue(ExecutionMode mode)
     {

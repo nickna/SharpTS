@@ -762,6 +762,7 @@ public partial class Interpreter
             SharpTSDate date => date.OwnEnumerableKeys(),
             SharpTSRegExp regex => regex.OwnEnumerableKeys(),
             SharpTSObjectNamespace objectNamespace => objectNamespace.OwnEnumerableKeys(),
+            SharpTSGlobalThis globalThis => globalThis.OwnEnumerableKeys(),
             // Every built-in prototype singleton at once — Object/Array/String/Number/
             // Boolean/Function.prototype. Naming them individually is how Object.prototype
             // and Number.prototype came to be missing here ("for...in requires an object").
@@ -867,12 +868,38 @@ public partial class Interpreter
     /// <returns>An enumerable of values if the object has a Symbol.iterator, null otherwise.</returns>
     private IEnumerable<object?>? TryGetSymbolIterator(object? iterable)
     {
+        // Arrays can replace their inherited @@iterator with an own method.
+        // Consult that override before falling back to indexed enumeration.
+        if (iterable is SharpTSArray array && array.HasSymbolProperty(SharpTSSymbol.Iterator))
+        {
+            var iteratorFn = array.GetBySymbol(SharpTSSymbol.Iterator);
+            if (iteratorFn is not ISharpTSCallable)
+                throw new ThrowException(new SharpTSTypeError(
+                    "[Symbol.iterator] must be a function"));
+            if (TryBindReceiverForMethodAccess(iteratorFn, array) is { } boundIteratorFn)
+                iteratorFn = boundIteratorFn;
+            return EnumerateWithIteratorProtocol(iteratorFn);
+        }
+
         // Check for Symbol.iterator on SharpTSObject
         if (iterable is SharpTSObject obj)
         {
-            var iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
-            if (iteratorFn != null)
+            object? iteratorFn;
+            if (obj.TryGetSymbolAccessor(SharpTSSymbol.Iterator, out var iteratorGetter, out _))
             {
+                iteratorFn = iteratorGetter is null
+                    ? SharpTSUndefined.Instance
+                    : FunctionBuiltIns.CallWithThis(this, iteratorGetter, obj, []);
+            }
+            else
+            {
+                iteratorFn = obj.GetBySymbol(SharpTSSymbol.Iterator);
+            }
+            if (iteratorFn != null || obj.HasSymbolProperty(SharpTSSymbol.Iterator))
+            {
+                if (iteratorFn is not ISharpTSCallable)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "[Symbol.iterator] must be a function"));
                 // Bind 'this' to the object for a function expression / object method shorthand,
                 // including generator forms (`[Symbol.iterator]: function*(){ this... }`, #775).
                 if (TryBindReceiverForMethodAccess(iteratorFn, obj) is { } boundIteratorFn)
@@ -895,6 +922,9 @@ public partial class Interpreter
             }
             if (iteratorFn != null)
             {
+                if (iteratorFn is not ISharpTSCallable)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "[Symbol.iterator] must be a function"));
                 // Bind 'this' to the instance for a function expression / object method shorthand,
                 // including generator forms (#775).
                 if (TryBindReceiverForMethodAccess(iteratorFn, inst) is { } boundIteratorFn)
@@ -925,7 +955,8 @@ public partial class Interpreter
         }
         else
         {
-            throw new InterpreterException("[Symbol.iterator] must be a function.");
+            throw new ThrowException(new SharpTSTypeError(
+                "[Symbol.iterator] must be a function"));
         }
 
         // A generator-valued [Symbol.iterator]() (`*[Symbol.iterator]() { yield ... }`) returns a
@@ -937,6 +968,10 @@ public partial class Interpreter
                 yield return item;
             yield break;
         }
+
+        if (iterator is not (SharpTSObject or SharpTSInstance))
+            throw new ThrowException(new SharpTSTypeError(
+                "[Symbol.iterator]() must return an object"));
 
         // Iterate using the iterator protocol. The surrounding try/finally
         // implements ECMA-262 7.4.6 IteratorClose: when iteration is abandoned
@@ -1840,6 +1875,8 @@ public partial class Interpreter
             value = Evaluate(varStmt.Initializer);
         }
         _environment.Define(varStmt.Name.Lexeme, value);
+        if (varStmt.IsVar && _environment.Enclosing is null)
+            GlobalThis.SetProperty(varStmt.Name.Lexeme, value);
         return ExecutionResult.Success();
     }
 

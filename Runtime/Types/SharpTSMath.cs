@@ -28,7 +28,20 @@ public class SharpTSMath
 
     // internal (not private) so each Interpreter can construct its own realm
     // instance; the base built-in members are stateless, only _extras differs.
-    internal SharpTSMath() { }
+    internal SharpTSMath()
+    {
+        _extras.DefineProperty(SharpTSSymbol.ToStringTag, new SharpTSPropertyDescriptor
+        {
+            Value = "Math",
+            HasValue = true,
+            Writable = false,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
+    }
 
     // Math is an ordinary object. Descriptor-aware storage preserves the
     // writable/enumerable/configurable attributes of defineProperty expandos.
@@ -80,6 +93,24 @@ public class SharpTSMath
         return deleted || BuiltIns.MathBuiltIns.IsMember(name);
     }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _extras.GetSymbolPropertyNames();
+
+    internal object? GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+
+    internal void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
 
     /// <summary>
     /// The own enumerable properties of Math. All built-in members (abs, max,

@@ -662,23 +662,45 @@ public partial class Interpreter
         if (value is SharpTSNumberPrototype) return 0.0;
         // String.prototype is itself a String object with [[StringData]] "".
         if (value is SharpTSStringPrototype) return "";
+        // Boolean.prototype is itself a Boolean object with [[BooleanData]] false.
+        if (value is SharpTSBooleanPrototype) return false;
         // Arrays have no own valueOf/toString and inherit Array.prototype.toString
         // (= join(',')); OrdinaryToPrimitive resolves to it for every hint (valueOf
         // returns the array, not a primitive, so it is skipped). e.g. `'' + [1,2,3]`
         // -> "1,2,3" and `[1,2,3] == "1,2,3"` -> true. The console/debug ToString
         // ("[1, 2, 3]") is intentionally NOT used here.
         if (value is SharpTSArguments) return "[object Arguments]";
-        if (value is SharpTSArray arr) return ArrayBuiltIns.ToJsString(this, arr);
+        if (value is SharpTSArray arr)
+        {
+            // Array.prototype conversion methods are mutable. Keep the direct
+            // join fast path for the ordinary realm, but perform the full
+            // lookup when either method has been overridden.
+            var arrayPrototype = GetArrayPrototype();
+            if (arrayPrototype.HasExtra("toString") || arrayPrototype.HasExtra("valueOf"))
+                return OrdinaryToPrimitiveObject(arr, hint);
+            return ArrayBuiltIns.ToJsString(this, arr);
+        }
+        if (value is SharpTSGlobalThis)
+            return OrdinaryToPrimitiveObject(value, hint);
+        if (value is ISharpTSCallable)
+            return OrdinaryToPrimitiveObject(value, hint);
         if (value is not SharpTSObject obj) return value;
         if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
             return exoticResult;
         bool isWrapper = TryGetBoxedPrimitiveValue(obj, out var primitiveValue);
-        bool hasOwnValueOf = obj.HasProperty("valueOf");
-        bool hasOwnToString = obj.HasProperty("toString");
-        if (!isWrapper && !hasOwnValueOf && !hasOwnToString) return value;
 
         string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
         string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
+        if (!isWrapper)
+        {
+            if (TryCallConversion(obj, first, out var firstResult))
+                return firstResult;
+            if (TryCallConversion(obj, second, out var secondResult))
+                return secondResult;
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert object to primitive value"));
+        }
+
         // An own override of the hint-preferred conversion always wins.
         if (TryCallOwnConversion(obj, first, out var r1)) return r1;
         // For a boxed wrapper, the *inherited* preferred conversion
@@ -690,7 +712,22 @@ public partial class Interpreter
         // OrdinaryToPrimitive fallback.
         if (isWrapper) return primitiveValue;
         if (TryCallOwnConversion(obj, second, out var r2)) return r2;
-        return value;
+        return primitiveValue;
+    }
+
+    private object? OrdinaryToPrimitiveObject(object receiver, PrimitiveHint hint)
+    {
+        string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
+        string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
+        foreach (string name in new[] { first, second })
+        {
+            if (GetPropertyValue(receiver, name) is not ISharpTSCallable callable)
+                continue;
+            var result = FunctionBuiltIns.CallWithThis(this, callable, receiver, []);
+            if (!IsObjectLike(result)) return result;
+        }
+        throw new ThrowException(new SharpTSTypeError(
+            "Cannot convert object to primitive value"));
     }
 
     /// <summary>
@@ -772,7 +809,7 @@ public partial class Interpreter
     /// <see cref="Stringify"/>.
     /// </summary>
     internal string ToStringForStringCall(object? value)
-        => Stringify(value is SharpTSObject ? ToPrimitive(value, PrimitiveHint.String) : value);
+        => Stringify(IsObjectLike(value) ? ToPrimitive(value, PrimitiveHint.String) : value);
 
     /// <summary>
     /// ECMA-262 ToString for built-in algorithm arguments. Unlike the
@@ -787,6 +824,8 @@ public partial class Interpreter
             return "[object Arguments]";
         if (value is SharpTSArray array)
             return ArrayBuiltIns.ToJsString(this, array);
+        if (value is ISharpTSCallable or SharpTSGlobalThis or SharpTSRegExp)
+            return Stringify(OrdinaryToPrimitiveObject(value, PrimitiveHint.String));
         if (value is not SharpTSObject obj)
             return Stringify(value);
 
@@ -995,8 +1034,16 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(name),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(name),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(name),
+            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(name),
+            SharpTSStringNamespace when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(name),
+            SharpTSNumberNamespace when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSNumberNamespace numberNamespace => numberNamespace.DeleteProperty(name),
+            SharpTSBooleanNamespace when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
+            SharpTSBooleanNamespace booleanNamespace => booleanNamespace.DeleteProperty(name),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(name),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(name),
             SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(name),
@@ -1006,6 +1053,16 @@ public partial class Interpreter
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(name),
             SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(name),
             SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(name),
+            SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(name),
+            SharpTSClass when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
+            SharpTSClass klass => klass.DeleteStaticProperty(name),
+            SharpTSBuiltInConstructor
+                { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
+                when name == "prototype" =>
+                    DeleteNonConfigurableClassPrototype(name, strictMode),
+            SharpTSBuiltInConstructor constructor =>
+                DeleteBuiltInConstructorProperty(constructor, name),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
             SharpTSFunction function => function.DeleteProperty(name),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(name),
@@ -1037,6 +1094,10 @@ public partial class Interpreter
             {
                 SharpTSObject tsObj => tsObj.DeleteBySymbolStrict(symbol, strictMode),
                 SharpTSInstance tsInst => tsInst.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSArray array => array.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSStringPrototype stringPrototype
+                    => stringPrototype.DeleteBySymbolStrict(symbol, strictMode),
                 _ => true
             };
         }
@@ -1054,8 +1115,16 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(keyStr),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(keyStr),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(keyStr),
+            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(keyStr),
+            SharpTSStringNamespace when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(keyStr),
+            SharpTSNumberNamespace when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             SharpTSNumberNamespace numberNamespace => numberNamespace.DeleteProperty(keyStr),
+            SharpTSBooleanNamespace when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
+            SharpTSBooleanNamespace booleanNamespace => booleanNamespace.DeleteProperty(keyStr),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(keyStr),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(keyStr),
             SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(keyStr),
@@ -1065,12 +1134,31 @@ public partial class Interpreter
             SharpTSSymbolPrototype symbolPrototype => symbolPrototype.DeleteProperty(keyStr),
             SharpTSObjectPrototype objectPrototype => objectPrototype.DeleteProperty(keyStr),
             SharpTSClassPrototype classPrototype => classPrototype.DeleteProperty(keyStr),
+            SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(keyStr),
+            SharpTSClass when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
+            SharpTSClass klass => klass.DeleteStaticProperty(keyStr),
+            SharpTSBuiltInConstructor
+                { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
+                when keyStr == "prototype" =>
+                    DeleteNonConfigurableClassPrototype(keyStr, strictMode),
+            SharpTSBuiltInConstructor constructor =>
+                DeleteBuiltInConstructorProperty(constructor, keyStr),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
             SharpTSFunction function => function.DeleteProperty(keyStr),
             SharpTSArrowFunction arrow => arrow.DeleteProperty(keyStr),
             Dictionary<string, object?> dict => dict.Remove(keyStr),
             _ => true
         };
+    }
+
+    private static bool DeleteNonConfigurableClassPrototype(
+        string propertyName, bool strictMode)
+    {
+        if (strictMode)
+            throw StrictModeErrors.TypeError(
+                $"Cannot delete property '{propertyName}' of class constructor");
+        return false;
     }
 
     /// <summary>
@@ -1135,9 +1223,11 @@ public partial class Interpreter
         // through ToPrimitive, so `new Number(0) == 0` is true (#708). Only when
         // the other operand is a primitive — object == object stays reference-based.
         if (a is SharpTSObject or SharpTSNumberPrototype or SharpTSStringPrototype
+                or SharpTSBooleanPrototype
             && IsPrimitiveOperand(b))
             a = ToPrimitive(a, PrimitiveHint.Default);
         else if (b is SharpTSObject or SharpTSNumberPrototype or SharpTSStringPrototype
+                or SharpTSBooleanPrototype
             && IsPrimitiveOperand(a))
             b = ToPrimitive(b, PrimitiveHint.Default);
         return a!.Equals(b);

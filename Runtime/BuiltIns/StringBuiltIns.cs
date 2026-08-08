@@ -11,6 +11,9 @@ public static class StringBuiltIns
     private static readonly BuiltInTypeMemberLookup<string> _lookup =
         BuiltInTypeBuilder<string>.ForInstanceType()
             .Property("length", s => (double)s.Length)
+            .MethodV2("[Symbol.iterator]", 0, static (_, value, _) =>
+                RuntimeValue.FromObject(new SharpTSIterator(
+                    value.EnumerateRunes().Select(r => (object?)r.ToString()))))
             .MethodV2("charAt", 0, int.MaxValue, specLength: 1, CharAtV2)
             // Spec lengths (ECMA-262 §22.1.3) are metadata, independent of
             // runtime argument acceptance: JavaScript methods coerce omitted
@@ -565,8 +568,14 @@ public static class StringBuiltIns
 
         if (pattern is SharpTSRegExp regex)
         {
-            if (!regex.Global)
-                throw new Exception("TypeError: String.prototype.matchAll called with a non-global RegExp argument");
+            object? flagsValue = interpreter.GetPropertyValue(regex, "flags");
+            if (flagsValue is null or SharpTSUndefined)
+                throw new ThrowException(new SharpTSTypeError(
+                    "String.prototype.matchAll requires RegExp flags"));
+            string flags = interpreter.ToStringForBuiltInArgument(flagsValue);
+            if (!flags.Contains('g'))
+                throw new ThrowException(new SharpTSTypeError(
+                    "String.prototype.matchAll called with a non-global RegExp argument"));
             object? matcher = interpreter.GetSymbolPropertyValue(
                 regex, SharpTSSymbol.MatchAll);
             if (matcher is not (null or SharpTSUndefined))
@@ -777,10 +786,10 @@ public static class StringBuiltIns
     }
 
     private static RuntimeValue ToUpperCaseV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.ToUpper());
+        => RuntimeValue.FromString(str.ToUpperInvariant());
 
     private static RuntimeValue ToLowerCaseV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromString(str.ToLower());
+        => RuntimeValue.FromString(str.ToLowerInvariant());
 
     private static RuntimeValue TrimV2(Interpreter _, string str, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromString(TrimEcmaWhitespace(str, trimStart: true, trimEnd: true));
@@ -1080,7 +1089,12 @@ public static class StringBuiltIns
     private static RuntimeValue LocaleCompareV2(Interpreter interpreter, string str, ReadOnlySpan<RuntimeValue> args)
     {
         string that = StringArgument(interpreter, args, 0);
-        var result = string.Compare(str, that, StringComparison.CurrentCulture);
+        // ECMA-402 requires canonically equivalent strings to compare equal,
+        // independent of the host culture's normalization behavior.
+        var result = string.Compare(
+            str.Normalize(NormalizationForm.FormC),
+            that.Normalize(NormalizationForm.FormC),
+            StringComparison.CurrentCulture);
         return RuntimeValue.FromNumber(result < 0 ? -1 : result > 0 ? 1 : 0);
     }
 

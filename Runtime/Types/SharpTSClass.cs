@@ -69,6 +69,7 @@ public class SharpTSClass(
     /// </summary>
     public SharpTSClassPrototype Prototype => _prototype ??= new SharpTSClassPrototype(this);
     private readonly Dictionary<string, ISharpTSCallable?> _staticMethodCache = [];
+    private readonly HashSet<string> _deletedStaticMethods = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SharpTSFunction?> _getterCache = [];
     private readonly Dictionary<string, SharpTSFunction?> _setterCache = [];
 
@@ -239,7 +240,8 @@ public class SharpTSClass(
         }
 
         // Look up in this class's static methods
-        if (_staticMethods.TryGetValue(name, out ISharpTSCallable? method))
+        if (!_deletedStaticMethods.Contains(name)
+            && _staticMethods.TryGetValue(name, out ISharpTSCallable? method))
         {
             _staticMethodCache[name] = method;
             return method;
@@ -273,7 +275,33 @@ public class SharpTSClass(
 
     public void SetStaticProperty(string name, object? value)
     {
+        if (_staticMethods.ContainsKey(name))
+            _deletedStaticMethods.Add(name);
+        _staticMethodCache.Remove(name);
         _staticProperties[name] = value;
+    }
+
+    internal bool HasOwnStaticMember(string name)
+        => _staticProperties.ContainsKey(name)
+            || !_deletedStaticMethods.Contains(name) && _staticMethods.ContainsKey(name)
+            || _staticGetters.ContainsKey(name)
+            || _staticSetters.ContainsKey(name)
+            || _staticAutoAccessorStorage.ContainsKey(name);
+
+    internal bool DeleteStaticProperty(string name)
+    {
+        _staticProperties.Remove(name);
+        if (_staticMethods.ContainsKey(name))
+            _deletedStaticMethods.Add(name);
+        _staticMethodCache.Remove(name);
+        return true;
+    }
+
+    internal bool DefineStaticProperty(string name, SharpTSPropertyDescriptor descriptor)
+    {
+        if (descriptor.HasValue)
+            SetStaticProperty(name, descriptor.Value);
+        return true;
     }
 
     // Symbol-keyed expando statics (`(C as any)[Symbol.species] = V`). Node allows

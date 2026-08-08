@@ -88,6 +88,22 @@ public class ObjectPrototypeTests
     // === isExtensible ===
 
     [Theory, ModeData]
+    public void Callable_IsExtensibleUntilPrevented(ExecutionMode mode)
+    {
+        var source = """
+            function callback(): void {}
+            console.log(Object.isExtensible(callback));
+            console.log(Reflect.isExtensible(callback));
+            Object.preventExtensions(callback);
+            console.log(Object.isExtensible(callback));
+            console.log(Reflect.isExtensible(callback));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void IsExtensible_TrueForNormalObject(ExecutionMode mode)
     {
         var source = """
@@ -205,6 +221,37 @@ public class ObjectPrototypeTests
             console.log(obj[symbols[0]]);
             """;
         Assert.Equal("42\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void GetOwnPropertySymbols_PreservesCreationOrderAcrossRedefinition(
+        ExecutionMode mode)
+    {
+        var source = """
+            let first = Symbol("first");
+            let second = Symbol("second");
+            let obj: any = {};
+            obj[first] = 1;
+            obj[second] = 2;
+            Object.defineProperty(obj, first, { get: () => 3 });
+            let objectKeys = Object.getOwnPropertySymbols(obj);
+            console.log(objectKeys[0] === first, objectKeys[1] === second);
+
+            delete obj[first];
+            obj[first] = 4;
+            objectKeys = Object.getOwnPropertySymbols(obj);
+            console.log(objectKeys[0] === second, objectKeys[1] === first);
+
+            let array: any = [];
+            array[first] = 1;
+            array[second] = 2;
+            Object.defineProperty(array, first, { writable: false });
+            let arrayKeys = Object.getOwnPropertySymbols(array);
+            console.log(arrayKeys[0] === first, arrayKeys[1] === second);
+            console.log(Object.getOwnPropertyDescriptor(array, first)!.writable);
+            """;
+        Assert.Equal("true true\ntrue true\ntrue true\nfalse\n",
+            TestHarness.Run(source, mode));
     }
 
     // === getPrototypeOf ===

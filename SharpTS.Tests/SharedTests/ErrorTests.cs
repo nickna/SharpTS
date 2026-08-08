@@ -293,7 +293,7 @@ public class ErrorTests
             console.log(e.message);
         ";
         var output = TestHarness.Run(source, mode);
-        Assert.Equal("All promises were rejected\n", output);
+        Assert.Equal("\n", output);
     }
 
     #endregion
@@ -393,6 +393,83 @@ public class ErrorTests
         ";
         var output = TestHarness.Run(source, mode);
         Assert.Equal("wrapped\noriginal\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Error_CoercesMessageBeforeReadingCause(ExecutionMode mode)
+    {
+        var source = """
+            const sequence: string[] = [];
+            const error = new Error(
+                ({ toString() { sequence.push("message"); return "converted"; } } as any),
+                { get cause() { sequence.push("cause"); return 42; } }
+            );
+            console.log(sequence.join(","));
+            console.log(error.message, error.cause);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("message,cause\nconverted 42\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Error_SymbolMessageThrowsTypeError(ExecutionMode mode)
+    {
+        var source = """
+            try {
+                Error(Symbol() as any);
+                console.log("no error");
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Error_PrototypePropertyIsNonConfigurable(ExecutionMode mode)
+    {
+        var source = """
+            const descriptor = Object.getOwnPropertyDescriptor(Error, "prototype")!;
+            console.log(descriptor.writable, descriptor.enumerable, descriptor.configurable);
+            console.log(delete (Error as any).prototype);
+            console.log(Error.prototype === descriptor.value);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false false false\nfalse\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Error_PrototypeInheritsObjectPrototypeMethods(ExecutionMode mode)
+    {
+        var source = """
+            const constructed = new Error("constructed");
+            const called = Error("called");
+            console.log(Error.prototype.isPrototypeOf(constructed));
+            console.log(Error.prototype.isPrototypeOf(called));
+            console.log(Error.prototype.hasOwnProperty("message"));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Error_ToStringUnboundDoesNotReadGlobalAccessors(ExecutionMode mode)
+    {
+        var source = """
+            Object.defineProperty(globalThis, "name", {
+                get() { throw new Error("name getter called"); }
+            });
+            const toString = Error.prototype.toString;
+            try {
+                toString();
+                console.log("no error");
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
     }
 
     [Theory, ModeData]

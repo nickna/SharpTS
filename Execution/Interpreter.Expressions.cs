@@ -786,6 +786,21 @@ public partial class Interpreter
     /// </summary>
     private static void ApplySpreadToFields(object? spreadValue, Dictionary<string, object?> stringFields)
     {
+        // CopyDataProperties skips null/undefined. Other primitives are
+        // ToObject-coerced: only strings contribute enumerable index keys;
+        // number/boolean/symbol/bigint wrappers have none.
+        if (spreadValue is null or SharpTSUndefined)
+            return;
+        if (spreadValue is string text)
+        {
+            for (int i = 0; i < text.Length; i++)
+                stringFields[i.ToString()] = text[i].ToString();
+            return;
+        }
+        if (spreadValue is bool or double or int or long or float or decimal
+            or SharpTSSymbol or SharpTSBigInt or System.Numerics.BigInteger)
+            return;
+
         if (spreadValue is SharpTSObject spreadObj)
         {
             foreach (var kv in spreadObj.Fields)
@@ -875,21 +890,24 @@ public partial class Interpreter
     /// <param name="obj">The object being indexed.</param>
     /// <param name="index">The index value.</param>
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
-    private static IndexTarget ResolveIndexTarget(object? obj, object? index) => (obj, index) switch
+    private IndexTarget ResolveIndexTarget(object? obj, object? index)
     {
-        (SharpTSArray array, double idx)
-            when idx >= 0
-                && idx <= SharpTSArray.MaxWriteIndex
-                && Math.Truncate(idx) == idx
-            => new IndexTarget.Array(array, (long)idx),
-        (SharpTSArray array, string idx)
-            when long.TryParse(idx, System.Globalization.NumberStyles.None,
+        if (obj is SharpTSArray array)
+        {
+            if (index is SharpTSSymbol symbol)
+                return new IndexTarget.ArraySymbol(array, symbol);
+            string key = ToPropertyKeyString(index);
+            if (long.TryParse(key, System.Globalization.NumberStyles.None,
                     System.Globalization.CultureInfo.InvariantCulture, out long parsed)
-                && parsed >= 0
-                && parsed <= SharpTSArray.MaxWriteIndex
-            => new IndexTarget.Array(array, parsed),
-        (SharpTSArray array, _) => new IndexTarget.ArrayString(
-            array, PropertyKeyConverter.ToPropertyKeyString(index)),
+                && parsed >= 0 && parsed <= SharpTSArray.MaxWriteIndex)
+            {
+                return new IndexTarget.Array(array, parsed);
+            }
+            return new IndexTarget.ArrayString(array, key);
+        }
+
+        return (obj, index) switch
+        {
         (SharpTSTypedArray typedArray, double typedIdx) => new IndexTarget.TypedArray(typedArray, (int)typedIdx),
         (SharpTSBuffer buffer, double bufIdx) => new IndexTarget.Buffer(buffer, (int)bufIdx),
         (SharpTSEnum enumObj, double enumIdx) => new IndexTarget.EnumReverse(enumObj, enumIdx),
@@ -901,20 +919,27 @@ public partial class Interpreter
         // and `obj["0"]` resolve identically (and undefined/null/bool keys
         // stringify to "undefined"/"null"/"true"/"false" rather than landing in
         // the Unsupported bucket).
-        (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, PropertyKeyConverter.ToPropertyKeyString(index)),
-        (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, PropertyKeyConverter.ToPropertyKeyString(index)),
+        (SharpTSObject sharpObj, _) => new IndexTarget.ObjectString(sharpObj, ToPropertyKeyString(index)),
+        (SharpTSInstance instance, _) => new IndexTarget.InstanceString(instance, ToPropertyKeyString(index)),
         (SharpTSGlobalThis globalThis, string globalKey) => new IndexTarget.GlobalThis(globalThis, globalKey),
         (ISharpTSMutableBuiltIn builtInPrototype, _) =>
             new IndexTarget.BuiltInPrototypeString(
-                builtInPrototype, PropertyKeyConverter.ToPropertyKeyString(index)),
+                builtInPrototype, ToPropertyKeyString(index)),
         (SharpTSHeaders headers, string headerKey) => new IndexTarget.HeadersString(headers, headerKey),
         // Class constructors accept expando statics (Node: `C["foo"] = 1`,
         // `C[Symbol.species] = P`). #262.
         (SharpTSClass cls, SharpTSSymbol clsSym) => new IndexTarget.ClassSymbol(cls, clsSym),
-        (SharpTSClass cls, _) => new IndexTarget.ClassString(cls, PropertyKeyConverter.ToPropertyKeyString(index)),
-        (string str, double strIdx) => new IndexTarget.StringChar(str, (int)strIdx),
-        _ => new IndexTarget.Unsupported(obj, index)
-    };
+        (SharpTSClass cls, _) => new IndexTarget.ClassString(cls, ToPropertyKeyString(index)),
+        (string str, double strIdx)
+            when double.IsFinite(strIdx)
+                && strIdx >= 0
+                && strIdx <= int.MaxValue
+                && Math.Truncate(strIdx) == strIdx
+            => new IndexTarget.StringChar(str, (int)strIdx),
+        (string str, double) => new IndexTarget.StringChar(str, -1),
+            _ => new IndexTarget.Unsupported(obj, index)
+        };
+    }
 
     /// <summary>
     /// Evaluates an index access expression (bracket notation).
@@ -1058,6 +1083,18 @@ public partial class Interpreter
             return RuntimeValue.FromBoxed(dotNetInstance.GetIndex(index, this));
         }
 
+        if (obj is SharpTSMath symbolMath && index is SharpTSSymbol mathSymbol)
+        {
+            return RuntimeValue.FromBoxed(
+                symbolMath.GetBySymbol(mathSymbol) ?? SharpTSUndefined.Instance);
+        }
+        if (obj is SharpTSStringPrototype stringPrototype
+            && index is SharpTSSymbol stringSymbol)
+        {
+            return RuntimeValue.FromBoxed(
+                stringPrototype.GetBySymbol(stringSymbol) ?? SharpTSUndefined.Instance);
+        }
+
         // Built-in namespace singletons and prototype objects resolve dot-notation access via
         // BuiltInRegistry.GetInstanceMember or hand-written fallbacks in EvaluateGetOnFallback
         // (SharpTSArrayGlobal, SharpTSArrayPrototype, SharpTSBuiltInConstructor, etc.).
@@ -1150,6 +1187,8 @@ public partial class Interpreter
             IndexTarget.ArrayString t => t.Target.HasNamedProperty(t.Key)
                 ? t.Target.GetNamedProperty(t.Key)
                 : SharpTSUndefined.Instance,
+            IndexTarget.ArraySymbol t => t.Target.GetBySymbol(t.Key)
+                ?? SharpTSUndefined.Instance,
             IndexTarget.TypedArray t => t.Target[t.Index],
             IndexTarget.Buffer t => t.Target[t.Index],
             IndexTarget.EnumReverse t => t.Target.GetReverse(t.Index),
@@ -1213,6 +1252,16 @@ public partial class Interpreter
             if (getter == null) return RuntimeValue.Undefined;
             return BindAccessorToObject(getter, array).CallV2(
                 this, ReadOnlySpan<RuntimeValue>.Empty);
+        }
+        if (!array.HasIndex(index))
+        {
+            string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var prototype = GetArrayPrototype();
+            if (prototype.GetExtraGetter(key) is { } inheritedGetter)
+                return BindAccessorToObject(inheritedGetter, array).CallV2(
+                    this, ReadOnlySpan<RuntimeValue>.Empty);
+            if (prototype.HasExtra(key))
+                return RuntimeValue.FromBoxed(prototype.TryGetExtra(key));
         }
         return RuntimeValue.FromBoxed(array.Get(index));
     }
@@ -1343,7 +1392,10 @@ public partial class Interpreter
         // Math is an extensible object — allow Math[n] = v alongside Math.foo = v.
         if (obj is SharpTSMath math)
         {
-            math.SetExtra(index?.ToString() ?? "", value);
+            if (index is SharpTSSymbol mathSymbol)
+                math.SetBySymbolStrict(mathSymbol, value, strictMode);
+            else
+                math.SetExtra(index?.ToString() ?? "", value);
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSJSON json)
@@ -1376,7 +1428,10 @@ public partial class Interpreter
         }
         if (obj is SharpTSStringPrototype strProto)
         {
-            strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            if (index is SharpTSSymbol stringSymbol)
+                strProto.SetBySymbolStrict(stringSymbol, value, strictMode);
+            else
+                strProto.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSArrayPrototype arrayProto)
@@ -1421,6 +1476,21 @@ public partial class Interpreter
                     $"Cannot assign to read only property '{index}' of function"));
             return RuntimeValue.FromBoxed(value);
         }
+        if (obj is SharpTSBuiltInConstructor
+            { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
+            && index?.ToString() == "prototype")
+        {
+            if (strictMode)
+                throw new ThrowException(new Runtime.Types.SharpTSTypeError(
+                    "Cannot assign to read only property 'prototype' of function"));
+            return RuntimeValue.FromBoxed(value);
+        }
+        if (obj is SharpTSBuiltInConstructor builtInConstructor)
+        {
+            SetBuiltInConstructorProperty(
+                builtInConstructor, PropertyKeyConverter.ToPropertyKeyString(index), value);
+            return RuntimeValue.FromBoxed(value);
+        }
 
         var target = ResolveIndexTarget(obj, index);
 
@@ -1461,6 +1531,23 @@ public partial class Interpreter
 
             case IndexTarget.ArrayString t:
                 t.Target.SetNamedProperty(t.Key, value);
+                break;
+
+            case IndexTarget.ArraySymbol t:
+                if (t.Target.TryGetSymbolAccessor(
+                    t.Key, out _, out var arraySymbolSetter))
+                {
+                    if (arraySymbolSetter != null)
+                        BindAccessorToObject(arraySymbolSetter, t.Target)
+                            .CallBoxed(this, [value]);
+                    else if (strictMode)
+                        throw new InterpreterException(
+                            $"Cannot set symbol property '{t.Key}' which has only a getter.");
+                }
+                else if (strictMode)
+                    t.Target.SetBySymbolStrict(t.Key, value, strictMode);
+                else
+                    t.Target.SetBySymbol(t.Key, value);
                 break;
 
             case IndexTarget.TypedArray t:

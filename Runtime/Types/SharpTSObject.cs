@@ -18,8 +18,10 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 {
     private readonly Dictionary<string, object?> _fields = fields;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
+    private readonly List<SharpTSSymbol> _symbolPropertyOrder = [];
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
         _symbolAccessors;
+    private Dictionary<SharpTSSymbol, PropertyDescriptorFlags>? _symbolDescriptors;
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
     private HashSet<string>? _accessorProperties;
@@ -115,12 +117,24 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 configurable: false);
         }
 
-        if (_accessorProperties is null) return;
-        foreach (var name in _accessorProperties)
+        if (_accessorProperties is not null)
         {
-            var current = GetPropertyFlags(name);
-            _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
-                writable: current.Writable,
+            foreach (var name in _accessorProperties)
+            {
+                var current = GetPropertyFlags(name);
+                _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
+                    writable: current.Writable,
+                    enumerable: current.Enumerable,
+                    configurable: false);
+            }
+        }
+
+        foreach (var symbol in GetSymbolPropertyNames())
+        {
+            var current = GetSymbolPropertyFlags(symbol);
+            _symbolDescriptors ??= [];
+            _symbolDescriptors[symbol] = PropertyDescriptorFlags.ForDefineProperty(
+                writable: frozen ? false : current.Writable,
                 enumerable: current.Enumerable,
                 configurable: false);
         }
@@ -138,9 +152,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// Gets all symbol-keyed property names.
     /// </summary>
     public IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
-    {
-        return _symbolFields.Keys;
-    }
+        => _symbolPropertyOrder;
 
     /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
@@ -426,9 +438,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal void DefineSymbolAccessor(
         SharpTSSymbol symbol, ISharpTSCallable? getter, ISharpTSCallable? setter)
     {
+        bool exists = HasSymbolProperty(symbol);
         _symbolAccessors ??= [];
         _symbolAccessors[symbol] = (getter, setter);
         _symbolFields.Remove(symbol);
+        _symbolDescriptors ??= [];
+        _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
+        if (!exists) _symbolPropertyOrder.Add(symbol);
     }
 
     /// <summary>Returns a symbol-keyed accessor pair when one is defined.</summary>
@@ -464,8 +480,17 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
+        if (exists && !GetSymbolPropertyFlags(symbol).Writable)
+            return;
+
         _symbolAccessors?.Remove(symbol);
         _symbolFields[symbol] = value;
+        if (!exists)
+        {
+            _symbolPropertyOrder.Add(symbol);
+            _symbolDescriptors ??= [];
+            _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
+        }
     }
 
     /// <summary>
@@ -491,9 +516,21 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             }
             return;
         }
+        if (exists && !GetSymbolPropertyFlags(symbol).Writable)
+        {
+            if (strictMode)
+                throw StrictModeErrors.TypeError("Cannot assign to read only symbol property of object");
+            return;
+        }
 
         _symbolAccessors?.Remove(symbol);
         _symbolFields[symbol] = value;
+        if (!exists)
+        {
+            _symbolPropertyOrder.Add(symbol);
+            _symbolDescriptors ??= [];
+            _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
+        }
     }
 
     /// <summary>
@@ -515,8 +552,16 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             // Frozen and sealed objects silently ignore property deletions
             return false;
         }
+        if (HasSymbolProperty(symbol) && !GetSymbolPropertyFlags(symbol).Configurable)
+            return false;
         bool removed = _symbolFields.Remove(symbol);
-        return (_symbolAccessors?.Remove(symbol) ?? false) || removed;
+        removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
+        if (removed)
+        {
+            _symbolPropertyOrder.Remove(symbol);
+            _symbolDescriptors?.Remove(symbol);
+        }
+        return removed;
     }
 
     /// <summary>
@@ -533,8 +578,101 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             }
             return false;
         }
+        if (HasSymbolProperty(symbol) && !GetSymbolPropertyFlags(symbol).Configurable)
+        {
+            if (strictMode)
+                throw StrictModeErrors.TypeError("Cannot delete non-configurable symbol property of object");
+            return false;
+        }
         bool removed = _symbolFields.Remove(symbol);
-        return (_symbolAccessors?.Remove(symbol) ?? false) || removed;
+        removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
+        if (removed)
+        {
+            _symbolPropertyOrder.Remove(symbol);
+            _symbolDescriptors?.Remove(symbol);
+        }
+        return removed;
+    }
+
+    /// <summary>
+    /// Defines or updates a symbol-keyed property while preserving its complete
+    /// descriptor attributes. Symbol assignments use the ordinary all-true
+    /// defaults; Object.defineProperty and intrinsic construction use this path.
+    /// </summary>
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+    {
+        bool hasExisting = HasSymbolProperty(symbol);
+        bool existingIsAccessor = _symbolAccessors?.ContainsKey(symbol) ?? false;
+        bool descriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
+        bool descriptorIsData = descriptor.HasValue || descriptor.HasWritable;
+        var existingFlags = hasExisting
+            ? GetSymbolPropertyFlags(symbol)
+            : PropertyDescriptorFlags.ForDefineProperty();
+
+        if (hasExisting && !existingFlags.Configurable)
+        {
+            if ((descriptor.HasConfigurable && descriptor.Configurable)
+                || (descriptor.HasEnumerable
+                    && descriptor.Enumerable != existingFlags.Enumerable))
+                return false;
+
+            if (existingIsAccessor)
+            {
+                if (descriptorIsData) return false;
+                TryGetSymbolAccessor(symbol, out var currentGet, out var currentSet);
+                if (descriptor.HasGet && !SameValue(descriptor.Get, currentGet)) return false;
+                if (descriptor.HasSet && !SameValue(descriptor.Set, currentSet)) return false;
+            }
+            else
+            {
+                if (descriptorIsAccessor) return false;
+                if (!existingFlags.Writable)
+                {
+                    if (descriptor.HasWritable && descriptor.Writable) return false;
+                    if (descriptor.HasValue
+                        && !SameValue(descriptor.Value, GetBySymbol(symbol)))
+                        return false;
+                }
+            }
+        }
+
+        if (IsFrozen || !IsExtensible && !hasExisting) return false;
+
+        bool writable = descriptor.HasWritable
+            ? descriptor.Writable
+            : hasExisting ? existingFlags.Writable : false;
+        bool enumerable = descriptor.HasEnumerable
+            ? descriptor.Enumerable
+            : hasExisting ? existingFlags.Enumerable : false;
+        bool configurable = descriptor.HasConfigurable
+            ? descriptor.Configurable
+            : hasExisting ? existingFlags.Configurable : false;
+        _symbolDescriptors ??= [];
+        _symbolDescriptors[symbol] = PropertyDescriptorFlags.ForDefineProperty(
+            writable, enumerable, configurable);
+
+        if (descriptorIsAccessor
+            || (!descriptorIsData && existingIsAccessor))
+        {
+            TryGetSymbolAccessor(symbol, out var getter, out var setter);
+            if (descriptor.HasGet) getter = descriptor.Get;
+            if (descriptor.HasSet) setter = descriptor.Set;
+            _symbolAccessors ??= [];
+            _symbolAccessors[symbol] = (getter, setter);
+            _symbolFields.Remove(symbol);
+        }
+        else
+        {
+            _symbolAccessors?.Remove(symbol);
+            if (descriptor.HasValue)
+                _symbolFields[symbol] = descriptor.Value;
+            else if (!hasExisting)
+                _symbolFields[symbol] = SharpTSUndefined.Instance;
+        }
+
+        if (!hasExisting) _symbolPropertyOrder.Add(symbol);
+
+        return true;
     }
 
     /// <summary>
@@ -731,6 +869,46 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
     }
 
+    /// <summary>Gets the complete descriptor for an own symbol-keyed property.</summary>
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+    {
+        bool hasDataProperty = _symbolFields.TryGetValue(symbol, out var value);
+        bool isAccessor = _symbolAccessors?.ContainsKey(symbol) ?? false;
+        if (!hasDataProperty && !isAccessor) return null;
+
+        var flags = GetSymbolPropertyFlags(symbol);
+        if (isAccessor)
+        {
+            TryGetSymbolAccessor(symbol, out var getter, out var setter);
+            return new SharpTSPropertyDescriptor
+            {
+                Get = getter,
+                Set = setter,
+                HasGet = true,
+                HasSet = true,
+                Enumerable = flags.Enumerable,
+                Configurable = flags.Configurable,
+            };
+        }
+
+        return new SharpTSPropertyDescriptor
+        {
+            Value = value,
+            HasValue = true,
+            Writable = flags.Writable,
+            HasWritable = true,
+            Enumerable = flags.Enumerable,
+            HasEnumerable = true,
+            Configurable = flags.Configurable,
+            HasConfigurable = true,
+        };
+    }
+
+    internal PropertyDescriptorFlags GetSymbolPropertyFlags(SharpTSSymbol symbol)
+        => _symbolDescriptors?.TryGetValue(symbol, out var flags) == true
+            ? flags
+            : PropertyDescriptorFlags.Default;
+
     /// <summary>
     /// Gets the descriptor flags for a property, or default flags if not explicitly set.
     /// </summary>
@@ -771,7 +949,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal IEnumerable<string> OwnEnumerableKeys()
     {
         foreach (var key in _fields.Keys)
-            if (!IsInternalSlot(key) && GetPropertyFlags(key).Enumerable)
+            if (GetPropertyFlags(key).Enumerable)
                 yield return key;
         if (_accessorProperties == null) yield break;
         foreach (var key in _accessorProperties)

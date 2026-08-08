@@ -18,8 +18,10 @@ public static class JSONBuiltIns
     // a fresh BuiltInMethod per access.
     private static readonly BuiltInStaticMemberLookup _lookup =
         BuiltInStaticBuilder.Create()
-            .MethodV2("parse", 1, 2, ParseJson)
-            .MethodV2("stringify", 1, 3, StringifyJson)
+            .MethodV2("parse", 0, 2, 2, ParseJson)
+            .MethodV2("stringify", 1, 3, 3, StringifyJson)
+            .MethodV2("rawJSON", 0, int.MaxValue, 1, RawJson)
+            .MethodV2("isRawJSON", 0, int.MaxValue, 1, IsRawJson)
             .Build();
 
     public static object? GetStaticMethod(string name) => _lookup.GetMember(name);
@@ -27,9 +29,47 @@ public static class JSONBuiltIns
     /// <summary>Member names for REPL autocomplete.</summary>
     public static IEnumerable<string> MemberNames => _lookup.MemberNames;
 
+    private static RuntimeValue RawJson(
+        Interpreter interpreter,
+        RuntimeValue _,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        object? input = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        string text = interpreter.ToStringForBuiltInArgument(input);
+        if (text.Length == 0 || char.IsWhiteSpace(text[0]) || char.IsWhiteSpace(text[^1]))
+            throw new ThrowException(new SharpTSSyntaxError("Invalid raw JSON text"));
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            if (document.RootElement.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+                throw new ThrowException(new SharpTSSyntaxError(
+                    "Raw JSON text must be a primitive value"));
+        }
+        catch (JsonException ex)
+        {
+            throw new ThrowException(new SharpTSSyntaxError(
+                $"Invalid raw JSON text: {ex.Message}"));
+        }
+
+        return RuntimeValue.FromObject(new SharpTSRawJson(text));
+    }
+
+    private static RuntimeValue IsRawJson(
+        Interpreter _,
+        RuntimeValue __,
+        ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromBoolean(
+            args.Length > 0 && args[0].ToObject() is SharpTSRawJson);
+
     private static RuntimeValue ParseJson(Interpreter interp, RuntimeValue _, ReadOnlySpan<RuntimeValue> args)
     {
-        var text = args[0].ToObject()?.ToString() ?? "null";
+        object? input = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        var text = interp.ToStringForBuiltInArgument(input);
         var reviver = args.Length > 1 ? args[1].ToObject() as ISharpTSCallable : null;
 
         object? parsed;
@@ -79,9 +119,19 @@ public static class JSONBuiltIns
                 var prop = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
                 var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
                 if (IsUndefinedRevive(newElement))
-                    arr.DeleteAt(i);
+                    arr.DeletePropertyStrict(prop, strictMode: false);
                 else
-                    arr[i] = newElement;
+                    arr.DefineProperty(prop, new SharpTSPropertyDescriptor
+                    {
+                        Value = newElement,
+                        HasValue = true,
+                        Writable = true,
+                        HasWritable = true,
+                        Enumerable = true,
+                        HasEnumerable = true,
+                        Configurable = true,
+                        HasConfigurable = true,
+                    });
             }
         }
         else if (val is SharpTSProxy proxy)
@@ -215,9 +265,11 @@ public static class JSONBuiltIns
                 break;
         }
 
-        var replacerFunc = replacer as ISharpTSCallable;
+        var replacerFunc = replacer is SharpTSProxy replacerProxy && !replacerProxy.IsCallable
+            ? null
+            : replacer as ISharpTSCallable;
         var replacerArray = replacer as SharpTSArray;
-        HashSet<string>? allowedKeys = null;
+        IReadOnlyList<string>? allowedKeys = null;
 
         if (replacerArray != null)
         {
@@ -225,12 +277,17 @@ public static class JSONBuiltIns
             // array. A String element is used as-is; a Number or a boxed
             // String/Number wrapper is coerced via ToString (honoring an own
             // toString/valueOf — #574); any other element is ignored.
-            allowedKeys = new HashSet<string>();
+            var propertyList = new List<string>();
+            var propertySet = new HashSet<string>();
             foreach (var element in replacerArray)
             {
-                if (interp.TryCoerceReplacerArrayKey(element, out var coercedKey))
-                    allowedKeys.Add(coercedKey);
+                if (interp.TryCoerceReplacerArrayKey(element, out var coercedKey)
+                    && propertySet.Add(coercedKey))
+                {
+                    propertyList.Add(coercedKey);
+                }
             }
+            allowedKeys = propertyList;
         }
 
         var sb = new StringBuilder();
@@ -238,7 +295,8 @@ public static class JSONBuiltIns
         // serializing objects/arrays. A cycle throws TypeError. Reference equality
         // (not .Equals) is the spec's notion of identity.
         var seen = new HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
-        if (StringifyValue(interp, value, "", replacerFunc, allowedKeys, indentStr, 0, sb, seen))
+        var wrapper = new SharpTSObject(new Dictionary<string, object?> { [""] = value });
+        if (StringifyValue(interp, wrapper, value, "", replacerFunc, allowedKeys, indentStr, 0, sb, seen))
         {
             return RuntimeValue.FromString(sb.ToString());
         }
@@ -252,16 +310,18 @@ public static class JSONBuiltIns
         return RuntimeValue.Undefined;
     }
 
-    private static bool StringifyValue(Interpreter interp, object? value, object? key,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
+    private static bool StringifyValue(Interpreter interp, object holder, object? value, string key,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
     {
+        // SerializeJSONProperty calls toJSON before the replacer, with the
+        // original value as `this` and the property key as its sole argument.
+        value = CallToJsonIfExists(interp, value, key);
+
         if (replacer != null)
         {
-            value = replacer.Call(interp, [key, value]);
+            value = FunctionBuiltIns.CallWithThis(
+                interp, replacer, holder, [key, value]);
         }
-
-        // Check for toJSON() method before serializing
-        value = CallToJsonIfExists(interp, value);
 
         // ECMA-262 25.5.2.3 step 4: a boxed primitive wrapper (new Number/String/Boolean)
         // serializes as its underlying primitive — not as an object exposing the internal
@@ -272,6 +332,9 @@ public static class JSONBuiltIns
 
         switch (value)
         {
+            case SharpTSRawJson rawJson:
+                sb.Append(rawJson.RawText);
+                return true;
             case null:
                 sb.Append("null");
                 return true;
@@ -287,9 +350,16 @@ public static class JSONBuiltIns
                 JsonStringEscaper.AppendQuoted(sb, s);
                 return true;
             case SharpTSBigInt:
-                throw new ThrowException("TypeError: BigInt value can't be serialized in JSON");
+                throw new ThrowException(new SharpTSTypeError(
+                    "BigInt value can't be serialized in JSON"));
             case SharpTSArray arr:
                 StringifyArray(interp, arr, replacer, allowedKeys, indentStr, depth, sb, seen);
+                return true;
+            case SharpTSProxy proxy when !proxy.IsCallable:
+                StringifyProxy(interp, proxy, replacer, allowedKeys, indentStr, depth, sb, seen);
+                return true;
+            case SharpTSRegExp regex:
+                StringifyRegExp(interp, regex, replacer, allowedKeys, indentStr, depth, sb, seen);
                 return true;
             case SharpTSObject obj:
                 StringifyObject(interp, obj, replacer, allowedKeys, indentStr, depth, sb, seen);
@@ -315,19 +385,20 @@ public static class JSONBuiltIns
     /// <summary>
     /// Checks if the value has a toJSON() method and calls it if present.
     /// </summary>
-    private static object? CallToJsonIfExists(Interpreter interp, object? value)
+    private static object? CallToJsonIfExists(
+        Interpreter interp,
+        object? value,
+        string key)
     {
-        if (value is SharpTSInstance inst)
-        {
-            var toJson = inst.GetClass().FindMethod("toJSON");
-            if (toJson != null)
-                return SharpTSClass.BindMethod(toJson, inst).Call(interp, []);
-        }
-        else if (value is SharpTSObject obj && obj.Fields.TryGetValue("toJSON", out var fn))
-        {
-            if (fn is ISharpTSCallable callable)
-                return callable.Call(interp, []);
-        }
+        if (value is null or string or bool or double
+            or SharpTSUndefined or SharpTSSymbol or SharpTSBigInt)
+            return value;
+
+        var toJson = interp.GetPropertyValue(value, "toJSON");
+        if (toJson is ISharpTSCallable callable)
+            return FunctionBuiltIns.CallWithThis(
+                interp, callable, value, [key]);
+
         return value;
     }
 
@@ -356,12 +427,13 @@ public static class JSONBuiltIns
     }
 
     private static void StringifyArray(Interpreter interp, SharpTSArray arr,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
     {
         // ECMA-262 25.5.2.5 SerializeJSONArray — throw if we're re-entering
         // the same array mid-serialization (cycle).
         if (!seen.Add(arr))
-            throw new ThrowException("TypeError: Converting circular structure to JSON");
+            throw new ThrowException(new SharpTSTypeError(
+                "Converting circular structure to JSON"));
         try
         {
             if (arr.Length == 0)
@@ -382,7 +454,9 @@ public static class JSONBuiltIns
             {
                 if (i > 0) sb.Append(separator);
 
-                if (!StringifyValue(interp, arr[i], (double)i, replacer, allowedKeys, indentStr, depth + 1, sb, seen))
+                if (!StringifyValue(interp, arr, arr[i],
+                    i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    replacer, allowedKeys, indentStr, depth + 1, sb, seen))
                 {
                     sb.Append("null");
                 }
@@ -402,16 +476,34 @@ public static class JSONBuiltIns
     }
 
     private static void StringifyDictionary(Interpreter interp, IReadOnlyDictionary<string, object?> dict,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, dict, dict.Keys, k => dict[k], replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, dict, dict.Keys,
+            k => dict.TryGetValue(k, out var value) ? value : SharpTSUndefined.Instance,
+            replacer, allowedKeys, indentStr, depth, sb, seen);
+
+    private static void StringifyProxy(Interpreter interp, SharpTSProxy proxy,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, proxy, proxy.TrapOwnKeys(interp),
+            key => proxy.TrapGet(key, interp),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
+
+    private static void StringifyRegExp(Interpreter interp, SharpTSRegExp regex,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, regex, regex.OwnEnumerableKeys(),
+            key => interp.GetPropertyValue(regex, key),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, obj, obj.Fields.Keys, k => obj.Fields[k], replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, obj, obj.OwnEnumerableKeys(),
+            k => interp.GetPropertyValue(obj, k),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyInstance(Interpreter interp, SharpTSInstance inst,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, inst, inst.GetFieldNames(), inst.GetRawField, replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, inst, inst.GetFieldNames(),
+            k => interp.GetPropertyValue(inst, k),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
 
     /// <summary>
     /// Shared JSON-object serializer for the three object shapes (plain dictionary,
@@ -424,19 +516,15 @@ public static class JSONBuiltIns
     /// </summary>
     private static void StringifyJsonObject(Interpreter interp, object node,
         IEnumerable<string> keys, Func<string, object?> read,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth,
         StringBuilder sb, HashSet<object> seen)
     {
         if (!seen.Add(node))
-            throw new ThrowException("TypeError: Converting circular structure to JSON");
+            throw new ThrowException(new SharpTSTypeError(
+                "Converting circular structure to JSON"));
         try
         {
-            if (allowedKeys != null)
-            {
-                keys = keys.Where(allowedKeys.Contains);
-            }
-
-            var keyList = keys.ToList();
+            var keyList = allowedKeys?.ToList() ?? keys.ToList();
             if (keyList.Count == 0)
             {
                 sb.Append("{}");
@@ -465,7 +553,8 @@ public static class JSONBuiltIns
                 sb.Append(':');
                 if (pretty) sb.Append(' ');
 
-                if (StringifyValue(interp, read(key), key, replacer, allowedKeys, indentStr, depth + 1, sb, seen))
+                if (StringifyValue(interp, node, read(key), key,
+                    replacer, allowedKeys, indentStr, depth + 1, sb, seen))
                 {
                     first = false;
                 }

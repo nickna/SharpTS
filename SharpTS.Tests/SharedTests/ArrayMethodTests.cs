@@ -190,6 +190,24 @@ public class ArrayMethodTests
     }
 
     [Theory, ModeData]
+    public void Array_With_DoesNotReadReplacedIndex(ExecutionMode mode)
+    {
+        var source = """
+            const values = [0, 1, 2, 3];
+            let reads = 0;
+            Object.defineProperty(values, "2", {
+                get() { reads++; throw new Error("replaced index was read"); }
+            });
+            console.log("defined", reads);
+            const result = values.with(2, 6);
+            console.log("copied", reads, result.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("defined 0\ncopied 0 0,1,6,3\n", output);
+    }
+
+    [Theory, ModeData]
     public void Array_ReduceRight_WithoutInitialValue_UsesLastElement(ExecutionMode mode)
     {
         var source = """

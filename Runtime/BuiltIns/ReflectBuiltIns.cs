@@ -249,6 +249,7 @@ public static class ReflectBuiltIns
                     SharpTSObject obj => obj.IsExtensible,
                     SharpTSInstance inst => inst.IsExtensible,
                     SharpTSArray arr => arr.IsExtensible,
+                    ISharpTSCallable callable => PropertyDescriptorStore.IsExtensible(callable),
                     Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
                     _ => false
                 });
@@ -268,6 +269,9 @@ public static class ReflectBuiltIns
                     case SharpTSArray arr:
                         arr.PreventExtensions();
                         break;
+                    case ISharpTSCallable callable:
+                        PropertyDescriptorStore.PreventExtensions(callable);
+                        break;
                     case Dictionary<string, object?> dict:
                         PropertyDescriptorStore.PreventExtensions(dict);
                         break;
@@ -275,12 +279,22 @@ public static class ReflectBuiltIns
                 return RuntimeValue.True;
             }),
 
-            "getOwnPropertyDescriptor" => BuiltInMethod.CreateV2("getOwnPropertyDescriptor", 2, static (_, _, args) =>
+            "getOwnPropertyDescriptor" => BuiltInMethod.CreateV2("getOwnPropertyDescriptor", 2, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.getOwnPropertyDescriptor requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
+                if (target is SharpTSProxy proxy)
+                {
+                    var proxyDescriptor = proxy.TrapGetOwnPropertyDescriptor(propertyKey, interpreter);
+                    return proxyDescriptor is null or SharpTSUndefined
+                        ? RuntimeValue.Undefined
+                        : RuntimeValue.FromBoxed(proxyDescriptor);
+                }
                 // Delegate to ObjectBuiltIns which handles all target types
-                return RuntimeValue.FromBoxed(ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(target, propertyKey));
+                var descriptor = ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(target, propertyKey);
+                return descriptor is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(descriptor);
             }),
 
             "defineProperty" => BuiltInMethod.CreateV2("defineProperty", 3, static (interpreter, _, args) =>
@@ -316,12 +330,15 @@ public static class ReflectBuiltIns
                 }
             }),
 
-            "ownKeys" => BuiltInMethod.CreateV2("ownKeys", 1, static (_, _, args) =>
+            "ownKeys" => BuiltInMethod.CreateV2("ownKeys", 1, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.ownKeys requires a target object.");
                 List<object?> keys = [];
                 switch (target)
                 {
+                    case SharpTSProxy proxy:
+                        keys.AddRange(proxy.TrapOwnKeys(interpreter).Select(k => (object?)k));
+                        break;
                     case SharpTSObject obj:
                         keys.AddRange(obj.Fields.Keys.Select(k => (object?)k));
                         keys.AddRange(obj.GetSymbolPropertyNames().Select(s => (object?)s));
@@ -329,6 +346,12 @@ public static class ReflectBuiltIns
                     case SharpTSInstance inst:
                         keys.AddRange(inst.GetFieldNames().Select(k => (object?)k));
                         keys.AddRange(inst.GetSymbolPropertyNames().Select(s => (object?)s));
+                        break;
+                    case SharpTSMath math:
+                        keys.AddRange(math.GetSymbolPropertyNames().Select(s => (object?)s));
+                        break;
+                    case SharpTSStringPrototype stringPrototype:
+                        keys.AddRange(stringPrototype.GetSymbolPropertyNames().Select(s => (object?)s));
                         break;
                     case Dictionary<string, object?> dict:
                         keys.AddRange(dict.Keys.Select(k => (object?)k));
@@ -418,6 +441,17 @@ public static class ReflectBuiltIns
                     throw new ThrowException(new SharpTSTypeError(
                         "Reflect.construct target is not a constructor"));
 
+                // Promise validates the executor before
+                // GetPrototypeFromConstructor(newTarget). In particular, an
+                // accessor on newTarget.prototype must not run when the
+                // executor argument is absent or non-callable.
+                if (target is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+                    && (callArgs.Count == 0 || callArgs[0] is not ISharpTSCallable))
+                {
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Promise executor must be callable"));
+                }
+
                 if (target is SharpTSClass cls)
                 {
                     return RuntimeValue.FromBoxed(cls.Call(interpreter, callArgs));
@@ -456,9 +490,10 @@ public static class ReflectBuiltIns
             or SharpTS.Runtime.Types.SharpTSArrayUnboundMethod
             or SharpTS.Runtime.Types.ErrorToStringCallable
             or BuiltInAsyncMethod
-            or BoundFunction
             or BuiltInMethod { IsConstructor: false })
             return true;
+        if (value is BoundFunction bound)
+            return IsNotConstructor(bound.Target);
         // Anything else that's not callable can't be a constructor.
         return value is not ISharpTSCallable;
     }

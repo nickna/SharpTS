@@ -15,6 +15,32 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class RealmIsolationTests
 {
+    [Fact]
+    public void HostRegisteredGlobals_AreOwnGlobalObjectProperties()
+    {
+        using var interpreter = new Interpreter(TextWriter.Null, TextWriter.Null);
+        var callback = new object();
+
+        interpreter.RegisterGlobal("hostCallback", callback);
+
+        Assert.True(interpreter.GlobalThis.HasUserProperty("hostCallback"));
+        Assert.Same(callback, interpreter.GlobalThis.GetProperty("hostCallback"));
+    }
+
+    [Fact]
+    public void HostRegisteredGlobals_AreVisibleToHasOwnProperty()
+    {
+        using var interpreter = new Interpreter(TextWriter.Null, TextWriter.Null);
+        interpreter.RegisterGlobal("hostCallback", new object());
+        var hasOwn = Assert.IsAssignableFrom<SharpTS.Runtime.Types.ISharpTSCallable>(
+            interpreter.GetObjectPrototype().GetMember("hasOwnProperty"));
+
+        var result = SharpTS.Runtime.BuiltIns.FunctionBuiltIns.CallWithThis(
+            interpreter, hasOwn, interpreter.GlobalThis, ["hostCallback"]);
+
+        Assert.Equal(true, result);
+    }
+
     /// <summary>
     /// The happy path still holds within a single realm in both modes:
     /// <c>Symbol.for</c> is idempotent for a given key and <c>Symbol.keyFor</c>
@@ -171,6 +197,23 @@ public class RealmIsolationTests
         Assert.False(realmB.GetStringPrototype().HasExtra("foo"));
         Assert.False(realmB.GetNumberPrototype().HasExtra("bar"));
         Assert.False(realmB.GetBooleanPrototype().HasExtra("baz"));
+    }
+
+    /// <summary>
+    /// Date.prototype is mutable but realm-owned. Deleting one of its built-in
+    /// methods in one interpreter must not remove the method from another
+    /// interpreter created in the same process.
+    /// </summary>
+    [Fact]
+    public void DatePrototypeMutations_ArePerRealm()
+    {
+        using var realmA = new Interpreter(TextWriter.Null, TextWriter.Null);
+        using var realmB = new Interpreter(TextWriter.Null, TextWriter.Null);
+
+        Assert.NotSame(realmA.GetDatePrototype(), realmB.GetDatePrototype());
+        Assert.True(realmA.GetDatePrototype().DeleteExtra("toISOString"));
+        Assert.True(realmA.GetDatePrototype().IsBuiltInDeleted("toISOString"));
+        Assert.False(realmB.GetDatePrototype().IsBuiltInDeleted("toISOString"));
     }
 
     /// <summary>

@@ -305,11 +305,23 @@ public static class RegExpBuiltIns
         static BuiltInMethod RealmLocal(BuiltInMethod method) => method.Bind(null);
 
         var proto = new SharpTSObject(new Dictionary<string, object?>());
-        proto.SetBySymbol(SharpTSSymbol.Match, RealmLocal(_symbolMatch));
-        proto.SetBySymbol(SharpTSSymbol.MatchAll, RealmLocal(_symbolMatchAll));
-        proto.SetBySymbol(SharpTSSymbol.Replace, RealmLocal(_symbolReplace));
-        proto.SetBySymbol(SharpTSSymbol.Search, RealmLocal(_symbolSearch));
-        proto.SetBySymbol(SharpTSSymbol.Split, RealmLocal(_symbolSplit));
+        void DefineSymbolMethod(SharpTSSymbol symbol, BuiltInMethod method) =>
+            proto.DefineProperty(symbol, new SharpTSPropertyDescriptor
+            {
+                Value = RealmLocal(method),
+                HasValue = true,
+                Writable = true,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = true,
+                HasConfigurable = true,
+            });
+        DefineSymbolMethod(SharpTSSymbol.Match, _symbolMatch);
+        DefineSymbolMethod(SharpTSSymbol.MatchAll, _symbolMatchAll);
+        DefineSymbolMethod(SharpTSSymbol.Replace, _symbolReplace);
+        DefineSymbolMethod(SharpTSSymbol.Search, _symbolSearch);
+        DefineSymbolMethod(SharpTSSymbol.Split, _symbolSplit);
         // ECMA-262 §22.2.5: instance-method slots that are introspectable on
         // the prototype itself (`RegExp.prototype.exec`, `.test`, `.toString`)
         // — propertyHelper.js's verifyNotWritable runs against them, and
@@ -504,7 +516,7 @@ public static class RegExpBuiltIns
         if (exec is ISharpTSCallable callable)
         {
             var result = FunctionBuiltIns.CallWithThis(interp, callable, rx, [s]);
-            if (result is null || result is SharpTSUndefined) return null;
+            if (result is null) return null;
             // Per spec, exec must return Object or Null. Anything else → TypeError.
             if (result is not (SharpTSObject or SharpTSArray or SharpTSInstance))
                 throw new ThrowException(new SharpTSTypeError(
@@ -606,7 +618,7 @@ public static class RegExpBuiltIns
     /// case (treated as `undefined`).
     /// </summary>
     private static string ToStr(Interpreter interp, object? value)
-        => value is null ? "undefined" : interp.Stringify(value);
+        => interp.ToStringForBuiltInArgument(value);
 
     /// <summary>
     /// ECMA-262 §22.2.4.1 RegExp(pattern, flags). Runs with interpreter access
@@ -624,7 +636,7 @@ public static class RegExpBuiltIns
     {
         object? pattern = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
         object? flags = args.Count > 1 ? args[1] : SharpTSUndefined.Instance;
-        bool flagsUndefined = flags is null or SharpTSUndefined;
+        bool flagsUndefined = flags is SharpTSUndefined;
 
         bool patternIsRegExp = IsRegExp(interp, pattern);
 
@@ -657,7 +669,7 @@ public static class RegExpBuiltIns
         {
             // Step 7: ordinary coercion — only `undefined` becomes "" (not the
             // literal "undefined"); everything else is ToString'd.
-            p = pattern is null or SharpTSUndefined ? "" : ToStr(interp, pattern);
+            p = pattern is SharpTSUndefined ? "" : ToStr(interp, pattern);
             f = flagsUndefined ? "" : ToStr(interp, flags);
         }
         return new SharpTSRegExp(p, f);
@@ -764,7 +776,10 @@ public static class RegExpBuiltIns
         bool fullUnicode = flags.Contains('u');
 
         // 6.b Set(rx, "lastIndex", 0, true).
-        interp.SetProperty(recv, "lastIndex", 0.0);
+        if (recv is SharpTSRegExp regex)
+            SetLastIndexOrThrow(interp, regex, 0);
+        else
+            interp.SetProperty(recv, "lastIndex", 0.0);
 
         // 6.c-e Loop, accumulate matched strings.
         var results = new List<object?>();
@@ -784,9 +799,13 @@ public static class RegExpBuiltIns
             // If matchStr is empty, advance lastIndex to avoid infinite loop.
             if (matchStr.Length == 0)
             {
-                var thisIndex = ToLengthAsInt(interp.GetProperty(recv, "lastIndex"));
+                var thisIndex = ToLengthAsInt(
+                    interp, interp.GetProperty(recv, "lastIndex"));
                 int nextIndex = AdvanceStringIndex(s, thisIndex, fullUnicode);
-                interp.SetProperty(recv, "lastIndex", (double)nextIndex);
+                if (recv is SharpTSRegExp regexReceiver)
+                    SetLastIndexOrThrow(interp, regexReceiver, nextIndex);
+                else
+                    interp.SetProperty(recv, "lastIndex", (double)nextIndex);
             }
         }
     }
@@ -798,7 +817,8 @@ public static class RegExpBuiltIns
     {
         var recv = recvV.ToObject();
         RequireObject(recv, "[Symbol.search]");
-        var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
+        var s = interp.ToStringForBuiltInArgument(
+            args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance);
 
         // Save lastIndex, set to 0, run RegExpExec, restore lastIndex.
         var previousLastIndex = interp.GetProperty(recv, "lastIndex");
@@ -826,8 +846,15 @@ public static class RegExpBuiltIns
     {
         var recv = recvV.ToObject();
         RequireObject(recv, "[Symbol.replace]");
-        var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
-        var replaceValue = args.Length > 1 ? args[1].ToObject() : null;
+        var s = interp.ToStringForBuiltInArgument(
+            args.Length > 0 ? args[0].ToObject() : SharpTSUndefined.Instance);
+        var replaceValue = args.Length > 1
+            ? args[1].ToObject()
+            : SharpTSUndefined.Instance;
+        bool isCallable = replaceValue is ISharpTSCallable;
+        string replaceStr = isCallable
+            ? ""
+            : interp.ToStringForBuiltInArgument(replaceValue);
 
         // Read flags via Get so user getters fire.
         var flags = ToStr(interp, interp.GetProperty(recv, "flags"));
@@ -859,8 +886,6 @@ public static class RegExpBuiltIns
         if (matches.Count == 0) return RuntimeValue.FromString(s);
 
         // Build the result string with replacements.
-        bool isCallable = replaceValue is ISharpTSCallable;
-        string replaceStr = isCallable ? "" : ToStr(interp, replaceValue);
         var sb = new System.Text.StringBuilder();
         int nextSourcePosition = 0;
         foreach (var match in matches)
@@ -1016,7 +1041,9 @@ public static class RegExpBuiltIns
         var recv = recvV.ToObject();
         RequireObject(recv, "[Symbol.split]");
         var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
-        var limitArg = args.Length > 1 ? args[1].ToObject() : null;
+        var limitArg = args.Length > 1
+            ? args[1].ToObject()
+            : SharpTSUndefined.Instance;
 
         // §22.2.5.13 step 4: C = SpeciesConstructor(rx, %RegExp%).
         var speciesCtor = SpeciesConstructor(interp, recv);
@@ -1051,12 +1078,9 @@ public static class RegExpBuiltIns
         }
 
         // Step 12: lim = ToUint32(limit).
-        long limit = limitArg switch
-        {
-            null or SharpTSUndefined => uint.MaxValue,
-            double d => double.IsNaN(d) ? 0 : (long)((uint)d),
-            _ => 0,
-        };
+        long limit = limitArg is SharpTSUndefined
+            ? uint.MaxValue
+            : interp.ToUint32(limitArg);
         if (limit == 0) return RuntimeValue.FromObject(new SharpTSArray(new List<object?>()));
 
         var arr = new List<object?>();

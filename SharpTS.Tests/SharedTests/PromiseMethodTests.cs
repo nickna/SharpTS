@@ -10,6 +10,109 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class PromiseMethodTests
 {
+    [Theory, ModeData]
+    public void Constructor_AllowsOwnPropertyOverrides(ExecutionMode mode)
+    {
+        var source = """
+            const original = (Promise as any).resolve;
+            (Promise as any).marker = 42;
+            (Promise as any).resolve = "replacement";
+            console.log((Promise as any).marker);
+            console.log((Promise as any).resolve);
+            (Promise as any).resolve = original;
+            console.log(Promise.resolve(1) instanceof Promise);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\nreplacement\ntrue\n", output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Constructor_ComputedWritesAndDeletesAreRealmLocal(ExecutionMode mode)
+    {
+        var source = """
+            const original = Promise.resolve;
+            const key = "resolve";
+            (Promise as any)[key] = "replacement";
+            console.log((Promise as any)[key]);
+            console.log(Object.getOwnPropertyDescriptor(Promise, key)!.enumerable);
+            console.log(delete (Promise as any)[key]);
+            console.log(Object.prototype.hasOwnProperty.call(Promise, key));
+            (Promise as any)[key] = original;
+            console.log(Promise.resolve(1) instanceof Promise);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("replacement\nfalse\ntrue\nfalse\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Resolve_ReturnsPromisesWithTheSameConstructorUnchanged(ExecutionMode mode)
+    {
+        var source = """
+            let fulfill!: (value: object) => void;
+            let reject!: (reason: object) => void;
+            const fulfilled = Promise.resolve(1);
+            const pendingFulfilled = new Promise<object>((res) => { fulfill = res; });
+            const pendingRejected = new Promise<object>((_, rej) => { reject = rej; });
+            console.log(Promise.resolve(fulfilled) === fulfilled);
+            console.log(Promise.resolve(pendingFulfilled) === pendingFulfilled);
+            console.log(Promise.resolve(pendingRejected) === pendingRejected);
+            fulfill({});
+            reject({});
+            pendingRejected.catch(() => {});
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void StaticMethods_ThrowSynchronouslyForPrimitiveReceivers(ExecutionMode mode)
+    {
+        var source = """
+            const methods: any[] = [
+                Promise.resolve, Promise.reject, Promise.all,
+                Promise.race, Promise.allSettled, Promise.any
+            ];
+            const receivers: any[] = [undefined, null, 86, "string", true, Symbol()];
+            for (const method of methods) {
+                for (const receiver of receivers) {
+                    try {
+                        method.call(receiver, []);
+                        console.log(false);
+                    } catch (error) {
+                        console.log(error instanceof TypeError);
+                    }
+                }
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(string.Concat(Enumerable.Repeat("true\n", 36)), output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void StaticCombinators_RejectCallableNonConstructors(ExecutionMode mode)
+    {
+        var source = """
+            const methods: any[] = [
+                Promise.all, Promise.race, Promise.allSettled, Promise.any
+            ];
+            for (const method of methods) {
+                try {
+                    method.call(eval);
+                    console.log(false);
+                } catch (error) {
+                    console.log(error instanceof TypeError && error.constructor === TypeError);
+                }
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
     #region Promise.then() Tests
 
     [Theory, ModeData]
@@ -384,8 +487,8 @@ public class PromiseMethodTests
         Assert.Equal("42\n", output);
     }
 
-    [Theory, ModeData]
-    public void Resolve_NoArgs(ExecutionMode mode)
+    [Fact]
+    public void Resolve_NoArgs()
     {
         var source = """
             async function main(): Promise<void> {
@@ -396,8 +499,8 @@ public class PromiseMethodTests
             main();
             """;
 
-        var output = TestHarness.Run(source, mode);
-        Assert.Equal("null\n", output);
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("undefined\n", output);
     }
 
     /// <summary>
@@ -509,6 +612,25 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("caught\n", output);
+    }
+
+    [Fact]
+    public void ResolveAndReject_OmittedValuesAreUndefined()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                console.log((await Promise.resolve()) === undefined);
+                try {
+                    await Promise.reject();
+                } catch (reason) {
+                    console.log(reason === undefined);
+                }
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\ntrue\n", output);
     }
 
     #endregion
@@ -1062,6 +1184,42 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("true\nfunction\ntrue\n", output);
+    }
+
+    [Fact]
+    public void PromisePrototype_IsAnOrdinaryMutableObject()
+    {
+        var source = """
+            const proto: any = Promise.prototype;
+            const original = proto.then;
+            console.log(Object.hasOwn(proto, "then"));
+            console.log(delete proto.then);
+            console.log(Object.hasOwn(proto, "then"));
+            proto["then"] = original;
+            console.log(Object.hasOwn(proto, "then"));
+            console.log(Object.getPrototypeOf(proto) === Object.prototype);
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\ntrue\nfalse\ntrue\ntrue\n", output);
+    }
+
+    [Fact]
+    public void PromiseMethods_AreInheritedByIdentityAndBindAtCallTime()
+    {
+        var source = """
+            async function main(): Promise<void> {
+                const p: any = Promise.resolve(3);
+                console.log(p.then === Promise.prototype.then);
+                console.log(p.catch === Promise.prototype.catch);
+                console.log(p.finally === Promise.prototype.finally);
+                console.log(await p.then((value: number) => value + 1));
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("true\ntrue\ntrue\n4\n", output);
     }
 
     #endregion

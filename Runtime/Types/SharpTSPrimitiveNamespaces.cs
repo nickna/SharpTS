@@ -100,7 +100,7 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         // ECMA-262 7.1.17 ToString(bigint) = BigInt::toString = bare numeric form
         // ("42"), NOT the "42n" debug form used by console.log / util.inspect.
         if (arg is SharpTSBigInt bi) return bi.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (arg is SharpTSArray arr) return ArrayBuiltIns.ToJsString(interpreter, arr);
+        if (arg is SharpTSArray) return interpreter.ToStringForStringCall(arg);
         // A boxed wrapper / plain object goes through ToString = ToPrimitive
         // (string hint) then stringify, honoring an own toString override and
         // unwrapping a bare wrapper to its primitive (#574). A raw Symbol is
@@ -113,6 +113,8 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         // (#921/#922 follow-up). ToStringForStringCall stringifies via the
         // instance's own toString.
         if (arg is SharpTSInstance) return interpreter.ToStringForStringCall(arg);
+        if (arg is SharpTSGlobalThis) return interpreter.ToStringForStringCall(arg);
+        if (arg is ISharpTSCallable) return interpreter.ToStringForStringCall(arg);
         return arg.ToString() ?? "";
     }
 
@@ -167,7 +169,23 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
     public static readonly SharpTSStringPrototype Instance = new();
     // internal (not private) so each Interpreter can construct its own realm
     // instance; only the _extras overlay differs between instances.
-    internal SharpTSStringPrototype() { }
+    internal SharpTSStringPrototype()
+    {
+        var iterator = new StringPrototypeMethodWrapper(
+            "[Symbol.iterator]",
+            StringBuiltIns.GetPrototypeMethod("[Symbol.iterator]")!);
+        _extras.DefineProperty(SharpTSSymbol.Iterator, new SharpTSPropertyDescriptor
+        {
+            Value = iterator,
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
+    }
 
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
@@ -189,6 +207,17 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    internal IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
+        => _extras.GetSymbolPropertyNames();
+    internal object? GetBySymbol(SharpTSSymbol symbol) => _extras.GetBySymbol(symbol);
+    internal void SetBySymbolStrict(SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
 
     private bool IsBuiltIn(string name)
         => name == "constructor" || StringBuiltIns.GetPrototypeMethod(name) != null;
@@ -686,7 +715,7 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
         // step 3): it returns the numeric value, even though *implicit* ToNumber
         // on a bigint throws a TypeError. The radix-free decimal magnitude maps
         // to the nearest double.
-        if (arg is SharpTSBigInt bi) return (double)bi.Value;
+        if (arg is SharpTSBigInt bi) return NumberBuiltIns.BigIntToNumber(bi.Value);
         return interpreter.ToNumberWithPrimitive(arg);
     }
 
@@ -969,20 +998,39 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn
     internal SharpTSBooleanPrototype() { }
 
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        _deletedBuiltIns.Remove(name);
+        return _extras.DefineProperty(name, descriptor);
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
-    public bool DeleteProperty(string name) => _extras.DeleteProperty(name);
+    private static bool IsBuiltIn(string name)
+        => name is "constructor" or "toString" or "valueOf";
+
+    public bool DeleteProperty(string name)
+    {
+        if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;
+        if (IsBuiltIn(name)) _deletedBuiltIns.Add(name);
+        return true;
+    }
+    public bool HasOwnProperty(string name)
+        => HasExtra(name) || (!_deletedBuiltIns.Contains(name) && IsBuiltIn(name));
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
     public object? GetMember(string name)
     {
         if (HasExtra(name)) return TryGetExtra(name);
+        if (_deletedBuiltIns.Contains(name)) return null;
         return name switch
         {
             "constructor" => RealmConstructor ?? (object)SharpTSBooleanNamespace.Instance,

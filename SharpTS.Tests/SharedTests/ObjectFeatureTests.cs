@@ -496,6 +496,39 @@ public class ObjectFeatureTests
     // run the body with a fresh `this` and propagate property writes. Fixed for both
     // modes in #54.
     [Theory, ModeData]
+    public void Function_ConstructedObject_SeparatesOwnAndPrototypeProperties(ExecutionMode mode)
+    {
+        var source = """
+            function Ctor(this: any): void { this.own = 1; }
+            (Ctor as any).prototype.inherited = 2;
+            const instance = new (Ctor as any)();
+            console.log(Object.keys(instance).join(','));
+            console.log(instance.inherited);
+            console.log(instance.constructor === Ctor);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("own\n2\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Object_Call_UsesObjectAndFunctionPrototypeConstructors(ExecutionMode mode)
+    {
+        var source = """
+            const empty: any = Object(null);
+            const callable = function (): number { return 7; };
+            const wrapped: any = Object(callable);
+            console.log(empty.constructor === Object);
+            console.log(wrapped === callable);
+            console.log(wrapped.constructor === Function);
+            console.log(wrapped());
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n7\n", output);
+    }
+
+    [Theory, ModeData]
     public void Function_ConstructorPattern_CapturesEnclosingVariable(ExecutionMode mode)
     {
         var source = """
@@ -2072,6 +2105,25 @@ public class ObjectFeatureTests
     }
 
     [Theory, ModeData]
+    public void Object_GetOwnPropertyNames_IncludesAccessorsAndArrayExpandos(
+        ExecutionMode mode)
+    {
+        var source = """
+            const objectValue: any = {};
+            Object.defineProperty(objectValue, "accessor", { get() { return 1; } });
+            const arrayValue: any[] = [1, 2];
+            arrayValue.data = 3;
+            Object.defineProperty(arrayValue, "accessor", { get() { return 4; } });
+            console.log(Object.getOwnPropertyNames(objectValue).includes("accessor"));
+            console.log(Object.getOwnPropertyNames(arrayValue).includes("data"));
+            console.log(Object.getOwnPropertyNames(arrayValue).includes("accessor"));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Object_GetOwnPropertyNames_DoesNotIncludeMethods(ExecutionMode mode)
     {
         // Methods defined on the class should NOT appear in getOwnPropertyNames
@@ -2158,6 +2210,28 @@ public class ObjectFeatureTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n10\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Object_LegacyAccessorLookup_PreservesDescriptorFunctionIdentity(ExecutionMode mode)
+    {
+        var source = """
+            const getter = function (): number { return 1; };
+            const setter = function (value: number): void {};
+            const descriptors: any = {
+                get: getter,
+                set: setter,
+                configurable: true
+            };
+            const prototype: any = {};
+            Object.defineProperty(prototype, 'value', descriptors);
+            const subject: any = Object.create(prototype);
+            console.log(subject.__lookupGetter__('value') === descriptors.get);
+            console.log(subject.__lookupSetter__('value') === descriptors.set);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n", output);
     }
 
     [Theory, ModeData]

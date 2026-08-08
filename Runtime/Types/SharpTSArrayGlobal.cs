@@ -266,9 +266,15 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!, _name, arguments);
         }
 
+        if (_name == "with")
+        {
+            return BuiltIns.ArrayBuiltIns.CopyWithArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
         // Fast path: receiver is a real array (ToObject is identity for objects).
         bool requiresObservableIndexedGet = _name is
-            "toReversed" or "toSorted" or "toSpliced" or "with";
+            "toReversed" or "toSorted" or "toSpliced";
         if (receiver is SharpTSArray arr && !requiresObservableIndexedGet)
             return _inner.Bind(arr).Call(interpreter, arguments);
 

@@ -89,7 +89,10 @@ public class SharpTSObjectNamespace : ISharpTSCallable
             {
                 ["__primitiveType"] = "Symbol",
                 ["__primitiveValue"] = value,
-            });
+            })
+            {
+                Prototype = interpreter.GetSymbolPrototype(),
+            };
         if (value is SharpTSBigInt)
             return new SharpTSObject(new Dictionary<string, object?>
             {

@@ -70,29 +70,53 @@ public class ThrowException : Exception
 
     private static string ExtractFromInstance(SharpTSInstance inst)
     {
-        var name = inst.GetRawField("name")?.ToString();
-        var message = inst.GetRawField("message")?.ToString();
+        var name = FindInstanceProperty(inst, "name")?.ToString();
+        var message = FindInstanceProperty(inst, "message")?.ToString();
         if (!string.IsNullOrEmpty(name))
             return string.IsNullOrEmpty(message) ? name : $"{name}: {message}";
         return inst.ToString() ?? "";
     }
 
+    private static object? FindInstanceProperty(SharpTSInstance inst, string name)
+    {
+        if (inst.GetOwnPropertyDescriptor(name) is not null)
+            return inst.GetRawField(name);
+
+        for (SharpTSClass? klass = inst.RuntimeClass; klass is not null; klass = klass.Superclass)
+        {
+            if (klass.Prototype.HasExtra(name))
+                return klass.Prototype.TryGetExtra(name);
+        }
+        return null;
+    }
+
     private static string ExtractFromObject(SharpTSObject obj)
     {
-        string? name = obj.HasProperty("name") ? obj.GetProperty("name")?.ToString() : null;
-        if (string.IsNullOrEmpty(name) && obj.HasProperty("constructor"))
+        string? name = FindObjectProperty(obj, "name")?.ToString();
+        if (string.IsNullOrEmpty(name))
         {
             // User-defined error types (e.g. Test262Error) don't set .name on
             // each instance — read it off the constructor function instead so
             // `throw new Test262Error(msg)` surfaces as "Test262Error: msg".
-            name = ExtractFunctionName(obj.GetProperty("constructor"));
+            name = ExtractFunctionName(FindObjectProperty(obj, "constructor"));
         }
-        string? message = obj.HasProperty("message") ? obj.GetProperty("message")?.ToString() : null;
+        string? message = FindObjectProperty(obj, "message")?.ToString();
         if (!string.IsNullOrEmpty(name))
             return string.IsNullOrEmpty(message) ? name : $"{name}: {message}";
         if (!string.IsNullOrEmpty(message))
             return message;
         return "[object Object]";
+    }
+
+    private static object? FindObjectProperty(SharpTSObject obj, string name)
+    {
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is SharpTSObject record; depth++)
+        {
+            if (record.HasProperty(name)) return record.GetProperty(name);
+            current = record.Prototype;
+        }
+        return null;
     }
 
     private static string? ExtractFunctionName(object? fn) => fn switch

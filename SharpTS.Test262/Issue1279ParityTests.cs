@@ -706,6 +706,25 @@ public sealed class Issue1279ParityTests
     public void Promise_combinators_reject_on_non_iterable(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/allSettled/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/any/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/race/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/reject/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/resolve/context-non-object-with-promise.js")]
+    [InlineData("built-ins/Promise/resolve/ctx-non-object.js")]
+    public void Promise_static_methods_reject_primitive_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/allSettled/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/any/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/race/ctx-non-ctor.js")]
+    public void Promise_combinators_reject_callable_nonconstructors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     /// <summary>
     /// <c>Promise.prototype</c> is a real object carrying the unbound reaction methods; it
     /// read as <c>undefined</c>, so every access through it threw.
@@ -1270,6 +1289,15 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes("built-ins/Boolean/S15.6.1.1_A1_T4.js");
 
     [Fact]
+    public void Deleted_Boolean_toString_falls_back_to_Object_prototype()
+        => AssertPassInBothModes("built-ins/Boolean/S15.6.2.1_A4.js");
+
+    [Fact]
+    public void Boolean_prototype_coerces_to_false_for_loose_equality()
+        => AssertPassInBothModes(
+            "built-ins/Boolean/prototype/S15.6.3.1_A1.js");
+
+    [Fact]
     public void Error_prototype_exposes_its_standard_name()
         => AssertPassInBothModes("built-ins/Error/name.js");
 
@@ -1405,6 +1433,45 @@ public sealed class Issue1279ParityTests
     public void Object_enumeration_methods_apply_ToObject(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/entries/inherited-properties-omitted.js")]
+    [InlineData("built-ins/Object/values/inherited-properties-omitted.js")]
+    public void Object_enumeration_methods_omit_inherited_properties(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
+    public void Date_prototype_methods_expose_standard_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-own-acsr-w-getter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-proto-acsr-w-getter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-own-acsr-w-setter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-proto-acsr-w-setter.js")]
+    public void Object_legacy_accessor_lookup_walks_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/S15.2.1.1_A2_T11.js")]
+    [InlineData("built-ins/Object/S15.2.1.1_A3_T2.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T1.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T2.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T3.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T4.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A1_T5.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A2_T7.js")]
+    [InlineData("built-ins/Object/S15.2.2.1_A6_T2.js")]
+    public void Object_call_and_construction_apply_legacy_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/inherited-properties-omitted.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/proxy-undefined-descriptor.js")]
+    public void Object_getOwnPropertyDescriptors_uses_own_descriptor_semantics(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
@@ -1420,10 +1487,24 @@ public sealed class Issue1279ParityTests
     public void Object_getOwnPropertyNames_rejects_nullish_targets(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-39.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-43.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-47.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/15.2.3.4-4-48.js")]
+    public void Object_getOwnPropertyNames_includes_own_expandos(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_getOwnPropertySymbols_rejects_nullish_targets()
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertySymbols/non-object-argument-invalid.js");
+
+    [Fact]
+    public void Object_getOwnPropertySymbols_preserves_creation_order()
+        => AssertPassInBothModes(
+            "built-ins/Object/getOwnPropertySymbols/order-after-define-property.js");
 
     [Theory]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-0-3.js")]
@@ -1472,6 +1553,29 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-167.js")]
     public void RegExp_prototype_methods_have_standard_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/prop-desc.js")]
+    public void RegExp_symbol_methods_have_standard_descriptors_in_interpreter(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void RegExp_replace_callback_receiver_passes_in_interpreter()
+        => AssertPass(
+            "built-ins/String/prototype/replace/S15.5.4.11_A12.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A2_T3.js")]
+    [InlineData("built-ins/String/prototype/search/S15.5.4.12_A2_T5.js")]
+    public void Boxed_string_search_regressions_pass_in_interpreter(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-176.js")]
@@ -2224,6 +2328,749 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/flatMap/this-value-null-undefined-throws.js")]
     public void Array_flattening_methods_support_generic_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Array_with_does_not_read_the_replaced_index()
+        => AssertPassInBothModes(
+            "built-ins/Array/prototype/with/no-get-replaced-index.js");
+
+    [Theory]
+    [InlineData("built-ins/Error/constructor.js")]
+    [InlineData("built-ins/Error/error-message-tostring-symbol.js")]
+    public void Error_constructor_arguments_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Error_prototype_property_is_nonconfigurable()
+        => AssertPassInBothModes(
+            "built-ins/Error/prototype/S15.11.3.1_A1_T1.js");
+
+    [Fact]
+    public void Error_instances_inherit_from_Error_prototype()
+        => AssertPassInBothModes("built-ins/Error/instance-prototype.js");
+
+    [Fact]
+    public void Error_toString_unbound_call_uses_undefined_receiver()
+        => AssertPassInBothModes(
+            "built-ins/Error/prototype/toString/called-as-function.js");
+
+    [Theory]
+    [InlineData("built-ins/JSON/parse/length.js")]
+    [InlineData("built-ins/JSON/parse/prop-desc.js")]
+    [InlineData("built-ins/JSON/stringify/length.js")]
+    [InlineData("built-ins/JSON/stringify/prop-desc.js")]
+    public void JSON_method_metadata_matches_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-5.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-6.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-7.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-8.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-116.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-178.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-179.js")]
+    public void Legacy_global_descriptors_remain_supported(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Promise_race_rejects_when_resolve_throws()
+        => AssertPass(
+            "built-ins/Promise/race/invoke-resolve-error-reject.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/catch/prop-desc.js")]
+    [InlineData("built-ins/Promise/prototype/then/prop-desc.js")]
+    [InlineData("built-ins/Promise/prototype/prop-desc.js")]
+    public void Promise_prototype_descriptors_match_the_spec(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Promise_resolve_reports_its_spec_length()
+        => AssertPass(
+            "built-ins/Promise/resolve/length.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.1_T1.js")]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.2_T1.js")]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.3_T1.js")]
+    public void Promise_resolve_preserves_same_constructor_identity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/reject-function-nonconstructor.js")]
+    [InlineData("built-ins/Promise/resolve-function-nonconstructor.js")]
+    public void Promise_capability_callbacks_are_not_constructors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Promise_capability_executor_is_extensible()
+        => AssertPassInBothModes("built-ins/Promise/executor-function-extensible.js");
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/resolve-non-callable.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-non-callable.js")]
+    [InlineData("built-ins/Promise/any/resolve-non-callable.js")]
+    [InlineData("built-ins/Promise/race/resolve-non-callable.js")]
+    public void Promise_combinators_validate_resolve_before_iteration(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/invoke-resolve.js")]
+    [InlineData("built-ins/Promise/allSettled/invoke-resolve.js")]
+    [InlineData("built-ins/Promise/race/invoke-resolve.js")]
+    public void Promise_combinators_invoke_constructor_resolve(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Promise_any_invokes_constructor_resolve()
+        => AssertPassInBothModes("built-ins/Promise/any/invoke-resolve.js");
+
+    [Theory]
+    [InlineData("built-ins/Promise/allSettled/returns-promise.js")]
+    [InlineData("built-ins/Promise/any/returns-promise.js")]
+    public void Promise_combinators_return_objects_with_the_Promise_prototype(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/resolve-element-function-extensible.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-element-function-extensible.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-element-function-extensible.js")]
+    [InlineData("built-ins/Promise/any/reject-element-function-extensible.js")]
+    public void Promise_combinator_element_callbacks_are_extensible(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/reject-via-abrupt.js")]
+    [InlineData("built-ins/Promise/reject-via-abrupt-queue.js")]
+    public void Promise_executor_preserves_thrown_rejection_values(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Promise_constructor_validates_executor_before_new_target_prototype()
+        => AssertPassInBothModes(
+            "built-ins/Promise/get-prototype-abrupt-executor-not-callable.js");
+
+    [Theory]
+    [InlineData("built-ins/String/S8.12.8_A1.js")]
+    [InlineData("built-ins/String/S9.8_A5_T1.js")]
+    public void String_legacy_coercion_matches_compiled_mode(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Bound_String_match_retains_its_receiver()
+        => AssertPassInBothModes(
+            "built-ins/String/prototype/match/S15.5.4.10_A1_T3.js");
+
+    [Theory]
+    [InlineData("language/expressions/call/spread-mult-obj-null.js")]
+    [InlineData("language/expressions/call/spread-mult-obj-undefined.js")]
+    [InlineData("language/expressions/call/spread-obj-null.js")]
+    [InlineData("language/expressions/call/spread-obj-undefined.js")]
+    public void Object_spread_ignores_nullish_sources(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("language/expressions/new/ctorExpr-isCtor-after-args-eval-fn-wrapup.js")]
+    [InlineData("language/expressions/new/ctorExpr-isCtor-after-args-eval.js")]
+    public void New_evaluates_arguments_before_constructor_validation(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("language/expressions/new/spread-err-mult-err-iter-get-value.js")]
+    [InlineData("language/expressions/new/spread-err-sngl-err-itr-get-value.js")]
+    public void New_spread_rejects_invalid_iterators(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/iter-assigned-null-reject.js")]
+    [InlineData("built-ins/Promise/all/iter-returns-null-reject.js")]
+    [InlineData("built-ins/Promise/all/S25.4.4.1_A3.1_T3.js")]
+    [InlineData("built-ins/Promise/race/iter-assigned-null-reject.js")]
+    [InlineData("built-ins/Promise/race/iter-returns-null-reject.js")]
+    [InlineData("built-ins/Promise/race/S25.4.4.3_A2.2_T3.js")]
+    public void Promise_combinators_preserve_iterator_error_values(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Promise_any_does_not_read_constructor_species()
+        => AssertPassInBothModes("built-ins/Promise/any/species-get-error.js");
+
+    [Theory]
+    [InlineData("built-ins/Promise/allKeyed/arg-is-function.js")]
+    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject-bigint.js")]
+    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/allKeyed/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/allKeyed/extensible.js")]
+    [InlineData("built-ins/Promise/allKeyed/key-order-preserved.js")]
+    [InlineData("built-ins/Promise/allKeyed/length.js")]
+    [InlineData("built-ins/Promise/allKeyed/name.js")]
+    [InlineData("built-ins/Promise/allKeyed/non-enumerable-properties-ignored.js")]
+    [InlineData("built-ins/Promise/allKeyed/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/allKeyed/prop-desc.js")]
+    [InlineData("built-ins/Promise/allKeyed/proto.js")]
+    [InlineData("built-ins/Promise/allKeyed/prototype-keys-ignored.js")]
+    [InlineData("built-ins/Promise/allKeyed/reject-deferred.js")]
+    [InlineData("built-ins/Promise/allKeyed/reject-immed.js")]
+    [InlineData("built-ins/Promise/allKeyed/resolve-not-callable-reject-with-typeerror.js")]
+    [InlineData("built-ins/Promise/allKeyed/resolves-empty-object.js")]
+    [InlineData("built-ins/Promise/allKeyed/symbol-keys.js")]
+    public void Promise_allKeyed_resolves_own_enumerable_properties(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-is-function.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject-bigint.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/extensible.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/key-order-preserved.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/length.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/name.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/non-enumerable-properties-ignored.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/prop-desc.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/proto.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/prototype-keys-ignored.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolve-not-callable-reject-with-typeerror.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolved-all-fulfilled.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolved-all-mixed.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolved-all-rejected.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolves-empty-object.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/symbol-keys.js")]
+    public void Promise_allSettledKeyed_retains_keyed_outcomes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Math_round_preserves_ecmascript_boundary_cases()
+        => AssertPass(
+            "built-ins/Math/round/S15.8.2.15_A7.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Math_exposes_standard_toStringTag_metadata()
+        => AssertPass(
+            "built-ins/Math/Symbol.toStringTag.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Math_sumPrecise_honors_array_iterator_overrides()
+        => AssertPass(
+            "built-ins/Math/sumPrecise/takes-iterable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Math_sumPrecise_accumulates_binary64_values_exactly()
+        => AssertPass(
+            "built-ins/Math/sumPrecise/sum.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Boolean_conversion_treats_objects_as_truthy()
+        => AssertPass(
+            "built-ins/Boolean/S9.2_A6_T1.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Boolean_prototype_property_is_not_configurable()
+        => AssertPass(
+            "built-ins/Boolean/prototype/S15.6.3.1_A3.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Boolean/prop-desc.js")]
+    [InlineData("built-ins/Math/prop-desc.js")]
+    [InlineData("built-ins/Number/prop-desc.js")]
+    public void Built_in_global_bindings_have_standard_descriptors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Number_explicitly_converts_BigInt_values()
+        => AssertPass(
+            "built-ins/Number/bigint-conversion.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Number_toFixed_uses_standard_notation_threshold()
+        => AssertPass(
+            "built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Error_isError_recognizes_intrinsic_error_instances()
+        => AssertPass(
+            "built-ins/Error/isError/errors.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Error/isError/bigints.js")]
+    [InlineData("built-ins/Error/isError/error-subclass.js")]
+    [InlineData("built-ins/Error/isError/fake-errors.js")]
+    [InlineData("built-ins/Error/isError/non-error-objects.js")]
+    [InlineData("built-ins/Error/isError/primitives.js")]
+    [InlineData("built-ins/Error/isError/symbols.js")]
+    public void Error_isError_uses_the_intrinsic_brand(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Error/isError/is-a-constructor.js")]
+    [InlineData("built-ins/Error/isError/name.js")]
+    [InlineData("built-ins/Error/isError/prop-desc.js")]
+    public void Error_isError_has_standard_function_metadata(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Error_and_Function_constructors_report_standard_length()
+        => AssertPass(
+            "built-ins/Error/length.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Error_omits_message_when_no_message_is_supplied()
+        => AssertPass(
+            "built-ins/Error/the-initial-value-of-errorprototypemessage-is-the-empty-string.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Error/tostring-1.js")]
+    [InlineData("built-ins/Error/tostring-2.js")]
+    public void Error_instances_honor_prototype_toString_replacement(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Error_prototype_constructor_builds_branded_instances()
+        => AssertPass(
+            "built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Error_cause_propagates_abrupt_has_and_get_operations()
+        => AssertPass(
+            "built-ins/Error/cause_abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/length.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/name.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/not-a-constructor.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/prop-desc.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/this-val-to-str-err.js")]
+    public void String_iterator_has_standard_protocol_metadata(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_indexing_rejects_NaN_as_an_array_index()
+        => AssertPass(
+            "built-ins/String/15.5.5.5.2-3-6.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_trim_handles_line_continuation_whitespace()
+        => AssertPass(
+            "built-ins/String/prototype/trim/15.5.4.20-4-1.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_call_observes_Array_prototype_toString_override()
+        => AssertPass(
+            "built-ins/String/S15.5.1.1_A1_T8.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_call_observes_global_toString_override()
+        => AssertPass(
+            "built-ins/String/S15.5.1.1_A1_T9.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_constructor_falls_back_to_function_valueOf()
+        => AssertPass(
+            "built-ins/String/S15.5.2.1_A1_T11.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_constructor_observes_Function_prototype_toString_override()
+        => AssertPass(
+            "built-ins/String/S15.5.2.1_A1_T8.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_index_rejects_NaN_property_key()
+        => AssertPass(
+            "built-ins/String/15.5.5.5.2-3-6.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_call_coerces_eval_var_result_to_undefined()
+        => AssertPass(
+            "built-ins/String/S9.8_A1_T1.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_prototype_constructor_constructs_boxed_strings()
+        => AssertPass(
+            "built-ins/String/prototype/constructor/S15.5.4.1_A1_T2.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_slice_coerces_function_receivers()
+        => AssertPass(
+            "built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_localeCompare_treats_canonical_equivalents_as_equal()
+        => AssertPass(
+            "built-ins/String/prototype/localeCompare/15.5.4.9_CE.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_replace_coerces_RegExp_replacement_objects()
+        => AssertPass(
+            "built-ins/String/prototype/replace/replaceValue-evaluation-order-regexp-object.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void String_matchAll_rejects_undefined_RegExp_flags()
+        => AssertPass(
+            "built-ins/String/prototype/matchAll/flags-undefined-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_boxes_BigInt_values()
+        => AssertPass(
+            "built-ins/Object/bigint.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_keys_unbox_Boolean_objects()
+        => AssertPass(
+            "built-ins/Array/S15.4_A1.1_T6.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_keys_unbox_Number_objects()
+        => AssertPass(
+            "built-ins/Array/S15.4_A1.1_T7.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_keys_unbox_String_objects()
+        => AssertPass(
+            "built-ins/Array/S15.4_A1.1_T8.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_keys_use_ordinary_object_ToPrimitive()
+        => AssertPass(
+            "built-ins/Array/S15.4_A1.1_T9.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_length_truncation_reveals_prototype_indices()
+        => AssertPass(
+            "built-ins/Array/S15.4.5.1_A1.2_T2.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_constructor_inherits_Function_prototype_expandos()
+        => AssertPass(
+            "built-ins/Array/S15.4.3_A1.1_T1.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void RegExp_digit_character_class_remains_stable_after_Array_key_changes()
+        => AssertPass(
+            "built-ins/RegExp/CharacterClassEscapes/character-class-digit-class-escape-positive-cases.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_length_growth_does_not_materialize_prototype_indices()
+        => AssertPass(
+            "built-ins/Array/length/S15.4.5.1_A1.2_T3.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_from_propagates_iterator_getter_errors()
+        => AssertPass(
+            "built-ins/Array/from/get-iter-method-err.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_assign_reads_symbols_after_strings()
+        => AssertPass(
+            "built-ins/Object/assign/strings-and-symbol-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_assign_boxes_Symbol_targets()
+        => AssertPass(
+            "built-ins/Object/assign/Target-Symbol.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_assign_updates_Array_exotic_targets()
+        => AssertPass(
+            "built-ins/Object/assign/target-Array.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Bound_functions_inherit_Function_prototype_expandos()
+        => AssertPassInBothModes(
+            "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
+
+    [Fact]
+    public void Bound_functions_inherit_Function_prototype_accessors()
+        => AssertPass(
+            "built-ins/Object/defineProperty/15.2.3.6-4-593.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-161.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-162.js")]
+    public void Date_prototype_methods_retain_data_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Promise_instances_inherit_the_finally_method()
+        => AssertPass(
+            "built-ins/Promise/prototype/finally/is-a-method.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/catch/invokes-then.js")]
+    [InlineData("built-ins/Promise/prototype/catch/this-value-then-poisoned.js")]
+    [InlineData("built-ins/Promise/prototype/catch/this-value-then-throws.js")]
+    public void Promise_catch_dynamically_invokes_then(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/finally/invokes-then-with-function.js")]
+    [InlineData("built-ins/Promise/prototype/finally/invokes-then-with-non-function.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-then-not-callable.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-then-poisoned.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-then-throws.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-thenable.js")]
+    public void Promise_finally_dynamically_invokes_then(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/JSON/rawJSON/basic.js")]
+    [InlineData("built-ins/JSON/rawJSON/builtin.js")]
+    [InlineData("built-ins/JSON/rawJSON/illegal-empty-and-start-end-chars.js")]
+    [InlineData("built-ins/JSON/rawJSON/invalid-JSON-text.js")]
+    [InlineData("built-ins/JSON/rawJSON/length.js")]
+    [InlineData("built-ins/JSON/rawJSON/name.js")]
+    [InlineData("built-ins/JSON/rawJSON/not-a-constructor.js")]
+    [InlineData("built-ins/JSON/rawJSON/prop-desc.js")]
+    [InlineData("built-ins/JSON/rawJSON/returns-expected-object.js")]
+    [InlineData("built-ins/JSON/isRawJSON/basic.js")]
+    [InlineData("built-ins/JSON/isRawJSON/builtin.js")]
+    [InlineData("built-ins/JSON/isRawJSON/length.js")]
+    [InlineData("built-ins/JSON/isRawJSON/name.js")]
+    [InlineData("built-ins/JSON/isRawJSON/not-a-constructor.js")]
+    [InlineData("built-ins/JSON/isRawJSON/prop-desc.js")]
+    public void JSON_raw_values_match_the_spec(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/JSON/parse/text-negative-zero.js")]
+    [InlineData("built-ins/JSON/parse/text-non-string-primitive.js")]
+    [InlineData("built-ins/JSON/parse/text-object-abrupt.js")]
+    [InlineData("built-ins/JSON/parse/text-object.js")]
+    public void JSON_parse_coerces_input_with_ToString(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void JSON_parse_keeps_the_last_duplicate_property()
+        => AssertPass(
+            "built-ins/JSON/parse/duplicate-proto.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void JSON_reviver_preserves_nonconfigurable_array_properties_on_delete()
+        => AssertPass(
+            "built-ins/JSON/parse/reviver-array-non-configurable-prop-delete.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void JSON_reviver_validates_array_data_property_creation()
+        => AssertPass(
+            "built-ins/JSON/parse/reviver-array-non-configurable-prop-create.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/JSON/stringify/replacer-array-duplicates.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-array-order.js")]
+    public void JSON_stringify_preserves_replacer_property_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void JSON_stringify_ignores_wrong_type_replacer_entries()
+        => AssertPass(
+            "built-ins/JSON/stringify/replacer-array-wrong-type.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/JSON/stringify/value-array-circular.js")]
+    [InlineData("built-ins/JSON/stringify/value-object-circular.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-function-array-circular.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-function-object-circular.js")]
+    public void JSON_stringify_circular_values_throw_TypeError(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void JSON_stringify_BigInt_throws_TypeError()
+        => AssertPass(
+            "built-ins/JSON/stringify/value-bigint.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/JSON/stringify/value-object-abrupt.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-abrupt.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-arguments.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-not-function.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-function-tojson.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-object-circular.js")]
+    public void JSON_stringify_observes_toJSON_semantics(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T4.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T7.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T9.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A8_T12.js")]
+    public void RegExp_constructor_coerces_pattern_and_flags(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void RegExp_call_only_reuses_matching_constructor_instances()
+        => AssertPass(
+            "built-ins/RegExp/call_with_regexp_not_same_constructor.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A1.js")]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A3.js")]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A4.js")]
+    public void RegExp_constructor_owns_protected_prototype(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void RegExp_replace_coerces_noncallable_replacement_eagerly()
+        => AssertPass(
+            "built-ins/RegExp/prototype/Symbol.replace/arg-2-coerce-err.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/flags-tostring-error.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/flags-tostring-error.js")]
+    public void RegExp_protocols_propagate_flags_ToString_errors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-limit-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-limit.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-string-err.js")]
+    public void RegExp_split_coerces_string_and_limit(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/coerce-global.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/exec-return-type-invalid.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/g-match-empty-coerce-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/g-match-empty-set-lastindex-err.js")]
+    public void RegExp_match_honors_global_exec_and_lastIndex(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/cstm-exec-return-invalid.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/set-lastindex-init-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.search/set-lastindex-restore-err.js")]
+    public void RegExp_search_uses_throwing_lastIndex_writes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/15.4.5-1.js")]
+    [InlineData("built-ins/Array/15.4.5.1-5-1.js")]
+    [InlineData("built-ins/Array/15.4.5.1-5-2.js")]
+    [InlineData("built-ins/Array/S15.4.1_A1.1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.1_A1.1_T2.js")]
+    [InlineData("built-ins/Array/S15.4.1_A1.2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.1_A1.3_T1.js")]
+    [InlineData("built-ins/Array/S15.4.1_A2.1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.1_A2.2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.1_A3.1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A1.1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A1.1_T2.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A1.2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A1.3_T1.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A2.1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.2.1_A2.2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.3_A1.1_T2.js")]
+    [InlineData("built-ins/Array/S15.4.5.1_A2.1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.1_A2.2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.1_A2.3_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.2_A1_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.2_A1_T2.js")]
+    [InlineData("built-ins/Array/S15.4.5.2_A2_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.2_A3_T1.js")]
+    [InlineData("built-ins/Array/S15.4.5.2_A3_T3.js")]
+    [InlineData("built-ins/Array/S15.4_A1.1_T10.js")]
+    [InlineData("built-ins/Array/S15.4_A1.1_T4.js")]
+    [InlineData("built-ins/Array/S15.4_A1.1_T5.js")]
+    public void Array_legacy_exotic_semantics_remain_interpreter_compatible(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/from/Array.from-name.js")]
+    [InlineData("built-ins/Array/from/Array.from_arity.js")]
+    [InlineData("built-ins/Array/from/array-like-has-length-but-no-indexes-with-values.js")]
+    [InlineData("built-ins/Array/from/calling-from-valid-1-noStrict.js")]
+    [InlineData("built-ins/Array/from/calling-from-valid-1-onlyStrict.js")]
+    [InlineData("built-ins/Array/from/elements-added-after.js")]
+    [InlineData("built-ins/Array/from/elements-updated-after.js")]
+    [InlineData("built-ins/Array/from/from-array.js")]
+    [InlineData("built-ins/Array/from/from-string.js")]
+    [InlineData("built-ins/Array/from/items-is-arraybuffer.js")]
+    [InlineData("built-ins/Array/from/items-is-null-throws.js")]
+    [InlineData("built-ins/Array/from/iter-adv-err.js")]
+    [InlineData("built-ins/Array/from/iter-get-iter-err.js")]
+    [InlineData("built-ins/Array/from/iter-get-iter-val-err.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-args.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-err.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-return.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-this-non-strict.js")]
+    [InlineData("built-ins/Array/from/iter-map-fn-this-strict.js")]
+    [InlineData("built-ins/Array/from/iter-set-elem-prop-non-writable.js")]
+    [InlineData("built-ins/Array/from/iter-set-elem-prop.js")]
+    [InlineData("built-ins/Array/from/iter-set-length.js")]
+    [InlineData("built-ins/Array/from/mapfn-is-not-callable-typeerror.js")]
+    [InlineData("built-ins/Array/from/mapfn-is-symbol-throws.js")]
+    [InlineData("built-ins/Array/from/mapfn-throws-exception.js")]
+    [InlineData("built-ins/Array/from/source-object-iterator-1.js")]
+    [InlineData("built-ins/Array/from/source-object-iterator-2.js")]
+    [InlineData("built-ins/Array/from/source-object-length-set-elem-prop-non-writable.js")]
+    [InlineData("built-ins/Array/from/source-object-length.js")]
+    [InlineData("built-ins/Array/from/source-object-missing.js")]
+    [InlineData("built-ins/Array/from/source-object-without.js")]
+    [InlineData("built-ins/Array/from/this-null.js")]
+    public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-1.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-2.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-3.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-4.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-6.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-0-7.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-1-1.js")]
+    [InlineData("built-ins/Array/isArray/15.4.3.2-1-10.js")]
+    public void Array_isArray_preserves_cross_type_classification(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {

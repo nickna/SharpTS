@@ -216,7 +216,10 @@ public class SharpTSPromiseClass : SharpTSClass
                 if (!settled)
                 {
                     settled = true;
-                    tcs.TrySetException(new SharpTSPromiseRejectedException(ex.Message));
+                    object? reason = ex is Runtime.Exceptions.ThrowException thrown
+                        ? thrown.Value
+                        : ex.Message;
+                    tcs.TrySetException(new SharpTSPromiseRejectedException(reason));
                 }
             }
         }

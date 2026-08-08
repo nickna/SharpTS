@@ -18,16 +18,42 @@ public class SharpTSJSON
 {
     public static readonly SharpTSJSON Instance = new();
     private readonly SharpTSObject _extras = new([]);
+    private readonly HashSet<string> _deletedBuiltIns = [];
     internal SharpTSJSON() { }
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
-    public void SetExtra(string name, object? value) => _extras.SetProperty(name, value);
+    public void SetExtra(string name, object? value)
+    {
+        _deletedBuiltIns.Remove(name);
+        _extras.SetProperty(name, value);
+    }
     public bool DefineExtraProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _extras.DefineProperty(name, descriptor);
+    {
+        bool defined = _extras.DefineProperty(name, descriptor);
+        if (defined) _deletedBuiltIns.Remove(name);
+        return defined;
+    }
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
-    public bool DeleteExtra(string name) => _extras.DeleteProperty(name);
+    public bool IsBuiltInDeleted(string name) => _deletedBuiltIns.Contains(name);
+    public bool HasOwnProperty(string name)
+        => HasExtra(name)
+            || (!IsBuiltInDeleted(name)
+                && BuiltIns.JSONBuiltIns.GetStaticMethod(name) is not null);
+    public object? GetMember(string name)
+    {
+        if (HasExtra(name)) return TryGetExtra(name);
+        if (IsBuiltInDeleted(name)) return null;
+        return BuiltIns.JSONBuiltIns.GetStaticMethod(name);
+    }
+    public bool DeleteExtra(string name)
+    {
+        if (HasExtra(name) && !_extras.DeleteProperty(name)) return false;
+        if (BuiltIns.JSONBuiltIns.GetStaticMethod(name) is not null)
+            _deletedBuiltIns.Add(name);
+        return true;
+    }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
     public override string ToString() => "[object JSON]";

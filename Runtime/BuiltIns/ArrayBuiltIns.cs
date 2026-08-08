@@ -524,6 +524,49 @@ public static class ArrayBuiltIns
     }
 
     /// <summary>
+    /// ECMA-262 23.1.3.39 generic Array.prototype.with implementation. Indexed
+    /// values are read directly from the original receiver so accessors remain
+    /// observable, except at the replaced index, which the algorithm must not
+    /// read at all.
+    /// </summary>
+    internal static object CopyWithArrayLike(
+        Interpreter interpreter,
+        object receiver,
+        IReadOnlyList<object?> args)
+    {
+        long len = ToLength(interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (len > uint.MaxValue)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        object? indexValue = args.Count > 0
+            ? args[0]
+            : SharpTSUndefined.Instance;
+        double relativeIndex = ToIntegerOrInfinity(interpreter, indexValue);
+        double actualIndex = relativeIndex >= 0 ? relativeIndex : len + relativeIndex;
+        if (actualIndex < 0 || actualIndex >= len)
+            throw new ThrowException(new SharpTSRangeError("Invalid index for with()."));
+
+        object? replacement = args.Count > 1
+            ? args[1]
+            : SharpTSUndefined.Instance;
+        int materializedLength = (int)Math.Min(len, 1 << 20);
+        var result = new List<object?>(materializedLength);
+        for (int i = 0; i < materializedLength; i++)
+        {
+            if (i == actualIndex)
+            {
+                result.Add(replacement);
+                continue;
+            }
+
+            string key = i.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            result.Add(interpreter.GetPropertyValue(receiver, key));
+        }
+        return new SharpTSArray(result);
+    }
+
+    /// <summary>
     /// ECMA-262 ArraySetLength steps 3-5. The descriptor value is converted
     /// separately for ToUint32 and ToNumber, so user conversion hooks run twice
     /// before descriptor attributes are validated.

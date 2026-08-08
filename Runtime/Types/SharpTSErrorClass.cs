@@ -35,7 +35,24 @@ public class SharpTSErrorClass : SharpTSClass
                 ["constructor"] = new ErrorConstructorCallable(errorTypeName),
                 ["toString"] = new ErrorToStringCallable()
             },
-            staticMethods: [],
+            staticMethods: errorTypeName == "Error"
+                ? new Dictionary<string, ISharpTSCallable>
+                {
+                    ["isError"] = Runtime.BuiltIns.BuiltInMethod.CreateV2(
+                            "isError", 0, int.MaxValue, static (_, _, args) =>
+                            {
+                                object? value = args.IsEmpty
+                                    ? SharpTSUndefined.Instance
+                                    : args[0].ToObject();
+                                return RuntimeValue.FromBoolean(
+                                    value is SharpTSError
+                                    || value is SharpTSInstance
+                                        { RuntimeClass: SharpTSErrorClass });
+                            })
+                        .WithSpecLength(1)
+                        .AsNonConstructor(),
+                }
+                : [],
             staticProperties: [])
     {
         _errorTypeName = errorTypeName;
@@ -111,6 +128,7 @@ public class SharpTSErrorClass : SharpTSClass
     /// Initialises error fields (name, message, stack) on an instance.
     /// </summary>
     internal static void InitializeErrorFields(
+        Interpreter interpreter,
         SharpTSInstance instance,
         string errorTypeName,
         List<object?> arguments)
@@ -118,32 +136,42 @@ public class SharpTSErrorClass : SharpTSClass
         // AggregateError: first arg is errors array, second is message
         if (errorTypeName == "AggregateError")
         {
-            var message = arguments.Count > 1
-                ? arguments[1]?.ToString() ?? "All promises were rejected"
-                : "All promises were rejected";
-            instance.SetRawField("name", errorTypeName);
-            instance.SetRawField("message", message);
+            bool hasMessage = arguments.Count > 1
+                && arguments[1] is not SharpTSUndefined;
+            var message = hasMessage
+                ? interpreter.ToStringForBuiltInArgument(arguments[1])
+                : "";
+            if (hasMessage)
+                instance.SetRawField("message", message);
             instance.SetRawField("stack", $"{errorTypeName}: {message}");
             if (arguments.Count > 0)
                 instance.SetRawField("errors", arguments[0]);
             // Cause is in the third argument's options
-            if (arguments.Count > 2 && arguments[2] is SharpTSObject opts
-                && opts.HasProperty("cause"))
+            if (arguments.Count > 2
+                && IsObjectValue(arguments[2])
+                && interpreter.HasProperty(arguments[2], "cause"))
             {
-                instance.SetRawField("cause", opts.GetProperty("cause"));
+                instance.SetRawField(
+                    "cause", interpreter.GetPropertyValue(arguments[2], "cause"));
             }
         }
         else
         {
-            var message = arguments.Count > 0 ? arguments[0]?.ToString() ?? "" : "";
-            instance.SetRawField("name", errorTypeName);
-            instance.SetRawField("message", message);
+            bool hasMessage = arguments.Count > 0
+                && arguments[0] is not SharpTSUndefined;
+            var message = hasMessage
+                ? interpreter.ToStringForBuiltInArgument(arguments[0])
+                : "";
+            if (hasMessage)
+                instance.SetRawField("message", message);
             instance.SetRawField("stack", $"{errorTypeName}: {message}");
             // Cause is in the second argument's options
-            if (arguments.Count > 1 && arguments[1] is SharpTSObject opts
-                && opts.HasProperty("cause"))
+            if (arguments.Count > 1
+                && IsObjectValue(arguments[1])
+                && interpreter.HasProperty(arguments[1], "cause"))
             {
-                instance.SetRawField("cause", opts.GetProperty("cause"));
+                instance.SetRawField(
+                    "cause", interpreter.GetPropertyValue(arguments[1], "cause"));
             }
         }
 
@@ -153,6 +181,10 @@ public class SharpTSErrorClass : SharpTSClass
         foreach (var key in new[] { "name", "message", "stack", "cause", "errors" })
             instance.MarkNonEnumerable(key);
     }
+
+    private static bool IsObjectValue(object? value) => value is not
+        (null or SharpTSUndefined or double or bool or string
+            or SharpTSBigInt or SharpTSSymbol or System.Numerics.BigInteger);
 
     /// <summary>
     /// Returns the error-formatted toString() result for an instance.
@@ -186,7 +218,7 @@ public class SharpTSErrorClass : SharpTSClass
         else
         {
             // No user constructor (or built-in Error class) — initialise error fields directly
-            InitializeErrorFields(instance, _errorTypeName, arguments);
+            InitializeErrorFields(interpreter, instance, _errorTypeName, arguments);
         }
 
         return instance;
@@ -201,7 +233,7 @@ public class SharpTSErrorClass : SharpTSClass
     {
         private SharpTSInstance? _boundInstance;
 
-        public int Arity() => 0; // All args optional
+        public int Arity() => 1;
 
         public ISharpTSCallable BindTo(SharpTSInstance instance)
         {
@@ -213,7 +245,7 @@ public class SharpTSErrorClass : SharpTSClass
             var instance = _boundInstance
                 ?? interpreter.GetCurrentThis() as SharpTSInstance;
             if (instance != null)
-                InitializeErrorFields(instance, errorTypeName, arguments);
+                InitializeErrorFields(interpreter, instance, errorTypeName, arguments);
             return null;
         }
     }

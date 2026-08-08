@@ -60,12 +60,12 @@ public static class PromiseBuiltIns
         "then" => new BuiltInAsyncMethod("then", 0, 2, (interp, recv, args) =>
             ThenImpl(RequirePromiseReceiver(recv, "then"), args, interp),
             speciesResolver: SpeciesResolver).WithSpecLength(2),
-        "catch" => new BuiltInAsyncMethod("catch", 0, 1, (interp, recv, args) =>
-            CatchImpl(RequirePromiseReceiver(recv, "catch"), args, interp),
-            speciesResolver: SpeciesResolver).WithSpecLength(1),
-        "finally" => new BuiltInAsyncMethod("finally", 0, 1, (interp, recv, args) =>
-            FinallyImpl(RequirePromiseReceiver(recv, "finally"), args, interp),
-            speciesResolver: SpeciesResolver).WithSpecLength(1),
+        "catch" => BuiltInMethod.CreateV2("catch", 0, int.MaxValue, CatchInvoke)
+            .WithSpecLength(1)
+            .AsNonConstructor(),
+        "finally" => BuiltInMethod.CreateV2("finally", 0, int.MaxValue, FinallyInvoke)
+            .WithSpecLength(1)
+            .AsNonConstructor(),
         "constructor" => Interpreter.PromiseGlobalValue as ISharpTSCallable,
         _ => null,
     };
@@ -79,6 +79,118 @@ public static class PromiseBuiltIns
         => receiver as SharpTSPromise
             ?? throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
                 $"Promise.prototype.{methodName} called on a non-Promise receiver"));
+
+    /// <summary>
+    /// ECMA-262 §27.2.5.1: catch is intentionally generic. It performs
+    /// <c>Invoke(promise, "then", « undefined, onRejected »)</c>, so an own
+    /// getter or replacement method is observed and its return value passes
+    /// through unchanged.
+    /// </summary>
+    private static RuntimeValue CatchInvoke(
+        Interpreter interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        object? target = receiver.ToObject();
+        object? then = interpreter.GetPropertyValue(target, "then");
+        if (then is not ISharpTSCallable callable)
+            throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise.prototype.catch: then is not callable"));
+
+        object? onRejected = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter,
+            callable,
+            target,
+            [SharpTSUndefined.Instance, onRejected]));
+    }
+
+    /// <summary>
+    /// Generic entry point for §27.2.5.3. A normal promise with its inherited
+    /// <c>then</c> keeps the optimized async implementation. Thenables and
+    /// promises that override <c>then</c> take the observable Invoke path.
+    /// </summary>
+    private static RuntimeValue FinallyInvoke(
+        Interpreter interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        object? target = receiver.ToObject();
+        bool hasOwnThen = target is SharpTSPromise promise
+            && (promise.TryGetAccessor("then", out _, out _)
+                || promise.TryGetOwnProperty("then", out _));
+
+        if (target is SharpTSPromise ordinaryPromise && !hasOwnThen)
+        {
+            var implementation = new BuiltInAsyncMethod(
+                "finally",
+                0,
+                1,
+                (interp, recv, callArgs) => FinallyImpl(
+                    (SharpTSPromise)recv!, callArgs, interp),
+                speciesResolver: SpeciesResolver).WithSpecLength(1);
+            List<object?> callArgs = args.Length > 0 ? [args[0].ToObject()] : [];
+            return RuntimeValue.FromBoxed(implementation.Bind(ordinaryPromise).Call(
+                interpreter, callArgs));
+        }
+
+        object? then = interpreter.GetPropertyValue(target, "then");
+        if (then is not ISharpTSCallable callable)
+            throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise.prototype.finally: then is not callable"));
+
+        object? onFinally = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        object? thenFinally = onFinally;
+        object? catchFinally = onFinally;
+        if (onFinally is ISharpTSCallable callback)
+        {
+            thenFinally = BuiltInMethod.CreateV2("", 1, (interp, _, thunkArgs) =>
+            {
+                object? value = thunkArgs.Length > 0
+                    ? thunkArgs[0].ToObject()
+                    : SharpTSUndefined.Instance;
+                return RuntimeValue.FromBoxed(CreateFinallyContinuation(
+                    interp, callback, value, reject: false));
+            }).AsNonConstructor();
+            catchFinally = BuiltInMethod.CreateV2("", 1, (interp, _, thunkArgs) =>
+            {
+                object? reason = thunkArgs.Length > 0
+                    ? thunkArgs[0].ToObject()
+                    : SharpTSUndefined.Instance;
+                return RuntimeValue.FromBoxed(CreateFinallyContinuation(
+                    interp, callback, reason, reject: true));
+            }).AsNonConstructor();
+        }
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter, callable, target, [thenFinally, catchFinally]));
+    }
+
+    private static SharpTSPromise CreateFinallyContinuation(
+        Interpreter interpreter,
+        ISharpTSCallable callback,
+        object? original,
+        bool reject)
+    {
+        object? result = FunctionBuiltIns.CallWithThis(
+            interpreter, callback, SharpTSUndefined.Instance, []);
+        return new SharpTSPromise(ContinueAsync(result, original, reject));
+
+        static async Task<object?> ContinueAsync(
+            object? callbackResult,
+            object? originalValue,
+            bool shouldReject)
+        {
+            if (callbackResult is SharpTSPromise promise)
+                await promise.GetValueAsync();
+            if (shouldReject)
+                throw new SharpTSPromiseRejectedException(originalValue);
+            return originalValue;
+        }
+    }
 
     /// <summary>
     /// Gets a static method from the Promise namespace.
@@ -95,31 +207,74 @@ public static class PromiseBuiltIns
     public static ISharpTSCallable? GetStaticMethod(string name, SharpTSPromiseClass? subclass)
     {
         var factory = DerivedPromiseFactory(subclass);
+        Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?> receiverResolver =
+            (interp, receiver) =>
+            {
+                RequireConstructorReceiver(receiver);
+                if (ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+                    || receiver is SharpTSPromiseClass promiseClass
+                        && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase))
+                {
+                    return null;
+                }
+
+                return DerivedPromiseFactory(receiver)
+                    ?? PreparePromiseCapability(interp, receiver);
+            };
         return name switch
         {
-            "all" => new BuiltInAsyncMethod("all", 1, 1, (interp, _, args) =>
-                AllImpl(args, interp), factory),
+            "all" => new BuiltInAsyncMethod("all", 0, 1, (interp, receiver, args) =>
+                AllImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
-            "race" => new BuiltInAsyncMethod("race", 1, 1, (interp, _, args) =>
-                RaceImpl(args, interp), factory),
+            "allKeyed" => new BuiltInAsyncMethod("allKeyed", 0, 1, (interp, receiver, args) =>
+                AllKeyedImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
-            "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
-                ResolveImplAsync(args), factory),
+            "race" => new BuiltInAsyncMethod("race", 0, 1, (interp, receiver, args) =>
+                RaceImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
-            "reject" => new BuiltInAsyncMethod("reject", 1, 1, (_, _, args) =>
-                Task.FromResult(RejectImpl(args)), factory),
+            "resolve" => new BuiltInMethod("resolve", 0, 1, (interp, receiver, args) =>
+                ResolveStatic(interp, receiver, args, factory))
+                .WithSpecLength(1)
+                .AsNonConstructor(),
 
-            "allSettled" => new BuiltInAsyncMethod("allSettled", 1, 1, (interp, _, args) =>
-                AllSettledImpl(args, interp), factory),
+            "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
+                Task.FromResult(RejectImpl(args)), factory, speciesResolver: receiverResolver).WithSpecLength(1),
 
-            "any" => new BuiltInAsyncMethod("any", 1, 1, (interp, _, args) =>
-                AnyImpl(args, interp), factory),
+            "allSettled" => new BuiltInAsyncMethod("allSettled", 0, 1, (interp, receiver, args) =>
+                AllSettledImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
+
+            "allSettledKeyed" => new BuiltInAsyncMethod("allSettledKeyed", 0, 1,
+                (interp, receiver, args) => AllSettledKeyedImpl(args, interp, receiver),
+                factory, speciesResolver: receiverResolver).WithSpecLength(1),
+
+            "any" => new BuiltInAsyncMethod("any", 0, 1, (interp, receiver, args) =>
+                AnyImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
+                .WithSpecLength(1),
 
             "withResolvers" => BuiltInMethod.CreateV2("withResolvers", 0, (interp, _, _) =>
                 RuntimeValue.FromBoxed(WithResolversImpl(interp, factory))),
 
             _ => null
         };
+    }
+
+    /// <summary>
+    /// Promise static combinators run NewPromiseCapability on their <c>this</c>
+    /// value before creating a result promise. That operation requires an
+    /// Object; primitives must therefore throw synchronously rather than
+    /// becoming a rejected promise in <see cref="BuiltInAsyncMethod"/>.
+    /// </summary>
+    private static void RequireConstructorReceiver(object? receiver)
+    {
+        if (!IsConstructorSpecies(receiver))
+        {
+            throw new Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise static method called on a non-constructor receiver"));
+        }
     }
 
     /// <summary>
@@ -268,13 +423,7 @@ public static class PromiseBuiltIns
     private static object? ConstructPromiseCapabilityAndAdopt(
         Interpreter interp, object? speciesCtor, Task<object?> source)
     {
-        var capability = new PromiseCapabilityExecutor();
-        object? promiseObject = interp.Construct(speciesCtor, [capability]);
-
-        // §27.2.1.5 step 4: the resolve/reject the executor stored must be callable.
-        if (capability.ResolveFn is not { } resolveFn || capability.RejectFn is not { } rejectFn)
-            throw new InterpreterException(
-                "Promise resolve or reject function is not callable");
+        var (promiseObject, resolveFn, rejectFn) = CreatePromiseCapability(interp, speciesCtor);
 
         // Adopt the source task into the captured capability. Awaiting inside this
         // helper captures the interpreter's SynchronizationContext, so the guest
@@ -282,6 +431,37 @@ public static class PromiseBuiltIns
         // escaping to the thread pool (#319/#320).
         _ = AdoptIntoCapability(source, resolveFn, rejectFn, interp);
         return promiseObject;
+    }
+
+    /// <summary>
+    /// Performs NewPromiseCapability synchronously and returns a materializer
+    /// that only adopts the operation task later. Promise combinators must run
+    /// the constructor before GetPromiseResolve/iterator processing, and a
+    /// custom constructor's no-op reject callback must own any later failure
+    /// instead of creating an unhandled host-backed SharpTSPromise.
+    /// </summary>
+    private static Func<Interpreter, Task<object?>, object?> PreparePromiseCapability(
+        Interpreter interp, object? constructor)
+    {
+        var (promiseObject, resolveFn, rejectFn) = CreatePromiseCapability(interp, constructor);
+        return (adoptingInterpreter, source) =>
+        {
+            _ = AdoptIntoCapability(source, resolveFn, rejectFn, adoptingInterpreter);
+            return promiseObject;
+        };
+    }
+
+    private static (object? Promise, ISharpTSCallable Resolve, ISharpTSCallable Reject)
+        CreatePromiseCapability(Interpreter interp, object? constructor)
+    {
+        var capability = new PromiseCapabilityExecutor();
+        object? promiseObject = interp.Construct(constructor, [capability]);
+        if (capability.ResolveFn is not { } resolveFn || capability.RejectFn is not { } rejectFn)
+        {
+            throw new Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise resolve or reject function is not callable"));
+        }
+        return (promiseObject, resolveFn, rejectFn);
     }
 
     private static async Task AdoptIntoCapability(
@@ -578,11 +758,12 @@ public static class PromiseBuiltIns
         {
             throw;
         }
-        catch (Runtime.Exceptions.ThrowException)
+        catch (Runtime.Exceptions.ThrowException ex)
         {
-            // A guest throw from a user-supplied Symbol.iterator / next() is itself the
-            // rejection reason; let the surrounding async machinery adopt it.
-            throw;
+            // A guest throw from Symbol.iterator / next() becomes the returned
+            // promise's rejection reason. Convert it here so the task wrapper
+            // preserves the guest value instead of exposing a host message.
+            throw new SharpTSPromiseRejectedException(ex.Value);
         }
         catch
         {
@@ -628,8 +809,10 @@ public static class PromiseBuiltIns
     /// Implementation of Promise.all(iterable)
     /// Resolves when all promises resolve, rejects on first rejection.
     /// </summary>
-    private static async Task<object?> AllImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> AllImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "all");
         var array = IterateCombinatorArgument(args, interpreter, "all");
 
         // Empty array resolves immediately to empty array
@@ -642,15 +825,9 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            if (element is SharpTSPromise promise)
-            {
-                tasks.Add(promise.GetValueAsync());
-            }
-            else
-            {
-                // Non-promise values are treated as immediately resolved
-                tasks.Add(Task.FromResult(element));
-            }
+            var resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            tasks.Add(TaskFromResolvedValue(interpreter, resolved));
         }
 
         // Wait for all promises - will throw on first rejection
@@ -658,12 +835,117 @@ public static class PromiseBuiltIns
         return new SharpTSArray(new List<object?>(results));
     }
 
+    private readonly record struct KeyedPromiseInput(object Key, object? Value);
+
+    /// <summary>
+    /// Promise.allKeyed (Await Dictionary proposal): resolves each own enumerable
+    /// property and returns a null-prototype object with the same string/symbol
+    /// keys in OwnPropertyKeys order.
+    /// </summary>
+    private static async Task<object?> AllKeyedImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
+    {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "allKeyed");
+        var entries = GetKeyedPromiseInputs(args, interpreter, "allKeyed");
+        var tasks = new List<Task<object?>>(entries.Count);
+        foreach (var entry in entries)
+        {
+            object? resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, entry.Value);
+            tasks.Add(TaskFromResolvedValue(interpreter, resolved));
+        }
+
+        object?[] values = await Task.WhenAll(tasks);
+        return CreateKeyedPromiseResult(entries, values);
+    }
+
+    private static List<KeyedPromiseInput> GetKeyedPromiseInputs(
+        List<object?> args, Interpreter interpreter, string methodName)
+    {
+        object? input = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+        if (input is null or SharpTSUndefined or bool or string or char
+            or byte or sbyte or short or ushort or int or uint or long or ulong
+            or float or double or decimal or SharpTSBigInt or System.Numerics.BigInteger
+            or SharpTSSymbol)
+        {
+            throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+                $"Promise.{methodName} requires an object argument"));
+        }
+
+        try
+        {
+            var entries = new List<KeyedPromiseInput>();
+            switch (input)
+            {
+                case SharpTSObject obj:
+                    foreach (string key in obj.OwnEnumerableKeys())
+                        entries.Add(new(key, interpreter.GetProperty(obj, key)));
+                    foreach (var symbol in obj.GetSymbolPropertyNames())
+                    {
+                        if (!obj.GetSymbolPropertyFlags(symbol).Enumerable) continue;
+                        object? value;
+                        if (obj.TryGetSymbolAccessor(symbol, out var getter, out _)
+                            && getter is not null)
+                        {
+                            value = FunctionBuiltIns.CallWithThis(
+                                interpreter, getter, obj, []);
+                        }
+                        else
+                        {
+                            value = obj.GetBySymbol(symbol) ?? SharpTSUndefined.Instance;
+                        }
+                        entries.Add(new(symbol, value));
+                    }
+                    return entries;
+                case SharpTSFunction function:
+                    foreach (string key in function.PropertyKeys)
+                        entries.Add(new(key, interpreter.GetProperty(function, key)));
+                    return entries;
+                case SharpTSArrowFunction arrow:
+                    foreach (string key in arrow.PropertyKeys)
+                        entries.Add(new(key, interpreter.GetProperty(arrow, key)));
+                    return entries;
+                case SharpTSArray array:
+                    foreach (string key in array.OwnEnumerableKeys())
+                        entries.Add(new(key, interpreter.GetProperty(array, key)));
+                    return entries;
+                case SharpTSInstance instance:
+                    foreach (string key in instance.OwnEnumerableKeys())
+                        entries.Add(new(key, interpreter.GetProperty(instance, key)));
+                    return entries;
+                default:
+                    throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+                        $"Promise.{methodName} requires an object argument"));
+            }
+        }
+        catch (Exceptions.ThrowException ex)
+        {
+            throw new SharpTSPromiseRejectedException(ex.Value);
+        }
+    }
+
+    private static SharpTSObject CreateKeyedPromiseResult(
+        IReadOnlyList<KeyedPromiseInput> entries, IReadOnlyList<object?> values)
+    {
+        var result = new SharpTSObject([]) { IsNullPrototype = true };
+        for (int index = 0; index < entries.Count; index++)
+        {
+            if (entries[index].Key is SharpTSSymbol symbol)
+                result.SetBySymbol(symbol, values[index]);
+            else
+                result.SetProperty((string)entries[index].Key, values[index]);
+        }
+        return result;
+    }
+
     /// <summary>
     /// Implementation of Promise.race(iterable)
     /// Resolves/rejects with the first promise to settle.
     /// </summary>
-    private static async Task<object?> RaceImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> RaceImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "race");
         var array = IterateCombinatorArgument(args, interpreter, "race");
 
         // Empty array never settles — there are no competitors to race.
@@ -680,15 +962,9 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            if (element is SharpTSPromise promise)
-            {
-                tasks.Add(promise.GetValueAsync());
-            }
-            else
-            {
-                // Non-promise values are treated as immediately resolved
-                tasks.Add(Task.FromResult(element));
-            }
+            object? resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            tasks.Add(TaskFromResolvedValue(interpreter, resolved));
         }
 
         // Return the result of the first task to complete
@@ -696,13 +972,94 @@ public static class PromiseBuiltIns
         return await completedTask;
     }
 
+    private static ISharpTSCallable GetPromiseResolve(
+        Interpreter interpreter, object? constructor, string methodName)
+    {
+        object? resolve = interpreter.GetProperty(constructor, "resolve");
+        if (resolve is ISharpTSCallable callable)
+        {
+            return callable;
+        }
+        throw new SharpTSPromiseRejectedException(new SharpTSTypeError(
+            $"Promise.{methodName} resolve property is not callable"));
+    }
+
+    private static object? InvokePromiseResolve(
+        Interpreter interpreter,
+        object? constructor,
+        ISharpTSCallable promiseResolve,
+        object? element)
+    {
+        try
+        {
+            return FunctionBuiltIns.CallWithThis(
+                interpreter, promiseResolve, constructor, [element]);
+        }
+        catch (Runtime.Exceptions.ThrowException ex)
+        {
+            throw new SharpTSPromiseRejectedException(ex.Value);
+        }
+    }
+
+    private static Task<object?> TaskFromResolvedValue(
+        Interpreter interpreter, object? resolved)
+    {
+        if (resolved is SharpTSPromise promise)
+            return promise.GetValueAsync();
+
+        if (resolved is SharpTSObject or SharpTSInstance)
+        {
+            var then = interpreter.GetProperty(resolved, "then");
+            if (then is ISharpTSCallable thenCallable)
+            {
+                var completion = new TaskCompletionSource<object?>();
+                var fulfill = new PromiseResolveCallback(value =>
+                {
+                    if (value is SharpTSPromise inner)
+                        _ = AdoptResolvedPromise(inner, completion);
+                    else
+                        completion.TrySetResult(value);
+                });
+                var reject = new PromiseRejectCallback(reason =>
+                    completion.TrySetException(new SharpTSPromiseRejectedException(reason)));
+                try
+                {
+                    FunctionBuiltIns.CallWithThis(
+                        interpreter, thenCallable, resolved, [fulfill, reject]);
+                }
+                catch (Runtime.Exceptions.ThrowException ex)
+                {
+                    completion.TrySetException(new SharpTSPromiseRejectedException(ex.Value));
+                }
+                return completion.Task;
+            }
+        }
+
+        return Task.FromResult(resolved);
+    }
+
+    private static async Task AdoptResolvedPromise(
+        SharpTSPromise promise, TaskCompletionSource<object?> completion)
+    {
+        try
+        {
+            completion.TrySetResult(await promise.GetValueAsync());
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
+    }
+
     /// <summary>
     /// Implementation of Promise.allSettled(iterable)
     /// Returns array of outcome objects: {status: "fulfilled"|"rejected", value?: T, reason?: E}
     /// Never rejects - always resolves with all outcomes.
     /// </summary>
-    private static async Task<object?> AllSettledImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> AllSettledImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "allSettled");
         var array = IterateCombinatorArgument(args, interpreter, "allSettled");
 
         // Empty array resolves immediately to empty array
@@ -711,44 +1068,61 @@ public static class PromiseBuiltIns
             return new SharpTSArray([]);
         }
 
-        List<object?> results = [];
+        var tasks = new List<Task<object?>>(array.Count);
 
         foreach (var element in array)
         {
-            try
-            {
-                object? value;
-                if (element is SharpTSPromise promise)
-                {
-                    value = await promise.GetValueAsync();
-                }
-                else
-                {
-                    // Non-promise values are treated as immediately resolved
-                    value = element;
-                }
-
-                // Create fulfilled outcome object
-                var outcome = new SharpTSObject(new Dictionary<string, object?>
-                {
-                    ["status"] = "fulfilled",
-                    ["value"] = value
-                });
-                results.Add(outcome);
-            }
-            catch (Exception ex)
-            {
-                // Create rejected outcome object carrying the guest rejection value
-                var outcome = new SharpTSObject(new Dictionary<string, object?>
-                {
-                    ["status"] = "rejected",
-                    ["reason"] = ExtractRejectionReason(ex)
-                });
-                results.Add(outcome);
-            }
+            var resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            tasks.Add(SettleForAllSettled(TaskFromResolvedValue(interpreter, resolved)));
         }
 
-        return new SharpTSArray(results);
+        return new SharpTSArray([.. await Task.WhenAll(tasks)]);
+    }
+
+    /// <summary>
+    /// Promise.allSettledKeyed (Await Dictionary proposal): settles each own
+    /// enumerable property independently and retains the input's key order in
+    /// a null-prototype result object.
+    /// </summary>
+    private static async Task<object?> AllSettledKeyedImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
+    {
+        var promiseResolve = GetPromiseResolve(
+            interpreter, constructor, "allSettledKeyed");
+        var entries = GetKeyedPromiseInputs(args, interpreter, "allSettledKeyed");
+        var tasks = new List<Task<object?>>(entries.Count);
+        foreach (var entry in entries)
+        {
+            object? resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, entry.Value);
+            tasks.Add(SettleForAllSettled(
+                TaskFromResolvedValue(interpreter, resolved)));
+        }
+
+        object?[] values = await Task.WhenAll(tasks);
+        return CreateKeyedPromiseResult(entries, values);
+    }
+
+    private static async Task<object?> SettleForAllSettled(Task<object?> resolved)
+    {
+        try
+        {
+            object? value = await resolved;
+            return new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["status"] = "fulfilled",
+                ["value"] = value
+            });
+        }
+        catch (Exception ex)
+        {
+            return new SharpTSObject(new Dictionary<string, object?>
+            {
+                ["status"] = "rejected",
+                ["reason"] = ExtractRejectionReason(ex)
+            });
+        }
     }
 
     /// <summary>
@@ -766,8 +1140,10 @@ public static class PromiseBuiltIns
     /// Implementation of Promise.any(iterable)
     /// First fulfilled promise wins. If all reject, throws AggregateError.
     /// </summary>
-    private static async Task<object?> AnyImpl(List<object?> args, Interpreter interpreter)
+    private static async Task<object?> AnyImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
     {
+        var promiseResolve = GetPromiseResolve(interpreter, constructor, "any");
         var array = IterateCombinatorArgument(args, interpreter, "any");
 
         // Empty array rejects immediately with AggregateError. Must be a real
@@ -783,15 +1159,10 @@ public static class PromiseBuiltIns
 
         foreach (var element in array)
         {
-            if (element is SharpTSPromise promise)
-            {
-                _ = ProcessPromiseForAny(promise.GetValueAsync(), state);
-            }
-            else
-            {
-                // Non-promise values are treated as immediately resolved - first one wins
-                state.Tcs.TrySetResult(element);
-            }
+            var resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, element);
+            _ = ProcessPromiseForAny(
+                TaskFromResolvedValue(interpreter, resolved), state);
         }
 
         return await state.Tcs.Task;
@@ -857,12 +1228,41 @@ public static class PromiseBuiltIns
     }
 
     /// <summary>
-    /// Implementation of Promise.resolve(value?)
-    /// Returns the value directly - BuiltInAsyncMethod.Call wraps in a Promise.
+    /// Implementation of Promise.resolve(value?). Returns an existing promise
+    /// unchanged when its constructor is the receiver; otherwise creates a
+    /// promise that adopts the supplied value.
     /// </summary>
+    private static object? ResolveStatic(
+        Interpreter interpreter,
+        object? receiver,
+        List<object?> args,
+        Func<Interpreter, Task<object?>, SharpTSPromise>? promiseFactory)
+    {
+        RequireConstructorReceiver(receiver);
+        var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
+
+        if (value is SharpTSPromise promise
+            && ReferenceEquals(interpreter.GetProperty(promise, "constructor"), receiver))
+        {
+            return promise;
+        }
+
+        var task = ResolveImplAsync(args);
+        if (promiseFactory != null)
+            return promiseFactory(interpreter, task);
+        bool isBaseConstructor = ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+            || receiver is SharpTSPromiseClass promiseClass
+                && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
+        if (!isBaseConstructor)
+        {
+            return ConstructPromiseCapabilityAndAdopt(interpreter, receiver, task);
+        }
+        return new SharpTSPromise(task);
+    }
+
     private static async Task<object?> ResolveImplAsync(List<object?> args)
     {
-        var value = args.Count > 0 ? args[0] : null;
+        var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
 
         // If already a Promise, await it to unwrap and avoid double-wrapping
         // (BuiltInAsyncMethod.Call will wrap the result in a new Promise)
@@ -882,7 +1282,7 @@ public static class PromiseBuiltIns
     /// </summary>
     private static object? RejectImpl(List<object?> args)
     {
-        var reason = args.Count > 0 ? args[0] : null;
+        var reason = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
         // Throw to let BuiltInAsyncMethod.Call create the rejected Promise
         throw new SharpTSPromiseRejectedException(reason);
     }

@@ -307,7 +307,14 @@ public partial class Interpreter : IDisposable
     /// outermost scope. Used by Test262 to inject the <c>$DONE</c>
     /// async-completion callback into <c>flags: [async]</c> tests.
     /// </summary>
-    public void RegisterGlobal(string name, object? value) => _environment.Define(name, value);
+    public void RegisterGlobal(string name, object? value)
+    {
+        _environment.Define(name, value);
+        // Host-injected globals are properties of the realm's global object,
+        // not lexical-only bindings. Test262's asyncHelpers intentionally checks
+        // hasOwnProperty(globalThis, "$DONE") before using the callback.
+        GlobalThis.SetProperty(name, value);
+    }
 
     /// <summary>
     /// When set, yield expressions call this delegate instead of throwing YieldException.
@@ -1294,7 +1301,11 @@ public partial class Interpreter : IDisposable
 
         // Preserve the outer type map: InterpretRepl assigns _typeMap, and passing null
         // would clobber type-aware dispatch for the remainder of the outer program.
-        return InterpretRepl(parseResult.Statements, _typeMap);
+        var completion = InterpretRepl(parseResult.Statements, _typeMap);
+        return parseResult.Statements.Count > 0
+            && parseResult.Statements[^1] is Stmt.Expression
+                ? completion
+                : SharpTSUndefined.Instance;
     }
 
     /// <summary>
