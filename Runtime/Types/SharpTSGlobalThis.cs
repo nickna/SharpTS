@@ -27,6 +27,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// User-assigned properties on globalThis.
     /// </summary>
     private readonly SharpTSObject _properties = new([]);
+    private readonly HashSet<string> _deletedProperties = new(StringComparer.Ordinal);
     private readonly Func<string, object?>? _realmIntrinsicResolver;
 
     // internal (not private) so each Interpreter can construct its own realm
@@ -55,10 +56,31 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     }
 
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
-        => _properties.DefineProperty(name, descriptor);
+    {
+        _deletedProperties.Remove(name);
+        return _properties.DefineProperty(name, descriptor);
+    }
 
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
-        => _properties.GetOwnPropertyDescriptor(name);
+    {
+        if (_properties.GetOwnPropertyDescriptor(name) is { } userDescriptor)
+            return userDescriptor;
+        if (!HasProperty(name)) return null;
+
+        // Constructor/function globals are ordinary properties of the global
+        // object: writable and configurable, but not enumerable (§19.1).
+        return new SharpTSPropertyDescriptor
+        {
+            Value = GetProperty(name),
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        };
+    }
 
     /// <summary>
     /// Gets a property from globalThis.
@@ -83,6 +105,8 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
             return value;
         }
         if (_properties.HasProperty(name))
+            return SharpTSUndefined.Instance;
+        if (_deletedProperties.Contains(name))
             return SharpTSUndefined.Instance;
 
         // An Interpreter-backed global object resolves mutable intrinsics from
@@ -178,8 +202,20 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     /// <param name="value">The value to set.</param>
     public void SetProperty(string name, object? value)
     {
+        _deletedProperties.Remove(name);
         _properties.SetProperty(name, value);
     }
+
+    internal bool DeleteProperty(string name)
+    {
+        if (HasUserProperty(name) && !_properties.DeleteProperty(name))
+            return false;
+        _deletedProperties.Add(name);
+        return true;
+    }
+
+    internal IEnumerable<string> OwnEnumerableKeys()
+        => _properties.OwnEnumerableKeys();
 
     /// <summary>
     /// Checks if a property exists on globalThis.
@@ -190,6 +226,7 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     {
         if (name == "globalThis") return true;
         if (HasUserProperty(name)) return true;
+        if (_deletedProperties.Contains(name)) return false;
 
         if (_realmIntrinsicResolver?.Invoke(name) is not null) return true;
 

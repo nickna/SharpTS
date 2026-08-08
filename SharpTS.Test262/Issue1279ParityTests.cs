@@ -2579,6 +2579,13 @@ public sealed class Issue1279ParityTests
             "built-ins/Boolean/prototype/S15.6.3.1_A3.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Boolean/prop-desc.js")]
+    [InlineData("built-ins/Math/prop-desc.js")]
+    [InlineData("built-ins/Number/prop-desc.js")]
+    public void Built_in_global_bindings_have_standard_descriptors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(

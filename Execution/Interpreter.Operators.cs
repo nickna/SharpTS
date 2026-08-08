@@ -1004,6 +1004,7 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(name),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(name),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(name),
+            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(name),
             SharpTSStringNamespace when name == "prototype" =>
                 DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(name),
@@ -1081,6 +1082,7 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(keyStr),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(keyStr),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(keyStr),
+            SharpTSGlobalThis globalThis => globalThis.DeleteProperty(keyStr),
             SharpTSStringNamespace when keyStr == "prototype" =>
                 DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(keyStr),
