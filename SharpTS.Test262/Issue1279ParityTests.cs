@@ -2520,6 +2520,29 @@ public sealed class Issue1279ParityTests
     public void Promise_allKeyed_resolves_own_enumerable_properties(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-is-function.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject-bigint.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/ctx-non-ctor.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/extensible.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/key-order-preserved.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/length.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/name.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/non-enumerable-properties-ignored.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/not-a-constructor.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/prop-desc.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/proto.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/prototype-keys-ignored.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolve-not-callable-reject-with-typeerror.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolved-all-fulfilled.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolved-all-mixed.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolved-all-rejected.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/resolves-empty-object.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/symbol-keys.js")]
+    public void Promise_allSettledKeyed_retains_keyed_outcomes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(

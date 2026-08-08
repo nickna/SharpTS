@@ -247,6 +247,10 @@ public static class PromiseBuiltIns
                 AllSettledImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
                 .WithSpecLength(1),
 
+            "allSettledKeyed" => new BuiltInAsyncMethod("allSettledKeyed", 0, 1,
+                (interp, receiver, args) => AllSettledKeyedImpl(args, interp, receiver),
+                factory, speciesResolver: receiverResolver).WithSpecLength(1),
+
             "any" => new BuiltInAsyncMethod("any", 0, 1, (interp, receiver, args) =>
                 AnyImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
                 .WithSpecLength(1),
@@ -1074,6 +1078,30 @@ public static class PromiseBuiltIns
         }
 
         return new SharpTSArray([.. await Task.WhenAll(tasks)]);
+    }
+
+    /// <summary>
+    /// Promise.allSettledKeyed (Await Dictionary proposal): settles each own
+    /// enumerable property independently and retains the input's key order in
+    /// a null-prototype result object.
+    /// </summary>
+    private static async Task<object?> AllSettledKeyedImpl(
+        List<object?> args, Interpreter interpreter, object? constructor)
+    {
+        var promiseResolve = GetPromiseResolve(
+            interpreter, constructor, "allSettledKeyed");
+        var entries = GetKeyedPromiseInputs(args, interpreter, "allSettledKeyed");
+        var tasks = new List<Task<object?>>(entries.Count);
+        foreach (var entry in entries)
+        {
+            object? resolved = InvokePromiseResolve(
+                interpreter, constructor, promiseResolve, entry.Value);
+            tasks.Add(SettleForAllSettled(
+                TaskFromResolvedValue(interpreter, resolved)));
+        }
+
+        object?[] values = await Task.WhenAll(tasks);
+        return CreateKeyedPromiseResult(entries, values);
     }
 
     private static async Task<object?> SettleForAllSettled(Task<object?> resolved)
