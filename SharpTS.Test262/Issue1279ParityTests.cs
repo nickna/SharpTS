@@ -2426,6 +2426,14 @@ public sealed class Issue1279ParityTests
     public void Promise_combinators_return_objects_with_the_Promise_prototype(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/resolve-element-function-extensible.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-element-function-extensible.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-element-function-extensible.js")]
+    [InlineData("built-ins/Promise/any/reject-element-function-extensible.js")]
+    public void Promise_combinator_element_callbacks_are_extensible(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(

@@ -783,14 +783,7 @@ public static class PromiseBuiltIns
         {
             var resolved = InvokePromiseResolve(
                 interpreter, constructor, promiseResolve, element);
-            if (resolved is SharpTSPromise promise)
-            {
-                tasks.Add(promise.GetValueAsync());
-            }
-            else
-            {
-                tasks.Add(Task.FromResult(resolved));
-            }
+            tasks.Add(TaskFromResolvedValue(interpreter, resolved));
         }
 
         // Wait for all promises - will throw on first rejection
@@ -824,15 +817,7 @@ public static class PromiseBuiltIns
         {
             object? resolved = InvokePromiseResolve(
                 interpreter, constructor, promiseResolve, element);
-            if (resolved is SharpTSPromise promise)
-            {
-                tasks.Add(promise.GetValueAsync());
-            }
-            else
-            {
-                // Non-promise values are treated as immediately resolved
-                tasks.Add(Task.FromResult(resolved));
-            }
+            tasks.Add(TaskFromResolvedValue(interpreter, resolved));
         }
 
         // Return the result of the first task to complete
@@ -869,6 +854,56 @@ public static class PromiseBuiltIns
         }
     }
 
+    private static Task<object?> TaskFromResolvedValue(
+        Interpreter interpreter, object? resolved)
+    {
+        if (resolved is SharpTSPromise promise)
+            return promise.GetValueAsync();
+
+        if (resolved is SharpTSObject or SharpTSInstance)
+        {
+            var then = interpreter.GetProperty(resolved, "then");
+            if (then is ISharpTSCallable thenCallable)
+            {
+                var completion = new TaskCompletionSource<object?>();
+                var fulfill = new PromiseResolveCallback(value =>
+                {
+                    if (value is SharpTSPromise inner)
+                        _ = AdoptResolvedPromise(inner, completion);
+                    else
+                        completion.TrySetResult(value);
+                });
+                var reject = new PromiseRejectCallback(reason =>
+                    completion.TrySetException(new SharpTSPromiseRejectedException(reason)));
+                try
+                {
+                    FunctionBuiltIns.CallWithThis(
+                        interpreter, thenCallable, resolved, [fulfill, reject]);
+                }
+                catch (Runtime.Exceptions.ThrowException ex)
+                {
+                    completion.TrySetException(new SharpTSPromiseRejectedException(ex.Value));
+                }
+                return completion.Task;
+            }
+        }
+
+        return Task.FromResult(resolved);
+    }
+
+    private static async Task AdoptResolvedPromise(
+        SharpTSPromise promise, TaskCompletionSource<object?> completion)
+    {
+        try
+        {
+            completion.TrySetResult(await promise.GetValueAsync());
+        }
+        catch (Exception ex)
+        {
+            completion.TrySetException(ex);
+        }
+    }
+
     /// <summary>
     /// Implementation of Promise.allSettled(iterable)
     /// Returns array of outcome objects: {status: "fulfilled"|"rejected", value?: T, reason?: E}
@@ -892,19 +927,17 @@ public static class PromiseBuiltIns
         {
             var resolved = InvokePromiseResolve(
                 interpreter, constructor, promiseResolve, element);
-            tasks.Add(SettleForAllSettled(resolved));
+            tasks.Add(SettleForAllSettled(TaskFromResolvedValue(interpreter, resolved)));
         }
 
         return new SharpTSArray([.. await Task.WhenAll(tasks)]);
     }
 
-    private static async Task<object?> SettleForAllSettled(object? resolved)
+    private static async Task<object?> SettleForAllSettled(Task<object?> resolved)
     {
         try
         {
-            object? value = resolved is SharpTSPromise promise
-                ? await promise.GetValueAsync()
-                : resolved;
+            object? value = await resolved;
             return new SharpTSObject(new Dictionary<string, object?>
             {
                 ["status"] = "fulfilled",
@@ -957,14 +990,8 @@ public static class PromiseBuiltIns
         {
             var resolved = InvokePromiseResolve(
                 interpreter, constructor, promiseResolve, element);
-            if (resolved is SharpTSPromise promise)
-            {
-                _ = ProcessPromiseForAny(promise.GetValueAsync(), state);
-            }
-            else
-            {
-                state.Tcs.TrySetResult(resolved);
-            }
+            _ = ProcessPromiseForAny(
+                TaskFromResolvedValue(interpreter, resolved), state);
         }
 
         return await state.Tcs.Task;
