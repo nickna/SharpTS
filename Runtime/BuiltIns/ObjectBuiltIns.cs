@@ -271,7 +271,13 @@ public static partial class ObjectBuiltIns
             {
                 case SharpTSObject source:
                     foreach (var symbol in source.GetSymbolPropertyNames())
-                        SetAssignedSymbol(target, symbol, source.GetBySymbol(symbol));
+                    {
+                        var descriptor = source.GetOwnPropertyDescriptor(symbol);
+                        if (descriptor?.Enumerable != true) continue;
+                        SetAssignedSymbol(
+                            target, symbol,
+                            interpreter.GetSymbolPropertyValue(source, symbol));
+                    }
                     break;
                 case SharpTSInstance source:
                     foreach (var symbol in source.GetSymbolPropertyNames())
