@@ -1353,6 +1353,7 @@ public partial class Interpreter
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
             ErrorToStringCallable m => m.Bind(receiver),
             BuiltInAsyncMethod m => m.Bind(receiver),
+            BuiltInMethod m when !m.IsBound && m.FunctionName == "catch" => m.Bind(receiver),
             _ => null,
         };
     }
@@ -1813,7 +1814,8 @@ public partial class Interpreter
                 // Bind methods to their receiver, return properties and prototype
                 // adapters directly. Prototype adapters receive `this` at the
                 // member-call site so ordinary reads preserve function identity.
-                if (member is BuiltInMethod m) return m.Bind(obj);
+                if (member is BuiltInMethod m)
+                    return obj is SharpTSPromisePrototype ? m : m.Bind(obj);
                 if (member is BuiltInAsyncMethod am)
                     return obj is SharpTSPromisePrototype ? am : am.Bind(obj);
                 return member;

@@ -60,9 +60,9 @@ public static class PromiseBuiltIns
         "then" => new BuiltInAsyncMethod("then", 0, 2, (interp, recv, args) =>
             ThenImpl(RequirePromiseReceiver(recv, "then"), args, interp),
             speciesResolver: SpeciesResolver).WithSpecLength(2),
-        "catch" => new BuiltInAsyncMethod("catch", 0, 1, (interp, recv, args) =>
-            CatchImpl(RequirePromiseReceiver(recv, "catch"), args, interp),
-            speciesResolver: SpeciesResolver).WithSpecLength(1),
+        "catch" => BuiltInMethod.CreateV2("catch", 0, int.MaxValue, CatchInvoke)
+            .WithSpecLength(1)
+            .AsNonConstructor(),
         "finally" => new BuiltInAsyncMethod("finally", 0, 1, (interp, recv, args) =>
             FinallyImpl(RequirePromiseReceiver(recv, "finally"), args, interp),
             speciesResolver: SpeciesResolver).WithSpecLength(1),
@@ -79,6 +79,33 @@ public static class PromiseBuiltIns
         => receiver as SharpTSPromise
             ?? throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
                 $"Promise.prototype.{methodName} called on a non-Promise receiver"));
+
+    /// <summary>
+    /// ECMA-262 §27.2.5.1: catch is intentionally generic. It performs
+    /// <c>Invoke(promise, "then", « undefined, onRejected »)</c>, so an own
+    /// getter or replacement method is observed and its return value passes
+    /// through unchanged.
+    /// </summary>
+    private static RuntimeValue CatchInvoke(
+        Interpreter interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        object? target = receiver.ToObject();
+        object? then = interpreter.GetPropertyValue(target, "then");
+        if (then is not ISharpTSCallable callable)
+            throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise.prototype.catch: then is not callable"));
+
+        object? onRejected = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter,
+            callable,
+            target,
+            [SharpTSUndefined.Instance, onRejected]));
+    }
 
     /// <summary>
     /// Gets a static method from the Promise namespace.
