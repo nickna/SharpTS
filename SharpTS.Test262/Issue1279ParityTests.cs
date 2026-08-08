@@ -3104,6 +3104,11 @@ public sealed class Issue1279ParityTests
     public void Array_concat_honors_generic_and_spreadable_values(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T1.js")]
+    public void Array_pop_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
