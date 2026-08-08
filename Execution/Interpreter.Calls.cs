@@ -1125,6 +1125,8 @@ public partial class Interpreter
             return IsBoxedPrimitiveOfType(left, "String");
         if (right is SharpTSBooleanNamespace)
             return IsBoxedPrimitiveOfType(left, "Boolean");
+        if (right is SharpTSGlobalFunction { Name: BuiltInNames.BigInt })
+            return IsBoxedPrimitiveOfType(left, "BigInt");
 
         // The Function global is represented by a namespace-style callable
         // rather than SharpTSBuiltInConstructor. OrdinaryHasInstance for it

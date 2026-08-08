@@ -1569,6 +1569,14 @@ public partial class Interpreter
             if (primitiveType == "Boolean"
                 && GetBooleanPrototype().GetMember(memberName) is { } booleanMember)
                 return RuntimeValue.FromBoxed(booleanMember);
+            if (primitiveType == "BigInt"
+                && GetBigIntPrototype().GetMember(memberName) is { } bigIntMember)
+            {
+                return RuntimeValue.FromBoxed(
+                    bigIntMember is BigIntPrototypeMethodWrapper wrapper
+                        ? wrapper.Bind(simpleObj)
+                        : bigIntMember);
+            }
 
             // These wrappers resolve exclusively through their mutable realm
             // prototype. Falling back to the primitive registry would resurrect
