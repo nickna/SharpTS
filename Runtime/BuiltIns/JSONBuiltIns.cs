@@ -20,12 +20,49 @@ public static class JSONBuiltIns
         BuiltInStaticBuilder.Create()
             .MethodV2("parse", 1, 2, 2, ParseJson)
             .MethodV2("stringify", 1, 3, 3, StringifyJson)
+            .MethodV2("rawJSON", 0, int.MaxValue, 1, RawJson)
+            .MethodV2("isRawJSON", 0, int.MaxValue, 1, IsRawJson)
             .Build();
 
     public static object? GetStaticMethod(string name) => _lookup.GetMember(name);
 
     /// <summary>Member names for REPL autocomplete.</summary>
     public static IEnumerable<string> MemberNames => _lookup.MemberNames;
+
+    private static RuntimeValue RawJson(
+        Interpreter interpreter,
+        RuntimeValue _,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        object? input = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        string text = interpreter.ToStringForBuiltInArgument(input);
+        if (text.Length == 0 || char.IsWhiteSpace(text[0]) || char.IsWhiteSpace(text[^1]))
+            throw new ThrowException(new SharpTSSyntaxError("Invalid raw JSON text"));
+
+        try
+        {
+            using var document = JsonDocument.Parse(text);
+            if (document.RootElement.ValueKind is JsonValueKind.Array or JsonValueKind.Object)
+                throw new ThrowException(new SharpTSSyntaxError(
+                    "Raw JSON text must be a primitive value"));
+        }
+        catch (JsonException ex)
+        {
+            throw new ThrowException(new SharpTSSyntaxError(
+                $"Invalid raw JSON text: {ex.Message}"));
+        }
+
+        return RuntimeValue.FromObject(new SharpTSRawJson(text));
+    }
+
+    private static RuntimeValue IsRawJson(
+        Interpreter _,
+        RuntimeValue __,
+        ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromBoolean(
+            args.Length > 0 && args[0].ToObject() is SharpTSRawJson);
 
     private static RuntimeValue ParseJson(Interpreter interp, RuntimeValue _, ReadOnlySpan<RuntimeValue> args)
     {
@@ -272,6 +309,9 @@ public static class JSONBuiltIns
 
         switch (value)
         {
+            case SharpTSRawJson rawJson:
+                sb.Append(rawJson.RawText);
+                return true;
             case null:
                 sb.Append("null");
                 return true;

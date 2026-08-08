@@ -2396,6 +2396,25 @@ public sealed class Issue1279ParityTests
     public void Promise_finally_dynamically_invokes_then(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/JSON/rawJSON/basic.js")]
+    [InlineData("built-ins/JSON/rawJSON/builtin.js")]
+    [InlineData("built-ins/JSON/rawJSON/illegal-empty-and-start-end-chars.js")]
+    [InlineData("built-ins/JSON/rawJSON/invalid-JSON-text.js")]
+    [InlineData("built-ins/JSON/rawJSON/length.js")]
+    [InlineData("built-ins/JSON/rawJSON/name.js")]
+    [InlineData("built-ins/JSON/rawJSON/not-a-constructor.js")]
+    [InlineData("built-ins/JSON/rawJSON/prop-desc.js")]
+    [InlineData("built-ins/JSON/rawJSON/returns-expected-object.js")]
+    [InlineData("built-ins/JSON/isRawJSON/basic.js")]
+    [InlineData("built-ins/JSON/isRawJSON/builtin.js")]
+    [InlineData("built-ins/JSON/isRawJSON/length.js")]
+    [InlineData("built-ins/JSON/isRawJSON/name.js")]
+    [InlineData("built-ins/JSON/isRawJSON/not-a-constructor.js")]
+    [InlineData("built-ins/JSON/isRawJSON/prop-desc.js")]
+    public void JSON_raw_values_match_the_spec(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
