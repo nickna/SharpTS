@@ -3028,6 +3028,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/from/Array.from-name.js")]
     [InlineData("built-ins/Array/from/Array.from_arity.js")]
     [InlineData("built-ins/Array/from/array-like-has-length-but-no-indexes-with-values.js")]
+    [InlineData("built-ins/Array/from/calling-from-valid-1-noStrict.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
