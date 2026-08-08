@@ -1597,6 +1597,8 @@ public static partial class ObjectBuiltIns
         // [[Prototype]]. Subclass instances keep their class chain instead.
         SharpTSArraySubclassInstance sub => sub.Klass,
         SharpTSArray => interp?.GetArrayPrototype(),
+        SharpTSPromiseSubclassInstance promiseSub => promiseSub.Klass.Prototype,
+        SharpTSPromise => interp?.GetPromisePrototype(),
         // ECMA-262 §22.2.6: a RegExp instance's [[Prototype]] is the
         // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
         // === RegExp.prototype` (the from-regexp-like tests assert this).
