@@ -148,7 +148,6 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
 
         var legacy = name switch
         {
-            "shift" => SharpTSArrayUnboundMethod.Shift,
             "unshift" => SharpTSArrayUnboundMethod.Unshift,
             _ => null,
         };
@@ -175,7 +174,7 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
 
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
-    // Mutating methods that still materialize (shift/unshift) keep the bespoke
+    // The mutating method that still materializes (unshift) keeps the bespoke
     // SharpTSArrayUnboundMethod path because spec-compliant array-like
     // mutation would require writing indexed properties back onto the
     // original receiver — a larger refactor. Non-mutating methods
@@ -296,6 +295,11 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         {
             return BuiltIns.ArrayBuiltIns.PushArrayLike(
                 interpreter, receiver!, arguments);
+        }
+
+        if (_name == "shift")
+        {
+            return BuiltIns.ArrayBuiltIns.ShiftArrayLike(interpreter, receiver!);
         }
 
         // Fast path: receiver is a real array (ToObject is identity for objects).

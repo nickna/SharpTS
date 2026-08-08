@@ -1480,7 +1480,7 @@ public partial class Interpreter
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
             ArrayPrototypeMethodWrapper m when m.FunctionName is
-                "join" or "slice" or "concat" or "pop" or "push"
+                "join" or "slice" or "concat" or "pop" or "push" or "shift"
                 => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),

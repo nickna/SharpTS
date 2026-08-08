@@ -365,12 +365,8 @@ public static class ArrayBuiltIns
     private static RuntimeValue PopV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(PopArrayLike(interpreter, arr));
 
-    private static RuntimeValue ShiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        if (arr.IsFrozen || arr.IsSealed || arr.Length == 0)
-            return RuntimeValue.Undefined;
-        return RuntimeValue.FromBoxed(arr.RemoveFirst());
-    }
+    private static RuntimeValue ShiftV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromBoxed(ShiftArrayLike(interpreter, arr));
 
     private static RuntimeValue UnshiftV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
@@ -903,6 +899,48 @@ public static class ArrayBuiltIns
         long newLength = length + items.Count;
         interpreter.SetProperty(receiver, "length", (double)newLength);
         return newLength;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.27 generic shift algorithm. Indexed properties are
+    /// observed and moved one at a time on the original receiver so holes,
+    /// inherited values, accessors, and abrupt completions remain visible.
+    /// </summary>
+    internal static object? ShiftArrayLike(Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (length == 0)
+        {
+            interpreter.SetProperty(receiver, "length", 0d);
+            return SharpTSUndefined.Instance;
+        }
+
+        object? first = interpreter.GetPropertyValue(receiver, "0");
+        for (long from = 1; from < length; from++)
+        {
+            string fromKey = from.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string toKey = (from - 1).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                interpreter.SetProperty(
+                    receiver, toKey,
+                    interpreter.GetPropertyValue(receiver, fromKey));
+            }
+            else
+            {
+                interpreter.DeleteProperty(receiver, toKey);
+            }
+        }
+
+        long newLength = length - 1;
+        interpreter.DeleteProperty(
+            receiver,
+            newLength.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return first;
     }
 
     private static void AppendConcatItem(

@@ -511,6 +511,40 @@ public class ArrayMethodTests
             output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Shift_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 3 };
+            object.shift = Array.prototype.shift;
+            console.log(object.shift());
+            console.log(object.length);
+            console.log(0 in object);
+            console.log(object[1]);
+            console.log(2 in object);
+
+            Object.prototype[1] = "inherited";
+            const inherited: any = { 0: "own", length: 2 };
+            console.log(Array.prototype.shift.call(inherited));
+            console.log(inherited[0]);
+            console.log(inherited.length);
+            delete Object.prototype[1];
+
+            const frozen: any = [];
+            Object.freeze(frozen);
+            try {
+                frozen.shift();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "first\n2\nfalse\nthird\nfalse\nown\ninherited\n1\ntrue\n",
+            output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {
