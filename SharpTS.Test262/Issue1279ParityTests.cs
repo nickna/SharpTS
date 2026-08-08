@@ -2485,6 +2485,12 @@ public sealed class Issue1279ParityTests
     public void RegExp_constructor_coerces_pattern_and_flags(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void RegExp_call_only_reuses_matching_constructor_instances()
+        => AssertPass(
+            "built-ins/RegExp/call_with_regexp_not_same_constructor.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

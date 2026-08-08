@@ -974,6 +974,8 @@ public partial class Interpreter
         {
             if (regex.TryGetAccessor(memberName, out var rxGetter, out _) && rxGetter != null)
                 return RuntimeValue.FromBoxed(rxGetter.CallBoxed(this, []));
+            if (regex.TryGetProperty(memberName, out var ownValue))
+                return RuntimeValue.FromBoxed(ownValue);
             if (memberName == "flags")
                 return RuntimeValue.FromBoxed(Runtime.BuiltIns.RegExpBuiltIns.GetMember(regex, memberName, this));
             // ECMA-262 §22.2.6.1: `constructor` is inherited from
@@ -987,7 +989,7 @@ public partial class Interpreter
             // shadows the inherited one, so yield to it when present. The
             // TryGetProperty probe is a cheap null check for the common case
             // (no own properties) and only hits the dict when one was set.
-            if (memberName == "constructor" && !regex.TryGetProperty("constructor", out _))
+            if (memberName == "constructor")
                 return RuntimeValue.FromBoxed(RegExpConstructorObject);
         }
 
