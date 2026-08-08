@@ -3109,6 +3109,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T2.js")]
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T3.js")]
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A3_T1.js")]
     public void Array_pop_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
