@@ -174,6 +174,8 @@ public static class NumberBuiltIns
         if (double.IsNaN(value)) return RuntimeValue.FromString("NaN");
         if (double.IsPositiveInfinity(value)) return RuntimeValue.FromString("Infinity");
         if (double.IsNegativeInfinity(value)) return RuntimeValue.FromString("-Infinity");
+        if (Math.Abs(value) >= 1e21)
+            return RuntimeValue.FromString(Compilation.RuntimeTypes.FormatNumber(value));
         if (value == 0) value = 0; // ECMA-262 treats -0 as non-negative.
 
         return RuntimeValue.FromString(value.ToString(

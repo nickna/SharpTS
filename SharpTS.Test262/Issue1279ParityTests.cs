@@ -2593,6 +2593,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Number_toFixed_uses_standard_notation_threshold()
+        => AssertPass(
+            "built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
