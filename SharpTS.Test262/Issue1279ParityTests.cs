@@ -3115,6 +3115,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A4_T1.js")]
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A4_T2.js")]
     [InlineData("built-ins/Array/prototype/pop/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/pop/clamps-to-integer-limit.js")]
     public void Array_pop_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
