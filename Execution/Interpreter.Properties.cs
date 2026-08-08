@@ -604,7 +604,75 @@ public partial class Interpreter
     {
         if (obj is string or bool or double or SharpTSBigInt or SharpTSSymbol)
             return SharpTSUndefined.Instance;
-        return PerformIndexGet(null!, obj, symbol).ToObject();
+
+        object receiver = obj;
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            if (current is SharpTSObject record)
+            {
+                if (record.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (record.HasSymbolProperty(symbol))
+                    return record.GetBySymbol(symbol);
+                current = GetRecordPrototype(record);
+                continue;
+            }
+
+            if (current is SharpTSFunction function)
+            {
+                if (function.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (function.TryGetSymbolProperty(symbol, out var value))
+                    return value;
+                current = GetFunctionPrototype();
+                continue;
+            }
+
+            if (current is SharpTSArrowFunction arrow)
+            {
+                if (arrow.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (arrow.TryGetSymbolProperty(symbol, out var value))
+                    return value;
+                current = GetFunctionPrototype();
+                continue;
+            }
+
+            if (current is SharpTSArray array)
+            {
+                if (array.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                if (array.HasSymbolProperty(symbol))
+                    return array.GetBySymbol(symbol);
+                if (ReferenceEquals(symbol, SharpTSSymbol.Iterator))
+                    return PerformIndexGet(null!, array, symbol).ToObject();
+                current = GetArrayPrototype();
+                continue;
+            }
+
+            if (current is ISharpTSSymbolPropertyBag symbolBag)
+            {
+                if (symbolBag.TryGetSymbolAccessor(symbol, out var getter, out _))
+                    return getter is null
+                        ? SharpTSUndefined.Instance
+                        : BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+                return symbolBag.HasSymbolProperty(symbol)
+                    ? symbolBag.GetBySymbol(symbol)
+                    : SharpTSUndefined.Instance;
+            }
+
+            return PerformIndexGet(null!, current, symbol).ToObject();
+        }
+        return SharpTSUndefined.Instance;
     }
 
     /// <summary>

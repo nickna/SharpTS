@@ -149,7 +149,7 @@ public class SharpTSStringNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
 /// receiver per ECMA-262 before dispatch. Also accepts arbitrary user-assigned
 /// properties (ECMA-262: String.prototype is an ordinary object).
 /// </summary>
-public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     /// <summary>
     /// The constructor this prototype reports as its <c>constructor</c> property. Set by the
@@ -218,6 +218,16 @@ public sealed class SharpTSStringPrototype : ISharpTSMutableBuiltIn
         => _extras.DefineProperty(symbol, descriptor);
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
         => _extras.GetOwnPropertyDescriptor(symbol);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     private bool IsBuiltIn(string name)
         => name == "constructor" || StringBuiltIns.GetPrototypeMethod(name) != null;
@@ -755,7 +765,7 @@ public class SharpTSNumberNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
 /// an ordinary object — Test262 sets indexed elements and <c>length</c> on it
 /// before invoking Array.prototype.* with a number primitive as the receiver).
 /// </summary>
-public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     /// <summary>
     /// The constructor this prototype reports as its <c>constructor</c> property. Set by the
@@ -797,6 +807,16 @@ public sealed class SharpTSNumberPrototype : ISharpTSMutableBuiltIn
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
 
@@ -975,7 +995,7 @@ public class SharpTSBooleanNamespace : ISharpTSCallable, ISharpTSMutableBuiltIn
 /// indexed elements and <c>length</c> before calling Array.prototype.* with a
 /// boolean primitive as the receiver.
 /// </summary>
-public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     /// <summary>
     /// The constructor this prototype reports as its <c>constructor</c> property. Set by the
@@ -1015,6 +1035,16 @@ public sealed class SharpTSBooleanPrototype : ISharpTSMutableBuiltIn
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
     private static bool IsBuiltIn(string name)
         => name is "constructor" or "toString" or "valueOf";
 

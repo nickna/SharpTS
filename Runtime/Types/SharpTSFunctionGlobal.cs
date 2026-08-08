@@ -45,7 +45,7 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
 /// the BuiltInMethod rebind path that real-world test262 harness code (e.g.
 /// <c>propertyHelper.js</c>) relies on.
 /// </summary>
-public sealed class SharpTSFunctionPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSFunctionPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
@@ -66,6 +66,17 @@ public sealed class SharpTSFunctionPrototype : ISharpTSMutableBuiltIn
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
     public ISharpTSCallable? GetExtraSetter(string name) => _extras.GetSetter(name);
+
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     private static bool IsBuiltIn(string name)
         => BuiltIns.FunctionBuiltIns.GetPrototypeMethod(name) != null

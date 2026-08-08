@@ -102,7 +102,7 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
 /// rebinds the receiver before invoking, so both access paths share one
 /// implementation.
 /// </summary>
-public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     internal SharpTSArrayGlobal? RealmConstructor { get; set; }
     // Array.prototype is an ordinary mutable object. Reuse SharpTSObject's
@@ -129,6 +129,16 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _extras.GetOwnPropertyDescriptor(name);
     public ISharpTSCallable? GetExtraGetter(string name) => _extras.GetGetter(name);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     private object? GetBuiltInMember(string name)
     {
