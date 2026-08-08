@@ -27,6 +27,20 @@ public class RealmIsolationTests
         Assert.Same(callback, interpreter.GlobalThis.GetProperty("hostCallback"));
     }
 
+    [Fact]
+    public void HostRegisteredGlobals_AreVisibleToHasOwnProperty()
+    {
+        using var interpreter = new Interpreter(TextWriter.Null, TextWriter.Null);
+        interpreter.RegisterGlobal("hostCallback", new object());
+        var hasOwn = Assert.IsAssignableFrom<SharpTS.Runtime.Types.ISharpTSCallable>(
+            interpreter.GetObjectPrototype().GetMember("hasOwnProperty"));
+
+        var result = SharpTS.Runtime.BuiltIns.FunctionBuiltIns.CallWithThis(
+            interpreter, hasOwn, interpreter.GlobalThis, ["hostCallback"]);
+
+        Assert.Equal(true, result);
+    }
+
     /// <summary>
     /// The happy path still holds within a single realm in both modes:
     /// <c>Symbol.for</c> is idempotent for a given key and <c>Symbol.keyFor</c>

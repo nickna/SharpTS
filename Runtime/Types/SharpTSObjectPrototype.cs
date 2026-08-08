@@ -266,6 +266,7 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSClass when key is "name" or "length" or "prototype" => true,
             SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
             SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
+            SharpTSGlobalThis globalThis => globalThis.HasProperty(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
             // per ECMA-262 §17. test262's verifyProperty calls
