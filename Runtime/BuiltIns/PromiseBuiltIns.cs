@@ -104,7 +104,7 @@ public static class PromiseBuiltIns
                 RaceImpl(args, interp, receiver), factory),
 
             "resolve" => new BuiltInAsyncMethod("resolve", 0, 1, (_, _, args) =>
-                ResolveImplAsync(args), factory),
+                ResolveImplAsync(args), factory).WithSpecLength(1),
 
             "reject" => new BuiltInAsyncMethod("reject", 1, 1, (_, _, args) =>
                 Task.FromResult(RejectImpl(args)), factory),

@@ -2367,6 +2367,12 @@ public sealed class Issue1279ParityTests
     public void Promise_prototype_descriptors_match_the_spec(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Promise_resolve_reports_its_spec_length()
+        => AssertPass(
+            "built-ins/Promise/resolve/length.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
