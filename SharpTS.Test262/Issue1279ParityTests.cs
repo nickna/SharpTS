@@ -712,6 +712,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Promise/any/ctx-non-object.js")]
     [InlineData("built-ins/Promise/race/ctx-non-object.js")]
     [InlineData("built-ins/Promise/reject/ctx-non-object.js")]
+    [InlineData("built-ins/Promise/resolve/context-non-object-with-promise.js")]
     [InlineData("built-ins/Promise/resolve/ctx-non-object.js")]
     public void Promise_static_methods_reject_primitive_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
