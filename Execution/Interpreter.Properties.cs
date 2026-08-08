@@ -76,12 +76,12 @@ public partial class Interpreter
 
         // Evaluate the callee expression to get the class/constructor
         object? klass = (await ctx.EvaluateExprAsync(newExpr.Callee)).ToObject();
+        List<object?> evaluatedArguments = await ctx.EvaluateAllAsync(newExpr.Arguments);
 
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
         {
-            List<object?> proxyArgs = await ctx.EvaluateAllAsync(newExpr.Arguments);
-            return proxy.TrapConstruct(proxyArgs, this);
+            return proxy.TrapConstruct(evaluatedArguments, this);
         }
 
         // Constructor-function pattern: `function Foo() { if (!(this instanceof Foo)) return new Foo(); this.x = 1; }`.
@@ -91,7 +91,6 @@ public partial class Interpreter
         // recurse infinitely.
         if (klass is SharpTSFunction userFn)
         {
-            List<object?> fnArgs = await ctx.EvaluateAllAsync(newExpr.Arguments);
             // Build a new `this` object backed by the function's prototype.
             if (!userFn.TryGetProperty("prototype", out var protoObj))
             {
@@ -100,7 +99,7 @@ public partial class Interpreter
             }
             var newThis = CreateConstructedThis(protoObj);
             var bound = userFn.BindThis(newThis);
-            var result = bound.CallBoxed(this, fnArgs);
+            var result = bound.CallBoxed(this, evaluatedArguments);
             // JS spec: if the constructor returns an object (incl. a function), use
             // it; otherwise use the new `this` (#446).
             return IsConstructorReturnObject(result) ? result : newThis;
@@ -119,7 +118,6 @@ public partial class Interpreter
         // properties" instead of the spec'd Test262Error.
         if (klass is SharpTSArrowFunction userArrowFn && userArrowFn.HasOwnThis)
         {
-            List<object?> arrowArgs = await ctx.EvaluateAllAsync(newExpr.Arguments);
             // Function expressions have prototype too — lazy-create on first read.
             if (!userArrowFn.TryGetProperty("prototype", out var protoObj))
             {
@@ -128,7 +126,7 @@ public partial class Interpreter
             }
             var newThis = CreateConstructedThis(protoObj);
             var bound = userArrowFn.Bind(newThis);
-            var result = bound.CallBoxed(this, arrowArgs);
+            var result = bound.CallBoxed(this, evaluatedArguments);
             return IsConstructorReturnObject(result) ? result : newThis;
         }
 
@@ -148,10 +146,9 @@ public partial class Interpreter
         // These implement ISharpTSCallable and are used for module-imported types.
         if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
         {
-            List<object?> ctorArgs = await ctx.EvaluateAllAsync(newExpr.Arguments);
             try
             {
-                return callable.CallBoxed(this, ctorArgs);
+                return callable.CallBoxed(this, evaluatedArguments);
             }
             catch (Exception ex) when (IsNativeConstructorFailure(ex))
             {
@@ -179,8 +176,7 @@ public partial class Interpreter
             throw new InterpreterException($"Cannot create an instance of abstract class '{sharpClass.Name}'.");
         }
 
-        List<object?> arguments = await ctx.EvaluateAllAsync(newExpr.Arguments);
-        return sharpClass.CallBoxed(this, arguments);
+        return sharpClass.CallBoxed(this, evaluatedArguments);
     }
 
     /// <summary>
@@ -300,16 +296,16 @@ public partial class Interpreter
 
         // Evaluate the callee expression to get the class/constructor
         object? klass = Evaluate(newExpr.Callee);
+        List<object?> evaluatedArguments = [];
+        foreach (var arg in newExpr.Arguments)
+        {
+            evaluatedArguments.Add(Evaluate(arg));
+        }
 
         // Handle Proxy construct trap
         if (klass is SharpTSProxy proxy)
         {
-            List<object?> proxyArgs = [];
-            foreach (var arg in newExpr.Arguments)
-            {
-                proxyArgs.Add(Evaluate(arg));
-            }
-            return proxy.TrapConstructRV(proxyArgs, this);
+            return proxy.TrapConstructRV(evaluatedArguments, this);
         }
 
         // Constructor-function pattern: `function Foo() { this.x = 1 }` called with `new`.
@@ -318,11 +314,6 @@ public partial class Interpreter
         // e.g. yallist, EventEmitter sub-classes).
         if (klass is SharpTSFunction userFn)
         {
-            List<object?> fnArgs = [];
-            foreach (var arg in newExpr.Arguments)
-            {
-                fnArgs.Add(Evaluate(arg));
-            }
             if (!userFn.TryGetProperty("prototype", out var protoObj))
             {
                 protoObj = CreateFunctionPrototype(userFn);
@@ -330,7 +321,7 @@ public partial class Interpreter
             }
             var newThis = CreateConstructedThis(protoObj);
             var bound = userFn.BindThis(newThis);
-            var result = bound.CallBoxed(this, fnArgs);
+            var result = bound.CallBoxed(this, evaluatedArguments);
             return RuntimeValue.FromBoxed(IsConstructorReturnObject(result) ? result : newThis);
         }
 
@@ -340,11 +331,6 @@ public partial class Interpreter
         // case, every assert.* throw lands as null instead of a usable error.
         if (klass is SharpTSArrowFunction userArrowFn && userArrowFn.HasOwnThis)
         {
-            List<object?> arrowArgs = [];
-            foreach (var arg in newExpr.Arguments)
-            {
-                arrowArgs.Add(Evaluate(arg));
-            }
             if (!userArrowFn.TryGetProperty("prototype", out var protoObj))
             {
                 protoObj = CreateFunctionPrototype(userArrowFn);
@@ -352,7 +338,7 @@ public partial class Interpreter
             }
             var newThis = CreateConstructedThis(protoObj);
             var bound = userArrowFn.Bind(newThis);
-            var result = bound.CallBoxed(this, arrowArgs);
+            var result = bound.CallBoxed(this, evaluatedArguments);
             return RuntimeValue.FromBoxed(IsConstructorReturnObject(result) ? result : newThis);
         }
 
@@ -367,14 +353,9 @@ public partial class Interpreter
         // registered as BuiltInMethod, so we accept any ISharpTSCallable here.
         if (klass is ISharpTSCallable callable && klass is not SharpTSClass && klass is not BoundFunction)
         {
-            List<object?> ctorArgs = [];
-            foreach (var arg in newExpr.Arguments)
-            {
-                ctorArgs.Add(Evaluate(arg));
-            }
             try
             {
-                return RuntimeValue.FromBoxed(callable.CallBoxed(this, ctorArgs));
+                return RuntimeValue.FromBoxed(callable.CallBoxed(this, evaluatedArguments));
             }
             catch (Exception ex) when (IsNativeConstructorFailure(ex))
             {
@@ -402,12 +383,7 @@ public partial class Interpreter
             throw new InterpreterException($"Cannot create an instance of abstract class '{sharpClass.Name}'.");
         }
 
-        List<object?> arguments = [];
-        foreach (var arg in newExpr.Arguments)
-        {
-            arguments.Add(Evaluate(arg));
-        }
-        return sharpClass.CallRV(this, arguments);
+        return sharpClass.CallRV(this, evaluatedArguments);
     }
 
     /// <summary>
