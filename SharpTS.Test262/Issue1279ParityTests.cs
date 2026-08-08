@@ -2441,6 +2441,12 @@ public sealed class Issue1279ParityTests
             "built-ins/JSON/parse/reviver-array-non-configurable-prop-create.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/JSON/stringify/replacer-array-duplicates.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-array-order.js")]
+    public void JSON_stringify_preserves_replacer_property_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -267,7 +267,7 @@ public static class JSONBuiltIns
 
         var replacerFunc = replacer as ISharpTSCallable;
         var replacerArray = replacer as SharpTSArray;
-        HashSet<string>? allowedKeys = null;
+        IReadOnlyList<string>? allowedKeys = null;
 
         if (replacerArray != null)
         {
@@ -275,12 +275,17 @@ public static class JSONBuiltIns
             // array. A String element is used as-is; a Number or a boxed
             // String/Number wrapper is coerced via ToString (honoring an own
             // toString/valueOf — #574); any other element is ignored.
-            allowedKeys = new HashSet<string>();
+            var propertyList = new List<string>();
+            var propertySet = new HashSet<string>();
             foreach (var element in replacerArray)
             {
-                if (interp.TryCoerceReplacerArrayKey(element, out var coercedKey))
-                    allowedKeys.Add(coercedKey);
+                if (interp.TryCoerceReplacerArrayKey(element, out var coercedKey)
+                    && propertySet.Add(coercedKey))
+                {
+                    propertyList.Add(coercedKey);
+                }
             }
+            allowedKeys = propertyList;
         }
 
         var sb = new StringBuilder();
@@ -303,7 +308,7 @@ public static class JSONBuiltIns
     }
 
     private static bool StringifyValue(Interpreter interp, object? value, object? key,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
     {
         if (replacer != null)
         {
@@ -409,7 +414,7 @@ public static class JSONBuiltIns
     }
 
     private static void StringifyArray(Interpreter interp, SharpTSArray arr,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
     {
         // ECMA-262 25.5.2.5 SerializeJSONArray — throw if we're re-entering
         // the same array mid-serialization (cycle).
@@ -455,16 +460,22 @@ public static class JSONBuiltIns
     }
 
     private static void StringifyDictionary(Interpreter interp, IReadOnlyDictionary<string, object?> dict,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, dict, dict.Keys, k => dict[k], replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, dict, dict.Keys,
+            k => dict.TryGetValue(k, out var value) ? value : SharpTSUndefined.Instance,
+            replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, obj, obj.Fields.Keys, k => obj.Fields[k], replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, obj, obj.Fields.Keys,
+            k => interp.GetPropertyValue(obj, k),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyInstance(Interpreter interp, SharpTSInstance inst,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, inst, inst.GetFieldNames(), inst.GetRawField, replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, inst, inst.GetFieldNames(),
+            k => interp.GetPropertyValue(inst, k),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
 
     /// <summary>
     /// Shared JSON-object serializer for the three object shapes (plain dictionary,
@@ -477,19 +488,14 @@ public static class JSONBuiltIns
     /// </summary>
     private static void StringifyJsonObject(Interpreter interp, object node,
         IEnumerable<string> keys, Func<string, object?> read,
-        ISharpTSCallable? replacer, HashSet<string>? allowedKeys, string indentStr, int depth,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth,
         StringBuilder sb, HashSet<object> seen)
     {
         if (!seen.Add(node))
             throw new ThrowException("TypeError: Converting circular structure to JSON");
         try
         {
-            if (allowedKeys != null)
-            {
-                keys = keys.Where(allowedKeys.Contains);
-            }
-
-            var keyList = keys.ToList();
+            var keyList = allowedKeys?.ToList() ?? keys.ToList();
             if (keyList.Count == 0)
             {
                 sb.Append("{}");
