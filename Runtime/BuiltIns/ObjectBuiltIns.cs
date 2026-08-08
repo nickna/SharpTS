@@ -84,6 +84,20 @@ public static partial class ObjectBuiltIns
             case SharpTSBigInt:
             case SharpTSSymbol:
                 yield break;
+            case SharpTSProxy proxy:
+                foreach (var key in proxy.TrapOwnKeys(interpreter))
+                {
+                    var descriptor = proxy.TrapGetOwnPropertyDescriptor(key, interpreter);
+                    if (descriptor is null or SharpTSUndefined)
+                        continue;
+
+                    var enumerable = interpreter.GetProperty(descriptor, "enumerable");
+                    if (!Compilation.RuntimeTypes.IsTruthy(enumerable))
+                        continue;
+
+                    yield return new(key, proxy.TrapGet(key, interpreter));
+                }
+                yield break;
             case SharpTSObject obj:
                 foreach (var k in obj.OwnEnumerableKeys())
                     yield return new(k, interpreter.GetProperty(obj, k));
@@ -266,7 +280,7 @@ public static partial class ObjectBuiltIns
         {
             if (args[i] is null or SharpTSUndefined) continue;
             foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
-                SetAssignedProperty(target, entry.Key, entry.Value);
+                SetAssignedProperty(interpreter, target, entry.Key, entry.Value);
             switch (args[i])
             {
                 case SharpTSObject source:
@@ -288,13 +302,21 @@ public static partial class ObjectBuiltIns
         return target;
     }
 
-    private static void SetAssignedProperty(object target, string name, object? value)
+    private static void SetAssignedProperty(
+        Interpreter interpreter, object target, string name, object? value)
     {
         switch (target)
         {
             case SharpTSObject obj: obj.SetPropertyStrict(name, value, strictMode: true); break;
             case SharpTSInstance instance: instance.SetRawFieldStrict(name, value, strictMode: true); break;
-            case SharpTSArray array when uint.TryParse(name, out uint index): array.Set(index, value); break;
+            case SharpTSArray array when name == "length":
+                array.SetLength((long)ArrayBuiltIns.CoerceArrayLength(interpreter, value));
+                break;
+            case SharpTSArray array when long.TryParse(name, out long index)
+                && index >= 0 && index <= SharpTSArray.MaxWriteIndex
+                && index.ToString(System.Globalization.CultureInfo.InvariantCulture) == name:
+                array.Set(index, value);
+                break;
             case SharpTSArray array: array.SetNamedProperty(name, value); break;
             case SharpTSFunction function: function.SetProperty(name, value); break;
             case SharpTSArrowFunction function: function.SetProperty(name, value); break;
