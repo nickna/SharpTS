@@ -260,7 +260,7 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Object.assign called on null or undefined"));
 
-        args[0] = BuiltInConstructorFactory.ToObject(args[0], interpreter);
+        args[0] = interpreter.GetObjectNamespace().Call(interpreter, [args[0]]);
         var target = args[0]!;
         for (int i = 1; i < args.Count; i++)
         {
