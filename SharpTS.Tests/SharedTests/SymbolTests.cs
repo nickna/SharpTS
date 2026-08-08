@@ -132,6 +132,19 @@ public class SymbolTests
     }
 
     [Fact]
+    public void Symbol_ArrayProperty_PreservesNull_InInterpreter()
+    {
+        var output = TestHarness.RunInterpreted("""
+            const key = Symbol("key");
+            const values: any = [];
+            values[key] = null;
+            console.log(values[key] === null);
+            """);
+
+        Assert.Equal("true\n", output);
+    }
+
+    [Fact]
     public void Symbol_DefinePropertyPreservesDescriptorFlags_InInterpreter()
     {
         var output = TestHarness.RunInterpreted("""

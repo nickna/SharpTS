@@ -1049,16 +1049,32 @@ public partial class Interpreter
             return RuntimeValue.Undefined;
         }
 
-        // Arrays inherit @@iterator from Array.prototype. Bracket access on an
-        // instance must therefore return the realm's values method bound to that
-        // instance, just as a dotted Array.prototype method call is receiver-bound.
-        if (obj is SharpTSArray array && ReferenceEquals(index, SharpTSSymbol.Iterator))
+        // Symbol-valued array properties are ordinary own properties and must
+        // preserve null (rather than confusing it with a missing property).
+        // An own value/accessor also shadows Array.prototype's @@iterator.
+        if (obj is SharpTSArray array && index is SharpTSSymbol arraySymbol)
         {
-            var iteratorMethod = GetArrayPrototype().GetMember("values");
-            return RuntimeValue.FromBoxed(
-                iteratorMethod is ArrayPrototypeMethodWrapper wrapper
-                    ? wrapper.Bind(array)
-                    : iteratorMethod ?? SharpTSUndefined.Instance);
+            if (array.TryGetSymbolAccessor(arraySymbol, out var getter, out _))
+            {
+                return getter is null
+                    ? RuntimeValue.Undefined
+                    : RuntimeValue.FromBoxed(
+                        BindAccessorToObject(getter, array).Call(this, []));
+            }
+            if (array.HasSymbolProperty(arraySymbol))
+                return RuntimeValue.FromBoxed(array.GetBySymbol(arraySymbol));
+
+            // Arrays inherit @@iterator from Array.prototype. Return the
+            // realm's values method bound to this instance.
+            if (ReferenceEquals(arraySymbol, SharpTSSymbol.Iterator))
+            {
+                var iteratorMethod = GetArrayPrototype().GetMember("values");
+                return RuntimeValue.FromBoxed(
+                    iteratorMethod is ArrayPrototypeMethodWrapper wrapper
+                        ? wrapper.Bind(array)
+                        : iteratorMethod ?? SharpTSUndefined.Instance);
+            }
+            return RuntimeValue.Undefined;
         }
 
         if (obj is SharpTSObject symbolObject && index is SharpTSSymbol objectSymbol)
