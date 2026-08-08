@@ -278,6 +278,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                 => meta.HasMetadataProperty(key),
             SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
                 when key == "prototype" => true,
+            SharpTSBuiltInConstructor { Name: BuiltInNames.RegExp }
+                when key == "prototype" => true,
             ISharpTSCallable when key is "name" or "length" => true,
             _ => false,
         };

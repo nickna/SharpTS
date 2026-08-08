@@ -763,6 +763,12 @@ public static partial class ObjectBuiltIns
                 writable: false,
                 enumerable: false,
                 configurable: false),
+            SharpTSBuiltInConstructor { Name: BuiltInNames.RegExp }
+                when propertyKey == "prototype" => DataDescriptor(
+                    interpreter.GetRegExpPrototype(),
+                    writable: false,
+                    enumerable: false,
+                    configurable: false),
             SharpTSSymbol => null,
             Dictionary<string, object?> dict => GetDictionaryPropertyDescriptor(dict, propertyKey),
             // Function metadata: ECMA-262 §17 — built-in functions expose `name`

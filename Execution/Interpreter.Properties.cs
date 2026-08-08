@@ -1978,7 +1978,8 @@ public partial class Interpreter
             json.SetExtra(set.Name.Lexeme, value);
             return value;
         }
-        if (obj is SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+        if (obj is SharpTSBuiltInConstructor
+            { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
             && set.Name.Lexeme == "prototype")
         {
             if (_environment.IsStrictMode)

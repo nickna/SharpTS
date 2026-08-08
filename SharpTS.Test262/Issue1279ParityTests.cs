@@ -2491,6 +2491,13 @@ public sealed class Issue1279ParityTests
             "built-ins/RegExp/call_with_regexp_not_same_constructor.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A1.js")]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A3.js")]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A4.js")]
+    public void RegExp_constructor_owns_protected_prototype(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -1011,7 +1011,8 @@ public partial class Interpreter
             SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(name),
             SharpTSClass when name == "prototype" =>
                 DeleteNonConfigurableClassPrototype(name, strictMode),
-            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+            SharpTSBuiltInConstructor
+                { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
                 when name == "prototype" =>
                     DeleteNonConfigurableClassPrototype(name, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(name),
@@ -1077,7 +1078,8 @@ public partial class Interpreter
             SharpTSPromisePrototype promisePrototype => promisePrototype.DeleteProperty(keyStr),
             SharpTSClass when keyStr == "prototype" =>
                 DeleteNonConfigurableClassPrototype(keyStr, strictMode),
-            SharpTSBuiltInConstructor { Name: BuiltInNames.Promise }
+            SharpTSBuiltInConstructor
+                { Name: BuiltInNames.Promise or BuiltInNames.RegExp }
                 when keyStr == "prototype" =>
                     DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             IBuiltInFunctionMetadata builtInFn => builtInFn.DeleteMetadataProperty(keyStr),
