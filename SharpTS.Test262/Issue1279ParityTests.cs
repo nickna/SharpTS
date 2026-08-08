@@ -3055,6 +3055,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/from/source-object-length-set-elem-prop-non-writable.js")]
     [InlineData("built-ins/Array/from/source-object-length.js")]
     [InlineData("built-ins/Array/from/source-object-missing.js")]
+    [InlineData("built-ins/Array/from/source-object-without.js")]
     public void Array_from_preserves_iterable_and_array_like_semantics(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
