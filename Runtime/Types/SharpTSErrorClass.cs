@@ -35,7 +35,24 @@ public class SharpTSErrorClass : SharpTSClass
                 ["constructor"] = new ErrorConstructorCallable(errorTypeName),
                 ["toString"] = new ErrorToStringCallable()
             },
-            staticMethods: [],
+            staticMethods: errorTypeName == "Error"
+                ? new Dictionary<string, ISharpTSCallable>
+                {
+                    ["isError"] = Runtime.BuiltIns.BuiltInMethod.CreateV2(
+                            "isError", 0, int.MaxValue, static (_, _, args) =>
+                            {
+                                object? value = args.IsEmpty
+                                    ? SharpTSUndefined.Instance
+                                    : args[0].ToObject();
+                                return RuntimeValue.FromBoolean(
+                                    value is SharpTSError
+                                    || value is SharpTSInstance
+                                        { RuntimeClass: SharpTSErrorClass });
+                            })
+                        .WithSpecLength(1)
+                        .AsNonConstructor(),
+                }
+                : [],
             staticProperties: [])
     {
         _errorTypeName = errorTypeName;

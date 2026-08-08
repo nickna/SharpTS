@@ -2599,6 +2599,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Error_isError_recognizes_intrinsic_error_instances()
+        => AssertPass(
+            "built-ins/Error/isError/errors.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
