@@ -2667,6 +2667,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void String_trim_handles_line_continuation_whitespace()
+        => AssertPass(
+            "built-ins/String/prototype/trim/15.5.4.20-4-1.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
