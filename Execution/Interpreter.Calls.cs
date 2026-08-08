@@ -16,17 +16,6 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
-    private static ISharpTSCallable BindBuiltInStaticCallReceiver(
-        string namespaceName, ISharpTSCallable method)
-        => namespaceName == BuiltInNames.Promise
-            ? method switch
-            {
-                BuiltInAsyncMethod promiseMethod => promiseMethod.Bind(PromiseGlobalValue),
-                BuiltInMethod promiseMethod => promiseMethod.Bind(PromiseGlobalValue),
-                _ => method,
-            }
-            : method;
-
     /// <summary>
     /// Calls a built-in method with pooled argument list to reduce allocations.
     /// Uses V2 (RuntimeValue) fast path when the method supports it, avoiding
@@ -169,12 +158,12 @@ public partial class Interpreter
 
         // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
         if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable nsVar)
+            get.Object is Expr.Variable nsVar &&
+            nsVar.Name.Lexeme != BuiltInNames.Promise)
         {
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
             {
-                method = BindBuiltInStaticCallReceiver(nsVar.Name.Lexeme, method);
                 return await CallBuiltInWithPooledArgs(ctx, method, call.Arguments);
             }
         }
@@ -462,12 +451,12 @@ public partial class Interpreter
 
         // Handle built-in static methods: Object.keys(), Array.isArray(), JSON.parse(), etc.
         if (call.Callee is Expr.Get get &&
-            get.Object is Expr.Variable nsVar)
+            get.Object is Expr.Variable nsVar &&
+            nsVar.Name.Lexeme != BuiltInNames.Promise)
         {
             var method = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (method != null)
             {
-                method = BindBuiltInStaticCallReceiver(nsVar.Name.Lexeme, method);
                 return CallBuiltInSync(method, call.Arguments);
             }
         }

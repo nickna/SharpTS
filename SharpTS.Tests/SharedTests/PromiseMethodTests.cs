@@ -11,6 +11,23 @@ namespace SharpTS.Tests.SharedTests;
 public class PromiseMethodTests
 {
     [Theory, ModeData]
+    public void Constructor_AllowsOwnPropertyOverrides(ExecutionMode mode)
+    {
+        var source = """
+            const original = (Promise as any).resolve;
+            (Promise as any).marker = 42;
+            (Promise as any).resolve = "replacement";
+            console.log((Promise as any).marker);
+            console.log((Promise as any).resolve);
+            (Promise as any).resolve = original;
+            console.log(Promise.resolve(1) instanceof Promise);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("42\nreplacement\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Resolve_ReturnsPromisesWithTheSameConstructorUnchanged(ExecutionMode mode)
     {
         var source = """

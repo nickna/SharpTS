@@ -217,6 +217,38 @@ public partial class Interpreter
     /// </summary>
     internal static object PromiseGlobalValue => _globalConstants[BuiltInNames.Promise];
 
+    // Built-in constructor values are process-wide singletons, but their JS own
+    // properties are realm-local and mutable. Keep expandos here so assignments
+    // such as `Promise.resolve = replacement` are observable without leaking to
+    // another interpreter running in the same process.
+    private Dictionary<SharpTSBuiltInConstructor, Dictionary<string, object?>>?
+        _builtInConstructorProperties;
+
+    private bool TryGetBuiltInConstructorProperty(
+        SharpTSBuiltInConstructor constructor,
+        string name,
+        out object? value)
+    {
+        value = null;
+        return _builtInConstructorProperties != null
+            && _builtInConstructorProperties.TryGetValue(constructor, out var properties)
+            && properties.TryGetValue(name, out value);
+    }
+
+    private void SetBuiltInConstructorProperty(
+        SharpTSBuiltInConstructor constructor,
+        string name,
+        object? value)
+    {
+        _builtInConstructorProperties ??= [];
+        if (!_builtInConstructorProperties.TryGetValue(constructor, out var properties))
+        {
+            properties = [];
+            _builtInConstructorProperties[constructor] = properties;
+        }
+        properties[name] = value;
+    }
+
     // Per-realm RegExp.prototype. Held on the Interpreter (not on the
     // process-wide SharpTSBuiltInConstructor singleton) so user mutations
     // — `delete RegExp.prototype[Symbol.split]`, `Object.defineProperty`,

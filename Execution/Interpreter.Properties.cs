@@ -481,7 +481,9 @@ public partial class Interpreter
         // value-form `const m = Math; m.max === Math.max`, #288) and lets a user
         // `let Math = …` shadow correctly, since the static fast-path binds to a
         // process-wide singleton that the realm instance no longer matches.
-        if (get.Object is Expr.Variable nsVar && !IsRealmIntrinsicName(nsVar.Name.Lexeme))
+        if (get.Object is Expr.Variable nsVar
+            && !IsRealmIntrinsicName(nsVar.Name.Lexeme)
+            && nsVar.Name.Lexeme != BuiltInNames.Promise)
         {
             var member = BuiltInRegistry.Instance.GetStaticMethod(nsVar.Name.Lexeme, get.Name.Lexeme);
             if (member != null)
@@ -1684,6 +1686,8 @@ public partial class Interpreter
         // Resolve static methods via the constructor's own GetMember.
         if (obj is SharpTSBuiltInConstructor ctor)
         {
+            if (TryGetBuiltInConstructorProperty(ctor, memberName, out var ownValue))
+                return ownValue;
             // RegExp.prototype is realm-local: route through the Interpreter's
             // own prototype object so `delete RegExp.prototype[Symbol.split]`
             // and `Object.defineProperty(RegExp.prototype, …)` don't leak
@@ -1991,6 +1995,11 @@ public partial class Interpreter
             if (forceStrict || _environment.IsStrictMode)
                 throw new ThrowException(new SharpTSTypeError(
                     "Cannot assign to read only property 'prototype' of function"));
+            return value;
+        }
+        if (obj is SharpTSBuiltInConstructor builtInConstructor)
+        {
+            SetBuiltInConstructorProperty(builtInConstructor, set.Name.Lexeme, value);
             return value;
         }
 
