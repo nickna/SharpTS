@@ -208,10 +208,18 @@ public static class PromiseBuiltIns
     {
         var factory = DerivedPromiseFactory(subclass);
         Func<Interpreter, object?, Func<Interpreter, Task<object?>, object?>?> receiverResolver =
-            (_, receiver) =>
+            (interp, receiver) =>
             {
                 RequireConstructorReceiver(receiver);
-                return factory;
+                if (ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+                    || receiver is SharpTSPromiseClass promiseClass
+                        && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase))
+                {
+                    return null;
+                }
+
+                return DerivedPromiseFactory(receiver)
+                    ?? PreparePromiseCapability(interp, receiver);
             };
         return name switch
         {
@@ -405,13 +413,7 @@ public static class PromiseBuiltIns
     private static object? ConstructPromiseCapabilityAndAdopt(
         Interpreter interp, object? speciesCtor, Task<object?> source)
     {
-        var capability = new PromiseCapabilityExecutor();
-        object? promiseObject = interp.Construct(speciesCtor, [capability]);
-
-        // §27.2.1.5 step 4: the resolve/reject the executor stored must be callable.
-        if (capability.ResolveFn is not { } resolveFn || capability.RejectFn is not { } rejectFn)
-            throw new InterpreterException(
-                "Promise resolve or reject function is not callable");
+        var (promiseObject, resolveFn, rejectFn) = CreatePromiseCapability(interp, speciesCtor);
 
         // Adopt the source task into the captured capability. Awaiting inside this
         // helper captures the interpreter's SynchronizationContext, so the guest
@@ -419,6 +421,37 @@ public static class PromiseBuiltIns
         // escaping to the thread pool (#319/#320).
         _ = AdoptIntoCapability(source, resolveFn, rejectFn, interp);
         return promiseObject;
+    }
+
+    /// <summary>
+    /// Performs NewPromiseCapability synchronously and returns a materializer
+    /// that only adopts the operation task later. Promise combinators must run
+    /// the constructor before GetPromiseResolve/iterator processing, and a
+    /// custom constructor's no-op reject callback must own any later failure
+    /// instead of creating an unhandled host-backed SharpTSPromise.
+    /// </summary>
+    private static Func<Interpreter, Task<object?>, object?> PreparePromiseCapability(
+        Interpreter interp, object? constructor)
+    {
+        var (promiseObject, resolveFn, rejectFn) = CreatePromiseCapability(interp, constructor);
+        return (adoptingInterpreter, source) =>
+        {
+            _ = AdoptIntoCapability(source, resolveFn, rejectFn, adoptingInterpreter);
+            return promiseObject;
+        };
+    }
+
+    private static (object? Promise, ISharpTSCallable Resolve, ISharpTSCallable Reject)
+        CreatePromiseCapability(Interpreter interp, object? constructor)
+    {
+        var capability = new PromiseCapabilityExecutor();
+        object? promiseObject = interp.Construct(constructor, [capability]);
+        if (capability.ResolveFn is not { } resolveFn || capability.RejectFn is not { } rejectFn)
+        {
+            throw new Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise resolve or reject function is not callable"));
+        }
+        return (promiseObject, resolveFn, rejectFn);
     }
 
     private static async Task AdoptIntoCapability(

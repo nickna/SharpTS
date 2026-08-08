@@ -2487,6 +2487,10 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Promise_any_does_not_read_constructor_species()
+        => AssertPassInBothModes("built-ins/Promise/any/species-get-error.js");
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
