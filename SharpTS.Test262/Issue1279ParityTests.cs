@@ -2497,6 +2497,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Object/defineProperty/15.2.3.6-4-593.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-161.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-162.js")]
+    public void Date_prototype_methods_retain_data_descriptors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(

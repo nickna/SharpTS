@@ -1718,6 +1718,8 @@ public partial class Interpreter
                 return GetPromisePrototype();
             if (memberName == "prototype" && ctor.Name == BuiltInNames.Symbol)
                 return GetSymbolPrototype();
+            if (memberName == "prototype" && ctor.Name == BuiltInNames.Date)
+                return GetDatePrototype();
             var ctorMember = ctor.GetMember(memberName);
             // Materialize constant-wrapping members (e.g. Symbol.species via an
             // alias: `const S = Symbol; S.species`) the same way the syntactic

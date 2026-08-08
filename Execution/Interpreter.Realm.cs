@@ -391,6 +391,7 @@ public partial class Interpreter
     private Runtime.Types.SharpTSArrayPrototype? _arrayPrototype;
     private Runtime.Types.SharpTSFunctionPrototype? _functionPrototype;
     private Runtime.Types.SharpTSObjectPrototype? _objectPrototype;
+    private Runtime.Types.SharpTSDate? _datePrototype;
     private Runtime.Types.SharpTSObjectNamespace? _objectNamespace;
     // The String/Number/Boolean constructor objects. Ordinary and extensible per ECMA-262,
     // so they carry a guest-writable expando bag and — like Math/JSON/Object — are held
@@ -433,6 +434,8 @@ public partial class Interpreter
     internal Runtime.Types.SharpTSFunctionPrototype GetFunctionPrototype() => _functionPrototype ??= new();
     internal Runtime.Types.SharpTSObjectPrototype GetObjectPrototype()
         => _objectPrototype ??= new() { RealmConstructor = GetObjectNamespace() };
+    internal Runtime.Types.SharpTSDate GetDatePrototype()
+        => _datePrototype ??= new(double.NaN) { IsPrototype = true };
     internal Runtime.Types.SharpTSObjectNamespace GetObjectNamespace() => _objectNamespace ??= new();
     internal Runtime.Types.SharpTSStringNamespace GetStringNamespace() => _stringNamespace ??= new();
     internal Runtime.Types.SharpTSNumberNamespace GetNumberNamespace()
@@ -533,6 +536,9 @@ public partial class Interpreter
                 return true;
             case Runtime.Types.SharpTSObjectNamespace:
                 prototype = GetObjectPrototype();
+                return true;
+            case Runtime.Types.SharpTSBuiltInConstructor { Name: BuiltInNames.Date }:
+                prototype = GetDatePrototype();
                 return true;
             default:
                 prototype = null;

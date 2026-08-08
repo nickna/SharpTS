@@ -174,6 +174,23 @@ public class RealmIsolationTests
     }
 
     /// <summary>
+    /// Date.prototype is mutable but realm-owned. Deleting one of its built-in
+    /// methods in one interpreter must not remove the method from another
+    /// interpreter created in the same process.
+    /// </summary>
+    [Fact]
+    public void DatePrototypeMutations_ArePerRealm()
+    {
+        using var realmA = new Interpreter(TextWriter.Null, TextWriter.Null);
+        using var realmB = new Interpreter(TextWriter.Null, TextWriter.Null);
+
+        Assert.NotSame(realmA.GetDatePrototype(), realmB.GetDatePrototype());
+        Assert.True(realmA.GetDatePrototype().DeleteExtra("toISOString"));
+        Assert.True(realmA.GetDatePrototype().IsBuiltInDeleted("toISOString"));
+        Assert.False(realmB.GetDatePrototype().IsBuiltInDeleted("toISOString"));
+    }
+
+    /// <summary>
     /// Within a realm, <c>globalThis</c> has stable identity and self-reference,
     /// still delegates built-in namespaces to the shared registry
     /// (<c>globalThis.JSON === JSON</c>), carries guest-assigned properties, and
