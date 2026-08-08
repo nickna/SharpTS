@@ -2715,6 +2715,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void String_slice_coerces_function_receivers()
+        => AssertPass(
+            "built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
