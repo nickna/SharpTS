@@ -1476,10 +1476,11 @@ public partial class Interpreter
         {
             SharpTSObjectUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
             SharpTSArrayUnboundMethod m when !m.HasBoundThis => m.BindTo(receiver),
-            // join, slice, concat, and pop have complete generic array-like dispatch in the wrapper. Other
+            // These methods have complete generic array-like dispatch in the wrapper. Other
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
-            ArrayPrototypeMethodWrapper m when m.FunctionName is "join" or "slice" or "concat" or "pop"
+            ArrayPrototypeMethodWrapper m when m.FunctionName is
+                "join" or "slice" or "concat" or "pop" or "push"
                 => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
@@ -2284,6 +2285,37 @@ public partial class Interpreter
                     // paths and transitions to sparse storage for large extensions.
                     double newLength = ArrayBuiltIns.CoerceArrayLength(this, value);
                     array.SetLength((long)newLength);
+                    return value;
+                }
+                if (uint.TryParse(memberName,
+                        System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out uint arrayIndex)
+                    && arrayIndex < uint.MaxValue)
+                {
+                    if (!array.HasIndex(arrayIndex)
+                        && GetArrayPrototype().GetOwnPropertyDescriptor(memberName)
+                            is { } inherited)
+                    {
+                        if (GetArrayPrototype().GetExtraSetter(memberName)
+                            is { } inheritedSetter)
+                        {
+                            BindAccessorToObject(inheritedSetter, array)
+                                .CallBoxed(this, [value]);
+                            return value;
+                        }
+                        if (inherited.Get != null || inherited.Set != null
+                            || !inherited.Writable)
+                        {
+                            if (strictMode)
+                            {
+                                throw new ThrowException(new SharpTSTypeError(
+                                    $"Cannot assign to inherited read only property '{memberName}' of array"));
+                            }
+                            return value;
+                        }
+                    }
+                    array.SetStrict(arrayIndex, value, strictMode);
                     return value;
                 }
                 array.SetNamedProperty(memberName, value);

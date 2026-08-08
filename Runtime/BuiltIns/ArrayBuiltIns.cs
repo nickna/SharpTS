@@ -354,13 +354,12 @@ public static class ArrayBuiltIns
 
     #region V2 Implementations (RuntimeValue — no boxing)
 
-    private static RuntimeValue PushV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue PushV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        if (arr.IsFrozen || arr.IsSealed || !arr.IsExtensible)
-            return RuntimeValue.FromNumber(arr.Length);
-        foreach (var arg in args)
-            arr.Add(arg.ToObject());
-        return RuntimeValue.FromNumber(arr.Length);
+        var items = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            items[i] = args[i].ToObject();
+        return RuntimeValue.FromNumber(PushArrayLike(interpreter, arr, items));
     }
 
     private static RuntimeValue PopV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -878,6 +877,32 @@ public static class ArrayBuiltIns
         interpreter.DeleteProperty(receiver, key);
         interpreter.SetProperty(receiver, "length", (double)newLength);
         return element;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.23 generic push algorithm. Writes directly to the
+    /// receiver and performs the 53-bit result-length check before any item is
+    /// stored, while preserving partial writes when a later strict Set fails.
+    /// </summary>
+    internal static double PushArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> items)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (items.Count > MaxSafeInteger - length)
+            throw TypeError("Array.prototype.push result exceeds the maximum safe integer.");
+
+        for (int i = 0; i < items.Count; i++)
+        {
+            string key = (length + i).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            interpreter.SetProperty(receiver, key, items[i]);
+        }
+
+        long newLength = length + items.Count;
+        interpreter.SetProperty(receiver, "length", (double)newLength);
+        return newLength;
     }
 
     private static void AppendConcatItem(

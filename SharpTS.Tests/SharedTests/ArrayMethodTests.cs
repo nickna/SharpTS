@@ -481,6 +481,36 @@ public class ArrayMethodTests
             output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Push_IsGenericAndSupportsSafeIntegerLengths(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { length: 4294967296 };
+            object.push = Array.prototype.push;
+            console.log(object.push("x", "y"));
+            console.log(object.length);
+            console.log(object[4294967296]);
+            console.log(object[4294967297]);
+
+            const large: any = { length: 9007199254740990 };
+            console.log(Array.prototype.push.call(large, "last"));
+            console.log(large[9007199254740990]);
+
+            const frozen: any = [];
+            Object.freeze(frozen);
+            try {
+                frozen.push();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "4294967298\n4294967298\nx\ny\n9007199254740991\nlast\ntrue\n",
+            output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {
