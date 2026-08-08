@@ -225,7 +225,7 @@ public class SharpTSErrorClass : SharpTSClass
     {
         private SharpTSInstance? _boundInstance;
 
-        public int Arity() => 0; // All args optional
+        public int Arity() => 1;
 
         public ISharpTSCallable BindTo(SharpTSInstance instance)
         {

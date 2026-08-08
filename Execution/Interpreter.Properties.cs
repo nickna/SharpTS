@@ -1260,7 +1260,7 @@ public partial class Interpreter
         // spec. Falls back to the class name / 0 only when the user hasn't
         // shadowed them with a static property (handled above).
         if (memberName == "name") return klass.Name;
-        if (memberName == "length") return 0.0;
+        if (memberName == "length") return (double)klass.Arity();
 
         // Class constructors are function objects and therefore inherit the
         // ordinary Object.prototype methods through Function.prototype.

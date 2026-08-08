@@ -11,7 +11,7 @@ public sealed class SharpTSFunctionGlobal : ISharpTSCallable
     private readonly SharpTSFunctionPrototype _prototype = new();
     private SharpTSFunctionGlobal() { }
 
-    public int Arity() => 0;
+    public int Arity() => 1;
 
     public object? Call(Execution.Interpreter interpreter, List<object?> arguments)
     {
