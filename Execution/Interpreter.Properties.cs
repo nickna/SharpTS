@@ -1353,7 +1353,8 @@ public partial class Interpreter
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
             ErrorToStringCallable m => m.Bind(receiver),
             BuiltInAsyncMethod m => m.Bind(receiver),
-            BuiltInMethod m when !m.IsBound && m.FunctionName == "catch" => m.Bind(receiver),
+            BuiltInMethod m when !m.IsBound
+                && m.FunctionName is "catch" or "finally" => m.Bind(receiver),
             _ => null,
         };
     }
@@ -2084,6 +2085,10 @@ public partial class Interpreter
                     return value;
                 }
                 promiseSub.SetOwnProperty(memberName, value);
+                return value;
+
+            case TypeCategory.Promise when obj is SharpTSPromise promise:
+                promise.SetOwnProperty(memberName, value);
                 return value;
 
             case TypeCategory.Array when obj is SharpTSArray array:

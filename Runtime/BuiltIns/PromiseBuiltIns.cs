@@ -63,9 +63,9 @@ public static class PromiseBuiltIns
         "catch" => BuiltInMethod.CreateV2("catch", 0, int.MaxValue, CatchInvoke)
             .WithSpecLength(1)
             .AsNonConstructor(),
-        "finally" => new BuiltInAsyncMethod("finally", 0, 1, (interp, recv, args) =>
-            FinallyImpl(RequirePromiseReceiver(recv, "finally"), args, interp),
-            speciesResolver: SpeciesResolver).WithSpecLength(1),
+        "finally" => BuiltInMethod.CreateV2("finally", 0, int.MaxValue, FinallyInvoke)
+            .WithSpecLength(1)
+            .AsNonConstructor(),
         "constructor" => Interpreter.PromiseGlobalValue as ISharpTSCallable,
         _ => null,
     };
@@ -105,6 +105,91 @@ public static class PromiseBuiltIns
             callable,
             target,
             [SharpTSUndefined.Instance, onRejected]));
+    }
+
+    /// <summary>
+    /// Generic entry point for §27.2.5.3. A normal promise with its inherited
+    /// <c>then</c> keeps the optimized async implementation. Thenables and
+    /// promises that override <c>then</c> take the observable Invoke path.
+    /// </summary>
+    private static RuntimeValue FinallyInvoke(
+        Interpreter interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
+    {
+        object? target = receiver.ToObject();
+        bool hasOwnThen = target is SharpTSPromise promise
+            && (promise.TryGetAccessor("then", out _, out _)
+                || promise.TryGetOwnProperty("then", out _));
+
+        if (target is SharpTSPromise ordinaryPromise && !hasOwnThen)
+        {
+            var implementation = new BuiltInAsyncMethod(
+                "finally",
+                0,
+                1,
+                (interp, recv, callArgs) => FinallyImpl(
+                    (SharpTSPromise)recv!, callArgs, interp),
+                speciesResolver: SpeciesResolver).WithSpecLength(1);
+            List<object?> callArgs = args.Length > 0 ? [args[0].ToObject()] : [];
+            return RuntimeValue.FromBoxed(implementation.Bind(ordinaryPromise).Call(
+                interpreter, callArgs));
+        }
+
+        object? then = interpreter.GetPropertyValue(target, "then");
+        if (then is not ISharpTSCallable callable)
+            throw new Runtime.Exceptions.ThrowException(new SharpTSTypeError(
+                "Promise.prototype.finally: then is not callable"));
+
+        object? onFinally = args.Length > 0
+            ? args[0].ToObject()
+            : SharpTSUndefined.Instance;
+        object? thenFinally = onFinally;
+        object? catchFinally = onFinally;
+        if (onFinally is ISharpTSCallable callback)
+        {
+            thenFinally = BuiltInMethod.CreateV2("", 1, (interp, _, thunkArgs) =>
+            {
+                object? value = thunkArgs.Length > 0
+                    ? thunkArgs[0].ToObject()
+                    : SharpTSUndefined.Instance;
+                return RuntimeValue.FromBoxed(CreateFinallyContinuation(
+                    interp, callback, value, reject: false));
+            }).AsNonConstructor();
+            catchFinally = BuiltInMethod.CreateV2("", 1, (interp, _, thunkArgs) =>
+            {
+                object? reason = thunkArgs.Length > 0
+                    ? thunkArgs[0].ToObject()
+                    : SharpTSUndefined.Instance;
+                return RuntimeValue.FromBoxed(CreateFinallyContinuation(
+                    interp, callback, reason, reject: true));
+            }).AsNonConstructor();
+        }
+        return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+            interpreter, callable, target, [thenFinally, catchFinally]));
+    }
+
+    private static SharpTSPromise CreateFinallyContinuation(
+        Interpreter interpreter,
+        ISharpTSCallable callback,
+        object? original,
+        bool reject)
+    {
+        object? result = FunctionBuiltIns.CallWithThis(
+            interpreter, callback, SharpTSUndefined.Instance, []);
+        return new SharpTSPromise(ContinueAsync(result, original, reject));
+
+        static async Task<object?> ContinueAsync(
+            object? callbackResult,
+            object? originalValue,
+            bool shouldReject)
+        {
+            if (callbackResult is SharpTSPromise promise)
+                await promise.GetValueAsync();
+            if (shouldReject)
+                throw new SharpTSPromiseRejectedException(originalValue);
+            return originalValue;
+        }
     }
 
     /// <summary>

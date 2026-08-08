@@ -2386,6 +2386,16 @@ public sealed class Issue1279ParityTests
     public void Promise_catch_dynamically_invokes_then(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/finally/invokes-then-with-function.js")]
+    [InlineData("built-ins/Promise/prototype/finally/invokes-then-with-non-function.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-then-not-callable.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-then-poisoned.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-then-throws.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-thenable.js")]
+    public void Promise_finally_dynamically_invokes_then(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
