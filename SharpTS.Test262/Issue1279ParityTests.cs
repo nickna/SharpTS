@@ -2398,6 +2398,10 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Promise_capability_executor_is_extensible()
+        => AssertPassInBothModes("built-ins/Promise/executor-function-extensible.js");
+
+    [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
             "built-ins/Promise/prototype/finally/is-a-method.js",

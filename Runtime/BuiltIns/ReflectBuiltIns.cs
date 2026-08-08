@@ -249,6 +249,7 @@ public static class ReflectBuiltIns
                     SharpTSObject obj => obj.IsExtensible,
                     SharpTSInstance inst => inst.IsExtensible,
                     SharpTSArray arr => arr.IsExtensible,
+                    ISharpTSCallable callable => PropertyDescriptorStore.IsExtensible(callable),
                     Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
                     _ => false
                 });
@@ -267,6 +268,9 @@ public static class ReflectBuiltIns
                         break;
                     case SharpTSArray arr:
                         arr.PreventExtensions();
+                        break;
+                    case ISharpTSCallable callable:
+                        PropertyDescriptorStore.PreventExtensions(callable);
                         break;
                     case Dictionary<string, object?> dict:
                         PropertyDescriptorStore.PreventExtensions(dict);

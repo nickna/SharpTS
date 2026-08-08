@@ -1029,7 +1029,7 @@ public static class PromiseBuiltIns
     /// unchanged when its constructor is the receiver; otherwise creates a
     /// promise that adopts the supplied value.
     /// </summary>
-    private static object ResolveStatic(
+    private static object? ResolveStatic(
         Interpreter interpreter,
         object? receiver,
         List<object?> args,
@@ -1045,9 +1045,16 @@ public static class PromiseBuiltIns
         }
 
         var task = ResolveImplAsync(args);
-        return promiseFactory != null
-            ? promiseFactory(interpreter, task)
-            : new SharpTSPromise(task);
+        if (promiseFactory != null)
+            return promiseFactory(interpreter, task);
+        bool isBaseConstructor = ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+            || receiver is SharpTSPromiseClass promiseClass
+                && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
+        if (!isBaseConstructor)
+        {
+            return ConstructPromiseCapabilityAndAdopt(interpreter, receiver, task);
+        }
+        return new SharpTSPromise(task);
     }
 
     private static async Task<object?> ResolveImplAsync(List<object?> args)

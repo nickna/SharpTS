@@ -88,6 +88,22 @@ public class ObjectPrototypeTests
     // === isExtensible ===
 
     [Theory, ModeData]
+    public void Callable_IsExtensibleUntilPrevented(ExecutionMode mode)
+    {
+        var source = """
+            function callback(): void {}
+            console.log(Object.isExtensible(callback));
+            console.log(Reflect.isExtensible(callback));
+            Object.preventExtensions(callback);
+            console.log(Object.isExtensible(callback));
+            console.log(Reflect.isExtensible(callback));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\nfalse\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void IsExtensible_TrueForNormalObject(ExecutionMode mode)
     {
         var source = """
