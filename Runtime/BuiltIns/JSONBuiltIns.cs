@@ -265,7 +265,9 @@ public static class JSONBuiltIns
                 break;
         }
 
-        var replacerFunc = replacer as ISharpTSCallable;
+        var replacerFunc = replacer is SharpTSProxy replacerProxy && !replacerProxy.IsCallable
+            ? null
+            : replacer as ISharpTSCallable;
         var replacerArray = replacer as SharpTSArray;
         IReadOnlyList<string>? allowedKeys = null;
 
@@ -293,7 +295,8 @@ public static class JSONBuiltIns
         // serializing objects/arrays. A cycle throws TypeError. Reference equality
         // (not .Equals) is the spec's notion of identity.
         var seen = new HashSet<object>(System.Collections.Generic.ReferenceEqualityComparer.Instance);
-        if (StringifyValue(interp, value, "", replacerFunc, allowedKeys, indentStr, 0, sb, seen))
+        var wrapper = new SharpTSObject(new Dictionary<string, object?> { [""] = value });
+        if (StringifyValue(interp, wrapper, value, "", replacerFunc, allowedKeys, indentStr, 0, sb, seen))
         {
             return RuntimeValue.FromString(sb.ToString());
         }
@@ -307,16 +310,18 @@ public static class JSONBuiltIns
         return RuntimeValue.Undefined;
     }
 
-    private static bool StringifyValue(Interpreter interp, object? value, object? key,
+    private static bool StringifyValue(Interpreter interp, object holder, object? value, string key,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen)
     {
+        // SerializeJSONProperty calls toJSON before the replacer, with the
+        // original value as `this` and the property key as its sole argument.
+        value = CallToJsonIfExists(interp, value, key);
+
         if (replacer != null)
         {
-            value = replacer.Call(interp, [key, value]);
+            value = FunctionBuiltIns.CallWithThis(
+                interp, replacer, holder, [key, value]);
         }
-
-        // Check for toJSON() method before serializing
-        value = CallToJsonIfExists(interp, value);
 
         // ECMA-262 25.5.2.3 step 4: a boxed primitive wrapper (new Number/String/Boolean)
         // serializes as its underlying primitive — not as an object exposing the internal
@@ -353,6 +358,9 @@ public static class JSONBuiltIns
             case SharpTSProxy proxy when !proxy.IsCallable:
                 StringifyProxy(interp, proxy, replacer, allowedKeys, indentStr, depth, sb, seen);
                 return true;
+            case SharpTSRegExp regex:
+                StringifyRegExp(interp, regex, replacer, allowedKeys, indentStr, depth, sb, seen);
+                return true;
             case SharpTSObject obj:
                 StringifyObject(interp, obj, replacer, allowedKeys, indentStr, depth, sb, seen);
                 return true;
@@ -377,25 +385,20 @@ public static class JSONBuiltIns
     /// <summary>
     /// Checks if the value has a toJSON() method and calls it if present.
     /// </summary>
-    private static object? CallToJsonIfExists(Interpreter interp, object? value)
+    private static object? CallToJsonIfExists(
+        Interpreter interp,
+        object? value,
+        string key)
     {
-        if (value is SharpTSProxy proxy && !proxy.IsCallable)
-        {
-            var toJson = proxy.TrapGet("toJSON", interp);
-            if (toJson is ISharpTSCallable callable)
-                return FunctionBuiltIns.CallWithThis(interp, callable, proxy, []);
-        }
-        else if (value is SharpTSInstance inst)
-        {
-            var toJson = inst.GetClass().FindMethod("toJSON");
-            if (toJson != null)
-                return SharpTSClass.BindMethod(toJson, inst).Call(interp, []);
-        }
-        else if (value is SharpTSObject obj && obj.Fields.TryGetValue("toJSON", out var fn))
-        {
-            if (fn is ISharpTSCallable callable)
-                return callable.Call(interp, []);
-        }
+        if (value is null or string or bool or double
+            or SharpTSUndefined or SharpTSSymbol or SharpTSBigInt)
+            return value;
+
+        var toJson = interp.GetPropertyValue(value, "toJSON");
+        if (toJson is ISharpTSCallable callable)
+            return FunctionBuiltIns.CallWithThis(
+                interp, callable, value, [key]);
+
         return value;
     }
 
@@ -451,7 +454,9 @@ public static class JSONBuiltIns
             {
                 if (i > 0) sb.Append(separator);
 
-                if (!StringifyValue(interp, arr[i], (double)i, replacer, allowedKeys, indentStr, depth + 1, sb, seen))
+                if (!StringifyValue(interp, arr, arr[i],
+                    i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    replacer, allowedKeys, indentStr, depth + 1, sb, seen))
                 {
                     sb.Append("null");
                 }
@@ -480,6 +485,12 @@ public static class JSONBuiltIns
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
         StringifyJsonObject(interp, proxy, proxy.TrapOwnKeys(interp),
             key => proxy.TrapGet(key, interp),
+            replacer, allowedKeys, indentStr, depth, sb, seen);
+
+    private static void StringifyRegExp(Interpreter interp, SharpTSRegExp regex,
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
+        StringifyJsonObject(interp, regex, regex.OwnEnumerableKeys(),
+            key => interp.GetPropertyValue(regex, key),
             replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,
@@ -542,7 +553,8 @@ public static class JSONBuiltIns
                 sb.Append(':');
                 if (pretty) sb.Append(' ');
 
-                if (StringifyValue(interp, read(key), key, replacer, allowedKeys, indentStr, depth + 1, sb, seen))
+                if (StringifyValue(interp, node, read(key), key,
+                    replacer, allowedKeys, indentStr, depth + 1, sb, seen))
                 {
                     first = false;
                 }

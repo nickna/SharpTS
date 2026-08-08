@@ -2467,6 +2467,16 @@ public sealed class Issue1279ParityTests
             "built-ins/JSON/stringify/value-bigint.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/JSON/stringify/value-object-abrupt.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-abrupt.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-arguments.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-not-function.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-function-tojson.js")]
+    [InlineData("built-ins/JSON/stringify/value-tojson-object-circular.js")]
+    public void JSON_stringify_observes_toJSON_semantics(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
