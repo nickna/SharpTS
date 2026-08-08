@@ -675,12 +675,19 @@ public partial class Interpreter
         if (TryCallExoticToPrimitive(obj, hint, out var exoticResult))
             return exoticResult;
         bool isWrapper = TryGetBoxedPrimitiveValue(obj, out var primitiveValue);
-        bool hasOwnValueOf = obj.HasProperty("valueOf");
-        bool hasOwnToString = obj.HasProperty("toString");
-        if (!isWrapper && !hasOwnValueOf && !hasOwnToString) return value;
 
         string first = hint == PrimitiveHint.String ? "toString" : "valueOf";
         string second = hint == PrimitiveHint.String ? "valueOf" : "toString";
+        if (!isWrapper)
+        {
+            if (TryCallConversion(obj, first, out var firstResult))
+                return firstResult;
+            if (TryCallConversion(obj, second, out var secondResult))
+                return secondResult;
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot convert object to primitive value"));
+        }
+
         // An own override of the hint-preferred conversion always wins.
         if (TryCallOwnConversion(obj, first, out var r1)) return r1;
         // For a boxed wrapper, the *inherited* preferred conversion
@@ -692,7 +699,7 @@ public partial class Interpreter
         // OrdinaryToPrimitive fallback.
         if (isWrapper) return primitiveValue;
         if (TryCallOwnConversion(obj, second, out var r2)) return r2;
-        return value;
+        return primitiveValue;
     }
 
     /// <summary>

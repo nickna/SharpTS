@@ -2445,6 +2445,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(
             "built-ins/Promise/get-prototype-abrupt-executor-not-callable.js");
 
+    [Theory]
+    [InlineData("built-ins/String/S8.12.8_A1.js")]
+    [InlineData("built-ins/String/S9.8_A5_T1.js")]
+    public void String_legacy_coercion_matches_compiled_mode(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_instances_inherit_the_finally_method()
         => AssertPass(
