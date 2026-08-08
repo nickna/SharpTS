@@ -3134,6 +3134,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A5_T1.js")]
     [InlineData("built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js")]
     [InlineData("built-ins/Array/prototype/push/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-array-is-frozen.js")]
     public void Array_push_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
