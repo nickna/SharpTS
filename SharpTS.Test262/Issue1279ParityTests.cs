@@ -2498,6 +2498,12 @@ public sealed class Issue1279ParityTests
     public void RegExp_constructor_owns_protected_prototype(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void RegExp_replace_coerces_noncallable_replacement_eagerly()
+        => AssertPass(
+            "built-ins/RegExp/prototype/Symbol.replace/arg-2-coerce-err.js",
+            Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

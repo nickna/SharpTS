@@ -844,6 +844,10 @@ public static class RegExpBuiltIns
         var replaceValue = args.Length > 1
             ? args[1].ToObject()
             : SharpTSUndefined.Instance;
+        bool isCallable = replaceValue is ISharpTSCallable;
+        string replaceStr = isCallable
+            ? ""
+            : interp.ToStringForBuiltInArgument(replaceValue);
 
         // Read flags via Get so user getters fire.
         var flags = ToStr(interp, interp.GetProperty(recv, "flags"));
@@ -875,10 +879,6 @@ public static class RegExpBuiltIns
         if (matches.Count == 0) return RuntimeValue.FromString(s);
 
         // Build the result string with replacements.
-        bool isCallable = replaceValue is ISharpTSCallable;
-        string replaceStr = isCallable
-            ? ""
-            : interp.ToStringForBuiltInArgument(replaceValue);
         var sb = new System.Text.StringBuilder();
         int nextSourcePosition = 0;
         foreach (var match in matches)
