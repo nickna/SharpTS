@@ -949,7 +949,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal IEnumerable<string> OwnEnumerableKeys()
     {
         foreach (var key in _fields.Keys)
-            if (!IsInternalSlot(key) && GetPropertyFlags(key).Enumerable)
+            if (GetPropertyFlags(key).Enumerable)
                 yield return key;
         if (_accessorProperties == null) yield break;
         foreach (var key in _accessorProperties)

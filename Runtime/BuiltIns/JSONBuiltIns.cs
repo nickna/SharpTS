@@ -428,7 +428,8 @@ public static class JSONBuiltIns
         // ECMA-262 25.5.2.5 SerializeJSONArray — throw if we're re-entering
         // the same array mid-serialization (cycle).
         if (!seen.Add(arr))
-            throw new ThrowException("TypeError: Converting circular structure to JSON");
+            throw new ThrowException(new SharpTSTypeError(
+                "Converting circular structure to JSON"));
         try
         {
             if (arr.Length == 0)
@@ -482,7 +483,7 @@ public static class JSONBuiltIns
 
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, HashSet<object> seen) =>
-        StringifyJsonObject(interp, obj, obj.Fields.Keys,
+        StringifyJsonObject(interp, obj, obj.OwnEnumerableKeys(),
             k => interp.GetPropertyValue(obj, k),
             replacer, allowedKeys, indentStr, depth, sb, seen);
 
@@ -507,7 +508,8 @@ public static class JSONBuiltIns
         StringBuilder sb, HashSet<object> seen)
     {
         if (!seen.Add(node))
-            throw new ThrowException("TypeError: Converting circular structure to JSON");
+            throw new ThrowException(new SharpTSTypeError(
+                "Converting circular structure to JSON"));
         try
         {
             var keyList = allowedKeys?.ToList() ?? keys.ToList();

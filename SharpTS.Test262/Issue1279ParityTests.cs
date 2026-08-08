@@ -2453,6 +2453,14 @@ public sealed class Issue1279ParityTests
             "built-ins/JSON/stringify/replacer-array-wrong-type.js",
             Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/JSON/stringify/value-array-circular.js")]
+    [InlineData("built-ins/JSON/stringify/value-object-circular.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-function-array-circular.js")]
+    [InlineData("built-ins/JSON/stringify/replacer-function-object-circular.js")]
+    public void JSON_stringify_circular_values_throw_TypeError(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
