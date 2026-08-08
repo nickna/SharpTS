@@ -1004,8 +1004,15 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(name),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(name),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(name),
+            SharpTSStringNamespace when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(name),
+            SharpTSNumberNamespace when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
             SharpTSNumberNamespace numberNamespace => numberNamespace.DeleteProperty(name),
+            SharpTSBooleanNamespace when name == "prototype" =>
+                DeleteNonConfigurableClassPrototype(name, strictMode),
+            SharpTSBooleanNamespace booleanNamespace => booleanNamespace.DeleteProperty(name),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(name),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(name),
             SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(name),
@@ -1074,8 +1081,15 @@ public partial class Interpreter
             SharpTSRegExp regex => regex.DeleteProperty(keyStr),
             SharpTSArrayGlobal arrayGlobal => arrayGlobal.DeleteProperty(keyStr),
             SharpTSObjectNamespace objectNamespace => objectNamespace.DeleteProperty(keyStr),
+            SharpTSStringNamespace when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             SharpTSStringNamespace stringNamespace => stringNamespace.DeleteProperty(keyStr),
+            SharpTSNumberNamespace when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
             SharpTSNumberNamespace numberNamespace => numberNamespace.DeleteProperty(keyStr),
+            SharpTSBooleanNamespace when keyStr == "prototype" =>
+                DeleteNonConfigurableClassPrototype(keyStr, strictMode),
+            SharpTSBooleanNamespace booleanNamespace => booleanNamespace.DeleteProperty(keyStr),
             SharpTSFunctionPrototype functionPrototype => functionPrototype.DeleteProperty(keyStr),
             SharpTSArrayPrototype arrayPrototype => arrayPrototype.DeleteProperty(keyStr),
             SharpTSStringPrototype stringPrototype => stringPrototype.DeleteProperty(keyStr),

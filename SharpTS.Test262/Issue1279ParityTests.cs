@@ -2574,6 +2574,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Boolean_prototype_property_is_not_configurable()
+        => AssertPass(
+            "built-ins/Boolean/prototype/S15.6.3.1_A3.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(
             "built-ins/Object/defineProperty/15.2.3.6-4-417.js");
