@@ -147,11 +147,12 @@ public class SharpTSErrorClass : SharpTSClass
             if (arguments.Count > 0)
                 instance.SetRawField("errors", arguments[0]);
             // Cause is in the third argument's options
-            if (arguments.Count > 2 && arguments[2] is SharpTSObject opts
-                && interpreter.HasProperty(opts, "cause"))
+            if (arguments.Count > 2
+                && IsObjectValue(arguments[2])
+                && interpreter.HasProperty(arguments[2], "cause"))
             {
                 instance.SetRawField(
-                    "cause", interpreter.GetPropertyValue(opts, "cause"));
+                    "cause", interpreter.GetPropertyValue(arguments[2], "cause"));
             }
         }
         else
@@ -165,11 +166,12 @@ public class SharpTSErrorClass : SharpTSClass
                 instance.SetRawField("message", message);
             instance.SetRawField("stack", $"{errorTypeName}: {message}");
             // Cause is in the second argument's options
-            if (arguments.Count > 1 && arguments[1] is SharpTSObject opts
-                && interpreter.HasProperty(opts, "cause"))
+            if (arguments.Count > 1
+                && IsObjectValue(arguments[1])
+                && interpreter.HasProperty(arguments[1], "cause"))
             {
                 instance.SetRawField(
-                    "cause", interpreter.GetPropertyValue(opts, "cause"));
+                    "cause", interpreter.GetPropertyValue(arguments[1], "cause"));
             }
         }
 
@@ -179,6 +181,10 @@ public class SharpTSErrorClass : SharpTSClass
         foreach (var key in new[] { "name", "message", "stack", "cause", "errors" })
             instance.MarkNonEnumerable(key);
     }
+
+    private static bool IsObjectValue(object? value) => value is not
+        (null or SharpTSUndefined or double or bool or string
+            or SharpTSBigInt or SharpTSSymbol or System.Numerics.BigInteger);
 
     /// <summary>
     /// Returns the error-formatted toString() result for an instance.
