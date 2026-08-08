@@ -578,6 +578,31 @@ public class ArrayMethodTests
             output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Reverse_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 4 };
+            object.reverse = Array.prototype.reverse;
+            console.log(object.reverse() === object);
+            console.log(0 in object);
+            console.log(object[1]);
+            console.log(2 in object);
+            console.log(object[3]);
+
+            Array.prototype[1] = "inherited";
+            const array: any[] = ["a"];
+            array.length = 2;
+            array.reverse();
+            console.log(array[0]);
+            console.log(array[1]);
+            delete Array.prototype[1];
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\nfalse\nthird\nfalse\nfirst\ninherited\na\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

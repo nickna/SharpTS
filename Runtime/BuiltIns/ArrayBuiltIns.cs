@@ -987,6 +987,52 @@ public static class ArrayBuiltIns
         return newLength;
     }
 
+    /// <summary>
+    /// ECMA-262 23.1.3.26 generic reverse algorithm. Each pair is queried and
+    /// updated through the receiver's property operations, retaining holes and
+    /// honoring inherited properties, accessors, proxies, and strict failures.
+    /// </summary>
+    internal static object ReverseArrayLike(Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        long middle = length / 2;
+        for (long lower = 0; lower < middle; lower++)
+        {
+            long upper = length - lower - 1;
+            string lowerKey = lower.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string upperKey = upper.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+
+            bool lowerExists = interpreter.HasProperty(receiver, lowerKey);
+            object? lowerValue = lowerExists
+                ? interpreter.GetPropertyValue(receiver, lowerKey)
+                : null;
+            bool upperExists = interpreter.HasProperty(receiver, upperKey);
+            object? upperValue = upperExists
+                ? interpreter.GetPropertyValue(receiver, upperKey)
+                : null;
+
+            if (lowerExists && upperExists)
+            {
+                interpreter.SetProperty(receiver, lowerKey, upperValue);
+                interpreter.SetProperty(receiver, upperKey, lowerValue);
+            }
+            else if (!lowerExists && upperExists)
+            {
+                interpreter.SetProperty(receiver, lowerKey, upperValue);
+                interpreter.DeleteProperty(receiver, upperKey);
+            }
+            else if (lowerExists)
+            {
+                interpreter.DeleteProperty(receiver, lowerKey);
+                interpreter.SetProperty(receiver, upperKey, lowerValue);
+            }
+        }
+        return receiver;
+    }
+
     private static void AppendConcatItem(
         Interpreter interpreter, SharpTSArray result, ref long nextIndex, object? item)
     {
@@ -1033,29 +1079,8 @@ public static class ArrayBuiltIns
         result.SetLength(nextIndex);
     }
 
-    private static RuntimeValue ReverseV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        // ECMA-262 23.1.3.26: preserves holes. Implemented via hole-aware swap
-        // so reverse([1,,3]) === [3,,1] (middle stays a hole).
-        if (arr.IsFrozen)
-            return RuntimeValue.FromObject(arr);
-        int len = arr.Length;
-        int lower = 0, upper = len - 1;
-        while (lower < upper)
-        {
-            bool lowerPresent = arr.HasIndex(lower);
-            bool upperPresent = arr.HasIndex(upper);
-            var lowerValue = lowerPresent ? arr[lower] : null;
-            var upperValue = upperPresent ? arr[upper] : null;
-            if (upperPresent) arr[lower] = upperValue;
-            else arr.DeleteAt(lower);
-            if (lowerPresent) arr[upper] = lowerValue;
-            else arr.DeleteAt(upper);
-            lower++;
-            upper--;
-        }
-        return RuntimeValue.FromObject(arr);
-    }
+    private static RuntimeValue ReverseV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromObject(ReverseArrayLike(interpreter, arr));
 
     private static RuntimeValue ToReversedV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
