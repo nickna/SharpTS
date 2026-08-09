@@ -1644,6 +1644,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_accepts_missing_target_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined-targetdesc-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
