@@ -1804,6 +1804,19 @@ public sealed class Issue1279ParityTests
             "built-ins/Array/prototype/splice/S15.4.4.12_A2.2_T5.js");
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T3.js")]
+    public void Array_splice_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)

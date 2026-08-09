@@ -718,6 +718,28 @@ public class ArrayMethodTests
         Assert.Equal("true\ntrue\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Splice_MutatesGenericSparseReceivers(ExecutionMode mode)
+    {
+        var source = """
+            const shrinking: any = { 0: "a", 2: "c", 3: "d", length: 4 };
+            const removed = Array.prototype.splice.call(shrinking, 1, 2, "x");
+            console.log(removed.length);
+            console.log(0 in removed, 1 in removed, removed[1]);
+            console.log(shrinking.length, shrinking[0], shrinking[1], shrinking[2]);
+            console.log(3 in shrinking);
+
+            const growing: any = { 0: "a", 1: "b", length: 2 };
+            Array.prototype.splice.call(growing, 0, 0, "x", "y");
+            console.log(growing.length, growing[0], growing[1], growing[2], growing[3]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "2\nfalse true c\n3 a x d\nfalse\n4 x y a b\n",
+            output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

@@ -1132,6 +1132,129 @@ public static class ArrayBuiltIns
         return receiver;
     }
 
+    /// <summary>
+    /// ECMA-262 23.1.3.28 generic splice algorithm. The receiver is mutated
+    /// through ordinary property operations so sparse objects, inherited
+    /// properties, accessors, proxies, and abrupt completions remain observable.
+    /// </summary>
+    internal static object SpliceArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+
+        double relativeStart = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long actualStart = NormalizeRelativeIndex(relativeStart, length);
+
+        long insertCount;
+        long actualDeleteCount;
+        if (args.Count == 0)
+        {
+            insertCount = 0;
+            actualDeleteCount = 0;
+        }
+        else if (args.Count == 1)
+        {
+            insertCount = 0;
+            actualDeleteCount = length - actualStart;
+        }
+        else
+        {
+            insertCount = args.Count - 2;
+            double deleteCount = ToIntegerOrInfinity(interpreter, args[1]);
+            actualDeleteCount = (long)Math.Min(
+                Math.Max(deleteCount, 0), length - actualStart);
+        }
+
+        if (insertCount > MaxSafeInteger - length + actualDeleteCount)
+            throw TypeError("Array.prototype.splice result exceeds the maximum safe integer.");
+        if (actualDeleteCount > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var deleted = new SharpTSArray();
+        deleted.SetLength(actualDeleteCount);
+        for (long index = 0; index < actualDeleteCount; index++)
+        {
+            string fromKey = (actualStart + index).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                deleted.Set(index, interpreter.GetPropertyValue(receiver, fromKey));
+            }
+        }
+
+        if (insertCount < actualDeleteCount)
+        {
+            for (long index = actualStart;
+                 index < length - actualDeleteCount;
+                 index++)
+            {
+                string fromKey = (index + actualDeleteCount).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                string toKey = (index + insertCount).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (interpreter.HasProperty(receiver, fromKey))
+                {
+                    interpreter.SetProperty(
+                        receiver, toKey,
+                        interpreter.GetPropertyValue(receiver, fromKey));
+                }
+                else
+                {
+                    interpreter.DeleteProperty(receiver, toKey);
+                }
+            }
+
+            for (long index = length;
+                 index > length - actualDeleteCount + insertCount;
+                 index--)
+            {
+                interpreter.DeleteProperty(
+                    receiver,
+                    (index - 1).ToString(
+                        System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        else if (insertCount > actualDeleteCount)
+        {
+            for (long index = length - actualDeleteCount;
+                 index > actualStart;
+                 index--)
+            {
+                string fromKey = (index + actualDeleteCount - 1).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                string toKey = (index + insertCount - 1).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (interpreter.HasProperty(receiver, fromKey))
+                {
+                    interpreter.SetProperty(
+                        receiver, toKey,
+                        interpreter.GetPropertyValue(receiver, fromKey));
+                }
+                else
+                {
+                    interpreter.DeleteProperty(receiver, toKey);
+                }
+            }
+        }
+
+        for (int index = 2; index < args.Count; index++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                (actualStart + index - 2).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                args[index]);
+        }
+
+        interpreter.SetProperty(
+            receiver, "length", (double)(length - actualDeleteCount + insertCount));
+        return deleted;
+    }
+
     private static long NormalizeRelativeIndex(double relativeIndex, long length)
     {
         if (double.IsNegativeInfinity(relativeIndex)) return 0;
