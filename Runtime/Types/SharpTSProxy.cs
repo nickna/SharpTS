@@ -892,9 +892,15 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     private static bool ToBoolean(object? value) => value switch
     {
-        null => false,
+        null or SharpTSUndefined => false,
         bool b => b,
         double d => d != 0 && !double.IsNaN(d),
+        float f => f != 0 && !float.IsNaN(f),
+        int i => i != 0,
+        long l => l != 0,
+        decimal m => m != 0,
+        System.Numerics.BigInteger bigInteger => !bigInteger.IsZero,
+        SharpTSBigInt bigInt => !bigInt.Value.IsZero,
         string s => s.Length > 0,
         _ => true
     };
