@@ -652,6 +652,26 @@ public class ClusterModuleTests : IDisposable
     }
 
     [Theory, ModeData]
+    public void LiveSettings_EnumeratesNormalizedAndMergedProperties(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as cluster from 'cluster';
+
+                const settings: any = cluster.settings;
+                cluster.setupPrimary({ silent: true, customSetting: 'present' } as any);
+                console.log('same: ' + (settings === cluster.settings));
+                console.log('keys: ' + Object.keys(settings).sort().join(','));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("same: true", output);
+        Assert.Contains("keys: args,customSetting,exec,execArgv,serialization,silent", output);
+    }
+
+    [Theory, ModeData]
     public void Setup_EventFiresOnSetupPrimary(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
