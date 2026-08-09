@@ -331,7 +331,10 @@ public static class ReflectBuiltIns
 
             "ownKeys" => BuiltInMethod.CreateV2("ownKeys", 1, static (interpreter, _, args) =>
             {
-                var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.ownKeys requires a target object.");
+                if (args[0].Kind != ValueKind.Object)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Reflect.ownKeys requires an object target"));
+                var target = args[0].ToObject()!;
                 List<object?> keys = [];
                 switch (target)
                 {

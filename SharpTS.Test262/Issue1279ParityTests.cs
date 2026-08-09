@@ -1640,6 +1640,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Reflect/ownKeys/target-is-not-object-throws.js")]
+    [InlineData("built-ins/Reflect/ownKeys/target-is-symbol-throws.js")]
+    public void Reflect_ownKeys_rejects_primitive_targets(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-0-3.js")]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1-3.js")]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1-4.js")]
