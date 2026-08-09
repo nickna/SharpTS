@@ -182,6 +182,9 @@ public static class FunctionBuiltIns
 
     private static object? InvokeWithThis(Interpreter interp, ISharpTSCallable callable, object? thisArg, List<object?> args)
     {
+        if (callable is SharpTSProxy proxy)
+            return proxy.TrapApply(thisArg, args, interp);
+
         // Arrow functions ignore thisArg
         if (callable is SharpTSArrowFunction arrow && !arrow.HasOwnThis)
         {
