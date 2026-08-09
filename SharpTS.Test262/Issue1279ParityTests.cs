@@ -1516,6 +1516,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor.js")]
+    public void Proxy_defineProperty_enforces_target_descriptor_invariants(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
     public void Date_prototype_methods_expose_standard_descriptors(string relativePath)
