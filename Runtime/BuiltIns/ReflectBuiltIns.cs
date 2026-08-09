@@ -298,7 +298,10 @@ public static class ReflectBuiltIns
 
                 try
                 {
-                    SharpTSPropertyDescriptor descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorArg);
+                    SharpTSPropertyDescriptor descriptor = ObjectBuiltIns.ToPropertyDescriptor(
+                        interpreter, descriptorArg);
+                    ObjectBuiltIns.PreserveOmittedAttributes(
+                        target, propertyKey, descriptor, descriptorArg, interpreter);
                     if (target is SharpTSArray
                         && propertyKey == "length"
                         && descriptor.HasValue)

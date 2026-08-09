@@ -305,8 +305,7 @@ public class SharpTSProxy : ISharpTSCallable
         {
             if (_target is SharpTSProxy targetProxy)
                 return targetProxy.TrapSetProperty(prop, value, interp, receiver);
-            ForwardSet(prop, value, interp);
-            return true;
+            return ForwardOrdinarySet(prop, value, interp, receiver);
         }
 
         bool result = ToBoolean(InvokeTrap(
@@ -329,6 +328,86 @@ public class SharpTSProxy : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy set trap cannot assign to a fixed accessor without a setter"));
         }
+        return true;
+    }
+
+    /// <summary>
+    /// OrdinarySetWithOwnDescriptor for the proxy's target.  The receiver must
+    /// remain the original proxy: defining directly on the target would bypass
+    /// the receiver's getOwnPropertyDescriptor and defineProperty internal
+    /// methods, which are observable when those operations are trapped.
+    /// </summary>
+    private bool ForwardOrdinarySet(
+        string prop, object? value, Interpreter? interpreter, object? receiver)
+    {
+        object? targetDescriptor = GetTargetOwnPropertyDescriptor(prop, interpreter);
+        SharpTSPropertyDescriptor descriptor;
+        if (targetDescriptor is null or SharpTSUndefined)
+        {
+            descriptor = new SharpTSPropertyDescriptor
+            {
+                Writable = true,
+                Enumerable = true,
+                Configurable = true,
+                HasValue = true,
+                HasWritable = true,
+                HasEnumerable = true,
+                HasConfigurable = true,
+            };
+        }
+        else
+        {
+            descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        }
+
+        if (descriptor.HasValue)
+        {
+            if (!descriptor.Writable || receiver is null or SharpTSUndefined)
+                return false;
+
+            if (receiver is SharpTSProxy receiverProxy && interpreter != null)
+            {
+                object? existing = receiverProxy.TrapGetOwnPropertyDescriptor(
+                    prop, interpreter);
+                bool receiverHasProperty = existing is not (null or SharpTSUndefined);
+                if (receiverHasProperty)
+                {
+                    var existingDescriptor = SharpTSPropertyDescriptor.FromAnyObject(existing!);
+                    if (existingDescriptor.HasGet || existingDescriptor.HasSet
+                        || !existingDescriptor.Writable)
+                        return false;
+                }
+
+                var valueDescriptor = new SharpTSObject([]);
+                valueDescriptor.SetProperty("value", value);
+                if (!receiverHasProperty)
+                {
+                    valueDescriptor.SetProperty("writable", true);
+                    valueDescriptor.SetProperty("enumerable", true);
+                    valueDescriptor.SetProperty("configurable", true);
+                }
+                return receiverProxy.TrapDefineProperty(
+                    prop, valueDescriptor, interpreter);
+            }
+
+            if (ReferenceEquals(receiver, _target))
+            {
+                ForwardSet(prop, value, interpreter);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (descriptor.Set == null) return false;
+        if (interpreter != null)
+        {
+            FunctionBuiltIns.CallWithThis(
+                interpreter, descriptor.Set, receiver, [value]);
+            return true;
+        }
+
+        descriptor.Set.Call(interpreter!, [value]);
         return true;
     }
 

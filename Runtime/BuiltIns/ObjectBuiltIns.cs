@@ -1523,7 +1523,7 @@ public static partial class ObjectBuiltIns
     /// (<see cref="SharpTSObject"/>) — the surface affected by #475's enumerability
     /// changes; instances/arrays/dicts keep their existing behavior.
     /// </summary>
-    private static void PreserveOmittedAttributes(
+    internal static void PreserveOmittedAttributes(
         object? target, string propertyKey, SharpTSPropertyDescriptor descriptor, object? descObj, Interpreter interpreter)
     {
         if (target is not SharpTSObject obj || descObj is null) return;
