@@ -1213,7 +1213,9 @@ public partial class Interpreter
             var member = prototype.HasSymbolProperty(regexSym)
                 ? prototype.GetBySymbol(regexSym)
                 : null;
-            if (member is BuiltInMethod bim) return RuntimeValue.FromBoxed(bim.Bind(regexObj));
+            // Property Get returns the exact data-property value. Method-call
+            // evaluation binds the receiver later; binding here creates a new
+            // wrapper and breaks observable function identity.
             return RuntimeValue.FromBoxed(member ?? SharpTSUndefined.Instance);
         }
 

@@ -1659,6 +1659,10 @@ public partial class Interpreter
         object? current = simpleObj.HasProperty("__proto__") ? simpleObj.GetProperty("__proto__") : null;
         for (int i = 0; i < 64 && current != null; i++)
         {
+            if (current is SharpTSProxy proxy)
+                return RuntimeValue.FromBoxed(
+                    proxy.TrapGet(memberName, this, simpleObj));
+
             if (current is SharpTSObject proto)
             {
                 var protoGetter = proto.GetGetter(memberName);

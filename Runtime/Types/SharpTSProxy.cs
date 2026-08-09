@@ -130,7 +130,12 @@ public class SharpTSProxy : ISharpTSCallable
     {
         var trap = GetTrapCallable("get", interp);
         if (trap == null)
-            return ForwardGet(prop, interp);
+        {
+            if (interp == null) return ForwardGet(prop, interp);
+            return _target is SharpTSProxy targetProxy
+                ? targetProxy.TrapGet(prop, interp, receiver)
+                : interp.GetPropertyValue(_target, prop);
+        }
 
         object? result = InvokeTrap(trap, interp, [_target, prop, receiver]);
         ValidateGetTrapResult(prop, result, interp);
