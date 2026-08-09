@@ -2100,6 +2100,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/deleteProperty/null-handler.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_deleteProperty_allows_false_results_in_sloppy_code()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/return-false-not-strict.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
