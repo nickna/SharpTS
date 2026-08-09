@@ -153,6 +153,12 @@ public static class ReflectBuiltIns
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.get requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
+                object? receiver = args.Length > 2 && !args[2].IsUndefined
+                    ? args[2].ToObject()
+                    : target;
+                if (target is SharpTSProxy proxy)
+                    return RuntimeValue.FromBoxed(
+                        proxy.TrapGet(propertyKey, interpreter, receiver));
                 return RuntimeValue.FromBoxed(
                     interpreter.GetPropertyValue(target, propertyKey));
             }),

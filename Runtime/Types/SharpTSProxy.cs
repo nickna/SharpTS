@@ -123,14 +123,18 @@ public class SharpTSProxy : ISharpTSCallable
     #region Trap Dispatch
 
     public object? TrapGet(string prop, Interpreter? interp)
+        => TrapGet(prop, interp, interp != null ? this : null);
+
+    internal object? TrapGet(
+        string prop, Interpreter? interp, object? receiver)
     {
         var trap = GetTrapCallable("get", interp);
         if (trap == null)
             return ForwardGet(prop, interp);
 
-        // Pass target, prop, receiver (null for compiled mode compatibility)
-        object? receiver = interp != null ? (object)this : null;
-        return InvokeTrap(trap, interp, [_target, prop, receiver]);
+        object? result = InvokeTrap(trap, interp, [_target, prop, receiver]);
+        ValidateGetTrapResult(prop, result, interp);
+        return result;
     }
 
     /// <summary>
@@ -145,7 +149,33 @@ public class SharpTSProxy : ISharpTSCallable
         if (trap == null)
             return interp.GetSymbolPropertyValue(_target, prop);
 
-        return InvokeTrap(trap, interp, [_target, prop, this]);
+        object? result = InvokeTrap(trap, interp, [_target, prop, this]);
+        ValidateGetTrapResult(prop, result, interp);
+        return result;
+    }
+
+    private void ValidateGetTrapResult(
+        object propertyKey, object? result, Interpreter? interpreter)
+    {
+        object? targetDescriptor = GetTargetOwnPropertyDescriptor(
+            propertyKey, interpreter);
+        if (targetDescriptor is null or SharpTSUndefined) return;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (descriptor.Configurable) return;
+
+        if (descriptor.HasValue && !descriptor.Writable
+            && !SharpTSObject.SameValue(result, descriptor.Value))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy get trap must return the value of a fixed data property"));
+        }
+        if ((descriptor.HasGet || descriptor.HasSet) && descriptor.Get == null
+            && result is not SharpTSUndefined)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy get trap must return undefined for a fixed accessor without a getter"));
+        }
     }
 
     /// <summary>
