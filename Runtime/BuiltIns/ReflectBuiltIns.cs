@@ -112,19 +112,12 @@ public static class ReflectBuiltIns
 
             // --- Standard ES2015 Reflect API ---
 
-            "has" => BuiltInMethod.CreateV2("has", 2, static (_, _, args) =>
+            "has" => BuiltInMethod.CreateV2("has", 2, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.has requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
-                return RuntimeValue.FromBoolean(target switch
-                {
-                    SharpTSObject obj => obj.HasProperty(propertyKey),
-                    SharpTSInstance inst => inst.HasProperty(propertyKey),
-                    SharpTSArray arr => propertyKey == "length"
-                        || (int.TryParse(propertyKey, out var idx) && idx >= 0 && idx < arr.Length),
-                    Dictionary<string, object?> dict => dict.ContainsKey(propertyKey),
-                    _ => false
-                });
+                return RuntimeValue.FromBoolean(
+                    interpreter.HasProperty(target, propertyKey));
             }),
 
             "deleteProperty" => BuiltInMethod.CreateV2("deleteProperty", 2, static (interpreter, _, args) =>
