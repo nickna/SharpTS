@@ -203,7 +203,7 @@ public class SharpTSProxy : ISharpTSCallable
         }
 
         return ValidateDescriptorTrapResult(
-            InvokeTrap(trap, interp, [_target, prop]));
+            InvokeTrap(trap, interp, [_target, prop]), prop, interp);
     }
 
     internal object? TrapGetOwnPropertyDescriptor(
@@ -219,12 +219,24 @@ public class SharpTSProxy : ISharpTSCallable
         }
 
         return ValidateDescriptorTrapResult(
-            InvokeTrap(trap, interpreter, [_target, prop]));
+            InvokeTrap(trap, interpreter, [_target, prop]), prop, interpreter);
     }
 
-    private static object? ValidateDescriptorTrapResult(object? result)
+    private object? ValidateDescriptorTrapResult(
+        object? result, object propertyKey, Interpreter? interpreter)
     {
-        if (result is SharpTSUndefined) return result;
+        object? targetDescriptor = GetTargetOwnPropertyDescriptor(
+            propertyKey, interpreter);
+        bool targetHasProperty = targetDescriptor is not (null or SharpTSUndefined);
+
+        if (result is SharpTSUndefined)
+        {
+            if (!targetHasProperty) return result;
+            var targetRecord = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!);
+            if (!targetRecord.Configurable || !TargetIsExtensible(_target))
+                ThrowDescriptorInvariant();
+            return result;
+        }
         if (result is null or string or bool or double or int or long or float
             or decimal or SharpTSSymbol or SharpTSBigInt
             or System.Numerics.BigInteger)
@@ -232,7 +244,56 @@ public class SharpTSProxy : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy getOwnPropertyDescriptor trap must return an object or undefined"));
         }
-        return result;
+
+        var resultDescriptor = interpreter == null
+            ? SharpTSPropertyDescriptor.FromAnyObject(result)
+            : ObjectBuiltIns.ToPropertyDescriptor(interpreter, result);
+
+        if (!targetHasProperty)
+        {
+            if (!TargetIsExtensible(_target) || !resultDescriptor.Configurable)
+                ThrowDescriptorInvariant();
+        }
+        else
+        {
+            var targetRecord = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!);
+            ValidateDefinePropertyInvariant(resultDescriptor, targetRecord);
+            if (!resultDescriptor.Configurable && targetRecord.Configurable)
+                ThrowDescriptorInvariant();
+        }
+
+        // [[GetOwnProperty]] returns a complete descriptor record. Expose a fresh
+        // descriptor object rather than the handler's potentially partial object.
+        return resultDescriptor.ToObject();
+
+        static void ThrowDescriptorInvariant() => throw new ThrowException(
+            new SharpTSTypeError(
+                "Proxy getOwnPropertyDescriptor trap result is incompatible with the target"));
+    }
+
+    private object? GetTargetOwnPropertyDescriptor(
+        object propertyKey, Interpreter? interpreter)
+    {
+        if (_target is SharpTSProxy proxy)
+        {
+            return propertyKey switch
+            {
+                SharpTSSymbol symbol when interpreter != null
+                    => proxy.TrapGetOwnPropertyDescriptor(symbol, interpreter),
+                string name => proxy.TrapGetOwnPropertyDescriptor(name, interpreter),
+                _ => SharpTSUndefined.Instance,
+            };
+        }
+
+        if (propertyKey is SharpTSSymbol symbolKey)
+            return ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, symbolKey)
+                ?? SharpTSUndefined.Instance;
+        if (propertyKey is string nameKey && interpreter != null)
+            return (object?)ObjectBuiltIns.OwnPropertyDescriptorOf(
+                    interpreter, _target, nameKey)?.ToObject()
+                ?? SharpTSUndefined.Instance;
+        return ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, propertyKey)
+            ?? SharpTSUndefined.Instance;
     }
 
     /// <summary>
