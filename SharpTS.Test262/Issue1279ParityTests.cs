@@ -2436,6 +2436,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/set/null-handler.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_set_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/set/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
