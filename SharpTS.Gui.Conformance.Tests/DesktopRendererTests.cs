@@ -92,7 +92,9 @@ public sealed class DesktopRendererTests : IDisposable
     public void DesktopPlatformServices_ReportEnvironmentAndRejectMissingShellTargets()
     {
         using JsonDocument info = JsonDocument.Parse(DesktopBridge.GetDesktopPlatformInfoJson());
-        Assert.Equal("windows", info.RootElement.GetProperty("operatingSystem").GetString());
+        string expectedOperatingSystem = OperatingSystem.IsWindows() ? "windows" :
+            OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsLinux() ? "linux" : "unknown";
+        Assert.Equal(expectedOperatingSystem, info.RootElement.GetProperty("operatingSystem").GetString());
         Assert.NotEmpty(info.RootElement.GetProperty("architecture").GetString()!);
         Assert.Empty(DesktopBridge.GetDesktopLaunchArguments());
         Assert.Throws<FileNotFoundException>(() =>

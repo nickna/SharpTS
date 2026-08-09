@@ -75,6 +75,18 @@ internal sealed class DesktopShutdownCoordinator
 
         try
         {
+            // Begin guest shutdown synchronously so an already-due guest timer
+            // cannot overtake the posted cleanup turn under dispatcher load.
+            request.GuestShutdown = _getGuest()?.ShutdownAsync(reason, exitCode)
+                ?? Task.CompletedTask;
+        }
+        catch (Exception exception)
+        {
+            request.GuestShutdown = Task.FromException(exception);
+        }
+
+        try
+        {
             _post(() => _ = CompleteShutdownAsync(request));
         }
         catch (Exception exception)
@@ -116,9 +128,7 @@ internal sealed class DesktopShutdownCoordinator
         {
             lock (_gate)
                 DetachWindowHandlersUnderLock();
-            IGuestRuntime? guest = _getGuest();
-            if (guest is not null)
-                await guest.ShutdownAsync(request.Reason, request.ExitCode);
+            await request.GuestShutdown;
         }
         catch (Exception exception)
         {
@@ -180,5 +190,12 @@ internal sealed class DesktopShutdownCoordinator
         _windowHandlers.Clear();
     }
 
-    private sealed record ShutdownRequest(SharpTSHostedShutdownReason Reason, int ExitCode);
+    private sealed class ShutdownRequest(
+        SharpTSHostedShutdownReason reason,
+        int exitCode)
+    {
+        public SharpTSHostedShutdownReason Reason { get; } = reason;
+        public int ExitCode { get; } = exitCode;
+        public Task GuestShutdown { get; set; } = Task.CompletedTask;
+    }
 }

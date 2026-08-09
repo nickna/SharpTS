@@ -87,6 +87,8 @@ public sealed class HostInfrastructureTests
         window.Close();
 
         Assert.True(coordinator.IsShutdownStarted);
+        Assert.Equal(SharpTSHostedShutdownReason.HostRequested, guest.Reason);
+        Assert.Equal(0, guest.ExitCode);
         Assert.Single(posted);
         Assert.Empty(exits);
         posted.Dequeue()();
@@ -129,6 +131,7 @@ public sealed class HostInfrastructureTests
             () => guest, posted.Enqueue, exits.Add, _ => { });
 
         Assert.True(coordinator.RequestShutdown(reason, exitCode));
+        Assert.Equal(1, guest.ShutdownCount);
         Assert.False(coordinator.RequestShutdown(SharpTSHostedShutdownReason.HostRequested, 0));
         Assert.False(coordinator.RequestShutdown(reason, exitCode));
         posted.Dequeue()();
