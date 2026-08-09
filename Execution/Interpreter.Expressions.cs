@@ -1758,7 +1758,9 @@ public partial class Interpreter
     private async Task<object?> DynamicImportAsync(Expr.DynamicImport di)
     {
         // Evaluate the path expression
-        object? pathValue = Evaluate(di.PathExpression);
+        object? pathValue = IsHostedExecution
+            ? (await EvaluateAsync(di.PathExpression)).ToObject()
+            : Evaluate(di.PathExpression);
         string specifier = pathValue?.ToString()
             ?? throw new InterpreterException("Dynamic import path cannot be null.");
 
@@ -1783,11 +1785,22 @@ public partial class Interpreter
                 "Use a static named import: import { TypeName } from \"" + specifier + "\";");
         }
 
-        // Check if module is already loaded
+        // Check if module is already loaded and fully initialized. A hosted
+        // module registered for a static or dynamic cycle is not observable as
+        // complete merely because its namespace object already exists.
         if (_loadedModules.TryGetValue(absolutePath, out var cached))
         {
-            return cached.ExportsAsObject();
+            if (cached.IsExecuted)
+                return cached.ExportsAsObject();
+            if (IsHostedExecution && IsHostedModuleExecuting(absolutePath))
+            {
+                throw new InterpreterException(
+                    $"Dynamic import cycle reached the evaluating module '{absolutePath}'.");
+            }
         }
+
+        if (IsHostedExecution && TryGetHostedDynamicImport(absolutePath, out Task<object?> pending))
+            return await pending;
 
         // Load and execute the module
         ParsedModule module = _moduleResolver.LoadModule(absolutePath);
@@ -1795,7 +1808,22 @@ public partial class Interpreter
         // Type check the new module (optional - errors become Promise rejections)
         // Note: Skipping type checking for dynamic imports for flexibility
 
-        // Execute the module
+        if (IsHostedExecution)
+        {
+            Task<object?> initialization = ExecuteHostedDynamicImportAsync(module);
+            TrackHostedDynamicImport(absolutePath, initialization);
+            try
+            {
+                return await initialization;
+            }
+            finally
+            {
+                CompleteHostedDynamicImport(absolutePath, initialization);
+            }
+        }
+
+        // The ordinary console runtime retains its synchronous module executor
+        // and promise pump; only hosted execution uses resumable module jobs.
         ExecuteModule(module);
 
         // Return the module namespace

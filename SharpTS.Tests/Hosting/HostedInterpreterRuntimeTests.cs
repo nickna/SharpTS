@@ -110,6 +110,218 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void EsmTopLevelAwait_SupportsCompoundConditionalAndLoopShapes()
+    {
+        const string source = """
+            const compound = 2 + await new Promise<number>(
+                resolve => setTimeout(() => resolve(3), 1));
+            const conditional = compound === 5
+                ? await Promise.resolve(7)
+                : await Promise.resolve(0);
+            let loop = 0;
+            for (let index = 1; index <= 3; index++) {
+                loop += await Promise.resolve(index);
+            }
+            if (await Promise.resolve(true)) {
+                console.log(`shapes-${compound}-${conditional}-${loop}`);
+            }
+            export {};
+            """;
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        using var runtime = CreateRuntime(
+            source, dispatcher, new RecordingLifetime(), new RecordingErrorSink(), output);
+
+        RunInitialization(runtime, dispatcher);
+
+        Assert.Equal(["shapes-5-7-6"], Lines(output));
+    }
+
+    [Fact]
+    public void HostedDynamicImport_AwaitsDependencyGraphAndCheckpointsEachModuleJob()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                console.log('main-start');
+                const specifier = await Promise.resolve('./lazy');
+                const loaded = await import(await Promise.resolve(specifier));
+                console.log(`main-${loaded.value}`);
+                export {};
+                """,
+            ["lazy.ts"] = """
+                import { prefix } from './lazy-dependency';
+                console.log('lazy-start');
+                export const value = prefix + await new Promise<number>(
+                    resolve => setTimeout(() => resolve(2), 2));
+                console.log('lazy-end');
+                queueMicrotask(() => console.log('lazy-microtask'));
+                """,
+            ["lazy-dependency.ts"] = """
+                console.log('dependency-start');
+                export const prefix = await Promise.resolve(40);
+                queueMicrotask(() => console.log('dependency-microtask'));
+                """,
+        };
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        using var runtime = new HostedInterpreterRuntime(
+            dispatcher,
+            new RecordingLifetime(),
+            new RecordingErrorSink(),
+            CreateProgram(files, "main.ts"),
+            output,
+            output);
+
+        RunInitialization(runtime, dispatcher);
+
+        Assert.Equal(
+            [
+                "main-start", "dependency-start", "dependency-microtask",
+                "lazy-start", "lazy-end", "lazy-microtask", "main-42"
+            ],
+            Lines(output));
+    }
+
+    [Fact]
+    public void HostedDynamicImport_RejectsMissingRejectedAndCyclicModulesInGuestCode()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                try {
+                    await import('./missing');
+                } catch (error) {
+                    console.log('missing-rejected');
+                }
+                try {
+                    await import('./rejected');
+                } catch (error) {
+                    console.log('module-rejected');
+                }
+                try {
+                    await import('./main');
+                } catch (error) {
+                    console.log('cycle-rejected');
+                }
+                export {};
+                """,
+            ["rejected.ts"] = """
+                await Promise.reject(new Error('dynamic-boom'));
+                export const unreachable = true;
+                """,
+        };
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = new StringWriter();
+        using var runtime = new HostedInterpreterRuntime(
+            dispatcher,
+            new RecordingLifetime(),
+            errors,
+            CreateProgram(files, "main.ts"),
+            output,
+            output);
+
+        RunInitialization(runtime, dispatcher);
+
+        Assert.Equal(
+            ["missing-rejected", "module-rejected", "cycle-rejected"],
+            Lines(output));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
+    public void Shutdown_CancelsSuspendedTopLevelAwaitAndLateTimerWork()
+    {
+        const string source = """
+            console.log('suspended');
+            await new Promise<void>(resolve => setTimeout(resolve, 60_000));
+            console.log('unexpected-resume');
+            export {};
+            """;
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = new StringWriter();
+        using var runtime = CreateRuntime(
+            source, dispatcher, new RecordingLifetime(), errors, output);
+
+        Task initialization = runtime.InitializeAsync();
+        Assert.True(dispatcher.RunNext());
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+        dispatcher.AdvanceBy(TimeSpan.FromMinutes(2));
+        dispatcher.RunUntilIdle();
+
+        Assert.True(initialization.IsFaulted);
+        Assert.Equal(SharpTSHostedRuntimeState.Stopped, runtime.State);
+        Assert.Equal(["suspended"], Lines(output));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
+    public void RejectedTopLevelAwaitShapes_ReportInitializationErrorAndModulePath()
+    {
+        (string Shape, string Source)[] cases =
+        [
+            ("compound", "const value = 1 + await Promise.reject(new Error('compound-boom')); export {};"),
+            ("conditional", "const value = true ? await Promise.reject(new Error('conditional-boom')) : 0; export {};"),
+            ("loop", "for (let i = 0; i < 1; i++) { await Promise.reject(new Error('loop-boom')); } export {};"),
+        ];
+
+        foreach ((string shape, string source) in cases)
+        {
+            var dispatcher = new DeterministicHostDispatcher();
+            var errors = new RecordingErrorSink();
+            using var runtime = CreateRuntime(
+                source,
+                dispatcher,
+                new RecordingLifetime(),
+                errors,
+                new StringWriter());
+
+            Task initialization = runtime.InitializeAsync();
+            dispatcher.RunUntil(() => initialization.IsCompleted);
+
+            SharpTSHostedError error = Assert.Single(errors.Errors);
+            Assert.True(initialization.IsFaulted);
+            Assert.Equal(SharpTSHostedErrorPhase.Initialization, error.Phase);
+            Assert.Contains($"{shape}-boom", error.Exception.Message, StringComparison.Ordinal);
+            Assert.Contains("main.ts", error.Exception.Message, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void RejectedHostedDynamicImport_AttributesTheDiscoveredModule()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = "await import('./rejected'); export {};",
+            ["rejected.ts"] = """
+                await Promise.reject(new Error('dynamic-attribution'));
+                export {};
+                """,
+        };
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var runtime = new HostedInterpreterRuntime(
+            dispatcher,
+            new RecordingLifetime(),
+            errors,
+            CreateProgram(files, "main.ts"),
+            new StringWriter(),
+            new StringWriter());
+
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+
+        SharpTSHostedError error = Assert.Single(errors.Errors);
+        Assert.True(initialization.IsFaulted);
+        Assert.Contains("dynamic-attribution", error.Exception.Message, StringComparison.Ordinal);
+        Assert.Contains("rejected.ts", error.Exception.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void GuestMacrotasks_AreFifoWithFullMicrotaskCheckpointAndHostFairness()
     {
         const string source = """

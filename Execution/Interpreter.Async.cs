@@ -47,7 +47,9 @@ public partial class Interpreter
         savedGen?.MarkBodySuspended();
         try
         {
-            return await task;
+            return await (IsHostedExecution
+                ? task.WaitAsync(ShutdownToken)
+                : task);
         }
         finally
         {

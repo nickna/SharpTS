@@ -254,6 +254,117 @@ public sealed class HostedDesktopIntegrationTests
         }
     }
 
+    [Fact]
+    public async Task InterpretedHeadless_InitializesExpandedTopLevelAwaitModuleJobs()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+#if DEBUG
+        const string configuration = "Debug";
+#else
+        const string configuration = "Release";
+#endif
+        string hostSource = Path.Combine(
+            repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
+        string stageDirectory = Path.Combine(
+            Path.GetTempPath(), $"sharpts-gui-tla-host-{Guid.NewGuid():N}");
+        string hostAssembly = Path.Combine(stageDirectory, "SharpTS.Gui.Host.dll");
+        Directory.CreateDirectory(stageDirectory);
+        string guestDirectory = Path.Combine(stageDirectory, "Guest");
+        string fixtureDirectory = Path.Combine(
+            repositoryRoot,
+            "SharpTS.Gui.Conformance.Tests",
+            "Fixtures",
+            "HostedTopLevelAwait");
+        string tracePath = Path.Combine(stageDirectory, "trace.json");
+        string[] fixtureNames = ["main.tsx", "lazy.ts", "lazy-dependency.ts", "rejected.ts"];
+
+        try
+        {
+            CopyDirectory(hostSource, stageDirectory);
+            foreach (string fixtureName in fixtureNames)
+            {
+                File.Copy(
+                    Path.Combine(fixtureDirectory, fixtureName),
+                    Path.Combine(guestDirectory, fixtureName),
+                    overwrite: true);
+            }
+
+            var startInfo = new ProcessStartInfo("dotnet")
+            {
+                WorkingDirectory = stageDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+            startInfo.ArgumentList.Add(hostAssembly);
+            startInfo.ArgumentList.Add("--mode");
+            startInfo.ArgumentList.Add("interpreted");
+            startInfo.ArgumentList.Add("--headless");
+            startInfo.ArgumentList.Add("--trace");
+            startInfo.ArgumentList.Add(tracePath);
+
+            using var process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Could not start the GUI host.");
+            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException("Hosted top-level-await scenario exceeded 30 seconds.");
+            }
+            string stdout = await stdoutTask;
+            string stderr = await stderrTask;
+
+            Assert.True(process.ExitCode == 0,
+                $"Hosted top-level await failed with {process.ExitCode}.{Environment.NewLine}" +
+                $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}" +
+                $"stderr:{Environment.NewLine}{stderr}");
+            using var trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
+            string[] stages = trace.RootElement.EnumerateArray()
+                .Select(item => item.GetProperty("Stage").GetString()!)
+                .ToArray();
+            string[] expected =
+            [
+                "tla-main-start",
+                "tla-compound-rejected",
+                "tla-conditional-rejected",
+                "tla-loop-rejected",
+                "tla-dynamic-import-rejected",
+                "tla-dependency-start",
+                "tla-dependency-microtask",
+                "tla-lazy-start",
+                "tla-lazy-end",
+                "tla-lazy-microtask",
+                "tla-main-resume-5-7-6-42",
+                "tla-window-mounted",
+                "tla-before-exit",
+                "tla-before-exit-microtask",
+                "unmount",
+                "tla-exit",
+                "host-exit-request",
+                "runtime-dispose"
+            ];
+            int previous = -1;
+            foreach (string stage in expected)
+            {
+                int current = Array.IndexOf(stages, stage);
+                Assert.True(current > previous, $"Trace stage '{stage}' was missing or out of order.");
+                previous = current;
+            }
+        }
+        finally
+        {
+            try { Directory.Delete(stageDirectory, recursive: true); }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+    }
+
     private static void AssertLifecycle(
         IReadOnlyList<string> stages,
         bool requireCleanupAfterBeforeExit)
@@ -289,5 +400,23 @@ public sealed class HostedDesktopIntegrationTests
             directory = Path.GetDirectoryName(directory);
         }
         throw new InvalidOperationException("Could not locate the SharpTS repository root.");
+    }
+
+    private static void CopyDirectory(string source, string destination)
+    {
+        foreach (string directory in Directory.EnumerateDirectories(
+            source, "*", SearchOption.AllDirectories))
+        {
+            Directory.CreateDirectory(Path.Combine(
+                destination, Path.GetRelativePath(source, directory)));
+        }
+
+        foreach (string file in Directory.EnumerateFiles(
+            source, "*", SearchOption.AllDirectories))
+        {
+            string target = Path.Combine(destination, Path.GetRelativePath(source, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target, overwrite: true);
+        }
     }
 }

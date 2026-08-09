@@ -6,13 +6,12 @@ This document is the canonical engineering record for the Avalonia desktop effor
 the Phase 0, Phase 1A, Phase 1B, Phase 2, Phase 3A, and Windows-preview findings reports. Git
 history remains the source for the full phase-by-phase narratives.
 
-## Phase 1A stabilization: shutdown and production diagnostics
+## Phase 1A stabilization: shutdown, diagnostics, and interpreted top-level await
 
-Phase 1A.1 and 1A.2 are complete in the worktree based on `eafafbd5` and were verified on
-Windows x64 on 2026-08-08. The final merge commit should replace that base identifier in the
-release record. Phase 1A.3, the remaining top-level-await closure, is the next chunk; this change
-does not expand the currently documented prepared-static-graph interpreted support or compiled
-subset.
+Phase 1A.1 and 1A.2 are complete at `b2c0f555`; Phase 1A.3 is complete in the following worktree
+based on that commit. All three chunks were verified on Windows x64 on 2026-08-08. The final merge
+commit should replace the Phase 1A.3 worktree reference in the release record. Hosted ABI 1, GUI
+API 2, application manifests, and the supported application surface are unchanged.
 
 Every desktop termination path now converges on one idempotent host coordinator. A native window
 close is cancelled long enough to run hosted shutdown, then the close interception is detached so
@@ -30,6 +29,17 @@ warning and never print a misleading location. Host-managed traces retain the ne
 explicit paths are not pruned. Fatal reports are separate under
 `%LOCALAPPDATA%\SharpTS.Gui\Errors`, where the newest 10 host-managed logs are retained. An
 explicit `SHARPTS_GUI_ERROR_LOG` is overwritten for each failure.
+
+Hosted interpreted ESM now evaluates top-level awaits inside compound expressions,
+conditionals, and loop bodies through the asynchronous evaluator. Dynamic imports evaluate an
+awaited specifier, prepare a newly discovered ESM dependency graph once, execute it in dependency
+order, and run a complete guest microtask checkpoint at each module-job boundary. Already-active
+cycles observe registered live bindings; a dynamic import that tries to await its own evaluating
+module rejects instead of deadlocking. Missing modules and rejected module jobs reject in guest
+code, while an uncaught initialization error identifies the failing module path. Shutdown cancels
+a suspended hosted await and rejects late timer or callback work. These hosted paths do not call
+the console runtime's `WaitForPromise` pump, replace Avalonia's synchronization context, poll, or
+start a nested dispatcher.
 
 ### Phase 1A.1/1A.2 verification
 
@@ -51,6 +61,25 @@ bare, automatic, and explicit trace modes, an ordinary no-trace execution, a del
 unwritable explicit trace target, separated fatal/trace directories, explicit-log overwrite, and
 10/20-file retention. The unwritable trace run still started and shut down successfully and
 reported only the expected diagnostic warning.
+
+### Phase 1A.3 verification
+
+| Gate | Result |
+| --- | --- |
+| Hosted runtime unit suite | `dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter FullyQualifiedName~HostedInterpreterRuntimeTests`: 25 passed, zero skipped, zero failed |
+| Focused hosted/JSX/SDK | `dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --no-build --no-restore --filter "FullyQualifiedName~SharpTS.Tests.Hosting\|FullyQualifiedName~JsxTypeCheckerTests\|FullyQualifiedName~GuiSdkTaskTests"`: 54 passed, zero skipped, zero failed |
+| GUI conformance | `dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release --no-restore`: 42 passed, zero skipped, zero failed |
+| Release solution build | `dotnet build SharpTS.sln -c Release --no-restore`: zero warnings, zero errors |
+| Canonical core suite | CI/release exclusions for `LiveNetwork`, `LoadSensitive`, and `npm`: 16,527 passed, two documented HTTP lifecycle skips, zero failed |
+| Packaged Windows x64 consumer | `SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow`: package audit, path-with-spaces rebuild, IL verification, interpreted/compiled Headless and real-window directory runs, asset closure, and compiled single-file Headless/real-window runs passed |
+
+The deterministic hosted suite covers successful compound, conditional, and loop awaits;
+successful dynamic-import dependency evaluation; missing, rejected, and cyclic dynamic imports;
+module-path error attribution; and shutdown during a suspended timer await with no late callback.
+The Avalonia Headless trace covers successful and caught-rejection cases for compound,
+conditional, loop, and dynamic-import awaits, dependency and module microtask checkpoints, window
+mount, and the exact `beforeExit` through runtime-disposal shutdown sequence. Compiled expansion to
+the same accepted syntax and interpreted/compiled trace parity remain Phase 1B work.
 
 ## Current 0.2 development status
 
@@ -112,9 +141,10 @@ claim that every Windows architecture has executed natively and not a cross-plat
 - Initialization faults and uncaught errors route through the host error sink and ordered shutdown.
   Graceful shutdown observes `beforeExit`, reverse cleanup, and `exit`; `process.exit(code)` requests
   host shutdown without calling `Environment.Exit`.
-- Hosted interpreted ESM supports prepared static top-level-await graphs. Compiled hosting supports
-  standalone awaits and direct awaited variable/export initializers. Compound-expression,
-  conditional, loop, and dynamic-import top-level-await expansion remain outside the contract.
+- Hosted interpreted ESM supports static and dynamically discovered top-level-await graphs,
+  including awaited compound expressions, conditionals, loops, and dynamic-import specifiers.
+  Compiled hosting remains at standalone awaits and direct awaited variable/export initializers;
+  expansion and cross-mode trace parity remain Phase 1B work.
 
 ### Renderer and TypeScript surface
 
@@ -181,7 +211,7 @@ claim that every Windows architecture has executed natively and not a cross-plat
 | Milestone | What it proved | Earlier limitation retired |
 | --- | --- | --- |
 | Phase 0 | Avalonia could own a responsive Windows UI thread while interpreted and compiled guests mounted a real window, handled an event, timer, promise, and off-thread completion, and published a complete framework-dependent asset closure. | Established feasibility, but used a 5 ms dispatcher pump, one-time mounting, a four-control surface, and separate host/guest assemblies. |
-| Phase 1A | A framework-neutral interpreted dispatcher/lifetime/error contract delivered deterministic turns, timers, lifecycle, cleanup, and static-graph ESM top-level await. | Removed polling from interpreted hosting and replaced ad hoc task delivery with a deterministic scheduler; compiled hosting still used the Phase 0 pump. |
+| Phase 1A | A framework-neutral interpreted dispatcher/lifetime/error contract delivered deterministic turns, timers, lifecycle, cleanup, static and dynamic ESM module jobs, and expanded top-level-await syntax. | Removed polling and synchronous promise pumping from interpreted hosting and replaced ad hoc task delivery with a deterministic scheduler; compiled syntax and trace parity remain Phase 1B work. |
 | Phase 1B | Hosted ABI 1 and the compiled scheduler matched interpreted scheduling, lifecycle, top-level-await subset, synchronization-context, and no-pump behavior. | Removed compiled polling and the prototype initializer/pump pair; replaced it with validated hosted assembly metadata and a shared runtime contract. |
 | Phase 2 | A retained keyed renderer, signals, refs, latest-callback events, validation, and deterministic cleanup produced identical interpreted and compiled traces. | Replaced one-time recursive mounting and imperative sample updates; retained the original small descriptor set and local source package. |
 | Phase 3A | A separately restored MSBuild SDK drove an isolated consumer through build, clean/rebuild, publish, IL verification, Headless, and real-window execution. | Replaced repository-local host compilation and copying with an SDK-owned manifest, overlay, launcher pipeline, and packaged consumer boundary. |
@@ -214,7 +244,8 @@ claim that every Windows architecture has executed natively and not a cross-plat
 - NuGet ID reservation/onboarding, API-key scope validation, and package publication.
 - Theme/resource dictionaries, custom descriptors/controls, rich item templates, drawing/canvas,
   data grids/trees, and multi-window support.
-- Compound-expression and dynamic-import top-level await.
+- Compiled compound-expression, conditional, loop, and dynamic-import top-level-await parity with
+  the hosted interpreter.
 - Trimming, Native AOT, signing, installers, update/distribution mechanisms, and macOS.
 
 ## Architecture boundaries

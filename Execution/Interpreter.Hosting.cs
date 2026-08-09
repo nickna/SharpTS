@@ -22,6 +22,12 @@ public partial class Interpreter
     private Action<int>? _hostedProcessExit;
     private RuntimeEnvironment? _hostedScriptEnvironment;
     private int _hostedExitCode;
+    private readonly HashSet<string> _hostedPreparedModules =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _hostedExecutingModules =
+        new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, Task<object?>> _hostedDynamicImports =
+        new(StringComparer.OrdinalIgnoreCase);
 
     internal void ConfigureHosted(
         IReadOnlyList<ParsedModule> modules,
@@ -62,21 +68,7 @@ public partial class Interpreter
         if (modules.Count > 0)
             EntryModulePath ??= modules[^1].Path;
 
-        // Register ESM instances before any body runs. This makes cyclic import
-        // graphs deterministic: imports observe the cycle's currently initialized
-        // bindings instead of recursively entering a dependency and deadlocking.
-        foreach (ParsedModule module in modules)
-        {
-            if (!module.IsScript && !module.IsCommonJs)
-                _loadedModules.TryAdd(module.Path, new ModuleInstance());
-        }
-
-        var variableResolver = new VariableResolver(this);
-        foreach (ParsedModule module in modules)
-        {
-            if (!module.IsBuiltIn)
-                variableResolver.Resolve(module.Statements);
-        }
+        PrepareHostedModules(modules);
     }
 
     internal async Task ExecuteHostedModuleAsync(ParsedModule module, bool isEntryModule)
@@ -108,29 +100,127 @@ public partial class Interpreter
         if (moduleInstance.IsExecuted)
             return;
 
-        if (InitializeHostedSpecialModule(module, moduleInstance))
+        // Static graphs are already supplied in dependency order. Dynamic graphs
+        // can point back into a module whose body is suspended; observe its live
+        // bindings without recursively entering that body and deadlocking.
+        if (!_hostedExecutingModules.Add(module.Path))
             return;
 
-        var moduleEnvironment = new RuntimeEnvironment(_environment);
-        BindModuleImports(module, moduleEnvironment);
-
-        using (PushModuleContext(moduleEnvironment, module, moduleInstance))
+        try
         {
-            HoistFunctionDeclarations(module.Statements);
-            foreach (Stmt statement in module.Statements)
+            if (InitializeHostedSpecialModule(module, moduleInstance))
+                return;
+
+            var moduleEnvironment = new RuntimeEnvironment(_environment);
+            BindModuleImports(module, moduleEnvironment);
+
+            using (PushModuleContext(moduleEnvironment, module, moduleInstance))
             {
-                ExecutionResult result = statement is Stmt.Export export
-                    ? await ExecuteHostedExportAsync(export)
-                    : await ExecuteStatementAsync(statement);
-                if (result.Type == ExecutionResult.ResultType.Throw)
-                    throw new InterpreterException(Stringify(result.Value.ToObject()));
-                if (result.IsAbrupt)
-                    break;
+                HoistFunctionDeclarations(module.Statements);
+                foreach (Stmt statement in module.Statements)
+                {
+                    ExecutionResult result = statement is Stmt.Export export
+                        ? await ExecuteHostedExportAsync(export)
+                        : await ExecuteStatementAsync(statement);
+                    if (result.Type == ExecutionResult.ResultType.Throw)
+                        throw new InterpreterException(
+                            Stringify(result.Value.ToObject()),
+                            filePath: module.Path);
+                    if (result.IsAbrupt)
+                        break;
+                }
             }
+
+            moduleInstance.IsExecuted = true;
+        }
+        catch (Exception exception) when (_hostedAcceptingWork)
+        {
+            throw new InterpreterException(
+                $"Hosted module initialization failed in '{module.Path}': {exception.Message}");
+        }
+        finally
+        {
+            _hostedExecutingModules.Remove(module.Path);
+        }
+    }
+
+    private void PrepareHostedModules(IEnumerable<ParsedModule> modules)
+    {
+        var newModules = new List<ParsedModule>();
+        foreach (ParsedModule module in modules)
+        {
+            if (!_hostedPreparedModules.Add(module.Path))
+                continue;
+            newModules.Add(module);
+            if (!module.IsScript && !module.IsCommonJs)
+                _loadedModules.TryAdd(module.Path, new ModuleInstance());
         }
 
-        moduleInstance.IsExecuted = true;
+        var variableResolver = new VariableResolver(this);
+        foreach (ParsedModule module in newModules)
+        {
+            if (!module.IsBuiltIn)
+                variableResolver.Resolve(module.Statements);
+        }
     }
+
+    internal async Task<object?> ExecuteHostedDynamicImportAsync(
+        ParsedModule requestedModule)
+    {
+        AssertHostedOwnerThread();
+        if (!_hostedAcceptingWork)
+            throw new OperationCanceledException(
+                "Hosted module initialization was cancelled.", ShutdownToken);
+
+        if (requestedModule.IsScript || requestedModule.IsCommonJs)
+        {
+            if (TopLevelAwaitDetector.Contains(requestedModule.Statements))
+            {
+                string kind = requestedModule.IsCommonJs ? "CommonJS module" : "script";
+                throw new InterpreterException(
+                    $"Top-level await is not supported in dynamically imported {kind} " +
+                    $"'{requestedModule.Path}'.");
+            }
+            ExecuteModule(requestedModule);
+            return _loadedModules[requestedModule.Path].ExportsAsObject();
+        }
+
+        List<ParsedModule> modules = _moduleResolver!.GetRuntimeModulesInOrder(requestedModule);
+        PrepareHostedModules(modules);
+        foreach (ParsedModule module in modules)
+        {
+            if (!_hostedAcceptingWork)
+            {
+                throw new OperationCanceledException(
+                    "Hosted module initialization was cancelled.", ShutdownToken);
+            }
+            await ExecuteHostedModuleAsync(module, isEntryModule: false);
+            // A dynamically discovered dependency is still a distinct module
+            // job. Complete its guest microtask checkpoint before evaluating
+            // the next dependency or resuming the importing module.
+            ProcessMicrotasks();
+        }
+
+        return _loadedModules[requestedModule.Path].ExportsAsObject();
+    }
+
+    internal bool TryGetHostedDynamicImport(string path, out Task<object?> task) =>
+        _hostedDynamicImports.TryGetValue(path, out task!);
+
+    internal void TrackHostedDynamicImport(string path, Task<object?> task) =>
+        _hostedDynamicImports[path] = task;
+
+    internal void CompleteHostedDynamicImport(string path, Task<object?> task)
+    {
+        if (_hostedDynamicImports.TryGetValue(path, out Task<object?>? current) &&
+            ReferenceEquals(current, task))
+        {
+            _hostedDynamicImports.Remove(path);
+        }
+    }
+
+    internal bool IsHostedModuleExecuting(string path) =>
+        _hostedExecutingModules.Contains(path);
 
     internal async Task<int?> ExecuteHostedMainAsync(IReadOnlyList<Stmt> statements)
     {
