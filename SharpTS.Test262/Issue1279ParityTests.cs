@@ -1562,6 +1562,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Proxy_ownKeys_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Proxy_ownKeys_rejects_noncallable_traps()
         => AssertPass(
             "built-ins/Proxy/ownKeys/trap-is-not-callable.js",
