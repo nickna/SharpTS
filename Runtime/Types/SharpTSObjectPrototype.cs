@@ -273,8 +273,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSPromisePrototype promisePrototype => promisePrototype.HasOwnProperty(key),
             SharpTSClass klass => key is "name" or "length" or "prototype"
                 || klass.HasOwnStaticMember(key),
-            SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
-            SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
+            // User functions materialize these intrinsic properties in their
+            // descriptor store, so deletion remains observable here.
+            SharpTSFunction function => function.HasProperty(key),
+            SharpTSArrowFunction arrow => arrow.HasProperty(key),
             SharpTSGlobalThis globalThis => globalThis.HasProperty(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties

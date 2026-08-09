@@ -1034,7 +1034,13 @@ public partial class Interpreter
     internal bool DeleteProperty(object? obj, string name, bool strictMode = true)
     {
         if (obj is SharpTSProxy proxy)
-            return proxy.TrapDeleteProperty(name, this);
+        {
+            bool deleted = proxy.TrapDeleteProperty(name, this);
+            if (!deleted && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot delete property '{name}' through proxy"));
+            return deleted;
+        }
 
         return obj switch
         {
@@ -1097,7 +1103,11 @@ public partial class Interpreter
         if (obj is SharpTSProxy proxy)
         {
             string proxyKey = key is SharpTSSymbol ? key.ToString()! : Stringify(key);
-            return proxy.TrapDeleteProperty(proxyKey, this);
+            bool deleted = proxy.TrapDeleteProperty(proxyKey, this);
+            if (!deleted && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot delete property '{proxyKey}' through proxy"));
+            return deleted;
         }
 
         // Handle symbol keys
