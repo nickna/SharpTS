@@ -1319,9 +1319,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = (double)_length,  // full long → double (accurate to 2^53)
+                HasValue = true,
                 Writable = _lengthWritable,
+                HasWritable = true,
                 Enumerable = false,
-                Configurable = false
+                HasEnumerable = true,
+                Configurable = false,
+                HasConfigurable = true,
             };
         }
 
@@ -1340,7 +1344,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                     HasGet = true,
                     HasSet = true,
                     Enumerable = accessorFlags.Enumerable,
+                    HasEnumerable = true,
                     Configurable = accessorFlags.Configurable,
+                    HasConfigurable = true,
                 };
             }
             // Holes have no own property descriptor — ECMA-262 HasOwnProperty
@@ -1355,9 +1361,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = UnholeForRead(GetCore(index)),
+                HasValue = true,
                 Writable = flags.Writable,
+                HasWritable = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
 
@@ -1370,9 +1380,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = value,
+                HasValue = true,
                 Writable = flags.Writable,
+                HasWritable = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
 

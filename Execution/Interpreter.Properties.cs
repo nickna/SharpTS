@@ -569,6 +569,9 @@ public partial class Interpreter
     {
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is SharpTSProxy proxy)
+                return proxy.TrapGet(name, this, receiver);
+
             if (current is bool)
             {
                 var prototype = GetBooleanPrototype();
@@ -632,6 +635,28 @@ public partial class Interpreter
                 if (record.Fields.TryGetValue(name, out var value)) return value;
                 current = GetRecordPrototype(record);
                 continue;
+            }
+
+            if (current is SharpTSFunction function
+                && function.GetOwnPropertyDescriptor(name) is { } functionDescriptor)
+            {
+                return functionDescriptor.HasGet || functionDescriptor.HasSet
+                    ? functionDescriptor.Get is null
+                        ? SharpTSUndefined.Instance
+                        : FunctionBuiltIns.CallWithThis(
+                            this, functionDescriptor.Get, receiver, [])
+                    : functionDescriptor.Value;
+            }
+
+            if (current is SharpTSArrowFunction arrow
+                && arrow.GetOwnPropertyDescriptor(name) is { } arrowDescriptor)
+            {
+                return arrowDescriptor.HasGet || arrowDescriptor.HasSet
+                    ? arrowDescriptor.Get is null
+                        ? SharpTSUndefined.Instance
+                        : FunctionBuiltIns.CallWithThis(
+                            this, arrowDescriptor.Get, receiver, [])
+                    : arrowDescriptor.Value;
             }
 
             if (current is ISharpTSCallable callable)
@@ -1595,9 +1620,7 @@ public partial class Interpreter
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
             ErrorToStringCallable m => m.Bind(receiver),
             BuiltInAsyncMethod m => m.Bind(receiver),
-            BuiltInMethod m when !m.IsBound
-                && m.FunctionName is "call" or "apply" or "bind"
-                    or "catch" or "finally" or "resolve" => m.Bind(receiver),
+            BuiltInMethod m when !m.IsBound => m.Bind(receiver),
             _ => null,
         };
     }

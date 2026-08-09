@@ -766,10 +766,19 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
         // Store the descriptor flags
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
+        bool writable = descriptor.HasWritable
+            ? descriptor.Writable
+            : hasExisting ? existingFlags.Writable : false;
+        bool enumerable = descriptor.HasEnumerable
+            ? descriptor.Enumerable
+            : hasExisting ? existingFlags.Enumerable : false;
+        bool configurable = descriptor.HasConfigurable
+            ? descriptor.Configurable
+            : hasExisting ? existingFlags.Configurable : false;
         _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
-            descriptor.Writable,
-            descriptor.Enumerable,
-            descriptor.Configurable
+            writable,
+            enumerable,
+            configurable
         );
 
         // ECMA-262 §10.1.6.3 classification. SharpTSObject represents an accessor
