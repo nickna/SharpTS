@@ -188,8 +188,12 @@ public class SharpTSProxy : ISharpTSCallable
     {
         var trap = GetTrapCallable("getOwnPropertyDescriptor");
         if (trap == null)
-            return ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop)
-                ?? SharpTSUndefined.Instance;
+        {
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapGetOwnPropertyDescriptor(prop, interp)
+                : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop)
+                    ?? SharpTSUndefined.Instance;
+        }
 
         return InvokeTrap(trap, interp, [_target, prop]);
     }
@@ -332,7 +336,7 @@ public class SharpTSProxy : ISharpTSCallable
     {
         var trap = GetTrapCallable("ownKeys");
         if (trap == null)
-            return ForwardOwnPropertyKeys();
+            return ForwardOwnPropertyKeys(interp);
 
         var result = InvokeTrap(trap, interp, [_target]);
         var keys = new List<object?>();
@@ -354,11 +358,14 @@ public class SharpTSProxy : ISharpTSCallable
         return keys;
     }
 
-    private List<object?> ForwardOwnPropertyKeys()
+    private List<object?> ForwardOwnPropertyKeys(Interpreter? interpreter)
     {
         var keys = new List<object?>();
         switch (_target)
         {
+            case SharpTSProxy proxy:
+                keys.AddRange(proxy.TrapOwnPropertyKeys(interpreter));
+                break;
             case SharpTSObject obj:
                 keys.AddRange(obj.OwnVisibleStringKeys());
                 keys.AddRange(obj.GetSymbolPropertyNames());
