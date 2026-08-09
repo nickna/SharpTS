@@ -80,7 +80,8 @@ public class SharpTSProxy : ISharpTSCallable
         if (invokeMethod != null)
             return value;
 
-        throw new Exception($"Runtime Error: Proxy handler trap '{trapName}' is not a function.");
+        throw new ThrowException(new SharpTSTypeError(
+            $"Proxy handler trap '{trapName}' is not callable"));
     }
 
     /// <summary>
