@@ -53,7 +53,15 @@ public class SharpTSProxy : ISharpTSCallable
 
         object? value = null;
 
-        if (_handler is SharpTSProxy proxy)
+        if (interpreter != null)
+        {
+            // GetMethod performs an ordinary [[Get]] on the handler. Going
+            // through the interpreter preserves accessor side effects and
+            // abrupt completions instead of reading the handler's backing
+            // property store directly.
+            value = interpreter.GetPropertyValue(_handler, trapName);
+        }
+        else if (_handler is SharpTSProxy proxy)
         {
             value = proxy.TrapGet(trapName, interpreter);
         }
