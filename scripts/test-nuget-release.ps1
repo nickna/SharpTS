@@ -45,23 +45,23 @@ function New-TestFixture {
     $documentationDirectory = Join-Path $root 'docs'
     New-Item -ItemType Directory -Path $packageDirectory, $documentationDirectory | Out-Null
 
-    $publishedPackageIds = @('SharpTS.LanguageServer', 'SharpTS.Hosting', 'SharpTS.Sdk', 'SharpTS')
+    $releaseVersionPackageIds = @('SharpTS.LanguageServer', 'SharpTS.Hosting', 'SharpTS.Sdk', 'SharpTS')
     $previewPackageId = 'SharpTS.Gui.Sdk'
-    $packageIds = @($publishedPackageIds) + $previewPackageId
+    $packageIds = @($releaseVersionPackageIds) + $previewPackageId
     $manifestData = [ordered]@{
         schemaVersion = 1
         documentedSdkVersion = '1.0.7'
         documentationFiles = @('README.md', 'docs/sdk.md')
         packages = @(
-            @($publishedPackageIds | ForEach-Object { [ordered]@{ id = $_ } })
-            [ordered]@{ id = $previewPackageId; version = '0.2.0-preview.1'; publish = $false }
+            @($releaseVersionPackageIds | ForEach-Object { [ordered]@{ id = $_ } })
+            [ordered]@{ id = $previewPackageId; version = '0.2.0-preview.1' }
         )
     }
     $manifestPath = Join-Path $root 'nuget-packages.json'
     $manifestData | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $manifestPath
     '<Project Sdk="SharpTS.Sdk/1.0.7">' | Set-Content -LiteralPath (Join-Path $root 'README.md')
     '{ "msbuild-sdks": { "SharpTS.Sdk": "1.0.7" } }' | Set-Content -LiteralPath (Join-Path $root 'docs/sdk.md')
-    foreach ($packageId in $publishedPackageIds) {
+    foreach ($packageId in $releaseVersionPackageIds) {
         'test package' | Set-Content -LiteralPath (Join-Path $packageDirectory "$packageId.2.0.0.nupkg")
     }
     'test package' | Set-Content -LiteralPath (Join-Path $packageDirectory "$previewPackageId.0.2.0-preview.1.nupkg")
@@ -71,7 +71,7 @@ function New-TestFixture {
         PackageDirectory = $packageDirectory
         Manifest = Get-NuGetReleaseManifest -Path $manifestPath
         PackageIds = $packageIds
-        PublishedPackageIds = $publishedPackageIds
+        ReleaseVersionPackageIds = $releaseVersionPackageIds
         PreviewPackageId = $previewPackageId
     }
 }
@@ -142,7 +142,7 @@ Invoke-Test 'preflight gates an unregistered package ID before publication' {
     }
 }
 
-Invoke-Test 'preflight gates an unregistered non-published preview ID' {
+Invoke-Test 'preflight gates an unregistered fixed-preview ID' {
     $fixture = New-TestFixture
     try {
         $published = New-PublishedVersionMap $fixture.PackageIds
@@ -194,12 +194,20 @@ Invoke-Test 'publication retries until the complete inventory is visible' {
         $published = New-PublishedVersionMap $fixture.PackageIds
         $fetchCounts = @{}
         $sleepCount = [pscustomobject]@{ Value = 0 }
-        $push = { param($PackagePath, $PackageId, $PackageVersion, $ApiKey, $Source) }.GetNewClosure()
+        $pushedVersions = @{}
+        $push = {
+            param($PackagePath, $PackageId, $PackageVersion, $ApiKey, $Source)
+            $pushedVersions[$PackageId] = $PackageVersion
+            if ([System.IO.Path]::GetFileName($PackagePath) -ne "$PackageId.$PackageVersion.nupkg") {
+                throw "Wrong package path for $PackageId."
+            }
+        }.GetNewClosure()
         $fetch = {
             param($PackageId, $BaseUri)
             $fetchCounts[$PackageId] = 1 + ($fetchCounts[$PackageId] ?? 0)
-            if ($fetchCounts[$PackageId] -ge 2 -and $published[$PackageId] -notcontains '2.0.0') {
-                [void]$published[$PackageId].Add('2.0.0')
+            $expectedVersion = if ($PackageId -eq $fixture.PreviewPackageId) { '0.2.0-preview.1' } else { '2.0.0' }
+            if ($fetchCounts[$PackageId] -ge 2 -and $published[$PackageId] -notcontains $expectedVersion) {
+                [void]$published[$PackageId].Add($expectedVersion)
             }
             @($published[$PackageId])
         }.GetNewClosure()
@@ -208,6 +216,10 @@ Invoke-Test 'publication retries until the complete inventory is visible' {
         Publish-NuGetPackages -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory -Version '2.0.0' -ApiKey 'test-key' -VerificationAttempts 2 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch -Sleep $sleep
 
         Assert-True ($sleepCount.Value -eq 1) 'Publication did not perform exactly one bounded retry.'
+        Assert-True ($pushedVersions[$fixture.PreviewPackageId] -eq '0.2.0-preview.1') 'The fixed GUI preview version was not pushed.'
+        foreach ($packageId in $fixture.ReleaseVersionPackageIds) {
+            Assert-True ($pushedVersions[$packageId] -eq '2.0.0') "$packageId did not use the release version."
+        }
     }
     finally {
         Remove-Item -LiteralPath $fixture.Root -Recurse -Force
@@ -219,10 +231,12 @@ Invoke-Test 'partial publication reports every package and converges on rerun' {
     try {
         $published = New-PublishedVersionMap $fixture.PackageIds
         $pushAttempts = [System.Collections.Generic.List[string]]::new()
+        $pushedVersions = @{}
         $firstRun = [pscustomobject]@{ Value = $true }
         $push = {
             param($PackagePath, $PackageId, $PackageVersion, $ApiKey, $Source)
             $pushAttempts.Add($PackageId)
+            $pushedVersions[$PackageId] = $PackageVersion
             if ($firstRun.Value -and $pushAttempts.Count -eq 2) {
                 throw 'simulated permission failure'
             }
@@ -237,19 +251,21 @@ Invoke-Test 'partial publication reports every package and converges on rerun' {
             Publish-NuGetPackages -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory -Version '2.0.0' -ApiKey 'test-key' -VerificationAttempts 1 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch -Sleep $sleep
         } 'simulated permission failure'
 
-        Assert-True ($pushAttempts.Count -eq 4) 'The first run did not attempt every publishable package after a failure.'
-        Assert-True ($pushAttempts -notcontains $fixture.PreviewPackageId) 'The preview-only package was unexpectedly pushed.'
+        Assert-True ($pushAttempts.Count -eq 5) 'The first run did not attempt every publishable package after a failure.'
+        Assert-True ($pushAttempts -contains $fixture.PreviewPackageId) 'The fixed preview package was not pushed.'
+        Assert-True ($pushedVersions[$fixture.PreviewPackageId] -eq '0.2.0-preview.1') 'The fixed preview package used the release version.'
         Assert-True ($published['SharpTS.LanguageServer'] -contains '2.0.0') 'The first package was not published.'
         Assert-True ($published['SharpTS.Hosting'] -notcontains '2.0.0') 'The simulated failed package was unexpectedly published.'
+        Assert-True ($published[$fixture.PreviewPackageId] -contains '0.2.0-preview.1') 'The fixed preview package was not published.'
 
         $firstRun.Value = $false
         Publish-NuGetPackages -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory -Version '2.0.0' -ApiKey 'test-key' -VerificationAttempts 1 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch -Sleep $sleep
 
-        Assert-True ($pushAttempts.Count -eq 8) 'The rerun did not attempt every publishable package deterministically.'
-        Assert-True ($pushAttempts -notcontains $fixture.PreviewPackageId) 'The preview-only package was unexpectedly pushed on rerun.'
-        foreach ($packageId in $fixture.PublishedPackageIds) {
+        Assert-True ($pushAttempts.Count -eq 10) 'The rerun did not attempt every publishable package deterministically.'
+        foreach ($packageId in $fixture.ReleaseVersionPackageIds) {
             Assert-True ($published[$packageId] -contains '2.0.0') "$packageId did not converge to version 2.0.0."
         }
+        Assert-True ($published[$fixture.PreviewPackageId] -contains '0.2.0-preview.1') 'The preview package did not converge to its fixed version.'
     }
     finally {
         Remove-Item -LiteralPath $fixture.Root -Recurse -Force

@@ -78,11 +78,30 @@ jobs:
       - name: Pack packages
         run: dotnet pack --no-build --configuration Release -p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }} -p:SharpTSGuiSkipPack=true --output ./nupkg
 
-      # The public-preview GUI SDK has an independent version train. It is
-      # packaged and preflighted on every release, but the manifest marks it as
-      # non-publishable until its NuGet ID and API-key scope are onboarded.
-      - name: Pack Windows GUI SDK preview
-        run: dotnet pack SharpTS.Gui.Sdk/SharpTS.Gui.Sdk.csproj --no-build --configuration Release -p:MinVerVersionOverride=0.2.0-preview.1 --output ./nupkg
+      # The GUI SDK has an independently onboarded, immutable preview version.
+      # Stage NuGet's repository-signed package instead of rebuilding different
+      # bytes under the same ID/version on every later SharpTS tag.
+      - name: Stage published Windows GUI SDK preview
+        shell: pwsh
+        run: |
+          $manifest = Get-Content .github/nuget-packages.json -Raw | ConvertFrom-Json
+          $package = @($manifest.packages | Where-Object id -eq 'SharpTS.Gui.Sdk')
+          if ($package.Count -ne 1) {
+            throw "Expected exactly one SharpTS.Gui.Sdk manifest entry."
+          }
+
+          $version = [string]$package[0].version
+          $expectedHash = [string]$package[0].sha256
+          $fileName = "SharpTS.Gui.Sdk.$version.nupkg"
+          $packagePath = Join-Path ./nupkg $fileName
+          $uri = "https://api.nuget.org/v3-flatcontainer/sharpts.gui.sdk/$version/sharpts.gui.sdk.$version.nupkg"
+          Invoke-WebRequest -Uri $uri -OutFile $packagePath -MaximumRetryCount 3 -RetryIntervalSec 5
+
+          $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "SharpTS.Gui.Sdk $version SHA-256 mismatch: expected $expectedHash, got $actualHash."
+          }
+          Write-Host "Staged repository-signed $fileName ($actualHash)."
 
       - name: Verify packages created
         run: |
@@ -537,4 +556,5 @@ jobs:
             ./nupkg/SharpTS.Hosting.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.LanguageServer.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.Sdk.${{ needs.build.outputs.version }}.nupkg
+            ./nupkg/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
             ./assets/*

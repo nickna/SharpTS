@@ -27,20 +27,20 @@ The tagged release is deliberately blocked if any manifest ID is not already
 registered. This prevents an untested new-package permission from publishing an
 established package first.
 
-`SharpTS.Gui.Sdk` is currently recorded as `0.2.0-preview.1` with
-`publish: false`. Before removing that guard, an operator must reserve and
-publish an approved preview of the package ID, confirm the release API key is
-scoped to it, run the packaged Windows x64 and ARM64 gates, and rerun the Publish
-workflow preflight. The stable release workflow must not be used to perform the
-first GUI package publication.
+`SharpTS.Gui.Sdk` was onboarded separately at `0.2.0-preview.1`. Its manifest
+entry keeps that independent preview version fixed while the other packages
+inherit the release tag. Keep the release API key scoped to this ID as well as
+the tagged package IDs. Because NuGet versions are immutable, the workflow
+downloads the repository-signed package, verifies the manifest-pinned SHA-256,
+publishes it idempotently, and verifies its own version in the final inventory.
 
 ## Normal release
 
 The Publish workflow builds and tests all artifacts before its release job. The
 release job pushes each publishable package explicitly with `--skip-duplicate`,
 records a result for every publishable package, and then queries NuGet until each
-one exposes the tag version. The job fails if any push failed or the final
-inventory remains incomplete.
+one exposes its manifest-selected version. The job fails if any push failed or
+the final inventory remains incomplete.
 
 Rerunning a failed release is safe. Already published packages are skipped and
 missing packages are retried, allowing a partial release to converge without

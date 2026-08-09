@@ -203,16 +203,17 @@ function Publish-NuGetPackages {
     $publishablePackages = @(Get-PublishableNuGetManifestPackages -Manifest $Manifest)
     foreach ($package in $publishablePackages) {
         $packageId = [string]$package.id
-        $packagePath = Join-Path $PackageDirectory "$packageId.$Version.nupkg"
-        Write-Host "::group::Push $packageId $Version"
+        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
+        $packagePath = Join-Path $PackageDirectory "$packageId.$packageVersion.nupkg"
+        Write-Host "::group::Push $packageId $packageVersion"
         try {
-            & $PushPackage $packagePath $packageId $Version $ApiKey $NuGetSource
-            Write-Host "PUSH SUCCEEDED: $packageId $Version"
+            & $PushPackage $packagePath $packageId $packageVersion $ApiKey $NuGetSource
+            Write-Host "PUSH SUCCEEDED: $packageId $packageVersion"
         }
         catch {
             $message = $_.Exception.Message
-            $pushFailures.Add("$packageId ${Version}: $message")
-            Write-Warning "PUSH FAILED: $packageId ${Version}: $message"
+            $pushFailures.Add("$packageId ${packageVersion}: $message")
+            Write-Warning "PUSH FAILED: $packageId ${packageVersion}: $message"
         }
         finally {
             Write-Host '::endgroup::'
@@ -224,17 +225,18 @@ function Publish-NuGetPackages {
         $missing = [System.Collections.Generic.List[string]]::new()
         foreach ($package in $publishablePackages) {
             $packageId = [string]$package.id
+            $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
             try {
                 $versions = @(& $FetchPackageVersions $packageId $FlatContainerBaseUri)
-                $isPublished = $versions -contains $Version
+                $isPublished = $versions -contains $packageVersion
                 $inventory[$packageId] = if ($isPublished) { 'published' } else { 'missing' }
                 if (-not $isPublished) {
-                    $missing.Add($packageId)
+                    $missing.Add("$packageId $packageVersion")
                 }
             }
             catch {
                 $inventory[$packageId] = "query failed: $($_.Exception.Message)"
-                $missing.Add($packageId)
+                $missing.Add("$packageId $packageVersion")
             }
         }
 
@@ -248,22 +250,27 @@ function Publish-NuGetPackages {
         }
     }
 
-    Write-Host "NuGet inventory for version ${Version}:"
+    Write-Host 'NuGet inventory:'
     foreach ($package in $publishablePackages) {
         $packageId = [string]$package.id
-        Write-Host " - $packageId`: $($inventory[$packageId])"
+        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
+        Write-Host " - $packageId $packageVersion`: $($inventory[$packageId])"
     }
 
     $inventoryFailures = @($publishablePackages | Where-Object { $inventory[[string]$_.id] -ne 'published' } | ForEach-Object { [string]$_.id })
     $failureMessages = [System.Collections.Generic.List[string]]::new()
     foreach ($failure in $pushFailures) { $failureMessages.Add("Push failed: $failure") }
-    foreach ($packageId in $inventoryFailures) { $failureMessages.Add("Version $Version is not visible for $packageId") }
+    foreach ($packageId in $inventoryFailures) {
+        $package = $publishablePackages | Where-Object { [string]$_.id -eq $packageId } | Select-Object -First 1
+        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
+        $failureMessages.Add("Version $packageVersion is not visible for $packageId")
+    }
 
     if ($failureMessages.Count -gt 0) {
         throw "NuGet release did not complete:`n - $($failureMessages -join "`n - ")"
     }
 
-    Write-Host "All expected NuGet packages expose version $Version."
+    Write-Host 'All expected NuGet packages expose their manifest-selected versions.'
 }
 
 Export-ModuleMember -Function @(
