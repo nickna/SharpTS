@@ -1,4 +1,4 @@
-import { trace } from "@sharpts/gui/internal-testing";
+import { trace } from "@sharpts/gui/conformance";
 import { prefix } from "./lazy-dependency";
 
 function recordLazyMicrotask(): void {

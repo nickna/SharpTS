@@ -72,17 +72,14 @@ internal static class GuiPayloadLoader
         }
         if (manifest.GuiApiVersion != DesktopBridge.GuiApiVersion)
         {
-            string migration = manifest.GuiApiVersion == 1
-                ? " GUI API 1 applications must migrate to API 2; see docs/gui/migrating-api-1-to-2.md."
-                : string.Empty;
             throw new InvalidOperationException(
                 $"SharpTS GUI host supports GUI API {DesktopBridge.GuiApiVersion}; " +
-                $"application requires GUI API {manifest.GuiApiVersion}." + migration);
+                $"application requires GUI API {manifest.GuiApiVersion}.");
         }
         if (manifest.DescriptorSchemaVersion is null || string.IsNullOrWhiteSpace(manifest.DescriptorSchemaHash))
         {
             throw new InvalidOperationException(
-                "SharpTS GUI API 2 application manifest is missing descriptor schema metadata; " +
+                "SharpTS GUI application manifest is missing descriptor schema metadata; " +
                 "rebuild the application with the current SharpTS.Gui.Sdk.");
         }
         if (manifest.DescriptorSchemaHash.Length != 64 ||

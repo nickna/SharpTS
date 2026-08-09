@@ -17,12 +17,11 @@ public sealed class HostInfrastructureTests
     public void OptionParser_ParsesSupportedModesAndRejectsIncompleteOptions()
     {
         HostOptions options = HostOptionsParser.Parse(
-            ["--mode", "compiled", "--headless", "--auto-close", "--trace", "trace.json"],
+            ["--mode", "compiled", "--headless", "--trace", "trace.json"],
             GuestMode.Interpreted);
 
         Assert.Equal(GuestMode.Compiled, options.Mode);
         Assert.True(options.Headless);
-        Assert.True(options.AutoClose);
         Assert.Equal("trace.json", options.TracePath);
         Assert.False(options.IsTracePathHostManaged);
         Assert.False(options.ValidateCompiledOnly);
@@ -43,7 +42,7 @@ public sealed class HostInfrastructureTests
     }
 
     [Fact]
-    public void OptionParser_DisablesOrdinaryTracingAndSupportsBareAndAutomaticTracing()
+    public void OptionParser_DisablesOrdinaryTracingAndSupportsBareAndExplicitTracing()
     {
         HostOptions ordinary = HostOptionsParser.Parse([], GuestMode.Interpreted);
         Assert.Null(ordinary.TracePath);
@@ -53,14 +52,12 @@ public sealed class HostInfrastructureTests
         Assert.StartsWith(HostDiagnosticPaths.TraceDirectory, bare.TracePath!, StringComparison.OrdinalIgnoreCase);
         Assert.True(bare.IsTracePathHostManaged);
 
-        HostOptions automatic = HostOptionsParser.Parse(["--auto-close"], GuestMode.Compiled);
-        Assert.StartsWith(HostDiagnosticPaths.TraceDirectory, automatic.TracePath!, StringComparison.OrdinalIgnoreCase);
-        Assert.True(automatic.IsTracePathHostManaged);
-
         HostOptions explicitPath = HostOptionsParser.Parse(
             ["--trace", "custom.json"], GuestMode.Interpreted);
         Assert.Equal("custom.json", explicitPath.TracePath);
         Assert.False(explicitPath.IsTracePathHostManaged);
+        Assert.Throws<ArgumentException>(() =>
+            HostOptionsParser.Parse(["--auto-close"], GuestMode.Compiled));
     }
 
     [Fact]
@@ -243,8 +240,10 @@ public sealed class HostInfrastructureTests
                     HostedAbiVersion = 1,
                     GuiApiVersion = 1
                 }));
-            InvalidOperationException migration = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
-            Assert.Contains("migrate to API 2", migration.Message, StringComparison.Ordinal);
+            InvalidOperationException oldApi = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
+            Assert.Contains("supports GUI API 2", oldApi.Message, StringComparison.Ordinal);
+            Assert.Contains("requires GUI API 1", oldApi.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("migrate", oldApi.Message, StringComparison.OrdinalIgnoreCase);
 
             File.WriteAllText(
                 Path.Combine(metadata, "app.json"),

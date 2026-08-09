@@ -12,6 +12,7 @@ namespace SharpTS.Gui.Benchmarks;
 public class GuiRendererBenchmarks
 {
     private DesktopRuntimeRegistration _registration = null!;
+    private DesktopApplicationSession? _application;
     private DesktopRoot? _root;
     private int _value;
 
@@ -30,6 +31,8 @@ public class GuiRendererBenchmarks
     {
         _root?.Dispose();
         _root = null;
+        _application?.Dispose();
+        _application = null;
     }
 
     [GlobalCleanup]
@@ -44,7 +47,8 @@ public class GuiRendererBenchmarks
     [Benchmark]
     public Window SharpTsInitialMount()
     {
-        _root = DesktopBridge.CreateDesktopRoot(() => { });
+        _application = DesktopBridge.CreateDesktopApplication("explicit");
+        _root = _application.CreateWindowRoot(() => { }, null, false, true);
         _root.Render(Tree(0));
         return _root.Window!;
     }
@@ -82,7 +86,8 @@ public class GuiRendererBenchmarks
     private void EnsureMounted(bool withButton = false)
     {
         if (_root is not null) return;
-        _root = DesktopBridge.CreateDesktopRoot(() => { });
+        _application = DesktopBridge.CreateDesktopApplication("explicit");
+        _root = _application.CreateWindowRoot(() => { }, null, false, true);
         _root.Render(Tree(_value, withButton: withButton));
     }
 

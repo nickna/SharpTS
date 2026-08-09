@@ -4,7 +4,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $artifactRoot = Join-Path $root 'artifacts\calculator-local'
 $feed = Join-Path $root 'artifacts\tsx-api-feed'
 $packages = Join-Path $artifactRoot 'packages'
-$sdkVersion = '0.2.0-preview.1'
+$sdkVersion = '0.3.0-preview.1'
 New-Item -ItemType Directory -Force -Path $feed, $packages | Out-Null
 $env:AVALONIA_TELEMETRY_OPTOUT = '1'
 $env:NUGET_PACKAGES = $packages

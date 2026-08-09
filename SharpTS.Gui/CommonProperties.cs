@@ -162,25 +162,11 @@ internal static class CommonProperties
     public static IBrush? ParseBrush(string? value) =>
         value is null ? null : Brush.Parse(value);
 
-    public static Thickness Padding(GuiVNode node)
-    {
-        double fallback = node.Padding;
-        return new Thickness(
-            double.IsNaN(node.PaddingLeft) ? fallback : node.PaddingLeft,
-            double.IsNaN(node.PaddingTop) ? fallback : node.PaddingTop,
-            double.IsNaN(node.PaddingRight) ? fallback : node.PaddingRight,
-            double.IsNaN(node.PaddingBottom) ? fallback : node.PaddingBottom);
-    }
+    public static Thickness Padding(GuiVNode node) =>
+        new(node.PaddingLeft, node.PaddingTop, node.PaddingRight, node.PaddingBottom);
 
-    public static Thickness BorderThickness(GuiVNode node)
-    {
-        double fallback = node.BorderThickness;
-        return new Thickness(
-            double.IsNaN(node.BorderLeft) ? fallback : node.BorderLeft,
-            double.IsNaN(node.BorderTop) ? fallback : node.BorderTop,
-            double.IsNaN(node.BorderRight) ? fallback : node.BorderRight,
-            double.IsNaN(node.BorderBottom) ? fallback : node.BorderBottom);
-    }
+    public static Thickness BorderThickness(GuiVNode node) =>
+        new(node.BorderLeft, node.BorderTop, node.BorderRight, node.BorderBottom);
 
     public static FontWeight ParseFontWeight(string value) => value switch
     {
@@ -247,12 +233,7 @@ internal static class CommonProperties
     };
 
     private static double[] Margins(GuiVNode node) =>
-    [
-        double.IsNaN(node.MarginLeft) ? node.Margin : node.MarginLeft,
-        double.IsNaN(node.MarginTop) ? node.Margin : node.MarginTop,
-        double.IsNaN(node.MarginRight) ? node.Margin : node.MarginRight,
-        double.IsNaN(node.MarginBottom) ? node.Margin : node.MarginBottom,
-    ];
+        [node.MarginLeft, node.MarginTop, node.MarginRight, node.MarginBottom];
 
     private static double EffectiveWidth(GuiVNode node) =>
         node.Kind == "Window" && double.IsNaN(node.Width) ? 480 : node.Width;

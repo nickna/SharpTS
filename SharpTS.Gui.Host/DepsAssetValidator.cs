@@ -90,7 +90,7 @@ internal static class DepsAssetValidator
                 Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "index.ts"),
                 Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "jsx-runtime.ts"),
                 Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "jsx-dev-runtime.ts"),
-                Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "internal-testing.ts")
+                Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "testing.ts")
             ];
             foreach (string relativePath in sourceContent)
                 if (!File.Exists(Path.Combine(fullDirectory, relativePath)))

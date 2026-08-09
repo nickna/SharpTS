@@ -1,12 +1,12 @@
 {
   "name": "@sharpts/gui",
-  "version": "0.2.0-preview.1",
+  "version": "0.3.0-preview.1",
   "type": "module",
   "exports": {
     ".": "./index.ts",
     "./devtools": "./devtools.ts",
     "./jsx-runtime": "./jsx-runtime.ts",
     "./jsx-dev-runtime": "./jsx-dev-runtime.ts",
-    "./internal-testing": "./internal-testing.ts"
+    "./testing": "./testing.ts"
   }
 }

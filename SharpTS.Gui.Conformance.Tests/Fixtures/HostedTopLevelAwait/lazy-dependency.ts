@@ -1,4 +1,4 @@
-import { trace } from "@sharpts/gui/internal-testing";
+import { trace } from "@sharpts/gui/conformance";
 
 function recordDependencyMicrotask(): void {
     trace("tla-dependency-microtask");

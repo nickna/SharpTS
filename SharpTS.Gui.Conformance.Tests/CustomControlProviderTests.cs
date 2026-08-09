@@ -31,14 +31,16 @@ public sealed class CustomControlProviderTests
             headless: true,
             dispatchGuestCallback: callback => callback(),
             scheduleGuestMicrotask: callback => callback());
-        using DesktopRoot root = DesktopBridge.CreateDesktopRoot(() => { });
+        using DesktopApplicationSession application = DesktopBridge.CreateDesktopApplication("explicit");
+        using DesktopRoot root = application.CreateWindowRoot(
+            () => { }, owner: null, modal: false, mainWindow: true);
 
         root.Render(Window(Custom("one")));
-        var badge = Assert.IsType<TextBlock>(runtime.Context.RequireControl<Control>("badge"));
+        var badge = Assert.IsType<TextBlock>(root.FindControl("badge"));
         Assert.Equal("one", badge.Text);
 
         root.Render(Window(Custom("two")));
-        Assert.Same(badge, runtime.Context.RequireControl<Control>("badge"));
+        Assert.Same(badge, root.FindControl("badge"));
         Assert.Equal("two", badge.Text);
     }
 

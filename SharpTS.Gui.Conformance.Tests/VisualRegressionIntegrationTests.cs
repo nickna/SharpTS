@@ -15,8 +15,14 @@ public sealed class VisualRegressionIntegrationTests
 #else
         const string configuration = "Release";
 #endif
-        string hostSource = Path.Combine(repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
-        string fixture = Path.Combine(repositoryRoot, "SharpTS.Gui.Conformance.Tests", "Fixtures", "VisualRegression", "main.tsx");
+        string hostSource = Path.Combine(
+            repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
+        string fixture = Path.Combine(
+            repositoryRoot,
+            "SharpTS.Gui.Conformance.Tests",
+            "Fixtures",
+            "VisualRegression",
+            "main.tsx");
         string temporaryRoot = Path.Combine(Path.GetTempPath(), $"sharpts-gui-visual-{Guid.NewGuid():N}");
         Process? process = null;
         try
@@ -25,18 +31,7 @@ public sealed class VisualRegressionIntegrationTests
             string guestDirectory = Path.Combine(temporaryRoot, "Guest");
             Directory.CreateDirectory(guestDirectory);
             File.Copy(fixture, Path.Combine(guestDirectory, "main.tsx"), overwrite: true);
-            Directory.CreateDirectory(Path.Combine(temporaryRoot, ".sharpts"));
-            await File.WriteAllTextAsync(Path.Combine(temporaryRoot, ".sharpts", "app.json"),
-                """
-                {
-                  "entryPath": "Guest/main.tsx",
-                  "compiledAssembly": "unused.dll",
-                  "hostedAbiVersion": 1,
-                  "guiApiVersion": 2,
-                  "descriptorSchemaVersion": 1,
-                  "descriptorSchemaHash": "7384ad1b4c183d7cd97dc12d422dff594ed82038e6a01bce3e661066f44e46da"
-                }
-                """);
+            GuiInterpretedTestAssets.Stage(repositoryRoot, configuration, temporaryRoot);
 
             var start = new ProcessStartInfo("dotnet")
             {

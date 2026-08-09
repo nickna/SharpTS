@@ -9,7 +9,7 @@ namespace SharpTS.Cli;
 
 internal static class GuiApplicationCli
 {
-    internal const string DefaultSdkVersion = "0.2.0-preview.1";
+    internal const string DefaultSdkVersion = "0.3.0-preview.1";
 
     public static int Create(ParsedCommand.NewAvalonia command)
     {
@@ -50,12 +50,13 @@ internal static class GuiApplicationCli
             """);
         File.WriteAllText(Path.Combine(root, "headless.tests.tsx"), """
             import { TextBlock, Window, renderDesktop } from "@sharpts/gui";
-            import { closeWindow, getText } from "@sharpts/gui/internal-testing";
-            renderDesktop(<Window title="Headless" width={320} height={160}>
+            import { createDesktopTestDriver } from "@sharpts/gui/testing";
+            const root = renderDesktop(<Window title="Headless" width={320} height={160}>
                 <TextBlock key="message">CLI Headless test</TextBlock>
             </Window>);
-            if (getText("message") !== "CLI Headless test") throw new Error("CLI Headless assertion failed.");
-            setTimeout((() => closeWindow()) as any, 0);
+            const driver = createDesktopTestDriver(root);
+            if (driver.getText("message") !== "CLI Headless test") throw new Error("CLI Headless assertion failed.");
+            setTimeout((() => root.dispose()) as any, 0);
             """);
         File.WriteAllText(Path.Combine(root, "Assets", "README.txt"),
             "Files in this directory are embedded under asset:/// paths." + Environment.NewLine);

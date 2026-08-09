@@ -126,7 +126,7 @@ public sealed class DesktopRendererTests : IDisposable
     public void DragDrop_NormalizesPayloadUsesLatestCallbacksAndReleasesSubscriptions()
     {
         var events = new List<string>();
-        using DesktopRoot root = DesktopBridge.CreateDesktopRoot(() => { });
+        using DesktopRoot root = CreateRoot();
         GuiVNode Target(string version) => new(
             "Border",
             Key: "drop-target",
@@ -140,7 +140,7 @@ public sealed class DesktopRendererTests : IDisposable
                 events.Add($"{version}-drop:{text}:{effect}:{ctrl}"));
 
         root.Render(Window(Target("old")));
-        var target = _runtimeRegistration.Context.RequireControl<Border>("drop-target");
+        var target = Assert.IsType<Border>(root.FindControl("drop-target"));
         Assert.True(DragDrop.GetAllowDrop(target));
         Assert.Equal(1, root.ActiveSubscriptions);
         root.Render(Window(Target("new")));
@@ -440,7 +440,8 @@ public sealed class DesktopRendererTests : IDisposable
             Window(new GuiVNode("TextBlock", Text: "leaf", Children: new[] { Text("invalid") }))));
         Assert.Throws<InvalidOperationException>(() => root.Render(
             Window(new GuiVNode("Unknown"))));
-        Assert.Equal("42", DesktopBridge.CreateTextBlock("key", double.NaN, "normal", "noWrap", null, 42d, null).Key);
+        Assert.Equal("42", DesktopBridge.CreateTextBlock(
+            "key", double.NaN, "normal", "normal", "noWrap", "left", null, 42d, null).Key);
 
         Assert.Same(window, root.Window);
         Assert.Same(a, root.FindControl("a"));
@@ -579,7 +580,7 @@ public sealed class DesktopRendererTests : IDisposable
         DesktopRoot root = CreateRoot(() => cleanups++);
         root.Render(Window(Panel(0, Text("owner"))));
 
-        Assert.Throws<InvalidOperationException>(() => DesktopBridge.CreateDesktopRoot(() => { }));
+        Assert.Throws<InvalidOperationException>(() => CreateRoot());
         Exception? offThreadError = null;
         var thread = new Thread(() =>
         {
@@ -610,10 +611,16 @@ public sealed class DesktopRendererTests : IDisposable
         root.Render(Window(new GuiVNode(
             "Border",
             Key: "border",
-            Padding: 8,
+            PaddingLeft: 8,
+            PaddingTop: 8,
+            PaddingRight: 8,
+            PaddingBottom: 8,
             Background: "#112233",
             BorderBrush: "orange",
-            BorderThickness: 2,
+            BorderLeft: 2,
+            BorderTop: 2,
+            BorderRight: 2,
+            BorderBottom: 2,
             CornerRadius: 4,
             Children: new[]
             {
@@ -638,7 +645,10 @@ public sealed class DesktopRendererTests : IDisposable
                                     FontWeight: "bold",
                                     TextWrapping: "wrap",
                                     Foreground: "white",
-                                    Margin: 3,
+                                    MarginLeft: 3,
+                                    MarginTop: 3,
+                                    MarginRight: 3,
+                                    MarginBottom: 3,
                                     HorizontalAlignment: "right",
                                     GridRow: 1,
                                     GridColumn: 1),
@@ -656,10 +666,16 @@ public sealed class DesktopRendererTests : IDisposable
         root.Render(Window(new GuiVNode(
             "Border",
             Key: "border",
-            Padding: 12,
+            PaddingLeft: 12,
+            PaddingTop: 12,
+            PaddingRight: 12,
+            PaddingBottom: 12,
             Background: "#223344",
             BorderBrush: "yellow",
-            BorderThickness: 3,
+            BorderLeft: 3,
+            BorderTop: 3,
+            BorderRight: 3,
+            BorderBottom: 3,
             CornerRadius: 6,
             Children: new[]
             {
@@ -1008,8 +1024,19 @@ public sealed class DesktopRendererTests : IDisposable
     private static GuiVNode ButtonNode(string text, string? key = null) =>
         new("Button", Key: key, Text: text);
 
-    private static DesktopRoot CreateRoot(Action? cleanup = null) =>
-        DesktopBridge.CreateDesktopRoot(cleanup ?? (() => { }));
+    private static DesktopRoot CreateRoot(Action? cleanup = null)
+    {
+        DesktopApplicationSession application = DesktopBridge.CreateDesktopApplication("explicit");
+        return application.CreateWindowRoot(
+            () =>
+            {
+                try { cleanup?.Invoke(); }
+                finally { application.Dispose(); }
+            },
+            owner: null,
+            modal: false,
+            mainWindow: true);
+    }
 
     private sealed class TestApplication : Application;
 

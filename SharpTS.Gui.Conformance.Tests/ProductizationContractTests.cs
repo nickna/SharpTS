@@ -67,22 +67,25 @@ public sealed class ProductizationContractTests
     }
 
     [Fact]
-    public void ConformanceHooks_AreIsolatedFromThePublicPackageEntryPoint()
+    public void SupportedTestingIsExportedAndPrivilegedConformanceHooksAreNotPackaged()
     {
         string root = FindRepositoryRoot();
         string packageRoot = Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage");
         string publicEntry = File.ReadAllText(Path.Combine(packageRoot, "index.ts"));
-        string conformanceEntry = File.ReadAllText(Path.Combine(packageRoot, "internal-testing.ts"));
+        string testingEntry = File.ReadAllText(Path.Combine(packageRoot, "testing.ts"));
         string devtoolsEntry = File.ReadAllText(Path.Combine(packageRoot, "devtools.ts"));
         string packageManifest = File.ReadAllText(Path.Combine(packageRoot, "package.json"));
 
         Assert.DoesNotContain("DesktopConformanceBridge", publicEntry, StringComparison.Ordinal);
         Assert.DoesNotContain("traceControlIdentities", publicEntry, StringComparison.Ordinal);
-        Assert.Contains("DesktopConformanceBridge", conformanceEntry, StringComparison.Ordinal);
-        Assert.Contains("traceControlIdentities", conformanceEntry, StringComparison.Ordinal);
+        Assert.Contains("DesktopTestingBridge", testingEntry, StringComparison.Ordinal);
+        Assert.DoesNotContain("FailNextNativeSetter", testingEntry, StringComparison.Ordinal);
         Assert.Contains("inspectDesktopTree", devtoolsEntry, StringComparison.Ordinal);
         Assert.Contains("assertHeadlessSnapshot", devtoolsEntry, StringComparison.Ordinal);
         Assert.Contains("\"./devtools\"", packageManifest, StringComparison.Ordinal);
+        Assert.Contains("\"./testing\"", packageManifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("internal-testing", packageManifest, StringComparison.Ordinal);
+        Assert.DoesNotContain("conformance", packageManifest, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()

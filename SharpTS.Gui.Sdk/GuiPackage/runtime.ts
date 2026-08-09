@@ -636,15 +636,16 @@ class ReactiveRoot {
 
 export interface DesktopRoot { readonly isDisposed: boolean; dispose(): void; }
 export function renderDesktop(element: GuiChild): DesktopRoot {
-    const runner = new ReactiveRoot(element);
-    const managed: any = DesktopBridge.CreateDesktopRoot((): void => runner.disposeFromManaged());
-    runner.setManaged(managed);
-    try { runner.renderNow(); }
-    catch (error) { managed.Dispose(); throw error; }
-    return {
-        get isDisposed(): boolean { return managed.IsDisposed; },
-        dispose(): void { managed.Dispose(); },
+    const application = createDesktopApplication();
+    let window: DesktopWindow;
+    try { window = application.createWindow(element, { main: true }); }
+    catch (error) { application.dispose(); throw error; }
+    const root: DesktopRoot = {
+        get isDisposed(): boolean { return window.isDisposed; },
+        dispose(): void { application.dispose(); },
     };
+    (root as any).__managedRoot = (window as any).__managedRoot;
+    return root;
 }
 
 export type ItemKey = string | number;

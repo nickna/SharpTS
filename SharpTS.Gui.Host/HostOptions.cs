@@ -7,7 +7,6 @@ internal enum GuestMode
 }
 internal sealed record HostOptions(
     GuestMode Mode,
-    bool AutoClose,
     bool Headless,
     string? TracePath,
     bool IsTracePathHostManaged,
@@ -21,7 +20,6 @@ internal static class HostOptionsParser
     public static HostOptions Parse(string[] args, GuestMode defaultMode)
     {
         GuestMode mode = defaultMode;
-        bool autoClose = false;
         bool headless = false;
         string? tracePath = null;
         bool traceRequested = false;
@@ -48,9 +46,6 @@ internal static class HostOptionsParser
                         var value => throw new ArgumentException(
                             $"--mode expects interpreted or compiled; got '{value}'.")
                     };
-                    break;
-                case "--auto-close":
-                    autoClose = true;
                     break;
                 case "--headless":
                     headless = true;
@@ -81,12 +76,11 @@ internal static class HostOptionsParser
             }
         }
 
-        bool hostManagedTrace = (traceRequested || autoClose) && !explicitTracePath;
+        bool hostManagedTrace = traceRequested && !explicitTracePath;
         if (hostManagedTrace)
             tracePath = HostDiagnosticPaths.CreateTracePath(mode);
         return new HostOptions(
             mode,
-            autoClose,
             headless,
             tracePath,
             hostManagedTrace,
@@ -97,6 +91,5 @@ internal static class HostOptionsParser
     }
 
     public static bool ShouldShowFatalDialog(string[] args) =>
-        !args.Contains("--headless", StringComparer.Ordinal) &&
-        !args.Contains("--auto-close", StringComparer.Ordinal);
+        !args.Contains("--headless", StringComparer.Ordinal);
 }

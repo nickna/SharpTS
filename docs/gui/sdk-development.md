@@ -34,7 +34,7 @@ while the default self-contained single file contains only the compiled guest.
 ## Create and develop an application
 
 ```powershell
-dotnet new install SharpTS.Gui.Sdk::0.2.0-preview.1
+dotnet new install SharpTS.Gui.Sdk::0.3.0-preview.1
 dotnet new sharpts-gui -n CounterApp
 cd CounterApp
 dotnet restore

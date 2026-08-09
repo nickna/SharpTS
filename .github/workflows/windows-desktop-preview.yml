@@ -58,7 +58,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: sharpts-gui-sdk-candidate
-          path: artifacts/windows-preview/win-x64/feed/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+          path: artifacts/windows-preview/win-x64/feed/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
 
   windows-x64:
     needs: gui-sdk-candidate
@@ -79,7 +79,7 @@ jobs:
         run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
       - name: Packaged x64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -106,7 +106,7 @@ jobs:
           path: artifacts/windows-preview/candidate
       - name: Cross-publish packaged ARM64 directory and single-file outputs
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -132,7 +132,7 @@ jobs:
           path: artifacts/windows-preview/candidate
       - name: Packaged ARM64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
       - uses: actions/upload-artifact@v4
         if: always()
         with:

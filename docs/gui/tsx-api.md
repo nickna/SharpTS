@@ -1,7 +1,8 @@
 # SharpTS GUI TSX API
 
 GUI API version 2 is an application-capable, retained TSX surface for Windows Avalonia apps.
-`renderDesktop` remains the concise, compatible entry point for an application with one window:
+`renderDesktop` is a concise wrapper over the same application/window lifecycle used by
+`createDesktopApplication`:
 
 ```tsx
 import { Button, StackPanel, TextBlock, Window, renderDesktop, useState } from "@sharpts/gui";
@@ -20,6 +21,25 @@ function App(): JSX.Element {
 
 const root = renderDesktop(<App />);
 ```
+
+Headless interaction tests use a driver scoped to that explicit root or window:
+
+```tsx
+import { createDesktopTestDriver } from "@sharpts/gui/testing";
+
+const driver = createDesktopTestDriver(root);
+driver.click("increment");
+driver.afterRender(() => {
+    if (driver.getText("count") !== "Count: 1") throw new Error("Count did not update");
+    root.dispose();
+});
+```
+
+The driver is available only under `--headless`. It supports keyed clicks, window keyboard input,
+text and allow-listed property queries, form value changes, and text drag/drop. Testing one window
+cannot resolve keys from another window. `afterRender` queues an assertion after an interaction's
+pending render commits. Scheduler manipulation, native-failure injection, renderer
+identity, and subscription counters are not public APIs.
 
 Applications that own more than one window use an explicit application session:
 
@@ -177,7 +197,6 @@ descriptors. Combo/list data is string-backed. Arbitrary Avalonia control templa
 `DataGrid`, and certified macOS execution are not yet supported. Typed item templates, a windowed virtual grid, native
 list/tree hosts, rich text, canvas/drawing, resources, class/type selectors, styles, theme variants,
 and resource lookup are supported. Multi-window orchestration is available through
-`createDesktopApplication`; `renderDesktop` remains the one-window convenience API.
-API 1 manifests are rejected with a migration diagnostic; see
-[Migrating GUI API 1 to 2](migrating-api-1-to-2.md). The complete proof application is in
+`createDesktopApplication`; `renderDesktop` remains the one-window convenience API. Incompatible
+GUI API and descriptor contracts fail before payload loading. The complete proof application is in
 `Examples/Calculator`.

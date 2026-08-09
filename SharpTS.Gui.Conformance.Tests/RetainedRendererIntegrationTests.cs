@@ -170,11 +170,11 @@ public sealed class RetainedRendererIntegrationTests
 #endif
         string hostDirectory = Path.Combine(
             repositoryRoot,
-            "SharpTS.Gui.Host",
+            "SharpTS.Gui.ConformanceHost",
             "bin",
             configuration,
             "net10.0");
-        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.Host.dll");
+        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string tracePath = Path.Combine(Path.GetTempPath(), $"sharpts-gui-renderer-{mode}-{Guid.NewGuid():N}.json");
         Assert.True(File.Exists(hostAssembly), $"GUI host was not built: {hostAssembly}");
 
@@ -189,7 +189,6 @@ public sealed class RetainedRendererIntegrationTests
         startInfo.ArgumentList.Add("--mode");
         startInfo.ArgumentList.Add(mode);
         startInfo.ArgumentList.Add("--headless");
-        startInfo.ArgumentList.Add("--auto-close");
         startInfo.ArgumentList.Add("--trace");
         startInfo.ArgumentList.Add(tracePath);
 

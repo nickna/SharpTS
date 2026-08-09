@@ -27,12 +27,12 @@ The tagged release is deliberately blocked if any manifest ID is not already
 registered. This prevents an untested new-package permission from publishing an
 established package first.
 
-`SharpTS.Gui.Sdk` was onboarded separately at `0.2.0-preview.1`. Its manifest
-entry keeps that independent preview version fixed while the other packages
-inherit the release tag. Keep the release API key scoped to this ID as well as
-the tagged package IDs. Because NuGet versions are immutable, the workflow
-downloads the repository-signed package, verifies the manifest-pinned SHA-256,
-publishes it idempotently, and verifies its own version in the final inventory.
+`SharpTS.Gui.Sdk` is onboarded separately from tagged releases. Its manifest entry keeps that
+independent preview version fixed while the other packages inherit the release tag. Keep the
+release API key scoped to this ID as well as the tagged package IDs. Because NuGet versions are
+immutable, publish a new GUI preview before updating the manifest; then pin the SHA-256 of the
+repository-signed package served by NuGet. Tagged releases download those exact bytes, verify the
+hash, publish idempotently, and verify the GUI SDK's own version in the final inventory.
 
 ## Normal release
 

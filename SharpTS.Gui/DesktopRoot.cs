@@ -67,7 +67,7 @@ public sealed class DesktopRoot : IDisposable
     public bool IsModal { get; }
     public bool IsMainWindow { get; }
     public Task Completion => _completion.Task;
-    public int ActiveSubscriptions => _activeSubscriptions;
+    internal int ActiveSubscriptions => _activeSubscriptions;
     public bool IsDisposed => _disposed;
     internal RendererOperationCounts OperationCounts =>
         new(_createOperations, _descriptorUpdateCalls, _removeOperations, _moveOperations);
@@ -269,9 +269,6 @@ public sealed class DesktopRoot : IDisposable
         UnobserveWindow();
         Dispose();
     }
-
-    internal Button? FindFirstButton() =>
-        _mounted is null ? null : FindFirstButton(_mounted);
 
     internal string GetKeyedControlIdentities()
     {
@@ -1356,16 +1353,6 @@ public sealed class DesktopRoot : IDisposable
 
     private static string Describe(MountedNode oldNode, PreparedNode next) =>
         $"{Describe(oldNode)}->{next.Descriptor.Kind}";
-
-    private static Button? FindFirstButton(MountedNode node)
-    {
-        if (node.Control is Button button && node.Control is not CheckBox)
-            return button;
-        foreach (MountedNode child in node.Children)
-            if (FindFirstButton(child) is Button found)
-                return found;
-        return null;
-    }
 
     private static Control? FindControl(MountedNode node, string key)
     {

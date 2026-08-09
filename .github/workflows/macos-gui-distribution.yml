@@ -41,7 +41,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: sharpts-gui-sdk-candidate
-          path: artifacts/macos-preview/osx-arm64/feed/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+          path: artifacts/macos-preview/osx-arm64/feed/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
 
   sign-notarize:
     needs: gui-sdk-candidate
@@ -69,7 +69,7 @@ jobs:
           path: artifacts/macos-preview/candidate
       - name: Build and execute the native candidate
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier ${{ matrix.rid }} -RealWindow -CandidatePackage artifacts/macos-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier ${{ matrix.rid }} -RealWindow -CandidatePackage artifacts/macos-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
       - name: Import Developer ID certificate and configure notarization
         shell: bash
         env:

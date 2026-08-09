@@ -14,7 +14,7 @@ public sealed class DesktopRef
 {
     internal ControlRef? Current { get; private set; }
     internal void Attach(object? value) => Current = (ControlRef?)value;
-    public bool IsAttached => Current is not null;
+    internal bool IsAttached => Current is not null;
     public bool isAttached => IsAttached;
     public bool focus() => Current?.Control.Focus() == true;
 }
@@ -75,11 +75,6 @@ public static class DesktopBridge
             launchArguments ?? []);
         _context = context;
         return new DesktopRuntimeRegistration(context, ReleaseContext);
-    }
-
-    public static DesktopRoot CreateDesktopRoot(Action reactiveCleanup)
-    {
-        return RequireContext().CreateRoot(reactiveCleanup);
     }
 
     public static DesktopRef CreateRef()
@@ -158,17 +153,6 @@ public static class DesktopBridge
             Drop = hasDrop ? drop : null,
         };
 
-    public static GuiVNode WithCommon(
-        GuiVNode node, double width, double height, double minWidth, double minHeight,
-        double maxWidth, double maxHeight, double margin, string horizontalAlignment,
-        string verticalAlignment, bool isVisible, bool isEnabled, double gridRow,
-        double gridColumn, double gridRowSpan, double gridColumnSpan) =>
-        WithCommon(node, width, height, minWidth, minHeight, maxWidth, maxHeight,
-            margin, margin, margin, margin, horizontalAlignment, verticalAlignment,
-            isVisible, isEnabled, 1, null, null, [], gridRow, gridColumn, gridRowSpan,
-            gridColumnSpan, "left", double.NaN, double.NaN, null, null, false, false,
-            false, null, null, false, false);
-
     public static GuiVNode WithStyle(
         GuiVNode node, string? background, string? foreground,
         double paddingLeft, double paddingTop, double paddingRight, double paddingBottom,
@@ -227,9 +211,6 @@ public static class DesktopBridge
             AttachRef: GetAttach(reference),
             RefIdentity: reference);
 
-    public static GuiVNode CreateStackPanel(double spacing, string orientation, GuiVNode[] children, object? key, DesktopRef? reference) =>
-        CreateStackPanel("StackPanel", spacing, orientation, children, key, reference);
-
     public static GuiVNode CreateWrapPanel(double spacing, string orientation, GuiVNode[] children, object? key, DesktopRef? reference) =>
         new("WrapPanel", NormalizeKey(key), Spacing: spacing, Orientation: orientation, Children: children, AttachRef: GetAttach(reference), RefIdentity: reference);
 
@@ -285,10 +266,6 @@ public static class DesktopBridge
             AttachRef: GetAttach(reference),
             RefIdentity: reference);
 
-    public static GuiVNode CreateBorder(double padding, string? background, string? borderBrush, double borderThickness, double cornerRadius, GuiVNode[] children, object? key, DesktopRef? reference) =>
-        CreateBorder("Border", padding, padding, padding, padding, background, borderBrush,
-            borderThickness, borderThickness, borderThickness, borderThickness, cornerRadius, children, key, reference);
-
     public static GuiVNode CreateScrollViewer(
         string horizontalScrollBarVisibility,
         string verticalScrollBarVisibility,
@@ -327,9 +304,6 @@ public static class DesktopBridge
             AttachRef: GetAttach(reference),
             RefIdentity: reference);
 
-    public static GuiVNode CreateTextBlock(string text, double fontSize, string fontWeight, string textWrapping, string? foreground, object? key, DesktopRef? reference) =>
-        CreateTextBlock(text, fontSize, fontWeight, "normal", textWrapping, "left", foreground, key, reference);
-
     public static GuiVNode CreateSeparator(object? key, DesktopRef? reference) =>
         new("Separator", NormalizeKey(key), AttachRef: GetAttach(reference), RefIdentity: reference);
 
@@ -346,21 +320,6 @@ public static class DesktopBridge
             FontWeight: fontWeight, HorizontalContentAlignment: horizontalContentAlignment,
             VerticalContentAlignment: verticalContentAlignment, Children: children,
             AttachRef: GetAttach(reference), RefIdentity: reference);
-
-    public static GuiVNode CreateButton(
-        string text,
-        double padding,
-        Action? click,
-        object? key,
-        DesktopRef? reference) =>
-        new(
-            "Button",
-            NormalizeKey(key),
-            Text: text,
-            Padding: padding,
-            Click: click,
-            AttachRef: GetAttach(reference),
-            RefIdentity: reference);
 
     public static GuiVNode CreateTextBox(
         string kind,
@@ -383,24 +342,6 @@ public static class DesktopBridge
             MaxLength: ToInteger(maxLength, nameof(maxLength)),
             IsPassword: isPassword,
             TextChanged: textChanged,
-            AttachRef: GetAttach(reference),
-            RefIdentity: reference);
-
-    public static GuiVNode CreateTextBox(string text, string? placeholder, Action<string>? textChanged, object? key, DesktopRef? reference) =>
-        CreateTextBox("TextBox", text, placeholder, false, false, 0, false, textChanged, key, reference);
-
-    public static GuiVNode CreateCheckBox(
-        string text,
-        bool isChecked,
-        Action<bool>? checkedChanged,
-        object? key,
-        DesktopRef? reference) =>
-        new(
-            "CheckBox",
-            NormalizeKey(key),
-            Text: text,
-            IsChecked: isChecked,
-            CheckedChanged: checkedChanged,
             AttachRef: GetAttach(reference),
             RefIdentity: reference);
 
@@ -581,10 +522,6 @@ public static class DesktopBridge
 
     internal static string? GetBoundaryPath(GuiVNode node) =>
         node.BoundaryPath;
-
-    internal static DesktopRoot? CurrentRoot => RequireContext().CurrentRoot;
-
-    internal static void DisposeCurrentRoot() => RequireContext().DisposeCurrentRoot();
 
     internal static void DisposeAllRoots() => RequireContext().DisposeAllRoots();
 

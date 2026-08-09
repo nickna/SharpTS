@@ -25,14 +25,14 @@ selects the Avalonia host. The explicit MSBuild SDK workflow remains available b
 Install the package's project template and create an application without C# or AXAML:
 
 ```powershell
-dotnet new install SharpTS.Gui.Sdk::0.2.0-preview.1
+dotnet new install SharpTS.Gui.Sdk::0.3.0-preview.1
 dotnet new sharpts-gui -n CounterApp
 cd CounterApp
 dotnet build
 ```
 
 ```xml
-<Project Sdk="SharpTS.Gui.Sdk/0.2.0-preview.1">
+<Project Sdk="SharpTS.Gui.Sdk/0.3.0-preview.1">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>main.tsx</SharpTSEntryPoint>
@@ -66,6 +66,13 @@ Create or intentionally refresh a committed baseline once with
 in normal tests. A mismatch writes `Snapshots/main.actual.png` and reports expected/actual SHA-256
 values. Snapshot capture is restricted to `--headless` runs and uses the deterministic Skia-backed
 Headless renderer.
+
+The supported `@sharpts/gui/testing` subpath creates a driver scoped to a `DesktopRoot` or
+`DesktopWindow`. Under `--headless`, it can click keyed buttons, send window key input, query text
+and allow-listed native properties, update form controls, and simulate text drops. Drivers cannot
+cross window boundaries and reject non-Headless runtimes. Scheduler, trace, renderer-identity,
+subscription, and native-failure controls are intentionally absent from the package. Call
+`driver.afterRender(callback)` after an interaction before reading state produced by its render.
 
 `getDesktopDisplays()` returns the current Avalonia display topology with primary-display state,
 pixel bounds and working areas, orientation, and per-display scaling. Controls retain native
@@ -101,7 +108,8 @@ macOS candidates retain fatal logs below `~/Library/Logs/SharpTS.Gui`, traces be
 `~/Library/Application Support/SharpTS.Gui/Traces`, and use a native alert after logging.
 
 Applications mount a typed element tree with `renderDesktop(<App />)` or create an explicit
-multi-window session with `createDesktopApplication`. The latter supports owned/modeless and
+multi-window session with `createDesktopApplication`. `renderDesktop` is a convenience wrapper over
+that same application/window lifecycle. Explicit sessions support owned/modeless and
 owned/modal windows, activation and close handles, `closed` promises, main/last/explicit shutdown
 modes, and per-window render-error isolation. Function components can
 return elements, primitive text, fragments, arrays, or `null`. The standard state/lifecycle API is
@@ -161,7 +169,7 @@ generated overlay while reserving the JSX runtime and `@sharpts/gui` module mapp
 `SharpTSVerifyIL` to `true` to verify the persisted hosted guest during compilation.
 
 Current supported-preview boundaries: Windows `win-x64` and `win-arm64`, one root element per Window,
-statically packaged custom controls only, string-backed legacy list/combo items, and no dynamic
+statically packaged custom controls only, simple string-backed list/combo items, and no dynamic
 descriptor discovery, arbitrary control-template, or full editing DataGrid API. Native resources/styles/theme variants,
 typed item templates, a windowed grid, trees, rich text, and canvas/drawing are supported.
 `osx-x64` and `osx-arm64` are experimental build candidates, not support claims; native x64/ARM64

@@ -1,9 +1,5 @@
 import { StackPanel, TextBlock, Window, renderDesktop } from "@sharpts/gui";
-import { closeWindow, trace } from "@sharpts/gui/internal-testing";
-
-function closeFixtureWindow(): void {
-    closeWindow();
-}
+import { afterTrace, trace } from "@sharpts/gui/conformance";
 
 function recordBeforeExitMicrotask(): void {
     trace("tla-before-exit-microtask");
@@ -60,7 +56,7 @@ const lazyPath = await Promise.resolve("./lazy");
 const loaded = await import(await Promise.resolve(lazyPath));
 trace(`tla-main-resume-${compound}-${conditional}-${loop}-${loaded.value}`);
 
-renderDesktop(
+const root = renderDesktop(
     <Window title="Hosted top-level await" width={360} height={180}>
         <StackPanel>
             <TextBlock>{`Ready ${loaded.value}`}</TextBlock>
@@ -68,4 +64,4 @@ renderDesktop(
     </Window>
 );
 trace("tla-window-mounted");
-setTimeout(closeFixtureWindow as any, 1);
+afterTrace("dispatcher-sentinel", () => root.dispose());

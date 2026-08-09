@@ -23,7 +23,7 @@ $supportedRuntimeIdentifiers = @($supportedPlatforms.SelectNodes("//SharpTSGuiSu
 if ($RuntimeIdentifier -notin $supportedRuntimeIdentifiers) {
     throw "SharpTS.Gui.Sdk supports only $($supportedRuntimeIdentifiers -join ', '); got '$RuntimeIdentifier'."
 }
-$version = "0.2.0-preview.1"
+$version = "0.3.0-preview.1"
 $isWindowsRid = $RuntimeIdentifier.StartsWith("win-", [StringComparison]::Ordinal)
 $isMacOsRid = $RuntimeIdentifier.StartsWith("osx-", [StringComparison]::Ordinal)
 $platformArtifactName = if ($isWindowsRid) { "windows-preview" } else { "macos-preview" }
@@ -174,7 +174,7 @@ try {
         "build/SharpTS.Sdk.Tasks.dll",
         "gui/index.ts",
         "gui/jsx-runtime.ts",
-        "gui/internal-testing.ts",
+        "gui/testing.ts",
         "launcher/Launcher.cs",
         "content/Templates/sharpts-gui/.template.config/template.json",
         "content/Templates/sharpts-gui/SharpTSGuiApp.csproj",
@@ -189,6 +189,11 @@ try {
         if ($entryNames -notcontains $required) {
             throw "GUI SDK package is missing '$required'."
         }
+    }
+    if ($entryNames -contains "gui/internal-testing.ts" -or
+        $entryNames -contains "gui/conformance.ts" -or
+        $entryNames -match "SharpTS.Gui.ConformanceSupport") {
+        throw "GUI SDK package contains repository-only conformance support."
     }
     if ($entryNames -match "native/runtimes/") {
         throw "GUI SDK package contains a duplicated native-runtime path."
@@ -329,11 +334,11 @@ Invoke-DotNet @("build", $consumerProject, "-c", $Configuration, "--no-restore")
 $buildOutput = Join-Path $consumerRoot "bin\$Configuration\net10.0"
 $buildLauncher = Join-Path $buildOutput "SharpTS.Gui.Sdk.Consumer.dll"
 $dotnetRunTrace = Join-Path $artifactRoot "dotnet-run-interpreted-trace.json"
-Invoke-DotNet @("run", "--project", $consumerProject, "-c", $Configuration, "--no-build", "--", "--mode", "interpreted", "--headless", "--auto-close", "--trace", $dotnetRunTrace) $consumerRoot
+Invoke-DotNet @("run", "--project", $consumerProject, "-c", $Configuration, "--no-build", "--", "--mode", "interpreted", "--headless", "--trace", $dotnetRunTrace, "--", "--smoke-close") $consumerRoot
 $buildTraces = @{}
 foreach ($mode in @("interpreted", "compiled")) {
     $tracePath = Join-Path $artifactRoot "build-$mode-trace.json"
-    Invoke-DotNet @($buildLauncher, "--mode", $mode, "--headless", "--auto-close", "--trace", $tracePath) $buildOutput
+    Invoke-DotNet @($buildLauncher, "--mode", $mode, "--headless", "--trace", $tracePath, "--", "--smoke-close") $buildOutput
     $buildTraces[$mode] = Get-Content -LiteralPath $tracePath -Raw | ConvertFrom-Json
 }
 if (Compare-Object (RendererTrace $buildTraces["interpreted"]) (RendererTrace $buildTraces["compiled"]) -SyncWindow 0) {
@@ -349,10 +354,10 @@ $directoryLauncher = Join-Path $directoryPublishRoot "SharpTS.Gui.Sdk.Consumer.d
 if ($canExecute) {
     foreach ($mode in @("interpreted", "compiled")) {
         $tracePath = Join-Path $artifactRoot "published-directory-$mode-trace.json"
-        Invoke-DotNet @($directoryLauncher, "--mode", $mode, "--headless", "--auto-close", "--trace", $tracePath) $directoryPublishRoot
+        Invoke-DotNet @($directoryLauncher, "--mode", $mode, "--headless", "--trace", $tracePath, "--", "--smoke-close") $directoryPublishRoot
         if ($RealWindow) {
             $windowTracePath = Join-Path $artifactRoot "published-directory-$mode-window-trace.json"
-            Invoke-DotNet @($directoryLauncher, "--mode", $mode, "--auto-close", "--trace", $windowTracePath) $directoryPublishRoot
+            Invoke-DotNet @($directoryLauncher, "--mode", $mode, "--trace", $windowTracePath, "--", "--smoke-close") $directoryPublishRoot
         }
     }
 }
@@ -375,10 +380,10 @@ if ($canExecute) {
     $env:DOTNET_ROOT = Join-Path $artifactRoot "intentionally missing dotnet"
     try {
         $singleTrace = Join-Path $artifactRoot "single-file-compiled-trace.json"
-        Invoke-Application $singleFile @("--headless", "--auto-close", "--trace", $singleTrace) $singleFilePublishRoot
+        Invoke-Application $singleFile @("--headless", "--trace", $singleTrace, "--", "--smoke-close") $singleFilePublishRoot
         if ($RealWindow) {
             $singleWindowTrace = Join-Path $artifactRoot "single-file-compiled-window-trace.json"
-            Invoke-Application $singleFile @("--auto-close", "--trace", $singleWindowTrace) $singleFilePublishRoot
+            Invoke-Application $singleFile @("--trace", $singleWindowTrace, "--", "--smoke-close") $singleFilePublishRoot
         }
     }
     finally {
@@ -435,7 +440,7 @@ if ($NativeAot) {
     if ($canExecute) {
         $nativeAotTrace = Join-Path $artifactRoot "native-aot-trace.json"
         $nativeAotMeasurement = Measure-Application $nativeAotExecutable @(
-            "--headless", "--auto-close", "--trace", $nativeAotTrace) $nativeAotPublishRoot
+            "--headless", "--trace", $nativeAotTrace, "--", "--smoke-close") $nativeAotPublishRoot
         Assert-GuestTrace $nativeAotTrace "Native AOT application"
         Write-Host "Native AOT cold startup: $($nativeAotMeasurement.ElapsedMilliseconds) ms; peak working set: $($nativeAotMeasurement.PeakWorkingSetBytes) bytes."
         if ($EnforcePerformanceBudgets -and

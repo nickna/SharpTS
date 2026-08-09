@@ -1,8 +1,7 @@
 import { Border, TextBlock, Window, getDesktopDisplays, renderDesktop } from "@sharpts/gui";
 import { assertHeadlessSnapshot, inspectDesktopTree } from "@sharpts/gui/devtools";
-import { closeWindow } from "@sharpts/gui/internal-testing";
 
-renderDesktop(
+const root = renderDesktop(
     <Window title="Visual regression" width={320} height={180}>
         <Border background="#cc2233">
             <TextBlock key="message">SharpTS visual baseline</TextBlock>
@@ -25,5 +24,5 @@ setTimeout((() => {
         throw new Error("Visual regression hash verification failed.");
     }
     console.log("VISUAL_SNAPSHOT_" + verified);
-    closeWindow();
+    root.dispose();
 }) as any, 50);

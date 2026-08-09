@@ -45,7 +45,6 @@ internal static class DesktopApplicationHost
 
         IGuestRuntime? guest = null;
         Exception? failure = null;
-        ISharpTSScheduledWork? watchdog = null;
 #if !SHARPTS_GUI_STATIC_HOST
         ISharpTSScheduledWork? hotReloadDelay = null;
         Timer? hotReloadPoll = null;
@@ -97,13 +96,10 @@ internal static class DesktopApplicationHost
         {
             if (root.IsMainWindow || lifetime.MainWindow is null)
                 lifetime.MainWindow = window;
-            if (!options.AutoClose)
-            {
-                shutdown.AttachWindow(
-                    window,
-                    () => bridgeContext?.ConsumeCloseCancellation() == true,
-                    () => bridgeContext?.ShouldRequestShutdown(root) != false);
-            }
+            shutdown.AttachWindow(
+                window,
+                () => bridgeContext?.ConsumeCloseCancellation() == true,
+                () => bridgeContext?.ShouldRequestShutdown(root) != false);
             if (root.Owner?.Window is Window owner)
             {
                 if (root.IsModal)
@@ -134,15 +130,11 @@ internal static class DesktopApplicationHost
             exitCode), options.GuestArguments);
         bridgeContext = bridgeRegistration.Context;
 
-        bool clickRaised = false;
-        int closing = 0;
-
         void Fail(
             Exception exception,
             SharpTSHostedShutdownReason reason = SharpTSHostedShutdownReason.UncaughtError)
         {
             RecordFailure(exception);
-            watchdog?.Cancel();
             shutdown.RequestShutdown(reason, 1);
         }
 
@@ -215,11 +207,6 @@ internal static class DesktopApplicationHost
                 if (bridgeRegistration.Context.CurrentRoot?.Window is null)
                     throw new InvalidOperationException("Reloaded guest did not mount a Window.");
                 trace.Record("hot-reload-end");
-                if (options.AutoClose)
-                {
-                    watchdog?.Cancel();
-                    shutdown.RequestShutdown(SharpTSHostedShutdownReason.HostRequested, 0);
-                }
             }
             catch (Exception exception)
             {
@@ -320,49 +307,6 @@ internal static class DesktopApplicationHost
         }
 #endif
 
-        void CompleteAutoClose()
-        {
-            watchdog?.Cancel();
-            shutdown.RequestShutdown(SharpTSHostedShutdownReason.HostRequested, 0);
-        }
-
-        void CheckAutoClose()
-        {
-            if (!options.AutoClose || Volatile.Read(ref closing) != 0)
-                return;
-            if (trace.Contains("guest-click") &&
-                trace.Contains("reactive-update-complete") &&
-                trace.Contains("guest-timer") &&
-                trace.Contains("guest-async-resume") &&
-                trace.Contains("dispatcher-sentinel") &&
-                Interlocked.Exchange(ref closing, 1) == 0)
-            {
-                dispatcher.Post(CompleteAutoClose, DispatcherPriority.Background);
-            }
-        }
-
-        void RaiseClickAfterReactiveCommit()
-        {
-            if (!options.AutoClose ||
-                !trace.Contains("reactive-update-complete") ||
-                !trace.Contains("guest-init-end"))
-                return;
-            if (Interlocked.Exchange(ref clickRaised, true) == false)
-            {
-                dispatcher.Post(() =>
-                {
-                    if (bridgeRegistration.Context.CurrentRoot is not null)
-                        bridgeRegistration.Context.RaiseFirstButtonClick();
-                }, DispatcherPriority.Background);
-            }
-        }
-
-        trace.Recorded += _ =>
-        {
-            RaiseClickAfterReactiveCommit();
-            CheckAutoClose();
-        };
-
         dispatcher.Post(async () =>
         {
             try
@@ -428,11 +372,6 @@ internal static class DesktopApplicationHost
                     QueueHotReload();
 #endif
                 dispatcher.Post(() => trace.Record("dispatcher-sentinel"), DispatcherPriority.Background);
-                if (options.AutoClose)
-                {
-                    watchdog = hostDispatcher.Schedule(TimeSpan.FromSeconds(15), () =>
-                        Fail(new TimeoutException("SharpTS GUI auto-close scenario timed out after 15 seconds.")));
-                }
             }
             catch (Exception exception)
             {
@@ -452,7 +391,6 @@ internal static class DesktopApplicationHost
         }
         finally
         {
-            watchdog?.Cancel();
 #if !SHARPTS_GUI_STATIC_HOST
             hotReloadDelay?.Cancel();
             hotReloadDelay?.Dispose();
@@ -483,24 +421,12 @@ internal static class DesktopApplicationHost
 
         string? writtenTracePath = TryWriteTrace(trace, options);
 
-        if (failure == null && options.AutoClose && !options.Watch)
-        {
-            var validationFailures = trace.ValidateRequiredStages(options.Headless);
-            if (validationFailures.Count > 0)
-            {
-                foreach (string validationFailure in validationFailures)
-                    Console.Error.WriteLine(validationFailure);
-                failure = new InvalidOperationException(
-                    "SharpTS GUI conformance trace validation failed.");
-            }
-        }
-
         if (writtenTracePath is not null)
             Console.WriteLine($"SharpTS GUI {options.Mode} trace: {writtenTracePath}");
         if (failure is null)
             return 0;
 
-        FatalDiagnostics.Report(failure, !options.Headless && !options.AutoClose);
+        FatalDiagnostics.Report(failure, !options.Headless);
         return 1;
     }
 

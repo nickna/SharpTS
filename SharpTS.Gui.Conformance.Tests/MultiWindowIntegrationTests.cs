@@ -17,7 +17,7 @@ public sealed class MultiWindowIntegrationTests
         const string configuration = "Release";
 #endif
         string hostSource = Path.Combine(
-            repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
+            repositoryRoot, "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
         string compiledGuest = Path.Combine(
             repositoryRoot, "SharpTS.Gui.Conformance.Tests", "obj", configuration,
             "net10.0", ".sharpts-gui-conformance", "MultiWindow.Guest.dll");
@@ -81,7 +81,7 @@ public sealed class MultiWindowIntegrationTests
             RedirectStandardError = true,
             UseShellExecute = false,
         };
-        start.ArgumentList.Add(Path.Combine(directory, "SharpTS.Gui.Host.dll"));
+        start.ArgumentList.Add(Path.Combine(directory, "SharpTS.Gui.ConformanceHost.dll"));
         start.ArgumentList.Add("--mode");
         start.ArgumentList.Add(mode);
         start.ArgumentList.Add("--headless");

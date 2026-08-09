@@ -19,11 +19,11 @@ public sealed class HostedDesktopIntegrationTests
 #endif
         string hostDirectory = Path.Combine(
             repositoryRoot,
-            "SharpTS.Gui.Host",
+            "SharpTS.Gui.ConformanceHost",
             "bin",
             configuration,
             "net10.0");
-        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.Host.dll");
+        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string tracePath = Path.Combine(Path.GetTempPath(), $"sharpts-gui-hosted-{mode}-{Guid.NewGuid():N}.json");
         Assert.True(File.Exists(hostAssembly), $"GUI host was not built: {hostAssembly}");
 
@@ -38,7 +38,6 @@ public sealed class HostedDesktopIntegrationTests
         startInfo.ArgumentList.Add("--mode");
         startInfo.ArgumentList.Add(mode);
         startInfo.ArgumentList.Add("--headless");
-        startInfo.ArgumentList.Add("--auto-close");
         startInfo.ArgumentList.Add("--trace");
         startInfo.ArgumentList.Add(tracePath);
 
@@ -136,8 +135,8 @@ public sealed class HostedDesktopIntegrationTests
         const string configuration = "Release";
 #endif
         string hostDirectory = Path.Combine(
-            repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
-        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.Host.dll");
+            repositoryRoot, "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
+        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string tracePath = Path.Combine(
             Path.GetTempPath(), $"sharpts-gui-window-close-{scenario}-{Guid.NewGuid():N}.json");
 
@@ -204,8 +203,8 @@ public sealed class HostedDesktopIntegrationTests
         const string configuration = "Release";
 #endif
         string hostDirectory = Path.Combine(
-            repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
-        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.Host.dll");
+            repositoryRoot, "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
+        string hostAssembly = Path.Combine(hostDirectory, "SharpTS.Gui.ConformanceHost.dll");
         string stage = Path.Combine(
             Path.GetTempPath(), "sharpts-gui-trace-failure-" + Guid.NewGuid().ToString("N"));
         string blocker = Path.Combine(stage, "not-a-directory");
@@ -266,10 +265,10 @@ public sealed class HostedDesktopIntegrationTests
         const string configuration = "Release";
 #endif
         string hostSource = Path.Combine(
-            repositoryRoot, "SharpTS.Gui.Host", "bin", configuration, "net10.0");
+            repositoryRoot, "SharpTS.Gui.ConformanceHost", "bin", configuration, "net10.0");
         string stageDirectory = Path.Combine(
             Path.GetTempPath(), $"sharpts-gui-tla-host-{Guid.NewGuid():N}");
-        string hostAssembly = Path.Combine(stageDirectory, "SharpTS.Gui.Host.dll");
+        string hostAssembly = Path.Combine(stageDirectory, "SharpTS.Gui.ConformanceHost.dll");
         Directory.CreateDirectory(stageDirectory);
         string guestDirectory = Path.Combine(stageDirectory, "Guest");
         string fixtureDirectory = Path.Combine(
@@ -318,6 +317,9 @@ public sealed class HostedDesktopIntegrationTests
                     repositoryRoot, "bin", configuration, "net10.0", "SharpTS.dll");
                 string bridgeAssembly = Path.Combine(
                     repositoryRoot, "SharpTS.Gui", "bin", configuration, "net10.0", "SharpTS.Gui.dll");
+                string supportAssembly = Path.Combine(
+                    repositoryRoot, "SharpTS.Gui.ConformanceSupport", "bin", configuration, "net10.0",
+                    "SharpTS.Gui.ConformanceSupport.dll");
                 var compile = new ProcessStartInfo("dotnet")
                 {
                     WorkingDirectory = stageDirectory,
@@ -330,6 +332,8 @@ public sealed class HostedDesktopIntegrationTests
                 compile.ArgumentList.Add(Path.Combine(stageConfigDirectory, "tsconfig.json"));
                 compile.ArgumentList.Add("-r");
                 compile.ArgumentList.Add(bridgeAssembly);
+                compile.ArgumentList.Add("-r");
+                compile.ArgumentList.Add(supportAssembly);
                 compile.ArgumentList.Add("-c");
                 compile.ArgumentList.Add(Path.Combine(guestDirectory, "main.tsx"));
                 compile.ArgumentList.Add("--target");
@@ -405,9 +409,9 @@ public sealed class HostedDesktopIntegrationTests
                 "tla-lazy-microtask",
                 "tla-main-resume-5-7-6-42",
                 "tla-window-mounted",
+                "unmount",
                 "tla-before-exit",
                 "tla-before-exit-microtask",
-                "unmount",
                 "tla-exit",
                 "host-exit-request",
                 "runtime-dispose"

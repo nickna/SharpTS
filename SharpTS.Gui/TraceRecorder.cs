@@ -61,12 +61,6 @@ public sealed class TraceRecorder
         Recorded?.Invoke(item);
     }
 
-    public bool Contains(string stage)
-    {
-        lock (_gate)
-            return _events.Any(item => item.Stage == stage);
-    }
-
     public void WriteJson(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
@@ -75,39 +69,6 @@ public sealed class TraceRecorder
             GuiJsonContext.Indented.GuiTraceEventArray));
     }
 
-    public IReadOnlyList<string> ValidateRequiredStages(bool headless)
-    {
-        string[] ownerStages =
-        [
-            "avalonia-setup", "guest-init-begin", "guest-init-end", "mount",
-            "dispatcher-sentinel", "button-click-event", "guest-click",
-            "coalesced-update-complete", "dependency-switch-complete",
-            "reactive-update-complete", "transient-ref-cleaned",
-            "guest-timer", "guest-async-resume", "unmount", "unsubscribe"
-        ];
-        var snapshot = Snapshot();
-        var failures = new List<string>();
-        foreach (string stage in ownerStages)
-        {
-            var matches = snapshot.Where(item => item.Stage == stage).ToArray();
-            if (matches.Length == 0)
-                failures.Add($"missing trace stage '{stage}'");
-            else if (matches.Any(item => item.ManagedThreadId != OwnerThreadId))
-                failures.Add($"trace stage '{stage}' ran off owner thread {OwnerThreadId}");
-        }
-
-        var completion = snapshot.SingleOrDefault(item => item.Stage == "task-complete-off-thread");
-        if (completion == null)
-            failures.Add("missing trace stage 'task-complete-off-thread'");
-        else if (completion.ManagedThreadId == OwnerThreadId)
-            failures.Add("task completion unexpectedly ran on the owner thread");
-
-        string windowStage = headless ? "headless-window-shown" : "real-window-shown";
-        if (!snapshot.Any(item => item.Stage == windowStage))
-            failures.Add($"missing trace stage '{windowStage}'");
-
-        return failures;
-    }
 }
 
 [JsonSourceGenerationOptions]

@@ -192,6 +192,10 @@
     <None Remove="SharpTS.Gui.Host/**" />
     <Compile Remove="SharpTS.Gui.Conformance.Tests/**" />
     <None Remove="SharpTS.Gui.Conformance.Tests/**" />
+    <Compile Remove="SharpTS.Gui.ConformanceSupport/**" />
+    <None Remove="SharpTS.Gui.ConformanceSupport/**" />
+    <Compile Remove="SharpTS.Gui.ConformanceHost/**" />
+    <None Remove="SharpTS.Gui.ConformanceHost/**" />
     <Compile Remove="SharpTS.Gui.Sdk.Consumer/**" />
     <None Remove="SharpTS.Gui.Sdk.Consumer/**" />
     <Compile Remove="SharpTS.Hosting.Abstractions/**" />

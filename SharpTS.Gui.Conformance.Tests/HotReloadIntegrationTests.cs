@@ -30,19 +30,7 @@ public sealed class HotReloadIntegrationTests
             Directory.CreateDirectory(guestDirectory);
             string entry = Path.Combine(guestDirectory, "main.tsx");
             File.Copy(fixture, entry, overwrite: true);
-            Directory.CreateDirectory(Path.Combine(temporaryRoot, ".sharpts"));
-            await File.WriteAllTextAsync(
-                Path.Combine(temporaryRoot, ".sharpts", "app.json"),
-                """
-                {
-                  "entryPath": "Guest/main.tsx",
-                  "compiledAssembly": "unused.dll",
-                  "hostedAbiVersion": 1,
-                  "guiApiVersion": 2,
-                  "descriptorSchemaVersion": 1,
-                  "descriptorSchemaHash": "7384ad1b4c183d7cd97dc12d422dff594ed82038e6a01bce3e661066f44e46da"
-                }
-                """);
+            GuiInterpretedTestAssets.Stage(repositoryRoot, configuration, temporaryRoot);
 
             string tracePath = Path.Combine(temporaryRoot, "hot-reload-trace.json");
             var start = new ProcessStartInfo("dotnet")
@@ -57,7 +45,6 @@ public sealed class HotReloadIntegrationTests
             start.ArgumentList.Add("interpreted");
             start.ArgumentList.Add("--headless");
             start.ArgumentList.Add("--watch");
-            start.ArgumentList.Add("--auto-close");
             start.ArgumentList.Add("--trace");
             start.ArgumentList.Add(tracePath);
 

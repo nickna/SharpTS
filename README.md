@@ -80,7 +80,7 @@ These commands materialize an internal `SharpTS.Gui.Sdk` project; the applicatio
 TypeScript/TSX, assets, `tsconfig.json`, and `sharpts.json`. The equivalent explicit SDK workflow is:
 
 ```powershell
-dotnet new install SharpTS.Gui.Sdk::0.2.0-preview.1
+dotnet new install SharpTS.Gui.Sdk::0.3.0-preview.1
 dotnet new sharpts-gui -n CounterApp
 cd CounterApp
 dotnet run -- --mode interpreted

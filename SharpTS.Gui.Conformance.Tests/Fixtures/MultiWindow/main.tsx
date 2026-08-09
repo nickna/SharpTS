@@ -13,7 +13,8 @@ import {
     createVirtualList,
     showNotification,
 } from "@sharpts/gui";
-import { dropText, getProperty, queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/internal-testing";
+import { createDesktopTestDriver } from "@sharpts/gui/testing";
+import { queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/conformance";
 
 const [fail, setFail] = createSignal<boolean>(false);
 const [stylePhase, setStylePhase] = createSignal<number>(0);
@@ -79,6 +80,7 @@ const mainWindow = application.createWindow(
     <MainWindow />,
     { main: true },
 );
+const driver = createDesktopTestDriver(mainWindow);
 const tray = application.createTrayIcon({
     icon: "asset:///headless.ico",
     toolTip: "SharpTS conformance",
@@ -99,18 +101,18 @@ application.createWindow(<FailureWindow />);
 if (application.windowCount !== 3) throw new Error("Expected three mounted windows.");
 if (mainWindow.findResource("accent") !== "#336699") throw new Error("Resource lookup failed.");
 trace("multi-window-mounted");
-if (dropText("drop-target", "payload") !== "copy") throw new Error("Drag effect mismatch.");
+if (driver.dropText("drop-target", "payload") !== "copy") throw new Error("Drag effect mismatch.");
 secondaryWindow.close();
 if (!secondaryWindow.isDisposed) throw new Error("Secondary close did not dispose its root.");
 trace("multi-window-secondary-closed");
 setTimeout((() => {
-    if (getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style did not apply.");
-    if (getProperty("drawing", "automationName") !== "drawing-surface") throw new Error("Advanced surface did not mount.");
+    if (driver.getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style did not apply.");
+    if (driver.getProperty("drawing", "automationName") !== "drawing-surface") throw new Error("Advanced surface did not mount.");
     trace("multi-window-advanced-surface");
     trace("multi-window-style-applied");
     setStylePhase(1);
     queueHostedMicrotask(() => {
-        if (getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style was lost after update.");
+        if (driver.getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style was lost after update.");
         trace("multi-window-style-retained");
         setFail(true);
     });

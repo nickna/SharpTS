@@ -12,8 +12,8 @@ public sealed class CalculatorHeadlessTests
         TraceEvent[] interpreted = await RunAsync("interpreted");
         TraceEvent[] compiled = await RunAsync("compiled");
 
-        Assert.Single(interpreted, item => item.Stage == "calculator-headless-complete");
-        Assert.Single(compiled, item => item.Stage == "calculator-headless-complete");
+        Assert.Single(interpreted, item => item.Stage == "guest-init-end");
+        Assert.Single(compiled, item => item.Stage == "guest-init-end");
         Assert.Contains(interpreted, item => item.Stage == "headless-window-shown");
         Assert.Contains(compiled, item => item.Stage == "headless-window-shown");
         Assert.Equal(
@@ -36,6 +36,7 @@ public sealed class CalculatorHeadlessTests
         try
         {
             CopyDirectory(hostSource, stage);
+            GuiInterpretedTestAssets.Stage(root, configuration, stage);
             string guestDirectory = Path.Combine(stage, "Guest");
             Directory.CreateDirectory(guestDirectory);
             File.Copy(Path.Combine(root, "Examples", "Calculator", "headless.tests.tsx"), Path.Combine(guestDirectory, "main.tsx"), true);
