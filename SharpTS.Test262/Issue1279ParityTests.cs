@@ -1458,6 +1458,11 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Object/keys/order-after-define-property.js")]
+    public void Object_enumeration_preserves_key_creation_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
     public void Date_prototype_methods_expose_standard_descriptors(string relativePath)
