@@ -1590,10 +1590,11 @@ public static partial class ObjectBuiltIns
     /// <summary>
     /// Object.isExtensible(obj) - returns whether new properties can be added to an object.
     /// </summary>
-    private static object? IsExtensibleMethod(Interpreter _, List<object?> args)
+    private static object? IsExtensibleMethod(Interpreter interpreter, List<object?> args)
     {
         return args[0] switch
         {
+            SharpTSProxy proxy => proxy.TrapIsExtensible(interpreter),
             SharpTSObject obj => obj.IsExtensible,
             SharpTSInstance inst => inst.IsExtensible,
             SharpTSArray arr => arr.IsExtensible,
@@ -1821,6 +1822,8 @@ public static partial class ObjectBuiltIns
     private static RuntimeValue IsExtensibleMethodV2(Interpreter interp, RuntimeValue recv, ReadOnlySpan<RuntimeValue> args)
     {
         var arg = args[0].ToObject();
+        if (arg is SharpTSProxy proxy)
+            return RuntimeValue.FromBoolean(proxy.TrapIsExtensible(interp));
         if (args[0].Kind == ValueKind.Object
             && arg is not null
             && arg is not (SharpTSObject or SharpTSInstance or SharpTSArray

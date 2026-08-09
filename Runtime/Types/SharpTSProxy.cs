@@ -182,6 +182,27 @@ public class SharpTSProxy : ISharpTSCallable
         return result;
     }
 
+    /// <summary>ECMA-262 §10.5.3 [[IsExtensible]].</summary>
+    internal bool TrapIsExtensible(Interpreter? interpreter)
+    {
+        var trap = GetTrapCallable("isExtensible", interpreter);
+        if (trap == null)
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapIsExtensible(interpreter)
+                : TargetIsExtensible(_target);
+
+        bool result = ToBoolean(InvokeTrap(trap, interpreter, [_target]));
+        bool targetResult = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapIsExtensible(interpreter)
+            : TargetIsExtensible(_target);
+        if (result != targetResult)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy isExtensible trap result does not match the target"));
+        }
+        return result;
+    }
+
     public object? TrapSet(string prop, object? value, Interpreter? interp)
     {
         var trap = GetTrapCallable("set", interp);
