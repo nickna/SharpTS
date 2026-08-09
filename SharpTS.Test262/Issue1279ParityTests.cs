@@ -1610,6 +1610,7 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/Proxy/ownKeys/not-extensible-missing-keys-throws.js")]
     [InlineData("built-ins/Proxy/ownKeys/not-extensible-new-keys-throws.js")]
+    [InlineData("built-ins/Proxy/ownKeys/not-extensible-return-keys.js")]
     public void Proxy_ownKeys_matches_nonextensible_target_keys(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
