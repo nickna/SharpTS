@@ -1553,8 +1553,15 @@ public static partial class ObjectBuiltIns
     /// Object.preventExtensions(obj) - prevents new properties from being added to an object.
     /// Unlike freeze/seal, existing properties can still be modified and deleted.
     /// </summary>
-    private static object? PreventExtensions(Interpreter _, List<object?> args)
+    private static object? PreventExtensions(Interpreter interpreter, List<object?> args)
     {
+        if (args[0] is SharpTSProxy proxy)
+        {
+            if (!proxy.TrapPreventExtensions(interpreter))
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy preventExtensions trap returned false"));
+            return proxy;
+        }
         switch (args[0])
         {
             case SharpTSObject obj:
@@ -1584,6 +1591,42 @@ public static partial class ObjectBuiltIns
             default:
                 // Non-objects are returned unchanged (JavaScript behavior)
                 return args[0];
+        }
+    }
+
+    internal static bool PreventExtensionsTarget(Interpreter interpreter, object target)
+    {
+        switch (target)
+        {
+            case SharpTSProxy proxy:
+                return proxy.TrapPreventExtensions(interpreter);
+            case SharpTSObject obj:
+                obj.PreventExtensions();
+                return true;
+            case SharpTSInstance instance:
+                instance.PreventExtensions();
+                return true;
+            case SharpTSArray array:
+                array.PreventExtensions();
+                return true;
+            case SharpTSFunction function:
+                function.PreventExtensions();
+                return true;
+            case SharpTSArrowFunction arrow:
+                arrow.PreventExtensions();
+                return true;
+            case ISharpTSCallable callable:
+                PropertyDescriptorStore.PreventExtensions(callable);
+                return true;
+            case Dictionary<string, object?> dictionary:
+                PropertyDescriptorStore.PreventExtensions(dictionary);
+                return true;
+            case System.Collections.IDictionary dictionary:
+                PropertyDescriptorStore.PreventExtensions(dictionary);
+                return true;
+            default:
+                PropertyDescriptorStore.PreventExtensions(target);
+                return true;
         }
     }
 
@@ -1811,6 +1854,7 @@ public static partial class ObjectBuiltIns
         var result = PreventExtensions(interp, CallableInterop.ToBoxedList(args));
         if (args[0].Kind == ValueKind.Object
             && arg is not null
+            && arg is not SharpTSProxy
             && arg is not (SharpTSObject or SharpTSInstance or SharpTSArray
                 or Dictionary<string, object?> or System.Collections.IDictionary))
         {
