@@ -17,8 +17,8 @@ internal static class GuiApplicationCli
         if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any())
             throw new InvalidOperationException($"Output directory is not empty: {root}");
         Directory.CreateDirectory(Path.Combine(root, "Assets"));
-        string serializedVersion = JsonSerializer.Serialize(command.GuiSdkVersion);
-        string serializedName = JsonSerializer.Serialize(command.Name);
+        string serializedVersion = QuoteJsonString(command.GuiSdkVersion);
+        string serializedName = QuoteJsonString(command.Name);
         File.WriteAllText(Path.Combine(root, "sharpts.json"), $$"""
             {
               "application": {
@@ -62,6 +62,9 @@ internal static class GuiApplicationCli
         Console.WriteLine($"Created SharpTS Avalonia application '{command.Name}' in {root}");
         return 0;
     }
+
+    private static string QuoteJsonString(string value) =>
+        $"\"{JsonEncodedText.Encode(value)}\"";
 
     public static int Run(ParsedCommand.Application command)
     {

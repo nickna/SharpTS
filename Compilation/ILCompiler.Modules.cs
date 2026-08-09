@@ -911,7 +911,7 @@ public partial class ILCompiler
         }
 
         Type funcTask = typeof(Func<Task>);
-        var stepArray = il.DeclareLocal(funcTask.MakeArrayType());
+        var stepArray = il.DeclareLocal(_types.MakeArrayType(funcTask));
         il.Emit(OpCodes.Ldc_I4, steps.Count);
         il.Emit(OpCodes.Newarr, funcTask);
         il.Emit(OpCodes.Stloc, stepArray);
@@ -1041,7 +1041,7 @@ public partial class ILCompiler
     private void EmitHostedStepArray(ILGenerator il, IReadOnlyList<MethodBuilder> steps)
     {
         Type funcTask = typeof(Func<Task>);
-        LocalBuilder stepArray = il.DeclareLocal(funcTask.MakeArrayType());
+        LocalBuilder stepArray = il.DeclareLocal(_types.MakeArrayType(funcTask));
         il.Emit(OpCodes.Ldc_I4, steps.Count);
         il.Emit(OpCodes.Newarr, funcTask);
         il.Emit(OpCodes.Stloc, stepArray);

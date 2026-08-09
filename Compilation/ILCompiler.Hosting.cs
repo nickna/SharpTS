@@ -9,6 +9,12 @@ namespace SharpTS.Compilation;
 
 public partial class ILCompiler
 {
+    [UnconditionalSuppressMessage(
+        "Trimming",
+        "IL2111",
+        Justification =
+            "The emitted factory type declares the public parameterless constructor required " +
+            "by SharpTSHostedProgramAttribute, and the attribute itself roots that constructor.")]
     private void EmitHostedAbi(
         MethodBuilder initializeCore,
         bool initializerAcceptsRuntime = false,
@@ -184,7 +190,7 @@ public partial class ILCompiler
 
     private void EmitHostedInitializeOverride(
         MethodBuilder initializeCore,
-        Type baseType,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicMethods)] Type baseType,
         bool initializerAcceptsRuntime,
         bool initializerReturnsTask)
     {
@@ -207,7 +213,10 @@ public partial class ILCompiler
         _hostedRuntimeType.DefineMethodOverride(method, contract);
     }
 
-    private void EmitHostedBooleanHook(string name, Type baseType, Action<ILGenerator> emitBody)
+    private void EmitHostedBooleanHook(
+        string name,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicMethods)] Type baseType,
+        Action<ILGenerator> emitBody)
     {
         MethodInfo contract = baseType.GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!;
         var method = _hostedRuntimeType!.DefineMethod(
@@ -221,7 +230,10 @@ public partial class ILCompiler
         _hostedRuntimeType.DefineMethodOverride(method, contract);
     }
 
-    private void EmitHostedBooleanProperty(string name, Type baseType, Action<ILGenerator> emitBody)
+    private void EmitHostedBooleanProperty(
+        string name,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicProperties)] Type baseType,
+        Action<ILGenerator> emitBody)
     {
         MethodInfo contract = baseType.GetProperty(
             name, BindingFlags.Instance | BindingFlags.NonPublic)!.GetMethod!;
@@ -240,7 +252,10 @@ public partial class ILCompiler
         property.SetGetMethod(getter);
     }
 
-    private void EmitHostedVoidHook(string name, Type baseType, Action<ILGenerator> emitBody)
+    private void EmitHostedVoidHook(
+        string name,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicMethods)] Type baseType,
+        Action<ILGenerator> emitBody)
     {
         MethodInfo contract = baseType.GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!;
         var method = _hostedRuntimeType!.DefineMethod(
@@ -254,7 +269,10 @@ public partial class ILCompiler
         _hostedRuntimeType.DefineMethodOverride(method, contract);
     }
 
-    private void EmitHostedLifecycleOverride(string name, Type baseType, MethodBuilder target)
+    private void EmitHostedLifecycleOverride(
+        string name,
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicMethods)] Type baseType,
+        MethodBuilder target)
     {
         MethodInfo contract = baseType.GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!;
         var method = _hostedRuntimeType!.DefineMethod(
@@ -269,7 +287,8 @@ public partial class ILCompiler
         _hostedRuntimeType.DefineMethodOverride(method, contract);
     }
 
-    private void EmitHostedTimerDelayOverride(Type baseType)
+    private void EmitHostedTimerDelayOverride(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.NonPublicMethods)] Type baseType)
     {
         MethodInfo contract = baseType.GetMethod(
             "GetNextGuestTimerDelay", BindingFlags.Instance | BindingFlags.NonPublic)!;
