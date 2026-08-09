@@ -1,10 +1,19 @@
 # Avalonia desktop status and Windows roadmap
 
-Date: 2026-08-08
+Date: 2026-08-09
 
 This document is the canonical engineering record for the Avalonia desktop effort. It replaces
 the Phase 0, Phase 1A, Phase 1B, Phase 2, Phase 3A, and Windows-preview findings reports. Git
 history remains the source for the full phase-by-phase narratives.
+
+## Phase 0 scope resolution
+
+Phase 0 is complete for the active Windows product scope. Windows x64 feasibility passed in both
+interpreted and compiled modes with a real window, dispatcher-owned input/rendering, timers, and
+asynchronous continuations. The original cross-platform exit criterion is not complete: no macOS
+gate has run or passed, and macOS remains an unscheduled Phase 4 reactivation track. Native
+Windows ARM64 execution is likewise release work rather than evidence already obtained. This
+distinction is deliberate and no cross-platform compatibility is implied.
 
 ## Phase 1A stabilization: shutdown, diagnostics, and interpreted top-level await
 

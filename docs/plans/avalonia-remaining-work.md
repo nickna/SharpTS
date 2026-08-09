@@ -1,7 +1,7 @@
 # Avalonia GUI remaining-work plan
 
-**Status:** Proposed implementation plan
-**Date:** 2026-08-08
+**Status:** Active completion record
+**Date:** 2026-08-09
 **Primary release scope:** Windows x64 and Windows ARM64 desktop applications
 **Deferred platform scope:** macOS, until explicitly reactivated
 **Baseline implementation:** `codex/avalonia-phase-0` at `989af7f4`
@@ -36,11 +36,11 @@ tooling, release closure, and ecosystem depth.
 
 | Phase | Current assessment | Completion target |
 | --- | --- | --- |
-| Phase 0 | Windows feasibility passed; original macOS gate was not run | Reconcile the original cross-platform criterion with the Windows-only roadmap and preserve macOS as an explicit deferred gate |
-| Phase 1A | Hosted interpreter scheduling is implemented | Close normal-window lifecycle, top-level-await, tracing, and conformance gaps |
+| Phase 0 | **Complete for the active Windows scope.** Cross-platform feasibility remains intentionally incomplete | macOS gates are preserved exclusively under the unscheduled Phase 4 reactivation track |
+| Phase 1A | **Complete.** Hosted interpreter lifecycle, diagnostics, top-level await, and conformance are closed | Regression coverage only |
 | Phase 1B | Compiled hosted ABI and scheduler are implemented | Match the completed interpreter contract and stabilize the ABI/tool terminology |
 | Phase 2A | Complete | No additional phase work; regression coverage only |
-| Phase 2B | Broad typed surface exists, but generation/LSP/performance work is incomplete | Establish one generated contract and finish diagnostics, recovery, and quality gates |
+| Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | SDK build/run/publish works | Add templates, documentation, install-location robustness, and complete SDK ergonomics |
 | Phase 3B | Windows SDK publishing works; TypeScript-only CLI and release publication do not | Deliver the CLI front door and close Windows preview publication gates |
 | Phase 4 | Selected services landed early; most ecosystem/AOT work remains | Stabilize and expand the platform after the public preview |
@@ -71,6 +71,13 @@ warnings; all core and GUI suites pass; and the evidence record identifies the e
 commit. No later phase may claim completion against the pre-integration branch.
 
 ## Phase 0 residual: scope and platform feasibility record
+
+**Resolution (2026-08-09): complete for the active Windows scope.** The canonical desktop status
+records Windows x64 interpreted and compiled real-window feasibility, explicitly labels native
+Windows ARM64 execution as outstanding, and states that no macOS product gate has run or passed.
+All macOS implementation and native-execution gates live under the Phase 4 macOS reactivation
+track. This resolution changes the completion record only; it does not claim cross-platform
+compatibility or add macOS to the supported RID set.
 
 The Windows x64 feasibility spike passed in interpreted and compiled modes. The original Phase 0
 exit criterion also required a real-window macOS run, but the product roadmap now explicitly
