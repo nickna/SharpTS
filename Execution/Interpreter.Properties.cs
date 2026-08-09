@@ -2218,7 +2218,11 @@ public partial class Interpreter
         // Proxy interception - must be before any other dispatch
         if (obj is SharpTSProxy proxy)
         {
-            proxy.TrapSet(set.Name.Lexeme, value, this);
+            bool assigned = proxy.TrapSetProperty(
+                set.Name.Lexeme, value, this, proxy);
+            if (!assigned && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Proxy set trap rejected property '{set.Name.Lexeme}'"));
             return value;
         }
 

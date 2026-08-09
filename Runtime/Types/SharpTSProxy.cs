@@ -293,14 +293,43 @@ public class SharpTSProxy : ISharpTSCallable
 
     public object? TrapSet(string prop, object? value, Interpreter? interp)
     {
+        TrapSetProperty(prop, value, interp, interp != null ? this : null);
+        return value;
+    }
+
+    internal bool TrapSetProperty(
+        string prop, object? value, Interpreter? interp, object? receiver)
+    {
         var trap = GetTrapCallable("set", interp);
         if (trap == null)
-            return ForwardSet(prop, value, interp);
+        {
+            if (_target is SharpTSProxy targetProxy)
+                return targetProxy.TrapSetProperty(prop, value, interp, receiver);
+            ForwardSet(prop, value, interp);
+            return true;
+        }
 
-        // Pass target, prop, value, receiver (null for compiled mode compatibility)
-        object? receiver = interp != null ? (object)this : null;
-        InvokeTrap(trap, interp, [_target, prop, value, receiver]);
-        return value;
+        bool result = ToBoolean(InvokeTrap(
+            trap, interp, [_target, prop, value, receiver]));
+        if (!result) return false;
+
+        object? targetDescriptor = GetTargetOwnPropertyDescriptor(prop, interp);
+        if (targetDescriptor is null or SharpTSUndefined) return true;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (descriptor.Configurable) return true;
+        if (descriptor.HasValue && !descriptor.Writable
+            && !SharpTSObject.SameValue(value, descriptor.Value))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy set trap cannot change a fixed data property"));
+        }
+        if ((descriptor.HasGet || descriptor.HasSet) && descriptor.Set == null)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy set trap cannot assign to a fixed accessor without a setter"));
+        }
+        return true;
     }
 
     public bool TrapHas(string prop, Interpreter? interp)

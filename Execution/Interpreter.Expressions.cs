@@ -1403,7 +1403,11 @@ public partial class Interpreter
         if (obj is SharpTSProxy proxy)
         {
             string key = index?.ToString() ?? "";
-            return proxy.TrapSetRV(key, value, this);
+            bool assigned = proxy.TrapSetProperty(key, value, this, proxy);
+            if (!assigned && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Proxy set trap rejected property '{key}'"));
+            return RuntimeValue.FromBoxed(value);
         }
 
         if (obj is ISharpTSSymbolPropertyBag symbolBag

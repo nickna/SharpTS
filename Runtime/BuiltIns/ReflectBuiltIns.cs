@@ -163,11 +163,17 @@ public static class ReflectBuiltIns
                     interpreter.GetPropertyValue(target, propertyKey));
             }),
 
-            "set" => BuiltInMethod.CreateV2("set", 3, 4, static (_, _, args) =>
+            "set" => BuiltInMethod.CreateV2("set", 3, 4, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.set requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
                 var value = args[2].ToObject();
+                object? receiver = args.Length > 3 && !args[3].IsUndefined
+                    ? args[3].ToObject()
+                    : target;
+                if (target is SharpTSProxy proxy)
+                    return RuntimeValue.FromBoolean(proxy.TrapSetProperty(
+                        propertyKey, value, interpreter, receiver));
                 try
                 {
                     switch (target)
