@@ -17,6 +17,7 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly Dictionary<string, object?> _fields = fields;
+    private readonly List<string> _stringPropertyOrder = [.. fields.Keys];
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private readonly List<SharpTSSymbol> _symbolPropertyOrder = [];
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
@@ -241,6 +242,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
+        if (!exists) _stringPropertyOrder.Add(name);
         _fields[name] = value;
     }
 
@@ -298,6 +300,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
+        if (!exists) _stringPropertyOrder.Add(name);
         _fields[name] = value;
     }
 
@@ -364,6 +367,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         _setters?.Remove(name);
         _accessorProperties?.Remove(name);
         _descriptors?.Remove(name);
+        _stringPropertyOrder.Remove(name);
         return true;
     }
 
@@ -382,6 +386,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void DefineGetter(string name, ISharpTSCallable getter)
     {
+        if (!_fields.ContainsKey(name) && !IsAccessorProperty(name))
+            _stringPropertyOrder.Add(name);
         _accessorProperties ??= [];
         _accessorProperties.Add(name);
         _getters ??= new Dictionary<string, ISharpTSCallable>();
@@ -393,6 +399,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void DefineSetter(string name, ISharpTSCallable setter)
     {
+        if (!_fields.ContainsKey(name) && !IsAccessorProperty(name))
+            _stringPropertyOrder.Add(name);
         _accessorProperties ??= [];
         _accessorProperties.Add(name);
         _setters ??= new Dictionary<string, ISharpTSCallable>();
@@ -747,6 +755,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return false;
         }
 
+        if (!hasExisting)
+            _stringPropertyOrder.Add(name);
+
         // Store the descriptor flags
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
         _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
@@ -951,19 +962,47 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal static bool IsInternalSlot(string key) => key is "__primitiveType" or "__primitiveValue";
 
     /// <summary>
-    /// Own enumerable string-keyed property names: data fields first, followed by
-    /// accessor properties, honoring per-property enumerability.
+    /// Own enumerable string-keyed property names in ECMA-262 OwnPropertyKeys
+    /// order: canonical array indices ascending, then other strings in creation
+    /// order. Data/accessor redefinitions keep their original position.
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
-        foreach (var key in _fields.Keys)
-            if (GetPropertyFlags(key).Enumerable)
-                yield return key;
-        if (_accessorProperties == null) yield break;
-        foreach (var key in _accessorProperties)
-            if (GetPropertyFlags(key).Enumerable)
-                yield return key;
+        var indices = new List<(uint Index, string Key)>();
+        foreach (string key in _stringPropertyOrder)
+        {
+            if (!HasOwnStringProperty(key) || !GetPropertyFlags(key).Enumerable)
+                continue;
+            if (TryGetArrayIndex(key, out uint index))
+            {
+                indices.Add((index, key));
+            }
+        }
+        indices.Sort(static (left, right) => left.Index.CompareTo(right.Index));
+        foreach (var entry in indices)
+            yield return entry.Key;
+
+        foreach (string key in _stringPropertyOrder)
+        {
+            if (!HasOwnStringProperty(key) || !GetPropertyFlags(key).Enumerable)
+                continue;
+            if (TryGetArrayIndex(key, out _))
+                continue;
+            yield return key;
+        }
     }
+
+    private bool HasOwnStringProperty(string name)
+        => _fields.ContainsKey(name) || IsAccessorProperty(name);
+
+    private static bool TryGetArrayIndex(string key, out uint index)
+        => uint.TryParse(
+                key,
+                System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out index)
+            && index < uint.MaxValue
+            && key == index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public override string ToString() => $"{{ {string.Join(", ", _fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
 }

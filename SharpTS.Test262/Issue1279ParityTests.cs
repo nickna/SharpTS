@@ -3010,6 +3010,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void JSON_parse_reviver_visits_own_keys_in_spec_order()
+        => AssertPass(
+            "built-ins/JSON/parse/reviver-call-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void JSON_reviver_preserves_nonconfigurable_array_properties_on_delete()
         => AssertPass(
             "built-ins/JSON/parse/reviver-array-non-configurable-prop-delete.js",

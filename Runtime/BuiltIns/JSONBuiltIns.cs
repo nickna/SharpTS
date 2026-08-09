@@ -154,7 +154,7 @@ public static class JSONBuiltIns
             // Snapshot keys — the reviver can defineProperty on `this`,
             // adding sibling keys; the spec freezes the iteration list at
             // the start of step 2.c.
-            var keys = obj.Fields.Keys.ToList();
+            var keys = obj.OwnEnumerableKeys().ToList();
             foreach (var prop in keys)
             {
                 var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
