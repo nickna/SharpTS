@@ -1878,6 +1878,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/isExtensible/return-is-different-from-target.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_isExtensible_accepts_results_matching_target()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/return-same-result-from-target.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
