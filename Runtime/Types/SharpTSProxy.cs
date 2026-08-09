@@ -284,8 +284,25 @@ public class SharpTSProxy : ISharpTSCallable
         if (trap == null)
             return ForwardDeleteProperty(prop, interp);
 
-        var result = InvokeTrap(trap, interp, [_target, prop]);
-        return ToBoolean(result);
+        bool result = ToBoolean(InvokeTrap(trap, interp, [_target, prop]));
+        if (!result) return false;
+
+        object? targetDescriptor = GetTargetOwnPropertyDescriptor(prop, interp);
+        if (targetDescriptor is null or SharpTSUndefined) return true;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (!descriptor.Configurable)
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy deleteProperty trap cannot delete a non-configurable property"));
+
+        bool targetIsExtensible = _target is SharpTSProxy proxy && interp != null
+            ? proxy.TrapIsExtensible(interp)
+            : TargetIsExtensible(_target);
+        if (!targetIsExtensible)
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy deleteProperty trap cannot hide a property on a non-extensible target"));
+
+        return true;
     }
 
     /// <summary>

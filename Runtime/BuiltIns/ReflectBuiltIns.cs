@@ -127,12 +127,15 @@ public static class ReflectBuiltIns
                 });
             }),
 
-            "deleteProperty" => BuiltInMethod.CreateV2("deleteProperty", 2, static (_, _, args) =>
+            "deleteProperty" => BuiltInMethod.CreateV2("deleteProperty", 2, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.deleteProperty requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
                 switch (target)
                 {
+                    case SharpTSProxy proxy:
+                        return RuntimeValue.FromBoolean(
+                            proxy.TrapDeleteProperty(propertyKey, interpreter));
                     case SharpTSObject obj:
                         return RuntimeValue.FromBoolean(
                             obj.DeleteProperty(propertyKey));
