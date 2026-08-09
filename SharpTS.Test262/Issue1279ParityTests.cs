@@ -2382,6 +2382,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/set/target-property-is-not-configurable-not-writable-not-equal-to-v.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_set_preserves_false_boolean_results()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-boolean-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
