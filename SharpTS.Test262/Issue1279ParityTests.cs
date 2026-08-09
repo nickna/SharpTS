@@ -1817,6 +1817,12 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/splice/length-and-deleteCount-exceeding-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/splice/length-exceeding-integer-limit-shrink-array.js")]
+    public void Array_splice_supports_max_safe_generic_lengths(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)
