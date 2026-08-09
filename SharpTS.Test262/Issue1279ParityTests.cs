@@ -1704,6 +1704,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined-target-is-not-extensible.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_hidden_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined-targetdesc-is-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
