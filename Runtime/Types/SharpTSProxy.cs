@@ -42,9 +42,13 @@ public class SharpTSProxy : ISharpTSCallable
     private static void ValidateObject(object? value, string argName)
     {
         if (value == null || value is SharpTSUndefined)
-            throw new Exception($"Runtime Error: Cannot create proxy with a non-object as {argName}.");
-        if (value is string or double or bool or int or long or float or decimal or SharpTSSymbol or SharpTSBigInt)
-            throw new Exception($"Runtime Error: Cannot create proxy with a non-object as {argName}.");
+            throw new ThrowException(new SharpTSTypeError(
+                $"Cannot create proxy with a non-object as {argName}."));
+        if (value is string or bool or byte or sbyte or short or ushort or int
+            or uint or long or ulong or float or double or decimal
+            or System.Numerics.BigInteger or SharpTSSymbol or SharpTSBigInt)
+            throw new ThrowException(new SharpTSTypeError(
+                $"Cannot create proxy with a non-object as {argName}."));
     }
 
     private object? GetTrapCallable(string trapName, Interpreter? interpreter)
