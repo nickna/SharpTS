@@ -234,11 +234,12 @@ public static class ReflectBuiltIns
                 }
             }),
 
-            "isExtensible" => BuiltInMethod.CreateV2("isExtensible", 1, static (_, _, args) =>
+            "isExtensible" => BuiltInMethod.CreateV2("isExtensible", 1, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.isExtensible requires a target object.");
                 return RuntimeValue.FromBoolean(target switch
                 {
+                    SharpTSProxy proxy => proxy.TrapIsExtensible(interpreter),
                     SharpTSObject obj => obj.IsExtensible,
                     SharpTSInstance inst => inst.IsExtensible,
                     SharpTSArray arr => arr.IsExtensible,
@@ -248,9 +249,11 @@ public static class ReflectBuiltIns
                 });
             }),
 
-            "preventExtensions" => BuiltInMethod.CreateV2("preventExtensions", 1, static (_, _, args) =>
+            "preventExtensions" => BuiltInMethod.CreateV2("preventExtensions", 1, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.preventExtensions requires a target object.");
+                if (target is SharpTSProxy proxy)
+                    return RuntimeValue.FromBoolean(proxy.TrapPreventExtensions(interpreter));
                 switch (target)
                 {
                     case SharpTSObject obj:
