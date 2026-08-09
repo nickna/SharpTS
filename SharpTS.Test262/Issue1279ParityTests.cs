@@ -1579,6 +1579,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Proxy/ownKeys/return-type-throws-null.js")]
     [InlineData("built-ins/Proxy/ownKeys/return-type-throws-number.js")]
     [InlineData("built-ins/Proxy/ownKeys/return-type-throws-object.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-undefined.js")]
     public void Proxy_ownKeys_rejects_non_property_key_entries(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
