@@ -5,6 +5,8 @@ import {
     Fragment,
     Grid,
     TextBlock,
+    Window,
+    createDesktopApplication,
     useControlRef,
 } from "@sharpts/gui";
 import { CalculatorButton, CalculatorButtonDefinition } from "../../../Examples/Calculator/CalculatorApp";
@@ -24,3 +26,19 @@ export const positive = (
         <Fragment><TextBlock>A</TextBlock><TextBlock>B</TextBlock></Fragment>
     </Grid>
 );
+
+const application = createDesktopApplication({
+    shutdownMode: "onMainWindowClose",
+    onUnhandledError: (_error, failedWindow) => failedWindow.dispose(),
+});
+const mainWindow = application.createWindow(
+    <Window title="Main"><TextBlock>Main</TextBlock></Window>,
+    { main: true },
+);
+const modalWindow = application.createWindow(
+    <Window title="Dialog"><TextBlock>Dialog</TextBlock></Window>,
+    { owner: mainWindow, modal: true },
+);
+modalWindow.activate();
+void modalWindow.closed;
+application.shutdown(0);

@@ -10,6 +10,7 @@
     <GuiConformanceConfig>$(GuiConformanceRoot)tsconfig.json</GuiConformanceConfig>
     <GuiConformanceGuest>$(GuiConformanceRoot)SharpTS.Gui.Guest.dll</GuiConformanceGuest>
     <CalculatorHeadlessGuest>$(GuiConformanceRoot)Calculator.Headless.Guest.dll</CalculatorHeadlessGuest>
+    <MultiWindowGuest>$(GuiConformanceRoot)MultiWindow.Guest.dll</MultiWindowGuest>
   </PropertyGroup>
 
   <ItemGroup>
@@ -39,6 +40,7 @@
     <Copy SourceFiles="..\SharpTS.Gui.Sdk\GuiPackage\tsconfig.overlay.json" DestinationFiles="$(GuiConformanceConfig)" />
     <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -c &quot;$(MSBuildThisFileDirectory)..\SharpTS.Gui.Sdk.Consumer\main.tsx&quot; --target dll --hosted --quiet -o &quot;$(GuiConformanceGuest)&quot;" />
     <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -c &quot;$(MSBuildThisFileDirectory)..\Examples\Calculator\headless.tests.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(CalculatorHeadlessGuest)&quot;" />
+    <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -c &quot;$(MSBuildThisFileDirectory)Fixtures\MultiWindow\main.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(MultiWindowGuest)&quot;" />
     <Copy SourceFiles="$(GuiConformanceGuest)" DestinationFolder="$(GuiConformanceHostDir)" />
     <Copy SourceFiles="..\SharpTS.Gui.Sdk.Consumer\main.tsx" DestinationFolder="$(GuiConformanceHostDir)Guest" />
     <Copy SourceFiles="$(GuiConformanceConfig)" DestinationFolder="$(GuiConformanceHostDir).sharpts" />

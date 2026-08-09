@@ -92,6 +92,22 @@ public sealed class HostInfrastructureTests
         Assert.Empty(failures);
     }
 
+    [Fact]
+    public void ShutdownCoordinator_AllowsWindowOnlyCloseWhenPolicyDeclinesShutdown()
+    {
+        EnsureAvalonia();
+        var posted = new Queue<Action>();
+        var coordinator = new DesktopShutdownCoordinator(
+            () => null, posted.Enqueue, _ => { }, _ => { });
+        var window = new Window();
+        coordinator.AttachWindow(window, shouldRequestShutdown: () => false);
+
+        window.Close();
+
+        Assert.False(coordinator.IsShutdownStarted);
+        Assert.Empty(posted);
+    }
+
     [Theory]
     [InlineData(SharpTSHostedShutdownReason.StartupFailure, 1)]
     [InlineData(SharpTSHostedShutdownReason.UncaughtError, 1)]

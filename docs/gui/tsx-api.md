@@ -1,7 +1,7 @@
 # SharpTS GUI TSX API
 
-GUI API version 2 is an application-capable, retained TSX surface for Windows Avalonia apps. A
-project renders one `Window` root from a function component:
+GUI API version 2 is an application-capable, retained TSX surface for Windows Avalonia apps.
+`renderDesktop` remains the concise, compatible entry point for an application with one window:
 
 ```tsx
 import { Button, StackPanel, TextBlock, Window, renderDesktop, useState } from "@sharpts/gui";
@@ -20,6 +20,38 @@ function App(): JSX.Element {
 
 const root = renderDesktop(<App />);
 ```
+
+Applications that own more than one window use an explicit application session:
+
+```tsx
+import { Window, TextBlock, createDesktopApplication } from "@sharpts/gui";
+
+const app = createDesktopApplication({
+    shutdownMode: "onMainWindowClose",
+    onUnhandledError: (error, failedWindow) => {
+        console.error(error);
+        failedWindow.dispose();
+    },
+});
+const main = app.createWindow(
+    <Window title="Main"><TextBlock>Main window</TextBlock></Window>,
+    { main: true },
+);
+const dialog = app.createWindow(
+    <Window title="Details"><TextBlock>Owned window</TextBlock></Window>,
+    { owner: main, modal: true },
+);
+dialog.activate();
+await dialog.closed;
+```
+
+The shutdown modes are `onLastWindowClose` (default), `onMainWindowClose`, and `explicit`.
+`app.shutdown(exitCode)` performs an explicit ordered guest/host shutdown. Closing or disposing a
+non-terminating window releases only its native tree, refs, subscriptions, hooks, and effects.
+Owned and modal windows must belong to the same application. An uncaught asynchronous render or
+effect failure invokes the window handler first and disposes only that window; event-handler and
+detached asynchronous errors remain host-level failures. Initial mount errors are thrown by
+`createWindow` before it returns.
 
 Function components may return an element, primitive text/number, fragment, nested array, or
 `null`/`undefined`/boolean. Components use `useState`, `useReducer`, `useEffect`, `useMemo`,
@@ -85,11 +117,13 @@ and SHA-256 pin:
 `showMessageDialog`, `showOpenFileDialog`, `showSaveFileDialog`, `showFolderDialog`,
 `readClipboardText`, and `writeClipboardText` require a mounted, non-Headless window.
 
-## Version 2 preview.1 boundaries
+## Current version 2 boundaries
 
-The API intentionally supports one `Window` root and built-in descriptors. Combo/list data is
+Each window still requires exactly one `Window` root and built-in descriptors. Combo/list data is
 string-backed. Public theme/resource dictionaries, custom controls, item templates, data grids,
-trees, drawing/canvas, rich text, multi-window orchestration, and macOS are not part of preview.1.
+trees, drawing/canvas, rich text, and macOS are not yet supported. Multi-window orchestration is
+available through `createDesktopApplication`; `renderDesktop` remains the one-window convenience
+API.
 API 1 manifests are rejected with a migration diagnostic; see
 [Migrating GUI API 1 to 2](migrating-api-1-to-2.md). The complete proof application is in
 `Examples/Calculator`.

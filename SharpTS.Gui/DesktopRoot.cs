@@ -15,7 +15,7 @@ namespace SharpTS.Gui;
 public sealed class DesktopRoot : IDisposable
 {
     private readonly TraceRecorder _recorder;
-    private readonly Action<Window> _showWindow;
+    private readonly Action<DesktopRoot, Window> _showWindow;
     private readonly Action<Action> _dispatchGuestCallback;
     private readonly bool _headless;
     private readonly Action _reactiveCleanup;
@@ -31,14 +31,22 @@ public sealed class DesktopRoot : IDisposable
     private int _removeOperations;
     private int _moveOperations;
     private string? _failNextSetterKey;
+    private Window? _observedWindow;
+    private Window? _closedWindow;
+    private readonly TaskCompletionSource _completion =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     internal DesktopRoot(
         TraceRecorder recorder,
-        Action<Window> showWindow,
+        Action<DesktopRoot, Window> showWindow,
         Action<Action> dispatchGuestCallback,
         bool headless,
         Action reactiveCleanup,
-        Action<DesktopRoot> releaseRoot)
+        Action<DesktopRoot> releaseRoot,
+        DesktopApplicationSession? application,
+        DesktopRoot? owner,
+        bool isModal,
+        bool isMainWindow)
     {
         _recorder = recorder;
         _showWindow = showWindow;
@@ -46,9 +54,18 @@ public sealed class DesktopRoot : IDisposable
         _headless = headless;
         _reactiveCleanup = reactiveCleanup;
         _releaseRoot = releaseRoot;
+        Application = application;
+        Owner = owner;
+        IsModal = isModal;
+        IsMainWindow = isMainWindow;
     }
 
     public Window? Window => _mounted?.Control as Window;
+    public DesktopApplicationSession? Application { get; }
+    public DesktopRoot? Owner { get; }
+    public bool IsModal { get; }
+    public bool IsMainWindow { get; }
+    public Task Completion => _completion.Task;
     public int ActiveSubscriptions => _activeSubscriptions;
     public bool IsDisposed => _disposed;
     internal RendererOperationCounts OperationCounts =>
@@ -78,7 +95,8 @@ public sealed class DesktopRoot : IDisposable
             _mounted = mounted;
             try
             {
-                _showWindow((Window)mounted.Control);
+                ObserveWindow((Window)mounted.Control);
+                _showWindow(this, (Window)mounted.Control);
                 ActivateSubtree(mounted);
                 _recorder.Record("mount", detail: root.SourceFile);
                 _recorder.Record(_headless ? "headless-window-shown" : "real-window-shown");
@@ -90,7 +108,7 @@ public sealed class DesktopRoot : IDisposable
                     ReleaseSubtree(mounted);
                     DetachNativeTree(mounted);
                     ((Window)mounted.Control).Content = null;
-                    ((Window)mounted.Control).Close();
+                    CloseNativeWindow((Window)mounted.Control);
                     _mounted = null;
                 }
                 catch (Exception releaseError)
@@ -98,6 +116,7 @@ public sealed class DesktopRoot : IDisposable
                     _mounted = null;
                     _disposed = true;
                     _releaseRoot(this);
+                    _completion.TrySetResult();
                     throw new AggregateException(
                         "SharpTS GUI initial mount failed and its detached native tree could not be released; the root was disposed.",
                         commitError, releaseError);
@@ -152,13 +171,14 @@ public sealed class DesktopRoot : IDisposable
         DetachNativeTree(previous);
         var previousWindow = (Window)previous.Control;
         previousWindow.Content = null;
-        previousWindow.Close();
+        CloseNativeWindow(previousWindow);
         _recorder.Record("reconcile-replace", detail: Describe(previous, prepared));
 
         _mounted = replacement;
         try
         {
-            _showWindow((Window)replacement.Control);
+            ObserveWindow((Window)replacement.Control);
+            _showWindow(this, (Window)replacement.Control);
             ActivateSubtree(replacement);
             _recorder.Record("render-commit");
         }
@@ -166,7 +186,7 @@ public sealed class DesktopRoot : IDisposable
         {
             ReleaseSubtree(replacement);
             ((Window)replacement.Control).Content = null;
-            ((Window)replacement.Control).Close();
+            CloseNativeWindow((Window)replacement.Control);
             _mounted = null;
             throw;
         }
@@ -192,12 +212,59 @@ public sealed class DesktopRoot : IDisposable
                 DetachNativeTree(mounted);
                 var window = (Window)mounted.Control;
                 window.Content = null;
-                window.Close();
+                CloseNativeWindow(window);
                 _mounted = null;
             }
             _releaseRoot(this);
+            _completion.TrySetResult();
             _recorder.Record("unmount");
         }
+    }
+
+    public void Activate()
+    {
+        EnsureAccess();
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Window?.Activate();
+    }
+
+    public void Close()
+    {
+        EnsureAccess();
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        Window?.Close();
+    }
+
+    private void ObserveWindow(Window window)
+    {
+        UnobserveWindow();
+        _closedWindow = null;
+        _observedWindow = window;
+        window.Closed += OnWindowClosed;
+    }
+
+    private void UnobserveWindow()
+    {
+        if (_observedWindow is null)
+            return;
+        _observedWindow.Closed -= OnWindowClosed;
+        _observedWindow = null;
+    }
+
+    private void CloseNativeWindow(Window window)
+    {
+        if (ReferenceEquals(_observedWindow, window))
+            UnobserveWindow();
+        if (!ReferenceEquals(_closedWindow, window))
+            window.Close();
+        _closedWindow = null;
+    }
+
+    private void OnWindowClosed(object? sender, EventArgs eventArgs)
+    {
+        _closedWindow = sender as Window;
+        UnobserveWindow();
+        Dispose();
     }
 
     internal Button? FindFirstButton() =>
@@ -483,11 +550,12 @@ public sealed class DesktopRoot : IDisposable
                 DetachNativeTree(mounted);
                 var window = (Window)mounted.Control;
                 window.Content = null;
-                window.Close();
+                CloseNativeWindow(window);
                 _mounted = null;
             }
         }
         _releaseRoot(this);
+        _completion.TrySetResult();
         _recorder.Record("fatal-rollback-dispose");
     }
 

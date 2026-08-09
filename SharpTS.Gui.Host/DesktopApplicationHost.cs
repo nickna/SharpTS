@@ -61,7 +61,7 @@ internal static class DesktopApplicationHost
                 lifetime.Shutdown(exitCode);
             },
             RecordFailure,
-            DesktopBridge.DisposeCurrentRoot);
+            DesktopBridge.DisposeAllRoots);
         var hostLifetime = new AvaloniaHostLifetime(exitCode =>
         {
             SharpTSHostedShutdownReason reason = guest?.ShutdownReason
@@ -72,16 +72,28 @@ internal static class DesktopApplicationHost
         });
 
         DesktopRuntimeContext? bridgeContext = null;
-        using DesktopRuntimeRegistration bridgeRegistration = DesktopBridge.Configure(trace, window =>
+        using DesktopRuntimeRegistration bridgeRegistration = DesktopBridge.Configure(trace, (root, window) =>
         {
-            lifetime.MainWindow = window;
+            if (root.IsMainWindow || lifetime.MainWindow is null)
+                lifetime.MainWindow = window;
             if (!options.AutoClose)
             {
                 shutdown.AttachWindow(
                     window,
-                    () => bridgeContext?.ConsumeCloseCancellation() == true);
+                    () => bridgeContext?.ConsumeCloseCancellation() == true,
+                    () => bridgeContext?.ShouldRequestShutdown(root) != false);
             }
-            window.Show();
+            if (root.Owner?.Window is Window owner)
+            {
+                if (root.IsModal)
+                    _ = window.ShowDialog(owner);
+                else
+                    window.Show(owner);
+            }
+            else
+            {
+                window.Show();
+            }
         }, options.Headless, callback =>
         {
             if (shutdown.IsShutdownStarted)
@@ -96,7 +108,9 @@ internal static class DesktopApplicationHost
             var currentGuest = guest
                 ?? throw new InvalidOperationException("Guest microtask arrived before runtime creation.");
             currentGuest.QueueMicrotask(callback);
-        });
+        }, exitCode => shutdown.RequestShutdown(
+            exitCode == 0 ? SharpTSHostedShutdownReason.HostRequested : SharpTSHostedShutdownReason.UncaughtError,
+            exitCode));
         bridgeContext = bridgeRegistration.Context;
 
         bool clickRaised = false;
@@ -228,7 +242,7 @@ internal static class DesktopApplicationHost
             watchdog?.Cancel();
             try
             {
-                DesktopBridge.DisposeCurrentRoot();
+                DesktopBridge.DisposeAllRoots();
             }
             catch (Exception exception)
             {

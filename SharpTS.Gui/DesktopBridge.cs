@@ -28,10 +28,11 @@ public static class DesktopBridge
 
     internal static DesktopRuntimeRegistration Configure(
         TraceRecorder recorder,
-        Action<Window> showWindow,
+        Action<DesktopRoot, Window> showWindow,
         bool headless,
         Action<Action> dispatchGuestCallback,
-        Action<Action> scheduleGuestMicrotask)
+        Action<Action> scheduleGuestMicrotask,
+        Action<int>? requestShutdown = null)
     {
         if (_context is not null)
             throw new InvalidOperationException("A desktop runtime context is already registered.");
@@ -41,7 +42,8 @@ public static class DesktopBridge
             showWindow,
             headless,
             dispatchGuestCallback,
-            scheduleGuestMicrotask);
+            scheduleGuestMicrotask,
+            requestShutdown ?? (_ => { }));
         _context = context;
         return new DesktopRuntimeRegistration(context, ReleaseContext);
     }
@@ -445,12 +447,30 @@ public static class DesktopBridge
         return node with { BoundaryPath = boundaryPath };
     }
 
+    public static DesktopApplicationSession CreateDesktopApplication(string shutdownMode)
+    {
+        return RequireContext().CreateApplication(shutdownMode);
+    }
+
+    public static DesktopRoot CreateDesktopApplicationRoot(
+        DesktopApplicationSession application,
+        Action reactiveCleanup,
+        DesktopRoot? owner,
+        bool modal,
+        bool mainWindow)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        return application.CreateWindowRoot(reactiveCleanup, owner, modal, mainWindow);
+    }
+
     internal static string? GetBoundaryPath(GuiVNode node) =>
         node.BoundaryPath;
 
     internal static DesktopRoot? CurrentRoot => RequireContext().CurrentRoot;
 
     internal static void DisposeCurrentRoot() => RequireContext().DisposeCurrentRoot();
+
+    internal static void DisposeAllRoots() => RequireContext().DisposeAllRoots();
 
     public static void QueueMicrotask(Action callback)
     {

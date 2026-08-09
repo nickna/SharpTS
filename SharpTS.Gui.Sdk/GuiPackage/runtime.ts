@@ -305,13 +305,20 @@ class ReactiveRoot {
     private components: ComponentState[] = [];
     private boundaries: ErrorBoundaryState[] = [];
     private fibers: LogicalFiber[] = [];
-    public constructor(private readonly element: GuiChild) {}
+    public constructor(
+        private readonly element: GuiChild,
+        private readonly onUnhandledError: ((error: unknown) => void) | null = null) {}
     public setManaged(root: any): void { this.managed = root; }
     public invalidate(): void {
         if (this.disposed || this.scheduled) return;
         if (this.rendering) throw new Error("State cannot be updated while rendering.");
         this.scheduled = true;
-        DesktopBridge.QueueMicrotask((): void => { this.scheduled = false; if (!this.disposed) this.renderNow(); });
+        DesktopBridge.QueueMicrotask((): void => {
+            this.scheduled = false;
+            if (this.disposed) return;
+            try { this.renderNow(); }
+            catch (error) { this.failWindow(error); }
+        });
     }
     private component(path: string, type: any, boundary: ErrorBoundaryState | null): ComponentState {
         for (const existing of this.components) if (existing.path === path && existing.type === type) {
@@ -464,7 +471,7 @@ class ReactiveRoot {
         let recoveredCommitError: any = null;
         try {
             const materialized = this.materialize(this.element, "root");
-            if (materialized.nodes.length !== 1) throw new Error("renderDesktop requires exactly one Window root.");
+            if (materialized.nodes.length !== 1) throw new Error("A desktop window requires exactly one Window root.");
             this.managed.Render(materialized.nodes[0]);
             this.fibers = materialized.fibers;
         } catch (error) {
@@ -540,6 +547,12 @@ class ReactiveRoot {
             }
         }
     }
+    private failWindow(error: unknown): void {
+        const report = this.onUnhandledError;
+        if (this.managed !== null) this.managed.Dispose();
+        if (report === null) throw error;
+        report(error);
+    }
     public disposeFromManaged(): void {
         if (this.disposed) return; this.disposed = true; this.scheduled = false;
         for (const component of this.components.slice().sort((a, b) => b.path.length - a.path.length)) {
@@ -562,6 +575,74 @@ export function renderDesktop(element: GuiChild): DesktopRoot {
         get isDisposed(): boolean { return managed.IsDisposed; },
         dispose(): void { managed.Dispose(); },
     };
+}
+
+export type DesktopShutdownMode = "onLastWindowClose" | "onMainWindowClose" | "explicit";
+export interface DesktopApplicationOptions {
+    shutdownMode?: DesktopShutdownMode;
+    onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
+}
+export interface DesktopWindowOptions {
+    owner?: DesktopWindow;
+    modal?: boolean;
+    main?: boolean;
+    onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
+}
+export interface DesktopWindow extends DesktopRoot {
+    readonly closed: Promise<void>;
+    activate(): void;
+    close(): void;
+}
+export interface DesktopApplication {
+    readonly isDisposed: boolean;
+    readonly windowCount: number;
+    createWindow(element: GuiChild, options?: DesktopWindowOptions): DesktopWindow;
+    shutdown(exitCode?: number): void;
+    dispose(): void;
+}
+
+export function createDesktopApplication(options: DesktopApplicationOptions = {}): DesktopApplication {
+    const managed: any = DesktopBridge.CreateDesktopApplication(options.shutdownMode || "onLastWindowClose");
+    let application: DesktopApplication;
+    application = {
+        get isDisposed(): boolean { return managed.IsDisposed; },
+        get windowCount(): number { return managed.WindowCount; },
+        createWindow(element: GuiChild, windowOptions: DesktopWindowOptions = {}): DesktopWindow {
+            if (managed.IsDisposed) throw new Error("The desktop application is disposed.");
+            const owner: any = windowOptions.owner === undefined ? null : (windowOptions.owner as any).__managedRoot;
+            if (windowOptions.owner !== undefined && owner === undefined)
+                throw new Error("The owner must be a window from this desktop application.");
+            let window: DesktopWindow;
+            const report = (error: unknown): void => {
+                const handler = windowOptions.onUnhandledError || options.onUnhandledError;
+                if (handler === undefined) throw error;
+                handler(error, window);
+            };
+            const runner = new ReactiveRoot(element, report);
+            const root: any = DesktopBridge.CreateDesktopApplicationRoot(
+                managed,
+                (): void => runner.disposeFromManaged(),
+                owner,
+                windowOptions.modal === true,
+                windowOptions.main === true);
+            runner.setManaged(root);
+            const closed = (async (): Promise<void> => { await root.Completion; })();
+            window = {
+                get isDisposed(): boolean { return root.IsDisposed; },
+                closed,
+                activate(): void { root.Activate(); },
+                close(): void { root.Close(); },
+                dispose(): void { root.Dispose(); },
+            };
+            (window as any).__managedRoot = root;
+            try { runner.renderNow(); }
+            catch (error) { root.Dispose(); throw error; }
+            return window;
+        },
+        shutdown(exitCode: number = 0): void { managed.Shutdown(exitCode); },
+        dispose(): void { managed.Dispose(); },
+    };
+    return application;
 }
 
 export type MessageDialogResult = "ok" | "cancel" | "yes" | "no";

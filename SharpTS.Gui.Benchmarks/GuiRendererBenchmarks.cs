@@ -21,7 +21,7 @@ public class GuiRendererBenchmarks
         if (Application.Current is null)
             AppBuilder.Configure<BenchmarkApplication>().UseHeadless(new AvaloniaHeadlessPlatformOptions()).SetupWithoutStarting();
         _registration = DesktopBridge.Configure(
-            new TraceRecorder(Environment.CurrentManagedThreadId), _ => { }, true,
+            new TraceRecorder(Environment.CurrentManagedThreadId), (_, _) => { }, true,
             callback => callback(), callback => callback());
     }
 

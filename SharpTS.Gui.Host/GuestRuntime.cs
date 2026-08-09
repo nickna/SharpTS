@@ -52,7 +52,7 @@ internal sealed class InterpretedGuestRuntime : IGuestRuntime
         });
         _runtime = new HostedInterpreterRuntime(
             _dispatcher, _lifetime, _errorSink, program, Console.Out, Console.Error);
-        _runtime.RegisterCleanup(DesktopBridge.DisposeCurrentRoot);
+        _runtime.RegisterCleanup(DesktopBridge.DisposeAllRoots);
         return _runtime.InitializeAsync();
     }
 
@@ -114,7 +114,7 @@ internal sealed class CompiledGuestRuntime : IGuestRuntime
             : AssemblyLoadContext.Default.LoadFromStream(new MemoryStream(_assemblyBytes, writable: false));
         _runtime = SharpTSHostedAssembly.CreateRuntime(
             assembly, _dispatcher, _lifetime, _errorSink);
-        _runtime.RegisterCleanup(DesktopBridge.DisposeCurrentRoot);
+        _runtime.RegisterCleanup(DesktopBridge.DisposeAllRoots);
         return _runtime.InitializeAsync();
     }
 

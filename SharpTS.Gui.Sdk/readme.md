@@ -72,7 +72,10 @@ Published applications use the Windows GUI subsystem. Fatal startup/runtime fail
 to `%LOCALAPPDATA%\SharpTS.Gui\<application>.log`; an interactive launch with no attached console
 also displays a minimal native error dialog.
 
-Applications mount a typed element tree with `renderDesktop(<App />)`. Function components can
+Applications mount a typed element tree with `renderDesktop(<App />)` or create an explicit
+multi-window session with `createDesktopApplication`. The latter supports owned/modeless and
+owned/modal windows, activation and close handles, `closed` promises, main/last/explicit shutdown
+modes, and per-window render-error isolation. Function components can
 return elements, primitive text, fragments, arrays, or `null`. The standard state/lifecycle API is
 `useState`, `useReducer`, `useEffect`, `useMemo`, `useCallback`, `useRef`, and `useControlRef`;
 `createSignal` remains available for external reactive state.
@@ -98,9 +101,9 @@ items that supply `LogicalName` and a required SHA-256 digest.
 generated overlay while reserving the JSX runtime and `@sharpts/gui` module mappings. Set
 `SharpTSVerifyIL` to `true` to verify the persisted hosted guest during compilation.
 
-Current preview boundaries: Windows `win-x64` and `win-arm64` only, one Window root, built-in
-controls only, string-backed list/combo items, and no public theme-resource, custom-control,
-drawing, data-grid/tree, or multi-window API. macOS support is intentionally deferred and is not
+Current preview boundaries: Windows `win-x64` and `win-arm64` only, one root element per Window,
+built-in controls only, string-backed list/combo items, and no public theme-resource,
+custom-control, drawing, or data-grid/tree API. macOS support is intentionally deferred and is not
 claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
 application.
 

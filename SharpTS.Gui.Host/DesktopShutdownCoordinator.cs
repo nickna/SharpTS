@@ -43,7 +43,10 @@ internal sealed class DesktopShutdownCoordinator
 
     public Task Completion => _completion.Task;
 
-    public void AttachWindow(Window window, Func<bool>? cancelClose = null)
+    public void AttachWindow(
+        Window window,
+        Func<bool>? cancelClose = null,
+        Func<bool>? shouldRequestShutdown = null)
     {
         ArgumentNullException.ThrowIfNull(window);
         lock (_gate)
@@ -52,7 +55,7 @@ internal sealed class DesktopShutdownCoordinator
                 return;
 
             EventHandler<WindowClosingEventArgs> handler = (_, eventArgs) =>
-                OnWindowClosing(eventArgs, cancelClose);
+                OnWindowClosing(eventArgs, cancelClose, shouldRequestShutdown);
             _windowHandlers.Add(window, handler);
             window.Closing += handler;
         }
@@ -81,7 +84,10 @@ internal sealed class DesktopShutdownCoordinator
         return true;
     }
 
-    private void OnWindowClosing(WindowClosingEventArgs eventArgs, Func<bool>? cancelClose)
+    private void OnWindowClosing(
+        WindowClosingEventArgs eventArgs,
+        Func<bool>? cancelClose,
+        Func<bool>? shouldRequestShutdown)
     {
         if (eventArgs.Cancel)
             return;
@@ -95,6 +101,9 @@ internal sealed class DesktopShutdownCoordinator
             eventArgs.Cancel = true;
             return;
         }
+
+        if (shouldRequestShutdown?.Invoke() == false)
+            return;
 
         if (RequestShutdown(SharpTSHostedShutdownReason.HostRequested, 0))
             eventArgs.Cancel = true;

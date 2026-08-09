@@ -29,8 +29,8 @@ tooling, release closure, and ecosystem depth.
   release target.
 - The SDK remains the canonical build and publish implementation. Future CLI commands must invoke
   it rather than reconstruct NuGet or MSBuild behavior.
-- One runtime currently owns one dispatcher and one `Window` root. Multi-window support is a
-  deliberate later API change, not an accidental extension of the current contract.
+- One runtime owns one dispatcher and may now host an explicit multi-window application session.
+  The legacy `renderDesktop` entry point intentionally remains a one-window convenience contract.
 
 ## Status summary
 
@@ -43,7 +43,7 @@ tooling, release closure, and ecosystem depth.
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | **Complete in the Phase 3A implementation commit.** Template, ordinary-command workflow, incremental inputs, compiled-only output, docs, and packaged lifecycle gate landed | Regression coverage and release evidence only |
 | Phase 3B | **CLI complete; local x64 and ARM64 cross-publish candidate gates pass.** Public NuGet onboarding and native ARM64 execution remain externally blocked | Publish only after package ownership/key scope and native ARM64 evidence exist |
-| Phase 4 | Selected services landed early; most ecosystem/AOT work remains | Stabilize and expand the platform after the public preview |
+| Phase 4 | Multi-window lifecycle/error isolation and selected services have landed; most ecosystem/AOT work remains | Stabilize and expand the platform after the public preview |
 
 ## Prerequisite integration gate
 
@@ -396,9 +396,10 @@ contract stabilizes.
 
 ### Track A: application and renderer APIs
 
-- Replace the single-root `renderDesktop` contract with an explicit multi-window application API.
-- Define window ownership, activation, shutdown modes, modal relationships, and per-window error
-  isolation.
+- **Complete:** add an explicit multi-window application API while retaining `renderDesktop` as a
+  compatible one-window helper.
+- **Complete:** define window ownership, activation, main/last/explicit shutdown modes, modal
+  relationships, and per-window render/effect error isolation in interpreted and compiled modes.
 - Add public Avalonia-native styles, resources, themes, selectors, templates, and resource lookup.
 - Add generic item sources/templates, virtualization-preserving list controls, trees, data grids,
   rich text, drawing/canvas, and custom rendering.

@@ -33,18 +33,89 @@ public sealed class DesktopRendererTests : IDisposable
 
     private readonly TraceRecorder _trace = new(Environment.CurrentManagedThreadId);
     private readonly DesktopRuntimeRegistration _runtimeRegistration;
+    private readonly List<int> _shutdownRequests = [];
 
     public DesktopRendererTests()
     {
         _runtimeRegistration = DesktopBridge.Configure(
             _trace,
-            _ => { },
+            (_, _) => { },
             headless: true,
             dispatchGuestCallback: callback => callback(),
-            scheduleGuestMicrotask: callback => callback());
+            scheduleGuestMicrotask: callback => callback(),
+            requestShutdown: exitCode => _shutdownRequests.Add(exitCode));
     }
 
     public void Dispose() => _runtimeRegistration.Dispose();
+
+    [Fact]
+    public void DesktopApplication_TracksOwnedModalWindowsAndLastWindowShutdown()
+    {
+        using DesktopApplicationSession application =
+            DesktopBridge.CreateDesktopApplication("onLastWindowClose");
+        DesktopRoot main = application.CreateWindowRoot(
+            () => { }, owner: null, modal: false, mainWindow: true);
+        main.Render(Window(title: "Main"));
+        DesktopRoot dialog = application.CreateWindowRoot(
+            () => { }, owner: main, modal: true, mainWindow: false);
+        dialog.Render(Window(title: "Dialog"));
+
+        Assert.Equal(2, application.WindowCount);
+        Assert.True(main.IsMainWindow);
+        Assert.Same(main, dialog.Owner);
+        Assert.True(dialog.IsModal);
+        Assert.False(_runtimeRegistration.Context.ShouldRequestShutdown(dialog));
+
+        dialog.Dispose();
+        Assert.True(dialog.IsDisposed);
+        Assert.True(dialog.Completion.IsCompletedSuccessfully);
+        Assert.Equal(1, application.WindowCount);
+        Assert.True(_runtimeRegistration.Context.ShouldRequestShutdown(main));
+
+        application.Shutdown(7);
+        Assert.Equal([7], _shutdownRequests);
+    }
+
+    [Theory]
+    [InlineData("onMainWindowClose", true, false)]
+    [InlineData("explicit", false, false)]
+    public void DesktopApplication_HonorsConfiguredShutdownMode(
+        string shutdownMode,
+        bool mainRequestsShutdown,
+        bool secondaryRequestsShutdown)
+    {
+        using DesktopApplicationSession application =
+            DesktopBridge.CreateDesktopApplication(shutdownMode);
+        DesktopRoot main = application.CreateWindowRoot(
+            () => { }, owner: null, modal: false, mainWindow: false);
+        main.Render(Window(title: "Main"));
+        DesktopRoot secondary = application.CreateWindowRoot(
+            () => { }, owner: main, modal: false, mainWindow: false);
+        secondary.Render(Window(title: "Secondary"));
+
+        Assert.True(main.IsMainWindow);
+        Assert.Equal(mainRequestsShutdown,
+            _runtimeRegistration.Context.ShouldRequestShutdown(main));
+        Assert.Equal(secondaryRequestsShutdown,
+            _runtimeRegistration.Context.ShouldRequestShutdown(secondary));
+    }
+
+    [Fact]
+    public void DesktopApplication_RejectsForeignOwnerAndDuplicateMainWindow()
+    {
+        using DesktopApplicationSession application =
+            DesktopBridge.CreateDesktopApplication("explicit");
+        DesktopRoot main = application.CreateWindowRoot(
+            () => { }, owner: null, modal: false, mainWindow: true);
+
+        Assert.Throws<InvalidOperationException>(() => application.CreateWindowRoot(
+            () => { }, owner: null, modal: false, mainWindow: true));
+        Assert.Throws<ArgumentException>(() => application.CreateWindowRoot(
+            () => { }, owner: null, modal: true, mainWindow: false));
+
+        main.Dispose();
+        Assert.Equal(0, application.WindowCount);
+    }
 
     [Fact]
     public void Render_UpdatesPropertiesAndMovesKeyedControlsWithoutRecreation()
