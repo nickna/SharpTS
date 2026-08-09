@@ -1,37 +1,37 @@
 # SharpTS GUI TSX API
 
-GUI API version 2 is an application-capable, retained TSX surface for Windows Avalonia apps.
-`renderDesktop` is a concise wrapper over the same application/window lifecycle used by
-`createDesktopApplication`:
+GUI API version 1 is an application-capable, retained TSX surface for Windows Avalonia apps.
+Applications create a lifecycle owner and mount their main window explicitly:
 
 ```tsx
-import { Button, StackPanel, TextBlock, Window, renderDesktop, useState } from "@sharpts/gui";
+import { Button, StackPanel, TextBlock, Window, createDesktopApplication, useState } from "@sharpts/gui";
 
 function App(): JSX.Element {
     const [count, setCount] = useState(0);
     return (
         <Window title="Counter" width={360} height={220}>
             <StackPanel margin={20} spacing={12}>
-                <TextBlock fontSize={28}>Count: {count}</TextBlock>
-                <Button onClick={() => setCount(value => value + 1)}>Increment</Button>
+                <TextBlock key="count" fontSize={28}>Count: {count}</TextBlock>
+                <Button key="increment" onClick={() => setCount(value => value + 1)}>Increment</Button>
             </StackPanel>
         </Window>
     );
 }
 
-const root = renderDesktop(<App />);
+const application = createDesktopApplication();
+const window = application.createWindow(<App />, { main: true });
 ```
 
-Headless interaction tests use a driver scoped to that explicit root or window:
+Headless interaction tests use a driver scoped to that explicit window:
 
 ```tsx
 import { createDesktopTestDriver } from "@sharpts/gui/testing";
 
-const driver = createDesktopTestDriver(root);
+const driver = createDesktopTestDriver(window);
 driver.click("increment");
 driver.afterRender(() => {
     if (driver.getText("count") !== "Count: 1") throw new Error("Count did not update");
-    root.dispose();
+    application.dispose();
 });
 ```
 
@@ -125,7 +125,7 @@ disposes the damaged window root and reports a combined fatal host error.
 ## Built-in controls
 
 - Layout: `Window`, `StackPanel`, `WrapPanel`, `DockPanel`, `Grid`, `Border`, `ScrollViewer`,
-  `ToolBar`, `StatusBar`, `Separator`, `Fragment`.
+  `ToolBar`, `StatusBar`, and `Separator`.
 - Display/actions: `TextBlock`, `Image`, `Button`.
 - Forms: `TextBox`, `PasswordBox`, `CheckBox`, `RadioButton`, `ToggleSwitch`, `ComboBox`,
   `ListBox`, `NumericUpDown`, `DatePicker`, `TimePicker`, `Slider`, `ProgressBar`.
@@ -190,13 +190,13 @@ supported basis for high-DPI and multiple-monitor layout decisions. Common `auto
 keyboard handlers, typed ref `focus()`, committed text-change events (including IME commits), and
 the Window `system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
 
-## Current version 2 boundaries
+## Current version 1 boundaries
 
 Each window still requires exactly one `Window` root and built-in or statically registered
 descriptors. Combo/list data is string-backed. Arbitrary Avalonia control templates, a full editing
 `DataGrid`, and certified macOS execution are not yet supported. Typed item templates, a windowed virtual grid, native
 list/tree hosts, rich text, canvas/drawing, resources, class/type selectors, styles, theme variants,
 and resource lookup are supported. Multi-window orchestration is available through
-`createDesktopApplication`; `renderDesktop` remains the one-window convenience API. Incompatible
+`createDesktopApplication`. Incompatible
 GUI API and descriptor contracts fail before payload loading. The complete proof application is in
 `Examples/Calculator`.

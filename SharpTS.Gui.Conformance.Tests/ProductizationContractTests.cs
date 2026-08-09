@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Xml.Linq;
 using Xunit;
 
@@ -64,6 +65,11 @@ public sealed class ProductizationContractTests
         Assert.Contains("-RequireSigned", macOsDistributionWorkflow, StringComparison.Ordinal);
         Assert.Contains("-RequireNotarized", macOsDistributionWorkflow, StringComparison.Ordinal);
         Assert.Contains("notarytool store-credentials", macOsDistributionWorkflow, StringComparison.Ordinal);
+
+        string publishWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "publish.yml"));
+        Assert.Contains("gui_package_filename: ${{ steps.gui_sdk.outputs.PACKAGE_FILE_NAME }}", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("PACKAGE_FILE_NAME=$fileName", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("needs.build.outputs.gui_package_filename", publishWorkflow, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -71,21 +77,51 @@ public sealed class ProductizationContractTests
     {
         string root = FindRepositoryRoot();
         string packageRoot = Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage");
-        string publicEntry = File.ReadAllText(Path.Combine(packageRoot, "index.ts"));
         string testingEntry = File.ReadAllText(Path.Combine(packageRoot, "testing.ts"));
         string devtoolsEntry = File.ReadAllText(Path.Combine(packageRoot, "devtools.ts"));
-        string packageManifest = File.ReadAllText(Path.Combine(packageRoot, "package.json"));
+        using JsonDocument packageManifest = JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(packageRoot, "package.json")));
+        Dictionary<string, string> exports = packageManifest.RootElement.GetProperty("exports")
+            .EnumerateObject()
+            .ToDictionary(property => property.Name, property => property.Value.GetString()!, StringComparer.Ordinal);
 
-        Assert.DoesNotContain("DesktopConformanceBridge", publicEntry, StringComparison.Ordinal);
-        Assert.DoesNotContain("traceControlIdentities", publicEntry, StringComparison.Ordinal);
+        Assert.Equal(
+            [".", "./devtools", "./jsx-dev-runtime", "./jsx-runtime", "./testing"],
+            exports.Keys.Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal("./index.ts", exports["."]);
+        Assert.Equal("./devtools.ts", exports["./devtools"]);
+        Assert.Equal("./jsx-dev-runtime.ts", exports["./jsx-dev-runtime"]);
+        Assert.Equal("./jsx-runtime.ts", exports["./jsx-runtime"]);
+        Assert.Equal("./testing.ts", exports["./testing"]);
+
+        string[] expectedGuiPayload =
+        [
+            "control-docs.generated.json",
+            "control-surface.generated.ts",
+            "devtools.ts",
+            "index.ts",
+            "jsx-dev-runtime.ts",
+            "jsx-runtime.ts",
+            "package.json",
+            "runtime-types.ts",
+            "runtime.ts",
+            "testing.ts",
+        ];
+        string[] actualGuiPayload = Directory.EnumerateFiles(packageRoot, "*", SearchOption.TopDirectoryOnly)
+            .Select(path => Path.GetFileName(path)!)
+            .Where(name => name != "tsconfig.overlay.json")
+            .Order(StringComparer.Ordinal)
+            .ToArray();
+        Assert.Equal(expectedGuiPayload, actualGuiPayload);
+
         Assert.Contains("DesktopTestingBridge", testingEntry, StringComparison.Ordinal);
-        Assert.DoesNotContain("FailNextNativeSetter", testingEntry, StringComparison.Ordinal);
         Assert.Contains("inspectDesktopTree", devtoolsEntry, StringComparison.Ordinal);
         Assert.Contains("assertHeadlessSnapshot", devtoolsEntry, StringComparison.Ordinal);
-        Assert.Contains("\"./devtools\"", packageManifest, StringComparison.Ordinal);
-        Assert.Contains("\"./testing\"", packageManifest, StringComparison.Ordinal);
-        Assert.DoesNotContain("internal-testing", packageManifest, StringComparison.Ordinal);
-        Assert.DoesNotContain("conformance", packageManifest, StringComparison.Ordinal);
+
+        string packageProject = File.ReadAllText(Path.Combine(root, "SharpTS.Gui.Sdk", "SharpTS.Gui.Sdk.csproj"));
+        Assert.Contains("Exclude=\"GuiPackage\\tsconfig.overlay.json\"", packageProject, StringComparison.Ordinal);
+        Assert.DoesNotContain("SharpTS.Gui.ConformanceSupport", packageProject, StringComparison.Ordinal);
+        Assert.DoesNotContain("SharpTS.Gui.Conformance.Tests", packageProject, StringComparison.Ordinal);
     }
 
     private static string FindRepositoryRoot()

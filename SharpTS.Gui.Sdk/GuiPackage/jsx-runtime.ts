@@ -1,4 +1,5 @@
-import { Fragment, createElement, createDevElement, GuiElement } from "./runtime";
+import { Fragment, createElement, createDevElement } from "./runtime";
+import type { GuiElement } from "./runtime-types";
 
 export { Fragment };
 

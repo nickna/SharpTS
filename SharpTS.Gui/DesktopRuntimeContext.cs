@@ -302,13 +302,13 @@ public sealed class DesktopApplicationSession : IDisposable
         return _context.CreateTrayIcon(this, icon, toolTip, menuJson, clicked, menuClicked);
     }
 
-    public DesktopRoot CreateWindowRoot(Action reactiveCleanup, DesktopRoot? owner, bool modal, bool mainWindow)
+    internal DesktopRoot CreateWindowRoot(Action reactiveCleanup, DesktopRoot? owner, bool modal, bool mainWindow)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _context.CreateApplicationRoot(this, reactiveCleanup, owner, modal, mainWindow);
     }
 
-    public void ConfigureStyleResources(string json)
+    internal void ConfigureStyleResources(string json)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (WindowCount != 0)
@@ -318,7 +318,7 @@ public sealed class DesktopApplicationSession : IDisposable
 
     internal void ApplyStyleResources(Window window) => _styleResources?.Apply(window);
 
-    public object? FindResource(DesktopRoot root, string key)
+    internal object? FindResource(DesktopRoot root, string key)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (!ReferenceEquals(root.Application, this) || root.IsDisposed)

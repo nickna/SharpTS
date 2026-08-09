@@ -24,7 +24,7 @@ public sealed class GuiApplicationCliTests
         string source = File.ReadAllText(Path.Combine(root, "main.tsx"));
         Assert.Contains("title={\"A \\u0022quoted\\u0022 app\"}", source);
         Assert.Contains(">{\"A \\u0022quoted\\u0022 app\"}</TextBlock>", source);
-        Assert.Contains("setTimeout((() => root.dispose()) as any, 0);",
+        Assert.Contains("setTimeout((() => application.dispose()) as any, 0);",
             File.ReadAllText(Path.Combine(root, "headless.tests.tsx")));
     }
 

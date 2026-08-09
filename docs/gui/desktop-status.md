@@ -7,9 +7,8 @@ provides retained TSX over Avalonia, interpreted and compiled hosted guests, Hea
 multi-window application sessions, hot reload, devtools, Windows packaging, and compiled
 single-file and Native AOT paths.
 
-`renderDesktop` and `createDesktopApplication` use one application/window lifecycle. The former is
-the concise one-window wrapper; the latter owns explicit windows, trays, resources, styles, and
-shutdown policy.
+`createDesktopApplication` is the lifecycle API. It owns explicit windows, trays, resources,
+styles, and shutdown policy.
 
 | Target | Status |
 | --- | --- |
@@ -19,7 +18,7 @@ shutdown policy.
 
 ## Contracts and package boundaries
 
-- Hosted ABI 1, GUI API 2, descriptor schema 1/hash, and custom-provider contract 1 are checked
+- Hosted ABI 1, GUI API 1, descriptor schema 1/hash, and custom-provider contract 1 are checked
   before guest initialization. A mismatch fails fast; no historical GUI compatibility path runs.
 - `@sharpts/gui` is the application API, `@sharpts/gui/devtools` provides inspection and Headless
   snapshots, and `@sharpts/gui/testing` provides window-scoped supported Headless interaction.

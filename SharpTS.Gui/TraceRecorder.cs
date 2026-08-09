@@ -4,7 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace SharpTS.Gui;
 
-public sealed record GuiTraceEvent(
+internal sealed record GuiTraceEvent(
     long Sequence,
     double ElapsedMilliseconds,
     DateTimeOffset TimestampUtc,
@@ -13,7 +13,7 @@ public sealed record GuiTraceEvent(
     string? SynchronizationContext,
     string? Detail);
 
-public sealed class TraceRecorder
+internal sealed class TraceRecorder
 {
     private readonly object _gate = new();
     private readonly List<GuiTraceEvent> _events = [];

@@ -18,6 +18,9 @@ public sealed class GeneratedControlContractTests
         JsonElement[] controls = manifest.RootElement.GetProperty("controls").EnumerateArray().ToArray();
         Assert.Equal(controls.Length, controls.Select(control => control.GetProperty("kind").GetString()).Distinct(StringComparer.Ordinal).Count());
         Assert.All(controls, control => Assert.Contains(control.GetProperty("adapter").GetString()!, reserved));
+        Assert.DoesNotContain(controls, control =>
+            control.GetProperty("kind").GetString() == "Fragment");
+        Assert.Null(DescriptorRegistry.Get("Fragment"));
         Assert.All(controls, control =>
         {
             string[] props = control.GetProperty("props").EnumerateArray().Select(prop => prop.GetProperty("name").GetString()!)

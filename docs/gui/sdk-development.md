@@ -105,7 +105,7 @@ servicing rules are in [GUI support policy](support-policy.md).
 
 ## Raw Avalonia and custom controls
 
-Raw Avalonia interop is an internal host capability, not a stable application API in GUI API 2.
+Raw Avalonia interop is an internal host capability, not a stable application API in GUI API 1.
 Application code must not retain or mutate `AvaloniaObject`/`Control` instances directly. Native
 creation, setters, child collections, event attachment, refs, dialogs, clipboard work, and recovery
 all run on the Avalonia dispatcher. Off-thread notifications enter through the hosted dispatcher;

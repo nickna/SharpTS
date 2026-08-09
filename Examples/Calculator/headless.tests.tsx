@@ -1,4 +1,4 @@
-import { renderDesktop } from "@sharpts/gui";
+import { createDesktopApplication } from "@sharpts/gui";
 import { createDesktopTestDriver, DesktopTestDriver } from "@sharpts/gui/testing";
 import { CalculatorShowcase } from "./CalculatorApp";
 
@@ -19,8 +19,9 @@ function perform(values: string[], keyboard: boolean, done: () => void, index: n
     driver.afterRender(() => perform(values, keyboard, done, index + 1));
 }
 
-const root = renderDesktop(<CalculatorShowcase />);
-driver = createDesktopTestDriver(root);
+const application = createDesktopApplication();
+const window = application.createWindow(<CalculatorShowcase />, { main: true });
+driver = createDesktopTestDriver(window);
 expect("normal entrypoint renders calculator", driver.getText("display") === "0");
 driver.afterRender(() => {
     expect("normal entrypoint remains usable", driver.getText("display") === "0");
@@ -45,7 +46,7 @@ driver.afterRender(() => {
                             perform(["clear"], false, () => {
                                 perform(["9", "*", "4", "Enter"], true, () => {
                                     expect("mouse keyboard parity", driver.getText("display") === mouseResult && mouseResult === "36");
-                                    setTimeout((() => root.dispose()) as any, 25);
+                                    setTimeout((() => application.dispose()) as any, 25);
                                 });
                             });
                         });

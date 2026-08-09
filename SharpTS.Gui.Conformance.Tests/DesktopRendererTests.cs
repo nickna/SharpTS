@@ -399,28 +399,6 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
-    public void Fragment_IsARetainedContainerAndMovesItsKeyedChildren()
-    {
-        DesktopRoot root = CreateRoot();
-        root.Render(Window(new GuiVNode(
-            "Fragment",
-            Key: "fragment",
-            Children: new[] { Text("A", "a"), Text("B", "b") })));
-        var fragment = Assert.IsType<StackPanel>(root.FindControl("fragment"));
-        Control a = root.FindControl("a")!;
-        Control b = root.FindControl("b")!;
-
-        root.Render(Window(new GuiVNode(
-            "Fragment",
-            Key: "fragment",
-            Children: new[] { Text("B", "b"), Text("A", "a") })));
-
-        Assert.Same(fragment, root.FindControl("fragment"));
-        Assert.Same(b, fragment.Children[0]);
-        Assert.Same(a, fragment.Children[1]);
-    }
-
-    [Fact]
     public void Render_PrevalidatesDuplicateKeysLeafChildrenAndWindowCardinality()
     {
         DesktopRoot root = CreateRoot();

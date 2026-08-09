@@ -3,7 +3,7 @@ import {
     StackPanel,
     TextBlock,
     Window,
-    renderDesktop,
+    createDesktopApplication,
     useState,
 } from "@sharpts/gui";
 
@@ -22,4 +22,5 @@ function App() {
     );
 }
 
-renderDesktop(<App />);
+const application = createDesktopApplication();
+application.createWindow(<App />, { main: true });

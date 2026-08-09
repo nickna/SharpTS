@@ -1,5 +1,5 @@
 import { DesktopTestingBridge } from "dotnet:SharpTS.Gui";
-import type { DesktopRoot } from "./runtime.ts";
+import type { DesktopWindow } from "./runtime.ts";
 
 export type DesktopTestProperty =
     "automationName" | "background" | "foreground" | "toolTip" | "isEnabled" | "isVisible";
@@ -17,8 +17,8 @@ export interface DesktopTestDriver {
     dropText(key: string, value: string): string;
 }
 
-export function createDesktopTestDriver(root: DesktopRoot): DesktopTestDriver {
-    const managed: any = (root as any).__managedRoot;
+export function createDesktopTestDriver(window: DesktopWindow): DesktopTestDriver {
+    const managed: any = (window as any).__managedRoot;
     if (managed === undefined || managed === null)
         throw new Error("The supplied value is not an active SharpTS desktop root.");
     return {

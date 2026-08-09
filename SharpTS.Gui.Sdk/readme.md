@@ -67,8 +67,8 @@ in normal tests. A mismatch writes `Snapshots/main.actual.png` and reports expec
 values. Snapshot capture is restricted to `--headless` runs and uses the deterministic Skia-backed
 Headless renderer.
 
-The supported `@sharpts/gui/testing` subpath creates a driver scoped to a `DesktopRoot` or
-`DesktopWindow`. Under `--headless`, it can click keyed buttons, send window key input, query text
+The supported `@sharpts/gui/testing` subpath creates a driver scoped to a `DesktopWindow`. Under
+`--headless`, it can click keyed buttons, send window key input, query text
 and allow-listed native properties, update form controls, and simulate text drops. Drivers cannot
 cross window boundaries and reject non-Headless runtimes. Scheduler, trace, renderer-identity,
 subscription, and native-failure controls are intentionally absent from the package. Call
@@ -107,9 +107,8 @@ Windows applications use the GUI subsystem; fatal errors are retained below
 macOS candidates retain fatal logs below `~/Library/Logs/SharpTS.Gui`, traces below
 `~/Library/Application Support/SharpTS.Gui/Traces`, and use a native alert after logging.
 
-Applications mount a typed element tree with `renderDesktop(<App />)` or create an explicit
-multi-window session with `createDesktopApplication`. `renderDesktop` is a convenience wrapper over
-that same application/window lifecycle. Explicit sessions support owned/modeless and
+Applications create an explicit application session with `createDesktopApplication`, then mount
+their main window with `application.createWindow(<App />, { main: true })`. Sessions support owned/modeless and
 owned/modal windows, activation and close handles, `closed` promises, main/last/explicit shutdown
 modes, and per-window render-error isolation. Function components can
 return elements, primitive text, fragments, arrays, or `null`. The standard state/lifecycle API is
@@ -117,13 +116,16 @@ return elements, primitive text, fragments, arrays, or `null`. The standard stat
 `createSignal` remains available for external reactive state.
 
 - Layout: `Window`, `StackPanel`, `WrapPanel`, `DockPanel`, `Grid`, `Border`, `ScrollViewer`,
-  `ToolBar`, `StatusBar`, `Separator`, and `Fragment`.
+  `ToolBar`, `StatusBar`, and `Separator`.
 - Display and actions: `TextBlock`, `Image`, and `Button`.
 - Forms: `TextBox`, `PasswordBox`, `CheckBox`, `RadioButton`, `ToggleSwitch`, `ComboBox`,
   `ListBox`, `NumericUpDown`, `DatePicker`, `TimePicker`, `Slider`, and `ProgressBar`.
 - Navigation and commands: `TabControl`, `TabItem`, `Menu`, and `MenuItem`.
 - Data and rendering: `ItemsControl`, `VirtualizingList`, `TreeView`, `TreeViewItem`, `Canvas`,
   `RichTextBlock`, and `DrawingCanvas`.
+
+JSX fragments remain layout-transparent logical nodes: they group siblings and preserve keyed
+subtree identity without creating a native control or changing layout.
 
 Controls expose typed direct props for layout, styling, accessibility names, focus refs, keyboard
 events, values, callbacks, and normalized text/local-file drag-and-drop. Set `allowDrop` and use

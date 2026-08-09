@@ -21,7 +21,7 @@
     <SharpTSGuiPackageSource>$(SharpTSGuiSdkRoot)gui\</SharpTSGuiPackageSource>
     <SharpTSGuiTasksAssembly>$(SharpTSGuiSdkRoot)build\SharpTS.Sdk.Tasks.dll</SharpTSGuiTasksAssembly>
     <SharpTSGuiHostedAbiVersion>1</SharpTSGuiHostedAbiVersion>
-    <SharpTSGuiApiVersion>2</SharpTSGuiApiVersion>
+    <SharpTSGuiApiVersion>1</SharpTSGuiApiVersion>
     <SharpTSGuiIntermediateRoot Condition="'$(SharpTSGuiIntermediateRoot)' == ''">$(BaseIntermediateOutputPath)$(Configuration)\.sharpts-gui\</SharpTSGuiIntermediateRoot>
     <SharpTSGuiGuestAssembly Condition="'$(SharpTSGuiGuestAssembly)' == ''">$(SharpTSGuiIntermediateRoot)SharpTS.Gui.Guest.dll</SharpTSGuiGuestAssembly>
     <SharpTSGuiPublishMode Condition="'$(PublishAot)' == 'true' and '$(SharpTSGuiPublishMode)' == ''">NativeAot</SharpTSGuiPublishMode>

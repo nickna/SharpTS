@@ -199,7 +199,7 @@ public sealed class HostInfrastructureTests
                     EntryPath = "Guest/main.tsx",
                     CompiledAssembly = "SharpTS.Gui.Guest.dll",
                     HostedAbiVersion = int.MaxValue,
-                    GuiApiVersion = 2
+                    GuiApiVersion = 1
                 }));
             Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
 
@@ -210,7 +210,7 @@ public sealed class HostInfrastructureTests
                     EntryPath = "Guest/main.tsx",
                     CompiledAssembly = "SharpTS.Gui.Guest.dll",
                     HostedAbiVersion = 1,
-                    GuiApiVersion = 2
+                    GuiApiVersion = 1
                 }));
             InvalidOperationException rebuild = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
             Assert.Contains("rebuild", rebuild.Message, StringComparison.OrdinalIgnoreCase);
@@ -222,7 +222,7 @@ public sealed class HostInfrastructureTests
                     EntryPath = "Guest/main.tsx",
                     CompiledAssembly = "SharpTS.Gui.Guest.dll",
                     HostedAbiVersion = 1,
-                    GuiApiVersion = 2,
+                    GuiApiVersion = 1,
                     DescriptorSchemaVersion = 99,
                     DescriptorSchemaHash = new string('0', 64)
                 }));
@@ -238,23 +238,28 @@ public sealed class HostInfrastructureTests
                     EntryPath = "Guest/main.tsx",
                     CompiledAssembly = "SharpTS.Gui.Guest.dll",
                     HostedAbiVersion = 1,
-                    GuiApiVersion = 1
+                    GuiApiVersion = 1,
+                    DescriptorSchemaVersion = DesktopBridge.DescriptorSchemaVersion,
+                    DescriptorSchemaHash = DesktopBridge.DescriptorSchemaHash
                 }));
-            InvalidOperationException oldApi = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
-            Assert.Contains("supports GUI API 2", oldApi.Message, StringComparison.Ordinal);
-            Assert.Contains("requires GUI API 1", oldApi.Message, StringComparison.Ordinal);
-            Assert.DoesNotContain("migrate", oldApi.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(1, GuiPayloadLoader.LoadFile(root).GuiApiVersion);
 
-            File.WriteAllText(
-                Path.Combine(metadata, "app.json"),
-                JsonSerializer.Serialize(new
-                {
-                    EntryPath = "Guest/main.tsx",
-                    CompiledAssembly = "SharpTS.Gui.Guest.dll",
-                    HostedAbiVersion = 1,
-                    GuiApiVersion = int.MaxValue
-                }));
-            Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
+            foreach (int incompatibleApi in new[] { 0, 2 })
+            {
+                File.WriteAllText(
+                    Path.Combine(metadata, "app.json"),
+                    JsonSerializer.Serialize(new
+                    {
+                        EntryPath = "Guest/main.tsx",
+                        CompiledAssembly = "SharpTS.Gui.Guest.dll",
+                        HostedAbiVersion = 1,
+                        GuiApiVersion = incompatibleApi
+                    }));
+                InvalidOperationException mismatch = Assert.Throws<InvalidOperationException>(
+                    () => GuiPayloadLoader.LoadFile(root));
+                Assert.Contains("supports GUI API 1", mismatch.Message, StringComparison.Ordinal);
+                Assert.Contains($"requires GUI API {incompatibleApi}", mismatch.Message, StringComparison.Ordinal);
+            }
         }
         finally
         {

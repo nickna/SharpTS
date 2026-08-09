@@ -40,9 +40,9 @@ public sealed class MultiWindowIntegrationTests
                   "entryPath": "Guest/main.tsx",
                   "compiledAssembly": "MultiWindow.Guest.dll",
                   "hostedAbiVersion": 1,
-                  "guiApiVersion": 2,
+                  "guiApiVersion": 1,
                   "descriptorSchemaVersion": 1,
-                  "descriptorSchemaHash": "7384ad1b4c183d7cd97dc12d422dff594ed82038e6a01bce3e661066f44e46da"
+                  "descriptorSchemaHash": "0c34aaf15e0ab40a353d13f9e4992d1a64ee1bc39f925ba635703e1cb856915f"
                 }
                 """);
 

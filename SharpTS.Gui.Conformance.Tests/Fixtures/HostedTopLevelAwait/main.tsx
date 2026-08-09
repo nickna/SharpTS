@@ -1,4 +1,4 @@
-import { StackPanel, TextBlock, Window, renderDesktop } from "@sharpts/gui";
+import { StackPanel, TextBlock, Window, createDesktopApplication } from "@sharpts/gui";
 import { afterTrace, trace } from "@sharpts/gui/conformance";
 
 function recordBeforeExitMicrotask(): void {
@@ -56,12 +56,14 @@ const lazyPath = await Promise.resolve("./lazy");
 const loaded = await import(await Promise.resolve(lazyPath));
 trace(`tla-main-resume-${compound}-${conditional}-${loop}-${loaded.value}`);
 
-const root = renderDesktop(
+const application = createDesktopApplication();
+application.createWindow(
     <Window title="Hosted top-level await" width={360} height={180}>
         <StackPanel>
             <TextBlock>{`Ready ${loaded.value}`}</TextBlock>
         </StackPanel>
-    </Window>
+    </Window>,
+    { main: true },
 );
 trace("tla-window-mounted");
-afterTrace("dispatcher-sentinel", () => root.dispose());
+afterTrace("dispatcher-sentinel", () => application.dispose());

@@ -61,11 +61,11 @@ public sealed class DesktopRoot : IDisposable
         IsMainWindow = isMainWindow;
     }
 
-    public Window? Window => _mounted?.Control as Window;
-    public DesktopApplicationSession? Application { get; }
-    public DesktopRoot? Owner { get; }
-    public bool IsModal { get; }
-    public bool IsMainWindow { get; }
+    internal Window? Window => _mounted?.Control as Window;
+    internal DesktopApplicationSession? Application { get; }
+    internal DesktopRoot? Owner { get; }
+    internal bool IsModal { get; }
+    internal bool IsMainWindow { get; }
     public Task Completion => _completion.Task;
     internal int ActiveSubscriptions => _activeSubscriptions;
     public bool IsDisposed => _disposed;

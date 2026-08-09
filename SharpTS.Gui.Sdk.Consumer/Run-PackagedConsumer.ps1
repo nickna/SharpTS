@@ -190,8 +190,24 @@ try {
             throw "GUI SDK package is missing '$required'."
         }
     }
-    if ($entryNames -contains "gui/internal-testing.ts" -or
-        $entryNames -contains "gui/conformance.ts" -or
+    $expectedGuiEntries = @(
+        "gui/control-docs.generated.json",
+        "gui/control-surface.generated.ts",
+        "gui/devtools.ts",
+        "gui/index.ts",
+        "gui/jsx-dev-runtime.ts",
+        "gui/jsx-runtime.ts",
+        "gui/package.json",
+        "gui/runtime-types.ts",
+        "gui/runtime.ts",
+        "gui/testing.ts"
+    ) | Sort-Object
+    $actualGuiEntries = @($entryNames | Where-Object { $_.StartsWith("gui/", [StringComparison]::Ordinal) } | Sort-Object)
+    if (Compare-Object $expectedGuiEntries $actualGuiEntries -SyncWindow 0) {
+        throw "GUI SDK package contains an unexpected gui/ payload."
+    }
+    if ($entryNames -match "(^|/)Fixtures/" -or
+        $entryNames -match "SharpTS.Gui.Conformance.Tests" -or
         $entryNames -match "SharpTS.Gui.ConformanceSupport") {
         throw "GUI SDK package contains repository-only conformance support."
     }

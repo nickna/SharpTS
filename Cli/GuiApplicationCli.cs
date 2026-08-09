@@ -34,7 +34,7 @@ internal static class GuiApplicationCli
             }
             """);
         File.WriteAllText(Path.Combine(root, "main.tsx"), $$"""
-            import { Button, StackPanel, TextBlock, Window, renderDesktop, useState } from "@sharpts/gui";
+            import { Button, StackPanel, TextBlock, Window, createDesktopApplication, useState } from "@sharpts/gui";
 
             function App() {
                 const [count, setCount] = useState(0);
@@ -46,17 +46,19 @@ internal static class GuiApplicationCli
                     </StackPanel>
                 </Window>;
             }
-            renderDesktop(<App />);
+            const application = createDesktopApplication();
+            application.createWindow(<App />, { main: true });
             """);
         File.WriteAllText(Path.Combine(root, "headless.tests.tsx"), """
-            import { TextBlock, Window, renderDesktop } from "@sharpts/gui";
+            import { TextBlock, Window, createDesktopApplication } from "@sharpts/gui";
             import { createDesktopTestDriver } from "@sharpts/gui/testing";
-            const root = renderDesktop(<Window title="Headless" width={320} height={160}>
+            const application = createDesktopApplication();
+            const window = application.createWindow(<Window title="Headless" width={320} height={160}>
                 <TextBlock key="message">CLI Headless test</TextBlock>
-            </Window>);
-            const driver = createDesktopTestDriver(root);
+            </Window>, { main: true });
+            const driver = createDesktopTestDriver(window);
             if (driver.getText("message") !== "CLI Headless test") throw new Error("CLI Headless assertion failed.");
-            setTimeout((() => root.dispose()) as any, 0);
+            setTimeout((() => application.dispose()) as any, 0);
             """);
         File.WriteAllText(Path.Combine(root, "Assets", "README.txt"),
             "Files in this directory are embedded under asset:/// paths." + Environment.NewLine);

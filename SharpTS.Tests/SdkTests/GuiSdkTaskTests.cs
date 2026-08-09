@@ -77,7 +77,7 @@ public sealed class GuiSdkTaskTests : IDisposable
             EntryPath = "Guest\\src\\main.tsx",
             CompiledAssembly = "SharpTS.Gui.Guest.dll",
             HostedAbiVersion = "1",
-            GuiApiVersion = "2",
+            GuiApiVersion = "1",
             DescriptorSchemaVersion = "1",
             DescriptorSchemaHash = new string('a', 64),
         };
@@ -86,7 +86,7 @@ public sealed class GuiSdkTaskTests : IDisposable
         using var document = JsonDocument.Parse(File.ReadAllText(output));
         Assert.Equal("Guest/src/main.tsx", document.RootElement.GetProperty("entryPath").GetString());
         Assert.Equal(1, document.RootElement.GetProperty("hostedAbiVersion").GetInt32());
-        Assert.Equal(2, document.RootElement.GetProperty("guiApiVersion").GetInt32());
+        Assert.Equal(1, document.RootElement.GetProperty("guiApiVersion").GetInt32());
         Assert.Equal(1, document.RootElement.GetProperty("descriptorSchemaVersion").GetInt32());
         Assert.Equal(new string('a', 64), document.RootElement.GetProperty("descriptorSchemaHash").GetString());
     }

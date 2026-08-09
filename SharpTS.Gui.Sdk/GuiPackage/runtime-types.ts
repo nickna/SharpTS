@@ -29,7 +29,8 @@ export interface GuiElement {
     readonly key: string | null;
     readonly source: SourceInfo | null;
 }
-export type GuiChild = GuiElement | string | number | boolean | null | undefined | readonly GuiChild[];
+export interface GuiChildArray { readonly length: number; readonly [index: number]: GuiChild; }
+export type GuiChild = GuiElement | string | number | boolean | null | undefined | GuiChildArray;
 export interface TextualChildArray { readonly length: number; readonly [index: number]: TextualChild; }
 export type TextualChild = string | number | boolean | null | undefined | TextualChildArray;
 export type Component<P = {}> = (props: Readonly<P & { children?: GuiChild }>) => GuiChild;

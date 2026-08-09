@@ -4,7 +4,7 @@ using Avalonia.Interactivity;
 
 namespace SharpTS.Gui;
 
-public sealed class ControlRef
+internal sealed class ControlRef
 {
     internal ControlRef(Control control) => Control = control;
     internal Control Control { get; }
@@ -12,6 +12,8 @@ public sealed class ControlRef
 
 public sealed class DesktopRef
 {
+    internal DesktopRef() { }
+
     internal ControlRef? Current { get; private set; }
     internal void Attach(object? value) => Current = (ControlRef?)value;
     internal bool IsAttached => Current is not null;
@@ -21,7 +23,7 @@ public sealed class DesktopRef
 
 public static class DesktopBridge
 {
-    public const int GuiApiVersion = 2;
+    public const int GuiApiVersion = 1;
     public const int CustomControlProviderApiVersion = 1;
     public const int DescriptorSchemaVersion = GeneratedControlContract.SchemaVersion;
     public const string DescriptorSchemaHash = GeneratedControlContract.SchemaHash;
@@ -465,9 +467,6 @@ public static class DesktopBridge
         return new(kind, NormalizeKey(key), CustomPropertiesJson: propertiesJson, Children: children,
             AttachRef: GetAttach(reference), RefIdentity: reference);
     }
-
-    public static GuiVNode CreateFragment(GuiVNode[] children, object? key) =>
-        new("Fragment", NormalizeKey(key), Children: children);
 
     public static GuiVNode WithSource(GuiVNode node, string file, double line, double column) =>
         node with { SourceFile = file, SourceLine = (int)line, SourceColumn = (int)column };

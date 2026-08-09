@@ -104,7 +104,7 @@ internal sealed partial class DesktopStyleResources
         {
             "Control" => TypedStyle<Control>(classes),
             "Window" => TypedStyle<Window>(classes),
-            "StackPanel" or "ToolBar" or "Fragment" => TypedStyle<StackPanel>(classes),
+            "StackPanel" or "ToolBar" => TypedStyle<StackPanel>(classes),
             "WrapPanel" => TypedStyle<WrapPanel>(classes),
             "DockPanel" => TypedStyle<DockPanel>(classes),
             "Grid" => TypedStyle<Grid>(classes),
