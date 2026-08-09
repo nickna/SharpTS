@@ -1709,6 +1709,12 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/slice/15.4.4.10-10-c-ii-1.js")]
+    [InlineData("built-ins/Array/prototype/slice/call-with-boolean.js")]
+    public void Array_slice_creates_own_result_properties(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSorted/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSpliced/this-value-boolean.js")]
