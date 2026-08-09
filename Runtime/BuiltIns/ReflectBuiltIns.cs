@@ -203,35 +203,18 @@ public static class ReflectBuiltIns
                 });
             }),
 
-            "setPrototypeOf" => BuiltInMethod.CreateV2("setPrototypeOf", 2, static (_, _, args) =>
+            "setPrototypeOf" => BuiltInMethod.CreateV2("setPrototypeOf", 2, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.setPrototypeOf requires a target object.");
                 var proto = args[1].ToObject();
-                try
-                {
-                    switch (target)
-                    {
-                        case SharpTSObjectPrototype:
-                            // %Object.prototype% is an immutable-prototype exotic:
-                            // setting its existing null prototype succeeds, any
-                            // different prototype is rejected.
-                            return RuntimeValue.FromBoolean(proto is null);
-                        case SharpTSObject obj:
-                            if (!obj.IsExtensible) return RuntimeValue.False;
-                            obj.Prototype = proto;
-                            return RuntimeValue.True;
-                        case Dictionary<string, object?> dict:
-                            if (!PropertyDescriptorStore.IsExtensible(dict)) return RuntimeValue.False;
-                            PropertyDescriptorStore.SetPrototype(dict, proto);
-                            return RuntimeValue.True;
-                        default:
-                            return RuntimeValue.False;
-                    }
-                }
-                catch
-                {
-                    return RuntimeValue.False;
-                }
+                if (proto is SharpTSUndefined or string or bool or double or int or long
+                    or float or decimal or SharpTSSymbol or SharpTSBigInt
+                    or System.Numerics.BigInteger)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Reflect.setPrototypeOf prototype must be an object or null"));
+
+                return RuntimeValue.FromBoolean(
+                    ObjectBuiltIns.SetPrototypeOfTarget(interpreter, target, proto));
             }),
 
             "isExtensible" => BuiltInMethod.CreateV2("isExtensible", 1, static (interpreter, _, args) =>

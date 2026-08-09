@@ -182,6 +182,32 @@ public class SharpTSProxy : ISharpTSCallable
         return result;
     }
 
+    /// <summary>ECMA-262 §10.5.2 [[SetPrototypeOf]].</summary>
+    internal bool TrapSetPrototypeOf(Interpreter interpreter, object? prototype)
+    {
+        var trap = GetTrapCallable("setPrototypeOf", interpreter);
+        if (trap == null)
+            return ObjectBuiltIns.SetPrototypeOfTarget(interpreter, _target, prototype);
+
+        bool result = ToBoolean(InvokeTrap(trap, interpreter, [_target, prototype]));
+        if (!result) return false;
+
+        bool targetIsExtensible = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapIsExtensible(interpreter)
+            : TargetIsExtensible(_target);
+        if (targetIsExtensible) return true;
+
+        object? targetPrototype = _target is SharpTSProxy proxy
+            ? proxy.TrapGetPrototypeOf(interpreter)
+            : ObjectBuiltIns.PrototypeOf(interpreter, _target);
+        if (!ReferenceEquals(prototype, targetPrototype))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy setPrototypeOf trap cannot change a non-extensible target"));
+        }
+        return true;
+    }
+
     /// <summary>ECMA-262 §10.5.3 [[IsExtensible]].</summary>
     internal bool TrapIsExtensible(Interpreter? interpreter)
     {

@@ -1753,7 +1753,7 @@ public static partial class ObjectBuiltIns
     /// <summary>
     /// Object.setPrototypeOf(obj, proto) - sets the prototype of an object.
     /// </summary>
-    private static object? SetPrototypeOf(Interpreter _, List<object?> args)
+    private static object? SetPrototypeOf(Interpreter interpreter, List<object?> args)
     {
         var target = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
         var proto = args.Count > 1 ? args[1] : SharpTSUndefined.Instance;
@@ -1762,40 +1762,67 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Object.setPrototypeOf called on null or undefined"));
 
+        if (!IsPrototypeValue(proto))
+            throw new ThrowException(new SharpTSTypeError(
+                "Object prototype may only be an object or null"));
+
+        if (target is string or bool or double or int or long or float or decimal
+            or SharpTSSymbol or SharpTSBigInt or System.Numerics.BigInteger)
+            return target;
+
+        if (!SetPrototypeOfTarget(interpreter, target, proto))
+            throw new ThrowException(new SharpTSTypeError(
+                "Cannot set prototype of a non-extensible object"));
+        return target;
+    }
+
+    internal static bool SetPrototypeOfTarget(
+        Interpreter interpreter,
+        object target,
+        object? proto)
+    {
+        if (target is SharpTSProxy proxy)
+            return proxy.TrapSetPrototypeOf(interpreter, proto);
+
         switch (target)
         {
+            case SharpTSObjectPrototype:
+                return proto is null;
+
             case SharpTSArray array:
-                if (!array.IsExtensible)
-                    throw new ThrowException(new SharpTSTypeError(
-                        "Cannot set prototype of a non-extensible array"));
+                if (ReferenceEquals(PrototypeOf(interpreter, array), proto)) return true;
+                if (!array.IsExtensible) return false;
                 array.SetExplicitPrototype(proto);
-                return array;
+                return true;
 
             case SharpTSObject obj:
-                if (!obj.IsExtensible)
-                    throw new Exception("TypeError: Object is not extensible");
+                if (ReferenceEquals(PrototypeOf(interpreter, obj), proto)) return true;
+                if (!obj.IsExtensible) return false;
                 obj.Prototype = proto;
                 // An explicit null prototype is distinct from "never linked": the latter
                 // still inherits Object.prototype. Record which one this is so
                 // Object.getPrototypeOf can tell them apart.
-                obj.IsNullPrototype = proto is null or SharpTSUndefined;
-                return obj;
+                obj.IsNullPrototype = proto is null;
+                return true;
 
-            case SharpTSInstance:
-                // Cannot change prototype of class instances
-                throw new Exception("TypeError: Cannot set prototype of class instance");
+            case SharpTSInstance instance:
+                return ReferenceEquals(PrototypeOf(interpreter, instance), proto);
 
             case Dictionary<string, object?> dict:
-                if (!PropertyDescriptorStore.IsExtensible(dict))
-                    throw new Exception("TypeError: Object is not extensible");
+                if (ReferenceEquals(PropertyDescriptorStore.GetPrototype(dict), proto)) return true;
+                if (!PropertyDescriptorStore.IsExtensible(dict)) return false;
                 PropertyDescriptorStore.SetPrototype(dict, proto);
-                return dict;
+                return true;
 
             default:
-                // Non-objects return unchanged (JavaScript behavior)
-                return target;
+                return false;
         }
     }
+
+    private static bool IsPrototypeValue(object? value)
+        => value is null || value is not (SharpTSUndefined or string or bool
+            or double or int or long or float or decimal or SharpTSSymbol
+            or SharpTSBigInt or System.Numerics.BigInteger);
 
     private static object? GroupBy(Interpreter interp, List<object?> args)
     {
