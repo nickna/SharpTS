@@ -1601,6 +1601,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/ownKeys/return-all-non-configurable-keys.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_ownKeys_allows_extensible_target_variations()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/extensible-return-trap-result.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
