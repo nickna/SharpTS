@@ -865,6 +865,8 @@ public class SharpTSProxy : ISharpTSCallable
             return arrow.DeleteProperty(prop);
         if (_target is SharpTSArray array)
             return array.DeletePropertyStrict(prop, false);
+        if (_target is SharpTSRegExp regex)
+            return regex.DeleteProperty(prop);
         return true;
     }
 
