@@ -368,18 +368,8 @@ public static class ReflectBuiltIns
                     throw new Exception("Runtime Error: Reflect.apply third argument must be an array-like object.");
                 }
 
-                // Invoke with this binding
-                if (target is SharpTSFunction fn)
-                {
-                    var bound = new BoundFunction(fn, thisArg, []);
-                    return RuntimeValue.FromBoxed(bound.Call(interpreter, callArgs));
-                }
-                if (target is SharpTSArrowFunction arrow && arrow.HasOwnThis)
-                {
-                    var bound = arrow.Bind(thisArg!);
-                    return RuntimeValue.FromBoxed(bound.Call(interpreter, callArgs));
-                }
-                return RuntimeValue.FromBoxed(target.Call(interpreter, callArgs));
+                return RuntimeValue.FromBoxed(FunctionBuiltIns.CallWithThis(
+                    interpreter, target, thisArg, callArgs));
             }),
 
             "construct" => BuiltInMethod.CreateV2("construct", 2, 3, static (interpreter, _, args) =>
