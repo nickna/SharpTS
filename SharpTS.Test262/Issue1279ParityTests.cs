@@ -3196,6 +3196,22 @@ public sealed class Issue1279ParityTests
     public void Array_fill_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/copyWithin/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-set-target-value.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-this.js")]
+    public void Array_copyWithin_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -1071,6 +1071,67 @@ public static class ArrayBuiltIns
         return receiver;
     }
 
+    /// <summary>
+    /// ECMA-262 23.1.3.4 generic copyWithin algorithm. The source and target
+    /// ranges are resolved from the captured length, then properties are moved
+    /// directly on the original receiver so holes, accessors, proxies, and
+    /// abrupt completions remain observable in specification order.
+    /// </summary>
+    internal static object CopyWithinArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+
+        double relativeTarget = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long target = NormalizeRelativeIndex(relativeTarget, length);
+
+        double relativeStart = args.Count > 1
+            ? ToIntegerOrInfinity(interpreter, args[1])
+            : 0;
+        long start = NormalizeRelativeIndex(relativeStart, length);
+
+        double relativeEnd = args.Count > 2 && args[2] is not SharpTSUndefined
+            ? ToIntegerOrInfinity(interpreter, args[2])
+            : length;
+        long end = NormalizeRelativeIndex(relativeEnd, length);
+
+        long count = Math.Min(end - start, length - target);
+        long direction = 1;
+        if (start < target && target < start + count)
+        {
+            direction = -1;
+            start += count - 1;
+            target += count - 1;
+        }
+
+        while (count > 0)
+        {
+            string fromKey = start.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string toKey = target.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                interpreter.SetProperty(
+                    receiver, toKey,
+                    interpreter.GetPropertyValue(receiver, fromKey));
+            }
+            else
+            {
+                interpreter.DeleteProperty(receiver, toKey);
+            }
+
+            start += direction;
+            target += direction;
+            count--;
+        }
+
+        return receiver;
+    }
+
     private static long NormalizeRelativeIndex(double relativeIndex, long length)
     {
         if (double.IsNegativeInfinity(relativeIndex)) return 0;
@@ -1174,53 +1235,14 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromObject(FillArrayLike(interpreter, arr, boxedArgs));
     }
 
-    private static RuntimeValue CopyWithinV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue CopyWithinV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        if (arr.IsFrozen)
-            return RuntimeValue.FromObject(arr);
-
-        int len = arr.Length;
-        if (len == 0) return RuntimeValue.FromObject(arr);
-
-        int relTarget = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
-        int to = relTarget < 0 ? Math.Max(len + relTarget, 0) : Math.Min(relTarget, len);
-
-        int relStart = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : 0;
-        int from = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
-
-        int relEnd = args.Length > 2 && !args[2].IsUndefined
-            ? (int)Interpreter.ToNumber(args[2])
-            : len;
-        int final_ = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
-
-        int count = Math.Min(final_ - from, len - to);
-
-        if (count > 0)
-        {
-            // ECMA-262 23.1.3.4: if source is a hole, DELETE target (make hole).
-            // Otherwise copy the value. Order (forward/backward) matters only when
-            // source and dest ranges overlap.
-            if (from < to && to < from + count)
-            {
-                for (int i = count - 1; i >= 0; i--)
-                    CopyOrHole(arr, from + i, to + i);
-            }
-            else
-            {
-                for (int i = 0; i < count; i++)
-                    CopyOrHole(arr, from + i, to + i);
-            }
-        }
-
-        return RuntimeValue.FromObject(arr);
-    }
-
-    private static void CopyOrHole(SharpTSArray arr, int fromIdx, int toIdx)
-    {
-        if (arr.HasIndex(fromIdx))
-            arr[toIdx] = arr[fromIdx];
-        else
-            arr.DeleteAt(toIdx);
+        var boxedArgs = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            boxedArgs[i] = args[i].ToObject();
+        return RuntimeValue.FromObject(
+            CopyWithinArrayLike(interpreter, arr, boxedArgs));
     }
 
     // --- Callback-based V2 methods ---

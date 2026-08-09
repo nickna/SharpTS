@@ -630,6 +630,29 @@ public class ArrayMethodTests
         Assert.Equal("true\nfalse\nx\nx\nfalse\ntrue\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_CopyWithin_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 4 };
+            object.copyWithin = Array.prototype.copyWithin;
+            console.log(object.copyWithin(1, 0, 3) === object);
+            console.log(object[0]);
+            console.log(object[1]);
+            console.log(2 in object);
+            console.log(object[3]);
+
+            const overlapping: any = { 0: "a", 1: "b", 2: "c", length: 3 };
+            Array.prototype.copyWithin.call(overlapping, 1, 0);
+            console.log(overlapping[0]);
+            console.log(overlapping[1]);
+            console.log(overlapping[2]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\nfirst\nfirst\nfalse\nthird\na\na\nb\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

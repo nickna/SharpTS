@@ -306,6 +306,12 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!, arguments);
         }
 
+        if (_name == "copyWithin")
+        {
+            return BuiltIns.ArrayBuiltIns.CopyWithinArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
         // Fast path: receiver is a real array (ToObject is identity for objects).
         bool requiresObservableIndexedGet = _name is
             "toReversed" or "toSorted" or "toSpliced";
