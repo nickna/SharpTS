@@ -256,6 +256,25 @@ None of these items is evidence of present compatibility, and none gates the Win
 
 ## Evidence appendix
 
+### Current-main integration verification
+
+The Avalonia baseline was replayed onto `main` at `a97e361e` and validated at integration commit
+`2ab6186093087628d62fc3146d062b0f265f2f7a` on 2026-08-08.
+
+| Gate | Integrated result |
+| --- | --- |
+| Release solution build | `dotnet build SharpTS.sln -c Release` passed with zero warnings and zero errors |
+| Focused hosted/JSX/SDK tests | 48 passed, zero skipped, zero failed |
+| GUI conformance | 25 passed, zero skipped, zero failed |
+| Canonical core suite | 16,521 passed, two documented HTTP lifecycle skips, zero failed using the CI/release exclusions for `LiveNetwork`, `LoadSensitive`, and `npm` |
+| Isolated x64 package lifecycle | Restore, package audit, path-with-spaces build/no-op/clean/rebuild, IL verification, interpreted and compiled Headless execution, framework-dependent directory publish, asset closure, compiled single-file publish, and missing-manifest diagnostics passed |
+| Candidate package | `SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg`, 26,209,832 bytes, SHA-256 `F8E73734D26FEF43B59A9D5626F77F4065DD472FA0010F8E28FB162543C826F5` |
+
+The unfiltered local core run additionally executed opt-in live-network tests. Its compiled
+`DnsRecordTypeTests.LiveSmoke_ResolveNs_Promise` case produced no output; the canonical suite
+excludes this category by design and deterministic dual-mode DNS tests passed. No ARM64 native or
+macOS execution was performed for this integration gate.
+
 ### TSX application API verification
 
 The GUI API 1 worktree passed the following focused gates on 2026-08-08:
