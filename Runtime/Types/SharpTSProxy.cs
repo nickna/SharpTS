@@ -47,13 +47,17 @@ public class SharpTSProxy : ISharpTSCallable
             throw new Exception($"Runtime Error: Cannot create proxy with a non-object as {argName}.");
     }
 
-    private object? GetTrapCallable(string trapName)
+    private object? GetTrapCallable(string trapName, Interpreter? interpreter)
     {
         EnsureNotRevoked();
 
         object? value = null;
 
-        if (_handler is SharpTSObject obj)
+        if (_handler is SharpTSProxy proxy)
+        {
+            value = proxy.TrapGet(trapName, interpreter);
+        }
+        else if (_handler is SharpTSObject obj)
         {
             value = obj.GetProperty(trapName);
         }
@@ -112,7 +116,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     public object? TrapGet(string prop, Interpreter? interp)
     {
-        var trap = GetTrapCallable("get");
+        var trap = GetTrapCallable("get", interp);
         if (trap == null)
             return ForwardGet(prop, interp);
 
@@ -129,7 +133,7 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     internal object? TrapGet(SharpTSSymbol prop, Interpreter interp)
     {
-        var trap = GetTrapCallable("get");
+        var trap = GetTrapCallable("get", interp);
         if (trap == null)
             return interp.GetSymbolPropertyValue(_target, prop);
 
@@ -149,7 +153,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     public object? TrapSet(string prop, object? value, Interpreter? interp)
     {
-        var trap = GetTrapCallable("set");
+        var trap = GetTrapCallable("set", interp);
         if (trap == null)
             return ForwardSet(prop, value, interp);
 
@@ -161,7 +165,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     public bool TrapHas(string prop, Interpreter? interp)
     {
-        var trap = GetTrapCallable("has");
+        var trap = GetTrapCallable("has", interp);
         if (trap == null)
             return ForwardHas(prop, interp);
 
@@ -171,7 +175,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     public bool TrapDeleteProperty(string prop, Interpreter? interp)
     {
-        var trap = GetTrapCallable("deleteProperty");
+        var trap = GetTrapCallable("deleteProperty", interp);
         if (trap == null)
             return ForwardDeleteProperty(prop);
 
@@ -186,7 +190,7 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     public object? TrapGetOwnPropertyDescriptor(string prop, Interpreter? interp)
     {
-        var trap = GetTrapCallable("getOwnPropertyDescriptor");
+        var trap = GetTrapCallable("getOwnPropertyDescriptor", interp);
         if (trap == null)
         {
             return _target is SharpTSProxy proxy
@@ -201,7 +205,7 @@ public class SharpTSProxy : ISharpTSCallable
     internal object? TrapGetOwnPropertyDescriptor(
         SharpTSSymbol prop, Interpreter interpreter)
     {
-        var trap = GetTrapCallable("getOwnPropertyDescriptor");
+        var trap = GetTrapCallable("getOwnPropertyDescriptor", interpreter);
         if (trap == null)
         {
             return _target is SharpTSProxy proxy
@@ -221,7 +225,7 @@ public class SharpTSProxy : ISharpTSCallable
     public bool TrapDefineProperty(
         string prop, object descriptor, Interpreter interpreter)
     {
-        var trap = GetTrapCallable("defineProperty");
+        var trap = GetTrapCallable("defineProperty", interpreter);
         if (trap == null)
             return ObjectBuiltIns.DefinePropertyOnProxyTarget(
                 interpreter, _target, prop, descriptor);
@@ -334,7 +338,7 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     internal List<object?> TrapOwnPropertyKeys(Interpreter? interp)
     {
-        var trap = GetTrapCallable("ownKeys");
+        var trap = GetTrapCallable("ownKeys", interp);
         if (trap == null)
             return ForwardOwnPropertyKeys(interp);
 
@@ -461,7 +465,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     public object? TrapApply(object? thisArg, List<object?> args, Interpreter? interp)
     {
-        var trap = GetTrapCallable("apply");
+        var trap = GetTrapCallable("apply", interp);
         if (trap == null)
         {
             if (_target is ISharpTSCallable callable)
@@ -486,7 +490,7 @@ public class SharpTSProxy : ISharpTSCallable
 
     public object? TrapConstruct(List<object?> args, Interpreter? interp)
     {
-        var trap = GetTrapCallable("construct");
+        var trap = GetTrapCallable("construct", interp);
         if (trap == null)
         {
             if (_target is SharpTSClass klass)

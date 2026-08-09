@@ -1446,6 +1446,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Object_keys_observes_proxy_traps_in_spec_order()
+        => AssertPass(
+            "built-ins/Object/keys/property-traps-order-with-proxied-array.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Object_entries_returns_integer_indices_before_creation_ordered_strings()
         => AssertPass(
             "built-ins/Object/entries/return-order.js",
