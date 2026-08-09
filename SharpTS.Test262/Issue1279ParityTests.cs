@@ -1770,6 +1770,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/getPrototypeOf/not-extensible-not-same-proto-throws.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_getPrototypeOf_accepts_matching_fixed_target_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/not-extensible-same-proto.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
