@@ -765,10 +765,30 @@ export interface DesktopWindow extends DesktopRoot {
     close(): void;
     findResource(key: string): DesktopResourceValue | null;
 }
+export interface TrayMenuItem {
+    id?: string;
+    label?: string;
+    separator?: boolean;
+    isEnabled?: boolean;
+    isChecked?: boolean;
+}
+export interface TrayIconOptions {
+    icon: string;
+    toolTip?: string;
+    menu?: readonly TrayMenuItem[];
+    onClick?: () => void;
+    onMenuItemClick?: (id: string) => void;
+}
+export interface DesktopTrayIcon {
+    readonly isDisposed: boolean;
+    update(options: TrayIconOptions): void;
+    dispose(): void;
+}
 export interface DesktopApplication {
     readonly isDisposed: boolean;
     readonly windowCount: number;
     createWindow(element: GuiChild, options?: DesktopWindowOptions): DesktopWindow;
+    createTrayIcon(options: TrayIconOptions): DesktopTrayIcon;
     shutdown(exitCode?: number): void;
     dispose(): void;
 }
@@ -818,6 +838,31 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
             catch (error) { root.Dispose(); throw error; }
             return window;
         },
+        createTrayIcon(trayOptions: TrayIconOptions): DesktopTrayIcon {
+            if (managed.IsDisposed) throw new Error("The desktop application is disposed.");
+            let current = trayOptions;
+            const create = (options: TrayIconOptions): any => DesktopBridge.CreateDesktopTrayIcon(
+                managed,
+                options.icon,
+                options.toolTip || "",
+                JSON.stringify(options.menu || []),
+                action(options.onClick),
+                stringAction(options.onMenuItemClick));
+            const native: any = create(current);
+            return {
+                get isDisposed(): boolean { return native.IsDisposed; },
+                update(options: TrayIconOptions): void {
+                    current = options;
+                    native.Update(
+                        current.icon,
+                        current.toolTip || "",
+                        JSON.stringify(current.menu || []),
+                        action(current.onClick),
+                        stringAction(current.onMenuItemClick));
+                },
+                dispose(): void { native.Dispose(); },
+            };
+        },
         shutdown(exitCode: number = 0): void { managed.Shutdown(exitCode); },
         dispose(): void { managed.Dispose(); },
     };
@@ -830,9 +875,25 @@ export interface FileFilter { name: string; patterns: readonly string[]; }
 export interface OpenFileDialogOptions { title?: string; allowMultiple?: boolean; filters?: readonly FileFilter[]; }
 export interface SaveFileDialogOptions { title?: string; suggestedFileName?: string; defaultExtension?: string; filters?: readonly FileFilter[]; }
 export interface FolderDialogOptions { title?: string; }
+export interface DesktopPlatformInfo {
+    operatingSystem: "windows" | "macos" | "linux" | "unknown";
+    architecture: string;
+    framework: string;
+    applicationDirectory: string;
+    localApplicationData: string;
+    roamingApplicationData: string;
+    documents: string;
+    desktop: string;
+    temporaryDirectory: string;
+}
 export async function showMessageDialog(options: MessageDialogOptions): Promise<MessageDialogResult> { return await DesktopBridge.ShowMessageDialogAsync(options.title || "", options.message, options.buttons || "ok") as any; }
 export async function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> { return await DesktopBridge.ShowOpenFileDialogAsync(options.title || "", options.allowMultiple === true, JSON.stringify(options.filters || [])) as any; }
 export async function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise<string | null> { return await DesktopBridge.ShowSaveFileDialogAsync(options.title || "", options.suggestedFileName || "", options.defaultExtension || "", JSON.stringify(options.filters || [])) as any; }
 export async function showFolderDialog(options: FolderDialogOptions = {}): Promise<string | null> { return await DesktopBridge.ShowFolderDialogAsync(options.title || "") as any; }
 export async function readClipboardText(): Promise<string> { return await DesktopBridge.ReadClipboardTextAsync(); }
 export async function writeClipboardText(value: string): Promise<void> { await DesktopBridge.WriteClipboardTextAsync(value); }
+export function getLaunchArguments(): string[] { return DesktopBridge.GetDesktopLaunchArguments() as any; }
+export function getDesktopPlatformInfo(): DesktopPlatformInfo { return JSON.parse(DesktopBridge.GetDesktopPlatformInfoJson()) as DesktopPlatformInfo; }
+export async function openExternal(target: string): Promise<void> { await DesktopBridge.OpenDesktopExternalAsync(target); }
+export async function showItemInFolder(path: string): Promise<void> { await DesktopBridge.ShowDesktopItemInFolderAsync(path); }
+export async function printFile(path: string): Promise<void> { await DesktopBridge.PrintDesktopFileAsync(path); }

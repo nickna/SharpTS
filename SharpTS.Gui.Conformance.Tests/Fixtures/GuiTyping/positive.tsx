@@ -14,6 +14,11 @@ import {
     createTree,
     createVirtualDataGrid,
     createVirtualList,
+    getDesktopPlatformInfo,
+    getLaunchArguments,
+    openExternal,
+    printFile,
+    showItemInFolder,
     useControlRef,
 } from "@sharpts/gui";
 import { CalculatorButton, CalculatorButtonDefinition } from "../../../Examples/Calculator/CalculatorApp";
@@ -55,8 +60,21 @@ const modalWindow = application.createWindow(
     { owner: mainWindow, modal: true },
 );
 modalWindow.activate();
+const tray = application.createTrayIcon({
+    icon: "asset:///icon.ico",
+    toolTip: "SharpTS",
+    menu: [{ id: "open", label: "Open" }, { separator: true }, { id: "quit", label: "Quit" }],
+    onMenuItemClick: id => { void id; },
+});
+tray.update({ icon: "asset:///icon.ico", toolTip: "Updated" });
+tray.dispose();
 const accent: string | number | boolean | readonly number[] | null = mainWindow.findResource("accent");
 void modalWindow.closed;
+void getDesktopPlatformInfo().applicationDirectory;
+void getLaunchArguments();
+void openExternal("https://example.com");
+void showItemInFolder("document.txt");
+void printFile("document.txt");
 application.shutdown(0);
 
 const records = [{ id: 1, name: "One", children: [] as any[] }];

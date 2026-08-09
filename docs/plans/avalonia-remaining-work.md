@@ -414,8 +414,10 @@ contract stabilizes.
 
 ### Track B: desktop services and developer experience
 
-- Expand menus, dialogs, clipboard, drag/drop, file associations, notifications, system tray,
-  printing, and platform services.
+- **Partially complete:** menus, dialogs, clipboard, file-association launch arguments, application-
+  owned system tray/menu handles, Windows shell printing, external launch/reveal, and platform/
+  known-folder services are implemented and dual-mode tested. Drag/drop remains; notifications
+  require the installer identity selected in Track D.
 - Add interpreted remount/hot reload with explicit state-preservation rules.
 - Add a component inspector and Headless visual-regression workflow.
 - Complete accessibility, keyboard navigation, focus, IME, high-DPI, multiple-monitor, and theme

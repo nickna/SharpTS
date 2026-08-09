@@ -74,6 +74,15 @@ const mainWindow = application.createWindow(
     <MainWindow />,
     { main: true },
 );
+const tray = application.createTrayIcon({
+    icon: "asset:///headless.ico",
+    toolTip: "SharpTS conformance",
+    menu: [{ id: "open", label: "Open" }, { separator: true }, { id: "quit", label: "Quit" }],
+});
+tray.update({ icon: "asset:///headless.ico", toolTip: "Updated" });
+tray.dispose();
+if (!tray.isDisposed) throw new Error("Tray icon did not dispose.");
+trace("multi-window-platform-services");
 const secondaryWindow = application.createWindow(
     <Window title="Secondary"><TextBlock>Secondary</TextBlock></Window>,
     { owner: mainWindow },

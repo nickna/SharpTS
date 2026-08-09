@@ -110,7 +110,7 @@ internal static class DesktopApplicationHost
             currentGuest.QueueMicrotask(callback);
         }, exitCode => shutdown.RequestShutdown(
             exitCode == 0 ? SharpTSHostedShutdownReason.HostRequested : SharpTSHostedShutdownReason.UncaughtError,
-            exitCode));
+            exitCode), options.GuestArguments);
         bridgeContext = bridgeRegistration.Context;
 
         bool clickRaised = false;

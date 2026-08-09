@@ -50,6 +50,7 @@ public sealed class MultiWindowIntegrationTests
             string[] compiled = await RunAsync(temporaryRoot, "compiled");
             string[] expected =
             [
+                "multi-window-platform-services",
                 "multi-window-mounted",
                 "multi-window-secondary-closed",
                 "multi-window-advanced-surface",

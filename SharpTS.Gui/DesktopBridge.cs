@@ -59,7 +59,8 @@ public static class DesktopBridge
         bool headless,
         Action<Action> dispatchGuestCallback,
         Action<Action> scheduleGuestMicrotask,
-        Action<int>? requestShutdown = null)
+        Action<int>? requestShutdown = null,
+        string[]? launchArguments = null)
     {
         if (_context is not null)
             throw new InvalidOperationException("A desktop runtime context is already registered.");
@@ -70,7 +71,8 @@ public static class DesktopBridge
             headless,
             dispatchGuestCallback,
             scheduleGuestMicrotask,
-            requestShutdown ?? (_ => { }));
+            requestShutdown ?? (_ => { }),
+            launchArguments ?? []);
         _context = context;
         return new DesktopRuntimeRegistration(context, ReleaseContext);
     }
@@ -601,6 +603,33 @@ public static class DesktopBridge
 
     public static Task WriteClipboardTextAsync(string value) =>
         DesktopServices.WriteClipboardAsync(RequireContext().RequireWindowForServices(), value);
+
+    public static string[] GetDesktopLaunchArguments() =>
+        RequireContext().GetLaunchArguments();
+
+    public static string GetDesktopPlatformInfoJson() =>
+        DesktopPlatformServices.PlatformInfoJson();
+
+    public static Task OpenDesktopExternalAsync(string target) =>
+        DesktopPlatformServices.OpenExternalAsync(target);
+
+    public static Task ShowDesktopItemInFolderAsync(string path) =>
+        DesktopPlatformServices.ShowItemInFolderAsync(path);
+
+    public static Task PrintDesktopFileAsync(string path) =>
+        DesktopPlatformServices.PrintFileAsync(path);
+
+    public static DesktopTrayIcon CreateDesktopTrayIcon(
+        DesktopApplicationSession application,
+        string icon,
+        string toolTip,
+        string menuJson,
+        Action? clicked,
+        Action<string>? menuClicked)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        return application.CreateTrayIcon(icon, toolTip, menuJson, clicked, menuClicked);
+    }
 
     internal static void EnsureOwnerThread() => RequireContext().EnsureOwnerThread();
 

@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using SharpTS.Gui;
 using Xunit;
 
@@ -48,6 +49,48 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     public void Dispose() => _runtimeRegistration.Dispose();
+
+    [Fact]
+    public void DesktopApplication_TracksHeadlessTrayIconCallbacksUpdatesAndDisposal()
+    {
+        using DesktopApplicationSession application =
+            DesktopBridge.CreateDesktopApplication("explicit");
+        var events = new List<string>();
+        using DesktopTrayIcon tray = DesktopBridge.CreateDesktopTrayIcon(
+            application,
+            "asset:///icon.ico",
+            "SharpTS",
+            "[{\"id\":\"open\",\"label\":\"Open\"}]",
+            () => events.Add("old-click"),
+            id => events.Add("old-" + id));
+
+        tray.RaiseClickForTesting();
+        tray.RaiseMenuClickForTesting("open");
+        tray.Update(
+            "asset:///icon.ico",
+            "Updated",
+            "[{\"id\":\"quit\",\"label\":\"Quit\"}]",
+            () => events.Add("new-click"),
+            id => events.Add("new-" + id));
+        tray.RaiseClickForTesting();
+        tray.RaiseMenuClickForTesting("quit");
+
+        Assert.Equal(["old-click", "old-open", "new-click", "new-quit"], events);
+        Assert.False(tray.IsDisposed);
+        application.Dispose();
+        Assert.True(tray.IsDisposed);
+    }
+
+    [Fact]
+    public void DesktopPlatformServices_ReportEnvironmentAndRejectMissingShellTargets()
+    {
+        using JsonDocument info = JsonDocument.Parse(DesktopBridge.GetDesktopPlatformInfoJson());
+        Assert.Equal("windows", info.RootElement.GetProperty("operatingSystem").GetString());
+        Assert.NotEmpty(info.RootElement.GetProperty("architecture").GetString()!);
+        Assert.Empty(DesktopBridge.GetDesktopLaunchArguments());
+        Assert.Throws<FileNotFoundException>(() =>
+            DesktopPlatformServices.ResolveExistingPath($"missing-{Guid.NewGuid():N}"));
+    }
 
     [Fact]
     public void DesktopApplication_TracksOwnedModalWindowsAndLastWindowShutdown()

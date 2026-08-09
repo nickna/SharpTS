@@ -13,8 +13,10 @@ internal sealed class DesktopRuntimeContext
     private readonly Action<Action> _dispatchGuestCallback;
     private readonly Action<Action> _scheduleGuestMicrotask;
     private readonly Action<int> _requestShutdown;
+    private readonly string[] _launchArguments;
     private readonly bool _headless;
     private readonly List<DesktopRoot> _roots = [];
+    private readonly List<DesktopTrayIcon> _trayIcons = [];
     private DesktopApplicationSession? _application;
     private bool _cancelNextWindowClose;
 
@@ -24,7 +26,8 @@ internal sealed class DesktopRuntimeContext
         bool headless,
         Action<Action> dispatchGuestCallback,
         Action<Action> scheduleGuestMicrotask,
-        Action<int> requestShutdown)
+        Action<int> requestShutdown,
+        string[] launchArguments)
     {
         Recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
         _showWindow = showWindow ?? throw new ArgumentNullException(nameof(showWindow));
@@ -33,6 +36,7 @@ internal sealed class DesktopRuntimeContext
         _scheduleGuestMicrotask = scheduleGuestMicrotask
             ?? throw new ArgumentNullException(nameof(scheduleGuestMicrotask));
         _requestShutdown = requestShutdown ?? throw new ArgumentNullException(nameof(requestShutdown));
+        _launchArguments = launchArguments?.ToArray() ?? throw new ArgumentNullException(nameof(launchArguments));
         _headless = headless;
         EnsureOwnerThread();
     }
@@ -43,6 +47,7 @@ internal sealed class DesktopRuntimeContext
         _roots.FirstOrDefault(root => root.IsMainWindow) ?? _roots.LastOrDefault();
 
     public IReadOnlyList<DesktopRoot> Roots => _roots;
+    public string[] GetLaunchArguments() => _launchArguments.ToArray();
 
     public DesktopRoot CreateRoot(Action reactiveCleanup)
     {
@@ -119,6 +124,7 @@ internal sealed class DesktopRuntimeContext
     public void DisposeAllRoots()
     {
         EnsureOwnerThread();
+        _application?.Dispose();
         foreach (DesktopRoot root in _roots.ToArray().Reverse())
             root.Dispose();
     }
@@ -126,6 +132,8 @@ internal sealed class DesktopRuntimeContext
     internal void DisposeApplication(DesktopApplicationSession application)
     {
         EnsureOwnerThread();
+        foreach (DesktopTrayIcon trayIcon in _trayIcons.Where(icon => ReferenceEquals(icon.Application, application)).ToArray().Reverse())
+            trayIcon.Dispose();
         foreach (DesktopRoot root in _roots.Where(root => ReferenceEquals(root.Application, application)).ToArray().Reverse())
             root.Dispose();
         if (ReferenceEquals(_application, application))
@@ -229,6 +237,23 @@ internal sealed class DesktopRuntimeContext
             ?? throw new InvalidOperationException("A mounted desktop root is required for this service.");
     }
 
+    internal DesktopTrayIcon CreateTrayIcon(
+        DesktopApplicationSession application,
+        string icon,
+        string toolTip,
+        string menuJson,
+        Action? clicked,
+        Action<string>? menuClicked)
+    {
+        EnsureOwnerThread();
+        if (!ReferenceEquals(application, _application) || application.IsDisposed)
+            throw new ObjectDisposedException(nameof(DesktopApplicationSession));
+        var handle = new DesktopTrayIcon(
+            this, application, _headless, icon, toolTip, menuJson, clicked, menuClicked, ReleaseTrayIcon);
+        _trayIcons.Add(handle);
+        return handle;
+    }
+
     public Bitmap LoadImage(string source)
     {
         EnsureOwnerThread();
@@ -249,6 +274,26 @@ internal sealed class DesktopRuntimeContext
         return new Bitmap(path);
     }
 
+    public WindowIcon LoadWindowIcon(string source)
+    {
+        EnsureOwnerThread();
+        if (source.StartsWith("asset:///", StringComparison.OrdinalIgnoreCase))
+        {
+            string logicalName = source[9..].Replace('\\', '/');
+            Stream stream = Assembly.GetEntryAssembly()?.GetManifestResourceStream($"SharpTS.Gui.Asset/{logicalName}")
+                ?? throw new FileNotFoundException($"Packaged GUI asset '{logicalName}' was not found.");
+            using (stream)
+                return new WindowIcon(stream);
+        }
+
+        string path = Uri.TryCreate(source, UriKind.Absolute, out Uri? uri) && uri.IsFile
+            ? uri.LocalPath
+            : source;
+        if (!Path.IsPathRooted(path))
+            path = Path.GetFullPath(path, AppContext.BaseDirectory);
+        return new WindowIcon(path);
+    }
+
     public void EnsureOwnerThread()
     {
         if (Environment.CurrentManagedThreadId != Recorder.OwnerThreadId)
@@ -263,6 +308,12 @@ internal sealed class DesktopRuntimeContext
     {
         EnsureOwnerThread();
         _roots.Remove(root);
+    }
+
+    private void ReleaseTrayIcon(DesktopTrayIcon trayIcon)
+    {
+        EnsureOwnerThread();
+        _trayIcons.Remove(trayIcon);
     }
 
     internal int CountApplicationRoots(DesktopApplicationSession application) =>
@@ -288,6 +339,17 @@ public sealed class DesktopApplicationSession : IDisposable
 
     public bool IsDisposed => _disposed;
     public int WindowCount => _disposed ? 0 : _context.CountApplicationRoots(this);
+
+    internal DesktopTrayIcon CreateTrayIcon(
+        string icon,
+        string toolTip,
+        string menuJson,
+        Action? clicked,
+        Action<string>? menuClicked)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _context.CreateTrayIcon(this, icon, toolTip, menuJson, clicked, menuClicked);
+    }
 
     public DesktopRoot CreateWindowRoot(Action reactiveCleanup, DesktopRoot? owner, bool modal, bool mainWindow)
     {

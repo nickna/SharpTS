@@ -94,7 +94,12 @@ events, values, and callbacks. Keys preserve native identity through sibling ins
 and reordering. Controlled input commits suppress callback echoes while real user changes dispatch
 the latest guest callback through one stable native subscription.
 
-The module also provides message, file, folder, and save dialogs plus clipboard read/write helpers.
+The module also provides message, file, folder, and save dialogs; clipboard read/write helpers;
+statically owned system-tray icons and menus; launch/file-association arguments; platform and known
+folder information; safe external URI/file launching; Explorer reveal; and Windows shell printing.
+Tray resources are application-owned and dispose automatically with their desktop application.
+Notification delivery remains outside the preview until the installer can provide a stable Windows
+application identity.
 Explicit desktop applications accept primitive resource dictionaries and native Avalonia styles
 with built-in type/class selectors and a trimming-safe setter allow-list. Controls opt into class
 selectors with `classes`, and a window can query its effective resources with `findResource`.

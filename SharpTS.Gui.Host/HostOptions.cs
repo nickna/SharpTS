@@ -12,7 +12,8 @@ internal sealed record HostOptions(
     string? TracePath,
     bool IsTracePathHostManaged,
     string? ValidateDepsDirectory,
-    bool ValidateCompiledOnly);
+    bool ValidateCompiledOnly,
+    string[] GuestArguments);
 
 internal static class HostOptionsParser
 {
@@ -26,9 +27,15 @@ internal static class HostOptionsParser
         bool explicitTracePath = false;
         string? validateDeps = null;
         bool validateCompiledOnly = false;
+        var guestArguments = new List<string>();
 
         for (int i = 0; i < args.Length; i++)
         {
+            if (args[i] == "--")
+            {
+                guestArguments.AddRange(args[(i + 1)..]);
+                break;
+            }
             switch (args[i])
             {
                 case "--mode" when i + 1 < args.Length:
@@ -61,6 +68,9 @@ internal static class HostOptionsParser
                     validateDeps = args[++i];
                     validateCompiledOnly = true;
                     break;
+                case var argument when !argument.StartsWith("--", StringComparison.Ordinal):
+                    guestArguments.Add(args[i]);
+                    break;
                 default:
                     throw new ArgumentException($"Unknown or incomplete option '{args[i]}'.");
             }
@@ -76,7 +86,8 @@ internal static class HostOptionsParser
             tracePath,
             hostManagedTrace,
             validateDeps,
-            validateCompiledOnly);
+            validateCompiledOnly,
+            guestArguments.ToArray());
     }
 
     public static bool ShouldShowFatalDialog(string[] args) =>
