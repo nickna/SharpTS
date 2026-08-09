@@ -202,7 +202,8 @@ public class SharpTSProxy : ISharpTSCallable
             return descriptor ?? SharpTSUndefined.Instance;
         }
 
-        return InvokeTrap(trap, interp, [_target, prop]);
+        return ValidateDescriptorTrapResult(
+            InvokeTrap(trap, interp, [_target, prop]));
     }
 
     internal object? TrapGetOwnPropertyDescriptor(
@@ -217,7 +218,21 @@ public class SharpTSProxy : ISharpTSCallable
                     ?? SharpTSUndefined.Instance;
         }
 
-        return InvokeTrap(trap, interpreter, [_target, prop]);
+        return ValidateDescriptorTrapResult(
+            InvokeTrap(trap, interpreter, [_target, prop]));
+    }
+
+    private static object? ValidateDescriptorTrapResult(object? result)
+    {
+        if (result is SharpTSUndefined) return result;
+        if (result is null or string or bool or double or int or long or float
+            or decimal or SharpTSSymbol or SharpTSBigInt
+            or System.Numerics.BigInteger)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy getOwnPropertyDescriptor trap must return an object or undefined"));
+        }
+        return result;
     }
 
     /// <summary>
