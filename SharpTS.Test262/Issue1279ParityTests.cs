@@ -1880,6 +1880,12 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/sort/precise-comparefn-throws.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-prototype-accessors.js")]
+    public void Array_sort_observes_object_prototype_accessors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)

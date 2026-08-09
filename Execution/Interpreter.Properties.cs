@@ -718,8 +718,8 @@ public partial class Interpreter
                     obj = array.ExplicitPrototype;
                     continue;
                 }
-                if (GetArrayPrototype().HasExtra(name)) return true;
-                return GetProperty(array, name) is not (null or SharpTSUndefined);
+                if (GetArrayPrototype().HasOwnProperty(name)) return true;
+                return GetObjectPrototype().HasOwnProperty(name);
             }
             if (obj is SharpTSObject so)
             {
@@ -2353,19 +2353,27 @@ public partial class Interpreter
                         }
                         return value;
                     }
-                    if (!array.HasIndex(arrayIndex)
-                        && GetArrayPrototype().GetOwnPropertyDescriptor(memberName)
-                            is { } inherited)
+                    if (!array.HasIndex(arrayIndex))
                     {
-                        if (GetArrayPrototype().GetExtraSetter(memberName)
-                            is { } inheritedSetter)
+                        var arrayPrototype = GetArrayPrototype();
+                        var inherited = arrayPrototype.GetOwnPropertyDescriptor(memberName);
+                        var inheritedSetter = arrayPrototype.GetExtraSetter(memberName);
+                        if (inherited is null)
+                        {
+                            var objectPrototype = GetObjectPrototype();
+                            inherited = objectPrototype.GetOwnPropertyDescriptor(memberName);
+                            inheritedSetter = objectPrototype.GetExtraSetter(memberName);
+                        }
+
+                        if (inheritedSetter != null)
                         {
                             BindAccessorToObject(inheritedSetter, array)
                                 .CallBoxed(this, [value]);
                             return value;
                         }
-                        if (inherited.Get != null || inherited.Set != null
-                            || !inherited.Writable)
+                        if (inherited is not null
+                            && (inherited.Get != null || inherited.Set != null
+                                || !inherited.Writable))
                         {
                             if (strictMode)
                             {
