@@ -33,6 +33,8 @@ export type GuiChild = GuiElement | string | number | boolean | null | undefined
 export interface TextualChildArray { readonly length: number; readonly [index: number]: TextualChild; }
 export type TextualChild = string | number | boolean | null | undefined | TextualChildArray;
 export type Component<P = {}> = (props: Readonly<P & { children?: GuiChild }>) => GuiChild;
+export type CustomControlComponent<P extends object = {}> =
+    (props: Readonly<P>) => GuiElement;
 export type SignalSetter<T> = (value: T | ((previous: T) => T)) => void;
 export type StateSetter<T> = SignalSetter<T>;
 export type Dispatch<A> = (action: A) => void;

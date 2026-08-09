@@ -26,6 +26,8 @@ export type GuiChild = GuiElement | string | number | boolean | null | undefined
 export interface TextualChildArray { readonly length: number; readonly [index: number]: TextualChild; }
 export type TextualChild = string | number | boolean | null | undefined | TextualChildArray;
 export type Component<P = {}> = (props: Readonly<P & { children?: GuiChild }>) => GuiChild;
+export type CustomControlComponent<P extends object = {}> =
+    (props: Readonly<P>) => GuiElement;
 export type SignalSetter<T> = (value: T | ((previous: T) => T)) => void;
 export type StateSetter<T> = SignalSetter<T>;
 export type Dispatch<A> = (action: A) => void;
@@ -71,6 +73,22 @@ export function createDevElement(type: any, props: any, key: any, source: any): 
         columnNumber: source.columnNumber === undefined ? 0 : source.columnNumber,
     };
     return { ...element, source: info };
+}
+
+/** Creates a typed TSX tag for a statically packaged managed custom-control descriptor. */
+export function defineCustomControl<P extends object = {}>(kind: string): CustomControlComponent<P> {
+    if (!/^[a-z][a-z0-9.-]*\.[A-Za-z][A-Za-z0-9]*$/.test(kind))
+        throw new Error("Custom control kinds must use a provider-qualified name such as 'vendor.widgets.Control'.");
+    return kind as any;
+}
+
+function customProperties(props: any): string {
+    const copy: any = {};
+    for (const name of Object.keys(props || {})) {
+        if (name === "children" || name === "ref" || name === "key" || typeof props[name] === "function") continue;
+        copy[name] = props[name];
+    }
+    return JSON.stringify(copy);
 }
 
 interface SignalState { value: any; subscribers: ReactiveRoot[]; }
@@ -473,7 +491,12 @@ class ReactiveRoot {
             case "TabControl": node = DesktopBridge.CreateTabControl(safe.selectedIndex === undefined ? 0 : safe.selectedIndex, numberAction(safe.onSelectionChanged), children.nodes, key, ref); break;
             case "TabItem": node = DesktopBridge.CreateTabItem(safe.header, children.nodes, key, ref); break;
             case "Menu": node = DesktopBridge.CreateMenu(children.nodes, key, ref); break;
-            default: throw new Error("Unknown @sharpts/gui TSX tag: " + element.type);
+            default:
+                if (typeof element.type !== "string" || element.type.indexOf(".") < 1)
+                    throw new Error("Unknown @sharpts/gui TSX tag: " + element.type);
+                node = DesktopBridge.CreateCustomControl(
+                    element.type, customProperties(safe), children.nodes, key, ref);
+                break;
         }
         node = DesktopBridge.WithSpecifiedProperties(
             source(withCommon(withStyle(node, safe), safe), element.source),

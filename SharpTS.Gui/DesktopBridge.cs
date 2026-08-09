@@ -22,9 +22,36 @@ public sealed class DesktopRef
 public static class DesktopBridge
 {
     public const int GuiApiVersion = 2;
+    public const int CustomControlProviderApiVersion = 1;
     public const int DescriptorSchemaVersion = GeneratedControlContract.SchemaVersion;
     public const string DescriptorSchemaHash = GeneratedControlContract.SchemaHash;
     private static DesktopRuntimeContext? _context;
+
+    /// <summary>
+    /// Registers statically referenced custom-control providers before the desktop host starts.
+    /// The returned scope must outlive the hosted application.
+    /// </summary>
+    public static IDisposable RegisterControlProviders(params IGuiControlProvider[] providers)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
+        if (_context is not null)
+            throw new InvalidOperationException(
+                "GUI control providers must be registered before the desktop runtime starts.");
+
+        var registrations = new List<IDisposable>(providers.Length);
+        try
+        {
+            foreach (IGuiControlProvider provider in providers)
+                registrations.Add(DescriptorRegistry.RegisterProvider(provider));
+            return new ControlProviderRegistrationScope(registrations);
+        }
+        catch
+        {
+            for (int index = registrations.Count - 1; index >= 0; index--)
+                registrations[index].Dispose();
+            throw;
+        }
+    }
 
     internal static DesktopRuntimeRegistration Configure(
         TraceRecorder recorder,
@@ -473,6 +500,20 @@ public static class DesktopBridge
         new("DrawingCanvas", NormalizeKey(key), DrawingJson: commandsJson,
             AttachRef: GetAttach(reference), RefIdentity: reference);
 
+    public static GuiVNode CreateCustomControl(
+        string kind,
+        string propertiesJson,
+        GuiVNode[] children,
+        object? key,
+        DesktopRef? reference)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(kind);
+        ArgumentNullException.ThrowIfNull(propertiesJson);
+        ArgumentNullException.ThrowIfNull(children);
+        return new(kind, NormalizeKey(key), CustomPropertiesJson: propertiesJson, Children: children,
+            AttachRef: GetAttach(reference), RefIdentity: reference);
+    }
+
     public static GuiVNode CreateFragment(GuiVNode[] children, object? key) =>
         new("Fragment", NormalizeKey(key), Children: children);
 
@@ -595,5 +636,19 @@ public static class DesktopBridge
     {
         if (ReferenceEquals(_context, context))
             _context = null;
+    }
+
+    private sealed class ControlProviderRegistrationScope(List<IDisposable> registrations) : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+            _disposed = true;
+            for (int index = registrations.Count - 1; index >= 0; index--)
+                registrations[index].Dispose();
+        }
     }
 }

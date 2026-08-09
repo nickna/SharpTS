@@ -407,7 +407,10 @@ contract stabilizes.
   lists, native trees, a lightweight virtual data grid, rich inline text, absolute canvas layout,
   and retained vector drawing/custom rendering are generated and dual-mode tested. A full editing
   Avalonia DataGrid may be added later without redefining this supported surface.
-- Add a reviewed third-party/custom-control registration and packaging contract.
+- **Complete:** add a reviewed third-party/custom-control registration and packaging contract.
+  Providers are statically referenced by `SharpTSGuiControlProvider`, constructed directly by
+  generated launcher code, namespace their descriptor kinds, and expose typed TS wrappers through
+  `defineCustomControl`; dynamic discovery and assembly scanning are intentionally unsupported.
 
 ### Track B: desktop services and developer experience
 

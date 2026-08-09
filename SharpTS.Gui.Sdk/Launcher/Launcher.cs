@@ -9,6 +9,7 @@ internal static class Launcher
     [STAThread]
     public static int Main(string[] args)
     {
+        using IDisposable controlProviders = ControlProviderRegistration.Register();
         string developmentManifest = Path.Combine(AppContext.BaseDirectory, ".sharpts", "app.json");
 #if SHARPTS_GUI_COMPILED_ONLY
         if (File.Exists(developmentManifest) &&

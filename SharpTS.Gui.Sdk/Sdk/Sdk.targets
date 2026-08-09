@@ -8,6 +8,7 @@
     <SharpTSGuiGuestAssembly Condition="'$(SharpTSGuiGuestAssembly)' == ''">$(SharpTSGuiIntermediateRoot)SharpTS.Gui.Guest.dll</SharpTSGuiGuestAssembly>
     <SharpTSGuiManifest Condition="'$(SharpTSGuiManifest)' == ''">$(SharpTSGuiIntermediateRoot)app.json</SharpTSGuiManifest>
     <SharpTSGuiBuildFingerprint Condition="'$(SharpTSGuiBuildFingerprint)' == ''">$(SharpTSGuiIntermediateRoot)build.fingerprint</SharpTSGuiBuildFingerprint>
+    <SharpTSGuiProviderRegistrationSource Condition="'$(SharpTSGuiProviderRegistrationSource)' == ''">$(SharpTSGuiIntermediateRoot)ControlProviderRegistration.g.cs</SharpTSGuiProviderRegistrationSource>
     <SharpTSGuiEntryFullPath Condition="$([System.IO.Path]::IsPathRooted('$(SharpTSEntryPoint)'))">$(SharpTSEntryPoint)</SharpTSGuiEntryFullPath>
     <SharpTSGuiEntryFullPath Condition="'$(SharpTSGuiEntryFullPath)' == ''">$(MSBuildProjectDirectory)\$(SharpTSEntryPoint)</SharpTSGuiEntryFullPath>
     <RunCommand>dotnet</RunCommand>
@@ -23,6 +24,8 @@
   <UsingTask TaskName="SharpTS.Sdk.Tasks.WriteGuiManifestTask"
              AssemblyFile="$(SharpTSGuiTasksAssembly)" />
   <UsingTask TaskName="SharpTS.Sdk.Tasks.PrepareGuiAssetsTask"
+             AssemblyFile="$(SharpTSGuiTasksAssembly)" />
+  <UsingTask TaskName="SharpTS.Sdk.Tasks.WriteGuiControlProviderRegistrationTask"
              AssemblyFile="$(SharpTSGuiTasksAssembly)" />
 
   <Target Name="_SharpTSGuiValidate" BeforeTargets="SharpTSGuiPrepare">
@@ -61,6 +64,12 @@
                                Exclude="$(MSBuildProjectDirectory)\bin\**;$(MSBuildProjectDirectory)\obj\**;$(MSBuildProjectDirectory)\node_modules\**" />
     </ItemGroup>
     <MakeDir Directories="$(SharpTSGuiMaterializedPackage);$(TargetDir)Guest;$(TargetDir).sharpts\node_modules\@sharpts\gui" />
+    <WriteGuiControlProviderRegistrationTask
+        OutputPath="$(SharpTSGuiProviderRegistrationSource)"
+        ProviderTypes="@(SharpTSGuiControlProvider)" />
+    <ItemGroup>
+      <Compile Include="$(SharpTSGuiProviderRegistrationSource)" />
+    </ItemGroup>
     <Copy SourceFiles="@(_SharpTSGuiPackageFiles)"
           DestinationFiles="@(_SharpTSGuiPackageFiles->'$(SharpTSGuiMaterializedPackage)%(RecursiveDir)%(Filename)%(Extension)')"
           SkipUnchangedFiles="true" />
@@ -81,7 +90,7 @@
                           DescriptorSchemaVersion="$(SharpTSGuiDescriptorSchemaVersion)"
                           DescriptorSchemaHash="$(SharpTSGuiDescriptorSchemaHash)" />
     <WriteLinesToFile File="$(SharpTSGuiBuildFingerprint)"
-                      Lines="Entry=$(SharpTSEntryPoint);Config=$(SharpTSTsConfigPath);VerifyIL=$(SharpTSVerifyIL);SourcePayload=$(SharpTSGuiIncludeSourcePayload);PublishMode=$(SharpTSGuiPublishMode);HostedAbi=$(SharpTSGuiHostedAbiVersion);GuiApi=$(SharpTSGuiApiVersion);DescriptorSchema=$(SharpTSGuiDescriptorSchemaVersion):$(SharpTSGuiDescriptorSchemaHash)"
+                      Lines="Entry=$(SharpTSEntryPoint);Config=$(SharpTSTsConfigPath);VerifyIL=$(SharpTSVerifyIL);SourcePayload=$(SharpTSGuiIncludeSourcePayload);PublishMode=$(SharpTSGuiPublishMode);HostedAbi=$(SharpTSGuiHostedAbiVersion);GuiApi=$(SharpTSGuiApiVersion);DescriptorSchema=$(SharpTSGuiDescriptorSchemaVersion):$(SharpTSGuiDescriptorSchemaHash);@(SharpTSGuiControlProvider->'Provider=%(Identity)')"
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
     <ItemGroup>

@@ -2,6 +2,7 @@ import {
     Border,
     Button,
     ButtonHandle,
+    CommonProps,
     Fragment,
     Grid,
     DrawingCanvas,
@@ -9,6 +10,7 @@ import {
     TextBlock,
     Window,
     createDesktopApplication,
+    defineCustomControl,
     createTree,
     createVirtualDataGrid,
     createVirtualList,
@@ -21,6 +23,8 @@ const definition: CalculatorButtonDefinition = {
     role: "digit", row: 0, column: 0, action: { type: "digit", digit: "1" },
 };
 const buttonRef = useControlRef<ButtonHandle>();
+interface BadgeProps extends CommonProps<unknown> { label: string; }
+const Badge = defineCustomControl<BadgeProps>("example.widgets.Badge");
 
 export const positive = (
     <Grid>
@@ -28,6 +32,7 @@ export const positive = (
         <TextBlock>{["recursive", 1, false, null]}</TextBlock>
         <Button ref={buttonRef}>Text only</Button>
         <Border><TextBlock>One logical child</TextBlock></Border>
+        <Badge label="custom" automationName="Custom badge" />
         <Fragment><TextBlock>A</TextBlock><TextBlock>B</TextBlock></Fragment>
     </Grid>
 );

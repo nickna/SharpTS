@@ -101,6 +101,20 @@ selectors with `classes`, and a window can query its effective resources with `f
 Typed `createVirtualList`, `createTree`, and `createVirtualDataGrid` factories provide keyed item
 templates and windowed materialization. Rich inline runs, absolute canvas positioning, and retained
 line/rectangle/ellipse drawing commands are part of the generated control contract.
+
+Custom-control NuGet packages may participate through the reviewed, static provider contract. A
+package contributes a normal managed reference and a `buildTransitive` target containing an item
+such as `<SharpTSGuiControlProvider Include="global::Vendor.Widgets.WidgetProvider" />`. The type
+implements `IGuiControlProvider` and returns explicit `NodeDescriptor` instances whose kinds use
+its lowercase provider namespace (for example, `vendor.widgets.Chart`). The SDK emits direct
+constructor calls into the application launcher; it never scans assemblies or uses reflection.
+Provider contract version `1` is checked during launcher registration before guest initialization.
+The package's TypeScript wrapper declares `ChartProps extends CommonProps` and uses
+`defineCustomControl&lt;ChartProps&gt;("vendor.widgets.Chart")`. Custom prop data is serialized as JSON
+in `GuiVNode.CustomPropertiesJson`; provider prop types explicitly include `children?: GuiChild`
+when their descriptors accept children. Common layout/style props and refs retain normal
+renderer behavior. Packages must pin a compatible SharpTS GUI API and own trimming annotations for
+their native controls.
 Files under a project's `Assets` directory are embedded automatically and referenced as
 `asset:///relative/path.png`. Reproducible URL assets may be declared with `SharpTSGuiRemoteAsset`
 items that supply `LogicalName` and a required SHA-256 digest.
@@ -110,8 +124,8 @@ generated overlay while reserving the JSX runtime and `@sharpts/gui` module mapp
 `SharpTSVerifyIL` to `true` to verify the persisted hosted guest during compilation.
 
 Current preview boundaries: Windows `win-x64` and `win-arm64` only, one root element per Window,
-built-in controls only, string-backed legacy list/combo items, and no public custom-control,
-arbitrary control-template, or full editing DataGrid API. Native resources/styles/theme variants,
+statically packaged custom controls only, string-backed legacy list/combo items, and no dynamic
+descriptor discovery, arbitrary control-template, or full editing DataGrid API. Native resources/styles/theme variants,
 typed item templates, a windowed grid, trees, rich text, and canvas/drawing are supported. macOS
 support is intentionally deferred and is not
 claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
@@ -119,7 +133,7 @@ application.
 
 The SDK package is approximately 26 MB compressed; a minimal framework-dependent x64 directory is
 approximately 47 MB before application assets. Exact sizes vary with SDK/runtime servicing. Raw
-Avalonia objects and descriptor registration are internal in this preview. Native controls must
+Avalonia objects and descriptor registration are available only to managed provider packages. Native controls must
 only be touched on the Avalonia dispatcher; application code should use generated props, events,
 refs, and services instead. See `docs/gui/sdk-development.md` in the repository for the complete
 threading and extension policy.

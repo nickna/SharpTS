@@ -139,4 +139,46 @@ public sealed class GuiSdkTaskTests : IDisposable
         Assert.False(remoteTask.Execute());
         Assert.Contains(_buildEngine.Errors, error => error.Contains("Sha256", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void WriteGuiControlProviderRegistrationTask_EmitsDirectDeterministicConstructors()
+    {
+        string output = Path.Combine(_root, "obj", "ControlProviderRegistration.g.cs");
+        var task = new WriteGuiControlProviderRegistrationTask
+        {
+            BuildEngine = _buildEngine,
+            OutputPath = output,
+            ProviderTypes =
+            [
+                new TaskItem("global::Contoso.Widgets.ChartProvider"),
+                new TaskItem("Fabrikam.Controls.MapProvider"),
+            ],
+        };
+
+        Assert.True(task.Execute());
+        string first = File.ReadAllText(output);
+        Assert.Contains("new global::Contoso.Widgets.ChartProvider()", first, StringComparison.Ordinal);
+        Assert.Contains("new Fabrikam.Controls.MapProvider()", first, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reflection", first, StringComparison.Ordinal);
+        Assert.True(task.Execute());
+        Assert.Equal(first, File.ReadAllText(output));
+    }
+
+    [Theory]
+    [InlineData("Vendor.Provider<T>")]
+    [InlineData("Vendor.Provider();System.Console.WriteLine(1)")]
+    [InlineData("Vendor..Provider")]
+    public void WriteGuiControlProviderRegistrationTask_RejectsUnsafeTypeNames(string providerType)
+    {
+        var task = new WriteGuiControlProviderRegistrationTask
+        {
+            BuildEngine = _buildEngine,
+            OutputPath = Path.Combine(_root, "obj", "providers.g.cs"),
+            ProviderTypes = [new TaskItem(providerType)],
+        };
+
+        Assert.False(task.Execute());
+        Assert.Contains(_buildEngine.Errors, error =>
+            error.Contains("qualified C# type name", StringComparison.Ordinal));
+    }
 }

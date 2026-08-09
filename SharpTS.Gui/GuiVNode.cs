@@ -80,6 +80,7 @@ public sealed record GuiVNode(
     string? Source = null,
     string? RichTextJson = null,
     string? DrawingJson = null,
+    string? CustomPropertiesJson = null,
     string Stretch = "uniform",
     bool LastChildFill = true,
     string? Header = null,
