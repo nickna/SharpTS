@@ -83,6 +83,11 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
             value: (double)_arity, configurable: true));
         _properties.DefineProperty("name", new SharpTSPropertyDescriptor(
             value: name, configurable: true));
+        _properties.DefineProperty("prototype", new SharpTSPropertyDescriptor(
+            value: Interpreter.CreateFunctionPrototype(this),
+            writable: true,
+            enumerable: false,
+            configurable: false));
     }
 
     /// <summary>JS function-as-object property access.</summary>
@@ -429,6 +434,14 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
             value: (double)_arity, configurable: true));
         _properties.DefineProperty("name", new SharpTSPropertyDescriptor(
             value: name, configurable: true));
+        if (HasOwnThis)
+        {
+            _properties.DefineProperty("prototype", new SharpTSPropertyDescriptor(
+                value: Interpreter.CreateFunctionPrototype(this),
+                writable: true,
+                enumerable: false,
+                configurable: false));
+        }
     }
 
     /// <summary>JS function-as-object property access.</summary>

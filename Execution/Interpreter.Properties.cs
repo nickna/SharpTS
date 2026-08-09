@@ -12,7 +12,7 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
-    private static SharpTSObject CreateFunctionPrototype(object constructor)
+    internal static SharpTSObject CreateFunctionPrototype(object constructor)
     {
         var prototype = new SharpTSObject([]);
         prototype.DefineProperty("constructor", new SharpTSPropertyDescriptor(
