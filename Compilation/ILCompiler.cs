@@ -1638,7 +1638,11 @@ public partial class ILCompiler
         var hasSharpTsReference = HasAssemblyReference(tempStream, "SharpTS");
         tempStream.Position = 0;
 
-        bool rewritingReferences = _useReferenceAssemblies || hasSharpTsReference;
+        // Hosted DLLs are consumed as ordinary compile-time references by the GUI SDK's
+        // Native AOT launcher. Retarget their CoreLib metadata to the public reference
+        // assemblies even though their runtime dependency is SharpTS.Hosting rather than
+        // SharpTS itself.
+        bool rewritingReferences = _useReferenceAssemblies || hasSharpTsReference || _hosted;
 
         // Kept only to verify the rewriter preserved MethodDef identity, so it is not materialized
         // for builds that will not emit symbols.

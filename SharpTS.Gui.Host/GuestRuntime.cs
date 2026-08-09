@@ -149,3 +149,47 @@ internal sealed class CompiledGuestRuntime : IGuestRuntime
         _runtime = null;
     }
 }
+
+internal sealed class StaticCompiledGuestRuntime(
+    ISharpTSHostedProgramFactory factory,
+    ISharpTSHostDispatcher dispatcher,
+    ISharpTSHostLifetime lifetime,
+    ISharpTSHostedErrorSink errorSink) : IGuestRuntime
+{
+    private ISharpTSHostedRuntime? _runtime;
+
+    public SharpTSHostedShutdownReason? ShutdownReason => _runtime?.ShutdownReason;
+
+    public Task InitializeAsync()
+    {
+        if (factory.AbiVersion != SharpTSHostedAbi.CurrentVersion)
+        {
+            throw new SharpTSHostedAbiException(
+                $"Statically linked hosted factory reports ABI {factory.AbiVersion}; " +
+                $"this host requires ABI {SharpTSHostedAbi.CurrentVersion}.");
+        }
+        _runtime = factory.Create(dispatcher, lifetime, errorSink)
+            ?? throw new SharpTSHostedAbiException("Statically linked hosted factory returned no runtime.");
+        _runtime.RegisterCleanup(DesktopBridge.DisposeAllRoots);
+        return _runtime.InitializeAsync();
+    }
+
+    public void Notify(Action callback) =>
+        (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).Notify(callback);
+
+    public void QueueMicrotask(Action callback)
+    {
+        if (_runtime is not SharpTSHostedRuntimeBase runtime)
+            throw new InvalidOperationException("Compiled guest runtime does not expose the hosted scheduler.");
+        runtime.EnqueueMicrotask(callback);
+    }
+
+    public Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode) =>
+        _runtime?.ShutdownAsync(reason, exitCode) ?? Task.CompletedTask;
+
+    public void Dispose()
+    {
+        _runtime?.Dispose();
+        _runtime = null;
+    }
+}

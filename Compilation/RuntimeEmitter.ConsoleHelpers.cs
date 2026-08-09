@@ -164,12 +164,13 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Try to clear console, ignore exceptions (e.g., when stdout is redirected)
-        il.BeginExceptionBlock();
+        // Console.Clear throws when output is redirected. Avoid the call in that case;
+        // this branch-only shape is also accepted by Native AOT's stricter IL validator.
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.Console, "IsOutputRedirected")!.GetMethod!);
+        il.Emit(OpCodes.Brtrue_S, done);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Console, "Clear"));
-        il.BeginCatchBlock(_types.Exception);
-        il.Emit(OpCodes.Pop); // Ignore exception
-        il.EndExceptionBlock();
+        il.MarkLabel(done);
         il.Emit(OpCodes.Ret);
     }
 

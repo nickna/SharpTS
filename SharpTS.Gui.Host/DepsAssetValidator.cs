@@ -62,9 +62,9 @@ internal static class DepsAssetValidator
         string manifestPath = Path.Combine(fullDirectory, ".sharpts", "app.json");
         if (File.Exists(manifestPath))
         {
-            GuiAppManifest? manifest = JsonSerializer.Deserialize<GuiAppManifest>(
+            GuiAppManifest? manifest = JsonSerializer.Deserialize(
                 File.ReadAllText(manifestPath),
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                GuiHostJsonContext.Default.GuiAppManifest);
             if (manifest is null)
             {
                 failures.Add("SharpTS GUI application manifest is invalid");

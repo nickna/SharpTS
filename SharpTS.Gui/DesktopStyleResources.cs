@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -9,7 +10,7 @@ using Avalonia.Styling;
 
 namespace SharpTS.Gui;
 
-internal sealed class DesktopStyleResources
+internal sealed partial class DesktopStyleResources
 {
     private readonly Dictionary<string, JsonElement> _resources;
     private readonly StyleModel[] _styles;
@@ -23,9 +24,9 @@ internal sealed class DesktopStyleResources
     public static DesktopStyleResources Parse(string json)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(json);
-        ContractModel model = JsonSerializer.Deserialize<ContractModel>(
+        ContractModel model = JsonSerializer.Deserialize(
             json,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            StyleJsonContext.Default.ContractModel)
             ?? throw new ArgumentException("The desktop style/resource contract is invalid.", nameof(json));
         var resources = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
         foreach ((string key, JsonElement value) in model.Resources ?? [])
@@ -210,4 +211,7 @@ internal sealed class DesktopStyleResources
     private sealed record ContractModel(Dictionary<string, JsonElement>? Resources, StyleModel[]? Styles);
     private sealed record StyleModel(SelectorModel? Selector, Dictionary<string, JsonElement>? Setters);
     private sealed record SelectorModel(string Control, string[]? Classes);
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    [JsonSerializable(typeof(ContractModel))]
+    private sealed partial class StyleJsonContext : JsonSerializerContext;
 }

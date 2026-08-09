@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -7,7 +8,7 @@ using Avalonia.Input.Platform;
 
 namespace SharpTS.Gui;
 
-internal static class DesktopServices
+internal static partial class DesktopServices
 {
     public static async Task<string> ShowMessageAsync(Window owner, string title, string message, string buttons)
     {
@@ -79,7 +80,8 @@ internal static class DesktopServices
 
     private static IReadOnlyList<FilePickerFileType>? Filters(string json)
     {
-        FilterModel[] values = JsonSerializer.Deserialize<FilterModel[]>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        FilterModel[] values = JsonSerializer.Deserialize(
+            json, DesktopServicesJsonContext.Default.FilterModelArray) ?? [];
         return values.Length == 0 ? null : values.Select(value => new FilePickerFileType(value.Name)
         {
             Patterns = value.Patterns,
@@ -96,4 +98,7 @@ internal static class DesktopServices
 
     private static string? Empty(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
     private sealed record FilterModel(string Name, string[] Patterns);
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    [JsonSerializable(typeof(FilterModel[]))]
+    private sealed partial class DesktopServicesJsonContext : JsonSerializerContext;
 }

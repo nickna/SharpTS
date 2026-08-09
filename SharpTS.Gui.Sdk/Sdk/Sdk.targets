@@ -94,7 +94,8 @@
                       Overwrite="true"
                       WriteOnlyWhenDifferent="true" />
     <ItemGroup>
-      <EmbeddedResource Include="$(SharpTSGuiGuestAssembly)" LogicalName="SharpTS.Gui.Guest.dll" />
+      <EmbeddedResource Include="$(SharpTSGuiGuestAssembly)" LogicalName="SharpTS.Gui.Guest.dll"
+                        Condition="'$(PublishAot)' != 'true'" />
       <EmbeddedResource Include="$(SharpTSGuiManifest)" LogicalName="SharpTS.Gui.App.json" />
     </ItemGroup>
   </Target>
@@ -109,6 +110,18 @@
     </PropertyGroup>
     <Exec Command="dotnet &quot;$(SharpTSGuiHostRoot)SharpTS.dll&quot; $(_SharpTSGuiCompileArgs)"
           WorkingDirectory="$(MSBuildProjectDirectory)" />
+  </Target>
+
+  <Target Name="SharpTSGuiAddNativeAotCompileReferences"
+          BeforeTargets="ResolveAssemblyReferences"
+          DependsOnTargets="SharpTSGuiCompile"
+          Condition="'$(PublishAot)' == 'true'">
+    <ItemGroup>
+      <Reference Include="SharpTS.Gui.Guest">
+        <HintPath>$(SharpTSGuiGuestAssembly)</HintPath>
+        <Private>true</Private>
+      </Reference>
+    </ItemGroup>
   </Target>
 
   <Target Name="SharpTSGuiAssemble"
@@ -164,7 +177,7 @@
       <_SharpTSGuiPublishInterpreterConfig Include="$(TargetDir).sharpts\tsconfig.json"
                                            Condition="'$(PublishSingleFile)' != 'true' and '$(SharpTSGuiIncludeSourcePayload)' == 'true'" />
       <_SharpTSGuiPublishGuestAssembly Include="$(TargetDir)SharpTS.Gui.Guest.dll"
-                                       Condition="'$(PublishSingleFile)' != 'true'" />
+                                       Condition="'$(PublishSingleFile)' != 'true' and '$(PublishAot)' != 'true'" />
       <ResolvedFileToPublish Include="@(_SharpTSGuiPublishNativeFiles)">
         <RelativePath>%(Filename)%(Extension)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
@@ -196,9 +209,9 @@
 
   <Target Name="SharpTSGuiValidatePublish" AfterTargets="Publish">
     <Exec Command="dotnet &quot;$(PublishDir)$(AssemblyName).dll&quot; --validate-deps &quot;$(PublishDir)&quot;"
-          Condition="'$(PublishSingleFile)' != 'true' and '$(SharpTSGuiValidatePublishedOutput)' == 'true' and '$(SharpTSGuiIncludeSourcePayload)' == 'true'" />
+          Condition="'$(PublishAot)' != 'true' and '$(PublishSingleFile)' != 'true' and '$(SharpTSGuiValidatePublishedOutput)' == 'true' and '$(SharpTSGuiIncludeSourcePayload)' == 'true'" />
     <Exec Command="dotnet &quot;$(PublishDir)$(AssemblyName).dll&quot; --validate-deps-compiled-only &quot;$(PublishDir)&quot;"
-          Condition="'$(PublishSingleFile)' != 'true' and '$(SharpTSGuiValidatePublishedOutput)' == 'true' and '$(SharpTSGuiIncludeSourcePayload)' != 'true'" />
+          Condition="'$(PublishAot)' != 'true' and '$(PublishSingleFile)' != 'true' and '$(SharpTSGuiValidatePublishedOutput)' == 'true' and '$(SharpTSGuiIncludeSourcePayload)' != 'true'" />
   </Target>
 
   <Target Name="SharpTSGuiClean" BeforeTargets="Clean">

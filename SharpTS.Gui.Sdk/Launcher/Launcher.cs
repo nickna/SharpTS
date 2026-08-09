@@ -1,3 +1,5 @@
+#pragma warning disable SHARPTS_HOSTING001
+
 using System;
 using System.IO;
 using System.Reflection;
@@ -22,8 +24,15 @@ internal static class Launcher
             args = compiledArgs;
         }
 #endif
+#if SHARPTS_GUI_NATIVE_AOT
+        return global::SharpTS.Gui.Host.Program.MainStatic(
+            args,
+            typeof(Launcher).Assembly,
+            new global::SharpTSHostedProgramFactory());
+#else
         return File.Exists(developmentManifest)
             ? global::SharpTS.Gui.Host.Program.Main(args)
             : global::SharpTS.Gui.Host.Program.MainEmbedded(args, Assembly.GetExecutingAssembly());
+#endif
     }
 }

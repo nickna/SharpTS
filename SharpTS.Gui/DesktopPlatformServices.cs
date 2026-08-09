@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia.Controls;
 
 namespace SharpTS.Gui;
@@ -9,20 +10,18 @@ internal static class DesktopPlatformServices
 {
     public static string PlatformInfoJson()
     {
-        var info = new
-        {
-            operatingSystem = OperatingSystem.IsWindows() ? "windows" :
+        var info = new PlatformInfo(
+            OperatingSystem.IsWindows() ? "windows" :
                 OperatingSystem.IsMacOS() ? "macos" : OperatingSystem.IsLinux() ? "linux" : "unknown",
-            architecture = RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
-            framework = RuntimeInformation.FrameworkDescription,
-            applicationDirectory = AppContext.BaseDirectory,
-            localApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            roamingApplicationData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-            documents = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
-            desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-            temporaryDirectory = Path.GetTempPath(),
-        };
-        return JsonSerializer.Serialize(info);
+            RuntimeInformation.OSArchitecture.ToString().ToLowerInvariant(),
+            RuntimeInformation.FrameworkDescription,
+            AppContext.BaseDirectory,
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+            Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+            Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+            Path.GetTempPath());
+        return JsonSerializer.Serialize(info, PlatformJsonContext.Default.PlatformInfo);
     }
 
     public static Task OpenExternalAsync(string target)
@@ -80,9 +79,8 @@ internal static class DesktopPlatformServices
     }
 }
 
-public sealed class DesktopTrayIcon : IDisposable
+public sealed partial class DesktopTrayIcon : IDisposable
 {
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
     private readonly DesktopRuntimeContext _context;
     private readonly TrayIcon? _native;
     private readonly Action<DesktopTrayIcon> _release;
@@ -137,7 +135,8 @@ public sealed class DesktopTrayIcon : IDisposable
         _context.EnsureOwnerThread();
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentException.ThrowIfNullOrWhiteSpace(icon);
-        TrayMenuItemModel[] menu = JsonSerializer.Deserialize<TrayMenuItemModel[]>(menuJson, JsonOptions) ?? [];
+        TrayMenuItemModel[] menu = JsonSerializer.Deserialize(
+            menuJson, TrayJsonContext.Default.TrayMenuItemModelArray) ?? [];
         ValidateMenu(menu);
         _clicked = clicked;
         _menuClicked = menuClicked;
@@ -230,4 +229,23 @@ public sealed class DesktopTrayIcon : IDisposable
         bool Separator = false,
         bool IsEnabled = true,
         bool IsChecked = false);
+
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    [JsonSerializable(typeof(TrayMenuItemModel[]))]
+    private sealed partial class TrayJsonContext : JsonSerializerContext;
 }
+
+internal sealed record PlatformInfo(
+    string OperatingSystem,
+    string Architecture,
+    string Framework,
+    string ApplicationDirectory,
+    string LocalApplicationData,
+    string RoamingApplicationData,
+    string Documents,
+    string Desktop,
+    string TemporaryDirectory);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(PlatformInfo))]
+internal sealed partial class PlatformJsonContext : JsonSerializerContext;

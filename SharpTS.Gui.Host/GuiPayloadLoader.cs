@@ -3,6 +3,7 @@
 using SharpTS.Hosting;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SharpTS.Gui.Host;
 
@@ -21,9 +22,9 @@ internal static class GuiPayloadLoader
         string path = Path.Combine(baseDirectory, ".sharpts", "app.json");
         if (!File.Exists(path))
             throw new InvalidOperationException($"SharpTS GUI application manifest is missing: {path}");
-        GuiAppManifest manifest = JsonSerializer.Deserialize<GuiAppManifest>(
+        GuiAppManifest manifest = JsonSerializer.Deserialize(
             File.ReadAllText(path),
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            GuiHostJsonContext.Default.GuiAppManifest)
             ?? throw new InvalidOperationException($"SharpTS GUI application manifest is invalid: {path}");
         ValidateAbi(manifest);
         return manifest;
@@ -33,9 +34,9 @@ internal static class GuiPayloadLoader
     {
         using Stream stream = payloadAssembly.GetManifestResourceStream("SharpTS.Gui.App.json")
             ?? throw new InvalidOperationException("The embedded SharpTS GUI application manifest is missing.");
-        GuiAppManifest manifest = JsonSerializer.Deserialize<GuiAppManifest>(
+        GuiAppManifest manifest = JsonSerializer.Deserialize(
             stream,
-            new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+            GuiHostJsonContext.Default.GuiAppManifest)
             ?? throw new InvalidOperationException("The embedded SharpTS GUI application manifest is invalid.");
         ValidateAbi(manifest);
         return manifest;
@@ -100,3 +101,7 @@ internal static class GuiPayloadLoader
         }
     }
 }
+
+[JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+[JsonSerializable(typeof(GuiAppManifest))]
+internal sealed partial class GuiHostJsonContext : JsonSerializerContext;

@@ -14,7 +14,10 @@ namespace SharpTS.Gui.Host;
 
 internal static class DesktopApplicationHost
 {
-    public static int Run(HostOptions options, Assembly? embeddedPayloadAssembly)
+    public static int Run(
+        HostOptions options,
+        Assembly? embeddedPayloadAssembly,
+        ISharpTSHostedProgramFactory? staticCompiledFactory = null)
     {
         int ownerThreadId = Environment.CurrentManagedThreadId;
         var trace = new TraceRecorder(ownerThreadId, enabled: options.TracePath is not null);
@@ -392,7 +395,13 @@ internal static class DesktopApplicationHost
                             hostDispatcher,
                             hostLifetime,
                             new DelegateHostedErrorSink(ReportHostedError))
-                        : new CompiledGuestRuntime(
+                        : staticCompiledFactory is not null
+                            ? new StaticCompiledGuestRuntime(
+                                staticCompiledFactory,
+                                hostDispatcher,
+                                hostLifetime,
+                                new DelegateHostedErrorSink(ReportHostedError))
+                            : new CompiledGuestRuntime(
                             GuiPayloadLoader.ReadEmbeddedResource(embeddedPayloadAssembly, manifest.CompiledAssembly),
                             hostDispatcher,
                             hostLifetime,

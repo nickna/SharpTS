@@ -5,6 +5,7 @@ using Avalonia.Media.Imaging;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SharpTS.Gui;
 
@@ -55,27 +56,17 @@ internal sealed class DesktopRuntimeContext
         EnsureOwnerThread();
         Window window = CurrentRoot?.Window
             ?? throw new InvalidOperationException("No desktop Window is mounted.");
-        return JsonSerializer.Serialize(window.Screens.All.Select(screen => new
-        {
-            name = screen.DisplayName ?? string.Empty,
-            isPrimary = screen.IsPrimary,
-            scaling = screen.Scaling,
-            orientation = screen.CurrentOrientation.ToString().ToLowerInvariant(),
-            bounds = new
-            {
-                x = screen.Bounds.X,
-                y = screen.Bounds.Y,
-                width = screen.Bounds.Width,
-                height = screen.Bounds.Height,
-            },
-            workingArea = new
-            {
-                x = screen.WorkingArea.X,
-                y = screen.WorkingArea.Y,
-                width = screen.WorkingArea.Width,
-                height = screen.WorkingArea.Height,
-            },
-        }));
+        DisplayInfo[] displays = window.Screens.All.Select(screen => new DisplayInfo(
+            screen.DisplayName ?? string.Empty,
+            screen.IsPrimary,
+            screen.Scaling,
+            screen.CurrentOrientation.ToString().ToLowerInvariant(),
+            new DisplayBounds(
+                screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height),
+            new DisplayBounds(
+                screen.WorkingArea.X, screen.WorkingArea.Y,
+                screen.WorkingArea.Width, screen.WorkingArea.Height))).ToArray();
+        return JsonSerializer.Serialize(displays, DisplayJsonContext.Default.DisplayInfoArray);
     }
 
     public DesktopRoot CreateRoot(Action reactiveCleanup)
@@ -348,6 +339,19 @@ internal sealed class DesktopRuntimeContext
     internal int CountApplicationRoots(DesktopApplicationSession application) =>
         _roots.Count(root => ReferenceEquals(root.Application, application) && !root.IsDisposed);
 }
+
+internal sealed record DisplayInfo(
+    string Name,
+    bool IsPrimary,
+    double Scaling,
+    string Orientation,
+    DisplayBounds Bounds,
+    DisplayBounds WorkingArea);
+internal sealed record DisplayBounds(double X, double Y, double Width, double Height);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(DisplayInfo[]))]
+internal sealed partial class DisplayJsonContext : JsonSerializerContext;
 
 public sealed class DesktopApplicationSession : IDisposable
 {

@@ -16,6 +16,28 @@ namespace SharpTS.Tests.Hosting;
 public sealed class HostedInterpreterRuntimeTests
 {
     [Fact]
+    public void CompiledHostedAssembly_IsAValidFrameworkReference()
+    {
+        SharpTSProgram program = CreateProgram("export const value = 42;");
+        var compiler = new ILCompiler($"hosted_reference_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        System.Reflection.Assembly assembly =
+            System.Reflection.Assembly.Load(compiler.SaveToBytes());
+        string[] references = assembly.GetReferencedAssemblies()
+            .Select(reference => reference.Name!)
+            .ToArray();
+
+        Assert.Contains("System.Runtime", references);
+        Assert.DoesNotContain("System.Private.CoreLib", references);
+        Assert.NotNull(assembly.GetType("SharpTSHostedProgramFactory", throwOnError: false));
+    }
+
+    [Fact]
     public void Initialization_IsAsynchronousAndPreservesHostSynchronizationContext()
     {
         var dispatcher = new DeterministicHostDispatcher();

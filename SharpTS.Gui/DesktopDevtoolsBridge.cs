@@ -3,6 +3,7 @@ using Avalonia.Headless;
 using Avalonia.Media.Imaging;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SharpTS.Gui;
 
@@ -11,14 +12,14 @@ public static class DesktopDevtoolsBridge
     public static string InspectDesktopTreeJson()
     {
         Context.EnsureOwnerThread();
-        return JsonSerializer.Serialize(new
-        {
-            windows = Context.Roots
+        var document = new InspectorDocument(
+            Context.Roots
                 .Where(root => !root.IsDisposed)
                 .Select(root => root.GetInspectorSnapshot())
                 .Where(snapshot => snapshot is not null)
-                .ToArray(),
-        });
+                .Select(snapshot => snapshot!)
+                .ToArray());
+        return JsonSerializer.Serialize(document, GuiInspectorJsonContext.Default.InspectorDocument);
     }
 
     public static string CaptureHeadlessSnapshot(string path)
@@ -77,3 +78,23 @@ public static class DesktopDevtoolsBridge
 
     private static DesktopRuntimeContext Context => DesktopBridge.RequireContext();
 }
+
+internal sealed record InspectorDocument(InspectorNode[] Windows);
+internal sealed record InspectorNode(
+    string Kind,
+    string? Key,
+    string? NativeType,
+    InspectorSource? Source,
+    InspectorBounds Bounds,
+    bool IsVisible,
+    bool IsEnabled,
+    string[] Classes,
+    InspectorProps Props,
+    InspectorNode[] Children);
+internal sealed record InspectorSource(string File, int Line, int Column);
+internal sealed record InspectorBounds(double X, double Y, double Width, double Height);
+internal sealed record InspectorProps(string? Text, string? Title, double? Width, double? Height);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(InspectorDocument))]
+internal sealed partial class GuiInspectorJsonContext : JsonSerializerContext;

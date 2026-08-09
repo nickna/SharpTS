@@ -1,4 +1,7 @@
+﻿#pragma warning disable SHARPTS_HOSTING001
+
 using System.Reflection;
+using SharpTS.Hosting;
 
 namespace SharpTS.Gui.Host;
 
@@ -10,10 +13,23 @@ public static class Program
     public static int MainEmbedded(string[] args, Assembly payloadAssembly)
     {
         ArgumentNullException.ThrowIfNull(payloadAssembly);
-        return Run(args, payloadAssembly);
+        return Run(args, payloadAssembly, staticCompiledFactory: null);
     }
 
-    private static int Run(string[] args, Assembly? embeddedPayloadAssembly)
+    public static int MainStatic(
+        string[] args,
+        Assembly payloadAssembly,
+        ISharpTSHostedProgramFactory factory)
+    {
+        ArgumentNullException.ThrowIfNull(payloadAssembly);
+        ArgumentNullException.ThrowIfNull(factory);
+        return Run(args, payloadAssembly, factory);
+    }
+
+    private static int Run(
+        string[] args,
+        Assembly? embeddedPayloadAssembly,
+        ISharpTSHostedProgramFactory? staticCompiledFactory = null)
     {
         HostOptions options;
         try
@@ -54,7 +70,7 @@ public static class Program
 
         try
         {
-            return DesktopApplicationHost.Run(options, embeddedPayloadAssembly);
+            return DesktopApplicationHost.Run(options, embeddedPayloadAssembly, staticCompiledFactory);
         }
         catch (Exception exception)
         {

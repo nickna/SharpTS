@@ -19,6 +19,9 @@
     <SharpTSGuiTasksAssembly>$(SharpTSGuiSdkRoot)build\SharpTS.Sdk.Tasks.dll</SharpTSGuiTasksAssembly>
     <SharpTSGuiHostedAbiVersion>1</SharpTSGuiHostedAbiVersion>
     <SharpTSGuiApiVersion>2</SharpTSGuiApiVersion>
+    <SharpTSGuiIntermediateRoot Condition="'$(SharpTSGuiIntermediateRoot)' == ''">$(BaseIntermediateOutputPath)$(Configuration)\.sharpts-gui\</SharpTSGuiIntermediateRoot>
+    <SharpTSGuiGuestAssembly Condition="'$(SharpTSGuiGuestAssembly)' == ''">$(SharpTSGuiIntermediateRoot)SharpTS.Gui.Guest.dll</SharpTSGuiGuestAssembly>
+    <SharpTSGuiPublishMode Condition="'$(PublishAot)' == 'true' and '$(SharpTSGuiPublishMode)' == ''">NativeAot</SharpTSGuiPublishMode>
     <SharpTSGuiPublishMode Condition="'$(SharpTSGuiPublishMode)' == ''">SingleFile</SharpTSGuiPublishMode>
     <SharpTSGuiValidatePublishedOutput
       Condition="'$(SharpTSGuiValidatePublishedOutput)' == '' and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)')">true</SharpTSGuiValidatePublishedOutput>
@@ -29,9 +32,18 @@
     <IncludeNativeLibrariesForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeNativeLibrariesForSelfExtract>
     <IncludeAllContentForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">false</IncludeAllContentForSelfExtract>
     <PublishTrimmed Condition="'$(PublishSingleFile)' == 'true'">false</PublishTrimmed>
+    <SelfContained Condition="'$(PublishAot)' == 'true'">true</SelfContained>
+    <PublishSingleFile Condition="'$(PublishAot)' == 'true'">false</PublishSingleFile>
+    <PublishTrimmed Condition="'$(PublishAot)' == 'true'">true</PublishTrimmed>
+    <TrimMode Condition="'$(PublishAot)' == 'true'">partial</TrimMode>
+    <IlcTrimMetadata Condition="'$(PublishAot)' == 'true'">false</IlcTrimMetadata>
+    <IlcGenerateCompleteTypeMetadata Condition="'$(PublishAot)' == 'true'">false</IlcGenerateCompleteTypeMetadata>
+    <StackTraceSupport Condition="'$(PublishAot)' == 'true'">true</StackTraceSupport>
     <DebugType Condition="'$(PublishSingleFile)' == 'true'">None</DebugType>
     <DebugSymbols Condition="'$(PublishSingleFile)' == 'true'">false</DebugSymbols>
     <DefineConstants Condition="'$(SharpTSGuiIncludeSourcePayload)' != 'true'">$(DefineConstants);SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
+    <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);SHARPTS_GUI_NATIVE_AOT;SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
+    <SharpTSGuiIncludeSourcePayload Condition="'$(PublishAot)' == 'true'">false</SharpTSGuiIncludeSourcePayload>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)DescriptorContract.Generated.props" />

@@ -96,7 +96,7 @@ public partial class ILCompiler
 
         _hostedFactoryType = EmitTypeDefinitions.DefineType(
             _moduleBuilder,
-            "$SharpTSHostedProgramFactory",
+            "SharpTSHostedProgramFactory",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
             [typeof(ISharpTSHostedProgramFactory)]);

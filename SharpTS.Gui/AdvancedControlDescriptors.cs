@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
@@ -109,7 +110,7 @@ internal sealed class CanvasDescriptor() : NodeDescriptor("Canvas", 0, int.MaxVa
         CommonProperties.Apply(control, next);
 }
 
-internal sealed class RichTextBlockDescriptor() : NodeDescriptor("RichTextBlock", 0, 0)
+internal sealed partial class RichTextBlockDescriptor() : NodeDescriptor("RichTextBlock", 0, 0)
 {
     public override void Validate(GuiVNode node) => _ = Parse(node.RichTextJson);
 
@@ -142,9 +143,11 @@ internal sealed class RichTextBlockDescriptor() : NodeDescriptor("RichTextBlock"
     }
 
     private static RichTextRunModel[] Parse(string? json) =>
-        JsonSerializer.Deserialize<RichTextRunModel[]>(json ?? "[]", JsonOptions) ?? [];
-    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
+        JsonSerializer.Deserialize(json ?? "[]", RichTextJsonContext.Default.RichTextRunModelArray) ?? [];
     private sealed record RichTextRunModel(string? Text, string? Foreground, double? FontSize, string? FontWeight, string? FontStyle);
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    [JsonSerializable(typeof(RichTextRunModel[]))]
+    private sealed partial class RichTextJsonContext : JsonSerializerContext;
 }
 
 internal sealed class DrawingCanvasDescriptor() : NodeDescriptor("DrawingCanvas", 0, 0)
@@ -171,7 +174,7 @@ internal sealed class DrawingCanvasDescriptor() : NodeDescriptor("DrawingCanvas"
     }
 }
 
-internal sealed class DrawingSurface : Control
+internal sealed partial class DrawingSurface : Control
 {
     private DrawingModel[] _commands = [];
     public DrawingModel[] Commands
@@ -206,8 +209,8 @@ internal sealed class DrawingSurface : Control
 
     public static DrawingModel[] Parse(string? json)
     {
-        DrawingModel[] commands = JsonSerializer.Deserialize<DrawingModel[]>(
-            json ?? "[]", new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? [];
+        DrawingModel[] commands = JsonSerializer.Deserialize(
+            json ?? "[]", DrawingJsonContext.Default.DrawingModelArray) ?? [];
         foreach (DrawingModel command in commands)
         {
             if (command.Kind is not ("line" or "rectangle" or "ellipse"))
@@ -253,4 +256,8 @@ internal sealed class DrawingSurface : Control
             _ => [],
         };
     }
+
+    [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
+    [JsonSerializable(typeof(DrawingModel[]))]
+    private sealed partial class DrawingJsonContext : JsonSerializerContext;
 }

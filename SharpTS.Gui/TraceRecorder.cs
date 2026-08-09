@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace SharpTS.Gui;
 
@@ -69,10 +70,9 @@ public sealed class TraceRecorder
     public void WriteJson(string path)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(path))!);
-        File.WriteAllText(path, JsonSerializer.Serialize(Snapshot(), new JsonSerializerOptions
-        {
-            WriteIndented = true
-        }));
+        File.WriteAllText(path, JsonSerializer.Serialize(
+            Snapshot().ToArray(),
+            GuiJsonContext.Indented.GuiTraceEventArray));
     }
 
     public IReadOnlyList<string> ValidateRequiredStages(bool headless)
@@ -108,4 +108,14 @@ public sealed class TraceRecorder
 
         return failures;
     }
+}
+
+[JsonSourceGenerationOptions]
+[JsonSerializable(typeof(GuiTraceEvent[]))]
+internal sealed partial class GuiJsonContext : JsonSerializerContext
+{
+    internal static GuiJsonContext Indented { get; } = new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+    });
 }

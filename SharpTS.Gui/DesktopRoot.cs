@@ -288,36 +288,28 @@ public sealed class DesktopRoot : IDisposable
         return _mounted is null ? null : FindControl(_mounted, key);
     }
 
-    internal object? GetInspectorSnapshot() =>
+    internal InspectorNode? GetInspectorSnapshot() =>
         _mounted is null ? null : InspectNode(_mounted);
 
-    private static object InspectNode(MountedNode node)
+    private static InspectorNode InspectNode(MountedNode node)
     {
         Rect bounds = node.Control.Bounds;
-        return new
-        {
-            kind = node.VNode.Kind,
-            key = node.VNode.Key,
-            nativeType = node.Control.GetType().FullName,
-            source = node.VNode.SourceFile is null ? null : new
-            {
-                file = node.VNode.SourceFile,
-                line = node.VNode.SourceLine,
-                column = node.VNode.SourceColumn,
-            },
-            bounds = new { x = bounds.X, y = bounds.Y, width = bounds.Width, height = bounds.Height },
-            isVisible = node.Control.IsVisible,
-            isEnabled = node.Control.IsEnabled,
-            classes = node.Control.Classes.ToArray(),
-            props = new
-            {
-                text = node.VNode.Text,
-                title = node.VNode.Title,
-                width = double.IsNaN(node.VNode.Width) ? null : (double?)node.VNode.Width,
-                height = double.IsNaN(node.VNode.Height) ? null : (double?)node.VNode.Height,
-            },
-            children = node.Children.Select(InspectNode).ToArray(),
-        };
+        return new InspectorNode(
+            node.VNode.Kind,
+            node.VNode.Key,
+            node.Control.GetType().FullName,
+            node.VNode.SourceFile is null ? null : new InspectorSource(
+                node.VNode.SourceFile, node.VNode.SourceLine, node.VNode.SourceColumn),
+            new InspectorBounds(bounds.X, bounds.Y, bounds.Width, bounds.Height),
+            node.Control.IsVisible,
+            node.Control.IsEnabled,
+            node.Control.Classes.ToArray(),
+            new InspectorProps(
+                node.VNode.Text,
+                node.VNode.Title,
+                double.IsNaN(node.VNode.Width) ? null : node.VNode.Width,
+                double.IsNaN(node.VNode.Height) ? null : node.VNode.Height),
+            node.Children.Select(InspectNode).ToArray());
     }
 
     private MountedNode BuildDetached(PreparedNode prepared)
