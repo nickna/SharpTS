@@ -173,6 +173,11 @@ and checks the executable and complete shipping-directory size budgets. Windows 
 cross-publish is supported; Native AOT ARM64 certification still requires the Visual C++ ARM64
 linker workload and execution on Windows ARM64 hardware.
 
+MSIX identity, signing, AppInstaller updates, SPDX/SLSA evidence, enterprise deployment, crash
+bundles, compatibility, and servicing policy are maintained in the repository's Windows GUI
+distribution and support-policy guides. Packaging is intentionally separate from `dotnet publish`
+and never embeds signing credentials in an application project.
+
 The SDK package is approximately 26 MB compressed; a minimal framework-dependent x64 directory is
 approximately 47 MB before application assets. Exact sizes vary with SDK/runtime servicing. Raw
 Avalonia objects and descriptor registration are available only to managed provider packages. Native controls must

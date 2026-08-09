@@ -164,9 +164,13 @@ component props, validates callable-object signatures, checks `children` and `re
 props, and validates `key` through `JSX.IntrinsicAttributes`.
 
 The generated descriptor contract, native-commit boundary recovery, full JSX parity set, GUI-aware
-LSP metadata, SDK template, and projectless CLI are complete. Multi-window APIs, public styles and
-resources, generic collections, plugins, Native AOT certification, and signed distribution remain
-Phase 4 work. See `docs/gui/migrating-api-1-to-2.md` for the preview.1 contract.
+LSP metadata, SDK template, projectless CLI, multi-window lifecycle, resources/styles, typed data
+controls, retained drawing, static custom providers, Windows platform services, hot reload,
+devtools, and Windows environment conformance are complete for their declared surface. The x64
+SDK now produces and runs a warning-clean Native AOT application under versioned performance and
+artifact budgets. Native ARM64 execution, public package onboarding, production signing identity,
+notifications, and macOS remain external or later-platform gates. See
+`docs/gui/migrating-api-1-to-2.md` for the preview.1 contract.
 
 ## Phase 3B CLI and candidate status
 
@@ -335,11 +339,10 @@ claim that every Windows architecture has executed natively and not a cross-plat
 
 - Native Windows ARM64 Headless and real-window execution.
 - NuGet ID reservation/onboarding, API-key scope validation, and package publication.
-- Theme/resource dictionaries, custom descriptors/controls, rich item templates, drawing/canvas,
-  data grids/trees, and multi-window support.
-- Compiled compound-expression, conditional, loop, and dynamic-import top-level-await parity with
-  the hosted interpreter.
-- Trimming, Native AOT, signing, installers, update/distribution mechanisms, and macOS.
+- Production signing-certificate execution and publication of an application-owned MSIX identity;
+  local packaging, update, SBOM/provenance, diagnostics, enterprise, and support-policy gates exist.
+- Packaged Windows notifications, arbitrary public control templates, and a full editing DataGrid.
+- Native AOT ARM64 certification and macOS.
 
 ## Architecture boundaries
 
@@ -395,19 +398,11 @@ and exact `0.2.0-preview.1` artifact:
 
 ## Post-preview stabilization
 
-- Establish compatibility and versioning policies for `@sharpts/gui`, hosted ABI metadata,
-  application manifests, descriptor schemas, and generated launchers. Define which combinations
-  fail fast and which may roll forward.
-- Resolve render failures that occur after an Avalonia property setter or ref callback has already
-  mutated native state. Choose and test a recovery policy rather than implying full rollback from
-  current structural prevalidation.
-- Add leak/soak tests and release gates for accessibility, focus and keyboard behavior, startup
-  latency, application/package size, reconciliation throughput, allocation, and input-to-render
-  latency.
-- Stabilize the implemented TSX component/lifecycle contract and decide the minimum supported
-  theme/resource model before expanding into custom controls.
-- Add code signing, artifact provenance, installer/update and distribution guidance, and support
-  diagnostics suitable for field reports.
+Compatibility/versioning policy, recoverable native commit errors, leak/soak and deterministic
+renderer gates, GUI performance budgets, static custom-control providers, and the local Windows
+distribution/support toolchain are now implemented. Remaining release stabilization is evidence:
+native ARM64 execution, public package ownership, production certificate-backed installer runs,
+packaged notifications, and the intentionally deferred macOS track.
 
 ## macOS reactivation checklist
 

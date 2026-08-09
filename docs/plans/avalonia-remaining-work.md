@@ -452,9 +452,21 @@ environmental prerequisites are release evidence, not reasons to weaken the cert
 
 ### Track D: distribution
 
-- Add code signing, artifact provenance/SBOM, installer packaging, update strategy, crash/support
-  diagnostics, and enterprise deployment guidance.
-- Define package and application support/versioning policy before a stable 1.0 release.
+- **Complete for local implementation:** the Windows distribution packager stages an explicit
+  MSIX identity, signs and verifies payloads/installers through Windows SDK tooling, emits an
+  AppInstaller update channel, SPDX 2.3 SBOM, SLSA/in-toto provenance, and SHA-256 inventory. A
+  protected manual workflow adds GitHub Sigstore provenance and SBOM attestations.
+- **Complete:** bounded/redacted support-bundle collection, update/rollback strategy, and offline/
+  Intune/Configuration Manager deployment guidance are documented and tested.
+- **Complete:** package, GUI API, descriptor schema, Hosted ABI, provider, application, servicing,
+  deprecation, platform-certification, and end-of-support rules are defined before stable 1.0.
+
+**Resolution (2026-08-09): implementation complete; production ceremony externally blocked.**
+`scripts/test-gui-distribution.ps1` verifies manifest escaping, immutable identity metadata,
+symbol exclusion, update metadata, SBOM/provenance/checksums, safe output replacement, and support
+bundle privacy. Producing a publicly trusted installer still requires an application owner's
+immutable identity, production code-signing certificate/secrets, final HTTPS update endpoint, and
+environment approval. Those values cannot be fabricated or committed by the repository.
 
 ### Track E: macOS reactivation
 

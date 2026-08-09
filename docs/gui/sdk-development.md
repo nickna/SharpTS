@@ -79,10 +79,17 @@ The default RID publish is a self-contained compiled single executable:
 dotnet publish -c Release -r win-x64
 ```
 
-The compressed SDK package is approximately 26 MB and a minimal x64 framework-dependent directory
+The compressed SDK package is approximately 31 MB and a minimal x64 framework-dependent directory
 is approximately 47 MB before application assets. These are engineering snapshots, not size gates.
 Applications published to a read-only directory do not write beside the executable; fatal logs and
 opt-in traces use the per-user local application-data directory.
+
+For warning-clean compiled-only Native AOT output, use
+`dotnet publish -c Release -r win-x64 --self-contained true -p:PublishAot=true`. The packaged gate
+enforces the versioned artifact budgets and can enforce reference-machine startup/working-set
+budgets. Installer identity, signing, SBOM/provenance, updates, enterprise deployment, and support
+bundles are described in [Windows GUI distribution](windows-distribution.md); compatibility and
+servicing rules are in [GUI support policy](support-policy.md).
 
 ## Configuration and assets
 

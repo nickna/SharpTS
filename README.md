@@ -89,7 +89,9 @@ directory is approximately 47 MB before application assets. Current limits are o
 per window, built-in and statically registered controls only, Windows only, and no cross-architecture Native
 AOT certification. Warning-clean x64 Native AOT publish/run is available with
 `dotnet publish -r win-x64 -p:PublishAot=true`. See the [GUI SDK workflow](docs/gui/sdk-development.md) and
-[TSX API reference](docs/gui/tsx-api.md).
+[TSX API reference](docs/gui/tsx-api.md). Signed MSIX packaging, updates, SBOM/provenance, enterprise
+deployment, and support bundles are covered by the [Windows distribution guide](docs/gui/windows-distribution.md)
+and [GUI support policy](docs/gui/support-policy.md).
 
 ### .NET Interop
 
