@@ -1632,6 +1632,12 @@ public sealed class Issue1279ParityTests
     public void Reflect_ownKeys_returns_spec_ordered_property_keys(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Reflect_ownKeys_includes_non_enumerable_array_and_object_keys()
+        => AssertPass(
+            "built-ins/Reflect/ownKeys/return-non-enumerable-keys.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-0-3.js")]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-1-3.js")]

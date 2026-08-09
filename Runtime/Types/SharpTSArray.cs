@@ -1005,21 +1005,40 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
-        long limit = Math.Min(_length, int.MaxValue);
-        for (long index = 0; index < limit; index++)
+        foreach (string key in OwnStringKeys())
         {
-            if (!HasIndex(index)) continue;
-            string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (key == "length") continue;
             if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
                 yield return key;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates all own string keys in Array [[OwnPropertyKeys]] order without
+    /// scanning the potentially huge sparse length range.
+    /// </summary>
+    internal IEnumerable<string> OwnStringKeys()
+    {
+        int denseLimit = (int)Math.Min(_length, _dense.Count);
+        for (int index = 0; index < denseLimit; index++)
+        {
+            if (_dense[index] is not ArrayHole)
+                yield return index.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        if (_namedProperties == null) yield break;
-        foreach (var key in _namedProperties.Keys)
+        if (_sparse is not null)
         {
-            if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
-                yield return key;
+            foreach (uint index in _sparse.Keys.OrderBy(static index => index))
+                if (index >= _dense.Count && index < _length)
+                    yield return index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
         }
+
+        yield return "length";
+        if (_namedProperties is null) yield break;
+        foreach (string key in _namedProperties.Keys)
+            yield return key;
     }
 
     internal bool IsPropertyEnumerable(string name)
