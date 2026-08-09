@@ -1872,6 +1872,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/sort/stability-5-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/stability-11-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/stability-513-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/stability-2048-elements.js")]
+    public void Array_sort_is_stable_across_input_sizes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)
