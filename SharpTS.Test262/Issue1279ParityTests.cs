@@ -1860,6 +1860,18 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-appends-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-decreases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-deletes-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-deletes-successor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-increases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-pops-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-sets-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-sets-successor.js")]
+    public void Array_sort_observes_writeback_side_effects(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)
