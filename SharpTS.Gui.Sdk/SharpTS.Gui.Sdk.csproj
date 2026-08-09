@@ -63,7 +63,9 @@
     <Exec Command="dotnet &quot;$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'SharpTS.Gui.Generator', 'bin', '$(Configuration)', 'net10.0', 'SharpTS.Gui.Generator.dll'))&quot; verify" />
   </Target>
 
-  <Target Name="EnsureGuiSdkPayloadPresent" BeforeTargets="GenerateNuspec">
+  <Target Name="EnsureGuiSdkPayloadPresent"
+          BeforeTargets="GenerateNuspec"
+          Condition="'$(IsPackable)' == 'true'">
     <Error Condition="!Exists('..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll')"
            Text="SharpTS.Gui.Sdk pack: tasks assembly missing. Build SharpTS.Sdk.Tasks in Release first." />
     <Error Condition="!Exists('$(GuiHostPublishRoot)SharpTS.Gui.Host.dll')"
