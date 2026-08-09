@@ -349,18 +349,10 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromNumber(UnshiftArrayLike(interpreter, arr, items));
     }
 
-    private static RuntimeValue SliceV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        var start = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
-        var end = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : arr.Length;
-        if (start < 0) start = Math.Max(0, arr.Length + start);
-        if (end < 0) end = Math.Max(0, arr.Length + end);
-        if (start > arr.Length) start = arr.Length;
-        if (end > arr.Length) end = arr.Length;
-        if (end <= start) return RuntimeValue.FromObject(new SharpTSArray([]));
-        var sliced = arr.GetRange(start, end - start);
-        return RuntimeValue.FromObject(new SharpTSArray(new Deque<object?>(sliced)));
-    }
+    private static RuntimeValue SliceV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromObject(SliceArrayLike(
+            interpreter, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue IncludesV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
@@ -1163,6 +1155,43 @@ public static class ArrayBuiltIns
         }
 
         return receiver;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.28 generic slice algorithm. The result preserves holes,
+    /// while start/end coercion and inherited indexed reads are performed in
+    /// specification order against the original receiver.
+    /// </summary>
+    internal static SharpTSArray SliceArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        double relativeStart = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long start = NormalizeRelativeIndex(relativeStart, length);
+
+        double relativeEnd = args.Count > 1 && args[1] is not SharpTSUndefined
+            ? ToIntegerOrInfinity(interpreter, args[1])
+            : length;
+        long end = NormalizeRelativeIndex(relativeEnd, length);
+        long count = Math.Max(end - start, 0);
+        if (count > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var result = new SharpTSArray();
+        result.SetLength(count);
+        for (long index = 0; index < count; index++)
+        {
+            string key = (start + index).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, key))
+            {
+                result.Set(index, interpreter.GetPropertyValue(receiver, key));
+            }
+        }
+        return result;
     }
 
     /// <summary>

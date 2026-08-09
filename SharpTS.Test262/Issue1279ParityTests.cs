@@ -1702,6 +1702,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A1.5_T1.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2.2_T5.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T6.js")]
+    public void Array_slice_coerces_bounds_and_preserves_generic_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSorted/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSpliced/this-value-boolean.js")]
