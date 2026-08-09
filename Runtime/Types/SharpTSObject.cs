@@ -963,15 +963,26 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
     /// <summary>
     /// Own enumerable string-keyed property names in ECMA-262 OwnPropertyKeys
-    /// order: canonical array indices ascending, then other strings in creation
-    /// order. Data/accessor redefinitions keep their original position.
+    /// order.
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
+    {
+        foreach (string key in OwnStringKeys())
+            if (GetPropertyFlags(key).Enumerable)
+                yield return key;
+    }
+
+    /// <summary>
+    /// All own string-keyed property names in ECMA-262 OwnPropertyKeys order:
+    /// canonical array indices ascending, then other strings in creation order.
+    /// Data/accessor redefinitions keep their original position.
+    /// </summary>
+    internal IEnumerable<string> OwnStringKeys()
     {
         var indices = new List<(uint Index, string Key)>();
         foreach (string key in _stringPropertyOrder)
         {
-            if (!HasOwnStringProperty(key) || !GetPropertyFlags(key).Enumerable)
+            if (!HasOwnStringProperty(key))
                 continue;
             if (TryGetArrayIndex(key, out uint index))
             {
@@ -984,7 +995,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
         foreach (string key in _stringPropertyOrder)
         {
-            if (!HasOwnStringProperty(key) || !GetPropertyFlags(key).Enumerable)
+            if (!HasOwnStringProperty(key))
                 continue;
             if (TryGetArrayIndex(key, out _))
                 continue;

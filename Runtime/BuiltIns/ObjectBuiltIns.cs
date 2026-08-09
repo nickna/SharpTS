@@ -1256,14 +1256,9 @@ public static partial class ObjectBuiltIns
     /// Gets all own property names from a SharpTSObject, including accessor-only properties.
     /// </summary>
     private static List<string> GetAllOwnPropertyNames(SharpTSObject obj)
-    {
-        HashSet<string> names = new(obj.Fields.Keys.Where(k => !IsBoxedPrimitiveInternalSlot(k)));
-        foreach (var key in obj.AccessorPropertyNames)
-        {
-            if (!IsBoxedPrimitiveInternalSlot(key)) names.Add(key);
-        }
-        return names.ToList();
-    }
+        => obj.OwnStringKeys()
+            .Where(k => !IsBoxedPrimitiveInternalSlot(k))
+            .ToList();
 
     /// <summary>
     /// Object.getOwnPropertyNames(obj) - returns an array of all own property names (including non-enumerable).
@@ -1296,17 +1291,10 @@ public static partial class ObjectBuiltIns
     /// Gets all own property names from a SharpTSObject (including accessor properties).
     /// </summary>
     private static List<object?> GetOwnPropertyNamesFromObject(SharpTSObject obj)
-    {
-        HashSet<string> names = new(obj.Fields.Keys.Where(k => !IsBoxedPrimitiveInternalSlot(k)));
-
-        // Add accessor property names (getters define properties even without data)
-        foreach (var key in obj.AccessorPropertyNames)
-        {
-            if (!IsBoxedPrimitiveInternalSlot(key)) names.Add(key);
-        }
-
-        return names.Select(k => (object?)k).ToList();
-    }
+        => obj.OwnStringKeys()
+            .Where(k => !IsBoxedPrimitiveInternalSlot(k))
+            .Select(k => (object?)k)
+            .ToList();
 
     /// <summary>
     /// Gets all own property names from a SharpTSArray (indices + length + any custom properties).

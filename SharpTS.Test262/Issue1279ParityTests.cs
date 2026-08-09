@@ -1515,6 +1515,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Object_getOwnPropertyNames_preserves_creation_order_on_redefinition()
+        => AssertPass(
+            "built-ins/Object/getOwnPropertyNames/order-after-define-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Object_getOwnPropertySymbols_rejects_nullish_targets()
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertySymbols/non-object-argument-invalid.js");
