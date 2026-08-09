@@ -6,8 +6,9 @@ last committed native tree. Rollback failures, event-handler exceptions, and det
 asynchronous failures remain fatal host errors. Calling the fallback's `reset` callback
 retries the protected subtree on a later render.
 
-Public-preview MSBuild SDK for building retained, reactive Windows desktop applications from
-SharpTS TSX and Avalonia.
+Preview MSBuild SDK for building retained, reactive Windows and macOS desktop applications from
+SharpTS TSX and Avalonia. Windows is the supported preview; macOS payloads are experimental until
+their native and Apple distribution workflows pass.
 
 With the SharpTS tool installed, a projectless application uses this SDK internally:
 
@@ -76,6 +77,8 @@ Publish a self-contained compiled application as one distributable Windows execu
 ```powershell
 dotnet publish -c Release -r win-x64
 # or: dotnet publish -c Release -r win-arm64
+# experimental candidates: dotnet publish -c Release -r osx-x64
+# or: dotnet publish -c Release -r osx-arm64
 ```
 
 Single-file publish is the default whenever a runtime identifier is supplied. It embeds the
@@ -92,9 +95,10 @@ same application can start in either mode. For a smaller compiled-only framework
 directory, set `-p:SharpTSGuiIncludeSourcePayload=false`; the generated launcher then defaults to
 compiled mode, and interpreted mode is unavailable because no source payload is distributed.
 
-Published applications use the Windows GUI subsystem. Fatal startup/runtime failures are appended
-to `%LOCALAPPDATA%\SharpTS.Gui\<application>.log`; an interactive launch with no attached console
-also displays a minimal native error dialog.
+Windows applications use the GUI subsystem; fatal errors are retained below
+`%LOCALAPPDATA%\SharpTS.Gui` and an interactive launch with no console displays a native dialog.
+macOS candidates retain fatal logs below `~/Library/Logs/SharpTS.Gui`, traces below
+`~/Library/Application Support/SharpTS.Gui/Traces`, and use a native alert after logging.
 
 Applications mount a typed element tree with `renderDesktop(<App />)` or create an explicit
 multi-window session with `createDesktopApplication`. The latter supports owned/modeless and
@@ -154,13 +158,13 @@ items that supply `LogicalName` and a required SHA-256 digest.
 generated overlay while reserving the JSX runtime and `@sharpts/gui` module mappings. Set
 `SharpTSVerifyIL` to `true` to verify the persisted hosted guest during compilation.
 
-Current preview boundaries: Windows `win-x64` and `win-arm64` only, one root element per Window,
+Current supported-preview boundaries: Windows `win-x64` and `win-arm64`, one root element per Window,
 statically packaged custom controls only, string-backed legacy list/combo items, and no dynamic
 descriptor discovery, arbitrary control-template, or full editing DataGrid API. Native resources/styles/theme variants,
-typed item templates, a windowed grid, trees, rich text, and canvas/drawing are supported. macOS
-support is intentionally deferred and is not
-claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
-application.
+typed item templates, a windowed grid, trees, rich text, and canvas/drawing are supported.
+`osx-x64` and `osx-arm64` are experimental build candidates, not support claims; native x64/ARM64
+execution plus Developer ID signing and notarization remain mandatory. See `Examples/Calculator`
+in the SharpTS repository for a complete TSX application.
 
 For a compiler-free, compiled-only Windows x64 executable, publish with:
 
@@ -178,7 +182,8 @@ bundles, compatibility, and servicing policy are maintained in the repository's 
 distribution and support-policy guides. Packaging is intentionally separate from `dotnet publish`
 and never embeds signing credentials in an application project.
 
-The SDK package is approximately 26 MB compressed; a minimal framework-dependent x64 directory is
+The SDK package is approximately 38 MiB compressed after including Windows and universal macOS
+native assets; a minimal framework-dependent x64 directory is
 approximately 47 MB before application assets. Exact sizes vary with SDK/runtime servicing. Raw
 Avalonia objects and descriptor registration are available only to managed provider packages. Native controls must
 only be touched on the Avalonia dispatcher; application code should use generated props, events,

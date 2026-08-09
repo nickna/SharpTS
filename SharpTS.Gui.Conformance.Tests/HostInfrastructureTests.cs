@@ -314,6 +314,42 @@ public sealed class HostInfrastructureTests
     }
 
     [Fact]
+    public void MacOsDiagnostics_WritesAndPrunesWithoutInvokingPlatformUiOffMac()
+    {
+        string root = Path.Combine(Path.GetTempPath(), "sharpts-gui-macos-errors-" + Guid.NewGuid().ToString("N"));
+        string? previous = Environment.GetEnvironmentVariable("SHARPTS_GUI_ERROR_LOG");
+        Environment.SetEnvironmentVariable("SHARPTS_GUI_ERROR_LOG", null);
+        try
+        {
+            var diagnostics = new MacOsFatalDiagnostics(root);
+            for (int index = 0; index < 12; index++)
+            {
+                string path = Assert.IsType<string>(
+                    diagnostics.TryWriteLog(new InvalidOperationException($"mac-failure-{index}")));
+                Assert.StartsWith(root, path, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var dialog = MacOsFatalDiagnostics.CreateDialogStartInfo(
+                new InvalidOperationException("quoted \"message\""),
+                "/tmp/path with spaces/error.log");
+            Assert.Equal("/usr/bin/osascript", dialog.FileName);
+            Assert.Equal("--", dialog.ArgumentList[2]);
+            Assert.Contains("quoted \"message\"", dialog.ArgumentList[3], StringComparison.Ordinal);
+            Assert.Contains("/tmp/path with spaces/error.log", dialog.ArgumentList[3], StringComparison.Ordinal);
+            if (!OperatingSystem.IsMacOS())
+                diagnostics.TryShowDialog(new InvalidOperationException("not-on-mac"), null);
+            Assert.Equal(HostDiagnosticPaths.RetainedDefaultErrorCount,
+                Directory.EnumerateFiles(root, "sharpts-gui-error-*.log").Count());
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("SHARPTS_GUI_ERROR_LOG", previous);
+            if (Directory.Exists(root))
+                Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void TraceRetention_PrunesOnlyManagedTraceNames()
     {
         string root = Path.Combine(Path.GetTempPath(), "sharpts-gui-traces-" + Guid.NewGuid().ToString("N"));

@@ -1,4 +1,4 @@
-# Avalonia desktop status and Windows roadmap
+# Avalonia desktop status and platform roadmap
 
 Date: 2026-08-09
 
@@ -11,7 +11,8 @@ history remains the source for the full phase-by-phase narratives.
 Phase 0 is complete for the active Windows product scope. Windows x64 feasibility passed in both
 interpreted and compiled modes with a real window, dispatcher-owned input/rendering, timers, and
 asynchronous continuations. The original cross-platform exit criterion is not complete: no macOS
-gate has run or passed, and macOS remains an unscheduled Phase 4 reactivation track. Native
+gate has run or passed. Phase 4 Track E now supplies macOS payloads, cross-publish evidence, and
+native/release workflows, but those workflows have not run, so the original criterion remains open. Native
 Windows ARM64 execution is likewise release work rather than evidence already obtained. This
 distinction is deliberate and no cross-platform compatibility is implied.
 
@@ -205,17 +206,18 @@ public NuGet publication remain unpassed external gates; `publish: false` is int
 - Windows ARM64 directory and single-file cross-publish pass. Native ARM64 Headless and
   real-window execution remain outstanding; cross-publish evidence is not native execution
   evidence.
-- `SharpTS.Gui.Sdk` is prepared as `0.1.0-preview.1` but is unpublished. NuGet package-ID
+- `SharpTS.Gui.Sdk` is prepared as `0.2.0-preview.1` but is unpublished. NuGet package-ID
   onboarding and separate API-key scope validation are prerequisites to publication.
 - Preview productization cleanup is complete. Projects, paths, tests, traces, workflows, renderer
   units, bridge ownership, host services, conformance hooks, and RID declarations now use durable
   boundaries without changing the preview contract.
-- The TSX application API is now implemented at GUI API version 1: typed function components,
+- The TSX application API is implemented at GUI API version 2: typed function components,
   natural children, keyed fragments, standard hooks, typed refs, keyboard/focus input, a broad
   built-in control set, desktop dialogs/clipboard, and reproducible packaged assets. The
   `Examples/Calculator` application exercises this surface in interpreted and compiled modes.
-- macOS is officially deferred. It has not passed any current product gate and does not gate the
-  Windows preview. No macOS compatibility or schedule is implied by the Avalonia architecture.
+- macOS is reactivated as an experimental SDK candidate. Both RIDs cross-publish and bundle
+  structurally, but no native macOS or Apple release gate has passed, so this is not a support claim
+  and does not gate the Windows preview.
 
 The result is a go for the implemented `win-x64` preview and for `win-arm64` cross-publish, not a
 claim that every Windows architecture has executed natively and not a cross-platform product go.
@@ -333,7 +335,7 @@ claim that every Windows architecture has executed natively and not a cross-plat
 | Dispatcher polling was acceptable for feasibility. | Both guest modes use wake/coalescing and exact host deadlines; polling is removed. |
 | Rendering was a one-time recursive mount. | Rendering uses retained keyed/positional reconciliation with signals, refs, validation, fresh callbacks, and cleanup. |
 | Deployment was framework-dependent and directory-based. | Framework-dependent directories remain for dual-mode development; RID publish adds a compiled self-contained single-file Windows executable. |
-| A real-window macOS run was the immediate next feasibility gate. | macOS is an explicit backlog item and does not gate the Windows preview. Its earlier pending gates were not converted into passes. |
+| A real-window macOS run was the immediate next feasibility gate. | Native Intel and Apple Silicon jobs now encode that gate. They remain unpassed until those workflows execute and do not gate the Windows preview. |
 
 ### Deferred
 
@@ -342,7 +344,7 @@ claim that every Windows architecture has executed natively and not a cross-plat
 - Production signing-certificate execution and publication of an application-owned MSIX identity;
   local packaging, update, SBOM/provenance, diagnostics, enterprise, and support-policy gates exist.
 - Packaged Windows notifications, arbitrary public control templates, and a full editing DataGrid.
-- Native AOT ARM64 certification and macOS.
+- Native AOT ARM64 certification and native macOS certification/signing evidence.
 
 ## Architecture boundaries
 
@@ -353,13 +355,13 @@ Portability depends on keeping the following seams intact during future evolutio
 - Keep reconciliation, validation, descriptors, mounted-node ownership, refs, and event freshness
   independent of Windows packaging. Renderer behavior must be testable without a WinExe or native
   dialog.
-- Confine RID filtering, WinExe selection, native fatal dialogs, and platform assets to
+- Confine RID filtering, subsystem selection, native fatal dialogs, and platform assets to
   platform-specific packaging or host adapters. A consumer manifest and generated launcher should
   not encode Windows behavior into the hosted ABI.
 - Keep one source of truth for supported platforms and RIDs so package contents, SDK validation,
   consumer harnesses, and workflows cannot drift.
-- Do not add speculative macOS assets or adapters and do not claim compatibility while macOS is
-  deferred.
+- Do not turn macOS cross-publish or structural bundle evidence into a compatibility claim before
+  native execution, signing, and notarization gates pass.
 
 ## Completed preview productization cleanup
 
@@ -374,7 +376,7 @@ The pre-publication cleanup is complete and behavior-preserving:
 4. Host startup is separated into option, payload, lifetime, and platform-diagnostics services.
 5. Conformance state and controls are isolated behind `@sharpts/gui/internal-testing`; contract
    tests verify that the normal package entry point does not expose them.
-6. Supported Windows RIDs have one declaration that drives SDK validation and package assets and
+6. Supported and candidate desktop RIDs have one declaration that drives SDK validation and package assets and
    is consumed or checked by the package harness and workflow tests.
 
 ## Windows preview publication gate
@@ -402,23 +404,22 @@ Compatibility/versioning policy, recoverable native commit errors, leak/soak and
 renderer gates, GUI performance budgets, static custom-control providers, and the local Windows
 distribution/support toolchain are now implemented. Remaining release stabilization is evidence:
 native ARM64 execution, public package ownership, production certificate-backed installer runs,
-packaged notifications, and the intentionally deferred macOS track.
+packaged notifications, and native/signing evidence for the macOS candidate.
 
-## macOS reactivation checklist
+## macOS reactivation status
 
-macOS work is separate from the current Windows roadmap and is not scheduled. If it is
-reactivated, require all of the following rather than extrapolating from Windows or Headless runs:
+Track E implementation is locally complete. `osx-x64` and `osx-arm64` are explicit SDK entries;
+the host uses macOS log/alert behavior; both architectures cross-publish from the same audited
+package; real Mach-O outputs pass `.app`, plist, symbol, architecture, and checksum validation;
+and native Intel/Apple-Silicon plus protected signing/notarization workflows are committed. The
+exact local package was 39,745,881 bytes with SHA-256
+`448CD57A08620B2FCCD5FCA87F7DAB7A18E97D7B9C3FAAF773314A05FB4561B8`.
 
-1. Add intentional macOS x64 and ARM64 platform payloads without weakening Windows RID filtering.
-2. Add a macOS fatal-diagnostics adapter with platform-appropriate logging and user notification.
-3. Build and inspect the x64/ARM64 matrix and prove Headless parity in interpreted and compiled
-   development modes.
-4. Record native real-window evidence on both macOS architectures, including dispatcher,
-   synchronization-context, lifecycle, reconciliation, forms, and cleanup traces.
-5. Define and validate the `.app` bundle layout and metadata.
-6. Add signing and notarization as explicit distribution gates.
-
-None of these items is evidence of present compatibility, and none gates the Windows preview.
+Still required before support: execute interpreted and compiled Headless and real-window cases
+natively on both architectures, then run Developer ID signing, app/DMG notarization, stapling,
+Gatekeeper validation, and provenance against the exact candidate. This workstation supplies
+neither macOS execution nor Apple credentials, so those are external evidence gates, not passes.
+See [macOS GUI preview and distribution](macos-distribution.md).
 
 ## Evidence appendix
 

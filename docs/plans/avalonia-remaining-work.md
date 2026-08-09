@@ -43,7 +43,7 @@ tooling, release closure, and ecosystem depth.
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | **Complete in the Phase 3A implementation commit.** Template, ordinary-command workflow, incremental inputs, compiled-only output, docs, and packaged lifecycle gate landed | Regression coverage and release evidence only |
 | Phase 3B | **CLI complete; local x64 and ARM64 cross-publish candidate gates pass.** Public NuGet onboarding and native ARM64 execution remain externally blocked | Publish only after package ownership/key scope and native ARM64 evidence exist |
-| Phase 4 | Tracks A and B are complete for their declared Windows surface. Track C is locally complete for x64; ARM64 Native AOT linking/execution is externally blocked. Distribution and macOS remain | Complete each independently selected release track without weakening its native evidence |
+| Phase 4 | Track A is complete for its declared surface; Track B lacks packaged notifications. Tracks C and D are locally complete with external ARM64/signing gates. Track E implementation and cross-publish are complete, with native macOS and Apple release evidence externally blocked | Complete each independently selected release track without weakening its native evidence |
 
 ## Prerequisite integration gate
 
@@ -470,12 +470,22 @@ environment approval. Those values cannot be fabricated or committed by the repo
 
 ### Track E: macOS reactivation
 
-This track remains unscheduled until explicitly selected.
+**Resolution (2026-08-09): selected and locally complete; native certification externally
+blocked.**
 
 - Add intentional `osx-x64` and `osx-arm64` payloads and a macOS diagnostics adapter.
 - Prove Headless and real-window interpreted/compiled behavior natively on both architectures.
 - Validate `.app` structure and metadata.
 - Add signing, notarization, and distribution gates without weakening Windows packaging rules.
+
+The SDK now carries intentional `osx-x64` and `osx-arm64` entries mapped to Avalonia's universal
+macOS native payload. One exact package passed both SDK and TypeScript-only CLI cross-publish
+matrices, and the resulting thin Mach-O executables passed `.app`, plist, architecture, symbol,
+and checksum validation. The host has platform-specific log locations and native alert handling.
+Native Apple Silicon and Intel jobs plus a protected Developer ID signing/notarization workflow
+are committed as blocking gates. This Windows workstation cannot execute those jobs and has no
+Apple identity or notarization credentials, so macOS remains an uncertified candidate rather than
+a supported platform.
 
 ### Phase 4 exit criterion
 

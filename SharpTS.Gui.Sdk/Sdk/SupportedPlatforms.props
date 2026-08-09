@@ -1,14 +1,24 @@
 <Project>
   <PropertyGroup>
-    <SharpTSGuiSupportedRuntimeIdentifiers>win-x64;win-arm64</SharpTSGuiSupportedRuntimeIdentifiers>
+    <SharpTSGuiSupportedRuntimeIdentifiers>win-x64;win-arm64;osx-x64;osx-arm64</SharpTSGuiSupportedRuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
     <SharpTSGuiSupportedRuntimeIdentifier Include="win-x64">
       <Architecture>X64</Architecture>
+      <RuntimeAssetDirectory>win-x64</RuntimeAssetDirectory>
     </SharpTSGuiSupportedRuntimeIdentifier>
     <SharpTSGuiSupportedRuntimeIdentifier Include="win-arm64">
       <Architecture>Arm64</Architecture>
+      <RuntimeAssetDirectory>win-arm64</RuntimeAssetDirectory>
+    </SharpTSGuiSupportedRuntimeIdentifier>
+    <SharpTSGuiSupportedRuntimeIdentifier Include="osx-x64">
+      <Architecture>X64</Architecture>
+      <RuntimeAssetDirectory>osx</RuntimeAssetDirectory>
+    </SharpTSGuiSupportedRuntimeIdentifier>
+    <SharpTSGuiSupportedRuntimeIdentifier Include="osx-arm64">
+      <Architecture>Arm64</Architecture>
+      <RuntimeAssetDirectory>osx</RuntimeAssetDirectory>
     </SharpTSGuiSupportedRuntimeIdentifier>
   </ItemGroup>
 
@@ -20,6 +30,9 @@
     <SharpTSGuiRuntimeAsset Include="$(GuiHostPublishRoot)runtimes\win-arm64\**"
                             Exclude="$(GuiHostPublishRoot)runtimes\win-arm64\**\*.pdb">
       <RuntimeIdentifier>win-arm64</RuntimeIdentifier>
+    </SharpTSGuiRuntimeAsset>
+    <SharpTSGuiRuntimeAsset Include="$(GuiHostPublishRoot)runtimes\osx\**">
+      <RuntimeIdentifier>osx</RuntimeIdentifier>
     </SharpTSGuiRuntimeAsset>
   </ItemGroup>
 </Project>

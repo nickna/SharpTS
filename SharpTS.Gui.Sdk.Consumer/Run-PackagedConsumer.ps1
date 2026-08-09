@@ -13,15 +13,21 @@ $ErrorActionPreference = "Stop"
 $repositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $supportedPlatformsPath = Join-Path $repositoryRoot "SharpTS.Gui.Sdk\Sdk\SupportedPlatforms.props"
 [xml]$supportedPlatforms = Get-Content -LiteralPath $supportedPlatformsPath -Raw
-$supportedRuntimeIdentifiers = @(
-    $supportedPlatforms.SelectNodes("//SharpTSGuiSupportedRuntimeIdentifier") |
-        ForEach-Object { $_.GetAttribute("Include") }
-)
+$supportedRuntimeAssetDirectories = @{}
+$supportedRuntimeIdentifiers = @($supportedPlatforms.SelectNodes("//SharpTSGuiSupportedRuntimeIdentifier") |
+    ForEach-Object {
+        $declaredRuntimeIdentifier = $_.GetAttribute("Include")
+        $supportedRuntimeAssetDirectories[$declaredRuntimeIdentifier] = [string]$_.RuntimeAssetDirectory
+        $declaredRuntimeIdentifier
+    })
 if ($RuntimeIdentifier -notin $supportedRuntimeIdentifiers) {
     throw "SharpTS.Gui.Sdk supports only $($supportedRuntimeIdentifiers -join ', '); got '$RuntimeIdentifier'."
 }
 $version = "0.2.0-preview.1"
-$artifactRoot = Join-Path $repositoryRoot "artifacts\windows-preview\$RuntimeIdentifier"
+$isWindowsRid = $RuntimeIdentifier.StartsWith("win-", [StringComparison]::Ordinal)
+$isMacOsRid = $RuntimeIdentifier.StartsWith("osx-", [StringComparison]::Ordinal)
+$platformArtifactName = if ($isWindowsRid) { "windows-preview" } else { "macos-preview" }
+$artifactRoot = Join-Path $repositoryRoot "artifacts\$platformArtifactName\$RuntimeIdentifier"
 $feed = Join-Path $artifactRoot "feed"
 $packageCache = Join-Path $artifactRoot "packages"
 $consumerRoot = Join-Path $artifactRoot "consumer with spaces"
@@ -37,8 +43,12 @@ $cliDirectoryPublishRoot = Join-Path $artifactRoot "cli published directory"
 $cliSingleFilePublishRoot = Join-Path $artifactRoot "cli published single file"
 $osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 $canExecute = -not $PublishOnly -and (
-    ($RuntimeIdentifier -eq "win-x64" -and $osArchitecture -eq "X64") -or
-    ($RuntimeIdentifier -eq "win-arm64" -and $osArchitecture -eq "Arm64"))
+    ($isWindowsRid -and [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::Windows)) -or
+    ($isMacOsRid -and [Runtime.InteropServices.RuntimeInformation]::IsOSPlatform([Runtime.InteropServices.OSPlatform]::OSX))) -and (
+    ($RuntimeIdentifier.EndsWith("-x64", [StringComparison]::Ordinal) -and $osArchitecture -eq "X64") -or
+    ($RuntimeIdentifier.EndsWith("-arm64", [StringComparison]::Ordinal) -and $osArchitecture -eq "Arm64"))
+$consumerExecutableName = "SharpTS.Gui.Sdk.Consumer" + $(if ($isWindowsRid) { ".exe" } else { "" })
+$cliExecutableName = "cli_app_with_spaces" + $(if ($isWindowsRid) { ".exe" } else { "" })
 $candidatePackagePath = $null
 if (-not [string]::IsNullOrWhiteSpace($CandidatePackage)) {
     $candidatePackagePath = [IO.Path]::GetFullPath($CandidatePackage, $repositoryRoot)
@@ -183,11 +193,12 @@ try {
     if ($entryNames -match "native/runtimes/") {
         throw "GUI SDK package contains a duplicated native-runtime path."
     }
-    if ($entryNames -match "/runtimes/(linux|osx|browser|maccatalyst|ios|android)-") {
-        throw "Windows GUI SDK package contains a non-Windows native runtime asset."
+    if ($entryNames -match "/runtimes/(linux|browser|maccatalyst|ios|android)(-|/)") {
+        throw "GUI SDK package contains an unsupported native runtime asset."
     }
     foreach ($rid in $supportedRuntimeIdentifiers) {
-        if (-not ($entryNames -match "/runtimes/$rid/native/")) {
+        $runtimeAssetDirectory = $supportedRuntimeAssetDirectories[$rid]
+        if (-not ($entryNames -match "/runtimes/$runtimeAssetDirectory/native/")) {
             throw "GUI SDK package is missing native runtime assets for '$rid'."
         }
     }
@@ -228,7 +239,7 @@ $nugetConfig = @"
 <configuration>
   <packageSources>
     <clear />
-    <add key="windows-preview" value="$escapedFeed" />
+    <add key="desktop-preview" value="$escapedFeed" />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
 </configuration>
@@ -350,12 +361,12 @@ Invoke-DotNet @(
     "publish", $consumerProject, "-c", $Configuration, "-r", $RuntimeIdentifier,
     "--self-contained", "true", "--no-restore", "-p:SharpTSGuiPublishMode=SingleFile", "-o", $singleFilePublishRoot) $consumerRoot
 
-$singleFile = Join-Path $singleFilePublishRoot "SharpTS.Gui.Sdk.Consumer.exe"
+$singleFile = Join-Path $singleFilePublishRoot $consumerExecutableName
 if (-not (Test-Path $singleFile)) {
     throw "Single-file GUI executable was not created: $singleFile"
 }
 $distributionFiles = @(Get-ChildItem -LiteralPath $singleFilePublishRoot -File)
-if ($distributionFiles.Count -ne 1 -or $distributionFiles[0].Name -ne "SharpTS.Gui.Sdk.Consumer.exe") {
+if ($distributionFiles.Count -ne 1 -or $distributionFiles[0].Name -ne $consumerExecutableName) {
     throw "Single-file publish produced unexpected sidecar files: $($distributionFiles.Name -join ', ')"
 }
 
@@ -399,7 +410,7 @@ if ($NativeAot) {
         "--self-contained", "true", "-p:PublishAot=true", "-p:TrimmerSingleWarn=true",
         "-o", $nativeAotPublishRoot) $consumerRoot
 
-    $nativeAotExecutable = Join-Path $nativeAotPublishRoot "SharpTS.Gui.Sdk.Consumer.exe"
+    $nativeAotExecutable = Join-Path $nativeAotPublishRoot $consumerExecutableName
     if (-not (Test-Path -LiteralPath $nativeAotExecutable -PathType Leaf)) {
         throw "Native AOT publish did not create '$nativeAotExecutable'."
     }
@@ -521,9 +532,9 @@ $sdkNativeClosure = @(Get-ChildItem -LiteralPath $directoryPublishRoot -File |
     Where-Object Extension -notin @(".dll", ".json", ".pdb") | ForEach-Object Name | Sort-Object)
 $cliNativeClosure = @(Get-ChildItem -LiteralPath $cliDirectoryPublishRoot -File |
     Where-Object Extension -notin @(".dll", ".json", ".pdb") |
-    Where-Object Name -notin @("SharpTS.Gui.Sdk.Consumer.exe", "cli_app_with_spaces.exe") |
+    Where-Object Name -notin @($consumerExecutableName, $cliExecutableName) |
     ForEach-Object Name | Sort-Object)
-$sdkNativeClosure = @($sdkNativeClosure | Where-Object { $_ -ne "SharpTS.Gui.Sdk.Consumer.exe" })
+$sdkNativeClosure = @($sdkNativeClosure | Where-Object { $_ -ne $consumerExecutableName })
 if (Compare-Object $sdkNativeClosure $cliNativeClosure -SyncWindow 0) {
     throw "SDK/CLI native dependency closure differs."
 }
@@ -532,7 +543,7 @@ Invoke-DotNet @(
     $sharpTsCli, "app", "publish", "headless.tests.tsx", "--source", $feed,
     "--rid", $RuntimeIdentifier, "--self-contained", "true", "--single-file", "true",
     "--output", $cliSingleFilePublishRoot) $cliRoot
-$cliSingleFile = Join-Path $cliSingleFilePublishRoot "cli_app_with_spaces.exe"
+$cliSingleFile = Join-Path $cliSingleFilePublishRoot $cliExecutableName
 if (-not (Test-Path -LiteralPath $cliSingleFile)) {
     throw "TypeScript-only CLI self-contained single-file publish did not create an executable."
 }

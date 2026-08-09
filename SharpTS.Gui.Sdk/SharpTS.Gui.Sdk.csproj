@@ -13,7 +13,7 @@
     <IsPackable Condition="'$(SharpTSGuiSkipPack)' == 'true'">false</IsPackable>
     <PackageId>SharpTS.Gui.Sdk</PackageId>
     <MinVerVersionOverride Condition="'$(MinVerVersionOverride)' == ''">0.2.0-preview.1</MinVerVersionOverride>
-    <Description>Public-preview MSBuild SDK for building Windows desktop applications with SharpTS TSX and Avalonia.</Description>
+    <Description>Preview MSBuild SDK for building Windows and macOS desktop applications with SharpTS TSX and Avalonia.</Description>
     <PackageTags>typescript;tsx;avalonia;desktop;msbuild;sdk</PackageTags>
     <PackageReadmeFile>readme.md</PackageReadmeFile>
     <DevelopmentDependency>true</DevelopmentDependency>

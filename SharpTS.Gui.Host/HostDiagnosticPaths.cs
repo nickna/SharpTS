@@ -7,13 +7,21 @@ internal static class HostDiagnosticPaths
     public const int RetainedDefaultTraceCount = 20;
     public const int RetainedDefaultErrorCount = 10;
 
-    public static string RootDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "SharpTS.Gui");
+    public static string RootDirectory => OperatingSystem.IsMacOS()
+        ? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Application Support", "SharpTS.Gui")
+        : Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "SharpTS.Gui");
 
     public static string TraceDirectory => Path.Combine(RootDirectory, "Traces");
 
-    public static string ErrorDirectory => Path.Combine(RootDirectory, "Errors");
+    public static string ErrorDirectory => OperatingSystem.IsMacOS()
+        ? Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Library", "Logs", "SharpTS.Gui")
+        : Path.Combine(RootDirectory, "Errors");
 
     public static string CreateTracePath(GuestMode mode) => Path.Combine(
         TraceDirectory,

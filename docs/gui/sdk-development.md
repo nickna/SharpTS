@@ -1,6 +1,7 @@
 # SharpTS GUI SDK development workflow
 
-SharpTS.Gui.Sdk is the supported entry point for the Windows desktop preview. It materializes the
+SharpTS.Gui.Sdk is the supported entry point for the Windows desktop preview and the experimental
+macOS candidate. It materializes the
 matching `@sharpts/gui` package under `obj`, type-checks and compiles the guest, writes the versioned
 application manifest, and assembles the Avalonia host. A separate global SharpTS installation,
 repository checkout, C# source file, and AXAML file are not required.
@@ -69,7 +70,8 @@ dotnet publish -c Release -r win-x64 --self-contained false `
   -p:SharpTSGuiPublishMode=Directory
 ```
 
-Use `win-arm64` to cross-publish for Windows ARM64. Set
+Use `win-arm64` to cross-publish for Windows ARM64. Experimental macOS candidates use `osx-x64`
+or `osx-arm64`; see [macOS GUI preview and distribution](macos-distribution.md). Set
 `-p:SharpTSGuiIncludeSourcePayload=false` to omit `Guest`, the generated tsconfig, and the
 materialized TypeScript package. That directory is compiled-only and defaults to compiled mode.
 
@@ -79,7 +81,7 @@ The default RID publish is a self-contained compiled single executable:
 dotnet publish -c Release -r win-x64
 ```
 
-The compressed SDK package is approximately 31 MB and a minimal x64 framework-dependent directory
+The compressed multi-platform SDK package is approximately 38 MiB and a minimal x64 framework-dependent directory
 is approximately 47 MB before application assets. These are engineering snapshots, not size gates.
 Applications published to a read-only directory do not write beside the executable; fatal logs and
 opt-in traces use the per-user local application-data directory.
@@ -117,6 +119,7 @@ schema-hash rules. Public custom controls require a future versioned provider mo
 
 ## Preview limits
 
-The supported RIDs are `win-x64` and `win-arm64`. The current root model allows one `Window`;
-macOS, multi-window APIs, public custom controls, theme resources, drawing, data grids/trees, and
-Native AOT certification remain outside the preview contract.
+The supported RIDs are `win-x64` and `win-arm64`; `osx-x64` and `osx-arm64` are available as
+uncertified candidates. Native execution on both macOS architectures and Apple signing/notarization
+must pass before a support claim. Cross-architecture Windows ARM64 Native AOT certification also
+remains outstanding.

@@ -29,8 +29,8 @@
              AssemblyFile="$(SharpTSGuiTasksAssembly)" />
 
   <Target Name="_SharpTSGuiValidate" BeforeTargets="SharpTSGuiPrepare">
-    <Error Condition="'$(OS)' != 'Windows_NT'"
-           Text="SharpTS.Gui.Sdk public preview currently supports Windows only." />
+    <Error Condition="!$([MSBuild]::IsOSPlatform('Windows')) and !$([MSBuild]::IsOSPlatform('OSX'))"
+           Text="SharpTS.Gui.Sdk currently supports Windows and macOS build hosts only." />
     <Error Condition="'$(RuntimeIdentifier)' != '' and !$([System.String]::Copy(';$(SharpTSGuiSupportedRuntimeIdentifiers);').Contains(';$(RuntimeIdentifier);'))"
            Text="SharpTS.Gui.Sdk supports only $(SharpTSGuiSupportedRuntimeIdentifiers) runtime identifiers." />
     <Error Condition="!Exists('$(SharpTSGuiTasksAssembly)')"
@@ -137,12 +137,14 @@
     <PropertyGroup>
       <_SharpTSGuiEffectiveRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</_SharpTSGuiEffectiveRid>
       <_SharpTSGuiEffectiveRid Condition="'$(_SharpTSGuiEffectiveRid)' == ''">$(NETCoreSdkRuntimeIdentifier)</_SharpTSGuiEffectiveRid>
+      <_SharpTSGuiRuntimeAssetDirectory Condition="$([System.String]::Copy('$(_SharpTSGuiEffectiveRid)').StartsWith('osx-'))">osx</_SharpTSGuiRuntimeAssetDirectory>
+      <_SharpTSGuiRuntimeAssetDirectory Condition="'$(_SharpTSGuiRuntimeAssetDirectory)' == ''">$(_SharpTSGuiEffectiveRid)</_SharpTSGuiRuntimeAssetDirectory>
     </PropertyGroup>
     <ItemGroup>
       <_SharpTSGuiHostFiles Include="$(SharpTSGuiHostRoot)**\*"
                             Exclude="$(SharpTSGuiHostRoot)runtimes\**;$(SharpTSGuiHostRoot)**\*.pdb" />
-      <_SharpTSGuiNativeBuildFiles Include="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiEffectiveRid)\native\*"
-                                   Exclude="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiEffectiveRid)\native\*.pdb" />
+      <_SharpTSGuiNativeBuildFiles Include="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiRuntimeAssetDirectory)\native\*"
+                                   Exclude="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiRuntimeAssetDirectory)\native\*.pdb" />
     </ItemGroup>
     <Copy SourceFiles="@(_SharpTSGuiHostFiles)"
           DestinationFiles="@(_SharpTSGuiHostFiles->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"
@@ -169,9 +171,13 @@
   <Target Name="SharpTSGuiAddPublishFiles"
           BeforeTargets="ComputeResolvedFilesToPublishList"
           DependsOnTargets="SharpTSGuiAssemble">
+    <PropertyGroup>
+      <_SharpTSGuiPublishRuntimeAssetDirectory Condition="$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">osx</_SharpTSGuiPublishRuntimeAssetDirectory>
+      <_SharpTSGuiPublishRuntimeAssetDirectory Condition="'$(_SharpTSGuiPublishRuntimeAssetDirectory)' == ''">$(RuntimeIdentifier)</_SharpTSGuiPublishRuntimeAssetDirectory>
+    </PropertyGroup>
     <ItemGroup>
-      <_SharpTSGuiPublishNativeFiles Include="$(SharpTSGuiRuntimeRoot)$(RuntimeIdentifier)\native\*"
-                                     Exclude="$(SharpTSGuiRuntimeRoot)$(RuntimeIdentifier)\native\*.pdb"
+      <_SharpTSGuiPublishNativeFiles Include="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiPublishRuntimeAssetDirectory)\native\*"
+                                     Exclude="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiPublishRuntimeAssetDirectory)\native\*.pdb"
                                      Condition="'$(RuntimeIdentifier)' != ''" />
       <_SharpTSGuiPublishGuestSources Include="$(TargetDir)Guest\**\*"
                                       Condition="'$(PublishSingleFile)' != 'true' and '$(SharpTSGuiIncludeSourcePayload)' == 'true'" />
