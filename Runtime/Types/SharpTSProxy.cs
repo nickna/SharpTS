@@ -599,6 +599,21 @@ public class SharpTSProxy : ISharpTSCallable
             arrow.SetProperty(prop, value);
             return value;
         }
+        if (_target is SharpTSArray array)
+        {
+            if (long.TryParse(prop, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out long index)
+                && index >= 0)
+                array.Set(index, value);
+            else
+                array.SetNamedProperty(prop, value);
+            return value;
+        }
+        if (_target is SharpTSRegExp regex)
+        {
+            regex.SetPropertyStrict(prop, value, strictMode: false);
+            return value;
+        }
         if (_target is SharpTSInstance inst)
         {
             if (interp != null) inst.SetInterpreter(interp);
