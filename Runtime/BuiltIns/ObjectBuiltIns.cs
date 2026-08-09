@@ -737,6 +737,8 @@ public static partial class ObjectBuiltIns
         // them in a separate map.
         if (args[1] is SharpTSSymbol symKey)
         {
+            if (target is SharpTSProxy symbolProxy)
+                return symbolProxy.TrapGetOwnPropertyDescriptor(symKey, interpreter);
             return GetOwnPropertyDescriptorBySymbol(target, symKey);
         }
 
@@ -1247,7 +1249,7 @@ public static partial class ObjectBuiltIns
             SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSRegExp regex => regex.OwnStringKeys().Cast<object?>().ToList(),
-            SharpTSProxy proxy => proxy.TrapOwnKeys(interpreter).Cast<object?>().ToList(),
+            SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter),
             Dictionary<string, object?> dict => dict.Keys.Cast<object?>().ToList(),
             _ => []
         };

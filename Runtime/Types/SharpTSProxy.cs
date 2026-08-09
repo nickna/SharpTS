@@ -194,6 +194,21 @@ public class SharpTSProxy : ISharpTSCallable
         return InvokeTrap(trap, interp, [_target, prop]);
     }
 
+    internal object? TrapGetOwnPropertyDescriptor(
+        SharpTSSymbol prop, Interpreter interpreter)
+    {
+        var trap = GetTrapCallable("getOwnPropertyDescriptor");
+        if (trap == null)
+        {
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapGetOwnPropertyDescriptor(prop, interpreter)
+                : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop)
+                    ?? SharpTSUndefined.Instance;
+        }
+
+        return InvokeTrap(trap, interpreter, [_target, prop]);
+    }
+
     /// <summary>
     /// ECMA-262 §10.5.6 [[DefineOwnProperty]]. A missing trap forwards the
     /// original descriptor object to the target; otherwise the trap receives
@@ -307,46 +322,56 @@ public class SharpTSProxy : ISharpTSCallable
     /// non-configurable own keys on the target (per spec, those must always appear).
     /// </summary>
     public List<string> TrapOwnKeys(Interpreter? interp)
+        => TrapOwnPropertyKeys(interp).OfType<string>().ToList();
+
+    /// <summary>
+    /// Full [[OwnPropertyKeys]] result, retaining both string and Symbol keys.
+    /// String-only consumers such as Object.keys use <see cref="TrapOwnKeys"/>.
+    /// </summary>
+    internal List<object?> TrapOwnPropertyKeys(Interpreter? interp)
     {
         var trap = GetTrapCallable("ownKeys");
         if (trap == null)
-            return ForwardOwnKeys();
+            return ForwardOwnPropertyKeys();
 
         var result = InvokeTrap(trap, interp, [_target]);
-        var keys = new List<string>();
+        var keys = new List<object?>();
         switch (result)
         {
             case SharpTSArray arr:
                 foreach (var item in arr)
-                    if (item is string s) keys.Add(s);
+                    if (item is string or SharpTSSymbol) keys.Add(item);
                 break;
             case List<object?> list:
                 foreach (var item in list)
-                    if (item is string s) keys.Add(s);
+                    if (item is string or SharpTSSymbol) keys.Add(item);
                 break;
             case IEnumerable<object?> seq:
                 foreach (var item in seq)
-                    if (item is string s) keys.Add(s);
+                    if (item is string or SharpTSSymbol) keys.Add(item);
                 break;
         }
         return keys;
     }
 
-    private List<string> ForwardOwnKeys()
+    private List<object?> ForwardOwnPropertyKeys()
     {
-        var keys = new List<string>();
+        var keys = new List<object?>();
         switch (_target)
         {
             case SharpTSObject obj:
                 keys.AddRange(obj.OwnStringKeys());
+                keys.AddRange(obj.GetSymbolPropertyNames());
                 break;
             case SharpTSInstance inst:
                 keys.AddRange(inst.GetFieldNames());
+                keys.AddRange(inst.GetSymbolPropertyNames());
                 break;
             case SharpTSArray arr:
                 for (int i = 0; i < arr.Length; i++)
                     keys.Add(i.ToString(System.Globalization.CultureInfo.InvariantCulture));
                 keys.Add("length");
+                keys.AddRange(arr.GetSymbolPropertyNames());
                 break;
             case Dictionary<string, object?> dict:
                 keys.AddRange(dict.Keys);

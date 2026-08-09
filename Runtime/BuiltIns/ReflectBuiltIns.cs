@@ -336,7 +336,7 @@ public static class ReflectBuiltIns
                 switch (target)
                 {
                     case SharpTSProxy proxy:
-                        keys.AddRange(proxy.TrapOwnKeys(interpreter).Select(k => (object?)k));
+                        keys.AddRange(proxy.TrapOwnPropertyKeys(interpreter));
                         break;
                     case SharpTSObject obj:
                         keys.AddRange(obj.Fields.Keys.Select(k => (object?)k));

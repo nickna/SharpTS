@@ -1575,6 +1575,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void Object_getOwnPropertyDescriptors_preserves_proxy_key_order()
+        => AssertPass(
+            "built-ins/Object/getOwnPropertyDescriptors/proxy-no-ownkeys-returned-keys-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
 
