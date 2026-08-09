@@ -2814,6 +2814,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/create-handler-not-object-throw-string.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_constructor_rejects_symbol_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-symbol.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
