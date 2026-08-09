@@ -88,6 +88,10 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     private object? InvokeTrap(object trap, Interpreter? interp, List<object?> args)
     {
+        if (trap is ISharpTSCallable callable && interp != null)
+            return FunctionBuiltIns.CallWithThis(
+                interp, callable, _handler, args);
+
         if (RuntimeCallableDispatcher.IsCallable(trap))
             return RuntimeCallableDispatcher.Invoke(interp, trap, args.ToArray());
 

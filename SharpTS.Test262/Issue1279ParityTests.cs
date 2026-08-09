@@ -1466,6 +1466,12 @@ public sealed class Issue1279ParityTests
     public void Object_enumeration_preserves_key_creation_order(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_defineProperty_passes_the_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
