@@ -560,6 +560,10 @@ public partial class Interpreter
     internal object? GetPropertyValue(object? obj, string name)
         => GetPropertyValueFromChain(obj, name, obj);
 
+    internal object? GetPropertyValue(
+        object? obj, string name, object? receiver)
+        => GetPropertyValueFromChain(obj, name, receiver);
+
     private object? GetPropertyValueFromChain(
         object? current, string name, object? receiver)
     {
