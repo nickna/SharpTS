@@ -21,6 +21,7 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public Action? LatestClick { get; set; }
     public Action<string>? LatestTextChanged { get; set; }
     public Action<bool>? LatestCheckedChanged { get; set; }
+    public Action<bool>? LatestExpandedChanged { get; set; }
     public Action<double>? LatestSelectionChanged { get; set; }
     public Action<double>? LatestValueChanged { get; set; }
     public Action<int[]>? LatestIndicesChanged { get; set; }

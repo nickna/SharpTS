@@ -110,6 +110,8 @@ disposes the damaged window root and reports a combined fatal host error.
 - Forms: `TextBox`, `PasswordBox`, `CheckBox`, `RadioButton`, `ToggleSwitch`, `ComboBox`,
   `ListBox`, `NumericUpDown`, `DatePicker`, `TimePicker`, `Slider`, `ProgressBar`.
 - Navigation/commands: `TabControl`, `TabItem`, `Menu`, `MenuItem`.
+- Data/rendering: `ItemsControl`, `VirtualizingList`, `TreeView`, `TreeViewItem`, `Canvas`,
+  `RichTextBlock`, and `DrawingCanvas`.
 
 Props are direct and typed rather than style objects. Common props include size constraints,
 per-edge `margin`/`padding` tuples, alignment, visibility, enabled/opacity state, Grid and Dock
@@ -119,6 +121,19 @@ weight, alignment, and corner radius where supported. Colors accept Avalonia col
 `useControlRef<T>()` returns a stable typed ref with `isAttached` and `focus()`. `onKeyDown` and
 `onKeyUp` receive normalized key names and Ctrl/Alt/Shift/Meta/repeat flags; returning `true` marks
 the native event handled.
+
+## Typed item templates and drawing
+
+`createVirtualList`, `createTree`, and `createVirtualDataGrid` infer the item type from `items` and
+accept typed key/template callbacks. They return ordinary `GuiElement` values, so they can be
+embedded in JSX expressions. The list uses a native virtualizing `ListBox`; list and grid factories
+materialize only the requested visible range plus `overscan`, preserving keyed native identity
+while a caller advances `startIndex`. Tree nodes use native `TreeViewItem` expansion events.
+
+`RichTextBlock` accepts independently styled text runs. `Canvas` supports `canvasLeft` and
+`canvasTop` attached props. `DrawingCanvas` retains validated line, rectangle, and ellipse commands
+and redraws only when its command contract changes. All of these controls remain in the generated
+descriptor/hash/documentation contract and are available to completion and hover.
 
 ## Assets and desktop services
 
@@ -145,9 +160,10 @@ and SHA-256 pin:
 ## Current version 2 boundaries
 
 Each window still requires exactly one `Window` root and built-in descriptors. Combo/list data is
-string-backed. Public custom controls, item/control templates, data grids, trees, drawing/canvas,
-rich text, and macOS are not yet supported. Native resources, class/type selectors, styles, theme
-variants, and resource lookup are supported. Multi-window orchestration is available through
+string-backed. Public custom controls, arbitrary Avalonia control templates, a full editing
+`DataGrid`, and macOS are not yet supported. Typed item templates, a windowed virtual grid, native
+list/tree hosts, rich text, canvas/drawing, resources, class/type selectors, styles, theme variants,
+and resource lookup are supported. Multi-window orchestration is available through
 `createDesktopApplication`; `renderDesktop` remains the one-window convenience API.
 API 1 manifests are rejected with a migration diagnostic; see
 [Migrating GUI API 1 to 2](migrating-api-1-to-2.md). The complete proof application is in

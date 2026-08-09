@@ -42,7 +42,7 @@ public sealed class MultiWindowIntegrationTests
                   "hostedAbiVersion": 1,
                   "guiApiVersion": 2,
                   "descriptorSchemaVersion": 1,
-                  "descriptorSchemaHash": "197228ac1bd9cd28536868bb12246b0383b479b9419e1052599feb878d828f57"
+                  "descriptorSchemaHash": "bbe93f8d6f526acb9a579e57777a66787a7611db9b6a2c743b75720964cfa800"
                 }
                 """);
 
@@ -52,6 +52,7 @@ public sealed class MultiWindowIntegrationTests
             [
                 "multi-window-mounted",
                 "multi-window-secondary-closed",
+                "multi-window-advanced-surface",
                 "multi-window-style-applied",
                 "multi-window-style-retained",
                 "multi-window-isolated-error",

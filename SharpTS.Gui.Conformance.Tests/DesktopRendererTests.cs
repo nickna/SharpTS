@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using System.Runtime.CompilerServices;
 using SharpTS.Gui;
 using Xunit;
 
@@ -155,6 +156,72 @@ public sealed class DesktopRendererTests : IDisposable
         using DesktopApplicationSession application =
             DesktopBridge.CreateDesktopApplication("explicit");
         Assert.ThrowsAny<ArgumentException>(() => application.ConfigureStyleResources(json));
+    }
+
+    [Fact]
+    public void AdvancedItemsTreeCanvasRichTextAndDrawing_ReconcileAsNativeControls()
+    {
+        int[] selectedEvent = [];
+        bool? expandedEvent = null;
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(Panel(0,
+            new GuiVNode("VirtualizingList", Key: "list", SelectedIndices: [1],
+                SelectionMode: "single", IndicesChanged: value => selectedEvent = value,
+                Children: new[] { Text("A", "a"), Text("B", "b") }),
+            new GuiVNode("TreeView", Key: "tree", Children: new[]
+            {
+                new GuiVNode("TreeViewItem", Key: "node", Header: "Root", IsExpanded: true,
+                    ExpandedChanged: value => expandedEvent = value,
+                    Children: new[] { Text("Leaf", "leaf") })
+            }),
+            new GuiVNode("Canvas", Key: "canvas", Height: 80, Children: new[]
+            {
+                new GuiVNode("Button", Key: "positioned", Text: "At", CanvasLeft: 12, CanvasTop: 18)
+            }),
+            new GuiVNode("RichTextBlock", Key: "rich", RichTextJson:
+                "[{\"text\":\"Bold\",\"fontWeight\":\"bold\"},{\"text\":\" text\",\"foreground\":\"#336699\"}]"),
+            new GuiVNode("DrawingCanvas", Key: "drawing", Width: 120, Height: 80, DrawingJson:
+                "[{\"kind\":\"line\",\"x1\":0,\"y1\":0,\"x2\":20,\"y2\":20,\"stroke\":\"#336699\"}]"))));
+
+        var list = Assert.IsType<ListBox>(root.FindControl("list"));
+        Assert.Equal(2, list.Items.Count);
+        Assert.Same(list.Items[1], Assert.Single(list.SelectedItems!));
+        var treeItem = Assert.IsType<TreeViewItem>(root.FindControl("node"));
+        Assert.True(treeItem.IsExpanded);
+        Control positioned = root.FindControl("positioned")!;
+        Assert.Equal(12, Canvas.GetLeft(positioned));
+        Assert.Equal(18, Canvas.GetTop(positioned));
+        Assert.Equal(2, Assert.IsType<TextBlock>(root.FindControl("rich")).Inlines!.Count);
+        Assert.Single(Assert.IsType<DrawingSurface>(root.FindControl("drawing")).Commands);
+        list.SelectedIndex = 0;
+        treeItem.IsExpanded = false;
+        Assert.Equal([0], selectedEvent);
+        Assert.False(expandedEvent);
+
+        int identity = RuntimeHelpers.GetHashCode(root.FindControl("b")!);
+        root.Render(Window(Panel(0,
+            new GuiVNode("VirtualizingList", Key: "list", SelectedIndices: [0],
+                SelectionMode: "single", Children: new[] { Text("B2", "b"), Text("A2", "a") }),
+            new GuiVNode("TreeView", Key: "tree", Children: Array.Empty<GuiVNode>()),
+            new GuiVNode("Canvas", Key: "canvas", Height: 80, Children: Array.Empty<GuiVNode>()),
+            new GuiVNode("RichTextBlock", Key: "rich", RichTextJson: "[]"),
+            new GuiVNode("DrawingCanvas", Key: "drawing", Width: 120, Height: 80, DrawingJson: "[]"))));
+
+        Assert.Equal(identity, RuntimeHelpers.GetHashCode(root.FindControl("b")!));
+        Assert.Same(list.Items[0], Assert.Single(list.SelectedItems!));
+        Assert.Empty(Assert.IsType<TextBlock>(root.FindControl("rich")).Inlines!);
+    }
+
+    [Theory]
+    [InlineData("[{\"kind\":\"unknown\"}]")]
+    [InlineData("[{\"kind\":\"line\",\"x1\":0,\"y1\":0,\"x2\":1,\"y2\":1}]")]
+    [InlineData("[{\"kind\":\"rectangle\",\"width\":-1,\"height\":2}]")]
+    public void DrawingCanvas_RejectsInvalidCommandsBeforeNativeMutation(string commands)
+    {
+        DesktopRoot root = CreateRoot();
+        Assert.ThrowsAny<Exception>(() => root.Render(Window(
+            new GuiVNode("DrawingCanvas", Width: 100, Height: 100, DrawingJson: commands))));
+        Assert.Null(root.Window);
     }
 
     [Fact]

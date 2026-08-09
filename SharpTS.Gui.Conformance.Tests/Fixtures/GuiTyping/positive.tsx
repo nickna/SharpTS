@@ -4,9 +4,14 @@ import {
     ButtonHandle,
     Fragment,
     Grid,
+    DrawingCanvas,
+    RichTextBlock,
     TextBlock,
     Window,
     createDesktopApplication,
+    createTree,
+    createVirtualDataGrid,
+    createVirtualList,
     useControlRef,
 } from "@sharpts/gui";
 import { CalculatorButton, CalculatorButtonDefinition } from "../../../Examples/Calculator/CalculatorApp";
@@ -48,3 +53,19 @@ modalWindow.activate();
 const accent: string | number | boolean | readonly number[] | null = mainWindow.findResource("accent");
 void modalWindow.closed;
 application.shutdown(0);
+
+const records = [{ id: 1, name: "One", children: [] as any[] }];
+const virtualList = createVirtualList({ items: records, itemKey: item => item.id,
+    renderItem: item => <TextBlock>{item.name}</TextBlock>, startIndex: 0, visibleCount: 10 });
+const tree = createTree({ items: records, itemKey: item => item.id, itemLabel: item => item.name,
+    childrenOf: item => item.children });
+const dataGrid = createVirtualDataGrid({ items: records, rowKey: item => item.id,
+    startIndex: 0, visibleCount: 10,
+    columns: [{ key: "name", header: "Name", renderCell: item => <TextBlock>{item.name}</TextBlock> }] });
+export const genericSurfaces = (
+    <Grid>
+        {virtualList}{tree}{dataGrid}
+        <RichTextBlock runs={[{ text: "Rich", fontWeight: "bold" }]} />
+        <DrawingCanvas commands={[{ kind: "ellipse", centerX: 10, centerY: 10, radiusX: 5, radiusY: 5, fill: "red" }]} />
+    </Grid>
+);

@@ -34,6 +34,10 @@ internal static class CommonProperties
         if (node.GridRowSpan < 1 || node.GridColumnSpan < 1)
             throw new ArgumentOutOfRangeException("gridRowSpan/gridColumnSpan", "Grid spans must be at least one.");
         _ = ParseDock(node.Dock);
+        if (!double.IsNaN(node.CanvasLeft) && !double.IsFinite(node.CanvasLeft))
+            throw new ArgumentOutOfRangeException("canvasLeft", "canvasLeft must be finite.");
+        if (!double.IsNaN(node.CanvasTop) && !double.IsFinite(node.CanvasTop))
+            throw new ArgumentOutOfRangeException("canvasTop", "canvasTop must be finite.");
         if (node.Classes is not null)
         {
             var seenClasses = new HashSet<string>(StringComparer.Ordinal);
@@ -121,6 +125,16 @@ internal static class CommonProperties
         if (DockPanel.GetDock(control) != dock)
         {
             DockPanel.SetDock(control, dock);
+            changed = true;
+        }
+        if (!Canvas.GetLeft(control).Equals(node.CanvasLeft))
+        {
+            Canvas.SetLeft(control, node.CanvasLeft);
+            changed = true;
+        }
+        if (!Canvas.GetTop(control).Equals(node.CanvasTop))
+        {
+            Canvas.SetTop(control, node.CanvasTop);
             changed = true;
         }
         return changed;

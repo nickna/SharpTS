@@ -373,7 +373,7 @@ public sealed class DesktopRoot : IDisposable
 
         UpdateCallbacks(mounted, prepared.VNode);
         SynchronizeKeyboard(mounted);
-        ReconcileChildren(mounted, prepared.Children);
+        ReconcileChildren(mounted, prepared.Children, prepared.VNode);
         UpdateRef(mounted, prepared.VNode);
         mounted.VNode = prepared.VNode;
     }
@@ -383,6 +383,7 @@ public sealed class DesktopRoot : IDisposable
         mounted.LatestClick = node.Click;
         mounted.LatestTextChanged = node.TextChanged;
         mounted.LatestCheckedChanged = node.CheckedChanged;
+        mounted.LatestExpandedChanged = node.ExpandedChanged;
         mounted.LatestSelectionChanged = node.SelectionChanged;
         mounted.LatestValueChanged = node.ValueChanged;
         mounted.LatestIndicesChanged = node.IndicesChanged;
@@ -402,6 +403,9 @@ public sealed class DesktopRoot : IDisposable
             case ToggleButton checkBox:
                 mounted.LastCheckedValue = checkBox.IsChecked == true;
                 break;
+            case TreeViewItem treeItem:
+                mounted.LastCheckedValue = treeItem.IsExpanded;
+                break;
             case ComboBox comboBox:
                 mounted.LastSelectionValue = comboBox.SelectedIndex;
                 break;
@@ -411,7 +415,10 @@ public sealed class DesktopRoot : IDisposable
         }
     }
 
-    private void ReconcileChildren(MountedNode parent, IReadOnlyList<PreparedNode> newChildren)
+    private void ReconcileChildren(
+        MountedNode parent,
+        IReadOnlyList<PreparedNode> newChildren,
+        GuiVNode nextNode)
     {
         IReadOnlyList<MountedNode> oldChildren = parent.Children.ToArray();
         var keyed = new Dictionary<string, MountedNode>(StringComparer.Ordinal);
@@ -525,12 +532,19 @@ public sealed class DesktopRoot : IDisposable
 
         parent.Children.Clear();
         parent.Children.AddRange(desired);
+        SynchronizeChildDependentProperties(parent, nextNode);
         foreach (MountedNode oldChild in removed)
         {
             _recorder.Record(
                 replaced.Contains(oldChild) ? "reconcile-replace" : "reconcile-remove",
                 detail: Describe(oldChild));
         }
+    }
+
+    private static void SynchronizeChildDependentProperties(MountedNode parent, GuiVNode node)
+    {
+        if (parent.Descriptor is VirtualizingListDescriptor && parent.Control is ListBox list)
+            VirtualizingListDescriptor.SynchronizeSelection(list, node);
     }
 
     private static void MarkSubtreeAlive(MountedNode mounted)
@@ -629,6 +643,29 @@ public sealed class DesktopRoot : IDisposable
                     };
                     mounted.RoutedHandler = handler;
                     checkBox.IsCheckedChanged += handler;
+                    MarkPrimarySubscribed(mounted);
+                    break;
+                }
+                case TreeViewItem treeItem:
+                {
+                    mounted.LastCheckedValue = treeItem.IsExpanded;
+                    EventHandler<RoutedEventArgs> handler = (_, _) =>
+                    {
+                        if (mounted.SuppressEvents)
+                            return;
+                        EnsureAccess();
+                        bool value = treeItem.IsExpanded;
+                        if (mounted.LastCheckedValue == value)
+                            return;
+                        mounted.LastCheckedValue = value;
+                        Action<bool>? latest = mounted.LatestExpandedChanged;
+                        if (latest is not null)
+                            _dispatchGuestCallback(() => latest(value));
+                    };
+                    treeItem.Expanded += handler;
+                    treeItem.Collapsed += handler;
+                    mounted.ExtraUnsubscribe.Add(() => treeItem.Expanded -= handler);
+                    mounted.ExtraUnsubscribe.Add(() => treeItem.Collapsed -= handler);
                     MarkPrimarySubscribed(mounted);
                     break;
                 }
@@ -1018,10 +1055,12 @@ public sealed class DesktopRoot : IDisposable
         {
             Children = null,
             Items = null,
+            Classes = null,
             SelectedIndices = null,
             Click = null,
             TextChanged = null,
             CheckedChanged = null,
+            ExpandedChanged = null,
             SelectionChanged = null,
             ValueChanged = null,
             IndicesChanged = null,
@@ -1037,8 +1076,11 @@ public sealed class DesktopRoot : IDisposable
             SourceLine = 0,
             SourceColumn = 0,
             BoundaryPath = null,
+            SpecifiedProperties = [],
         };
         return Normalize(left) == Normalize(right) &&
+            (left.Classes ?? []).SequenceEqual(right.Classes ?? [], StringComparer.Ordinal) &&
+            left.SpecifiedProperties.SequenceEqual(right.SpecifiedProperties, StringComparer.Ordinal) &&
             (left.Items ?? []).SequenceEqual(right.Items ?? [], StringComparer.Ordinal) &&
             (left.SelectedIndices ?? []).SequenceEqual(right.SelectedIndices ?? []);
     }
@@ -1055,6 +1097,7 @@ public sealed class DesktopRoot : IDisposable
         {
             foreach (MountedNode child in parent.Children)
                 items.Items.Add(child.Control);
+            SynchronizeChildDependentProperties(parent, parent.VNode);
             return;
         }
         if (parent.Children.Count > 0)

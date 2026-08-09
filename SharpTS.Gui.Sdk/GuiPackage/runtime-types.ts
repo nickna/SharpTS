@@ -9,6 +9,17 @@ export type SelectionMode = "single" | "multiple";
 export type Dock = "left" | "top" | "right" | "bottom";
 export type FontWeight = "normal" | "medium" | "semibold" | "bold";
 export type TextAlignment = "left" | "center" | "right" | "justify";
+export interface RichTextRun {
+    text: string;
+    foreground?: string;
+    fontSize?: number;
+    fontWeight?: FontWeight;
+    fontStyle?: "normal" | "italic";
+}
+export type DrawingCommand =
+    { kind: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; strokeThickness?: number } |
+    { kind: "rectangle"; x: number; y: number; width: number; height: number; fill?: string; stroke?: string; strokeThickness?: number } |
+    { kind: "ellipse"; centerX: number; centerY: number; radiusX: number; radiusY: number; fill?: string; stroke?: string; strokeThickness?: number };
 
 export interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
 export interface GuiElement {
@@ -65,6 +76,7 @@ export interface CommonProps<THandle = unknown> {
     classes?: readonly string[];
     gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number;
     dock?: Dock;
+    canvasLeft?: number; canvasTop?: number;
     onKeyDown?: (event: KeyEvent) => boolean;
     onKeyUp?: (event: KeyEvent) => boolean;
 }

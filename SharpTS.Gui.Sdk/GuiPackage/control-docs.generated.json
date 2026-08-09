@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "197228ac1bd9cd28536868bb12246b0383b479b9419e1052599feb878d828f57",
+  "schemaHash": "bbe93f8d6f526acb9a579e57777a66787a7611db9b6a2c743b75720964cfa800",
   "controls": [
     {
       "kind": "Window",
@@ -110,6 +110,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -294,6 +306,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -465,6 +489,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -642,6 +678,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -816,6 +864,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -978,6 +1038,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -1149,6 +1221,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -1341,6 +1425,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -1530,6 +1626,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -1708,6 +1816,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -1925,6 +2045,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -2179,6 +2311,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -2466,6 +2610,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -2744,6 +2900,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -3001,6 +3169,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -3270,6 +3450,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -3527,6 +3719,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -3796,6 +4000,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -3961,6 +4177,1254 @@
       ]
     },
     {
+      "kind": "ItemsControl",
+      "documentation": "Native items host for keyed templated children.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "VirtualizingList",
+      "documentation": "Virtualizing native list whose keyed children are produced by a typed item template.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "selectedIndices",
+          "type": "readonly number[]",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "selectionMode",
+          "type": "SelectionMode",
+          "documentation": "",
+          "enumValues": [
+            "single",
+            "multiple"
+          ]
+        },
+        {
+          "name": "onSelectionChanged",
+          "type": "(indices: number[]) =\u003E void",
+          "documentation": "",
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "TreeView",
+      "documentation": "Hierarchical native tree host.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "TreeViewItem",
+      "documentation": "One expandable native tree node.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "header",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isExpanded",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "onExpandedChanged",
+          "type": "(expanded: boolean) =\u003E void",
+          "documentation": "",
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "Canvas",
+      "documentation": "Absolute-positioned child canvas.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "RichTextBlock",
+      "documentation": "TextBlock with independently formatted inline runs.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "runs",
+          "type": "readonly RichTextRun[]",
+          "documentation": "",
+          "enumValues": null
+        }
+      ]
+    },
+    {
+      "kind": "DrawingCanvas",
+      "documentation": "Retained vector drawing surface for lines, rectangles, and ellipses.",
+      "props": [
+        {
+          "name": "ref",
+          "type": "ControlRef\u003CTHandle\u003E",
+          "documentation": "Receives the retained native control handle.",
+          "enumValues": null
+        },
+        {
+          "name": "width",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "height",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "minHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxWidth",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "maxHeight",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "margin",
+          "type": "Thickness",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "horizontalAlignment",
+          "type": "HorizontalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "center",
+            "right",
+            "stretch"
+          ]
+        },
+        {
+          "name": "verticalAlignment",
+          "type": "VerticalAlignment",
+          "documentation": "",
+          "enumValues": [
+            "top",
+            "center",
+            "bottom",
+            "stretch"
+          ]
+        },
+        {
+          "name": "isVisible",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "isEnabled",
+          "type": "boolean",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "opacity",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "toolTip",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "automationName",
+          "type": "string",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "gridRow",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumn",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridRowSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "gridColumnSpan",
+          "type": "number",
+          "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "dock",
+          "type": "Dock",
+          "documentation": "",
+          "enumValues": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ]
+        },
+        {
+          "name": "onKeyDown",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-down event.",
+          "enumValues": null
+        },
+        {
+          "name": "onKeyUp",
+          "type": "(event: KeyEvent) =\u003E boolean",
+          "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "commands",
+          "type": "readonly DrawingCommand[]",
+          "documentation": "",
+          "enumValues": null
+        }
+      ]
+    },
+    {
       "kind": "NumericUpDown",
       "documentation": "Numeric spinner input.",
       "props": [
@@ -4068,6 +5532,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -4349,6 +5825,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -4520,6 +6008,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -4688,6 +6188,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -4874,6 +6386,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5051,6 +6575,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5207,6 +6743,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {
@@ -5398,6 +6946,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5569,6 +7129,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5734,6 +7306,18 @@
           "enumValues": null
         },
         {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5890,6 +7474,18 @@
           "name": "classes",
           "type": "readonly string[]",
           "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasLeft",
+          "type": "number",
+          "documentation": "Canvas left coordinate when parented by Canvas.",
+          "enumValues": null
+        },
+        {
+          "name": "canvasTop",
+          "type": "number",
+          "documentation": "Canvas top coordinate when parented by Canvas.",
           "enumValues": null
         },
         {

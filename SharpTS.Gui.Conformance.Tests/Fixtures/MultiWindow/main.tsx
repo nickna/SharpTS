@@ -1,10 +1,16 @@
 import {
     DesktopApplication,
     Button,
+    Canvas,
+    DrawingCanvas,
+    RichTextBlock,
     TextBlock,
     Window,
     createDesktopApplication,
     createSignal,
+    createTree,
+    createVirtualDataGrid,
+    createVirtualList,
 } from "@sharpts/gui";
 import { getProperty, queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/internal-testing";
 
@@ -18,7 +24,29 @@ function FailureWindow(): JSX.Element {
 }
 
 function MainWindow(): JSX.Element {
-    return <Window title="Main"><Button key="styled" classes={["accent"]}>{"Main " + stylePhase()}</Button></Window>;
+    const items = [{ id: "a", label: "Alpha" }, { id: "b", label: "Beta" }, { id: "c", label: "Gamma" }];
+    const treeItems = [{ id: "root", label: "Root", children: [{ id: "leaf", label: "Leaf", children: [] as any[] }] }];
+    return <Window title="Main"><Canvas>
+        <Button key="styled" classes={["accent"]} canvasLeft={0} canvasTop={0}>{"Main " + stylePhase()}</Button>
+        {createVirtualList({
+            key: "virtual-list", items, itemKey: item => item.id,
+            renderItem: item => <TextBlock>{item.label}</TextBlock>,
+            startIndex: 0, visibleCount: 2, canvasLeft: 0, canvasTop: 40,
+        })}
+        {createTree({
+            key: "tree", items: treeItems, itemKey: item => item.id, itemLabel: item => item.label,
+            childrenOf: item => item.children, canvasLeft: 180, canvasTop: 40,
+        })}
+        {createVirtualDataGrid({
+            key: "grid", items, rowKey: item => item.id, startIndex: 0, visibleCount: 2,
+            columns: [{ key: "label", header: "Label", renderCell: item => <TextBlock>{item.label}</TextBlock> }],
+            canvasLeft: 360, canvasTop: 40,
+        })}
+        <RichTextBlock key="rich" runs={[{ text: "Rich", fontWeight: "bold" }, { text: " text", foreground: "#336699" }]} canvasLeft={0} canvasTop={180} />
+        <DrawingCanvas key="drawing" automationName="drawing-surface" width={100} height={60}
+            commands={[{ kind: "rectangle", x: 2, y: 2, width: 40, height: 20, fill: "#336699" }]}
+            canvasLeft={180} canvasTop={180} />
+    </Canvas></Window>;
 }
 
 application = createDesktopApplication({
@@ -60,6 +88,8 @@ if (!secondaryWindow.isDisposed) throw new Error("Secondary close did not dispos
 trace("multi-window-secondary-closed");
 setTimeout((() => {
     if (getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style did not apply.");
+    if (getProperty("drawing", "automationName") !== "drawing-surface") throw new Error("Advanced surface did not mount.");
+    trace("multi-window-advanced-surface");
     trace("multi-window-style-applied");
     setStylePhase(1);
     queueHostedMicrotask(() => {

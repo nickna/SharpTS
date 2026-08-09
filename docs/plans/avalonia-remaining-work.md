@@ -402,9 +402,11 @@ contract stabilizes.
   relationships, and per-window render/effect error isolation in interpreted and compiled modes.
 - **Partially complete:** Avalonia-native resources, type/class selectors, styles, theme variants,
   resource lookup, and local-value precedence are implemented without reflection. Public
-  item/control templates remain with the generic item-control work below.
-- Add generic item sources/templates, virtualization-preserving list controls, trees, data grids,
-  rich text, drawing/canvas, and custom rendering.
+  arbitrary control templates remain outside the current allow-listed contract.
+- **Complete for the supported surface:** typed keyed item templates, windowed native virtualizing
+  lists, native trees, a lightweight virtual data grid, rich inline text, absolute canvas layout,
+  and retained vector drawing/custom rendering are generated and dual-mode tested. A full editing
+  Avalonia DataGrid may be added later without redefining this supported surface.
 - Add a reviewed third-party/custom-control registration and packaging contract.
 
 ### Track B: desktop services and developer experience

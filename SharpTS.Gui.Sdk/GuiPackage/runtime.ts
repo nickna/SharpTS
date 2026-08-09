@@ -12,6 +12,14 @@ export type SelectionMode = "single" | "multiple";
 export type Dock = "left" | "top" | "right" | "bottom";
 export type FontWeight = "normal" | "medium" | "semibold" | "bold";
 export type TextAlignment = "left" | "center" | "right" | "justify";
+export interface RichTextRun {
+    text: string; foreground?: string; fontSize?: number;
+    fontWeight?: FontWeight; fontStyle?: "normal" | "italic";
+}
+export type DrawingCommand =
+    { kind: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; strokeThickness?: number } |
+    { kind: "rectangle"; x: number; y: number; width: number; height: number; fill?: string; stroke?: string; strokeThickness?: number } |
+    { kind: "ellipse"; centerX: number; centerY: number; radiusX: number; radiusY: number; fill?: string; stroke?: string; strokeThickness?: number };
 export interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
 export interface GuiElement { readonly __guiElement: true; readonly type: any; readonly props: any; readonly key: string | null; readonly source: SourceInfo | null; }
 export type GuiChild = GuiElement | string | number | boolean | null | undefined | readonly GuiChild[];
@@ -40,6 +48,7 @@ export interface CommonProps<THandle = unknown> {
     isVisible?: boolean; isEnabled?: boolean; opacity?: number; toolTip?: string; automationName?: string;
     classes?: readonly string[];
     gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number; dock?: Dock;
+    canvasLeft?: number; canvasTop?: number;
     onKeyDown?: (event: KeyEvent) => boolean; onKeyUp?: (event: KeyEvent) => boolean;
 }
 export interface TextStyleProps { foreground?: string; fontFamily?: string; fontSize?: number; fontWeight?: FontWeight; fontStyle?: "normal" | "italic"; textAlignment?: TextAlignment; }
@@ -267,6 +276,8 @@ function withCommon(node: GuiVNode, safe: any): GuiVNode {
         safe.gridRow === undefined ? 0 : safe.gridRow, safe.gridColumn === undefined ? 0 : safe.gridColumn,
         safe.gridRowSpan === undefined ? 1 : safe.gridRowSpan, safe.gridColumnSpan === undefined ? 1 : safe.gridColumnSpan,
         safe.dock === undefined ? "left" : safe.dock,
+        safe.canvasLeft === undefined ? NaN : safe.canvasLeft,
+        safe.canvasTop === undefined ? NaN : safe.canvasTop,
         keyAction(safe.onKeyDown), keyAction(safe.onKeyUp),
         hasProperty(safe, "onKeyDown"), hasProperty(safe, "onKeyUp")) as any;
 }
@@ -449,6 +460,11 @@ class ReactiveRoot {
             case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged), key, ref); break;
             case "ComboBox": node = DesktopBridge.CreateComboBox((safe.items || []).slice(), safe.selectedIndex === undefined ? -1 : safe.selectedIndex, numberAction(safe.onSelectionChanged), key, ref); break;
             case "ListBox": node = DesktopBridge.CreateListBox((safe.items || []).slice(), (safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged), key, ref); break;
+            case "ItemsControl": case "TreeView": case "Canvas": node = DesktopBridge.CreateItemsControl(element.type, children.nodes, key, ref); break;
+            case "VirtualizingList": node = DesktopBridge.CreateVirtualizingList((safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged), children.nodes, key, ref); break;
+            case "TreeViewItem": node = DesktopBridge.CreateTreeViewItem(safe.header, safe.isExpanded === true, boolAction(safe.onExpandedChanged), children.nodes, key, ref); break;
+            case "RichTextBlock": node = DesktopBridge.CreateRichTextBlock(JSON.stringify(safe.runs || []), key, ref); break;
+            case "DrawingCanvas": node = DesktopBridge.CreateDrawingCanvas(JSON.stringify(safe.commands || []), key, ref); break;
             case "NumericUpDown": node = DesktopBridge.CreateNumericUpDown(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.increment === undefined ? 1 : safe.increment, safe.value === undefined ? null : safe.value, nullableNumberAction(safe.onValueChanged), key, ref); break;
             case "DatePicker": case "TimePicker": node = DesktopBridge.CreateDateTimePicker(element.type, safe.value === undefined ? null : safe.value, nullableStringAction(safe.onValueChanged), key, ref); break;
             case "Slider": node = DesktopBridge.CreateSlider(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.value === undefined ? 0 : safe.value, numberAction(safe.onValueChanged), key, ref); break;
@@ -580,6 +596,105 @@ export function renderDesktop(element: GuiChild): DesktopRoot {
         dispose(): void { managed.Dispose(); },
     };
 }
+
+export type ItemKey = string | number;
+export type ItemTemplate<T> = (item: T, index: number) => GuiChild;
+export interface VirtualListProps<T> extends CommonProps<unknown> {
+    key?: ItemKey;
+    items: readonly T[];
+    itemKey: (item: T, index: number) => ItemKey;
+    renderItem: ItemTemplate<T>;
+    startIndex: number;
+    visibleCount: number;
+    overscan?: number;
+    selectedIndices?: readonly number[];
+    selectionMode?: SelectionMode;
+    onSelectionChanged?: (indices: number[]) => void;
+}
+interface CreateVirtualList { <T>(props: VirtualListProps<T>): GuiElement; }
+function createVirtualListImpl(props: VirtualListProps<any>): GuiElement {
+    const overscan = props.overscan === undefined ? 2 : Math.max(0, Math.floor(props.overscan));
+    const start = Math.max(0, Math.floor(props.startIndex) - overscan);
+    const end = Math.min(props.items.length, Math.floor(props.startIndex) + Math.max(0, Math.floor(props.visibleCount)) + overscan);
+    const children: GuiElement[] = [];
+    for (let index = start; index < end; index++) {
+        const item = props.items[index];
+        children.push(createElement(Fragment, { children: props.renderItem(item, index) }, props.itemKey(item, index)));
+    }
+    const selected = (props.selectedIndices || []).filter(index => index >= start && index < end).map(index => index - start);
+    const changed = props.onSelectionChanged === undefined ? undefined
+        : (indices: number[]): void => props.onSelectionChanged!(indices.map(index => index + start));
+    return createElement("VirtualizingList", { ...props, selectedIndices: selected, onSelectionChanged: changed, children }, props.key);
+}
+export const createVirtualList: CreateVirtualList = createVirtualListImpl;
+
+export interface TreeProps<T> extends CommonProps<unknown> {
+    key?: ItemKey;
+    items: readonly T[];
+    itemKey: (item: T) => ItemKey;
+    itemLabel: (item: T) => string;
+    childrenOf: (item: T) => readonly T[];
+    isExpanded?: (item: T) => boolean;
+    onExpandedChanged?: (item: T, expanded: boolean) => void;
+}
+interface CreateTree { <T>(props: TreeProps<T>): GuiElement; }
+function createTreeImpl(props: TreeProps<any>): GuiElement {
+    const renderNodes = (items: readonly any[]): GuiElement[] => items.map(item =>
+        createElement("TreeViewItem", {
+            header: props.itemLabel(item),
+            isExpanded: props.isExpanded === undefined ? false : props.isExpanded(item),
+            onExpandedChanged: props.onExpandedChanged === undefined ? undefined
+                : (expanded: boolean): void => props.onExpandedChanged!(item, expanded),
+            children: renderNodes(props.childrenOf(item)),
+        }, props.itemKey(item)));
+    return createElement("TreeView", { ...props, children: renderNodes(props.items) }, props.key);
+}
+export const createTree: CreateTree = createTreeImpl;
+
+export interface DataGridColumn<T> {
+    key: string;
+    header: string;
+    renderCell: (item: T, rowIndex: number) => GuiChild;
+}
+export interface VirtualDataGridProps<T> extends CommonProps<unknown> {
+    key?: ItemKey;
+    items: readonly T[];
+    columns: readonly DataGridColumn<T>[];
+    rowKey: (item: T, rowIndex: number) => ItemKey;
+    startIndex: number;
+    visibleCount: number;
+    overscan?: number;
+}
+interface CreateVirtualDataGrid { <T>(props: VirtualDataGridProps<T>): GuiElement; }
+function createVirtualDataGridImpl(props: VirtualDataGridProps<any>): GuiElement {
+    const overscan = props.overscan === undefined ? 1 : Math.max(0, Math.floor(props.overscan));
+    const start = Math.max(0, Math.floor(props.startIndex) - overscan);
+    const end = Math.min(props.items.length, Math.floor(props.startIndex) + Math.max(0, Math.floor(props.visibleCount)) + overscan);
+    const children: GuiElement[] = [];
+    for (let column = 0; column < props.columns.length; column++) {
+        const definition = props.columns[column];
+        children.push(createElement("Border", { gridRow: 0, gridColumn: column, children:
+            createElement("TextBlock", { children: definition.header }) }, "header:" + definition.key));
+    }
+    for (let index = start; index < end; index++) {
+        const item = props.items[index];
+        const rowKey = String(props.rowKey(item, index));
+        for (let column = 0; column < props.columns.length; column++) {
+            const definition = props.columns[column];
+            children.push(createElement("Border", {
+                gridRow: index - start + 1,
+                gridColumn: column,
+                children: props.columns[column].renderCell(item, index),
+            }, rowKey + ":" + definition.key));
+        }
+    }
+    const rows: string[] = ["auto"];
+    for (let index = start; index < end; index++) rows.push("auto");
+    const columns: string[] = [];
+    for (let index = 0; index < props.columns.length; index++) columns.push("*");
+    return createElement("Grid", { ...props, rows: rows.join(","), columns: columns.join(","), children }, props.key);
+}
+export const createVirtualDataGrid: CreateVirtualDataGrid = createVirtualDataGridImpl;
 
 export type DesktopShutdownMode = "onLastWindowClose" | "onMainWindowClose" | "explicit";
 export type DesktopControlKind =

@@ -86,6 +86,8 @@ return elements, primitive text, fragments, arrays, or `null`. The standard stat
 - Forms: `TextBox`, `PasswordBox`, `CheckBox`, `RadioButton`, `ToggleSwitch`, `ComboBox`,
   `ListBox`, `NumericUpDown`, `DatePicker`, `TimePicker`, `Slider`, and `ProgressBar`.
 - Navigation and commands: `TabControl`, `TabItem`, `Menu`, and `MenuItem`.
+- Data and rendering: `ItemsControl`, `VirtualizingList`, `TreeView`, `TreeViewItem`, `Canvas`,
+  `RichTextBlock`, and `DrawingCanvas`.
 
 Controls expose typed direct props for layout, styling, accessibility names, focus refs, keyboard
 events, values, and callbacks. Keys preserve native identity through sibling insertion, removal,
@@ -96,6 +98,9 @@ The module also provides message, file, folder, and save dialogs plus clipboard 
 Explicit desktop applications accept primitive resource dictionaries and native Avalonia styles
 with built-in type/class selectors and a trimming-safe setter allow-list. Controls opt into class
 selectors with `classes`, and a window can query its effective resources with `findResource`.
+Typed `createVirtualList`, `createTree`, and `createVirtualDataGrid` factories provide keyed item
+templates and windowed materialization. Rich inline runs, absolute canvas positioning, and retained
+line/rectangle/ellipse drawing commands are part of the generated control contract.
 Files under a project's `Assets` directory are embedded automatically and referenced as
 `asset:///relative/path.png`. Reproducible URL assets may be declared with `SharpTSGuiRemoteAsset`
 items that supply `LogicalName` and a required SHA-256 digest.
@@ -105,8 +110,9 @@ generated overlay while reserving the JSX runtime and `@sharpts/gui` module mapp
 `SharpTSVerifyIL` to `true` to verify the persisted hosted guest during compilation.
 
 Current preview boundaries: Windows `win-x64` and `win-arm64` only, one root element per Window,
-built-in controls only, string-backed list/combo items, and no public custom-control, template,
-drawing, or data-grid/tree API. Native resources/styles/theme variants are supported. macOS
+built-in controls only, string-backed legacy list/combo items, and no public custom-control,
+arbitrary control-template, or full editing DataGrid API. Native resources/styles/theme variants,
+typed item templates, a windowed grid, trees, rich text, and canvas/drawing are supported. macOS
 support is intentionally deferred and is not
 claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
 application.

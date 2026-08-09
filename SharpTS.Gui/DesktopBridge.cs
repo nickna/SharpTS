@@ -84,6 +84,8 @@ public static class DesktopBridge
         double gridRowSpan,
         double gridColumnSpan,
         string dock,
+        double canvasLeft,
+        double canvasTop,
         Func<string, bool, bool, bool, bool, bool, bool>? keyDown,
         Func<string, bool, bool, bool, bool, bool, bool>? keyUp,
         bool hasKeyDown,
@@ -113,6 +115,8 @@ public static class DesktopBridge
             GridRowSpan = ToInteger(gridRowSpan, nameof(gridRowSpan)),
             GridColumnSpan = ToInteger(gridColumnSpan, nameof(gridColumnSpan)),
             Dock = dock,
+            CanvasLeft = canvasLeft,
+            CanvasTop = canvasTop,
             KeyDown = hasKeyDown ? keyDown : null,
             KeyUp = hasKeyUp ? keyUp : null,
         };
@@ -125,7 +129,7 @@ public static class DesktopBridge
         WithCommon(node, width, height, minWidth, minHeight, maxWidth, maxHeight,
             margin, margin, margin, margin, horizontalAlignment, verticalAlignment,
             isVisible, isEnabled, 1, null, null, [], gridRow, gridColumn, gridRowSpan,
-            gridColumnSpan, "left", null, null, false, false);
+            gridColumnSpan, "left", double.NaN, double.NaN, null, null, false, false);
 
     public static GuiVNode WithStyle(
         GuiVNode node, string? background, string? foreground,
@@ -435,6 +439,39 @@ public static class DesktopBridge
 
     public static GuiVNode CreateMenu(GuiVNode[] children, object? key, DesktopRef? reference) =>
         new("Menu", NormalizeKey(key), Children: children, AttachRef: GetAttach(reference), RefIdentity: reference);
+
+    public static GuiVNode CreateItemsControl(string kind, GuiVNode[] children, object? key, DesktopRef? reference) =>
+        new(kind, NormalizeKey(key), Children: children, AttachRef: GetAttach(reference), RefIdentity: reference);
+
+    public static GuiVNode CreateVirtualizingList(
+        int[] selectedIndices,
+        string selectionMode,
+        Action<int[]>? changed,
+        GuiVNode[] children,
+        object? key,
+        DesktopRef? reference) =>
+        new("VirtualizingList", NormalizeKey(key), SelectedIndices: selectedIndices,
+            SelectionMode: selectionMode, IndicesChanged: changed, Children: children,
+            AttachRef: GetAttach(reference), RefIdentity: reference);
+
+    public static GuiVNode CreateTreeViewItem(
+        string header,
+        bool isExpanded,
+        Action<bool>? expandedChanged,
+        GuiVNode[] children,
+        object? key,
+        DesktopRef? reference) =>
+        new("TreeViewItem", NormalizeKey(key), Header: header, IsExpanded: isExpanded,
+            ExpandedChanged: expandedChanged, Children: children,
+            AttachRef: GetAttach(reference), RefIdentity: reference);
+
+    public static GuiVNode CreateRichTextBlock(string runsJson, object? key, DesktopRef? reference) =>
+        new("RichTextBlock", NormalizeKey(key), RichTextJson: runsJson,
+            AttachRef: GetAttach(reference), RefIdentity: reference);
+
+    public static GuiVNode CreateDrawingCanvas(string commandsJson, object? key, DesktopRef? reference) =>
+        new("DrawingCanvas", NormalizeKey(key), DrawingJson: commandsJson,
+            AttachRef: GetAttach(reference), RefIdentity: reference);
 
     public static GuiVNode CreateFragment(GuiVNode[] children, object? key) =>
         new("Fragment", NormalizeKey(key), Children: children);
