@@ -369,9 +369,15 @@ public class SharpTSProxy : ISharpTSCallable
                 throw InvalidOwnKeysResult();
         }
 
+        var uniqueKeys = new HashSet<object?>();
         foreach (object? value in values)
+        {
             if (value is not (string or SharpTSSymbol))
                 throw InvalidOwnKeysResult();
+            if (!uniqueKeys.Add(value))
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy ownKeys trap returned duplicate property keys"));
+        }
         return values;
 
         static ThrowException InvalidOwnKeysResult() => new(
