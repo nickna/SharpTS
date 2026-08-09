@@ -1585,6 +1585,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Proxy/ownKeys/return-duplicate-entries-throws.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-duplicate-symbol-entries-throws.js")]
     public void Proxy_ownKeys_rejects_duplicate_property_keys(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
