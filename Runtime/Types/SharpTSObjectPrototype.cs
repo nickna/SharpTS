@@ -345,7 +345,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot convert undefined or null to object"));
-        return ToStringImpl(interpreter, target, args);
+        if (interpreter is null)
+            return ToStringImpl(null, target, args);
+
+        object? method = interpreter.GetPropertyValue(target, "toString");
+        if (method is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object toString property is not callable"));
+        return FunctionBuiltIns.CallWithThis(interpreter, callable, target, []);
     }
 
     private static object? ValueOfImpl(Interp? interpreter, object? target, List<object?> args)

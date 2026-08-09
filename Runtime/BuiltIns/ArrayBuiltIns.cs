@@ -39,7 +39,10 @@ public static class ArrayBuiltIns
             .MethodV2("join", 0, 1, specLength: 1, JoinV2)
             // Array.prototype.toString = join() with ","; distinct from the debug ToString().
             .MethodV2("toString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
-            .MethodV2("toLocaleString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
+            .MethodV2(
+                "toLocaleString", 0, int.MaxValue, specLength: 0,
+                static (interp, arr, _) => RuntimeValue.FromString(
+                    ToLocaleStringArrayLike(interp, arr)))
             // Array.prototype.concat accepts any number of args (variadic).
             .MethodV2("concat", 0, int.MaxValue, specLength: 1, ConcatV2)
             .MethodV2("reverse", 0, ReverseV2)
@@ -1192,6 +1195,35 @@ public static class ArrayBuiltIns
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.33 Array.prototype.toLocaleString. Each present value is
+    /// read live and its own <c>toLocaleString</c> method is called with the
+    /// value as receiver and no forwarded locale/options arguments.
+    /// </summary>
+    internal static string ToLocaleStringArrayLike(
+        Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        var result = new System.Text.StringBuilder();
+        for (long index = 0; index < length; index++)
+        {
+            if (index > 0) result.Append(',');
+            object? element = interpreter.GetPropertyValue(
+                receiver,
+                index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (element is null or SharpTSUndefined) continue;
+
+            object? method = interpreter.GetPropertyValue(element, "toLocaleString");
+            if (method is not ISharpTSCallable callable)
+                throw TypeError("Array element toLocaleString is not callable");
+            object? text = FunctionBuiltIns.CallWithThis(
+                interpreter, callable, element, []);
+            result.Append(interpreter.ToStringForBuiltInArgument(text));
+        }
+        return result.ToString();
     }
 
     /// <summary>

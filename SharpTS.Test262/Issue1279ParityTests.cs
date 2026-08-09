@@ -1715,6 +1715,13 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/toLocaleString/invoke-element-tolocalestring.js")]
+    [InlineData("built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js")]
+    [InlineData("built-ins/Array/prototype/toLocaleString/primitive_this_value.js")]
+    public void Array_toLocaleString_invokes_element_methods(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSorted/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSpliced/this-value-boolean.js")]

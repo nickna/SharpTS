@@ -324,6 +324,12 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!, arguments);
         }
 
+        if (_name == "toLocaleString")
+        {
+            return BuiltIns.ArrayBuiltIns.ToLocaleStringArrayLike(
+                interpreter, receiver!);
+        }
+
         if (_name == "splice" && receiver is not SharpTSArray)
         {
             return BuiltIns.ArrayBuiltIns.SpliceArrayLike(

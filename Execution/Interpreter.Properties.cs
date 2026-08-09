@@ -565,6 +565,19 @@ public partial class Interpreter
     {
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is bool)
+            {
+                var prototype = GetBooleanPrototype();
+                if (prototype.GetExtraGetter(name) is { } getter)
+                    return BindAccessorToObject(getter, receiver!).CallBoxed(this, []);
+                if (prototype.HasExtra(name))
+                    return prototype.TryGetExtra(name);
+                if (prototype.GetMember(name) is { } member)
+                    return member;
+                return GetObjectPrototype().GetMember(name)
+                    ?? SharpTSUndefined.Instance;
+            }
+
             if (current is SharpTSArray array)
             {
                 if (name == "length") return (double)array.LongLength;
@@ -1509,7 +1522,7 @@ public partial class Interpreter
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
             ArrayPrototypeMethodWrapper m when m.FunctionName is
-                "join" or "slice" or "concat" or "pop" or "push" or "shift" or "unshift" or "reverse" or "fill" or "copyWithin" or "sort" or "splice"
+                "join" or "slice" or "concat" or "pop" or "push" or "shift" or "unshift" or "reverse" or "fill" or "copyWithin" or "sort" or "splice" or "toLocaleString"
                 => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
