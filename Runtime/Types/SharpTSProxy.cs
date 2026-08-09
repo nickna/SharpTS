@@ -193,10 +193,13 @@ public class SharpTSProxy : ISharpTSCallable
         var trap = GetTrapCallable("getOwnPropertyDescriptor", interp);
         if (trap == null)
         {
-            return _target is SharpTSProxy proxy
-                ? proxy.TrapGetOwnPropertyDescriptor(prop, interp)
-                : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop)
-                    ?? SharpTSUndefined.Instance;
+            if (_target is SharpTSProxy proxy)
+                return proxy.TrapGetOwnPropertyDescriptor(prop, interp);
+
+            object? descriptor = interp == null
+                ? ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop)
+                : ObjectBuiltIns.OwnPropertyDescriptorOf(interp, _target, prop)?.ToObject();
+            return descriptor ?? SharpTSUndefined.Instance;
         }
 
         return InvokeTrap(trap, interp, [_target, prop]);
@@ -215,6 +218,22 @@ public class SharpTSProxy : ISharpTSCallable
         }
 
         return InvokeTrap(trap, interpreter, [_target, prop]);
+    }
+
+    /// <summary>
+    /// Enumerates the proxy's own enumerable string keys by combining
+    /// [[OwnPropertyKeys]] with [[GetOwnProperty]] for each key.
+    /// </summary>
+    internal IEnumerable<string> TrapOwnEnumerableKeys(Interpreter interpreter)
+    {
+        foreach (object? key in TrapOwnPropertyKeys(interpreter))
+        {
+            if (key is not string name) continue;
+            object? descriptor = TrapGetOwnPropertyDescriptor(name, interpreter);
+            if (descriptor is null or SharpTSUndefined) continue;
+            if (SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable)
+                yield return name;
+        }
     }
 
     /// <summary>
@@ -537,6 +556,14 @@ public class SharpTSProxy : ISharpTSCallable
             if (member is BuiltInAsyncMethod am) return am.Bind(arr);
             return member;
         }
+        if (_target is SharpTSFunction function)
+        {
+            if (function.TryGetProperty(prop, out var value)) return value;
+        }
+        if (_target is SharpTSArrowFunction arrow)
+        {
+            if (arrow.TryGetProperty(prop, out var value)) return value;
+        }
         if (_target is Dictionary<string, object?> dict)
         {
             dict.TryGetValue(prop, out var val);
@@ -555,9 +582,21 @@ public class SharpTSProxy : ISharpTSCallable
 
     private object? ForwardSet(string prop, object? value, Interpreter? interp)
     {
+        if (_target is SharpTSProxy proxy)
+            return proxy.TrapSet(prop, value, interp);
         if (_target is SharpTSObject obj)
         {
             obj.SetProperty(prop, value);
+            return value;
+        }
+        if (_target is SharpTSFunction function)
+        {
+            function.SetProperty(prop, value);
+            return value;
+        }
+        if (_target is SharpTSArrowFunction arrow)
+        {
+            arrow.SetProperty(prop, value);
             return value;
         }
         if (_target is SharpTSInstance inst)
