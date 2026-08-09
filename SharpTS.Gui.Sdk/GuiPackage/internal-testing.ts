@@ -2,6 +2,14 @@ import { DesktopConformanceBridge } from "dotnet:SharpTS.Gui";
 
 // Conformance-only helpers. This subpath is intentionally separate from the
 // supported @sharpts/gui entry point.
+export function closeWindow(): void {
+    DesktopConformanceBridge.CloseWindow();
+}
+
+export function cancelNextWindowClose(): void {
+    DesktopConformanceBridge.CancelNextWindowClose();
+}
+
 export function trace(stage: string): void {
     DesktopConformanceBridge.Trace(stage);
 }

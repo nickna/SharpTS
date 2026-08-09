@@ -12,6 +12,7 @@ internal sealed class DesktopRuntimeContext
     private readonly Action<Action> _dispatchGuestCallback;
     private readonly Action<Action> _scheduleGuestMicrotask;
     private readonly bool _headless;
+    private bool _cancelNextWindowClose;
 
     public DesktopRuntimeContext(
         TraceRecorder recorder,
@@ -98,6 +99,28 @@ internal sealed class DesktopRuntimeContext
         var down = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = nativeKey, KeyModifiers = modifiers };
         window.RaiseEvent(down);
         window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = nativeKey, KeyModifiers = modifiers });
+    }
+
+    public void CloseWindow()
+    {
+        EnsureOwnerThread();
+        var window = CurrentRoot?.Window
+            ?? throw new InvalidOperationException("No mounted Window exists.");
+        window.Close();
+    }
+
+    public void CancelNextWindowClose()
+    {
+        EnsureOwnerThread();
+        _cancelNextWindowClose = true;
+    }
+
+    public bool ConsumeCloseCancellation()
+    {
+        EnsureOwnerThread();
+        bool cancel = _cancelNextWindowClose;
+        _cancelNextWindowClose = false;
+        return cancel;
     }
 
     public T RequireControl<T>(string key) where T : Control

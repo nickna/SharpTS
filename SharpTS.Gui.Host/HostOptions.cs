@@ -9,7 +9,8 @@ internal sealed record HostOptions(
     GuestMode Mode,
     bool AutoClose,
     bool Headless,
-    string TracePath,
+    string? TracePath,
+    bool IsTracePathHostManaged,
     string? ValidateDepsDirectory);
 
 internal static class HostOptionsParser
@@ -20,6 +21,8 @@ internal static class HostOptionsParser
         bool autoClose = false;
         bool headless = false;
         string? tracePath = null;
+        bool traceRequested = false;
+        bool explicitTracePath = false;
         string? validateDeps = null;
 
         for (int i = 0; i < args.Length; i++)
@@ -41,8 +44,13 @@ internal static class HostOptionsParser
                 case "--headless":
                     headless = true;
                     break;
-                case "--trace" when i + 1 < args.Length:
-                    tracePath = args[++i];
+                case "--trace":
+                    traceRequested = true;
+                    if (i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal))
+                    {
+                        tracePath = args[++i];
+                        explicitTracePath = true;
+                    }
                     break;
                 case "--validate-deps" when i + 1 < args.Length:
                     validateDeps = args[++i];
@@ -52,10 +60,16 @@ internal static class HostOptionsParser
             }
         }
 
-        tracePath ??= Path.Combine(
-            AppContext.BaseDirectory,
-            $"sharpts-gui-{mode.ToString().ToLowerInvariant()}-trace.json");
-        return new HostOptions(mode, autoClose, headless, tracePath, validateDeps);
+        bool hostManagedTrace = (traceRequested || autoClose) && !explicitTracePath;
+        if (hostManagedTrace)
+            tracePath = HostDiagnosticPaths.CreateTracePath(mode);
+        return new HostOptions(
+            mode,
+            autoClose,
+            headless,
+            tracePath,
+            hostManagedTrace,
+            validateDeps);
     }
 
     public static bool ShouldShowFatalDialog(string[] args) =>

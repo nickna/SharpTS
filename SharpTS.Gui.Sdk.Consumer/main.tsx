@@ -23,8 +23,10 @@ import {
 } from "@sharpts/gui";
 import {
     beginOffThreadTask,
+    cancelNextWindowClose,
+    closeWindow,
     isRefAttached,
-    queueMicrotask,
+    queueMicrotask as queueHostedMicrotask,
     setCheckBoxValue,
     setComboBoxIndex,
     setSliderValue,
@@ -32,6 +34,12 @@ import {
     trace,
     traceControlIdentities,
 } from "@sharpts/gui/internal-testing";
+
+process.on("beforeExit", () => {
+    trace("before-exit");
+    queueMicrotask(() => trace("before-exit-microtask"));
+});
+process.on("exit", () => trace("exit"));
 
 const statusRef = createControlRef<TextBlockHandle>();
 const transientRef = createControlRef<ButtonHandle>();
@@ -149,6 +157,12 @@ function ConformanceApp(): JSX.Element {
 
 desktopRoot = renderDesktop(<ConformanceApp />);
 
+const lifecycleScenario = process.env.SHARPTS_GUI_LIFECYCLE_SCENARIO;
+if (lifecycleScenario === "initialization") {
+    trace("window-close-request");
+    closeWindow();
+}
+
 traceControlIdentities("identities-initial");
 
 function afterCoalescedUpdate(): void {
@@ -158,14 +172,14 @@ function afterCoalescedUpdate(): void {
         trace("transient-ref-cleaned");
     }
     setUseAlternate(true);
-    queueMicrotask(afterDependencySwitch);
+    queueHostedMicrotask(afterDependencySwitch);
 }
 
 function afterDependencySwitch(): void {
     trace("dependency-switch-complete");
     setPrimary(3);
     setAlternate(1);
-    queueMicrotask(afterFinalUpdate);
+    queueHostedMicrotask(afterFinalUpdate);
 }
 
 function afterFinalUpdate(): void {
@@ -182,7 +196,7 @@ setPrimary(0);
 setPrimary(1);
 setPrimary(2);
 setPhase(1);
-queueMicrotask(afterCoalescedUpdate);
+queueHostedMicrotask(afterCoalescedUpdate);
 beginOffThreadTask(() => {
     trace("guest-async-resume");
     setTimeout((() => trace("guest-timer")) as any, 50);
@@ -194,3 +208,29 @@ async function resumePromiseMicrotask(): Promise<void> {
 }
 
 resumePromiseMicrotask();
+
+if (lifecycleScenario === "normal") {
+    setTimeout((() => {
+        trace("window-close-request");
+        closeWindow();
+    }) as any, 100);
+} else if (lifecycleScenario === "cancelled") {
+    setTimeout((() => {
+        cancelNextWindowClose();
+        closeWindow();
+        trace("window-close-cancelled");
+        closeWindow();
+    }) as any, 100);
+} else if (lifecycleScenario === "repeated") {
+    setTimeout((() => {
+        trace("window-close-request");
+        closeWindow();
+        closeWindow();
+    }) as any, 100);
+} else if (lifecycleScenario === "queued") {
+    setTimeout((() => trace("late-window-timer")) as any, 200);
+    setTimeout((() => {
+        trace("window-close-request");
+        closeWindow();
+    }) as any, 1);
+}

@@ -17,11 +17,13 @@ public sealed class TraceRecorder
     private readonly object _gate = new();
     private readonly List<GuiTraceEvent> _events = [];
     private readonly long _startedAt = Stopwatch.GetTimestamp();
+    private readonly bool _enabled;
     private long _sequence;
 
-    public TraceRecorder(int ownerThreadId)
+    public TraceRecorder(int ownerThreadId, bool enabled = true)
     {
         OwnerThreadId = ownerThreadId;
+        _enabled = enabled;
     }
 
     public int OwnerThreadId { get; }
@@ -36,6 +38,8 @@ public sealed class TraceRecorder
     public void Record(string stage, bool requireOwnerThread = true, string? detail = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(stage);
+        if (!_enabled)
+            return;
         int threadId = Environment.CurrentManagedThreadId;
         if (requireOwnerThread && threadId != OwnerThreadId)
         {

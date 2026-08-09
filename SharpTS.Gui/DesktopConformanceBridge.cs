@@ -7,6 +7,10 @@ namespace SharpTS.Gui;
 
 public static class DesktopConformanceBridge
 {
+    public static void CloseWindow() => Context.CloseWindow();
+
+    public static void CancelNextWindowClose() => Context.CancelNextWindowClose();
+
     public static void Click(string key) => Context.RaiseButtonClick(key);
 
     public static void PressKey(string key) => Context.RaiseKeyPress(key);

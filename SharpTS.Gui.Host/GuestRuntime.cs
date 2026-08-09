@@ -8,10 +8,11 @@ namespace SharpTS.Gui.Host;
 
 internal interface IGuestRuntime : IDisposable
 {
+    SharpTSHostedShutdownReason? ShutdownReason { get; }
     Task InitializeAsync();
     void Notify(Action callback);
     void QueueMicrotask(Action callback);
-    Task ShutdownAsync();
+    Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode);
 }
 
 internal sealed class InterpretedGuestRuntime : IGuestRuntime
@@ -22,6 +23,8 @@ internal sealed class InterpretedGuestRuntime : IGuestRuntime
     private readonly ISharpTSHostLifetime _lifetime;
     private readonly ISharpTSHostedErrorSink _errorSink;
     private HostedInterpreterRuntime? _runtime;
+
+    public SharpTSHostedShutdownReason? ShutdownReason => _runtime?.ShutdownReason;
 
     public InterpretedGuestRuntime(
         string entryPath,
@@ -59,7 +62,8 @@ internal sealed class InterpretedGuestRuntime : IGuestRuntime
     public void QueueMicrotask(Action callback) =>
         (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).EnqueueMicrotask(callback);
 
-    public Task ShutdownAsync() => _runtime?.ShutdownAsync() ?? Task.CompletedTask;
+    public Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode) =>
+        _runtime?.ShutdownAsync(reason, exitCode) ?? Task.CompletedTask;
 
     public void Dispose()
     {
@@ -76,6 +80,8 @@ internal sealed class CompiledGuestRuntime : IGuestRuntime
     private readonly ISharpTSHostLifetime _lifetime;
     private readonly ISharpTSHostedErrorSink _errorSink;
     private ISharpTSHostedRuntime? _runtime;
+
+    public SharpTSHostedShutdownReason? ShutdownReason => _runtime?.ShutdownReason;
 
     public CompiledGuestRuntime(
         string assemblyPath,
@@ -122,7 +128,8 @@ internal sealed class CompiledGuestRuntime : IGuestRuntime
         runtime.EnqueueMicrotask(callback);
     }
 
-    public Task ShutdownAsync() => _runtime?.ShutdownAsync() ?? Task.CompletedTask;
+    public Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode) =>
+        _runtime?.ShutdownAsync(reason, exitCode) ?? Task.CompletedTask;
 
     public void Dispose()
     {

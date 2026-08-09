@@ -1,6 +1,5 @@
 #pragma warning disable SHARPTS_HOSTING001
 
-using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Threading;
 using SharpTS.Hosting;
 
@@ -55,10 +54,9 @@ internal sealed class AvaloniaHostDispatcher : ISharpTSHostDispatcher
     }
 }
 
-internal sealed class AvaloniaHostLifetime(
-    ClassicDesktopStyleApplicationLifetime lifetime) : ISharpTSHostLifetime
+internal sealed class AvaloniaHostLifetime(Action<int> requestExit) : ISharpTSHostLifetime
 {
-    public void RequestExit(int exitCode) => lifetime.Shutdown(exitCode);
+    public void RequestExit(int exitCode) => requestExit(exitCode);
 }
 
 internal sealed class DelegateHostedErrorSink(Action<SharpTSHostedError> report)

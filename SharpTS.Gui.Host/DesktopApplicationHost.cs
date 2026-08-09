@@ -16,7 +16,7 @@ internal static class DesktopApplicationHost
     public static int Run(HostOptions options, Assembly? embeddedPayloadAssembly)
     {
         int ownerThreadId = Environment.CurrentManagedThreadId;
-        var trace = new TraceRecorder(ownerThreadId);
+        var trace = new TraceRecorder(ownerThreadId, enabled: options.TracePath is not null);
         var lifetime = new ClassicDesktopStyleApplicationLifetime
         {
             ShutdownMode = ShutdownMode.OnExplicitShutdown
@@ -30,65 +30,98 @@ internal static class DesktopApplicationHost
 
         var dispatcher = Dispatcher.UIThread;
         var hostDispatcher = new AvaloniaHostDispatcher(dispatcher);
-        var hostLifetime = new AvaloniaHostLifetime(lifetime);
         var setupContext = SynchronizationContext.Current
             ?? throw new InvalidOperationException("Avalonia did not install a SynchronizationContext.");
         SynchronizationContext? hostedContext = null;
         trace.Record("avalonia-setup", detail: setupContext.GetType().FullName);
 
         IGuestRuntime? guest = null;
+        Exception? failure = null;
+        ISharpTSScheduledWork? watchdog = null;
+
+        void RecordFailure(Exception exception)
+        {
+            failure ??= exception;
+            try
+            {
+                Console.Error.WriteLine(exception);
+            }
+            catch
+            {
+                // A Windows-subsystem application may not have inherited stderr.
+            }
+        }
+
+        var shutdown = new DesktopShutdownCoordinator(
+            () => guest,
+            callback => dispatcher.Post(callback, DispatcherPriority.Send),
+            exitCode =>
+            {
+                trace.Record("host-exit-request", detail: exitCode.ToString());
+                lifetime.Shutdown(exitCode);
+            },
+            RecordFailure,
+            DesktopBridge.DisposeCurrentRoot);
+        var hostLifetime = new AvaloniaHostLifetime(exitCode =>
+        {
+            SharpTSHostedShutdownReason reason = guest?.ShutdownReason
+                ?? (exitCode == 0
+                    ? SharpTSHostedShutdownReason.ProgramCompleted
+                    : SharpTSHostedShutdownReason.UncaughtError);
+            shutdown.RequestShutdown(reason, exitCode);
+        });
+
+        DesktopRuntimeContext? bridgeContext = null;
         using DesktopRuntimeRegistration bridgeRegistration = DesktopBridge.Configure(trace, window =>
         {
             lifetime.MainWindow = window;
             if (!options.AutoClose)
-                window.Closed += (_, _) => lifetime.Shutdown();
+            {
+                shutdown.AttachWindow(
+                    window,
+                    () => bridgeContext?.ConsumeCloseCancellation() == true);
+            }
             window.Show();
         }, options.Headless, callback =>
         {
+            if (shutdown.IsShutdownStarted)
+                return;
             var currentGuest = guest
                 ?? throw new InvalidOperationException("Guest callback arrived before runtime creation.");
             currentGuest.Notify(callback);
         }, callback =>
         {
+            if (shutdown.IsShutdownStarted)
+                return;
             var currentGuest = guest
                 ?? throw new InvalidOperationException("Guest microtask arrived before runtime creation.");
             currentGuest.QueueMicrotask(callback);
         });
+        bridgeContext = bridgeRegistration.Context;
 
-        Exception? failure = null;
         bool clickRaised = false;
         int closing = 0;
-        ISharpTSScheduledWork? watchdog = null;
 
-        void Fail(Exception exception)
+        void Fail(
+            Exception exception,
+            SharpTSHostedShutdownReason reason = SharpTSHostedShutdownReason.UncaughtError)
         {
-            failure ??= exception;
-            Console.Error.WriteLine(exception);
+            RecordFailure(exception);
             watchdog?.Cancel();
-            lifetime.Shutdown(1);
+            shutdown.RequestShutdown(reason, 1);
         }
 
         void ReportHostedError(SharpTSHostedError error)
         {
-            failure ??= error.Exception;
-            Console.Error.WriteLine(error.Exception);
+            RecordFailure(error.Exception);
             // HostedInterpreterRuntime owns error shutdown ordering and requests
             // the host exit only after guest cleanup and lifecycle delivery.
         }
 
-        async void CompleteAutoClose()
+        void CompleteAutoClose()
         {
-            try
-            {
-                watchdog?.Cancel();
-                if (guest != null)
-                    await guest.ShutdownAsync();
-                lifetime.Shutdown(0);
-            }
-            catch (Exception exception)
-            {
-                Fail(exception);
-            }
+            watchdog?.Cancel();
+            shutdown.RequestShutdown(SharpTSHostedShutdownReason.HostRequested, 0);
         }
 
         void CheckAutoClose()
@@ -176,7 +209,8 @@ internal static class DesktopApplicationHost
             }
             catch (Exception exception)
             {
-                Fail(exception);
+                if (!shutdown.IsShutdownStarted)
+                    Fail(exception, SharpTSHostedShutdownReason.StartupFailure);
             }
         }, DispatcherPriority.Send);
 
@@ -200,9 +234,21 @@ internal static class DesktopApplicationHost
             {
                 failure ??= exception;
             }
-            guest?.Dispose();
-            trace.WriteJson(options.TracePath);
+            try
+            {
+                guest?.Dispose();
+            }
+            catch (Exception exception)
+            {
+                RecordFailure(exception);
+            }
+            finally
+            {
+                trace.Record("runtime-dispose");
+            }
         }
+
+        string? writtenTracePath = TryWriteTrace(trace, options);
 
         if (failure == null && options.AutoClose)
         {
@@ -211,16 +257,50 @@ internal static class DesktopApplicationHost
             {
                 foreach (string validationFailure in validationFailures)
                     Console.Error.WriteLine(validationFailure);
-                return 1;
+                failure = new InvalidOperationException(
+                    "SharpTS GUI conformance trace validation failed.");
             }
         }
 
-        Console.WriteLine($"SharpTS GUI {options.Mode} trace: {Path.GetFullPath(options.TracePath)}");
+        if (writtenTracePath is not null)
+            Console.WriteLine($"SharpTS GUI {options.Mode} trace: {writtenTracePath}");
         if (failure is null)
             return 0;
 
         FatalDiagnostics.Report(failure, !options.Headless && !options.AutoClose);
         return 1;
+    }
+
+    private static string? TryWriteTrace(TraceRecorder trace, HostOptions options)
+    {
+        if (options.TracePath is null)
+            return null;
+
+        try
+        {
+            string path = Path.GetFullPath(options.TracePath);
+            trace.WriteJson(path);
+            if (options.IsTracePathHostManaged)
+            {
+                HostDiagnosticPaths.Prune(
+                    Path.GetDirectoryName(path)!,
+                    "sharpts-gui-host-*.json",
+                    HostDiagnosticPaths.RetainedDefaultTraceCount);
+            }
+            return path;
+        }
+        catch (Exception exception)
+        {
+            try
+            {
+                Console.Error.WriteLine($"SharpTS GUI trace could not be written: {exception.Message}");
+            }
+            catch
+            {
+                // Trace diagnostics must not destabilize a Windows-subsystem application.
+            }
+            return null;
+        }
     }
 
     private static void AssertSynchronizationContext(SynchronizationContext expected)

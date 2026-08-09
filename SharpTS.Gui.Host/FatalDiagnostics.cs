@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace SharpTS.Gui.Host;
@@ -29,22 +28,34 @@ internal sealed partial class WindowsFatalDiagnostics
     private const uint MbOk = 0;
     private const uint MbIconError = 0x10;
 
+    private readonly string? _defaultErrorDirectory;
+
+    public WindowsFatalDiagnostics(string? defaultErrorDirectory = null)
+    {
+        _defaultErrorDirectory = defaultErrorDirectory;
+    }
+
     public string? TryWriteLog(Exception exception)
     {
         try
         {
             string? configuredPath = Environment.GetEnvironmentVariable("SHARPTS_GUI_ERROR_LOG");
-            string applicationName = Assembly.GetEntryAssembly()?.GetName().Name ?? "application";
-            string path = string.IsNullOrWhiteSpace(configuredPath)
-                ? Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                    "SharpTS.Gui",
-                    applicationName + ".log")
-                : Path.GetFullPath(configuredPath);
+            bool hostManaged = string.IsNullOrWhiteSpace(configuredPath);
+            string directory = _defaultErrorDirectory ?? HostDiagnosticPaths.ErrorDirectory;
+            string path = hostManaged
+                ? HostDiagnosticPaths.CreateErrorPath(directory, HostDiagnosticPaths.GetApplicationName())
+                : Path.GetFullPath(configuredPath!);
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            File.AppendAllText(
+            File.WriteAllText(
                 path,
-                $"[{DateTimeOffset.Now:O}] {exception}{Environment.NewLine}{Environment.NewLine}");
+                $"[{DateTimeOffset.Now:O}] {exception}{Environment.NewLine}");
+            if (hostManaged)
+            {
+                HostDiagnosticPaths.Prune(
+                    directory,
+                    "sharpts-gui-error-*.log",
+                    HostDiagnosticPaths.RetainedDefaultErrorCount);
+            }
             return path;
         }
         catch

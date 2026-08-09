@@ -6,6 +6,52 @@ This document is the canonical engineering record for the Avalonia desktop effor
 the Phase 0, Phase 1A, Phase 1B, Phase 2, Phase 3A, and Windows-preview findings reports. Git
 history remains the source for the full phase-by-phase narratives.
 
+## Phase 1A stabilization: shutdown and production diagnostics
+
+Phase 1A.1 and 1A.2 are complete in the worktree based on `eafafbd5` and were verified on
+Windows x64 on 2026-08-08. The final merge commit should replace that base identifier in the
+release record. Phase 1A.3, the remaining top-level-await closure, is the next chunk; this change
+does not expand the currently documented prepared-static-graph interpreted support or compiled
+subset.
+
+Every desktop termination path now converges on one idempotent host coordinator. A native window
+close is cancelled long enough to run hosted shutdown, then the close interception is detached so
+reverse cleanup can dispose the renderer and native window before Avalonia receives the final exit
+request. Automated completion, initialization failure, uncaught guest errors, watchdog failures,
+and hosted lifetime requests use the same coordinator with their original shutdown reason and exit
+code. Repeated requests select the first reason, and bridge callbacks arriving after selection are
+ignored.
+
+Detailed tracing is now opt-in. An ordinary launch records no detailed events and writes no trace;
+bare `--trace` writes a uniquely named file under `%LOCALAPPDATA%\SharpTS.Gui\Traces`, while
+`--trace <path>` preserves the explicit path. `--auto-close` enables conformance tracing and uses
+the default trace directory unless a path is supplied. Trace-write failures produce a nonfatal
+warning and never print a misleading location. Host-managed traces retain the newest 20 files;
+explicit paths are not pruned. Fatal reports are separate under
+`%LOCALAPPDATA%\SharpTS.Gui\Errors`, where the newest 10 host-managed logs are retained. An
+explicit `SHARPTS_GUI_ERROR_LOG` is overwritten for each failure.
+
+### Phase 1A.1/1A.2 verification
+
+| Gate | Result |
+| --- | --- |
+| Focused hosted/JSX/SDK | `dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~SharpTS.Tests.Hosting\|FullyQualifiedName~JsxTypeCheckerTests\|FullyQualifiedName~GuiSdkTaskTests"`: 48 passed, zero skipped, zero failed |
+| GUI conformance | `dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release --no-restore`: 41 passed, zero skipped, zero failed |
+| Release solution build | `dotnet build SharpTS.sln -c Release --no-restore`: zero warnings, zero errors |
+| Canonical core suite | CI/release exclusions for `LiveNetwork`, `LoadSensitive`, and `npm`: 16,521 passed, two documented HTTP lifecycle skips, zero failed |
+| Packaged Windows x64 consumer | `SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow`: package audit, path-with-spaces rebuild, IL verification, interpreted/compiled Headless and real-window directory runs, asset closure, and compiled single-file Headless/real-window runs passed |
+
+The real-host lifecycle fixture covered ordinary close, cancelled-then-successful close, repeated
+close, initialization-time close, and close with queued timer/off-thread work in interpreted mode.
+It asserts one effect cleanup, one unmount, one host exit request, no late timer callback, and the
+ordered sequence `beforeExit`, its microtask checkpoint, cleanup/unmount, `exit`, host exit, and
+runtime disposal. Automated interpreted and compiled runs assert the same lifecycle subsequence
+and retain their pre-shutdown renderer-disposal conformance check. Parser/host tests cover disabled,
+bare, automatic, and explicit trace modes, an ordinary no-trace execution, a deliberately
+unwritable explicit trace target, separated fatal/trace directories, explicit-log overwrite, and
+10/20-file retention. The unwritable trace run still started and shut down successfully and
+reported only the expected diagnostic warning.
+
 ## Current 0.2 development status
 
 `0.2.0-preview.1` advances the manifest to GUI API 2 while keeping Hosted ABI 1. Its implemented
@@ -105,8 +151,9 @@ claim that every Windows architecture has executed natively and not a cross-plat
 - Package contents are filtered to `win-x64` and `win-arm64`, contain no PDBs, and expose no
   absolute repository paths in MSBuild assets. Both single-file publish directories contain only
   the consumer executable.
-- Interactive Windows-subsystem failures are written under `%LOCALAPPDATA%\SharpTS.Gui` and may
-  show a minimal native dialog when no console is attached.
+- Interactive Windows-subsystem failures are written under `%LOCALAPPDATA%\SharpTS.Gui\Errors`
+  and may show a minimal native dialog when no console is attached. Opt-in detailed traces use the
+  sibling `Traces` directory.
 - Release preflight requires the fixed preview artifact and a registered package ID before any
   stable package push. The release manifest excludes the GUI SDK from publication and inventory
   with `publish: false` until maintainers intentionally complete onboarding and remove the guard.
