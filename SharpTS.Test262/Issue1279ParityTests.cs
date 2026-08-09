@@ -1549,6 +1549,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Proxy/ownKeys/trap-is-null-target-is-proxy.js")]
+    [InlineData("built-ins/Proxy/ownKeys/trap-is-undefined-target-is-proxy.js")]
     [InlineData("built-ins/Proxy/ownKeys/trap-is-undefined.js")]
     public void Proxy_ownKeys_forwards_missing_traps(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
