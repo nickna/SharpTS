@@ -1479,6 +1479,12 @@ public sealed class Issue1279ParityTests
     public void Proxy_defineProperty_forwards_missing_traps(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_defineProperty_boolean_coerces_false_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/trap-return-is-false.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
