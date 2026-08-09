@@ -428,6 +428,14 @@ public static class ReflectBuiltIns
                 {
                     return RuntimeValue.FromBoxed(cls.Call(interpreter, callArgs));
                 }
+                if (target is SharpTSProxy proxy)
+                {
+                    object effectiveNewTarget = args.Length > 2
+                        ? args[2].ToObject()!
+                        : target;
+                    return RuntimeValue.FromBoxed(proxy.TrapConstruct(
+                        callArgs, interpreter, effectiveNewTarget));
+                }
                 if (target is ISharpTSCallable callable)
                 {
                     return RuntimeValue.FromBoxed(callable.Call(interpreter, callArgs));

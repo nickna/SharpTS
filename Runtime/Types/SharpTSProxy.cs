@@ -925,7 +925,8 @@ public class SharpTSProxy : ISharpTSCallable
         return InvokeTrap(trap, interp, [_target, thisArg, argsArg]);
     }
 
-    public object? TrapConstruct(List<object?> args, Interpreter? interp)
+    public object? TrapConstruct(
+        List<object?> args, Interpreter? interp, object? newTarget = null)
     {
         var trap = GetTrapCallable("construct", interp);
         if (trap == null)
@@ -938,7 +939,7 @@ public class SharpTSProxy : ISharpTSCallable
         }
 
         var argsArray = new SharpTSArray(args);
-        return InvokeTrap(trap, interp, [_target, argsArray, this]);
+        return InvokeTrap(trap, interp, [_target, argsArray, newTarget ?? this]);
     }
 
     #endregion
