@@ -333,14 +333,20 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             SloppyModeWarnings.Warn("delete from frozen/sealed", $"Delete from frozen/sealed object property '{name}' returns false");
             return false;
         }
-        return RemoveOwnProperty(name);
+        bool deleted = RemoveOwnProperty(name);
+        if (!deleted && strictMode)
+        {
+            throw StrictModeErrors.TypeError(
+                $"Cannot delete non-configurable property '{name}'");
+        }
+        return deleted;
     }
 
     /// <summary>
     /// Removes an own property (data OR accessor) and its descriptor, honoring
     /// configurability. Returns true when something was removed, false when a
-    /// present non-configurable property blocks the delete (or nothing matched,
-    /// preserving the legacy absent → false result). Accessors live in
+    /// present non-configurable property blocks the delete. Deleting an absent
+    /// property succeeds, as required by OrdinaryDelete. Accessors live in
     /// <c>_getters</c>/<c>_setters</c>, so a getter-only property (e.g.
     /// RegExp.prototype.global) is now deletable. The configurability check
     /// relies on correct ToBoolean attribute coercion (interpreter-aware
@@ -348,15 +354,17 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     private bool RemoveOwnProperty(string name)
     {
+        bool present = _fields.ContainsKey(name) || IsAccessorProperty(name);
+        if (!present) return true;
         if (_descriptors != null && _descriptors.TryGetValue(name, out var flags)
             && flags.HasExplicitDescriptor && !flags.Configurable)
             return false;
-        bool removed = _fields.Remove(name);
-        if (_getters?.Remove(name) == true) removed = true;
-        if (_setters?.Remove(name) == true) removed = true;
-        if (_accessorProperties?.Remove(name) == true) removed = true;
-        if (removed) _descriptors?.Remove(name);
-        return removed;
+        _fields.Remove(name);
+        _getters?.Remove(name);
+        _setters?.Remove(name);
+        _accessorProperties?.Remove(name);
+        _descriptors?.Remove(name);
+        return true;
     }
 
     public bool HasProperty(string name)

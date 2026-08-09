@@ -110,4 +110,29 @@ public class DeleteOperatorTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("deleted\n", output);
     }
+
+    [Theory, InterpretedOnlyData]
+    public void Delete_NonConfigurablePropertyHonorsStrictness(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = {};
+            Object.defineProperty(object, "fixed", {
+                value: 1,
+                configurable: false
+            });
+            console.log(delete object.fixed);
+            console.log(delete object.missing);
+            (function() {
+                "use strict";
+                try {
+                    delete object.fixed;
+                } catch (error) {
+                    console.log(error instanceof TypeError);
+                }
+            })();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\ntrue\ntrue\n", output);
+    }
 }

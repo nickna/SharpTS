@@ -3202,6 +3202,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/length-near-integer-limit.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-target.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end-as-symbol.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-set-target-value.js")]

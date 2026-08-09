@@ -134,10 +134,8 @@ public static class ReflectBuiltIns
                 switch (target)
                 {
                     case SharpTSObject obj:
-                        if ((obj.IsFrozen || obj.IsSealed) && obj.HasProperty(propertyKey))
-                            return RuntimeValue.False;
-                        obj.DeleteProperty(propertyKey);
-                        return RuntimeValue.True;
+                        return RuntimeValue.FromBoolean(
+                            obj.DeleteProperty(propertyKey));
                     case SharpTSInstance inst:
                         if ((inst.IsFrozen || inst.IsSealed) && inst.HasField(propertyKey))
                             return RuntimeValue.False;
