@@ -1740,6 +1740,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-return-not-configurable.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_getPrototypeOf_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]

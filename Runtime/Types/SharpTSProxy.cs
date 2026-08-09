@@ -151,6 +151,37 @@ public class SharpTSProxy : ISharpTSCallable
             || _target is SharpTSProxy proxy && proxy.HasArrayTarget();
     }
 
+    /// <summary>ECMA-262 §10.5.1 [[GetPrototypeOf]].</summary>
+    internal object? TrapGetPrototypeOf(Interpreter? interpreter)
+    {
+        var trap = GetTrapCallable("getPrototypeOf", interpreter);
+        if (trap == null)
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapGetPrototypeOf(interpreter)
+                : ObjectBuiltIns.PrototypeOf(interpreter, _target);
+
+        object? result = InvokeTrap(trap, interpreter, [_target]);
+        if (result is SharpTSUndefined or string or bool or double or int or long
+            or float or decimal or SharpTSSymbol or SharpTSBigInt
+            or System.Numerics.BigInteger)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy getPrototypeOf trap must return an object or null"));
+        }
+
+        if (TargetIsExtensible(_target)) return result;
+
+        object? targetPrototype = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapGetPrototypeOf(interpreter)
+            : ObjectBuiltIns.PrototypeOf(interpreter, _target);
+        if (!ReferenceEquals(result, targetPrototype))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy getPrototypeOf trap result does not match the non-extensible target"));
+        }
+        return result;
+    }
+
     public object? TrapSet(string prop, object? value, Interpreter? interp)
     {
         var trap = GetTrapCallable("set", interp);

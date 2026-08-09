@@ -1653,6 +1653,7 @@ public static partial class ObjectBuiltIns
     /// </summary>
     public static object? PrototypeOf(Interpreter? interp, object? target) => target switch
     {
+        SharpTSProxy proxy => proxy.TrapGetPrototypeOf(interp),
         // A plain object literal has no explicit [[Prototype]] link but still inherits
         // Object.prototype; only Object.create(null) genuinely has none.
         SharpTSObject { Prototype: null, IsNullPrototype: false } => interp?.GetObjectPrototype(),
