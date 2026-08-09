@@ -2082,6 +2082,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/deleteProperty/targetdesc-is-not-configurable.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_deleteProperty_preserves_false_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/boolean-trap-result-boolean-false.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
