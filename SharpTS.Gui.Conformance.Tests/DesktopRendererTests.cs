@@ -28,7 +28,12 @@ public sealed class DesktopRendererTests : IDisposable
         if (Application.Current is null)
         {
             AppBuilder.Configure<TestApplication>()
-                .UseHeadless(new AvaloniaHeadlessPlatformOptions())
+                .UseSkia()
+                .UseHeadless(new AvaloniaHeadlessPlatformOptions
+                {
+                    UseHeadlessDrawing = false,
+                    ShouldRenderOnUIThread = true,
+                })
                 .SetupWithoutStarting();
         }
     }
@@ -871,6 +876,27 @@ public sealed class DesktopRendererTests : IDisposable
 
         Assert.All(retained, reference => Assert.False(reference.IsAlive));
         Assert.Equal(0, _runtimeRegistration.Context.CurrentRoot?.ActiveSubscriptions ?? 0);
+    }
+
+    [Fact]
+    public void Devtools_InspectTreeReportsLogicalNativeAndSourceStructure()
+    {
+        using DesktopRoot root = CreateRoot();
+        root.Render(new GuiVNode(
+            "Window", Key: "window", Title: "Inspector", Width: 320, Height: 180,
+            SourceFile: "inspector.tsx", SourceLine: 4, SourceColumn: 2,
+            Children: new[] { new GuiVNode("Border", Key: "surface", Background: "#ff0000",
+                Children: new[] { Panel(4, Text("Before", "label")) }) }));
+
+        using JsonDocument inspector = JsonDocument.Parse(
+            DesktopDevtoolsBridge.InspectDesktopTreeJson());
+        JsonElement window = Assert.Single(inspector.RootElement.GetProperty("windows").EnumerateArray());
+        Assert.Equal("Window", window.GetProperty("kind").GetString());
+        Assert.Equal("window", window.GetProperty("key").GetString());
+        Assert.Equal("inspector.tsx", window.GetProperty("source").GetProperty("file").GetString());
+        Assert.Equal(320, window.GetProperty("props").GetProperty("width").GetDouble());
+        Assert.Equal("Border", Assert.Single(window.GetProperty("children").EnumerateArray())
+            .GetProperty("kind").GetString());
     }
 
     private static void AddDisposedCycle(List<WeakReference> retained, int value)

@@ -21,6 +21,7 @@ import {
     useEffect,
     useState,
 } from "@sharpts/gui";
+import { inspectDesktopTree } from "@sharpts/gui/devtools";
 import {
     beginOffThreadTask,
     cancelNextWindowClose,
@@ -166,6 +167,9 @@ function ConformanceApp(): JSX.Element {
 }
 
 desktopRoot = renderDesktop(<ConformanceApp />);
+if (inspectDesktopTree().windows.length !== 1) {
+    throw new Error("GUI devtools inspector did not report the mounted window.");
+}
 failNextNativeSetter("native-probe");
 setNativeValue(1);
 

@@ -24,7 +24,11 @@ internal static class DesktopApplicationHost
         };
         AppBuilder builder = AppBuilder.Configure<GuiApplication>();
         builder = options.Headless
-            ? builder.UseHeadless(new AvaloniaHeadlessPlatformOptions())
+            ? builder.UseSkia().UseHeadless(new AvaloniaHeadlessPlatformOptions
+            {
+                UseHeadlessDrawing = false,
+                ShouldRenderOnUIThread = true,
+            })
             : builder.UsePlatformDetect();
         builder.SetupWithLifetime(lifetime);
         AvaloniaSynchronizationContext.InstallIfNeeded();

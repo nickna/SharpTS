@@ -421,7 +421,9 @@ contract stabilizes.
 - **Complete:** interpreted `--watch` validates each changed module graph while the last good UI
   remains mounted, then disposes it and performs a fresh remount. Component, hook, timer, effect,
   and subscription state is intentionally reset; rejected edits retain the last good tree.
-- Add a component inspector and Headless visual-regression workflow.
+- **Complete:** the `@sharpts/gui/devtools` subpath exposes a source-aware component/native-tree
+  inspector plus Skia-backed Headless PNG capture and exact baseline comparison. Mismatches retain
+  an `.actual.png` artifact and report both SHA-256 values.
 - Complete accessibility, keyboard navigation, focus, IME, high-DPI, multiple-monitor, and theme
   conformance.
 

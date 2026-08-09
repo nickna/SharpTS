@@ -58,6 +58,14 @@ state, hooks, effects, subscriptions, refs, and timers do not carry across a rel
 edit is reported without removing the last successfully mounted UI, so a later edit can retry.
 Watch mode is unavailable for compiled and embedded single-file applications.
 
+The `@sharpts/gui/devtools` subpath provides `inspectDesktopTree()` for source-aware logical/native
+tree inspection and `captureHeadlessSnapshot()` / `assertHeadlessSnapshot()` for PNG visual tests.
+Create or intentionally refresh a committed baseline once with
+`assertHeadlessSnapshot("Snapshots/main.png", true)`, then use the default `false` update argument
+in normal tests. A mismatch writes `Snapshots/main.actual.png` and reports expected/actual SHA-256
+values. Snapshot capture is restricted to `--headless` runs and uses the deterministic Skia-backed
+Headless renderer.
+
 Publish a self-contained compiled application as one distributable Windows executable:
 
 ```powershell

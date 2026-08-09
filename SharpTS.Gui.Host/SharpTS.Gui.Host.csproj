@@ -13,6 +13,7 @@
     <ProjectReference Include="..\SharpTS.Gui\SharpTS.Gui.csproj" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Skia" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
   </ItemGroup>
 
