@@ -616,8 +616,23 @@ public class SharpTSProxy : ISharpTSCallable
     {
         var trap = GetTrapCallable("defineProperty", interpreter);
         if (trap == null)
-            return ObjectBuiltIns.DefinePropertyOnProxyTarget(
-                interpreter, _target, prop, descriptor);
+        {
+            try
+            {
+                return ObjectBuiltIns.DefinePropertyOnProxyTarget(
+                    interpreter, _target, prop, descriptor);
+            }
+            catch (Exception ex) when (ex.Message.StartsWith(
+                "TypeError: Cannot define property '",
+                StringComparison.Ordinal))
+            {
+                // [[DefineOwnProperty]] reports an incompatible descriptor as
+                // false. Object.defineProperty turns that false into a thrown
+                // TypeError, so translate only that wrapper error here while
+                // preserving abrupt descriptor evaluation.
+                return false;
+            }
+        }
 
         bool trapResult = ToBoolean(InvokeTrap(
             trap, interpreter, [_target, prop, descriptor]));
