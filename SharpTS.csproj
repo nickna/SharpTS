@@ -206,6 +206,8 @@
     <None Remove="external/**" />
     <Compile Remove="artifacts/**" />
     <None Remove="artifacts/**" />
+    <Compile Remove="out/**" />
+    <None Remove="out/**" />
   </ItemGroup>
 
   <!--

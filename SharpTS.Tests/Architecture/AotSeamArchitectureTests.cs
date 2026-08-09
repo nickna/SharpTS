@@ -115,7 +115,11 @@ public class AotSeamArchitectureTests
             "SharpTS.Tests", "SharpTS.Test262", "SharpTS.Test262.Worker",
             "SharpTS.TypeScriptConformance", "SharpTS.Microbenchmarks",
             "SharpTS.Sdk", "SharpTS.Sdk.Tasks", "SharpTS.LanguageServer",
+            "SharpTS.Gui", "SharpTS.Gui.Host", "SharpTS.Gui.Conformance.Tests",
+            "SharpTS.Gui.Sdk", "SharpTS.Gui.Sdk.Consumer",
+            "SharpTS.Hosting", "SharpTS.Hosting.Abstractions",
             "Examples", "benchmarks", "stdlib", "docs", "scripts", "external",
+            "artifacts", "out",
         ];
 
         foreach (var file in Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories))
