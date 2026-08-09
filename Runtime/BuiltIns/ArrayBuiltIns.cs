@@ -55,7 +55,7 @@ public static class ArrayBuiltIns
             .MethodV2("with", 2, WithV2)
             .MethodV2("at", 1, AtV2)
             .MethodV2("fill", 0, 3, specLength: 1, FillV2)
-            .MethodV2("copyWithin", 1, 3, specLength: 2, CopyWithinV2)
+            .MethodV2("copyWithin", 0, 3, specLength: 2, CopyWithinV2)
             .MethodV2("entries", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(arr))))
             .MethodV2("keys", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(arr))))
             .MethodV2("values", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateValues(arr))))

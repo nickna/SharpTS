@@ -3210,6 +3210,8 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target-as-symbol.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-this.js")]
     public void Array_copyWithin_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);

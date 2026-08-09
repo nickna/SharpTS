@@ -674,6 +674,50 @@ public class ArrayMethodTests
         Assert.Equal("true\ntrue\none\none\ntwo\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_LengthGetterAbruptCompletionPreservesValue(ExecutionMode mode)
+    {
+        var source = """
+            function Test262Error() {
+                this.message = "boom";
+            }
+            Test262Error.prototype.name = "Test262Error";
+            Test262Error.prototype.constructor = Test262Error;
+
+            function reportsExpectedError(callback: any) {
+                try {
+                    callback();
+                } catch (error) {
+                    console.log(error.constructor === Test262Error);
+                }
+            }
+
+            const object: any = {};
+            Object.defineProperty(object, "length", {
+                get: function() {
+                    throw new Test262Error();
+                }
+            });
+            reportsExpectedError(function() {
+                Array.prototype.copyWithin.call(object);
+            });
+
+            const valueOfObject: any = {
+                length: {
+                    valueOf: function() {
+                        throw new Test262Error();
+                    }
+                }
+            };
+            reportsExpectedError(function() {
+                Array.prototype.copyWithin.call(valueOfObject);
+            });
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

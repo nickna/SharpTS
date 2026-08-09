@@ -273,7 +273,7 @@ public static class FunctionBuiltIns
                     builtIn.Name, builtIn).Bind(thisArg).Call(interp, args);
             }
             if (builtIn.ExpectedReceiverType == typeof(SharpTSArray)
-                && builtIn.Name is "includes" or "flat" or "flatMap")
+                && builtIn.Name is "includes" or "flat" or "flatMap" or "copyWithin")
             {
                 return new Types.ArrayPrototypeMethodWrapper(builtIn.Name, builtIn)
                     .Bind(thisArg)
