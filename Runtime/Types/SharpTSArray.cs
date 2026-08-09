@@ -70,6 +70,25 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
 
     private readonly Deque<object?> _dense;
     private Dictionary<uint, object?>? _sparse;
+    private object? _explicitPrototype;
+
+    /// <summary>
+    /// Whether Object.setPrototypeOf has replaced this array's intrinsic
+    /// Array.prototype link. Kept separate from the value so an explicit null
+    /// prototype remains distinguishable from the default realm prototype.
+    /// </summary>
+    internal bool HasExplicitPrototype { get; private set; }
+
+    /// <summary>The explicitly assigned [[Prototype]], including null.</summary>
+    internal object? ExplicitPrototype => _explicitPrototype;
+
+    /// <summary>Replaces this array exotic object's [[Prototype]] link.</summary>
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        _explicitPrototype = prototype;
+        HasExplicitPrototype = true;
+    }
+
     /// <summary>
     /// Full JS array length — up to <see cref="MaxLength"/> = 2^32 - 1 per ECMA-262.
     /// Stored as <c>long</c> so arithmetic doesn't overflow; all arithmetic uses
@@ -986,21 +1005,40 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
-        long limit = Math.Min(_length, int.MaxValue);
-        for (long index = 0; index < limit; index++)
+        foreach (string key in OwnStringKeys())
         {
-            if (!HasIndex(index)) continue;
-            string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (key == "length") continue;
             if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
                 yield return key;
+        }
+    }
+
+    /// <summary>
+    /// Enumerates all own string keys in Array [[OwnPropertyKeys]] order without
+    /// scanning the potentially huge sparse length range.
+    /// </summary>
+    internal IEnumerable<string> OwnStringKeys()
+    {
+        int denseLimit = (int)Math.Min(_length, _dense.Count);
+        for (int index = 0; index < denseLimit; index++)
+        {
+            if (_dense[index] is not ArrayHole)
+                yield return index.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        if (_namedProperties == null) yield break;
-        foreach (var key in _namedProperties.Keys)
+        if (_sparse is not null)
         {
-            if (_descriptors?.TryGetValue(key, out var flags) != true || flags.Enumerable)
-                yield return key;
+            foreach (uint index in _sparse.Keys.OrderBy(static index => index))
+                if (index >= _dense.Count && index < _length)
+                    yield return index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
         }
+
+        yield return "length";
+        if (_namedProperties is null) yield break;
+        foreach (string key in _namedProperties.Keys)
+            yield return key;
     }
 
     internal bool IsPropertyEnumerable(string name)
@@ -1281,9 +1319,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = (double)_length,  // full long → double (accurate to 2^53)
+                HasValue = true,
                 Writable = _lengthWritable,
+                HasWritable = true,
                 Enumerable = false,
-                Configurable = false
+                HasEnumerable = true,
+                Configurable = false,
+                HasConfigurable = true,
             };
         }
 
@@ -1302,7 +1344,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                     HasGet = true,
                     HasSet = true,
                     Enumerable = accessorFlags.Enumerable,
+                    HasEnumerable = true,
                     Configurable = accessorFlags.Configurable,
+                    HasConfigurable = true,
                 };
             }
             // Holes have no own property descriptor — ECMA-262 HasOwnProperty
@@ -1317,9 +1361,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = UnholeForRead(GetCore(index)),
+                HasValue = true,
                 Writable = flags.Writable,
+                HasWritable = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
 
@@ -1332,9 +1380,13 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return new SharpTSPropertyDescriptor
             {
                 Value = value,
+                HasValue = true,
                 Writable = flags.Writable,
+                HasWritable = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
 

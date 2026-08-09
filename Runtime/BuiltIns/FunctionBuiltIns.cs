@@ -182,6 +182,9 @@ public static class FunctionBuiltIns
 
     private static object? InvokeWithThis(Interpreter interp, ISharpTSCallable callable, object? thisArg, List<object?> args)
     {
+        if (callable is SharpTSProxy proxy)
+            return proxy.TrapApply(thisArg, args, interp);
+
         // Arrow functions ignore thisArg
         if (callable is SharpTSArrowFunction arrow && !arrow.HasOwnThis)
         {
@@ -273,7 +276,7 @@ public static class FunctionBuiltIns
                     builtIn.Name, builtIn).Bind(thisArg).Call(interp, args);
             }
             if (builtIn.ExpectedReceiverType == typeof(SharpTSArray)
-                && builtIn.Name is "includes" or "flat" or "flatMap")
+                && builtIn.Name is "includes" or "flat" or "flatMap" or "copyWithin" or "slice" or "sort" or "splice" or "toLocaleString" or "toReversed" or "toSpliced")
             {
                 return new Types.ArrayPrototypeMethodWrapper(builtIn.Name, builtIn)
                     .Bind(thisArg)

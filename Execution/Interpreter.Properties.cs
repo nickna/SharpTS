@@ -12,7 +12,7 @@ namespace SharpTS.Execution;
 
 public partial class Interpreter
 {
-    private static SharpTSObject CreateFunctionPrototype(object constructor)
+    internal static SharpTSObject CreateFunctionPrototype(object constructor)
     {
         var prototype = new SharpTSObject([]);
         prototype.DefineProperty("constructor", new SharpTSPropertyDescriptor(
@@ -558,11 +558,46 @@ public partial class Interpreter
     /// run with the original receiver as <c>this</c>.
     /// </summary>
     internal object? GetPropertyValue(object? obj, string name)
+        => GetPropertyValueFromChain(obj, name, obj);
+
+    internal object? GetPropertyValue(
+        object? obj, string name, object? receiver)
+        => GetPropertyValueFromChain(obj, name, receiver);
+
+    private object? GetPropertyValueFromChain(
+        object? current, string name, object? receiver)
     {
-        object? receiver = obj;
-        object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
+            if (current is SharpTSProxy proxy)
+                return proxy.TrapGet(name, this, receiver);
+
+            if (current is bool)
+            {
+                var prototype = GetBooleanPrototype();
+                if (prototype.GetExtraGetter(name) is { } getter)
+                    return BindAccessorToObject(getter, receiver!).CallBoxed(this, []);
+                if (prototype.HasExtra(name))
+                    return prototype.TryGetExtra(name);
+                if (prototype.GetMember(name) is { } member)
+                    return member;
+                return GetObjectPrototype().GetMember(name)
+                    ?? SharpTSUndefined.Instance;
+            }
+
+            if (current is SharpTSBigInt)
+            {
+                var prototype = GetBigIntPrototype();
+                if (prototype.GetExtraGetter(name) is { } getter)
+                    return BindAccessorToObject(getter, receiver!).CallBoxed(this, []);
+                if (prototype.HasExtra(name))
+                    return prototype.TryGetExtra(name);
+                if (prototype.GetMember(name) is { } member)
+                    return member;
+                return GetObjectPrototype().GetMember(name)
+                    ?? SharpTSUndefined.Instance;
+            }
+
             if (current is SharpTSArray array)
             {
                 if (name == "length") return (double)array.LongLength;
@@ -574,11 +609,22 @@ public partial class Interpreter
                 }
                 if (array.HasNamedProperty(name))
                     return array.GetNamedProperty(name);
+                if (array.HasExplicitPrototype)
+                {
+                    current = array.ExplicitPrototype;
+                    continue;
+                }
                 if (GetArrayPrototype().GetExtraGetter(name) is { } arrayGetter)
                     return BindAccessorToObject(arrayGetter, receiver!).CallBoxed(this, []);
                 if (GetArrayPrototype().HasExtra(name))
                     return GetArrayPrototype().TryGetExtra(name);
-                return GetProperty(current, name);
+                if (GetArrayPrototype().GetMember(name) is { } arrayMember)
+                    return arrayMember;
+                if (GetObjectPrototype().GetExtraGetter(name) is { } objectGetter)
+                    return BindAccessorToObject(objectGetter, receiver!).CallBoxed(this, []);
+                if (GetObjectPrototype().GetMember(name) is { } objectMember)
+                    return objectMember;
+                return SharpTSUndefined.Instance;
             }
 
             if (current is SharpTSObject record)
@@ -589,6 +635,38 @@ public partial class Interpreter
                 if (record.Fields.TryGetValue(name, out var value)) return value;
                 current = GetRecordPrototype(record);
                 continue;
+            }
+
+            if (current is SharpTSFunction function
+                && function.GetOwnPropertyDescriptor(name) is { } functionDescriptor)
+            {
+                return functionDescriptor.HasGet || functionDescriptor.HasSet
+                    ? functionDescriptor.Get is null
+                        ? SharpTSUndefined.Instance
+                        : FunctionBuiltIns.CallWithThis(
+                            this, functionDescriptor.Get, receiver, [])
+                    : functionDescriptor.Value;
+            }
+
+            if (current is SharpTSArrowFunction arrow
+                && arrow.GetOwnPropertyDescriptor(name) is { } arrowDescriptor)
+            {
+                return arrowDescriptor.HasGet || arrowDescriptor.HasSet
+                    ? arrowDescriptor.Get is null
+                        ? SharpTSUndefined.Instance
+                        : FunctionBuiltIns.CallWithThis(
+                            this, arrowDescriptor.Get, receiver, [])
+                    : arrowDescriptor.Value;
+            }
+
+            if (current is ISharpTSCallable callable)
+            {
+                // Return inherited Function.prototype methods unbound. A
+                // member call binds the original receiver afterwards; binding
+                // to a proxy target here would bypass the proxy [[Call]] trap.
+                return FunctionBuiltIns.GetPrototypeMethod(name)
+                    ?? FunctionBuiltIns.GetMember(callable, name)
+                    ?? SharpTSUndefined.Instance;
             }
 
             return GetProperty(current, name);
@@ -658,7 +736,9 @@ public partial class Interpreter
                     return array.GetBySymbol(symbol);
                 if (ReferenceEquals(symbol, SharpTSSymbol.Iterator))
                     return PerformIndexGet(null!, array, symbol).ToObject();
-                current = GetArrayPrototype();
+                current = array.HasExplicitPrototype
+                    ? array.ExplicitPrototype
+                    : GetArrayPrototype();
                 continue;
             }
 
@@ -695,11 +775,19 @@ public partial class Interpreter
 
         for (int depth = 0; depth < 64 && obj is not (null or SharpTSUndefined); depth++)
         {
+            if (obj is SharpTSProxy prototypeProxy)
+                return prototypeProxy.TrapHas(name, this);
+
             if (obj is SharpTSArray array)
             {
                 if (array.HasOwnProperty(name)) return true;
-                if (GetArrayPrototype().HasExtra(name)) return true;
-                return GetProperty(array, name) is not (null or SharpTSUndefined);
+                if (array.HasExplicitPrototype)
+                {
+                    obj = array.ExplicitPrototype;
+                    continue;
+                }
+                if (GetArrayPrototype().HasOwnProperty(name)) return true;
+                return GetObjectPrototype().HasOwnProperty(name);
             }
             if (obj is SharpTSObject so)
             {
@@ -715,6 +803,42 @@ public partial class Interpreter
             // accessor whose Get yields undefined, which does not arise for these
             // receiver kinds in practice.
             return GetProperty(obj, name) is not (null or SharpTSUndefined);
+        }
+        return false;
+    }
+
+    /// <summary>Symbol-keyed counterpart of <see cref="HasProperty(object?, string)"/>.</summary>
+    internal bool HasSymbolProperty(object? obj, SharpTSSymbol symbol)
+    {
+        if (obj is SharpTSProxy proxy)
+            return proxy.TrapHas(symbol, this);
+
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            if (current is SharpTSProxy prototypeProxy)
+                return prototypeProxy.TrapHas(symbol, this);
+            if (current is SharpTSObject record)
+            {
+                if (record.HasSymbolProperty(symbol)
+                    || record.TryGetSymbolAccessor(symbol, out _, out _)) return true;
+                current = GetRecordPrototype(record);
+                continue;
+            }
+            if (current is SharpTSArray array)
+            {
+                if (array.HasSymbolProperty(symbol)
+                    || array.TryGetSymbolAccessor(symbol, out _, out _)
+                    || ReferenceEquals(symbol, SharpTSSymbol.Iterator)) return true;
+                current = array.HasExplicitPrototype
+                    ? array.ExplicitPrototype
+                    : GetArrayPrototype();
+                continue;
+            }
+            if (current is ISharpTSSymbolPropertyBag symbolBag
+                && symbolBag.HasSymbolProperty(symbol)) return true;
+
+            return GetSymbolPropertyValue(current, symbol) is not SharpTSUndefined;
         }
         return false;
     }
@@ -1243,6 +1367,15 @@ public partial class Interpreter
             return GetArrayIndexValue(arrIdx, idx);
         }
 
+        if (obj is SharpTSArray arrayWithPrototype
+            && arrayWithPrototype.HasExplicitPrototype)
+        {
+            object? inherited = GetPropertyValueFromChain(
+                arrayWithPrototype.ExplicitPrototype, memberName, obj);
+            return RuntimeValue.FromBoxed(
+                TryBindReceiverForMethodAccess(inherited, obj) ?? inherited);
+        }
+
         if (GetArrayPrototype().GetExtraGetter(memberName) is { } prototypeGetter)
             return BindAccessorToObject(prototypeGetter, obj).CallV2(
                 this, ReadOnlySpan<RuntimeValue>.Empty);
@@ -1480,15 +1613,14 @@ public partial class Interpreter
             // methods need additional live Get/Set semantics before copied calls can
             // be rebound without changing their observable behavior.
             ArrayPrototypeMethodWrapper m when m.FunctionName is
-                "join" or "slice" or "concat" or "pop" or "push" or "shift" or "unshift" or "reverse" or "fill"
+                "join" or "slice" or "concat" or "pop" or "push" or "shift" or "unshift" or "reverse" or "fill" or "copyWithin" or "sort" or "splice" or "toLocaleString" or "toReversed" or "toSpliced"
                 => m.Bind(receiver),
             StringPrototypeMethodWrapper m => m.Bind(receiver),
             NumberPrototypeMethodWrapper m => m.Bind(receiver),
             BooleanPrototypeMethodWrapper m => m.Bind(receiver),
             ErrorToStringCallable m => m.Bind(receiver),
             BuiltInAsyncMethod m => m.Bind(receiver),
-            BuiltInMethod m when !m.IsBound
-                && m.FunctionName is "catch" or "finally" or "resolve" => m.Bind(receiver),
+            BuiltInMethod m when !m.IsBound => m.Bind(receiver),
             _ => null,
         };
     }
@@ -1565,6 +1697,10 @@ public partial class Interpreter
         object? current = simpleObj.HasProperty("__proto__") ? simpleObj.GetProperty("__proto__") : null;
         for (int i = 0; i < 64 && current != null; i++)
         {
+            if (current is SharpTSProxy proxy)
+                return RuntimeValue.FromBoxed(
+                    proxy.TrapGet(memberName, this, simpleObj));
+
             if (current is SharpTSObject proto)
             {
                 var protoGetter = proto.GetGetter(memberName);
@@ -2116,7 +2252,11 @@ public partial class Interpreter
         // Proxy interception - must be before any other dispatch
         if (obj is SharpTSProxy proxy)
         {
-            proxy.TrapSet(set.Name.Lexeme, value, this);
+            bool assigned = proxy.TrapSetProperty(
+                set.Name.Lexeme, value, this, proxy);
+            if (!assigned && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Proxy set trap rejected property '{set.Name.Lexeme}'"));
             return value;
         }
 
@@ -2308,19 +2448,43 @@ public partial class Interpreter
                         out uint arrayIndex)
                     && arrayIndex < uint.MaxValue)
                 {
-                    if (!array.HasIndex(arrayIndex)
-                        && GetArrayPrototype().GetOwnPropertyDescriptor(memberName)
-                            is { } inherited)
+                    if (array.TryGetIndexAccessor(
+                            arrayIndex, out _, out var ownSetter))
                     {
-                        if (GetArrayPrototype().GetExtraSetter(memberName)
-                            is { } inheritedSetter)
+                        if (ownSetter != null)
+                        {
+                            BindAccessorToObject(ownSetter, array)
+                                .CallBoxed(this, [value]);
+                            return value;
+                        }
+                        if (strictMode)
+                        {
+                            throw new ThrowException(new SharpTSTypeError(
+                                $"Cannot set property '{memberName}' which has only a getter."));
+                        }
+                        return value;
+                    }
+                    if (!array.HasIndex(arrayIndex))
+                    {
+                        var arrayPrototype = GetArrayPrototype();
+                        var inherited = arrayPrototype.GetOwnPropertyDescriptor(memberName);
+                        var inheritedSetter = arrayPrototype.GetExtraSetter(memberName);
+                        if (inherited is null)
+                        {
+                            var objectPrototype = GetObjectPrototype();
+                            inherited = objectPrototype.GetOwnPropertyDescriptor(memberName);
+                            inheritedSetter = objectPrototype.GetExtraSetter(memberName);
+                        }
+
+                        if (inheritedSetter != null)
                         {
                             BindAccessorToObject(inheritedSetter, array)
                                 .CallBoxed(this, [value]);
                             return value;
                         }
-                        if (inherited.Get != null || inherited.Set != null
-                            || !inherited.Writable)
+                        if (inherited is not null
+                            && (inherited.Get != null || inherited.Set != null
+                                || !inherited.Writable))
                         {
                             if (strictMode)
                             {
@@ -2362,6 +2526,17 @@ public partial class Interpreter
                 if (strictMode)
                     throw new ThrowException(new SharpTSTypeError(
                         $"Cannot set property '{memberName}' which has only a getter."));
+                return value;
+            }
+
+            if (simpleObj.GetOwnPropertyDescriptor(memberName) is null
+                && simpleObj.Prototype is SharpTSProxy prototypeProxy)
+            {
+                bool assigned = prototypeProxy.TrapSetProperty(
+                    memberName, value, this, simpleObj);
+                if (!assigned && strictMode)
+                    throw new ThrowException(new SharpTSTypeError(
+                        $"Proxy set trap rejected property '{memberName}'"));
                 return value;
             }
 

@@ -1213,7 +1213,9 @@ public partial class Interpreter
             var member = prototype.HasSymbolProperty(regexSym)
                 ? prototype.GetBySymbol(regexSym)
                 : null;
-            if (member is BuiltInMethod bim) return RuntimeValue.FromBoxed(bim.Bind(regexObj));
+            // Property Get returns the exact data-property value. Method-call
+            // evaluation binds the receiver later; binding here creates a new
+            // wrapper and breaks observable function identity.
             return RuntimeValue.FromBoxed(member ?? SharpTSUndefined.Instance);
         }
 
@@ -1292,6 +1294,11 @@ public partial class Interpreter
         if (!array.HasIndex(index))
         {
             string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (array.HasExplicitPrototype)
+            {
+                return RuntimeValue.FromBoxed(GetPropertyValueFromChain(
+                    array.ExplicitPrototype, key, array));
+            }
             var prototype = GetArrayPrototype();
             if (prototype.GetExtraGetter(key) is { } inheritedGetter)
                 return BindAccessorToObject(inheritedGetter, array).CallV2(
@@ -1396,7 +1403,11 @@ public partial class Interpreter
         if (obj is SharpTSProxy proxy)
         {
             string key = index?.ToString() ?? "";
-            return proxy.TrapSetRV(key, value, this);
+            bool assigned = proxy.TrapSetProperty(key, value, this, proxy);
+            if (!assigned && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Proxy set trap rejected property '{key}'"));
+            return RuntimeValue.FromBoxed(value);
         }
 
         if (obj is ISharpTSSymbolPropertyBag symbolBag
@@ -1556,6 +1567,19 @@ public partial class Interpreter
                         System.Globalization.CultureInfo.InvariantCulture), value);
                     break;
                 }
+                if (!t.Target.HasIndex(t.Index)
+                    && t.Target.HasExplicitPrototype
+                    && t.Target.ExplicitPrototype is SharpTSProxy arrayPrototypeProxy)
+                {
+                    string propertyKey = t.Index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    bool assigned = arrayPrototypeProxy.TrapSetProperty(
+                        propertyKey, value, this, t.Target);
+                    if (!assigned && strictMode)
+                        throw new ThrowException(new SharpTSTypeError(
+                            $"Proxy set trap rejected property '{propertyKey}'"));
+                    break;
+                }
                 if (t.Target.TryGetIndexAccessor(
                     t.Index, out _, out var indexSetter))
                 {
@@ -1621,6 +1645,15 @@ public partial class Interpreter
                 {
                     if (strictMode)
                         throw new InterpreterException($"Cannot set property '{t.Key}' which has only a getter.");
+                }
+                else if (t.Target.GetOwnPropertyDescriptor(t.Key) is null
+                    && t.Target.Prototype is SharpTSProxy prototypeProxy)
+                {
+                    bool assigned = prototypeProxy.TrapSetProperty(
+                        t.Key, value, this, t.Target);
+                    if (!assigned && strictMode)
+                        throw new ThrowException(new SharpTSTypeError(
+                            $"Proxy set trap rejected property '{t.Key}'"));
                 }
                 else if (TrySetBoxedPrimitiveInheritedProperty(
                     t.Target, t.Key, value, strictMode))

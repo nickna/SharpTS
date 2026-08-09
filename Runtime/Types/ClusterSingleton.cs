@@ -27,7 +27,9 @@ public class ClusterSingleton : SharpTSEventEmitter
     // mutated in place — exactly how Node's cluster module keeps them live across
     // import-time snapshot bindings. The SharpTSObject wraps the dictionary by
     // reference, so the same backing store serves interpreter property reads and the
-    // compiled bridge (which hands the raw dictionary to compiled code as its $Object shape).
+    // compiled bridge (which hands the raw dictionary to compiled code as its $Object
+    // shape). All runtime mutations must go through SharpTSObject so its descriptor and
+    // property-order metadata remain synchronized with that backing store.
     private readonly Dictionary<string, object?> _workersDict = new();
     private readonly SharpTSObject _workersObject;
     private readonly Dictionary<string, object?> _settingsDict = new();
@@ -80,8 +82,8 @@ public class ClusterSingleton : SharpTSEventEmitter
             try { kvp.Value.Dispose(); } catch { }
         }
         _workers.Clear();
-        _workersDict.Clear();
-        _settingsDict.Clear();
+        ClearProperties(_workersObject);
+        ClearProperties(_settingsObject);
         _settingsNormalized = false;
         _entryScript = null;
         _schedulingPolicy = DefaultSchedulingPolicy();
@@ -133,7 +135,7 @@ public class ClusterSingleton : SharpTSEventEmitter
         var worker = new SharpTSClusterWorker(script, env, interpreter, argv, silent,
             loopRef, loopUnref, loopSchedule);
         _workers[worker.Id] = worker;
-        _workersDict[worker.Id.ToString("0")] = worker;
+        _workersObject.SetProperty(worker.Id.ToString("0"), worker);
 
         // Emit 'fork' event on cluster
         EmitWorkerEvent("fork", worker);
@@ -187,29 +189,38 @@ public class ClusterSingleton : SharpTSEventEmitter
             // Node defaults: exec = process.argv[1], args = process.argv.slice(2),
             // execArgv = process.execArgv, silent = false. In the thread model the
             // entry script plays the role of argv[1] and there are no exec args.
-            _settingsDict["exec"] = _entryScript ?? "";
-            _settingsDict["args"] = new List<object?>();
-            _settingsDict["execArgv"] = new List<object?>();
-            _settingsDict["silent"] = false;
-            _settingsDict["serialization"] = "json";
+            SetSettingValue("exec", _entryScript ?? "");
+            SetSettingValue("args", new List<object?>());
+            SetSettingValue("execArgv", new List<object?>());
+            SetSettingValue("silent", false);
+            SetSettingValue("serialization", "json");
         }
         else if (_entryScript != null && _settingsDict.TryGetValue("exec", out var exec) && exec as string == "")
         {
             // The entry script became known after an early setupPrimary().
-            _settingsDict["exec"] = _entryScript;
+            SetSettingValue("exec", _entryScript);
         }
 
         switch (settings)
         {
             case SharpTSObject obj:
                 foreach (var key in obj.PropertyNames)
-                    _settingsDict[key] = obj.GetProperty(key);
+                    SetSettingValue(key, obj.GetProperty(key));
                 break;
             case Dictionary<string, object?> dict:
                 foreach (var (key, value) in dict)
-                    _settingsDict[key] = value;
+                    SetSettingValue(key, value);
                 break;
         }
+    }
+
+    private void SetSettingValue(string name, object? value)
+        => _settingsObject.SetProperty(name, value);
+
+    private static void ClearProperties(SharpTSObject obj)
+    {
+        foreach (var key in obj.OwnStringKeys().ToArray())
+            obj.DeleteProperty(key);
     }
 
     /// <summary>
@@ -239,7 +250,7 @@ public class ClusterSingleton : SharpTSEventEmitter
     public void RemoveWorker(double id)
     {
         _workers.TryRemove(id, out _);
-        _workersDict.Remove(id.ToString("0"));
+        _workersObject.DeleteProperty(id.ToString("0"));
     }
 
     /// <summary>

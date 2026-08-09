@@ -227,6 +227,9 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         {
             return target switch
             {
+                SharpTSProxy proxy when interpreter != null
+                    => proxy.TrapGetOwnPropertyDescriptor(sym, interpreter)
+                        is not (null or SharpTSUndefined),
                 SharpTSObject obj => obj.HasSymbolProperty(sym),
                 SharpTSInstance inst => inst.HasSymbolProperty(sym),
                 SharpTSMath math => math.GetOwnPropertyDescriptor(sym) is not null,
@@ -238,6 +241,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         var key = args[0]?.ToString() ?? "";
         return target switch
         {
+            SharpTSProxy proxy => proxy.TrapGetOwnPropertyDescriptor(key, interpreter)
+                is not (null or SharpTSUndefined),
             SharpTSObject obj => obj.HasProperty(key) || obj.HasSetter(key),
             // Own properties only: a class method lives on the prototype, so
             // `Object.hasOwn(new C(), "someMethod")` is false. HasProperty would resolve
@@ -268,8 +273,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             SharpTSPromisePrototype promisePrototype => promisePrototype.HasOwnProperty(key),
             SharpTSClass klass => key is "name" or "length" or "prototype"
                 || klass.HasOwnStaticMember(key),
-            SharpTSFunction function => function.HasProperty(key) || key is "name" or "length",
-            SharpTSArrowFunction arrow => arrow.HasProperty(key) || key is "name" or "length",
+            // User functions materialize these intrinsic properties in their
+            // descriptor store, so deletion remains observable here.
+            SharpTSFunction function => function.HasProperty(key),
+            SharpTSArrowFunction arrow => arrow.HasProperty(key),
             SharpTSGlobalThis globalThis => globalThis.HasProperty(key),
             IDictionary<string, object?> dict => dict.ContainsKey(key),
             // Built-in functions expose `name` and `length` as own properties
@@ -345,7 +352,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
                 "Cannot convert undefined or null to object"));
-        return ToStringImpl(interpreter, target, args);
+        if (interpreter is null)
+            return ToStringImpl(null, target, args);
+
+        object? method = interpreter.GetPropertyValue(target, "toString");
+        if (method is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object toString property is not callable"));
+        return FunctionBuiltIns.CallWithThis(interpreter, callable, target, []);
     }
 
     private static object? ValueOfImpl(Interp? interpreter, object? target, List<object?> args)
@@ -417,6 +431,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         {
             return target switch
             {
+                SharpTSProxy proxy when interpreter != null
+                    => proxy.TrapGetOwnPropertyDescriptor(symbol, interpreter)
+                        is { } descriptor
+                        && descriptor is not SharpTSUndefined
+                        && SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable,
                 SharpTSObject obj
                     => obj.GetOwnPropertyDescriptor(symbol) is { Enumerable: true },
                 SharpTSInstance instance => instance.HasSymbolProperty(symbol),
@@ -434,6 +453,11 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
             // [[Enumerable]] — a non-enumerable own property (e.g. the
             // RegExp.prototype flag accessors) must return false, not just
             // "is present".
+            SharpTSProxy proxy when interpreter != null
+                => proxy.TrapGetOwnPropertyDescriptor(key, interpreter)
+                    is { } descriptor
+                    && descriptor is not SharpTSUndefined
+                    && SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable,
             SharpTSObject obj => obj.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSMath math => math.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSJSON json => json.GetOwnPropertyDescriptor(key) is { Enumerable: true },
