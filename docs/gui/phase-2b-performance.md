@@ -34,3 +34,28 @@ mount/update lifecycles. BenchmarkDotNet warned that the individual iteration
 times are below its recommended 100 ms minimum and that several distributions
 are multimodal, so compare future runs by trend and retain the raw reports when
 investigating a regression.
+
+## Track C budgets
+
+`SharpTS.Gui.Benchmarks/PerformanceBudgets.json` is the versioned release budget contract. It
+sets maximum mean time and managed allocation for initial mount, scalar and batched updates,
+keyed reconciliation, and input-to-render latency. The keyed limit also establishes a minimum
+reconciliation throughput of approximately 1,428 complete insert/move/remove cycles per second.
+The verifier consumes BenchmarkDotNet's CSV output without depending on locale-specific table
+formatting:
+
+```powershell
+.\SharpTS.Gui.Benchmarks\Verify-PerformanceBudgets.ps1
+```
+
+The same contract limits a Windows Native AOT executable to 50 MiB and its complete shipping
+directory to 65 MiB. Those deterministic artifact limits are always enforced by
+`Run-PackagedConsumer.ps1 -NativeAot`. On a release reference machine, add
+`-EnforcePerformanceBudgets` to enforce a 1.5-second cold Headless startup and 256 MiB peak
+working-set ceiling. The harness always records both values, but ordinary CI does not reject
+wall-clock or process-memory measurements because shared-runner load makes those signals noisy.
+
+The 2026-08-09 x64 candidate measured 37,569,024 bytes for the executable and 56,408,368 bytes
+for the complete shipping directory. Native ARM64 compilation proceeds through managed code
+generation on the current x64 workstation, but final linking and execution remain certification
+requirements on a machine with the Visual C++ ARM64 linker workload and ARM64 Windows hardware.

@@ -4,7 +4,9 @@ param(
     [string]$CandidatePackage,
     [switch]$PackageOnly,
     [switch]$RealWindow,
-    [switch]$PublishOnly
+    [switch]$PublishOnly,
+    [switch]$NativeAot,
+    [switch]$EnforcePerformanceBudgets
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,6 +27,8 @@ $packageCache = Join-Path $artifactRoot "packages"
 $consumerRoot = Join-Path $artifactRoot "consumer with spaces"
 $directoryPublishRoot = Join-Path $artifactRoot "published directory"
 $singleFilePublishRoot = Join-Path $artifactRoot "published single file"
+$nativeAotPublishRoot = Join-Path $artifactRoot "published native aot"
+$aotHostPublishRoot = Join-Path $repositoryRoot "SharpTS.Gui.Host\bin\Release\net10.0\aot-publish"
 $templateHive = Join-Path $artifactRoot "template hive"
 $templateRoot = Join-Path $artifactRoot "template app with spaces"
 $templatePublishRoot = Join-Path $artifactRoot "template compiled-only publish"
@@ -101,6 +105,43 @@ Invoke-DotNet @("restore", "SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj")
 Invoke-DotNet @("restore", "SharpTS.Gui.Host\SharpTS.Gui.Host.csproj")
 Invoke-DotNet @("build", "SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj", "-c", "Release", "--no-restore")
 Invoke-DotNet @("publish", "SharpTS.Gui.Host\SharpTS.Gui.Host.csproj", "-c", "Release", "--self-contained", "false", "--no-restore")
+if (Test-Path -LiteralPath $aotHostPublishRoot) {
+    Remove-Item -LiteralPath $aotHostPublishRoot -Recurse -Force
+}
+
+function Measure-Application([string]$Executable, [string[]]$Arguments, [string]$WorkingDirectory) {
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    foreach ($argument in $Arguments) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+    $stopwatch = [Diagnostics.Stopwatch]::StartNew()
+    $process = [Diagnostics.Process]::Start($startInfo)
+    [long]$peakWorkingSetBytes = 0
+    try {
+        while (-not $process.WaitForExit(10)) {
+            $process.Refresh()
+            $peakWorkingSetBytes = [Math]::Max($peakWorkingSetBytes, $process.WorkingSet64)
+        }
+        $stopwatch.Stop()
+        if ($process.ExitCode -ne 0) {
+            throw "$Executable $($Arguments -join ' ') failed with exit code $($process.ExitCode)."
+        }
+        return [pscustomobject]@{
+            ElapsedMilliseconds = $stopwatch.Elapsed.TotalMilliseconds
+            PeakWorkingSetBytes = $peakWorkingSetBytes
+        }
+    }
+    finally {
+        $process.Dispose()
+    }
+}
+Invoke-DotNet @(
+    "publish", "SharpTS.Gui.Host\SharpTS.Gui.Host.csproj", "-c", "Release",
+    "--self-contained", "false", "--no-restore", "-p:SharpTSGuiHostLibrary=true",
+    "-o", $aotHostPublishRoot)
 $packagePath = Join-Path $feed "SharpTS.Gui.Sdk.$version.nupkg"
 if ($null -ne $candidatePackagePath) {
     Copy-Item -LiteralPath $candidatePackagePath -Destination $packagePath
@@ -130,7 +171,10 @@ try {
         "content/Templates/sharpts-gui/headless.tests.tsx",
         "tools/net10.0/any/host/SharpTS.Gui.Host.dll",
         "tools/net10.0/any/host/SharpTS.dll",
-        "tools/net10.0/any/host/SharpTS.Gui.dll"
+        "tools/net10.0/any/host/SharpTS.Gui.dll",
+        "tools/net10.0/any/aot-host/SharpTS.Gui.Host.dll",
+        "tools/net10.0/any/aot-host/SharpTS.Hosting.Abstractions.dll",
+        "tools/net10.0/any/aot-host/SharpTS.Gui.dll"
     )) {
         if ($entryNames -notcontains $required) {
             throw "GUI SDK package is missing '$required'."
@@ -346,6 +390,51 @@ if ($canExecute) {
     }
     if ($interpretedExitCode -eq 0 -or $interpretedDiagnostic -notmatch "contains only the compiled guest") {
         throw "Single-file interpreted mode did not produce the expected diagnostic.`n$interpretedDiagnostic"
+    }
+}
+
+if ($NativeAot) {
+    Invoke-DotNet @(
+        "publish", $consumerProject, "-c", $Configuration, "-r", $RuntimeIdentifier,
+        "--self-contained", "true", "-p:PublishAot=true", "-p:TrimmerSingleWarn=true",
+        "-o", $nativeAotPublishRoot) $consumerRoot
+
+    $nativeAotExecutable = Join-Path $nativeAotPublishRoot "SharpTS.Gui.Sdk.Consumer.exe"
+    if (-not (Test-Path -LiteralPath $nativeAotExecutable -PathType Leaf)) {
+        throw "Native AOT publish did not create '$nativeAotExecutable'."
+    }
+    $nativeAotFiles = @(Get-ChildItem -LiteralPath $nativeAotPublishRoot -File -Recurse)
+    $symbolFiles = @($nativeAotFiles | Where-Object Extension -in @(".pdb", ".dbg"))
+    if ($symbolFiles.Count -ne 0) {
+        throw "Native AOT shipping output contains symbol sidecars: $($symbolFiles.Name -join ', ')"
+    }
+    $nativeAotExecutableBytes = (Get-Item -LiteralPath $nativeAotExecutable).Length
+    $nativeAotTotalBytes = ($nativeAotFiles | Measure-Object Length -Sum).Sum
+    $performanceBudgets = Get-Content -LiteralPath (Join-Path $repositoryRoot "SharpTS.Gui.Benchmarks\PerformanceBudgets.json") -Raw | ConvertFrom-Json
+    $nativeAotMaxExecutableBytes = $performanceBudgets.nativeAot.maxExecutableBytes
+    $nativeAotMaxTotalBytes = $performanceBudgets.nativeAot.maxShippingBytes
+    if ($nativeAotExecutableBytes -gt $nativeAotMaxExecutableBytes) {
+        throw "Native AOT executable budget exceeded: $nativeAotExecutableBytes bytes > $nativeAotMaxExecutableBytes bytes."
+    }
+    if ($nativeAotTotalBytes -gt $nativeAotMaxTotalBytes) {
+        throw "Native AOT artifact budget exceeded: $nativeAotTotalBytes bytes > $nativeAotMaxTotalBytes bytes."
+    }
+    Write-Host "Native AOT budgets: executable $nativeAotExecutableBytes / $nativeAotMaxExecutableBytes bytes; total $nativeAotTotalBytes / $nativeAotMaxTotalBytes bytes."
+
+    if ($canExecute) {
+        $nativeAotTrace = Join-Path $artifactRoot "native-aot-trace.json"
+        $nativeAotMeasurement = Measure-Application $nativeAotExecutable @(
+            "--headless", "--auto-close", "--trace", $nativeAotTrace) $nativeAotPublishRoot
+        Assert-GuestTrace $nativeAotTrace "Native AOT application"
+        Write-Host "Native AOT cold startup: $($nativeAotMeasurement.ElapsedMilliseconds) ms; peak working set: $($nativeAotMeasurement.PeakWorkingSetBytes) bytes."
+        if ($EnforcePerformanceBudgets -and
+            $nativeAotMeasurement.ElapsedMilliseconds -gt $performanceBudgets.nativeAot.maxColdStartupMilliseconds) {
+            throw "Native AOT startup budget exceeded: $($nativeAotMeasurement.ElapsedMilliseconds) ms > $($performanceBudgets.nativeAot.maxColdStartupMilliseconds) ms."
+        }
+        if ($EnforcePerformanceBudgets -and
+            $nativeAotMeasurement.PeakWorkingSetBytes -gt $performanceBudgets.nativeAot.maxPeakWorkingSetBytes) {
+            throw "Native AOT working-set budget exceeded: $($nativeAotMeasurement.PeakWorkingSetBytes) bytes > $($performanceBudgets.nativeAot.maxPeakWorkingSetBytes) bytes."
+        }
     }
 }
 

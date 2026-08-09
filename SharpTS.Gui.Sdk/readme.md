@@ -162,6 +162,17 @@ support is intentionally deferred and is not
 claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
 application.
 
+For a compiler-free, compiled-only Windows x64 executable, publish with:
+
+```powershell
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishAot=true
+```
+
+The SDK treats every trim/AOT warning as a release failure, omits interpreter sources and symbols,
+and checks the executable and complete shipping-directory size budgets. Windows ARM64 managed
+cross-publish is supported; Native AOT ARM64 certification still requires the Visual C++ ARM64
+linker workload and execution on Windows ARM64 hardware.
+
 The SDK package is approximately 26 MB compressed; a minimal framework-dependent x64 directory is
 approximately 47 MB before application assets. Exact sizes vary with SDK/runtime servicing. Raw
 Avalonia objects and descriptor registration are available only to managed provider packages. Native controls must

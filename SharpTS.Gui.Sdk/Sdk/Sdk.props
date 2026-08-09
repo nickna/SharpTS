@@ -14,7 +14,10 @@
     <SharpTSGuiIncludeSourcePayload Condition="'$(SharpTSGuiIncludeSourcePayload)' == ''">true</SharpTSGuiIncludeSourcePayload>
 
     <SharpTSGuiSdkRoot>$(MSBuildThisFileDirectory)..\</SharpTSGuiSdkRoot>
-    <SharpTSGuiHostRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiHostRoot>
+    <SharpTSGuiHostRoot Condition="'$(PublishAot)' != 'true'">$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiHostRoot>
+    <SharpTSGuiHostRoot Condition="'$(PublishAot)' == 'true'">$(SharpTSGuiSdkRoot)tools\net10.0\any\aot-host\</SharpTSGuiHostRoot>
+    <SharpTSGuiCompilerRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiCompilerRoot>
+    <SharpTSGuiRuntimeRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\runtimes\</SharpTSGuiRuntimeRoot>
     <SharpTSGuiPackageSource>$(SharpTSGuiSdkRoot)gui\</SharpTSGuiPackageSource>
     <SharpTSGuiTasksAssembly>$(SharpTSGuiSdkRoot)build\SharpTS.Sdk.Tasks.dll</SharpTSGuiTasksAssembly>
     <SharpTSGuiHostedAbiVersion>1</SharpTSGuiHostedAbiVersion>
@@ -39,8 +42,10 @@
     <IlcTrimMetadata Condition="'$(PublishAot)' == 'true'">false</IlcTrimMetadata>
     <IlcGenerateCompleteTypeMetadata Condition="'$(PublishAot)' == 'true'">false</IlcGenerateCompleteTypeMetadata>
     <StackTraceSupport Condition="'$(PublishAot)' == 'true'">true</StackTraceSupport>
-    <DebugType Condition="'$(PublishSingleFile)' == 'true'">None</DebugType>
-    <DebugSymbols Condition="'$(PublishSingleFile)' == 'true'">false</DebugSymbols>
+    <StripSymbols Condition="'$(PublishAot)' == 'true'">true</StripSymbols>
+    <CopyOutputSymbolsToPublishDirectory Condition="'$(PublishAot)' == 'true'">false</CopyOutputSymbolsToPublishDirectory>
+    <DebugType Condition="'$(PublishSingleFile)' == 'true' or '$(PublishAot)' == 'true'">None</DebugType>
+    <DebugSymbols Condition="'$(PublishSingleFile)' == 'true' or '$(PublishAot)' == 'true'">false</DebugSymbols>
     <DefineConstants Condition="'$(SharpTSGuiIncludeSourcePayload)' != 'true'">$(DefineConstants);SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
     <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);SHARPTS_GUI_NATIVE_AOT;SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
     <SharpTSGuiIncludeSourcePayload Condition="'$(PublishAot)' == 'true'">false</SharpTSGuiIncludeSourcePayload>
@@ -54,7 +59,11 @@
 
   <ItemGroup>
     <Compile Include="$(SharpTSGuiSdkRoot)launcher\Launcher.cs" Link="SharpTS.Gui.Launcher.g.cs" />
-    <_SharpTSGuiManagedReference Include="$(SharpTSGuiHostRoot)*.dll" />
+    <_SharpTSGuiManagedReference Include="$(SharpTSGuiHostRoot)*.dll"
+                                 Condition="'$(PublishAot)' != 'true'" />
+    <_SharpTSGuiManagedReference
+      Include="$(SharpTSGuiHostRoot)SharpTS.Gui.Host.dll;$(SharpTSGuiHostRoot)SharpTS.Gui.dll;$(SharpTSGuiHostRoot)SharpTS.Hosting.Abstractions.dll"
+      Condition="'$(PublishAot)' == 'true'" />
     <Reference Include="@(_SharpTSGuiManagedReference)">
       <HintPath>%(Identity)</HintPath>
       <Private>true</Private>

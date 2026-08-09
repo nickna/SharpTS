@@ -2,6 +2,7 @@
 
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Diagnostics.CodeAnalysis;
 using SharpTS.Hosting;
 
 namespace SharpTS.Compilation;
@@ -152,6 +153,32 @@ public partial class ILCompiler
                 markerCtor,
                 SharpTSHostedAbi.CurrentVersion,
                 _hostedFactoryType));
+
+        EmitHostedNativeAotSuppressions();
+    }
+
+    private void EmitHostedNativeAotSuppressions()
+    {
+        const string justification =
+            "The GUI SDK roots the complete generated guest assembly because the emitted " +
+            "JavaScript runtime performs name-based dispatch over its own generated members.";
+        string[] diagnosticIds =
+        [
+            "IL2026", "IL2055", "IL2059", "IL2067",
+            "IL2070", "IL2072", "IL2075", "IL3050",
+        ];
+        ConstructorInfo constructor = typeof(UnconditionalSuppressMessageAttribute).GetConstructor(
+            [typeof(string), typeof(string)])!;
+        PropertyInfo justificationProperty = typeof(UnconditionalSuppressMessageAttribute).GetProperty(
+            nameof(UnconditionalSuppressMessageAttribute.Justification))!;
+        foreach (string diagnosticId in diagnosticIds)
+        {
+            _assemblyBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+                constructor,
+                ["Trimming/AOT", diagnosticId],
+                [justificationProperty],
+                [justification]));
+        }
     }
 
     private void EmitHostedInitializeOverride(

@@ -46,17 +46,19 @@ internal static class DesktopApplicationHost
         IGuestRuntime? guest = null;
         Exception? failure = null;
         ISharpTSScheduledWork? watchdog = null;
+#if !SHARPTS_GUI_STATIC_HOST
         ISharpTSScheduledWork? hotReloadDelay = null;
         Timer? hotReloadPoll = null;
         FileSystemWatcher? hotReloadWatcher = null;
         string? hotReloadEntryPath = null;
         string? hotReloadConfigPath = null;
-        bool hotReloadAttempt = false;
         bool hotReloadRunning = false;
         bool guestInitializationComplete = false;
         bool hotReloadChangePending = false;
         string hotReloadFingerprint = string.Empty;
         var hotReloadGate = new object();
+#endif
+        bool hotReloadAttempt = false;
 
         void RecordFailure(Exception exception)
         {
@@ -154,6 +156,7 @@ internal static class DesktopApplicationHost
             // the host exit only after guest cleanup and lifecycle delivery.
         }
 
+#if !SHARPTS_GUI_STATIC_HOST
         void ReportReloadFailure(Exception exception)
         {
             try { Console.Error.WriteLine($"SharpTS GUI hot reload rejected: {exception.Message}"); }
@@ -315,6 +318,7 @@ internal static class DesktopApplicationHost
                 _ => PollHotReload(root), null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
             trace.Record("hot-reload-watch", detail: root);
         }
+#endif
 
         void CompleteAutoClose()
         {
@@ -372,6 +376,14 @@ internal static class DesktopApplicationHost
                 GuiAppManifest manifest = embeddedPayloadAssembly is null
                     ? GuiPayloadLoader.LoadFile(baseDirectory)
                     : GuiPayloadLoader.LoadEmbedded(embeddedPayloadAssembly);
+#if SHARPTS_GUI_STATIC_HOST
+                guest = new StaticCompiledGuestRuntime(
+                    staticCompiledFactory ?? throw new InvalidOperationException(
+                        "The static-only GUI host requires a linked guest factory."),
+                    hostDispatcher,
+                    hostLifetime,
+                    new DelegateHostedErrorSink(ReportHostedError));
+#else
                 string interpretedEntryPath = GuiPayloadLoader.ResolvePath(baseDirectory, manifest.EntryPath);
                 string interpretedConfigPath = Path.Combine(baseDirectory, ".sharpts", "tsconfig.json");
                 if (options.Watch)
@@ -395,27 +407,26 @@ internal static class DesktopApplicationHost
                             hostDispatcher,
                             hostLifetime,
                             new DelegateHostedErrorSink(ReportHostedError))
-                        : staticCompiledFactory is not null
-                            ? new StaticCompiledGuestRuntime(
-                                staticCompiledFactory,
-                                hostDispatcher,
-                                hostLifetime,
-                                new DelegateHostedErrorSink(ReportHostedError))
-                            : new CompiledGuestRuntime(
+                        : new CompiledGuestRuntime(
                             GuiPayloadLoader.ReadEmbeddedResource(embeddedPayloadAssembly, manifest.CompiledAssembly),
                             hostDispatcher,
                             hostLifetime,
                             new DelegateHostedErrorSink(ReportHostedError)),
                     _ => throw new ArgumentOutOfRangeException()
                 };
+#endif
                 await guest.InitializeAsync();
+#if !SHARPTS_GUI_STATIC_HOST
                 guestInitializationComplete = true;
+#endif
                 AssertSynchronizationContext(hostedContext);
                 if (bridgeRegistration.Context.CurrentRoot?.Window is null)
                     throw new InvalidOperationException("Guest initialization returned without mounting a Window.");
                 trace.Record("guest-init-end");
+#if !SHARPTS_GUI_STATIC_HOST
                 if (hotReloadChangePending)
                     QueueHotReload();
+#endif
                 dispatcher.Post(() => trace.Record("dispatcher-sentinel"), DispatcherPriority.Background);
                 if (options.AutoClose)
                 {
@@ -442,10 +453,12 @@ internal static class DesktopApplicationHost
         finally
         {
             watchdog?.Cancel();
+#if !SHARPTS_GUI_STATIC_HOST
             hotReloadDelay?.Cancel();
             hotReloadDelay?.Dispose();
             hotReloadPoll?.Dispose();
             hotReloadWatcher?.Dispose();
+#endif
             try
             {
                 DesktopBridge.DisposeAllRoots();
@@ -533,6 +546,7 @@ internal static class DesktopApplicationHost
         }
     }
 
+#if !SHARPTS_GUI_STATIC_HOST
     private static string ResolveDevelopmentEntry(string root, string manifestEntry)
     {
         string relative = manifestEntry.Replace('/', Path.DirectorySeparatorChar);
@@ -572,5 +586,6 @@ internal static class DesktopApplicationHost
                 string contentHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
                 return $"{Path.GetRelativePath(root, path)}:{info.Length}:{info.LastWriteTimeUtc.Ticks}:{contentHash}";
             }));
+#endif
 
 }

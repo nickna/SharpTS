@@ -16,9 +16,13 @@ public static class SharpTSHostedAbi
 
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
-public sealed class SharpTSHostedProgramAttribute(int abiVersion, Type factoryType) : Attribute
+public sealed class SharpTSHostedProgramAttribute(
+    int abiVersion,
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
+    Type factoryType) : Attribute
 {
     public int AbiVersion { get; } = abiVersion;
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
     public Type FactoryType { get; } = factoryType ?? throw new ArgumentNullException(nameof(factoryType));
 }
 

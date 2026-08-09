@@ -43,7 +43,7 @@ tooling, release closure, and ecosystem depth.
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | **Complete in the Phase 3A implementation commit.** Template, ordinary-command workflow, incremental inputs, compiled-only output, docs, and packaged lifecycle gate landed | Regression coverage and release evidence only |
 | Phase 3B | **CLI complete; local x64 and ARM64 cross-publish candidate gates pass.** Public NuGet onboarding and native ARM64 execution remain externally blocked | Publish only after package ownership/key scope and native ARM64 evidence exist |
-| Phase 4 | Multi-window lifecycle/error isolation and selected services have landed; most ecosystem/AOT work remains | Stabilize and expand the platform after the public preview |
+| Phase 4 | Tracks A and B are complete for their declared Windows surface. Track C is locally complete for x64; ARM64 Native AOT linking/execution is externally blocked. Distribution and macOS remain | Complete each independently selected release track without weakening its native evidence |
 
 ## Prerequisite integration gate
 
@@ -430,12 +430,25 @@ contract stabilizes.
 
 ### Track C: optimization and Native AOT
 
-- Remove runtime reflection from the supported GUI control and callback path.
-- Close the custom-control registration set for trimming/AOT analysis.
-- Add trimming annotations and publish tests for every supported descriptor and service.
-- Establish startup, working-set, allocation, throughput, and artifact-size budgets.
-- Certify Native AOT only after Windows x64 and ARM64 publish/run tests pass with the complete
+- **Complete:** remove runtime reflection from the supported GUI control and callback path.
+- **Complete:** close the custom-control registration set for trimming/AOT analysis through the
+  static provider contract; dynamic discovery remains unsupported.
+- **Complete for the locally testable surface:** the SDK emits a compiler-free static host,
+  roots the generated guest contract, carries reviewed trim annotations, and fails on every
+  Native AOT warning. The packaged x64 application publishes and runs the complete Headless trace.
+- **Complete:** startup, working-set, allocation, throughput, and artifact-size budgets are
+  versioned in `SharpTS.Gui.Benchmarks/PerformanceBudgets.json`; deterministic artifact limits are
+  blocking and reference-machine process budgets are opt-in to avoid shared-runner noise.
+- **Certification blocked:** certify Native AOT only after Windows x64 and ARM64 publish/run tests pass with the complete
   supported surface.
+
+**Resolution (2026-08-09): locally complete; ARM64 certification externally blocked.** The x64
+package gate produces a warning-clean Native AOT executable, runs the full 172-event application
+trace, and passes the 50 MiB executable / 65 MiB shipping-directory limits. The exact package also
+passes managed `win-arm64` directory and single-file cross-publish. ARM64 Native AOT reaches the
+platform-link step, where this workstation lacks the Visual C++ ARM64 linker workload; native
+Headless and real-window execution additionally require Windows ARM64 hardware. Those missing
+environmental prerequisites are release evidence, not reasons to weaken the certification rule.
 
 ### Track D: distribution
 

@@ -1,15 +1,18 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <OutputType Condition="'$(SharpTSGuiHostLibrary)' == 'true'">Library</OutputType>
     <IsPackable>false</IsPackable>
     <AssemblyName>SharpTS.Gui.Host</AssemblyName>
     <RootNamespace>SharpTS.Gui.Host</RootNamespace>
     <Description>Avalonia host for the SharpTS GUI SDK public preview.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <DefineConstants Condition="'$(SharpTSGuiHostLibrary)' == 'true'">$(DefineConstants);SHARPTS_GUI_STATIC_HOST</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SharpTS.csproj" />
+    <ProjectReference Include="..\SharpTS.csproj"
+                      Condition="'$(SharpTSGuiHostLibrary)' != 'true'" />
     <ProjectReference Include="..\SharpTS.Gui\SharpTS.Gui.csproj" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Headless" />

@@ -84,10 +84,11 @@ cd CounterApp
 dotnet run -- --mode interpreted
 ```
 
-The compressed SDK package is approximately 26 MB and a minimal framework-dependent Windows x64
-directory is approximately 47 MB before application assets. Current limits are one `Window` root,
-built-in controls only, Windows only, no public custom-control registration, and no Native AOT
-certification. See the [GUI SDK workflow](docs/gui/sdk-development.md) and
+The compressed SDK package is approximately 31 MB and a minimal framework-dependent Windows x64
+directory is approximately 47 MB before application assets. Current limits are one root element
+per window, built-in and statically registered controls only, Windows only, and no cross-architecture Native
+AOT certification. Warning-clean x64 Native AOT publish/run is available with
+`dotnet publish -r win-x64 -p:PublishAot=true`. See the [GUI SDK workflow](docs/gui/sdk-development.md) and
 [TSX API reference](docs/gui/tsx-api.md).
 
 ### .NET Interop

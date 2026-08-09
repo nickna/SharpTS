@@ -37,8 +37,10 @@
            Text="SharpTS.Gui.Sdk payload is incomplete: missing MSBuild tasks assembly." />
     <Error Condition="!Exists('$(SharpTSGuiHostRoot)SharpTS.Gui.Host.dll')"
            Text="SharpTS.Gui.Sdk payload is incomplete: missing GUI host." />
-    <Error Condition="!Exists('$(SharpTSGuiHostRoot)SharpTS.dll')"
+    <Error Condition="!Exists('$(SharpTSGuiCompilerRoot)SharpTS.dll')"
            Text="SharpTS.Gui.Sdk payload is incomplete: missing compiler/runtime." />
+    <Error Condition="'$(PublishAot)' == 'true' and !Exists('$(SharpTSGuiHostRoot)SharpTS.Hosting.Abstractions.dll')"
+           Text="SharpTS.Gui.Sdk AOT payload is incomplete: missing Hosted ABI contracts." />
     <Error Condition="!Exists('$(SharpTSGuiHostRoot)SharpTS.Gui.dll')"
            Text="SharpTS.Gui.Sdk payload is incomplete: missing Avalonia bridge." />
     <Error Condition="!Exists('$(SharpTSGuiEntryFullPath)')"
@@ -102,13 +104,13 @@
 
   <Target Name="SharpTSGuiCompile"
           DependsOnTargets="SharpTSGuiPrepare"
-          Inputs="$(SharpTSGuiEntryFullPath);@(_SharpTSGuiGuestSources);@(_SharpTSGuiPackageFiles);$(SharpTSTsConfigPath);$(MSBuildProjectFullPath);$(SharpTSGuiBuildFingerprint);$(SharpTSGuiHostRoot)SharpTS.dll;$(SharpTSGuiHostRoot)SharpTS.Gui.dll"
+          Inputs="$(SharpTSGuiEntryFullPath);@(_SharpTSGuiGuestSources);@(_SharpTSGuiPackageFiles);$(SharpTSTsConfigPath);$(MSBuildProjectFullPath);$(SharpTSGuiBuildFingerprint);$(SharpTSGuiCompilerRoot)SharpTS.dll;$(SharpTSGuiCompilerRoot)SharpTS.Gui.dll"
           Outputs="$(SharpTSGuiGuestAssembly)">
     <PropertyGroup>
-      <_SharpTSGuiCompileArgs>-p &quot;$(SharpTSGuiGeneratedTsConfig)&quot; -r &quot;$(SharpTSGuiHostRoot)SharpTS.Gui.dll&quot; -c &quot;$(SharpTSGuiEntryFullPath)&quot; --target dll --hosted --quiet -o &quot;$(SharpTSGuiGuestAssembly)&quot;</_SharpTSGuiCompileArgs>
+      <_SharpTSGuiCompileArgs>-p &quot;$(SharpTSGuiGeneratedTsConfig)&quot; -r &quot;$(SharpTSGuiCompilerRoot)SharpTS.Gui.dll&quot; -c &quot;$(SharpTSGuiEntryFullPath)&quot; --target dll --hosted --quiet -o &quot;$(SharpTSGuiGuestAssembly)&quot;</_SharpTSGuiCompileArgs>
       <_SharpTSGuiCompileArgs Condition="'$(SharpTSVerifyIL)' == 'true'">$(_SharpTSGuiCompileArgs) --verify</_SharpTSGuiCompileArgs>
     </PropertyGroup>
-    <Exec Command="dotnet &quot;$(SharpTSGuiHostRoot)SharpTS.dll&quot; $(_SharpTSGuiCompileArgs)"
+    <Exec Command="dotnet &quot;$(SharpTSGuiCompilerRoot)SharpTS.dll&quot; $(_SharpTSGuiCompileArgs)"
           WorkingDirectory="$(MSBuildProjectDirectory)" />
   </Target>
 
@@ -121,6 +123,10 @@
         <HintPath>$(SharpTSGuiGuestAssembly)</HintPath>
         <Private>true</Private>
       </Reference>
+      <!-- The emitted JavaScript runtime performs name-based dispatch over its own generated
+           members. Root that single assembly while allowing the host and GUI closure to be
+           fully trimmed. This boundary is narrower than partial-trimming the entire app. -->
+      <TrimmerRootAssembly Include="SharpTS.Gui.Guest" />
     </ItemGroup>
   </Target>
 
@@ -135,8 +141,8 @@
     <ItemGroup>
       <_SharpTSGuiHostFiles Include="$(SharpTSGuiHostRoot)**\*"
                             Exclude="$(SharpTSGuiHostRoot)runtimes\**;$(SharpTSGuiHostRoot)**\*.pdb" />
-      <_SharpTSGuiNativeBuildFiles Include="$(SharpTSGuiHostRoot)runtimes\$(_SharpTSGuiEffectiveRid)\native\*"
-                                   Exclude="$(SharpTSGuiHostRoot)runtimes\$(_SharpTSGuiEffectiveRid)\native\*.pdb" />
+      <_SharpTSGuiNativeBuildFiles Include="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiEffectiveRid)\native\*"
+                                   Exclude="$(SharpTSGuiRuntimeRoot)$(_SharpTSGuiEffectiveRid)\native\*.pdb" />
     </ItemGroup>
     <Copy SourceFiles="@(_SharpTSGuiHostFiles)"
           DestinationFiles="@(_SharpTSGuiHostFiles->'$(TargetDir)%(RecursiveDir)%(Filename)%(Extension)')"
@@ -164,8 +170,8 @@
           BeforeTargets="ComputeResolvedFilesToPublishList"
           DependsOnTargets="SharpTSGuiAssemble">
     <ItemGroup>
-      <_SharpTSGuiPublishNativeFiles Include="$(SharpTSGuiHostRoot)runtimes\$(RuntimeIdentifier)\native\*"
-                                     Exclude="$(SharpTSGuiHostRoot)runtimes\$(RuntimeIdentifier)\native\*.pdb"
+      <_SharpTSGuiPublishNativeFiles Include="$(SharpTSGuiRuntimeRoot)$(RuntimeIdentifier)\native\*"
+                                     Exclude="$(SharpTSGuiRuntimeRoot)$(RuntimeIdentifier)\native\*.pdb"
                                      Condition="'$(RuntimeIdentifier)' != ''" />
       <_SharpTSGuiPublishGuestSources Include="$(TargetDir)Guest\**\*"
                                       Condition="'$(PublishSingleFile)' != 'true' and '$(SharpTSGuiIncludeSourcePayload)' == 'true'" />

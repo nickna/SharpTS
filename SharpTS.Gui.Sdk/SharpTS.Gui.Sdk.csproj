@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <GuiHostPublishRoot>..\SharpTS.Gui.Host\bin\Release\net10.0\publish\</GuiHostPublishRoot>
+    <GuiAotHostPublishRoot>..\SharpTS.Gui.Host\bin\Release\net10.0\aot-publish\</GuiAotHostPublishRoot>
   </PropertyGroup>
   <Import Project="Sdk\SupportedPlatforms.props" />
 
@@ -39,6 +40,18 @@
           Pack="true"
           PackagePath="tools/net10.0/any/host/"
           Condition="Exists('$(GuiHostPublishRoot)')" />
+    <None Include="$(GuiAotHostPublishRoot)Avalonia*.dll;
+                   $(GuiAotHostPublishRoot)HarfBuzzSharp.dll;
+                   $(GuiAotHostPublishRoot)MicroCom.Runtime.dll;
+                   $(GuiAotHostPublishRoot)Microsoft.Extensions.DependencyInjection.Abstractions.dll;
+                   $(GuiAotHostPublishRoot)SharpTS.Gui.Host.dll;
+                   $(GuiAotHostPublishRoot)SharpTS.Gui.dll;
+                   $(GuiAotHostPublishRoot)SharpTS.Hosting.Abstractions.dll;
+                   $(GuiAotHostPublishRoot)SkiaSharp.dll;
+                   $(GuiAotHostPublishRoot)Tmds.DBus.Protocol.dll"
+          Pack="true"
+          PackagePath="tools/net10.0/any/aot-host/"
+          Condition="Exists('$(GuiAotHostPublishRoot)')" />
     <None Include="@(SharpTSGuiRuntimeAsset)" Pack="true">
       <PackagePath>tools/net10.0/any/host/runtimes/%(RuntimeIdentifier)/</PackagePath>
     </None>
@@ -55,6 +68,8 @@
            Text="SharpTS.Gui.Sdk pack: tasks assembly missing. Build SharpTS.Sdk.Tasks in Release first." />
     <Error Condition="!Exists('$(GuiHostPublishRoot)SharpTS.Gui.Host.dll')"
            Text="SharpTS.Gui.Sdk pack: host payload missing. Publish the GUI host in Release first." />
+    <Error Condition="!Exists('$(GuiAotHostPublishRoot)SharpTS.Gui.Host.dll')"
+           Text="SharpTS.Gui.Sdk pack: AOT host payload missing. Publish the GUI host with SharpTSGuiHostLibrary=true first." />
     <Error Condition="!Exists('$(GuiHostPublishRoot)SharpTS.dll')"
            Text="SharpTS.Gui.Sdk pack: SharpTS compiler/runtime missing from host payload." />
     <Error Condition="!Exists('$(GuiHostPublishRoot)SharpTS.Gui.dll')"

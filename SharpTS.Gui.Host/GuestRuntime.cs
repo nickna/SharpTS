@@ -1,6 +1,8 @@
 #pragma warning disable SHARPTS_HOSTING001
 
+#if !SHARPTS_GUI_STATIC_HOST
 using System.Runtime.Loader;
+#endif
 using SharpTS.Gui;
 using SharpTS.Hosting;
 
@@ -15,6 +17,7 @@ internal interface IGuestRuntime : IDisposable
     Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode);
 }
 
+#if !SHARPTS_GUI_STATIC_HOST
 internal sealed class InterpretedGuestRuntime : IGuestRuntime
 {
     private readonly string _entryPath;
@@ -149,6 +152,7 @@ internal sealed class CompiledGuestRuntime : IGuestRuntime
         _runtime = null;
     }
 }
+#endif
 
 internal sealed class StaticCompiledGuestRuntime(
     ISharpTSHostedProgramFactory factory,

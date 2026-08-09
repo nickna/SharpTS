@@ -35,6 +35,16 @@ public sealed class HostedInterpreterRuntimeTests
         Assert.Contains("System.Runtime", references);
         Assert.DoesNotContain("System.Private.CoreLib", references);
         Assert.NotNull(assembly.GetType("SharpTSHostedProgramFactory", throwOnError: false));
+        string[] suppressions = assembly
+            .GetCustomAttributes(
+                typeof(System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute),
+                inherit: false)
+            .Cast<System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute>()
+            .Select(attribute => attribute.CheckId)
+            .ToArray();
+        Assert.Equal(
+            ["IL2026", "IL2055", "IL2059", "IL2067", "IL2070", "IL2072", "IL2075", "IL3050"],
+            suppressions);
     }
 
     [Fact]

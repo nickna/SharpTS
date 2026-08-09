@@ -3,5 +3,6 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>SharpTS.Hosting.Abstractions</AssemblyName>
     <RootNamespace>SharpTS.Hosting</RootNamespace>
+    <IsTrimmable>true</IsTrimmable>
   </PropertyGroup>
 </Project>
