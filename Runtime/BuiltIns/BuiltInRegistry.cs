@@ -607,7 +607,7 @@ public sealed class BuiltInRegistry
                     if (args.Length < 2)
                         throw new Exception("Runtime Error: Proxy.revocable requires exactly 2 arguments (target, handler).");
                     var proxy = new SharpTSProxy(args[0].ToObject()!, args[1].ToObject()!);
-                    var revoke = BuiltInMethod.CreateV2("revoke", 0, (_, _, _) =>
+                    var revoke = BuiltInMethod.CreateV2("", 0, (_, _, _) =>
                     {
                         proxy.Revoke();
                         return RuntimeValue.Undefined;
