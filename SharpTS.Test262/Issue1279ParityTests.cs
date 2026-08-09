@@ -1986,6 +1986,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/setPrototypeOf/internals-call-order.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_setPrototypeOf_rejects_fixed_target_prototype_lies()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/not-extensible-target-not-same-target-prototype.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
