@@ -961,6 +961,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
 
     if (hosted && target != OutputTarget.Dll)
         throw new InvalidOperationException("Hosted ABI output is valid only for DLL output.");
+    string? hostedAbstractionsPath = hosted ? ResolveHostedAbstractionsPath() : null;
 
     if (target == OutputTarget.Exe)
     {
@@ -1055,7 +1056,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         ValidateCompiledRuntimeRequirements(compiler);
         compiler.Save(outputPath);
         if (hosted)
-            CopyHostedAbstractions(outputPath);
+            CopyHostedAbstractions(hostedAbstractionsPath!, outputPath);
 
         MeasurePhase(timings,
             ExecutionPhaseTiming.GenerateRuntimeConfig,
@@ -1081,17 +1082,34 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
     }
 }
 
-static void CopyHostedAbstractions(string outputPath)
+static string ResolveHostedAbstractionsPath()
 {
-    string source = typeof(SharpTSHostedAbi).Assembly.Location;
-    if (string.IsNullOrEmpty(source) || !File.Exists(source))
-    {
-        throw new InvalidOperationException(
-            "SharpTS.Hosting.Abstractions.dll is unavailable for hosted output.");
-    }
+    const string fileName = "SharpTS.Hosting.Abstractions.dll";
+    string sidecar = Path.Combine(AppContext.BaseDirectory, fileName);
+    if (File.Exists(sidecar)) return sidecar;
+
+    string managedLocation = GetManagedHostedAbstractionsLocation();
+    if (!string.IsNullOrEmpty(managedLocation) && File.Exists(managedLocation))
+        return managedLocation;
+
+    throw new InvalidOperationException(
+        "Hosted output requires a physical SharpTS.Hosting.Abstractions.dll. " +
+        "The Native AOT/single-file SharpTS compiler does not support --hosted; " +
+        "use the managed SharpTS compiler instead.");
+}
+
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "SingleFile",
+    "IL3000",
+    Justification = "Managed custom hosts may load the Hosted ABI away from AppContext.BaseDirectory; an empty bundled location is explicitly rejected before output is emitted.")]
+static string GetManagedHostedAbstractionsLocation() =>
+    typeof(SharpTSHostedAbi).Assembly.Location;
+
+static void CopyHostedAbstractions(string source, string outputPath)
+{
     string destination = Path.Combine(
         Path.GetDirectoryName(Path.GetFullPath(outputPath))!,
-        Path.GetFileName(source));
+        "SharpTS.Hosting.Abstractions.dll");
     if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination),
             StringComparison.OrdinalIgnoreCase))
     {

@@ -122,6 +122,22 @@ public sealed class ProductizationContractTests
         Assert.Contains("Exclude=\"GuiPackage\\tsconfig.overlay.json\"", packageProject, StringComparison.Ordinal);
         Assert.DoesNotContain("SharpTS.Gui.ConformanceSupport", packageProject, StringComparison.Ordinal);
         Assert.DoesNotContain("SharpTS.Gui.Conformance.Tests", packageProject, StringComparison.Ordinal);
+
+        XDocument packageProjectXml = XDocument.Parse(packageProject);
+        XElement templateManifestItem = Assert.Single(
+            packageProjectXml.Descendants("None"),
+            item => item.Attribute("Include")?.Value ==
+                "Templates\\sharpts-gui\\.template.config\\template.json");
+        Assert.Equal("true", templateManifestItem.Attribute("Pack")?.Value);
+        Assert.Equal(
+            "content\\Templates\\sharpts-gui\\.template.config\\",
+            templateManifestItem.Attribute("PackagePath")?.Value);
+        XElement templateGlobItem = Assert.Single(
+            packageProjectXml.Descendants("None"),
+            item => item.Attribute("Include")?.Value == "Templates\\**\\*");
+        Assert.Equal(
+            "Templates\\sharpts-gui\\.template.config\\template.json",
+            templateGlobItem.Attribute("Exclude")?.Value);
     }
 
     private static string FindRepositoryRoot()

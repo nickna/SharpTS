@@ -18,10 +18,10 @@ string hash = Hash(CanonicalSemantic(manifest));
 
 var outputs = new Dictionary<string, string>
 {
-    [Path.Combine(root, "SharpTS.Gui", "Generated", "ControlContract.Generated.cs")] = GenerateCSharp(manifest, hash),
-    [Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage", "control-surface.generated.ts")] = GenerateTypeScript(manifest, hash),
-    [Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage", "control-docs.generated.json")] = GenerateDocumentation(manifest, hash),
-    [Path.Combine(root, "SharpTS.Gui.Sdk", "Sdk", "DescriptorContract.Generated.props")] = GenerateSdkProps(hash),
+    [Path.Combine(root, "SharpTS.Gui", "Generated", "ControlContract.Generated.cs")] = CanonicalText(GenerateCSharp(manifest, hash)),
+    [Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage", "control-surface.generated.ts")] = CanonicalText(GenerateTypeScript(manifest, hash)),
+    [Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage", "control-docs.generated.json")] = CanonicalText(GenerateDocumentation(manifest, hash)),
+    [Path.Combine(root, "SharpTS.Gui.Sdk", "Sdk", "DescriptorContract.Generated.props")] = CanonicalText(GenerateSdkProps(hash)),
 };
 
 bool stale = false;
@@ -40,6 +40,9 @@ foreach ((string path, string content) in outputs)
     }
 }
 return stale ? 1 : 0;
+
+static string CanonicalText(string value) =>
+    value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
 
 static string FindRoot(string start)
 {

@@ -184,6 +184,15 @@ jobs:
           native="$PWD/artifacts/native-aot/SharpTS"
           scratch="$(mktemp -d)"
 
+          if "$native" --compile Examples/AotCompileGate/main.ts --target dll --hosted \
+              -o "$scratch/hosted.dll" > "$scratch/hosted-error.txt" 2>&1; then
+            echo "Native AOT compiler unexpectedly accepted --hosted" >&2
+            exit 1
+          fi
+          grep -q 'Native AOT/single-file SharpTS compiler does not support --hosted' \
+            "$scratch/hosted-error.txt"
+          test ! -e "$scratch/hosted.dll"
+
           "$native" Examples/AotCompileGate/main.ts > "$scratch/interpreted.txt"
           grep -qx '42' "$scratch/interpreted.txt"
 

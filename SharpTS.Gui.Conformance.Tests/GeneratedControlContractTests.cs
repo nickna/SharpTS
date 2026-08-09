@@ -64,6 +64,30 @@ public sealed class GeneratedControlContractTests
         Assert.True(process.ExitCode == 0, output);
     }
 
+    [Fact]
+    public void CheckedInGeneratedOutputsUseUtf8WithoutBomAndCanonicalLf()
+    {
+        string root = FindRoot();
+        string[] paths =
+        [
+            Path.Combine(root, "SharpTS.Gui", "Generated", "ControlContract.Generated.cs"),
+            Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage", "control-surface.generated.ts"),
+            Path.Combine(root, "SharpTS.Gui.Sdk", "GuiPackage", "control-docs.generated.json"),
+            Path.Combine(root, "SharpTS.Gui.Sdk", "Sdk", "DescriptorContract.Generated.props"),
+        ];
+
+        foreach (string path in paths)
+        {
+            byte[] bytes = File.ReadAllBytes(path);
+            Assert.NotEmpty(bytes);
+            Assert.DoesNotContain((byte)'\r', bytes);
+            Assert.Equal((byte)'\n', bytes[^1]);
+            Assert.False(
+                bytes.Length >= 3 && bytes[0] == 0xef && bytes[1] == 0xbb && bytes[2] == 0xbf,
+                $"Generated GUI contract has a UTF-8 BOM: {Path.GetRelativePath(root, path)}");
+        }
+    }
+
     private static string ManifestPath() => Path.Combine(FindRoot(), "SharpTS.Gui", "Controls", "controls.v1.json");
 
     private static string FindRoot()

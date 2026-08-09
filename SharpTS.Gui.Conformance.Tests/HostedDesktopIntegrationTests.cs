@@ -6,6 +6,77 @@ namespace SharpTS.Gui.Conformance.Tests;
 
 public sealed class HostedDesktopIntegrationTests
 {
+    [Fact]
+    public async Task ManagedHostedCompilation_CoLocatesHostedAbiSidecar()
+    {
+        string repositoryRoot = FindRepositoryRoot();
+#if DEBUG
+        const string configuration = "Debug";
+#else
+        const string configuration = "Release";
+#endif
+        string compilerAssembly = Path.Combine(
+            repositoryRoot, "bin", configuration, "net10.0", "SharpTS.dll");
+        string stageDirectory = Path.Combine(
+            Path.GetTempPath(), $"sharpts-hosted-sidecar-{Guid.NewGuid():N}");
+        string sourcePath = Path.Combine(stageDirectory, "main.ts");
+        string outputDirectory = Path.Combine(stageDirectory, "output");
+        string outputPath = Path.Combine(outputDirectory, "guest.dll");
+        Directory.CreateDirectory(outputDirectory);
+        await File.WriteAllTextAsync(sourcePath, "export const answer = 42;");
+
+        try
+        {
+            var startInfo = new ProcessStartInfo("dotnet")
+            {
+                WorkingDirectory = stageDirectory,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+            };
+            startInfo.ArgumentList.Add(compilerAssembly);
+            startInfo.ArgumentList.Add("-c");
+            startInfo.ArgumentList.Add(sourcePath);
+            startInfo.ArgumentList.Add("--target");
+            startInfo.ArgumentList.Add("dll");
+            startInfo.ArgumentList.Add("--hosted");
+            startInfo.ArgumentList.Add("--no-tsconfig");
+            startInfo.ArgumentList.Add("--quiet");
+            startInfo.ArgumentList.Add("-o");
+            startInfo.ArgumentList.Add(outputPath);
+
+            using Process process = Process.Start(startInfo)
+                ?? throw new InvalidOperationException("Could not start the managed hosted compiler.");
+            Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+            Task<string> stderrTask = process.StandardError.ReadToEndAsync();
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            try
+            {
+                await process.WaitForExitAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                process.Kill(entireProcessTree: true);
+                throw new TimeoutException("Managed hosted compilation exceeded 30 seconds.");
+            }
+            string stdout = await stdoutTask;
+            string stderr = await stderrTask;
+
+            Assert.True(process.ExitCode == 0,
+                $"Hosted compilation failed with {process.ExitCode}.{Environment.NewLine}" +
+                $"stdout:{Environment.NewLine}{stdout}{Environment.NewLine}" +
+                $"stderr:{Environment.NewLine}{stderr}");
+            Assert.True(File.Exists(outputPath), "Hosted compilation did not create the guest assembly.");
+            Assert.True(
+                File.Exists(Path.Combine(outputDirectory, "SharpTS.Hosting.Abstractions.dll")),
+                "Hosted compilation did not co-locate its ABI sidecar.");
+        }
+        finally
+        {
+            Directory.Delete(stageDirectory, recursive: true);
+        }
+    }
+
     [Theory]
     [InlineData("interpreted")]
     [InlineData("compiled")]
