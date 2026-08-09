@@ -1117,7 +1117,9 @@ public class SharpTSProxy : ISharpTSCallable
     /// Returns whether the proxy target is callable (function-like).
     /// Checks ISharpTSCallable (interpreter mode), Delegate, and emitted compiled function types.
     /// </summary>
-    public bool IsCallable => _target is ISharpTSCallable or Delegate
+    public bool IsCallable => _target is SharpTSProxy proxy
+        ? proxy.IsCallable
+        : _target is ISharpTSCallable or Delegate
         || _target?.GetType().Name is "$TSFunction" or "$BoundTSFunction"
             or "$PromisifiedFunction" or "$DeprecatedFunction";
 
