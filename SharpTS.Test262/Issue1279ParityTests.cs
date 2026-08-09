@@ -1627,6 +1627,7 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Reflect/ownKeys/return-on-corresponding-order-large-index.js")]
     [InlineData("built-ins/Reflect/ownKeys/return-on-corresponding-order.js")]
     public void Reflect_ownKeys_returns_spec_ordered_property_keys(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
