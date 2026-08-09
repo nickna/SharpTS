@@ -177,7 +177,7 @@ public class SharpTSProxy : ISharpTSCallable
     {
         var trap = GetTrapCallable("deleteProperty", interp);
         if (trap == null)
-            return ForwardDeleteProperty(prop);
+            return ForwardDeleteProperty(prop, interp);
 
         var result = InvokeTrap(trap, interp, [_target, prop]);
         return ToBoolean(result);
@@ -636,14 +636,22 @@ public class SharpTSProxy : ISharpTSCallable
         return false;
     }
 
-    private bool ForwardDeleteProperty(string prop)
+    private bool ForwardDeleteProperty(string prop, Interpreter? interp)
     {
+        if (_target is SharpTSProxy proxy)
+            return proxy.TrapDeleteProperty(prop, interp);
         if (_target is SharpTSObject obj)
             return obj.DeletePropertyStrict(prop, false);
         if (_target is SharpTSInstance inst)
             return inst.DeleteFieldStrict(prop, false);
         if (_target is Dictionary<string, object?> dict)
             return dict.Remove(prop);
+        if (_target is SharpTSFunction function)
+            return function.DeleteProperty(prop);
+        if (_target is SharpTSArrowFunction arrow)
+            return arrow.DeleteProperty(prop);
+        if (_target is SharpTSArray array)
+            return array.DeletePropertyStrict(prop, false);
         return true;
     }
 
