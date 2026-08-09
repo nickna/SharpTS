@@ -1589,6 +1589,12 @@ public sealed class Issue1279ParityTests
     public void Proxy_ownKeys_rejects_duplicate_property_keys(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_ownKeys_requires_nonconfigurable_target_keys()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/extensible-return-trap-result-absent-not-configurable-keys.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]

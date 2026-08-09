@@ -378,11 +378,51 @@ public class SharpTSProxy : ISharpTSCallable
                 throw new ThrowException(new SharpTSTypeError(
                     "Proxy ownKeys trap returned duplicate property keys"));
         }
+        ValidateOwnKeysInvariant(values, uniqueKeys, interp);
         return values;
 
         static ThrowException InvalidOwnKeysResult() => new(
             new SharpTSTypeError(
                 "Proxy ownKeys trap result must contain only strings and symbols"));
+    }
+
+    private void ValidateOwnKeysInvariant(
+        List<object?> trapKeys,
+        HashSet<object?> trapKeySet,
+        Interpreter? interpreter)
+    {
+        List<object?> targetKeys = ForwardOwnPropertyKeys(interpreter);
+        bool extensible = TargetIsExtensible(_target);
+
+        foreach (object? targetKey in targetKeys)
+        {
+            object? descriptor = targetKey switch
+            {
+                string name when _target is SharpTSProxy proxy
+                    => proxy.TrapGetOwnPropertyDescriptor(name, interpreter),
+                string name
+                    => ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, name),
+                SharpTSSymbol symbol when _target is SharpTSProxy proxy
+                    && interpreter != null
+                    => proxy.TrapGetOwnPropertyDescriptor(symbol, interpreter),
+                SharpTSSymbol symbol
+                    => ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, symbol),
+                _ => null,
+            };
+            if (descriptor is null or SharpTSUndefined) continue;
+            var record = SharpTSPropertyDescriptor.FromAnyObject(descriptor);
+            if (!record.Configurable && !trapKeySet.Contains(targetKey))
+                ThrowOwnKeysInvariant();
+        }
+
+        if (extensible) return;
+        if (trapKeys.Count != targetKeys.Count
+            || targetKeys.Any(key => !trapKeySet.Contains(key)))
+            ThrowOwnKeysInvariant();
+
+        static void ThrowOwnKeysInvariant() => throw new ThrowException(
+            new SharpTSTypeError(
+                "Proxy ownKeys trap result is incompatible with the target"));
     }
 
     private List<object?> ForwardOwnPropertyKeys(Interpreter? interpreter)
