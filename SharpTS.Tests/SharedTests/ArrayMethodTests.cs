@@ -653,6 +653,27 @@ public class ArrayMethodTests
         Assert.Equal("true\nfirst\nfirst\nfalse\nthird\na\na\nb\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_CustomPrototypeSuppliesInheritedIndexes(ExecutionMode mode)
+    {
+        var source = """
+            const prototype: any = ["zero", "one", "two"];
+            const array: any = [];
+            array.length = 3;
+            Object.setPrototypeOf(array, prototype);
+            console.log(Object.getPrototypeOf(array) === prototype);
+            console.log(1 in array);
+            console.log(array[1]);
+            array.copyWithin = Array.prototype.copyWithin;
+            array.copyWithin(0, 1, 3);
+            console.log(array[0]);
+            console.log(array[1]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\none\none\ntwo\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

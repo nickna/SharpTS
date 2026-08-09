@@ -1292,6 +1292,11 @@ public partial class Interpreter
         if (!array.HasIndex(index))
         {
             string key = index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            if (array.HasExplicitPrototype)
+            {
+                return RuntimeValue.FromBoxed(GetPropertyValueFromChain(
+                    array.ExplicitPrototype, key, array));
+            }
             var prototype = GetArrayPrototype();
             if (prototype.GetExtraGetter(key) is { } inheritedGetter)
                 return BindAccessorToObject(inheritedGetter, array).CallV2(

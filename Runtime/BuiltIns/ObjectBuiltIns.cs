@@ -1663,6 +1663,7 @@ public static partial class ObjectBuiltIns
         SharpTSError err => interp?.GetErrorClass(err.ErrorTypeName).Prototype,
         // ECMA-262 §23.1.3: ordinary Array exotic objects have Array.prototype as their
         // [[Prototype]]. Subclass instances keep their class chain instead.
+        SharpTSArray { HasExplicitPrototype: true } array => array.ExplicitPrototype,
         SharpTSArraySubclassInstance sub => sub.Klass,
         SharpTSArray => interp?.GetArrayPrototype(),
         SharpTSPromiseSubclassInstance promiseSub => promiseSub.Klass.Prototype,
@@ -1716,6 +1717,13 @@ public static partial class ObjectBuiltIns
 
         switch (target)
         {
+            case SharpTSArray array:
+                if (!array.IsExtensible)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Cannot set prototype of a non-extensible array"));
+                array.SetExplicitPrototype(proto);
+                return array;
+
             case SharpTSObject obj:
                 if (!obj.IsExtensible)
                     throw new Exception("TypeError: Object is not extensible");

@@ -558,9 +558,11 @@ public partial class Interpreter
     /// run with the original receiver as <c>this</c>.
     /// </summary>
     internal object? GetPropertyValue(object? obj, string name)
+        => GetPropertyValueFromChain(obj, name, obj);
+
+    private object? GetPropertyValueFromChain(
+        object? current, string name, object? receiver)
     {
-        object? receiver = obj;
-        object? current = obj;
         for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
         {
             if (current is SharpTSArray array)
@@ -574,11 +576,22 @@ public partial class Interpreter
                 }
                 if (array.HasNamedProperty(name))
                     return array.GetNamedProperty(name);
+                if (array.HasExplicitPrototype)
+                {
+                    current = array.ExplicitPrototype;
+                    continue;
+                }
                 if (GetArrayPrototype().GetExtraGetter(name) is { } arrayGetter)
                     return BindAccessorToObject(arrayGetter, receiver!).CallBoxed(this, []);
                 if (GetArrayPrototype().HasExtra(name))
                     return GetArrayPrototype().TryGetExtra(name);
-                return GetProperty(current, name);
+                if (GetArrayPrototype().GetMember(name) is { } arrayMember)
+                    return arrayMember;
+                if (GetObjectPrototype().GetExtraGetter(name) is { } objectGetter)
+                    return BindAccessorToObject(objectGetter, receiver!).CallBoxed(this, []);
+                if (GetObjectPrototype().GetMember(name) is { } objectMember)
+                    return objectMember;
+                return SharpTSUndefined.Instance;
             }
 
             if (current is SharpTSObject record)
@@ -658,7 +671,9 @@ public partial class Interpreter
                     return array.GetBySymbol(symbol);
                 if (ReferenceEquals(symbol, SharpTSSymbol.Iterator))
                     return PerformIndexGet(null!, array, symbol).ToObject();
-                current = GetArrayPrototype();
+                current = array.HasExplicitPrototype
+                    ? array.ExplicitPrototype
+                    : GetArrayPrototype();
                 continue;
             }
 
@@ -698,6 +713,11 @@ public partial class Interpreter
             if (obj is SharpTSArray array)
             {
                 if (array.HasOwnProperty(name)) return true;
+                if (array.HasExplicitPrototype)
+                {
+                    obj = array.ExplicitPrototype;
+                    continue;
+                }
                 if (GetArrayPrototype().HasExtra(name)) return true;
                 return GetProperty(array, name) is not (null or SharpTSUndefined);
             }
@@ -1241,6 +1261,15 @@ public partial class Interpreter
             && arrIdx.HasIndex(idx))
         {
             return GetArrayIndexValue(arrIdx, idx);
+        }
+
+        if (obj is SharpTSArray arrayWithPrototype
+            && arrayWithPrototype.HasExplicitPrototype)
+        {
+            object? inherited = GetPropertyValueFromChain(
+                arrayWithPrototype.ExplicitPrototype, memberName, obj);
+            return RuntimeValue.FromBoxed(
+                TryBindReceiverForMethodAccess(inherited, obj) ?? inherited);
         }
 
         if (GetArrayPrototype().GetExtraGetter(memberName) is { } prototypeGetter)

@@ -3198,6 +3198,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Array/prototype/copyWithin/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-start.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/length-near-integer-limit.js")]
     [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js")]

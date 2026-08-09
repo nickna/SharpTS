@@ -70,6 +70,25 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
 
     private readonly Deque<object?> _dense;
     private Dictionary<uint, object?>? _sparse;
+    private object? _explicitPrototype;
+
+    /// <summary>
+    /// Whether Object.setPrototypeOf has replaced this array's intrinsic
+    /// Array.prototype link. Kept separate from the value so an explicit null
+    /// prototype remains distinguishable from the default realm prototype.
+    /// </summary>
+    internal bool HasExplicitPrototype { get; private set; }
+
+    /// <summary>The explicitly assigned [[Prototype]], including null.</summary>
+    internal object? ExplicitPrototype => _explicitPrototype;
+
+    /// <summary>Replaces this array exotic object's [[Prototype]] link.</summary>
+    internal void SetExplicitPrototype(object? prototype)
+    {
+        _explicitPrototype = prototype;
+        HasExplicitPrototype = true;
+    }
+
     /// <summary>
     /// Full JS array length — up to <see cref="MaxLength"/> = 2^32 - 1 per ECMA-262.
     /// Stored as <c>long</c> so arithmetic doesn't overflow; all arithmetic uses
