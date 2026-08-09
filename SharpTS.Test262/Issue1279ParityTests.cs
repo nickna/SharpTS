@@ -1823,6 +1823,15 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/splice/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/splice/clamps-length-to-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/splice/length-near-integer-limit-grow-array.js")]
+    [InlineData("built-ins/Array/prototype/splice/set_length_no_args.js")]
+    [InlineData("built-ins/Array/prototype/splice/throws-if-integer-limit-exceeded.js")]
+    public void Array_splice_handles_generic_length_edges(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)
