@@ -1259,26 +1259,16 @@ public partial class Interpreter
         // Handle proxy has trap
         if (right is SharpTSProxy proxy)
         {
-            string proxyKey = left is SharpTSSymbol ? left.ToString()! : (left?.ToString() ?? "");
-            return proxy.TrapHas(proxyKey, this);
+            return left is SharpTSSymbol proxySymbol
+                ? proxy.TrapHas(proxySymbol, this)
+                : proxy.TrapHas(left?.ToString() ?? "", this);
         }
 
         // Handle symbol keys specially
         if (left is SharpTSSymbol symbol)
         {
-            if (right is SharpTSObject symObj)
-            {
-                return symObj.HasSymbolProperty(symbol);
-            }
-            if (right is SharpTSInstance symInst)
-            {
-                return symInst.HasSymbolProperty(symbol);
-            }
-            // Symbols can't be in arrays or other types
-            if (right is SharpTSArray)
-            {
-                return false;
-            }
+            if (right is SharpTSObject or SharpTSInstance or SharpTSArray)
+                return HasSymbolProperty(right, symbol);
             throw new InterpreterException("'in' operator requires an object on the right side.");
         }
 

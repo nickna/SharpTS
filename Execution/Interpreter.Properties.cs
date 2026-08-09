@@ -768,6 +768,42 @@ public partial class Interpreter
         return false;
     }
 
+    /// <summary>Symbol-keyed counterpart of <see cref="HasProperty(object?, string)"/>.</summary>
+    internal bool HasSymbolProperty(object? obj, SharpTSSymbol symbol)
+    {
+        if (obj is SharpTSProxy proxy)
+            return proxy.TrapHas(symbol, this);
+
+        object? current = obj;
+        for (int depth = 0; depth < 64 && current is not (null or SharpTSUndefined); depth++)
+        {
+            if (current is SharpTSProxy prototypeProxy)
+                return prototypeProxy.TrapHas(symbol, this);
+            if (current is SharpTSObject record)
+            {
+                if (record.HasSymbolProperty(symbol)
+                    || record.TryGetSymbolAccessor(symbol, out _, out _)) return true;
+                current = GetRecordPrototype(record);
+                continue;
+            }
+            if (current is SharpTSArray array)
+            {
+                if (array.HasSymbolProperty(symbol)
+                    || array.TryGetSymbolAccessor(symbol, out _, out _)
+                    || ReferenceEquals(symbol, SharpTSSymbol.Iterator)) return true;
+                current = array.HasExplicitPrototype
+                    ? array.ExplicitPrototype
+                    : GetArrayPrototype();
+                continue;
+            }
+            if (current is ISharpTSSymbolPropertyBag symbolBag
+                && symbolBag.HasSymbolProperty(symbol)) return true;
+
+            return GetSymbolPropertyValue(current, symbol) is not SharpTSUndefined;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Reads a descriptor field with ECMA-262 §7.3.2 Get semantics AND correct
     /// presence (§7.3.11 HasProperty), used by ToPropertyDescriptor (#801).

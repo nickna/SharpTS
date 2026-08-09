@@ -115,9 +115,10 @@ public static class ReflectBuiltIns
             "has" => BuiltInMethod.CreateV2("has", 2, static (interpreter, _, args) =>
             {
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.has requires a target object.");
-                var propertyKey = args[1].ToObject()?.ToString() ?? "";
-                return RuntimeValue.FromBoolean(
-                    interpreter.HasProperty(target, propertyKey));
+                var propertyKey = args[1].ToObject();
+                return RuntimeValue.FromBoolean(propertyKey is SharpTSSymbol symbol
+                    ? interpreter.HasSymbolProperty(target, symbol)
+                    : interpreter.HasProperty(target, propertyKey?.ToString() ?? ""));
             }),
 
             "deleteProperty" => BuiltInMethod.CreateV2("deleteProperty", 2, static (interpreter, _, args) =>

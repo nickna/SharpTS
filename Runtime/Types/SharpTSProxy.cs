@@ -269,12 +269,22 @@ public class SharpTSProxy : ISharpTSCallable
     }
 
     public bool TrapHas(string prop, Interpreter? interp)
+        => TrapHasCore(prop, interp);
+
+    internal bool TrapHas(SharpTSSymbol prop, Interpreter interp)
+        => TrapHasCore(prop, interp);
+
+    private bool TrapHasCore(object prop, Interpreter? interp)
     {
         var trap = GetTrapCallable("has", interp);
         if (trap == null)
-            return interp != null
-                ? interp.HasProperty(_target, prop)
-                : ForwardHas(prop, interp);
+        {
+            if (interp != null)
+                return prop is SharpTSSymbol symbol
+                    ? interp.HasSymbolProperty(_target, symbol)
+                    : interp.HasProperty(_target, (string)prop);
+            return ForwardHas((string)prop, interp);
+        }
 
         bool result = ToBoolean(InvokeTrap(trap, interp, [_target, prop]));
         if (result) return true;
