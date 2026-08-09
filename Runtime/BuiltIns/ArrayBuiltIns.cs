@@ -1227,6 +1227,30 @@ public static class ArrayBuiltIns
     }
 
     /// <summary>
+    /// ECMA-262 23.1.3.33 copying reverse algorithm. Length is captured once,
+    /// then every source index is read from high to low with ordinary Get;
+    /// absent properties therefore become explicit undefined result elements.
+    /// </summary>
+    internal static SharpTSArray ToReversedArrayLike(
+        Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (length > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var result = new SharpTSArray();
+        result.SetLength(length);
+        for (long index = 0; index < length; index++)
+        {
+            string fromKey = (length - index - 1).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            result.Set(index, interpreter.GetPropertyValue(receiver, fromKey));
+        }
+        return result;
+    }
+
+    /// <summary>
     /// ECMA-262 23.1.3.28 generic splice algorithm. The receiver is mutated
     /// through ordinary property operations so sparse objects, inherited
     /// properties, accessors, proxies, and abrupt completions remain observable.
@@ -1406,18 +1430,9 @@ public static class ArrayBuiltIns
     private static RuntimeValue ReverseV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromObject(ReverseArrayLike(interpreter, arr));
 
-    private static RuntimeValue ToReversedV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        // ECMA-262 23.1.3.33: produces a dense array — holes are fetched via Get
-        // (returns undefined) and assigned via CreateDataPropertyOrThrow. So
-        // toReversed FILLS holes with undefined. (This is different from reverse,
-        // which preserves holes.)
-        int len = arr.Length;
-        var result = new List<object?>(len);
-        for (int i = len - 1; i >= 0; i--)
-            result.Add(arr[i]);  // user-facing read: holes become undefined
-        return RuntimeValue.FromObject(new SharpTSArray(result));
-    }
+    private static RuntimeValue ToReversedV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromObject(ToReversedArrayLike(interpreter, arr));
 
     private static RuntimeValue WithV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {

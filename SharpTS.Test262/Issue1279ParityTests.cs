@@ -1738,6 +1738,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/toReversed/get-descending-order.js")]
+    [InlineData("built-ins/Array/prototype/toReversed/length-decreased-while-iterating.js")]
+    public void Array_toReversed_reads_captured_indices_in_descending_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/length-exceeding-array-length-limit.js")]
     [InlineData("built-ins/Array/prototype/toSorted/length-exceeding-array-length-limit.js")]
     [InlineData("built-ins/Array/prototype/with/length-exceeding-array-length-limit.js")]
