@@ -118,6 +118,12 @@ public class ParsedModule
     public bool IsExecuted { get; set; }
 
     /// <summary>
+    /// True when the module was discovered only through a literal dynamic import
+    /// and is compiled for on-demand initialization rather than the entry graph.
+    /// </summary>
+    public bool IsDynamicImportOnly { get; set; }
+
+    /// <summary>
     /// Whether the module has been type-checked.
     /// </summary>
     public bool IsTypeChecked { get; set; }

@@ -267,6 +267,8 @@ public partial class TypeChecker
         {
             // Track this path for module discovery (even if resolution fails)
             _dynamicImportPaths.Add(literal.Value);
+            if (_currentModule is not null)
+                _dynamicImportReferences.Add((literal.Value, _currentModule.Path));
 
             // Try to resolve the module and get its exports
             if (_moduleResolver != null && _currentModule != null)

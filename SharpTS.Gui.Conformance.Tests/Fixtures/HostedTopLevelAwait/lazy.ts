@@ -1,9 +1,11 @@
 import { trace } from "@sharpts/gui/internal-testing";
 import { prefix } from "./lazy-dependency";
 
+function recordLazyMicrotask(): void {
+    trace("tla-lazy-microtask");
+}
+
 trace("tla-lazy-start");
-export const value = prefix + await new Promise<number>(
-    resolve => setTimeout(() => resolve(2), 2)
-);
+export const value = prefix + await Promise.resolve(2);
 trace("tla-lazy-end");
-queueMicrotask(() => trace("tla-lazy-microtask"));
+queueMicrotask(recordLazyMicrotask as any);

@@ -1,11 +1,25 @@
 import { StackPanel, TextBlock, Window, renderDesktop } from "@sharpts/gui";
 import { closeWindow, trace } from "@sharpts/gui/internal-testing";
 
-process.on("beforeExit", () => {
+function closeFixtureWindow(): void {
+    closeWindow();
+}
+
+function recordBeforeExitMicrotask(): void {
+    trace("tla-before-exit-microtask");
+}
+
+function recordBeforeExit(): void {
     trace("tla-before-exit");
-    queueMicrotask(() => trace("tla-before-exit-microtask"));
-});
-process.on("exit", () => trace("tla-exit"));
+    queueMicrotask(recordBeforeExitMicrotask as any);
+}
+
+function recordExit(): void {
+    trace("tla-exit");
+}
+
+process.on("beforeExit", recordBeforeExit);
+process.on("exit", recordExit);
 
 trace("tla-main-start");
 try {
@@ -54,4 +68,4 @@ renderDesktop(
     </Window>
 );
 trace("tla-window-mounted");
-setTimeout((() => closeWindow()) as any, 1);
+setTimeout(closeFixtureWindow as any, 1);

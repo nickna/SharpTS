@@ -38,7 +38,7 @@ tooling, release closure, and ecosystem depth.
 | --- | --- | --- |
 | Phase 0 | **Complete for the active Windows scope.** Cross-platform feasibility remains intentionally incomplete | macOS gates are preserved exclusively under the unscheduled Phase 4 reactivation track |
 | Phase 1A | **Complete.** Hosted interpreter lifecycle, diagnostics, top-level await, and conformance are closed | Regression coverage only |
-| Phase 1B | Compiled hosted ABI and scheduler are implemented | Match the completed interpreter contract and stabilize the ABI/tool terminology |
+| Phase 1B | **Complete in the Phase 1B implementation commit.** Compiled module jobs, dynamic imports, shutdown, traces, and terminology match the Hosted ABI 1 contract | Regression coverage and release evidence only |
 | Phase 2A | Complete | No additional phase work; regression coverage only |
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | SDK build/run/publish works | Add templates, documentation, install-location robustness, and complete SDK ergonomics |
@@ -167,6 +167,14 @@ module-job suite without `WaitForPromise`, nested dispatchers, polling, or synch
 replacement.
 
 ## Phase 1B residual: compiled hosted parity and ABI stabilization
+
+**Resolution (2026-08-09): complete.** Hosted ABI 1 absorbs the expanded module-job semantics
+without changing its public host entry points. Compiled ESM uses generated asynchronous module
+runners for compound, conditional, loop, caught-rejection, default/named-export, and dynamic
+import paths. Literal dynamic-import closure is discovered and type-checked at preparation time,
+but evaluated only on demand. Interpreted and compiled Avalonia Headless fixtures now assert the
+same dependency/microtask order and lifecycle trace. Compatibility and rebuild rules are recorded
+in `docs/gui/desktop-status.md`.
 
 ### Work
 

@@ -320,6 +320,16 @@ public sealed class HostedInterpreterRuntime : ISharpTSHostedRuntime
             _moduleIndex++;
         }
 
+        // Literal dynamic-import targets are prepared with the program so the
+        // interpreter can resolve and type-check them, but their bodies remain
+        // lazy. They are evaluated by ExecuteHostedDynamicImportAsync only when
+        // guest code actually reaches the corresponding import() expression.
+        while (_moduleIndex < _program.RuntimeModules.Count &&
+               _program.RuntimeModules[_moduleIndex].IsDynamicImportOnly)
+        {
+            _moduleIndex++;
+        }
+
         if (_moduleIndex >= _program.RuntimeModules.Count)
         {
             if (!_mainStarted && _program.RuntimeModules.Count > 0)

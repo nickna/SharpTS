@@ -23,6 +23,12 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     private readonly List<Action> _cleanup = [];
     private readonly object _cleanupGate = new();
     private readonly object _timerGate = new();
+    private readonly object _moduleGate = new();
+    private readonly Dictionary<string, HostedModuleRegistration> _hostedModules =
+        new(StringComparer.Ordinal);
+    private readonly Dictionary<string, Task<object?>> _hostedModuleTasks =
+        new(StringComparer.Ordinal);
+    private readonly HashSet<string> _activeHostedModules = new(StringComparer.Ordinal);
     private readonly TaskCompletionSource _initialization =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _shutdown =
@@ -271,6 +277,85 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         ArgumentNullException.ThrowIfNull(steps);
         var sequence = new InitializationSequence(this, steps);
         return sequence.Run();
+    }
+
+    /// <summary>Registers a compiled module initializer under a runtime import alias.</summary>
+    public void RegisterHostedModule(
+        string alias,
+        string canonicalPath,
+        Func<Task> initializer)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(alias);
+        ArgumentException.ThrowIfNullOrWhiteSpace(canonicalPath);
+        ArgumentNullException.ThrowIfNull(initializer);
+        lock (_moduleGate)
+            _hostedModules[alias] = new HostedModuleRegistration(canonicalPath, initializer);
+    }
+
+    /// <summary>
+    /// Initializes a compiled module once and returns its namespace. Active self-imports
+    /// reject instead of awaiting their own initialization task indefinitely.
+    /// </summary>
+    public Task<object?> ImportHostedModule(string alias, Func<object?> namespaceFactory)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(alias);
+        ArgumentNullException.ThrowIfNull(namespaceFactory);
+
+        HostedModuleRegistration registration;
+        lock (_moduleGate)
+        {
+            if (!_hostedModules.TryGetValue(alias, out registration!))
+                return Task.FromResult(namespaceFactory());
+            if (_activeHostedModules.Contains(registration.CanonicalPath))
+            {
+                return Task.FromException<object?>(new InvalidOperationException(
+                    $"Dynamic import of evaluating module '{registration.CanonicalPath}' would deadlock."));
+            }
+            if (_hostedModuleTasks.TryGetValue(
+                    registration.CanonicalPath, out Task<object?>? existing))
+                return existing;
+
+            _activeHostedModules.Add(registration.CanonicalPath);
+            Task<object?> pending = CompleteHostedModuleAsync(registration, namespaceFactory);
+            _hostedModuleTasks[registration.CanonicalPath] = pending;
+            return pending;
+        }
+    }
+
+    private async Task<object?> CompleteHostedModuleAsync(
+        HostedModuleRegistration registration,
+        Func<object?> namespaceFactory)
+    {
+        try
+        {
+            await registration.Initializer().ConfigureAwait(false);
+            return namespaceFactory();
+        }
+        finally
+        {
+            lock (_moduleGate)
+                _activeHostedModules.Remove(registration.CanonicalPath);
+        }
+    }
+
+    /// <summary>
+    /// Attributes an uncaught compiled module-initialization failure to its source
+    /// module without changing errors handled by guest try/catch code.
+    /// </summary>
+    public static async Task AttributeModuleInitialization(Task task, string modulePath)
+    {
+        ArgumentNullException.ThrowIfNull(task);
+        ArgumentException.ThrowIfNullOrWhiteSpace(modulePath);
+        try
+        {
+            await task.ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"Module initialization failed in '{modulePath}': {exception.Message}",
+                exception);
+        }
     }
 
     public Task ObserveProgramMain(Task<object?> task, bool useNumericResult)
@@ -778,6 +863,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
                     if (task.IsCompleted)
                     {
                         ObserveTask(task);
+                        runtime.DrainMicrotaskCheckpoint();
                         continue;
                     }
 
@@ -787,6 +873,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
                             try
                             {
                                 ObserveTask(completed);
+                                runtime.DrainMicrotaskCheckpoint();
                                 Advance();
                             }
                             catch (Exception exception)
@@ -808,6 +895,10 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
             }
         }
     }
+
+    private sealed record HostedModuleRegistration(
+        string CanonicalPath,
+        Func<Task> Initializer);
 }
 
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]

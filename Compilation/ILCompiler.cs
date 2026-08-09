@@ -221,6 +221,8 @@ public partial class ILCompiler
     private TypeBuilder? _hostedRuntimeType;
     private TypeBuilder? _hostedFactoryType;
     private readonly Dictionary<string, List<MethodBuilder>> _hostedModuleSteps = [];
+    private readonly Dictionary<string, string> _hostedModuleRunnerKeys = [];
+    private readonly Dictionary<string, FieldBuilder> _moduleInitializedFields = [];
 
     /// <summary>
     /// Enables the experimental versioned hosted ABI for DLL output.
@@ -1323,6 +1325,9 @@ public partial class ILCompiler
             {
                 DefineDeclarationFromStatement(stmt);
             }
+
+            if (_hosted && TopLevelAwaitDetector.Contains(module.Statements))
+                DefineHostedModuleRunner(module);
         }
         _modules.CurrentPath = null;
         _modules.CurrentDotNetNamespace = null;

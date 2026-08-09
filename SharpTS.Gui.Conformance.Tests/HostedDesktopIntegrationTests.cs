@@ -254,8 +254,10 @@ public sealed class HostedDesktopIntegrationTests
         }
     }
 
-    [Fact]
-    public async Task InterpretedHeadless_InitializesExpandedTopLevelAwaitModuleJobs()
+    [Theory]
+    [InlineData("interpreted")]
+    [InlineData("compiled")]
+    public async Task Headless_InitializesExpandedTopLevelAwaitModuleJobs(string mode)
     {
         string repositoryRoot = FindRepositoryRoot();
 #if DEBUG
@@ -289,6 +291,67 @@ public sealed class HostedDesktopIntegrationTests
                     overwrite: true);
             }
 
+            string conformanceRoot = Path.Combine(
+                repositoryRoot,
+                "SharpTS.Gui.Conformance.Tests",
+                "obj",
+                configuration,
+                "net10.0",
+                ".sharpts-gui-conformance");
+            string stageConfigDirectory = Path.Combine(stageDirectory, ".sharpts");
+            Directory.CreateDirectory(stageConfigDirectory);
+            File.Copy(
+                Path.Combine(conformanceRoot, "tsconfig.json"),
+                Path.Combine(stageConfigDirectory, "tsconfig.json"),
+                overwrite: true);
+            CopyDirectory(
+                Path.Combine(conformanceRoot, "node_modules"),
+                Path.Combine(stageConfigDirectory, "node_modules"));
+            File.Copy(
+                Path.Combine(repositoryRoot, "SharpTS.Gui.Conformance.Tests", "GuiConformanceApp.json"),
+                Path.Combine(stageConfigDirectory, "app.json"),
+                overwrite: true);
+
+            if (mode == "compiled")
+            {
+                string compilerAssembly = Path.Combine(
+                    repositoryRoot, "bin", configuration, "net10.0", "SharpTS.dll");
+                string bridgeAssembly = Path.Combine(
+                    repositoryRoot, "SharpTS.Gui", "bin", configuration, "net10.0", "SharpTS.Gui.dll");
+                var compile = new ProcessStartInfo("dotnet")
+                {
+                    WorkingDirectory = stageDirectory,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                };
+                compile.ArgumentList.Add(compilerAssembly);
+                compile.ArgumentList.Add("-p");
+                compile.ArgumentList.Add(Path.Combine(stageConfigDirectory, "tsconfig.json"));
+                compile.ArgumentList.Add("-r");
+                compile.ArgumentList.Add(bridgeAssembly);
+                compile.ArgumentList.Add("-c");
+                compile.ArgumentList.Add(Path.Combine(guestDirectory, "main.tsx"));
+                compile.ArgumentList.Add("--target");
+                compile.ArgumentList.Add("dll");
+                compile.ArgumentList.Add("--hosted");
+                compile.ArgumentList.Add("--verify");
+                compile.ArgumentList.Add("--quiet");
+                compile.ArgumentList.Add("-o");
+                compile.ArgumentList.Add(Path.Combine(stageDirectory, "SharpTS.Gui.Guest.dll"));
+                using var compileProcess = Process.Start(compile)
+                    ?? throw new InvalidOperationException("Could not start the GUI guest compiler.");
+                Task<string> compileStdoutTask = compileProcess.StandardOutput.ReadToEndAsync();
+                Task<string> compileStderrTask = compileProcess.StandardError.ReadToEndAsync();
+                await compileProcess.WaitForExitAsync();
+                string compileStdout = await compileStdoutTask;
+                string compileStderr = await compileStderrTask;
+                Assert.True(compileProcess.ExitCode == 0,
+                    $"Hosted top-level-await compilation failed with {compileProcess.ExitCode}." +
+                    $"{Environment.NewLine}stdout:{Environment.NewLine}{compileStdout}" +
+                    $"{Environment.NewLine}stderr:{Environment.NewLine}{compileStderr}");
+            }
+
             var startInfo = new ProcessStartInfo("dotnet")
             {
                 WorkingDirectory = stageDirectory,
@@ -298,7 +361,7 @@ public sealed class HostedDesktopIntegrationTests
             };
             startInfo.ArgumentList.Add(hostAssembly);
             startInfo.ArgumentList.Add("--mode");
-            startInfo.ArgumentList.Add("interpreted");
+            startInfo.ArgumentList.Add(mode);
             startInfo.ArgumentList.Add("--headless");
             startInfo.ArgumentList.Add("--trace");
             startInfo.ArgumentList.Add(tracePath);
@@ -353,7 +416,10 @@ public sealed class HostedDesktopIntegrationTests
             foreach (string stage in expected)
             {
                 int current = Array.IndexOf(stages, stage);
-                Assert.True(current > previous, $"Trace stage '{stage}' was missing or out of order.");
+                Assert.True(
+                    current > previous,
+                    $"Trace stage '{stage}' was missing or out of order. Actual: " +
+                    string.Join(", ", stages));
                 previous = current;
             }
         }

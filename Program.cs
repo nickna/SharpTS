@@ -846,16 +846,32 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
     timings?.Complete(ExecutionPhaseTiming.TypeCheck, typeCheckStartedAt);
 
-    var dynamicPaths = checker.DynamicImportPaths;
-    if (dynamicPaths.Count > 0)
+    var dynamicModules = new List<ParsedModule>();
+    var dynamicModulePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var processedDynamicImports = new HashSet<(string Specifier, string ImportingModulePath)>();
+    while (true)
     {
+        var pendingImports = checker.DynamicImportReferences
+            .Where(reference => processedDynamicImports.Add(reference))
+            .ToArray();
+        if (pendingImports.Length == 0)
+            break;
         var newModules = MeasurePhase(timings,
             ExecutionPhaseTiming.LoadDynamicImports,
-            () => resolver.LoadDynamicImportModules(dynamicPaths, absolutePath, decoratorMode));
+            () => pendingImports
+                .SelectMany(reference => resolver.LoadDynamicImportModules(
+                    [reference.Specifier],
+                    reference.ImportingModulePath,
+                    decoratorMode))
+                .Where(module => dynamicModulePaths.Add(module.Path))
+                .ToList());
         if (newModules.Count > 0)
         {
-            allModules = resolver.GetRuntimeModulesInOrder(entryModule);
-            typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
+            dynamicModules.AddRange(newModules);
+            allModules = resolver.GetRuntimeModulesInOrder(
+                dynamicModules.Append(entryModule));
+            typeModules = resolver.GetModulesInOrder(
+                declarationModules.Concat(dynamicModules).Append(entryModule));
 
             typeCheckStartedAt = timings?.Start() ?? 0;
             try
@@ -936,7 +952,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
 
     if (hosted && target != OutputTarget.Dll)
-        throw new InvalidOperationException("The hosted prototype is valid only for DLL output.");
+        throw new InvalidOperationException("Hosted ABI output is valid only for DLL output.");
 
     if (target == OutputTarget.Exe)
     {

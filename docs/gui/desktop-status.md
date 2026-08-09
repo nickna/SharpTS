@@ -17,10 +17,9 @@ distinction is deliberate and no cross-platform compatibility is implied.
 
 ## Phase 1A stabilization: shutdown, diagnostics, and interpreted top-level await
 
-Phase 1A.1 and 1A.2 are complete at `b2c0f555`; Phase 1A.3 is complete in the following worktree
-based on that commit. All three chunks were verified on Windows x64 on 2026-08-08. The final merge
-commit should replace the Phase 1A.3 worktree reference in the release record. Hosted ABI 1, GUI
-API 2, application manifests, and the supported application surface are unchanged.
+Phase 1A.1 and 1A.2 are complete at `b2c0f555`; Phase 1A.3 is complete at `b3c993e6`.
+All three chunks were verified on Windows x64 on 2026-08-08. Hosted ABI 1, GUI API 2,
+application manifests, and the supported application surface are unchanged.
 
 Every desktop termination path now converges on one idempotent host coordinator. A native window
 close is cancelled long enough to run hosted shutdown, then the close interception is detached so
@@ -87,8 +86,47 @@ successful dynamic-import dependency evaluation; missing, rejected, and cyclic d
 module-path error attribution; and shutdown during a suspended timer await with no late callback.
 The Avalonia Headless trace covers successful and caught-rejection cases for compound,
 conditional, loop, and dynamic-import awaits, dependency and module microtask checkpoints, window
-mount, and the exact `beforeExit` through runtime-disposal shutdown sequence. Compiled expansion to
-the same accepted syntax and interpreted/compiled trace parity remain Phase 1B work.
+mount, and the exact `beforeExit` through runtime-disposal shutdown sequence.
+
+## Phase 1B stabilization: compiled module-job parity and ABI rules
+
+Phase 1B is complete in the Phase 1B implementation commit. Compiled hosted ESM now uses the same
+async state-machine lowering as ordinary async functions instead of splitting only direct await
+statements. It supports awaits nested in compound expressions, conditionals, loops, and
+try/catch; preserves export visibility before dependent jobs run; discovers literal dynamic-import
+graphs during preparation; initializes those graphs lazily; rejects missing, failed, and active
+self-imports in guest code; attributes uncaught initialization failure to the module path; and
+cancels suspended initialization without accepting late timer work. Each compiled module job runs
+a complete microtask checkpoint before the next dependency begins.
+
+Hosted ABI remains version 1. These changes refine scheduler and module semantics behind the
+existing validated runtime factory and do not change the hosted assembly entry-point shape.
+Compatibility is enforced as follows:
+
+| Contract | Compatibility rule |
+| --- | --- |
+| Hosted ABI | Persisted compiled guests declare ABI 1. A different or missing ABI marker is rejected before runtime construction and guest initialization. |
+| GUI API | Application manifests declare GUI API 2. Other versions fail before payload loading; no API 1 compatibility mode is active. |
+| SDK/runtime package | Applications must rebuild with the SDK/runtime package that supplies their manifest and generated TypeScript surface. Package assets are an atomic contract rather than independently versioned files. |
+| Application manifest | API 2 requires the compiled/interpreted payload fields plus descriptor schema metadata. Missing required metadata is a rebuild-with-current-SDK error. |
+| Descriptor schema | Schema version 1 and its semantic SHA-256 must match the host exactly. Diagnostics include host and application values, and validation occurs before guest initialization. |
+
+The cross-mode Avalonia Headless fixture asserts identical ordered stages for caught compound,
+conditional, and loop rejections; rejected dynamic import; lazy dependency evaluation; dependency
+and module microtask checkpoints; resumed exports; window mount; and `beforeExit`/`exit` cleanup.
+The hosted unit suite additionally covers default and function exports, missing/failed/self dynamic
+imports, module-path attribution, ABI construction, and cancellation of a suspended top-level
+await.
+
+### Phase 1B verification
+
+| Gate | Result |
+| --- | --- |
+| Hosted runtime unit suite | `dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests"`: 32 passed, zero skipped, zero failed |
+| GUI conformance | `dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release --no-build --no-restore`: 51 passed, zero skipped, zero failed |
+| Release solution build | `dotnet build SharpTS.sln -c Release --no-restore`: zero warnings, zero errors |
+| Canonical core suite | CI/release exclusions for `LiveNetwork`, `LoadSensitive`, and `npm`: 16,536 passed, two documented HTTP lifecycle skips, zero failed |
+| Packaged Windows x64 consumer | `SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow`: package audit, path-with-spaces rebuild, IL verification, interpreted/compiled Headless and real-window directory runs, asset closure, and compiled single-file Headless/real-window runs passed |
 
 ## Current 0.2 development status
 
@@ -150,10 +188,9 @@ claim that every Windows architecture has executed natively and not a cross-plat
 - Initialization faults and uncaught errors route through the host error sink and ordered shutdown.
   Graceful shutdown observes `beforeExit`, reverse cleanup, and `exit`; `process.exit(code)` requests
   host shutdown without calling `Environment.Exit`.
-- Hosted interpreted ESM supports static and dynamically discovered top-level-await graphs,
-  including awaited compound expressions, conditionals, loops, and dynamic-import specifiers.
-  Compiled hosting remains at standalone awaits and direct awaited variable/export initializers;
-  expansion and cross-mode trace parity remain Phase 1B work.
+- Hosted interpreted and compiled ESM support static and dynamically discovered top-level-await
+  graphs, including awaited compound expressions, conditionals, loops, dynamic-import specifiers,
+  ordered module-job microtask checkpoints, and cancellation during suspended initialization.
 
 ### Renderer and TypeScript surface
 
@@ -221,7 +258,7 @@ claim that every Windows architecture has executed natively and not a cross-plat
 | --- | --- | --- |
 | Phase 0 | Avalonia could own a responsive Windows UI thread while interpreted and compiled guests mounted a real window, handled an event, timer, promise, and off-thread completion, and published a complete framework-dependent asset closure. | Established feasibility, but used a 5 ms dispatcher pump, one-time mounting, a four-control surface, and separate host/guest assemblies. |
 | Phase 1A | A framework-neutral interpreted dispatcher/lifetime/error contract delivered deterministic turns, timers, lifecycle, cleanup, static and dynamic ESM module jobs, and expanded top-level-await syntax. | Removed polling and synchronous promise pumping from interpreted hosting and replaced ad hoc task delivery with a deterministic scheduler; compiled syntax and trace parity remain Phase 1B work. |
-| Phase 1B | Hosted ABI 1 and the compiled scheduler matched interpreted scheduling, lifecycle, top-level-await subset, synchronization-context, and no-pump behavior. | Removed compiled polling and the prototype initializer/pump pair; replaced it with validated hosted assembly metadata and a shared runtime contract. |
+| Phase 1B | Hosted ABI 1 and the compiled scheduler matched interpreted scheduling, lifecycle, expanded top-level-await, dynamic-import, synchronization-context, and no-pump behavior. | Removed compiled polling and the prototype initializer/pump pair; replaced it with validated hosted assembly metadata, asynchronous module runners, and a shared runtime contract. |
 | Phase 2 | A retained keyed renderer, signals, refs, latest-callback events, validation, and deterministic cleanup produced identical interpreted and compiled traces. | Replaced one-time recursive mounting and imperative sample updates; retained the original small descriptor set and local source package. |
 | Phase 3A | A separately restored MSBuild SDK drove an isolated consumer through build, clean/rebuild, publish, IL verification, Headless, and real-window execution. | Replaced repository-local host compilation and copying with an SDK-owned manifest, overlay, launcher pipeline, and packaged consumer boundary. |
 | Windows preview | Durable assembly names, typed layout/display/form controls, controlled inputs, Windows-only RID filtering, generated consumer launcher, and compiled self-contained single-file deployment passed on x64; ARM64 cross-publish passed. | Expanded beyond the four-control and framework-dependent-only experiment, reduced the all-platform package, and added release-preflight and Windows fatal-diagnostic safeguards. |

@@ -118,6 +118,39 @@ public static class SharpTSProgramLoader
         if (errors.Length != 0)
             throw new SharpTSProgramLoadException(errors);
 
+        var dynamicModules = new List<ParsedModule>();
+        var dynamicModulePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var processedImports = new HashSet<(string Specifier, string ImportingModulePath)>();
+        while (true)
+        {
+            var pendingImports = checker.DynamicImportReferences
+                .Where(reference => processedImports.Add(reference))
+                .ToArray();
+            if (pendingImports.Length == 0)
+                break;
+            List<ParsedModule> discovered = pendingImports
+                .SelectMany(reference => resolver.LoadDynamicImportModules(
+                    [reference.Specifier],
+                    reference.ImportingModulePath,
+                    decoratorMode))
+                .Where(module => dynamicModulePaths.Add(module.Path))
+                .ToList();
+            if (discovered.Count == 0)
+                continue;
+            dynamicModules.AddRange(discovered);
+            runtimeModules = resolver.GetRuntimeModulesInOrder(
+                dynamicModules.Append(entryModule));
+            typeModules = resolver.GetModulesInOrder(
+                declarationModules.Concat(dynamicModules).Append(entryModule));
+            typeMap = checker.CheckModules(typeModules, resolver);
+            diagnostics = checker.GetDiagnostics().ToArray();
+            errors = diagnostics
+                .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+                .ToArray();
+            if (errors.Length != 0)
+                throw new SharpTSProgramLoadException(errors);
+        }
+
         return new SharpTSProgram(
             absolutePath,
             configuration,

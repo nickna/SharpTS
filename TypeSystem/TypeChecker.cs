@@ -1065,12 +1065,21 @@ public partial class TypeChecker
     // Track dynamic import paths discovered during type checking
     // Used for module discovery - ensures dynamically imported modules are compiled
     private readonly HashSet<string> _dynamicImportPaths = [];
+    private readonly HashSet<(string Specifier, string ImportingModulePath)>
+        _dynamicImportReferences = [];
 
     /// <summary>
     /// Gets the set of module paths discovered in dynamic import expressions with string literal paths.
     /// These paths are relative to the importing module and should be resolved before use.
     /// </summary>
     public IReadOnlySet<string> DynamicImportPaths => _dynamicImportPaths;
+
+    /// <summary>
+    /// Literal dynamic imports paired with the source module that owns the
+    /// specifier. Compilers use this to resolve nested relative imports correctly.
+    /// </summary>
+    public IReadOnlySet<(string Specifier, string ImportingModulePath)>
+        DynamicImportReferences => _dynamicImportReferences;
 
     /// <summary>
     /// Type-checks the given statements and returns a TypeMap with resolved types for all expressions.

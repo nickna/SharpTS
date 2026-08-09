@@ -568,8 +568,9 @@ public partial class ILCompiler
         var initializedField = moduleType.DefineField(
             "_initialized",
             typeof(bool),
-            FieldAttributes.Private | FieldAttributes.Static
+            FieldAttributes.Assembly | FieldAttributes.Static
         );
+        _moduleInitializedFields[module.Path] = initializedField;
 
         // Create $Initialize method
         var initMethod = moduleType.DefineMethod(
@@ -613,10 +614,9 @@ public partial class ILCompiler
         bool hasHostedTopLevelAwait = _hosted && TopLevelAwaitDetector.Contains(module.Statements);
         if (hasHostedTopLevelAwait)
         {
-            EmitHostedModuleSteps(module, moduleType);
-            // Hosted initialization executes the resumable steps above. Keep the
-            // legacy synchronous initializer as an inert registration target; it
-            // must not also emit or execute the same statements.
+            // The internal async module runner executes this module through the
+            // compiler's normal async state-machine implementation. Keep the
+            // synchronous initializer inert so the statements cannot run twice.
             il.MarkLabel(skipLabel);
             il.Emit(OpCodes.Ret);
             return;
@@ -673,6 +673,7 @@ public partial class ILCompiler
             typeof(bool),
             FieldAttributes.Private | FieldAttributes.Static
         );
+        _moduleInitializedFields[script.Path] = initializedField;
 
         var il = initMethod.GetILGenerator();
 
@@ -800,21 +801,52 @@ public partial class ILCompiler
                 continue;
             if (_moduleGetNamespaceMethods.TryGetValue(module.Path, out MethodBuilder? getNamespaceMethod))
             {
-                EmitRegisterModule(il, GetRelativeModulePath(module, modules[^1]), getNamespaceMethod);
+                string relativePath = GetRelativeModulePath(module, modules[^1]);
+                EmitRegisterModule(il, relativePath, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(relativePath), getNamespaceMethod);
                 EmitRegisterModule(il, module.Path, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(module.Path), getNamespaceMethod);
                 if (!string.IsNullOrEmpty(module.ModuleName))
                     EmitRegisterModule(il, module.ModuleName, getNamespaceMethod);
             }
         }
         InitializeNamespaceFields(il);
 
-        var steps = new List<MethodBuilder>();
         ParsedModule? entryModule = modules.Count > 0 ? modules[^1] : null;
         int wrapperIndex = 0;
+        var moduleSteps = new Dictionary<string, MethodBuilder>(StringComparer.OrdinalIgnoreCase);
         foreach (ParsedModule module in modules)
         {
-            if (module.IsCommonJs && module != entryModule)
+            if (_hostedModuleRunnerKeys.TryGetValue(module.Path, out string? runnerKey))
+            {
+                MethodBuilder asyncStep = EmitHostedAsyncModuleStep(
+                    _functions.Builders[runnerKey],
+                    module.Path,
+                    _moduleInitializedFields.GetValueOrDefault(module.Path),
+                    wrapperIndex++);
+                Stmt[] importPrelude = module.Statements
+                    .Where(IsHostedModulePreludeStatement)
+                    .ToArray();
+                Stmt[] exportPostlude = module.Statements
+                    .Where(IsHostedModulePostludeStatement)
+                    .ToArray();
+                var sequence = new List<MethodBuilder>();
+                if (importPrelude.Length > 0)
+                {
+                    sequence.Add(EmitHostedSynchronousStatementsStep(
+                        module, importPrelude, wrapperIndex++));
+                }
+                sequence.Add(asyncStep);
+                if (exportPostlude.Length > 0)
+                {
+                    sequence.Add(EmitHostedSynchronousStatementsStep(
+                        module, exportPostlude, wrapperIndex++));
+                }
+                moduleSteps[module.Path] = sequence.Count == 1
+                    ? asyncStep
+                    : EmitHostedStepSequence(sequence, wrapperIndex++);
                 continue;
+            }
             if ((module.IsScript || module.IsCommonJs) &&
                 TopLevelAwaitDetector.Contains(module.Statements))
             {
@@ -822,13 +854,55 @@ public partial class ILCompiler
                 throw new InvalidOperationException(
                     $"Hosted compiled top-level await is not supported in {kind} '{module.Path}'.");
             }
-            if (_hostedModuleSteps.TryGetValue(module.Path, out List<MethodBuilder>? moduleSteps))
+            if (_hostedModuleSteps.TryGetValue(module.Path, out List<MethodBuilder>? legacySteps))
             {
-                steps.AddRange(moduleSteps);
+                if (legacySteps.Count == 1)
+                    moduleSteps[module.Path] = legacySteps[0];
                 continue;
             }
             if (_modules.InitMethods.TryGetValue(module.Path, out MethodBuilder? initMethod))
-                steps.Add(EmitHostedSynchronousModuleStep(initMethod, wrapperIndex++));
+                moduleSteps[module.Path] = EmitHostedSynchronousModuleStep(initMethod, wrapperIndex++);
+        }
+
+        var compositeInitializers = new Dictionary<string, MethodBuilder>(StringComparer.OrdinalIgnoreCase);
+        var importFactories = new Dictionary<string, MethodBuilder>(StringComparer.OrdinalIgnoreCase);
+        foreach (ParsedModule module in modules)
+        {
+            if (!moduleSteps.ContainsKey(module.Path))
+                continue;
+            MethodBuilder composite = EmitHostedModuleCompositeInitializer(
+                module, modules, moduleSteps, wrapperIndex++);
+            compositeInitializers[module.Path] = composite;
+
+            if (!module.IsScript &&
+                _moduleGetNamespaceMethods.TryGetValue(module.Path, out MethodBuilder? getNamespace))
+            {
+                MethodBuilder factory = EmitHostedModuleImportFactory(
+                    module, getNamespace, wrapperIndex++);
+                importFactories[module.Path] = factory;
+                string relativePath = GetRelativeModulePath(module, modules[^1]);
+                EmitRegisterHostedModule(
+                    il, relativePath, module.Path, composite);
+                EmitRegisterHostedModule(
+                    il, RemoveModuleExtension(relativePath), module.Path, composite);
+                EmitRegisterHostedModule(il, module.Path, module.Path, composite);
+                EmitRegisterHostedModule(
+                    il, RemoveModuleExtension(module.Path), module.Path, composite);
+                if (!string.IsNullOrEmpty(module.ModuleName))
+                    EmitRegisterHostedModule(il, module.ModuleName, module.Path, composite);
+            }
+        }
+
+        var steps = new List<MethodBuilder>();
+        foreach (ParsedModule module in modules)
+        {
+            if (module.IsDynamicImportOnly ||
+                (module.IsCommonJs && module != entryModule))
+                continue;
+            if (importFactories.TryGetValue(module.Path, out MethodBuilder? factory))
+                steps.Add(factory);
+            else if (compositeInitializers.TryGetValue(module.Path, out MethodBuilder? composite))
+                steps.Add(composite);
         }
         if (entryModule is not null &&
             FindMainFunction(entryModule.Statements) is { } main)
@@ -855,6 +929,317 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldloc, stepArray);
         il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
             nameof(SharpTSHostedRuntimeBase.RunInitializationSteps))!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedAsyncModuleStep(
+        MethodBuilder runner,
+        string modulePath,
+        FieldBuilder? initializedField,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedAsyncModuleStep_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        Label run = il.DefineLabel();
+        if (initializedField is not null)
+        {
+            il.Emit(OpCodes.Ldsfld, initializedField);
+            il.Emit(OpCodes.Brfalse, run);
+            il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(run);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stsfld, initializedField);
+        }
+        il.Emit(OpCodes.Call, runner);
+        il.Emit(OpCodes.Ldstr, modulePath);
+        il.Emit(OpCodes.Call, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.AttributeModuleInitialization))!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedModuleCompositeInitializer(
+        ParsedModule module,
+        IReadOnlyList<ParsedModule> modules,
+        IReadOnlyDictionary<string, MethodBuilder> moduleSteps,
+        int index)
+    {
+        var reachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Visit(ParsedModule current)
+        {
+            if (!reachable.Add(current.Path)) return;
+            foreach (ParsedModule dependency in current.Dependencies)
+                Visit(dependency);
+            foreach (ParsedModule dependency in current.RuntimeDependencies)
+                Visit(dependency);
+        }
+        Visit(module);
+        MethodBuilder[] steps = modules
+            .Where(candidate => reachable.Contains(candidate.Path))
+            .Select(candidate => moduleSteps.GetValueOrDefault(candidate.Path))
+            .Where(step => step is not null)
+            .Cast<MethodBuilder>()
+            .ToArray();
+
+        var method = _programType.DefineMethod(
+            $"$HostedModuleInitialize_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        EmitHostedStepArray(il, steps);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedModuleImportFactory(
+        ParsedModule module,
+        MethodBuilder getNamespace,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModuleImport_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task<object?>),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Ldstr, module.Path);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, getNamespace);
+        il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructor(
+            [typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.ImportHostedModule))!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private static void EmitRegisterHostedModule(
+        ILGenerator il,
+        string alias,
+        string canonicalPath,
+        MethodBuilder initializer)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, alias);
+        il.Emit(OpCodes.Ldstr, canonicalPath);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, initializer);
+        il.Emit(OpCodes.Newobj, typeof(Func<Task>).GetConstructor(
+            [typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.RegisterHostedModule))!);
+    }
+
+    private void EmitHostedStepArray(ILGenerator il, IReadOnlyList<MethodBuilder> steps)
+    {
+        Type funcTask = typeof(Func<Task>);
+        LocalBuilder stepArray = il.DeclareLocal(funcTask.MakeArrayType());
+        il.Emit(OpCodes.Ldc_I4, steps.Count);
+        il.Emit(OpCodes.Newarr, funcTask);
+        il.Emit(OpCodes.Stloc, stepArray);
+        ConstructorInfo delegateCtor = funcTask.GetConstructor([typeof(object), typeof(IntPtr)])!;
+        for (int stepIndex = 0; stepIndex < steps.Count; stepIndex++)
+        {
+            il.Emit(OpCodes.Ldloc, stepArray);
+            il.Emit(OpCodes.Ldc_I4, stepIndex);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, steps[stepIndex]);
+            il.Emit(OpCodes.Newobj, delegateCtor);
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Ldloc, stepArray);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.RunInitializationSteps))!);
+    }
+
+    /// <summary>
+    /// Defines an internal async function for a module containing top-level await.
+    /// Using the regular async state-machine compiler gives hosted modules the same
+    /// suspension support as async functions, including compound expressions,
+    /// control flow, loops, and try/catch/finally.
+    /// </summary>
+    private void DefineHostedModuleRunner(ParsedModule module)
+    {
+        string name = "$HostedModuleRunner_" +
+            CompilationContext.SanitizeModuleName(module.ModuleName);
+        var nameToken = new Token(TokenType.IDENTIFIER, name, null, 0);
+        string? defaultBinding = RegisterHostedExportBinding(
+            module, "$default", "$HostedDefault_");
+        string? exportAssignmentBinding = RegisterHostedExportBinding(
+            module, "$exportAssignment", "$HostedExportAssignment_");
+        var body = new List<Stmt>();
+        foreach (Stmt statement in module.Statements)
+        {
+            if (LowerHostedTopLevelStatement(
+                    statement, defaultBinding, exportAssignmentBinding) is { } lowered)
+                body.Add(lowered);
+        }
+
+        var runner = new Stmt.Function(
+            nameToken,
+            TypeParams: null,
+            ThisType: null,
+            Parameters: [],
+            Body: body,
+            ReturnType: null,
+            IsAsync: true);
+        DefineFunction(runner);
+        string key = GetDefinitionContext().GetQualifiedFunctionName(name);
+        _hostedModuleRunnerKeys[module.Path] = key;
+    }
+
+    private string? RegisterHostedExportBinding(
+        ParsedModule module,
+        string exportName,
+        string prefix)
+    {
+        if (!_modules.ExportFields.TryGetValue(module.Path, out var exports) ||
+            !exports.TryGetValue(exportName, out FieldBuilder? field))
+        {
+            return null;
+        }
+
+        string binding = prefix + CompilationContext.SanitizeModuleName(module.ModuleName);
+        if (!_moduleTopLevelStaticVars.TryGetValue(module.Path, out var variables))
+        {
+            variables = new Dictionary<string, FieldBuilder>(StringComparer.Ordinal);
+            _moduleTopLevelStaticVars[module.Path] = variables;
+        }
+        variables[binding] = field;
+        return binding;
+    }
+
+    private static Stmt? LowerHostedTopLevelStatement(
+        Stmt statement,
+        string? defaultBinding,
+        string? exportAssignmentBinding) => statement switch
+    {
+        // Declarations are defined in the compiler's normal declaration phases.
+        Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum or
+            Stmt.Namespace or Stmt.DeclareModule => null,
+
+        // Module imports are emitted in a synchronous prelude using the normal
+        // module emitter. AsyncMoveNextEmitter intentionally handles executable
+        // statements only and cannot establish module bindings itself.
+        Stmt.Import or Stmt.ImportAlias or Stmt.ImportRequire => null,
+
+        // Module-level bindings already have generated static/export fields. Assign
+        // those fields from the async runner instead of introducing function locals,
+        // preserving visibility to exported dependents and top-level functions.
+        Stmt.Const declaration => new Stmt.Expression(
+            new Expr.Assign(declaration.Name, declaration.Initializer)),
+        Stmt.Var declaration when !declaration.IsDeclare => new Stmt.Expression(
+            new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer ??
+                    new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
+                IsVarRedeclaration: declaration.IsVar)),
+        Stmt.Var => null,
+        Stmt.Sequence sequence => new Stmt.Sequence(
+            sequence.Statements
+                .Select(item => LowerHostedTopLevelStatement(
+                    item, defaultBinding, exportAssignmentBinding))
+                .Where(lowered => lowered is not null)
+                .Cast<Stmt>()
+                .ToList()),
+        Stmt.Export { Declaration: Stmt.Const declaration } => new Stmt.Expression(
+            new Expr.Assign(declaration.Name, declaration.Initializer)),
+        Stmt.Export { Declaration: Stmt.Var declaration } when !declaration.IsDeclare =>
+            new Stmt.Expression(new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer ??
+                    new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
+                IsVarRedeclaration: declaration.IsVar)),
+        Stmt.Export { Declaration: Stmt.Var } => null,
+        Stmt.Export { Declaration: Stmt.Sequence sequence } => new Stmt.Sequence(
+            sequence.Statements
+                .Select(item => LowerHostedTopLevelStatement(
+                    item, defaultBinding, exportAssignmentBinding))
+                .Where(lowered => lowered is not null)
+                .Cast<Stmt>()
+                .ToList()),
+        Stmt.Export { DefaultExpr: not null } export when defaultBinding is not null =>
+            new Stmt.Expression(new Expr.Assign(
+                new Token(TokenType.IDENTIFIER, defaultBinding, null, 0),
+                export.DefaultExpr)),
+        Stmt.Export { ExportAssignment: not null } export when exportAssignmentBinding is not null =>
+            new Stmt.Expression(new Expr.Assign(
+                new Token(TokenType.IDENTIFIER, exportAssignmentBinding, null, 0),
+                export.ExportAssignment)),
+        Stmt.Export
+        {
+            Declaration: null,
+            NamedExports: null or [],
+            DefaultExpr: null,
+            ExportAssignment: null,
+            NamespaceExportName: null,
+            GlobalNamespaceName: null,
+        } => null,
+
+        // Function/class declarations and re-export wiring contain no executable
+        // await once their declarations have been defined. Emit them after the
+        // runner with the normal module emitter so export fields are populated.
+        Stmt.Export export when IsHostedModulePostludeStatement(export) => null,
+
+        // Exported declarations still need their generated export fields populated;
+        // the declarations themselves were already defined above.
+        _ => statement,
+    };
+
+    private static bool IsHostedModulePreludeStatement(Stmt statement) =>
+        statement is Stmt.Import or Stmt.ImportAlias or Stmt.ImportRequire;
+
+    private static bool IsHostedModulePostludeStatement(Stmt statement)
+    {
+        if (statement is not Stmt.Export export || export.IsTypeOnly)
+            return false;
+        if (export.Declaration is Stmt.Const or Stmt.Var or Stmt.Sequence)
+            return false;
+        if (export.DefaultExpr is not null || export.ExportAssignment is not null)
+            return false;
+        return true;
+    }
+
+    private MethodBuilder EmitHostedSynchronousStatementsStep(
+        ParsedModule module,
+        IReadOnlyList<Stmt> statements,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModulePrelude_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        CompilationContext context = CreateHostedModuleStepContext(module, il, method);
+        var emitter = new ILEmitter(context);
+        foreach (Stmt statement in statements)
+            emitter.EmitStatement(statement);
+        il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedStepSequence(
+        IReadOnlyList<MethodBuilder> steps,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModuleSequence_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        EmitHostedStepArray(il, steps);
         il.Emit(OpCodes.Ret);
         return method;
     }
@@ -1180,9 +1565,11 @@ public partial class ILCompiler
                 // Register under relative path (e.g., "./utils.ts")
                 string relativePath = GetRelativeModulePath(module, modules[^1]);
                 EmitRegisterModule(il, relativePath, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(relativePath), getNamespaceMethod);
 
                 // Also register under absolute path for direct matches
                 EmitRegisterModule(il, module.Path, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(module.Path), getNamespaceMethod);
 
                 // Register under module name without extension (e.g., "utils")
                 string moduleName = module.ModuleName;
@@ -1253,6 +1640,14 @@ public partial class ILCompiler
 
         // Fall back to filename
         return "./" + Path.GetFileName(targetPath);
+    }
+
+    private static string RemoveModuleExtension(string path)
+    {
+        string extension = Path.GetExtension(path);
+        return extension is ".ts" or ".tsx" or ".js" or ".jsx" or ".mts" or ".cts"
+            ? path[..^extension.Length]
+            : path;
     }
 
     /// <summary>

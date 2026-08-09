@@ -138,6 +138,56 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void CompiledHostedTopLevelAwait_SupportsCompoundConditionalLoopAndCatchShapes()
+    {
+        const string source = """
+            const compound = 2 + await new Promise<number>(
+                resolve => setTimeout(() => resolve(3), 1));
+            const conditional = compound === 5
+                ? await Promise.resolve(7)
+                : await Promise.resolve(0);
+            let loop = 0;
+            for (let index = 1; index <= 3; index++) {
+                loop += await Promise.resolve(index);
+            }
+            try {
+                await Promise.reject(new Error('caught-shape'));
+                console.log('unexpected');
+            } catch (error) {
+                console.log('caught');
+            }
+            if (await Promise.resolve(true)) {
+                console.log(`shapes-${compound}-${conditional}-${loop}`);
+            }
+            export {};
+            """;
+        SharpTSProgram program = CreateProgram(source);
+        var compiler = new ILCompiler($"hosted_tla_shapes_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            new RecordingLifetime(),
+            new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal(
+            ["caught", "shapes-5-7-6"],
+            output.GetOutput().Split(
+                [Environment.NewLine],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    [Fact]
     public void HostedDynamicImport_AwaitsDependencyGraphAndCheckpointsEachModuleJob()
     {
         var files = new Dictionary<string, string>
@@ -181,6 +231,102 @@ public sealed class HostedInterpreterRuntimeTests
                 "lazy-start", "lazy-end", "lazy-microtask", "main-42"
             ],
             Lines(output));
+    }
+
+    [Fact]
+    public void CompiledHostedDynamicImport_InitializesDiscoveredModuleOnDemand()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                console.log('main-start');
+                const loaded = await import('./sub/lazy');
+                console.log(`main-${loaded.value}`);
+                export {};
+                """,
+            ["sub/lazy.ts"] = """
+                console.log('lazy-start');
+                const dependency = await import('../dependency');
+                export const value = dependency.value;
+                console.log('lazy-end');
+                """,
+            ["dependency.ts"] = """
+                console.log('dependency-start');
+                export const value = 40 + await Promise.resolve(2);
+                """,
+        };
+        SharpTSProgram program = CreateProgramWithDynamicImports(files, "main.ts");
+        Assert.Contains(program.RuntimeModules, module => module.IsDynamicImportOnly);
+        var compiler = new ILCompiler($"hosted_dynamic_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            new RecordingLifetime(),
+            new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal(
+            ["main-start", "lazy-start", "dependency-start", "lazy-end", "main-42"],
+            output.GetOutput().Split(
+                [Environment.NewLine],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+    }
+
+    [Fact]
+    public void CompiledHostedDynamicImport_RejectsMissingFailedAndSelfImportsInGuestCode()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                try { await import('./missing'); }
+                catch (error) { console.log('missing-rejected'); }
+                try { await import('./rejected'); }
+                catch (error) { console.log('module-rejected'); }
+                try { await import('./main'); }
+                catch (error) { console.log('self-rejected'); }
+                export {};
+                """,
+            ["rejected.ts"] = """
+                await Promise.reject(new Error('dynamic-compiled-boom'));
+                export {};
+                """,
+        };
+        SharpTSProgram program = CreateProgramWithDynamicImports(files, "main.ts");
+        var compiler = new ILCompiler($"hosted_dynamic_reject_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            new RecordingLifetime(),
+            errors);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal(
+            ["missing-rejected", "module-rejected", "self-rejected"],
+            output.GetOutput().Split(
+                [Environment.NewLine],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        Assert.Empty(errors.Errors);
     }
 
     [Fact]
@@ -260,6 +406,48 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void CompiledShutdown_CancelsSuspendedTopLevelAwaitAndLateTimerWork()
+    {
+        SharpTSProgram program = CreateProgram("""
+            console.log('compiled-suspended');
+            await new Promise<void>(resolve => setTimeout(resolve, 60_000));
+            console.log('unexpected-compiled-resume');
+            export {};
+            """);
+        var compiler = new ILCompiler($"hosted_tla_cancel_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            new RecordingLifetime(),
+            errors);
+        Task initialization = runtime.InitializeAsync();
+        Assert.True(dispatcher.RunNext());
+        Task shutdown = runtime.ShutdownAsync();
+        dispatcher.RunUntil(() => shutdown.IsCompleted);
+        shutdown.GetAwaiter().GetResult();
+        dispatcher.AdvanceBy(TimeSpan.FromMinutes(2));
+        dispatcher.RunUntilIdle();
+
+        Assert.True(initialization.IsFaulted);
+        Assert.Equal(SharpTSHostedRuntimeState.Stopped, runtime.State);
+        Assert.Equal(
+            ["compiled-suspended"],
+            output.GetOutput().Split(
+                [Environment.NewLine],
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+        Assert.Empty(errors.Errors);
+    }
+
+    [Fact]
     public void RejectedTopLevelAwaitShapes_ReportInitializationErrorAndModulePath()
     {
         (string Shape, string Source)[] cases =
@@ -289,6 +477,35 @@ public sealed class HostedInterpreterRuntimeTests
             Assert.Contains($"{shape}-boom", error.Exception.Message, StringComparison.Ordinal);
             Assert.Contains("main.ts", error.Exception.Message, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public void CompiledRejectedTopLevelAwait_ReportsInitializationErrorAndModulePath()
+    {
+        SharpTSProgram program = CreateProgram(
+            "const value = 1 + await Promise.reject(new Error('compiled-boom')); export {};");
+        var compiler = new ILCompiler($"hosted_tla_rejected_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        var errors = new RecordingErrorSink();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            new RecordingLifetime(),
+            errors);
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+
+        SharpTSHostedError error = Assert.Single(errors.Errors);
+        Assert.True(initialization.IsFaulted);
+        Assert.Equal(SharpTSHostedErrorPhase.Initialization, error.Phase);
+        Assert.Contains("compiled-boom", error.Exception.Message, StringComparison.Ordinal);
+        Assert.Contains("main.ts", error.Exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -588,6 +805,39 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void ProgramLoader_IncludesLiteralDynamicImportModulesAsOnDemandRoots()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"sharpts-program-dynamic-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(root);
+        try
+        {
+            string entry = Path.Combine(root, "main.ts");
+            File.WriteAllText(entry, """
+                const path = await Promise.resolve('./lazy');
+                await import(await Promise.resolve(path));
+                export {};
+                """);
+            File.WriteAllText(
+                Path.Combine(root, "lazy.ts"),
+                "export const value = 42;");
+
+            SharpTSProgram program = SharpTSProgramLoader.Load(entry, new SharpTSProgramLoadOptions
+            {
+                DiscoverTsConfig = false,
+            });
+
+            ParsedModule dynamicModule = Assert.Single(
+                program.RuntimeModules, module => module.IsDynamicImportOnly);
+            Assert.EndsWith("lazy.ts", dynamicModule.Path, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal(Path.GetFullPath(entry), program.RuntimeModules[^1].Path);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Fact]
     public void CompiledHostedTopLevelAwait_InitializesThroughVersionedAbi()
     {
         SharpTSProgram program = CreateProgram(
@@ -662,6 +912,44 @@ public sealed class HostedInterpreterRuntimeTests
         Assert.Equal(SharpTSHostedShutdownReason.ProgramCompleted, runtime.ShutdownReason);
         Assert.Equal([(13, dispatcher.OwnerThreadId)], lifetime.Exits);
         runtime.Dispose();
+    }
+
+    [Fact]
+    public void CompiledHostedTopLevelAwait_PopulatesDefaultAndFunctionExports()
+    {
+        SharpTSProgram program = CreateProgram(
+            new Dictionary<string, string>
+            {
+                ["dependency.ts"] = """
+                    export default 10 + await Promise.resolve(2);
+                    export function increment(value: number): number { return value + 1; }
+                    """,
+                ["main.ts"] = """
+                    import answer, { increment } from './dependency';
+                    function main(): number { return increment(answer); }
+                    export {};
+                    """,
+            },
+            "main.ts");
+        var compiler = new ILCompiler($"hosted_tla_default_export_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(),
+            program.Resolver,
+            program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        var lifetime = new RecordingLifetime();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            lifetime,
+            new RecordingErrorSink());
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => runtime.State == SharpTSHostedRuntimeState.Stopped);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal([(13, dispatcher.OwnerThreadId)], lifetime.Exits);
     }
 
     [Fact]
@@ -826,6 +1114,66 @@ public sealed class HostedInterpreterRuntimeTests
         var checker = new TypeChecker();
         checker.EnableHostedTopLevelAwait();
         TypeMap typeMap = checker.CheckModules(typeModules, resolver);
+        Diagnostic[] errors = checker.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToArray();
+        if (errors.Length != 0)
+            throw new Xunit.Sdk.XunitException(string.Join(Environment.NewLine, errors.Select(e => e.ToString())));
+        return new SharpTSProgram(
+            entryPath,
+            configuration: null,
+            DecoratorMode.Stage3,
+            ReferenceSet.Empty,
+            resolver,
+            runtimeModules,
+            typeModules,
+            typeMap,
+            checker.GetDiagnostics().ToArray());
+    }
+
+    private static SharpTSProgram CreateProgramWithDynamicImports(
+        IReadOnlyDictionary<string, string> sources,
+        string entryFile)
+    {
+        string root = Path.GetFullPath(Path.Combine(
+            Path.GetTempPath(), $"sharpts_hosted_dynamic_{Guid.NewGuid():N}"));
+        string entryPath = Path.Combine(root, entryFile);
+        var files = sources.ToDictionary(
+            pair => Path.Combine(root, pair.Key),
+            pair => pair.Value,
+            StringComparer.OrdinalIgnoreCase);
+        var resolver = new ModuleResolver(entryPath, files);
+        ParsedModule entry = resolver.LoadProgram(entryPath);
+        var checker = new TypeChecker();
+        checker.EnableHostedTopLevelAwait();
+        List<ParsedModule> initialTypes = resolver.GetModulesInOrder(entry);
+        var dynamicModules = new List<ParsedModule>();
+        var dynamicPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var processed = new HashSet<(string Specifier, string ImportingModulePath)>();
+        TypeMap typeMap = checker.CheckModules(initialTypes, resolver);
+        while (true)
+        {
+            var pending = checker.DynamicImportReferences
+                .Where(reference => processed.Add(reference))
+                .ToArray();
+            if (pending.Length == 0) break;
+            List<ParsedModule> discovered = pending
+                .SelectMany(reference => resolver.LoadDynamicImportModules(
+                    [reference.Specifier],
+                    reference.ImportingModulePath,
+                    DecoratorMode.Stage3))
+                .Where(module => dynamicPaths.Add(module.Path))
+                .ToList();
+            if (discovered.Count == 0) continue;
+            dynamicModules.AddRange(discovered);
+            typeMap = checker.CheckModules(
+                resolver.GetModulesInOrder(dynamicModules.Append(entry)), resolver);
+        }
+        List<ParsedModule> runtimeModules = resolver.GetRuntimeModulesInOrder(
+            dynamicModules.Append(entry));
+        List<ParsedModule> typeModules = resolver.GetModulesInOrder(
+            dynamicModules.Append(entry));
+        typeMap = checker.CheckModules(typeModules, resolver);
         Diagnostic[] errors = checker.GetDiagnostics()
             .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
             .ToArray();

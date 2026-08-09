@@ -1,5 +1,8 @@
+#pragma warning disable SHARPTS_HOSTING001
+
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Hosting;
 
 namespace SharpTS.Compilation;
 
@@ -156,10 +159,32 @@ public partial class RuntimeEmitter
         var factoryLocal = il.DeclareLocal(funcType);
         var tcsLocal = il.DeclareLocal(tcsType);
         var exceptionLocal = il.DeclareLocal(_types.Exception);
+        var lookupPathLocal = il.DeclareLocal(_types.String);
 
         // Labels
         var notFoundLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
+        var lookupReadyLabel = il.DefineLabel();
+
+        // Resolve relative specifiers against the importing module so nested
+        // dynamic imports do not accidentally use entry-module aliases.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, lookupPathLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, ".");
+        il.Emit(OpCodes.Callvirt, typeof(string).GetMethod(
+            nameof(string.StartsWith), [typeof(string)])!);
+        il.Emit(OpCodes.Brfalse, lookupReadyLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, typeof(Path).GetMethod(
+            nameof(Path.GetDirectoryName), [typeof(string)])!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(Path).GetMethod(
+            nameof(Path.Combine), [typeof(string), typeof(string)])!);
+        il.Emit(OpCodes.Call, typeof(Path).GetMethod(
+            nameof(Path.GetFullPath), [typeof(string)])!);
+        il.Emit(OpCodes.Stloc, lookupPathLocal);
+        il.MarkLabel(lookupReadyLabel);
 
         // If registry is null, go to not found
         il.Emit(OpCodes.Ldsfld, runtime.ModuleRegistry);
@@ -168,15 +193,27 @@ public partial class RuntimeEmitter
         // Func<object?> factory;
         // if (_moduleRegistry.TryGetValue(specifier, out factory))
         il.Emit(OpCodes.Ldsfld, runtime.ModuleRegistry);
-        il.Emit(OpCodes.Ldarg_0); // specifier
+        il.Emit(OpCodes.Ldloc, lookupPathLocal);
         il.Emit(OpCodes.Ldloca, factoryLocal);
         il.Emit(OpCodes.Callvirt, dictType.GetMethod("TryGetValue")!);
         il.Emit(OpCodes.Brfalse, notFoundLabel);
 
-        // Found - invoke factory and return Task.FromResult(factory())
-        il.Emit(OpCodes.Ldloc, factoryLocal);
-        il.Emit(OpCodes.Callvirt, funcType.GetMethod("Invoke")!);
-        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(taskType.GetMethod("FromResult")!, typeof(object)));
+        // Hosted output delegates lazy initialization and cycle detection to the
+        // host-owned runtime. Console output retains the synchronous namespace lookup.
+        if (_emitHosted)
+        {
+            il.Emit(OpCodes.Call, runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Ldloc, lookupPathLocal);
+            il.Emit(OpCodes.Ldloc, factoryLocal);
+            il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+                nameof(SharpTSHostedRuntimeBase.ImportHostedModule))!);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldloc, factoryLocal);
+            il.Emit(OpCodes.Callvirt, funcType.GetMethod("Invoke")!);
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(taskType.GetMethod("FromResult")!, typeof(object)));
+        }
         il.Emit(OpCodes.Br, returnLabel);
 
         // Not found - return rejected task
