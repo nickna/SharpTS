@@ -688,6 +688,10 @@ public static partial class ObjectBuiltIns
                 }
                 success = true;
                 break;
+            case SharpTSProxy proxy:
+                success = proxy.TrapDefineProperty(
+                    propertyKey, descriptorArg, interpreter);
+                break;
             default:
                 throw new Exception("TypeError: Object.defineProperty called on non-object");
         }
@@ -708,6 +712,13 @@ public static partial class ObjectBuiltIns
         }
 
         return target;
+    }
+
+    internal static bool DefinePropertyOnProxyTarget(
+        Interpreter interpreter, object target, string propertyKey, object descriptor)
+    {
+        DefineProperty(interpreter, [target, propertyKey, descriptor]);
+        return true;
     }
 
     /// <summary>

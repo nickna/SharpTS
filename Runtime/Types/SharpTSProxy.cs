@@ -189,6 +189,23 @@ public class SharpTSProxy : ISharpTSCallable
     }
 
     /// <summary>
+    /// ECMA-262 §10.5.6 [[DefineOwnProperty]]. A missing trap forwards the
+    /// original descriptor object to the target; otherwise the trap receives
+    /// (target, propertyKey, descriptor) and its result is boolean-coerced.
+    /// </summary>
+    public bool TrapDefineProperty(
+        string prop, object descriptor, Interpreter interpreter)
+    {
+        var trap = GetTrapCallable("defineProperty");
+        if (trap == null)
+            return ObjectBuiltIns.DefinePropertyOnProxyTarget(
+                interpreter, _target, prop, descriptor);
+
+        return ToBoolean(InvokeTrap(
+            trap, interpreter, [_target, prop, descriptor]));
+    }
+
+    /// <summary>
     /// ECMA-262 10.5.11 [[OwnPropertyKeys]] trap. Returns the property names visible
     /// to enumeration (Object.keys / JSON.stringify / for-in). Falls back to forwarding
     /// to the target's own string keys when no ownKeys trap is defined. Throws if the
@@ -227,7 +244,7 @@ public class SharpTSProxy : ISharpTSCallable
         switch (_target)
         {
             case SharpTSObject obj:
-                keys.AddRange(obj.Fields.Keys);
+                keys.AddRange(obj.OwnStringKeys());
                 break;
             case SharpTSInstance inst:
                 keys.AddRange(inst.GetFieldNames());
