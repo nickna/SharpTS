@@ -189,8 +189,9 @@ public static class BuiltInConstructorFactory
     /// <c>string</c>/<c>number</c>/<c>boolean</c> primitive in its boxed wrapper
     /// object (so <c>typeof</c> is <c>"object"</c> and <c>instanceof</c> works),
     /// reusing the same <c>new String/Number/Boolean</c> layout as #360. Every
-    /// other value — already-object values, arrays, <c>null</c>, <c>undefined</c>,
-    /// symbols, bigint — is returned unchanged; callers that must reject
+    /// Symbol and BigInt primitives use the same internal-slot wrapper shape as
+    /// <c>Object(value)</c>. Every other value — already-object values, arrays,
+    /// <c>null</c>, and <c>undefined</c> — is returned unchanged; callers that must reject
     /// <c>null</c>/<c>undefined</c> guard before calling. Mirrors compiled mode's
     /// <c>$Runtime.ToObject</c> (see <c>RuntimeEmitter.BoxedPrimitives.EmitToObject</c>).
     /// </summary>
@@ -199,6 +200,10 @@ public static class BuiltInConstructorFactory
         string => CreateBoxedString(new[] { value }, interpreter),
         double => CreateBoxedNumber(new[] { value }, interpreter),
         bool => CreateBoxedBoolean(new[] { value }, interpreter),
+        SharpTSSymbol symbol => CreateBoxedPrimitive(
+            "Symbol", symbol, interpreter?.GetSymbolPrototype()),
+        SharpTSBigInt bigint => CreateBoxedPrimitive(
+            "BigInt", bigint, interpreter?.GetBigIntPrototype()),
         _ => value,
     };
 
@@ -500,6 +505,17 @@ public static class BuiltInConstructorFactory
             Prototype = interpreter?.GetBooleanPrototype(),
         };
     }
+
+    private static SharpTSObject CreateBoxedPrimitive(
+        string primitiveType, object primitiveValue, object? prototype)
+        => new(new Dictionary<string, object?>
+        {
+            ["__primitiveType"] = primitiveType,
+            ["__primitiveValue"] = primitiveValue,
+        })
+        {
+            Prototype = prototype,
+        };
 
     private static double ParseNumberFromString(string s)
     {

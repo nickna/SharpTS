@@ -81,31 +81,10 @@ public class SharpTSObjectNamespace : ISharpTSCallable
         var value = arguments[0];
         if (value == null || value is SharpTSUndefined)
             return new SharpTSObject(new Dictionary<string, object?>());
-        // Symbol → boxed wrapper carrying the __primitiveType marker, matching the
-        // compiled NewBoxedPrimitive("Symbol", …) shape so `Object(sym) instanceof
-        // Symbol` is true (ECMA-262 §7.1.18 ToObject on a Symbol, #449).
-        if (value is SharpTSSymbol)
-            return new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__primitiveType"] = "Symbol",
-                ["__primitiveValue"] = value,
-            })
-            {
-                Prototype = interpreter.GetSymbolPrototype(),
-            };
-        if (value is SharpTSBigInt)
-            return new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["__primitiveType"] = "BigInt",
-                ["__primitiveValue"] = value,
-            })
-            {
-                Prototype = interpreter.GetBigIntPrototype(),
-            };
         // Primitives use the same internal-slot wrappers as their dedicated
         // constructors. This preserves Object(value)'s primitive identity for
         // later ToPrimitive operations.
-        if (value is string or double or bool)
+        if (value is string or double or bool or SharpTSSymbol or SharpTSBigInt)
             return BuiltInConstructorFactory.ToObject(value, interpreter);
         return value;
     }

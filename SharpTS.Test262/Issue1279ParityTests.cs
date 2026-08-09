@@ -1853,6 +1853,12 @@ public sealed class Issue1279ParityTests
     public void Array_sort_observes_collection_side_effects(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Array_sort_boxes_primitive_receivers()
+        => AssertPass(
+            "built-ins/Array/prototype/sort/call-with-primitive.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
