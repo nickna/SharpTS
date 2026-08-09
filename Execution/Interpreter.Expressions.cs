@@ -1567,6 +1567,19 @@ public partial class Interpreter
                         System.Globalization.CultureInfo.InvariantCulture), value);
                     break;
                 }
+                if (!t.Target.HasIndex(t.Index)
+                    && t.Target.HasExplicitPrototype
+                    && t.Target.ExplicitPrototype is SharpTSProxy arrayPrototypeProxy)
+                {
+                    string propertyKey = t.Index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture);
+                    bool assigned = arrayPrototypeProxy.TrapSetProperty(
+                        propertyKey, value, this, t.Target);
+                    if (!assigned && strictMode)
+                        throw new ThrowException(new SharpTSTypeError(
+                            $"Proxy set trap rejected property '{propertyKey}'"));
+                    break;
+                }
                 if (t.Target.TryGetIndexAccessor(
                     t.Index, out _, out var indexSetter))
                 {
