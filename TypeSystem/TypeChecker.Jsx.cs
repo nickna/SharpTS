@@ -127,10 +127,18 @@ public partial class TypeChecker
                 CheckJsxComponentReturnType(jsx, jsxNamespace, fn.ReturnType);
                 return;
 
-            case TypeInfo.GenericFunction:
-                // Best effort only: without full JSX generic inference, reporting attribute
-                // mismatches here risks false positives. Deferred to a follow-up.
+            case TypeInfo.GenericFunction generic:
+            {
+                List<TypeInfo> typeArguments = InferTypeArguments(generic, [propsType]);
+                var instantiated = (TypeInfo.Function)InstantiateGenericFunction(generic, typeArguments);
+                CheckJsxAttributes(
+                    instantiated.ParamTypes.Count > 0
+                        ? instantiated.ParamTypes[0]
+                        : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty),
+                    propsType, jsx, jsxNamespace);
+                CheckJsxComponentReturnType(jsx, jsxNamespace, instantiated.ReturnType);
                 return;
+            }
 
             case TypeInfo.OverloadedFunction overloaded:
             {
@@ -140,7 +148,11 @@ public partial class TypeChecker
                         ? signature.ParamTypes[0]
                         : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
                     if (IsCompatible(expected, propsType))
+                    {
+                        CheckJsxAttributes(expected, propsType, jsx, jsxNamespace);
+                        CheckJsxComponentReturnType(jsx, jsxNamespace, signature.ReturnType);
                         return;
+                    }
                 }
                 ReportJsx(new TypeCheckException(
                     "No overload matches this call.", jsx.Line, tsCode: "TS2769"));
@@ -153,9 +165,13 @@ public partial class TypeChecker
                 or TypeInfo.InstantiatedGeneric:
                 return;
 
-            // Callable object types ({ (props): Element }) are usable as components.
-            case TypeInfo.Record { CallSignatures.Count: > 0 }:
-            case TypeInfo.Interface { CallSignatures.Count: > 0 }:
+            // Callable object types ({ (props): Element }) use their call signatures just like
+            // overloaded function declarations.
+            case TypeInfo.Record { CallSignatures.Count: > 0 } record:
+                CheckJsxCallSignatures(jsx, jsxNamespace, record.CallSignatures!, propsType);
+                return;
+            case TypeInfo.Interface { CallSignatures.Count: > 0 } iface:
+                CheckJsxCallSignatures(jsx, jsxNamespace, iface.CallSignatures!, propsType);
                 return;
 
             case TypeInfo.Union union:
@@ -196,6 +212,27 @@ public partial class TypeChecker
                 $"Its return type '{returnType}' is not a valid JSX element.",
                 jsx.Line, tsCode: "TS2786"));
         }
+    }
+
+    private void CheckJsxCallSignatures(
+        JsxCallInfo jsx,
+        TypeInfo.Namespace? jsxNamespace,
+        IReadOnlyList<TypeInfo.CallSignature> signatures,
+        TypeInfo propsType)
+    {
+        foreach (TypeInfo.CallSignature signature in signatures)
+        {
+            TypeInfo expected = signature.ParamTypes.Count > 0
+                ? signature.ParamTypes[0]
+                : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
+            if (!IsCompatible(expected, propsType))
+                continue;
+            CheckJsxAttributes(expected, propsType, jsx, jsxNamespace);
+            CheckJsxComponentReturnType(jsx, jsxNamespace, signature.ReturnType);
+            return;
+        }
+        ReportJsx(new TypeCheckException(
+            "No overload matches this call.", jsx.Line, tsCode: "TS2769"));
     }
 
     private bool IsJsxComponentResult(TypeInfo elementType, TypeInfo returnType)
@@ -245,12 +282,12 @@ public partial class TypeChecker
             return;
         }
 
-        // Missing required props. `children` is satisfied by child elements (arity fidelity
-        // deferred); key/ref never participate.
+        // Missing required props. `key` is supplied through IntrinsicAttributes rather than the
+        // component props object; children and ref retain their declared prop types.
         var missing = new List<string>();
         foreach (var required in RequiredMemberNames(expected))
         {
-            if (required is "children" or "key" or "ref")
+            if (required is "key")
                 continue;
             if (!actualRecord.Fields.ContainsKey(required))
                 missing.Add(required);
@@ -270,6 +307,21 @@ public partial class TypeChecker
         }
 
         TypeInfo? intrinsicAttributes = jsxNamespace?.Types.GetValueOrDefault("IntrinsicAttributes");
+
+        if (actualRecord.Fields.TryGetValue("key", out TypeInfo? keyType))
+        {
+            TypeInfo? expectedKey = intrinsicAttributes is null
+                ? null
+                : LookupJsxObjectMember(intrinsicAttributes, "key");
+            if (expectedKey is null || !IsCompatible(expectedKey, keyType))
+            {
+                ReportJsx(new TypeCheckException(
+                    expectedKey is null
+                        ? $"Property 'key' does not exist on type 'JSX.IntrinsicAttributes'."
+                        : $"Type '{keyType}' is not assignable to type '{expectedKey}'.",
+                    JsxAttributeLine(jsx, "key"), tsCode: "TS2322"));
+            }
+        }
 
         foreach (var (name, valueType) in actualRecord.Fields)
         {
@@ -306,12 +358,12 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Whether a written attribute participates in props checking: key/ref/children never do,
-    /// and tsc exempts hyphenated/namespaced names — this is what keeps data-*/aria-* legal
+    /// Whether a written attribute participates in props checking: key is checked separately
+    /// through IntrinsicAttributes, and tsc exempts hyphenated/namespaced names — this keeps data-*/aria-* legal
     /// against props types with no index signature.
     /// </summary>
     private static bool IsCheckedJsxAttribute(string name) =>
-        name is not ("key" or "ref" or "children") && !name.Contains('-') && !name.Contains(':');
+        name != "key" && !name.Contains('-') && !name.Contains(':');
 
     /// <summary>
     /// Flattens an object-like props type into (members, optionals, string index). False for

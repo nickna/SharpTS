@@ -342,9 +342,9 @@ public partial class ILCompiler
         // Build module-scoped top-level vars so this function only sees its own
         // module's bindings plus global imports. When emitting a namespace member body this
         // also surfaces the enclosing namespace's var/let/const backing fields (#567) — the
-        // augmentation now lives in BuildTopLevelStaticVarsForModule so every emission site
+        // augmentation now lives in BuildModuleMemberTopLevelStaticVarsForModule so every emission site
         // (state machines, class methods) gets it uniformly, not just this plain-function path.
-        Dictionary<string, FieldBuilder>? topLevelVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
+        Dictionary<string, FieldBuilder>? topLevelVars = BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
 
         var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.FunctionOverloads = _functions.Overloads;

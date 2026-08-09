@@ -4,6 +4,8 @@ import {
     ButtonHandle,
     CheckBox,
     ComboBox,
+    ErrorBoundary,
+    Fragment,
     Grid,
     ProgressBar,
     ScrollViewer,
@@ -16,6 +18,8 @@ import {
     createControlRef,
     createSignal,
     renderDesktop,
+    useEffect,
+    useState,
 } from "@sharpts/gui";
 import {
     beginOffThreadTask,
@@ -39,6 +43,34 @@ const [alternate, setAlternate] = createSignal<number>(0);
 let viewCount = 0;
 let desktopRoot: any = null;
 
+function EffectProbe(): JSX.Element {
+    const [ready, setReady] = useState<boolean>(false);
+    useEffect(() => {
+        trace("effect-setup");
+        setReady(true);
+        return () => trace("effect-cleanup");
+    }, []);
+    if (ready) trace("effect-state-applied");
+    return <TextBlock key="effect-probe">{ready ? "effect ready" : "effect pending"}</TextBlock>;
+}
+
+function StatefulItem(props: { label: string }): JSX.Element {
+    const [identity] = useState<string>(props.label);
+    return <TextBlock>{props.label + ":" + identity}</TextBlock>;
+}
+
+function RenderFailure(): JSX.Element {
+    throw new Error("expected render failure");
+}
+
+function EffectFailure(): JSX.Element {
+    useEffect(() => {
+        trace("effect-failure-setup");
+        throw new Error("expected effect failure");
+    }, []);
+    return <TextBlock>effect failure pending</TextBlock>;
+}
+
 function ConformanceApp(): JSX.Element {
     viewCount++;
     const currentPhase = phase();
@@ -53,6 +85,9 @@ function ConformanceApp(): JSX.Element {
             <TextBlock key="b">B updated</TextBlock>,
             <TextBlock key="a">A updated</TextBlock>,
         ];
+    const orderedComponents = currentPhase === 0
+        ? [<StatefulItem key="component-a" label="A" />, <StatefulItem key="component-b" label="B" />]
+        : [<StatefulItem key="component-b" label="B" />, <StatefulItem key="component-a" label="A" />];
 
     return (
         <Window key="window" title={currentPhase === 0 ? "SharpTS reactive desktop" : "SharpTS reactive desktop updated"} width={currentPhase === 0 ? 720 : 760} height={currentPhase === 0 ? 560 : 600} theme={currentPhase === 0 ? "light" : "dark"}>
@@ -87,6 +122,24 @@ function ConformanceApp(): JSX.Element {
                             ? <TextBlock key="replacement" ref={replacementRef}>Replace me</TextBlock>
                             : <Button key="replacement">Replacement button</Button>}
                         {ordered}
+                        {orderedComponents}
+                        <Fragment key="transparent-pair">
+                            <TextBlock key="fragment-a">fragment A</TextBlock>
+                            <TextBlock key="fragment-b">fragment B</TextBlock>
+                        </Fragment>
+                        <EffectProbe key="effect-probe-component" />
+                        <ErrorBoundary key="render-boundary" fallback={() => {
+                            trace("render-boundary-fallback");
+                            return <TextBlock>render recovered</TextBlock>;
+                        }}>
+                            <RenderFailure />
+                        </ErrorBoundary>
+                        <ErrorBoundary key="effect-boundary" fallback={() => {
+                            trace("effect-boundary-fallback");
+                            return <TextBlock>effect recovered</TextBlock>;
+                        }}>
+                            <EffectFailure />
+                        </ErrorBoundary>
                     </StackPanel>
                 </ScrollViewer>
             </Border>

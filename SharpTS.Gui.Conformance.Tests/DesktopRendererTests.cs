@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using SharpTS.Gui;
@@ -474,6 +475,97 @@ public sealed class DesktopRendererTests : IDisposable
         Assert.Equal("Stable", root.Window!.Title);
     }
 
+    [Fact]
+    public void KeyboardHandlers_AreDiffedAndRepeatedKeyDownIsNormalized()
+    {
+        var repeats = new List<bool>();
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(Panel(0, new GuiVNode("Separator", Key: "input"))));
+        Control input = root.FindControl("input")!;
+        Assert.Equal(0, root.ActiveSubscriptions);
+
+        root.Render(Window(Panel(0, new GuiVNode(
+            "Separator",
+            Key: "input",
+            KeyDown: (_, _, _, _, _, repeat) => { repeats.Add(repeat); return false; }))));
+        Assert.Same(input, root.FindControl("input"));
+        Assert.Equal(1, root.ActiveSubscriptions);
+
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = Key.A });
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+        Assert.Equal(new[] { false, true, false }, repeats);
+
+        root.Render(Window(Panel(0, new GuiVNode("Separator", Key: "input"))));
+        Assert.Equal(0, root.ActiveSubscriptions);
+        input.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.A });
+        Assert.Equal(3, repeats.Count);
+        Assert.Single(_trace.Snapshot(), item => item.Stage == "subscribe" && item.Detail == "Separator#input");
+        Assert.Single(_trace.Snapshot(), item => item.Stage == "unsubscribe" && item.Detail == "Separator#input");
+    }
+
+    [Fact]
+    public void KeyRepeat_IsStableAcrossHandlersForOneRoutedNativeEvent()
+    {
+        var repeats = new List<string>();
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode(
+            "StackPanel",
+            Key: "keyboard-parent",
+            KeyDown: (_, _, _, _, _, repeat) => { repeats.Add("parent:" + repeat); return false; },
+            Children: new[]
+            {
+                new GuiVNode(
+                    "Separator",
+                    Key: "keyboard-child",
+                    KeyDown: (_, _, _, _, _, repeat) => { repeats.Add("child:" + repeat); return false; })
+            })));
+        Control child = root.FindControl("keyboard-child")!;
+
+        child.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.B });
+        child.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.B });
+
+        Assert.Equal(
+            new[] { "child:False", "parent:False", "child:True", "parent:True" },
+            repeats);
+    }
+
+    [Fact]
+    public void FailedNativeSetter_RollsBackToLastCommittedTree()
+    {
+        using IDisposable registration = DescriptorRegistry.RegisterForTesting(new RollbackProbeDescriptor());
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode("$RollbackProbe", Key: "probe", Text: "stable", Width: 100)));
+        var probe = Assert.IsType<TextBlock>(root.FindControl("probe"));
+
+        InvalidOperationException error = Assert.Throws<InvalidOperationException>(() =>
+            root.Render(Window(new GuiVNode("$RollbackProbe", Key: "probe", Text: "throw", Width: 200))));
+
+        Assert.Contains("injected setter failure", error.Message, StringComparison.Ordinal);
+        Assert.False(root.IsDisposed);
+        Assert.Same(probe, root.FindControl("probe"));
+        Assert.Equal(100, probe.Width);
+        Assert.Equal("stable", probe.Text);
+    }
+
+    [Fact]
+    public void FailedRollback_DisposesDamagedWindowRoot()
+    {
+        using IDisposable registration = DescriptorRegistry.RegisterForTesting(
+            new RollbackProbeDescriptor(failEveryUpdateAfterCreate: true));
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode("$RollbackProbe", Key: "probe", Text: "stable", Width: 100)));
+
+        AggregateException error = Assert.Throws<AggregateException>(() =>
+            root.Render(Window(new GuiVNode("$RollbackProbe", Key: "probe", Text: "changed", Width: 200))));
+
+        Assert.Contains("window root was disposed", error.Message, StringComparison.Ordinal);
+        Assert.True(root.IsDisposed);
+        Assert.Null(root.Window);
+        Assert.Contains(_trace.Snapshot(), item => item.Stage == "fatal-rollback-dispose");
+    }
+
     private static GuiVNode Window(
         GuiVNode? content = null,
         string title = "Test",
@@ -500,4 +592,28 @@ public sealed class DesktopRendererTests : IDisposable
         DesktopBridge.CreateDesktopRoot(cleanup ?? (() => { }));
 
     private sealed class TestApplication : Application;
+
+    private sealed class RollbackProbeDescriptor(bool failEveryUpdateAfterCreate = false)
+        : NodeDescriptor("$RollbackProbe", 0, 0)
+    {
+        private int _updates;
+
+        public override Control Create(GuiVNode node)
+        {
+            var control = new TextBlock();
+            Update(control, new GuiVNode(Kind), node);
+            return control;
+        }
+
+        public override bool Update(Control control, GuiVNode previous, GuiVNode next)
+        {
+            var text = (TextBlock)control;
+            text.Width = next.Width;
+            _updates++;
+            if (next.Text == "throw" || (failEveryUpdateAfterCreate && _updates > 1))
+                throw new InvalidOperationException("injected setter failure");
+            text.Text = next.Text;
+            return true;
+        }
+    }
 }

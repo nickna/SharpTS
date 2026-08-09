@@ -6,7 +6,25 @@ This document is the canonical engineering record for the Avalonia desktop effor
 the Phase 0, Phase 1A, Phase 1B, Phase 2, Phase 3A, and Windows-preview findings reports. Git
 history remains the source for the full phase-by-phase narratives.
 
-## Current decision
+## Current 0.2 development status
+
+`0.2.0-preview.1` advances the manifest to GUI API 2 while keeping Hosted ABI 1. Its implemented
+renderer slice adds a retained logical fiber tree, component/fragment key ownership,
+layout-transparent fragments, duplicate logical-key validation, post-render effects, ignored
+updates after unmount, render/effect error boundaries, dynamically diffed keyboard handlers, and
+per-window key-repeat tracking. Native setter failures reverse to the last committed VNode tree;
+if that recovery also fails, the damaged window root is disposed and the combined fatal error is
+routed through the host. The Calculator and packaged consumer use the API 2 SDK, and API 1
+manifests receive a migration-oriented rejection. The JSX checker now infers generic function
+component props, validates callable-object signatures, checks `children` and `ref` as declared
+props, and validates `key` through `JSX.IntrinsicAttributes`.
+
+The remaining roadmap items—including descriptor-commit error-boundary recovery, the full JSX
+checker parity set, the multi-window application API, styles,
+generic collections, plugins, LSP integration, and Windows v1 distribution—remain subsequent
+work. See `docs/gui/migrating-api-1-to-2.md` for the implemented preview.1 contract.
+
+## API 1 baseline decision
 
 - The Windows x64 public-preview implementation is complete and verified. It passed the isolated
   SDK package lifecycle, interpreted and compiled Headless and real-window execution, and a

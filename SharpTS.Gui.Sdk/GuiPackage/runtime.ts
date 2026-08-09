@@ -22,10 +22,19 @@ export interface GuiElement {
 
 interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
 export type GuiChild = GuiElement | string | number | boolean | null | undefined | readonly GuiChild[];
+export interface TextualChildArray {
+    readonly length: number;
+    readonly [index: number]: TextualChild;
+}
+export type TextualChild = string | number | boolean | null | undefined | TextualChildArray;
 export type Component<P = {}> = (props: Readonly<P & { children?: GuiChild }>) => GuiChild;
 export type SignalSetter<T> = (value: T | ((previous: T) => T)) => void;
 export type StateSetter<T> = SignalSetter<T>;
 export type Dispatch<A> = (action: A) => void;
+export interface ErrorBoundaryProps {
+    readonly children?: GuiChild;
+    readonly fallback: (error: unknown, reset: () => void) => GuiChild;
+}
 
 export interface MutableRef<T> { current: T; }
 export interface ControlRef<THandle> {
@@ -67,6 +76,8 @@ export interface CommonProps<THandle = unknown> {
 }
 
 export interface ChildrenProps { children?: GuiChild; }
+export interface TextualChildrenProps { children?: TextualChild; }
+export interface SingleElementChildProps { children?: GuiElement | null | undefined; }
 export interface TextStyleProps {
     foreground?: string; fontFamily?: string; fontSize?: number;
     fontWeight?: FontWeight; fontStyle?: "normal" | "italic";
@@ -79,23 +90,23 @@ export interface ContentStyleProps extends TextStyleProps {
     verticalContentAlignment?: VerticalAlignment;
 }
 
-export interface WindowProps extends CommonProps<WindowHandle>, ChildrenProps {
+export interface WindowProps extends CommonProps<WindowHandle>, SingleElementChildProps {
     title?: string; canResize?: boolean; theme?: Theme;
 }
 export interface StackPanelProps extends CommonProps<StackPanelHandle>, ChildrenProps { spacing?: number; orientation?: Orientation; }
 export interface WrapPanelProps extends CommonProps<unknown>, ChildrenProps { spacing?: number; orientation?: Orientation; }
 export interface DockPanelProps extends CommonProps<unknown>, ChildrenProps { lastChildFill?: boolean; }
 export interface GridProps extends CommonProps<GridHandle>, ChildrenProps { rows?: string; columns?: string; }
-export interface BorderProps extends CommonProps<BorderHandle>, ChildrenProps {
+export interface BorderProps extends CommonProps<BorderHandle>, SingleElementChildProps {
     padding?: Thickness; background?: string; borderBrush?: string;
     borderThickness?: Thickness; cornerRadius?: number;
 }
-export interface ScrollViewerProps extends CommonProps<unknown>, ChildrenProps {
+export interface ScrollViewerProps extends CommonProps<unknown>, SingleElementChildProps {
     horizontalScrollBarVisibility?: ScrollBarVisibility;
     verticalScrollBarVisibility?: ScrollBarVisibility;
 }
-export interface TextBlockProps extends CommonProps<TextBlockHandle>, ChildrenProps, TextStyleProps { textWrapping?: "noWrap" | "wrap"; }
-export interface ButtonProps extends CommonProps<ButtonHandle>, ChildrenProps, ContentStyleProps { onClick?: () => void; }
+export interface TextBlockProps extends CommonProps<TextBlockHandle>, TextualChildrenProps, TextStyleProps { textWrapping?: "noWrap" | "wrap"; }
+export interface ButtonProps extends CommonProps<ButtonHandle>, TextualChildrenProps, ContentStyleProps { onClick?: () => void; }
 export interface TextBoxProps extends CommonProps<TextBoxHandle>, ContentStyleProps {
     text?: string; placeholder?: string; isReadOnly?: boolean; acceptsReturn?: boolean; maxLength?: number;
     onTextChanged?: (value: string) => void;
@@ -104,7 +115,7 @@ export interface PasswordBoxProps extends CommonProps<TextBoxHandle>, ContentSty
     value?: string; placeholder?: string; revealPassword?: boolean; maxLength?: number;
     onValueChanged?: (value: string) => void;
 }
-export interface CheckBoxProps extends CommonProps<unknown>, ChildrenProps, ContentStyleProps { isChecked?: boolean; onCheckedChanged?: (value: boolean) => void; }
+export interface CheckBoxProps extends CommonProps<unknown>, TextualChildrenProps, ContentStyleProps { isChecked?: boolean; onCheckedChanged?: (value: boolean) => void; }
 export interface RadioButtonProps extends CheckBoxProps { groupName: string; }
 export interface ToggleSwitchProps extends CheckBoxProps {}
 export interface ComboBoxProps extends CommonProps<unknown>, ContentStyleProps { items: readonly string[]; selectedIndex?: number; onSelectionChanged?: (index: number) => void; }
@@ -116,7 +127,7 @@ export interface SliderProps extends CommonProps<unknown> { minimum?: number; ma
 export interface ProgressBarProps extends CommonProps<unknown> { minimum?: number; maximum?: number; value?: number; }
 export interface ImageProps extends CommonProps<unknown> { source: string; stretch?: Stretch; onLoad?: () => void; onError?: (message: string) => void; }
 export interface TabControlProps extends CommonProps<unknown>, ChildrenProps { selectedIndex?: number; onSelectionChanged?: (index: number) => void; }
-export interface TabItemProps extends CommonProps<unknown>, ChildrenProps { header: string; }
+export interface TabItemProps extends CommonProps<unknown>, SingleElementChildProps { header: string; }
 export interface MenuProps extends CommonProps<unknown>, ChildrenProps {}
 export interface MenuItemProps extends CommonProps<unknown>, ChildrenProps { header: string; onClick?: () => void; isChecked?: boolean; }
 
@@ -152,6 +163,7 @@ export const TabItem = tag<TabItemProps>("TabItem");
 export const Menu = tag<MenuProps>("Menu");
 export const MenuItem = tag<MenuItemProps>("MenuItem");
 export const Fragment: any = "Fragment";
+export function ErrorBoundary(props: ErrorBoundaryProps): GuiElement { return props.children as any; }
 
 function normalizeKey(key: any): string | null {
     return key === undefined || key === null ? null : String(key);
@@ -198,7 +210,19 @@ interface RefHook { kind: "ref"; ref: MutableRef<any>; }
 interface ControlRefHook { kind: "controlRef"; ref: any; }
 interface EffectHook { kind: "effect"; effect: () => any; deps: readonly unknown[] | undefined; cleanup: (() => void) | null; changed: boolean; }
 type Hook = StateHook | ReducerHook | MemoHook | RefHook | ControlRefHook | EffectHook;
-interface ComponentState { path: string; type: any; hooks: Hook[]; nextHooks: Hook[]; hookIndex: number; root: ReactiveRoot; seen: boolean; }
+interface ErrorBoundaryState { path: string; error: any; root: ReactiveRoot; seen: boolean; }
+interface ComponentState { path: string; type: any; hooks: Hook[]; nextHooks: Hook[]; hookIndex: number; root: ReactiveRoot; seen: boolean; mounted: boolean; boundary: ErrorBoundaryState | null; }
+interface LogicalFiber {
+    readonly kind: "component" | "fragment" | "intrinsic" | "text";
+    readonly key: string | null;
+    readonly path: string;
+    readonly type: any;
+    readonly children: readonly LogicalFiber[];
+}
+interface MaterializedChildren {
+    readonly fibers: LogicalFiber[];
+    readonly nodes: GuiVNode[];
+}
 let activeComponent: ComponentState | null = null;
 
 function requireComponent(name: string): ComponentState {
@@ -225,7 +249,11 @@ function useStateImpl(initial: any): any[] {
     let hook: StateHook;
     if (old === null) {
         hook = { kind: "state", value: typeof initial === "function" ? (initial as any)() : initial, pending: [], setter: null as any };
-        hook.setter = (next: any): void => { hook.pending.push(next); component.root.invalidate(); };
+        hook.setter = (next: any): void => {
+            if (!component.mounted) return;
+            hook.pending.push(next);
+            component.root.invalidate();
+        };
     } else hook = old;
     let value = hook.value;
     for (const update of hook.pending) value = typeof update === "function" ? update(value) : update;
@@ -242,7 +270,11 @@ function useReducerImpl(reducer: any, initial: any): any[] {
     let hook: ReducerHook;
     if (old === null) {
         hook = { kind: "reducer", value: initial, pending: [], reducer: reducer as any, dispatch: null as any };
-        hook.dispatch = (action: any): void => { hook.pending.push(action); component.root.invalidate(); };
+        hook.dispatch = (action: any): void => {
+            if (!component.mounted) return;
+            hook.pending.push(action);
+            component.root.invalidate();
+        };
     } else { hook = old; hook.reducer = reducer as any; }
     let value = hook.value;
     for (const action of hook.pending) value = reducer(value, action);
@@ -389,6 +421,8 @@ class ReactiveRoot {
     private rendering = false;
     private dependencies: SignalState[] = [];
     private components: ComponentState[] = [];
+    private boundaries: ErrorBoundaryState[] = [];
+    private fibers: LogicalFiber[] = [];
     public constructor(private readonly element: GuiChild) {}
     public setManaged(root: any): void { this.managed = root; }
     public invalidate(): void {
@@ -397,27 +431,75 @@ class ReactiveRoot {
         this.scheduled = true;
         DesktopBridge.QueueMicrotask((): void => { this.scheduled = false; if (!this.disposed) this.renderNow(); });
     }
-    private component(path: string, type: any): ComponentState {
-        for (const existing of this.components) if (existing.path === path && existing.type === type) { existing.seen = true; return existing; }
-        const created: ComponentState = { path, type, hooks: [], nextHooks: [], hookIndex: 0, root: this, seen: true };
+    private component(path: string, type: any, boundary: ErrorBoundaryState | null): ComponentState {
+        for (const existing of this.components) if (existing.path === path && existing.type === type) {
+            existing.seen = true; existing.boundary = boundary; return existing;
+        }
+        const created: ComponentState = { path, type, hooks: [], nextHooks: [], hookIndex: 0, root: this, seen: true, mounted: true, boundary };
         this.components.push(created); return created;
     }
-    private materialize(child: GuiChild, path: string): GuiVNode[] {
+    private boundary(path: string): ErrorBoundaryState {
+        for (const existing of this.boundaries) if (existing.path === path) { existing.seen = true; return existing; }
+        const created: ErrorBoundaryState = { path, error: null, root: this, seen: true };
+        this.boundaries.push(created); return created;
+    }
+    private materialize(child: GuiChild, path: string, transparentPrefix: string | null = null,
+        nearestBoundary: ErrorBoundaryState | null = null): MaterializedChildren {
         const flat: GuiChild[] = []; flatten(child, flat);
-        const result: GuiVNode[] = [];
+        const explicitKeys: string[] = [];
+        for (const item of flat) {
+            if (typeof item !== "string" && typeof item !== "number") {
+                const element = item as GuiElement;
+                if (element.__guiElement !== true) throw new Error("Unsupported @sharpts/gui child value.");
+                if (element.key !== null) {
+                    if (contains(explicitKeys, element.key)) throw new Error("Duplicate sibling key '" + element.key + "'.");
+                    explicitKeys.push(element.key);
+                }
+            }
+        }
+        const fibers: LogicalFiber[] = [];
+        const nodes: GuiVNode[] = [];
         for (let index = 0; index < flat.length; index++) {
             const item = flat[index];
+            const positionalSegment = String(index);
             if (typeof item === "string" || typeof item === "number") {
-                result.push(DesktopBridge.CreateTextBlock(String(item), NaN, "normal", "normal", "noWrap", "left", null, null, null) as any);
+                const textPath = path + "/" + positionalSegment;
+                nodes.push(DesktopBridge.CreateTextBlock(String(item), NaN, "normal", "normal", "noWrap", "left", null,
+                    transparentPrefix === null ? null : transparentPrefix + "/" + positionalSegment, null) as any);
+                fibers.push({ kind: "text", key: null, path: textPath, type: "TextBlock", children: [] });
                 continue;
             }
             const element = item as GuiElement;
-            if (element.__guiElement !== true) throw new Error("Unsupported @sharpts/gui child value.");
             const segment = element.key === null ? String(index) : "$" + element.key;
             const childPath = path + "/" + segment;
+            if (element.type === ErrorBoundary) {
+                const state = this.boundary(childPath + ":boundary");
+                const safe: ErrorBoundaryProps = element.props || {} as any;
+                if (typeof safe.fallback !== "function") throw new Error("ErrorBoundary requires a fallback function.");
+                const reset = (): void => { if (state.error !== null) { state.error = null; state.root.invalidate(); } };
+                const prefix = element.key !== null || flat.length > 1
+                    ? (transparentPrefix === null ? segment : transparentPrefix + "/" + segment)
+                    : transparentPrefix;
+                let nested: MaterializedChildren;
+                if (state.error !== null) {
+                    nested = this.materialize(safe.fallback(state.error, reset), state.path, prefix, nearestBoundary);
+                } else {
+                    try {
+                        nested = this.materialize(safe.children, state.path, prefix, state);
+                    } catch (error) {
+                        state.error = error;
+                        for (const component of this.components)
+                            if (component.path.indexOf(state.path + "/") === 0) component.seen = false;
+                        nested = this.materialize(safe.fallback(error, reset), state.path, prefix, nearestBoundary);
+                    }
+                }
+                fibers.push({ kind: "component", key: element.key, path: state.path, type: ErrorBoundary, children: nested.fibers });
+                for (const nestedNode of nested.nodes) nodes.push(nestedNode);
+                continue;
+            }
             if (typeof element.type === "function") {
                 const id = functionId(element.type);
-                const state = this.component(childPath + ":c" + id, element.type);
+                const state = this.component(childPath + ":c" + id, element.type, nearestBoundary);
                 state.hookIndex = 0; state.nextHooks = [];
                 const previous = activeComponent; activeComponent = state;
                 let rendered: GuiChild;
@@ -425,35 +507,54 @@ class ReactiveRoot {
                 finally { activeComponent = previous; }
                 if (state.hookIndex !== state.hooks.length && state.hooks.length !== 0)
                     throw new Error("Hook count changed in component at " + state.path + ".");
-                const nested = this.materialize(rendered, state.path);
-                for (const nestedNode of nested) result.push(nestedNode);
+                const prefix = element.key !== null || flat.length > 1
+                    ? (transparentPrefix === null ? segment : transparentPrefix + "/" + segment)
+                    : transparentPrefix;
+                const nested = this.materialize(rendered, state.path, prefix, nearestBoundary);
+                fibers.push({ kind: "component", key: element.key, path: state.path, type: element.type, children: nested.fibers });
+                for (const nestedNode of nested.nodes) nodes.push(nestedNode);
                 continue;
             }
-            result.push(this.intrinsic(element, childPath));
+            if (element.type === Fragment) {
+                const prefix = element.key !== null || flat.length > 1
+                    ? (transparentPrefix === null ? segment : transparentPrefix + "/" + segment)
+                    : transparentPrefix;
+                const nested = this.materialize((element.props || {}).children, childPath, prefix, nearestBoundary);
+                fibers.push({ kind: "fragment", key: element.key, path: childPath, type: Fragment, children: nested.fibers });
+                for (const nestedNode of nested.nodes) nodes.push(nestedNode);
+                continue;
+            }
+            const nativeKey = transparentPrefix === null
+                ? element.key
+                : transparentPrefix + "/" + segment;
+            const intrinsic = this.intrinsic(element, childPath, nativeKey, nearestBoundary);
+            fibers.push({ kind: "intrinsic", key: element.key, path: childPath, type: element.type, children: intrinsic.fibers });
+            nodes.push(intrinsic.node);
         }
-        return result;
+        return { fibers, nodes };
     }
-    private intrinsic(element: GuiElement, path: string): GuiVNode {
+    private intrinsic(element: GuiElement, path: string, nativeKey: string | null,
+        nearestBoundary: ErrorBoundaryState | null): { node: GuiVNode; fibers: LogicalFiber[] } {
         const safe: any = element.props || {};
         const ref: any = safe.ref === undefined ? null : safe.ref;
         const textual = element.type === "TextBlock" || element.type === "Button" ||
             element.type === "CheckBox" || element.type === "RadioButton" ||
             element.type === "ToggleSwitch";
-        const children = textual ? [] : this.materialize(safe.children, path);
-        const key: any = element.key;
+        const children = textual ? { fibers: [], nodes: [] } : this.materialize(safe.children, path, null, nearestBoundary);
+        const key: any = nativeKey;
         let node: GuiVNode;
         const pad = thickness(safe.padding); const border = thickness(safe.borderThickness);
         switch (element.type) {
-            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, children, key, ref); break;
-            case "StackPanel": case "ToolBar": node = DesktopBridge.CreateStackPanel(element.type, safe.spacing === undefined ? 0 : safe.spacing, element.type === "ToolBar" ? "horizontal" : (safe.orientation === undefined ? "vertical" : safe.orientation), children, key, ref); break;
-            case "WrapPanel": node = DesktopBridge.CreateWrapPanel(safe.spacing === undefined ? 0 : safe.spacing, safe.orientation === undefined ? "horizontal" : safe.orientation, children, key, ref); break;
-            case "DockPanel": node = DesktopBridge.CreateDockPanel(safe.lastChildFill === undefined ? true : safe.lastChildFill, children, key, ref); break;
-            case "Grid": node = DesktopBridge.CreateGrid(safe.rows || "", safe.columns || "", children, key, ref); break;
-            case "Border": case "StatusBar": node = DesktopBridge.CreateBorder(element.type, pad[0], pad[1], pad[2], pad[3], safe.background || null, safe.borderBrush || null, border[0], border[1], border[2], border[3], safe.cornerRadius || 0, children, key, ref); break;
-            case "ScrollViewer": node = DesktopBridge.CreateScrollViewer(safe.horizontalScrollBarVisibility || "auto", safe.verticalScrollBarVisibility || "auto", children, key, ref); break;
+            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, children.nodes, key, ref); break;
+            case "StackPanel": case "ToolBar": node = DesktopBridge.CreateStackPanel(element.type, safe.spacing === undefined ? 0 : safe.spacing, element.type === "ToolBar" ? "horizontal" : (safe.orientation === undefined ? "vertical" : safe.orientation), children.nodes, key, ref); break;
+            case "WrapPanel": node = DesktopBridge.CreateWrapPanel(safe.spacing === undefined ? 0 : safe.spacing, safe.orientation === undefined ? "horizontal" : safe.orientation, children.nodes, key, ref); break;
+            case "DockPanel": node = DesktopBridge.CreateDockPanel(safe.lastChildFill === undefined ? true : safe.lastChildFill, children.nodes, key, ref); break;
+            case "Grid": node = DesktopBridge.CreateGrid(safe.rows || "", safe.columns || "", children.nodes, key, ref); break;
+            case "Border": case "StatusBar": node = DesktopBridge.CreateBorder(element.type, pad[0], pad[1], pad[2], pad[3], safe.background || null, safe.borderBrush || null, border[0], border[1], border[2], border[3], safe.cornerRadius || 0, children.nodes, key, ref); break;
+            case "ScrollViewer": node = DesktopBridge.CreateScrollViewer(safe.horizontalScrollBarVisibility || "auto", safe.verticalScrollBarVisibility || "auto", children.nodes, key, ref); break;
             case "Separator": node = DesktopBridge.CreateSeparator(key, ref); break;
             case "TextBlock": node = DesktopBridge.CreateTextBlock(textContent(safe.children), safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.fontStyle || "normal", safe.textWrapping || "noWrap", safe.textAlignment || "left", safe.foreground || null, key, ref); break;
-            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : textContent(safe.children), safe.isChecked === true, safe.groupName || null, action(safe.onClick), boolAction(safe.onCheckedChanged), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children, key, ref); break;
+            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : textContent(safe.children), safe.isChecked === true, safe.groupName || null, action(safe.onClick), boolAction(safe.onCheckedChanged), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
             case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged), key, ref); break;
             case "ComboBox": node = DesktopBridge.CreateComboBox((safe.items || []).slice(), safe.selectedIndex === undefined ? -1 : safe.selectedIndex, numberAction(safe.onSelectionChanged), key, ref); break;
             case "ListBox": node = DesktopBridge.CreateListBox((safe.items || []).slice(), (safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged), key, ref); break;
@@ -462,63 +563,80 @@ class ReactiveRoot {
             case "Slider": node = DesktopBridge.CreateSlider(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.value === undefined ? 0 : safe.value, numberAction(safe.onValueChanged), key, ref); break;
             case "ProgressBar": node = DesktopBridge.CreateProgressBar(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.value === undefined ? 0 : safe.value, key, ref); break;
             case "Image": node = DesktopBridge.CreateImage(safe.source, safe.stretch || "uniform", action(safe.onLoad), stringAction(safe.onError), key, ref); break;
-            case "TabControl": node = DesktopBridge.CreateTabControl(safe.selectedIndex === undefined ? 0 : safe.selectedIndex, numberAction(safe.onSelectionChanged), children, key, ref); break;
-            case "TabItem": node = DesktopBridge.CreateTabItem(safe.header, children, key, ref); break;
-            case "Menu": node = DesktopBridge.CreateMenu(children, key, ref); break;
-            case "Fragment": node = DesktopBridge.CreateFragment(children, key); break;
+            case "TabControl": node = DesktopBridge.CreateTabControl(safe.selectedIndex === undefined ? 0 : safe.selectedIndex, numberAction(safe.onSelectionChanged), children.nodes, key, ref); break;
+            case "TabItem": node = DesktopBridge.CreateTabItem(safe.header, children.nodes, key, ref); break;
+            case "Menu": node = DesktopBridge.CreateMenu(children.nodes, key, ref); break;
             default: throw new Error("Unknown @sharpts/gui TSX tag: " + element.type);
         }
-        return source(withCommon(withStyle(node, safe), safe), element.source);
+        return { node: source(withCommon(withStyle(node, safe), safe), element.source), fibers: children.fibers };
     }
     public renderNow(): void {
         if (this.disposed) return;
         this.rendering = true;
         for (const component of this.components) component.seen = false;
+        for (const boundary of this.boundaries) boundary.seen = false;
         const nextDependencies: SignalState[] = [];
         const previousCollector = activeSignalCollector; activeSignalCollector = nextDependencies;
         try {
-            const roots = this.materialize(this.element, "root");
-            if (roots.length !== 1) throw new Error("renderDesktop requires exactly one Window root.");
-            this.managed.Render(roots[0]);
-            this.commitComponents();
+            const materialized = this.materialize(this.element, "root");
+            if (materialized.nodes.length !== 1) throw new Error("renderDesktop requires exactly one Window root.");
+            this.managed.Render(materialized.nodes[0]);
+            this.fibers = materialized.fibers;
         } finally { activeSignalCollector = previousCollector; this.rendering = false; }
+        this.commitComponents();
+        this.boundaries = this.boundaries.filter(boundary => boundary.seen);
         for (const dependency of this.dependencies) if (!contains(nextDependencies, dependency)) remove(dependency.subscribers, this);
         for (const dependency of nextDependencies) if (!contains(dependency.subscribers, this)) dependency.subscribers.push(this);
         this.dependencies = nextDependencies;
     }
     private commitComponents(): void {
         const removed = this.components.filter(component => !component.seen).sort((a, b) => b.path.length - a.path.length);
-        for (const component of removed) this.cleanup(component);
+        for (const component of removed) { component.mounted = false; this.cleanup(component); }
         this.components = this.components.filter(component => component.seen);
-        for (const component of this.components) {
+        const childFirst = this.components.slice().sort((a, b) => b.path.length - a.path.length);
+        for (const component of childFirst) {
             for (const hook of component.nextHooks) {
                 if (hook.kind === "state" || hook.kind === "reducer") hook.pending.splice(0, hook.pending.length);
                 if (hook.kind === "effect" && hook.changed && hook.cleanup !== null) {
                     const cleanup = hook.cleanup;
-                    cleanup();
+                    try { cleanup(); }
+                    catch (error) { this.captureEffectError(component, error); }
                 }
             }
             component.hooks = component.nextHooks;
         }
-        for (const component of this.components) for (const hook of component.hooks) if (hook.kind === "effect" && hook.changed) {
-            const cleanup = hook.effect(); hook.cleanup = typeof cleanup === "function" ? cleanup : null; hook.changed = false;
+        for (const component of childFirst) for (const hook of component.hooks) if (hook.kind === "effect" && hook.changed) {
+            try {
+                const cleanup = hook.effect(); hook.cleanup = typeof cleanup === "function" ? cleanup : null;
+            } catch (error) { this.captureEffectError(component, error); }
+            hook.changed = false;
         }
+    }
+    private captureEffectError(component: ComponentState, error: any): void {
+        const boundary = component.boundary;
+        if (this.disposed || boundary === null) throw error;
+        boundary.error = error;
+        this.invalidate();
     }
     private cleanup(component: ComponentState): void {
         for (let i = component.hooks.length - 1; i >= 0; i--) {
             const hook = component.hooks[i];
             if (hook.kind === "effect" && hook.cleanup !== null) {
                 const cleanup = hook.cleanup;
-                cleanup();
+                try { cleanup(); }
+                catch (error) { this.captureEffectError(component, error); }
                 hook.cleanup = null;
             }
         }
     }
     public disposeFromManaged(): void {
         if (this.disposed) return; this.disposed = true; this.scheduled = false;
-        for (const component of this.components.slice().sort((a, b) => b.path.length - a.path.length)) this.cleanup(component);
+        for (const component of this.components.slice().sort((a, b) => b.path.length - a.path.length)) {
+            component.mounted = false;
+            this.cleanup(component);
+        }
         for (const dependency of this.dependencies) remove(dependency.subscribers, this);
-        this.dependencies = []; this.components = []; this.managed = null;
+        this.dependencies = []; this.components = []; this.boundaries = []; this.fibers = []; this.managed = null;
     }
 }
 

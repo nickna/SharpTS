@@ -153,6 +153,33 @@ public class JsxTypeCheckerTests
     }
 
     [Fact]
+    public void KeyAttributeUsesIntrinsicAttributesType()
+    {
+        var call = JsxCall(JsxElementKind.Intrinsic, "div", new Expr.Literal("div"),
+            new Expr.ObjectLiteral([Attribute("key", new Expr.Literal(true))]));
+
+        Assert.Contains(Check(call).Diagnostics, d => d.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void ChildrenAndRefUseDeclaredPropTypes()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare function RefComponent(props: { ref?: { id: string }; children: string }): JSX.Element;
+            """;
+        var call = JsxCall(JsxElementKind.Component, "RefComponent",
+            new Expr.Variable(Identifier("RefComponent")),
+            new Expr.ObjectLiteral([
+                Attribute("ref", new Expr.Literal(42)),
+                Attribute("children", new Expr.Literal(42)),
+            ]));
+
+        TypeCheckDiagnosticResult result = Check(call, prelude);
+        Assert.True(result.Diagnostics.Count(d => d.TsCode == "TS2322") >= 2);
+    }
+
+    [Fact]
     public void OneMissingRequiredProp_ReportsTs2741()
     {
         var call = JsxCall(JsxElementKind.Intrinsic, "button", new Expr.Literal("button"),
@@ -268,6 +295,45 @@ public class JsxTypeCheckerTests
         var result = Check(call, prelude);
 
         Assert.Contains(result.Diagnostics, d => d.TsCode == "TS2786");
+    }
+
+    [Fact]
+    public void GenericFunctionComponent_InfersPropsAndChecksAttributes()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare function GenericValue<T>(props: { value: T; same: T }): JSX.Element;
+            """;
+        var valid = JsxCall(JsxElementKind.Component, "GenericValue",
+            new Expr.Variable(Identifier("GenericValue")),
+            new Expr.ObjectLiteral([
+                Attribute("value", new Expr.Literal("x")),
+                Attribute("same", new Expr.Literal("x")),
+            ]));
+        var missing = JsxCall(JsxElementKind.Component, "GenericValue",
+            new Expr.Variable(Identifier("GenericValue")),
+            new Expr.ObjectLiteral([Attribute("value", new Expr.Literal("x"))]));
+
+        Assert.Empty(Check(valid, prelude).Diagnostics);
+        Assert.Contains(Check(missing, prelude).Diagnostics, d => d.TsCode == "TS2741");
+    }
+
+    [Fact]
+    public void CallableObjectComponent_ChecksItsCallSignatureProps()
+    {
+        const string prelude = JsxPrelude + """
+
+            interface CallableComponent {
+                (props: { count: number }): JSX.Element;
+                label: string;
+            }
+            declare const Callable: CallableComponent;
+            """;
+        var call = JsxCall(JsxElementKind.Component, "Callable",
+            new Expr.Variable(Identifier("Callable")),
+            new Expr.ObjectLiteral([Attribute("count", new Expr.Literal("wrong"))]));
+
+        Assert.Contains(Check(call, prelude).Diagnostics, d => d.TsCode == "TS2769");
     }
 
     [Fact]

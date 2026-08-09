@@ -44,9 +44,21 @@ public sealed class HostInfrastructureTests
                     EntryPath = "Guest/main.tsx",
                     CompiledAssembly = "SharpTS.Gui.Guest.dll",
                     HostedAbiVersion = int.MaxValue,
-                    GuiApiVersion = 1
+                    GuiApiVersion = 2
                 }));
             Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
+
+            File.WriteAllText(
+                Path.Combine(metadata, "app.json"),
+                JsonSerializer.Serialize(new
+                {
+                    EntryPath = "Guest/main.tsx",
+                    CompiledAssembly = "SharpTS.Gui.Guest.dll",
+                    HostedAbiVersion = 1,
+                    GuiApiVersion = 1
+                }));
+            InvalidOperationException migration = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
+            Assert.Contains("migrate to API 2", migration.Message, StringComparison.Ordinal);
 
             File.WriteAllText(
                 Path.Combine(metadata, "app.json"),

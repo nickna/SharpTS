@@ -21,7 +21,7 @@ public sealed class DesktopRef
 
 public static class DesktopBridge
 {
-    public const int GuiApiVersion = 1;
+    public const int GuiApiVersion = 2;
     private static DesktopRuntimeContext? _context;
 
     internal static DesktopRuntimeRegistration Configure(

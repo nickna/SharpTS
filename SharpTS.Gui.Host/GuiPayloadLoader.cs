@@ -69,9 +69,12 @@ internal static class GuiPayloadLoader
         }
         if (manifest.GuiApiVersion != DesktopBridge.GuiApiVersion)
         {
+            string migration = manifest.GuiApiVersion == 1
+                ? " GUI API 1 applications must migrate to API 2; see docs/gui/migrating-api-1-to-2.md."
+                : string.Empty;
             throw new InvalidOperationException(
                 $"SharpTS GUI host supports GUI API {DesktopBridge.GuiApiVersion}; " +
-                $"application requires GUI API {manifest.GuiApiVersion}.");
+                $"application requires GUI API {manifest.GuiApiVersion}." + migration);
         }
     }
 }

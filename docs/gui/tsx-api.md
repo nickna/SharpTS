@@ -1,6 +1,6 @@
 # SharpTS GUI TSX API
 
-GUI API version 1 is an application-capable, retained TSX surface for Windows Avalonia apps. A
+GUI API version 2 is an application-capable, retained TSX surface for Windows Avalonia apps. A
 project renders one `Window` root from a function component:
 
 ```tsx
@@ -24,14 +24,26 @@ const root = renderDesktop(<App />);
 Function components may return an element, primitive text/number, fragment, nested array, or
 `null`/`undefined`/boolean. Components use `useState`, `useReducer`, `useEffect`, `useMemo`,
 `useCallback`, `useRef`, and `useControlRef`. Hooks must be called unconditionally in the same
-order. Effects run after a successful native commit; cleanup runs before a changed effect, when a
-component is removed, and when the root is disposed. `createSignal` is retained for state owned
-outside the component tree.
+order. Effects run after the renderer leaves render mode and after a successful native commit, so
+effect setup and changed-effect cleanup may queue state updates. Cleanup runs before a changed
+effect, when a component is removed, and when the root is disposed. `createSignal` is retained for
+state owned outside the component tree.
+
+`ErrorBoundary` catches descendant render failures and effect setup/cleanup failures. Its
+`fallback(error, reset)` callback returns the recovery UI; calling `reset()` retries the protected
+subtree on a subsequent render. Event-handler and detached asynchronous failures remain host-level
+errors.
 
 Natural children are supported. Text-bearing controls (`TextBlock`, `Button`, `CheckBox`,
 `RadioButton`, and `ToggleSwitch`) accept string/number children; container controls accept
-elements, fragments, arrays, and conditional children. Stable `key` values preserve native
-identity when siblings move.
+elements, fragments, arrays, and conditional children. Stable `key` values preserve the complete
+logical component or fragment subtree, including native identity and hook state, when siblings
+move. Fragments are layout-transparent and never insert a native panel. Duplicate keys at any
+sibling level are rejected before native mutation.
+
+Built-in descriptors validate parsed values before mutation. If a native setter fails during an
+update, the renderer reverses the commit to the last VNode tree. A second failure during recovery
+disposes the damaged window root and reports a combined fatal host error.
 
 ## Built-in controls
 
@@ -73,9 +85,11 @@ and SHA-256 pin:
 `showMessageDialog`, `showOpenFileDialog`, `showSaveFileDialog`, `showFolderDialog`,
 `readClipboardText`, and `writeClipboardText` require a mounted, non-Headless window.
 
-## Version 1 boundaries
+## Version 2 preview.1 boundaries
 
 The API intentionally supports one `Window` root and built-in descriptors. Combo/list data is
 string-backed. Public theme/resource dictionaries, custom controls, item templates, data grids,
-trees, drawing/canvas, rich text, multi-window orchestration, and macOS are not part of GUI API 1.
-The complete proof application is in `Examples/Calculator`.
+trees, drawing/canvas, rich text, multi-window orchestration, and macOS are not part of preview.1.
+API 1 manifests are rejected with a migration diagnostic; see
+[Migrating GUI API 1 to 2](migrating-api-1-to-2.md). The complete proof application is in
+`Examples/Calculator`.

@@ -22,6 +22,30 @@ export function traceControlIdentities(stage: string): void {
     DesktopConformanceBridge.TraceControlIdentities(stage);
 }
 
+export function click(key: string): void {
+    DesktopConformanceBridge.Click(key);
+}
+
+export function pressKey(key: string): void {
+    DesktopConformanceBridge.PressKey(key);
+}
+
+export function getText(key: string): string {
+    return DesktopConformanceBridge.GetText(key);
+}
+
+export function getProperty(key: string, property: string): string {
+    return DesktopConformanceBridge.GetProperty(key, property);
+}
+
+export function getIdentity(key: string): number {
+    return DesktopConformanceBridge.GetIdentity(key);
+}
+
+export function getActiveSubscriptionCount(): number {
+    return DesktopConformanceBridge.GetActiveSubscriptionCount();
+}
+
 export function isRefAttached(reference: unknown): boolean {
     return DesktopConformanceBridge.IsRefAttached(reference as any);
 }

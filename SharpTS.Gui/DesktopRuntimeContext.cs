@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using System.Reflection;
 
@@ -70,6 +71,33 @@ internal sealed class DesktopRuntimeContext
         var button = CurrentRoot?.FindFirstButton()
             ?? throw new InvalidOperationException("No mounted Button exists.");
         button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    }
+
+    public void RaiseButtonClick(string key)
+    {
+        EnsureOwnerThread();
+        RequireControl<Button>(key).RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+    }
+
+    public void RaiseKeyPress(string key)
+    {
+        EnsureOwnerThread();
+        var window = CurrentRoot?.Window
+            ?? throw new InvalidOperationException("No mounted Window exists.");
+        Key nativeKey = key switch
+        {
+            "0" => Key.D0, "1" => Key.D1, "2" => Key.D2, "3" => Key.D3, "4" => Key.D4,
+            "5" => Key.D5, "6" => Key.D6, "7" => Key.D7, "8" => Key.D8, "9" => Key.D9,
+            "+" => Key.Add, "-" => Key.Subtract, "*" => Key.Multiply, "/" => Key.Divide,
+            "." => Key.Decimal, "Enter" or "=" => Key.Return, "%" => Key.D5,
+            "Backspace" => Key.Back, "Delete" => Key.Delete, "Escape" => Key.Escape,
+            "c" or "C" => Key.C, "x" or "X" => Key.X,
+            _ => throw new ArgumentException($"Unsupported Headless key '{key}'.", nameof(key)),
+        };
+        KeyModifiers modifiers = key == "%" ? KeyModifiers.Shift : KeyModifiers.None;
+        var down = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = nativeKey, KeyModifiers = modifiers };
+        window.RaiseEvent(down);
+        window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyUpEvent, Key = nativeKey, KeyModifiers = modifiers });
     }
 
     public T RequireControl<T>(string key) where T : Control

@@ -16,7 +16,7 @@ $supportedRuntimeIdentifiers = @(
 if ($RuntimeIdentifier -notin $supportedRuntimeIdentifiers) {
     throw "SharpTS.Gui.Sdk supports only $($supportedRuntimeIdentifiers -join ', '); got '$RuntimeIdentifier'."
 }
-$version = "0.1.0-preview.1"
+$version = "0.2.0-preview.1"
 $artifactRoot = Join-Path $repositoryRoot "artifacts\windows-preview\$RuntimeIdentifier"
 $feed = Join-Path $artifactRoot "feed"
 $packageCache = Join-Path $artifactRoot "packages"

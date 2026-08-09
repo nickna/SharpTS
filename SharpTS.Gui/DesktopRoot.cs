@@ -23,6 +23,9 @@ public sealed class DesktopRoot : IDisposable
     private MountedNode? _mounted;
     private bool _disposed;
     private int _activeSubscriptions;
+    private readonly HashSet<Key> _heldKeys = [];
+    private KeyEventArgs? _lastKeyDownArgs;
+    private bool _lastKeyDownRepeat;
 
     internal DesktopRoot(
         TraceRecorder recorder,
@@ -75,7 +78,27 @@ public sealed class DesktopRoot : IDisposable
 
         if (CanReuse(_mounted, prepared))
         {
-            ReconcileNode(_mounted, prepared);
+            GuiVNode previousTree = _mounted.VNode;
+            try
+            {
+                ReconcileNode(_mounted, prepared);
+            }
+            catch (Exception commitError)
+            {
+                try
+                {
+                    ReconcileNode(_mounted, VNodeValidator.Prepare(previousTree, requireWindowRoot: true));
+                }
+                catch (Exception rollbackError)
+                {
+                    DisposeDamagedRoot();
+                    throw new AggregateException(
+                        "SharpTS GUI native commit and rollback both failed; the window root was disposed.",
+                        commitError,
+                        rollbackError);
+                }
+                throw;
+            }
             _recorder.Record("render-commit");
             return;
         }
@@ -174,9 +197,15 @@ public sealed class DesktopRoot : IDisposable
 
         bool changed;
         mounted.SuppressEvents = true;
+        GuiVNode previousNode = mounted.VNode;
         try
         {
-            changed = mounted.Descriptor.Update(mounted.Control, mounted.VNode, prepared.VNode);
+            changed = mounted.Descriptor.Update(mounted.Control, previousNode, prepared.VNode);
+        }
+        catch
+        {
+            mounted.Descriptor.Update(mounted.Control, prepared.VNode, previousNode);
+            throw;
         }
         finally
         {
@@ -187,6 +216,7 @@ public sealed class DesktopRoot : IDisposable
             _recorder.Record("reconcile-update", detail: Describe(mounted));
 
         UpdateCallbacks(mounted, prepared.VNode);
+        SynchronizeKeyboard(mounted);
         ReconcileChildren(mounted, prepared.Children);
         UpdateRef(mounted, prepared.VNode);
         mounted.VNode = prepared.VNode;
@@ -269,39 +299,95 @@ public sealed class DesktopRoot : IDisposable
             created.Add(newNode);
         }
 
-        foreach (MountedNode oldChild in oldChildren)
+        MountedNode[] removed = oldChildren
+            .Where(oldChild => !desired.Contains(oldChild, ReferenceEqualityComparer.Instance))
+            .ToArray();
+        try
         {
-            if (desired.Contains(oldChild, ReferenceEqualityComparer.Instance))
-                continue;
-            ReleaseSubtree(oldChild);
-            RemoveChildControl(parent, oldChild.Control);
-            _recorder.Record(
-                replaced.Contains(oldChild) ? "reconcile-replace" : "reconcile-remove",
-                detail: Describe(oldChild));
+            foreach (MountedNode oldChild in removed)
+            {
+                ReleaseSubtree(oldChild);
+                RemoveChildControl(parent, oldChild.Control);
+            }
+
+            for (int index = 0; index < desired.Count; index++)
+            {
+                MountedNode child = desired[index];
+                int currentIndex = IndexOfChildControl(parent, child.Control);
+                if (currentIndex == index)
+                    continue;
+
+                if (currentIndex >= 0)
+                {
+                    MoveChildControl(parent, currentIndex, index);
+                    _recorder.Record("reconcile-move", detail: $"{Describe(child)}:{currentIndex}->{index}");
+                }
+                else
+                {
+                    InsertChildControl(parent, index, child.Control);
+                    if (created.Contains(child))
+                        ActivateSubtree(child);
+                }
+            }
         }
-
-        for (int index = 0; index < desired.Count; index++)
+        catch
         {
-            MountedNode child = desired[index];
-            int currentIndex = IndexOfChildControl(parent, child.Control);
-            if (currentIndex == index)
-                continue;
-
-            if (currentIndex >= 0)
+            foreach (MountedNode child in created)
             {
-                MoveChildControl(parent, currentIndex, index);
-                _recorder.Record("reconcile-move", detail: $"{Describe(child)}:{currentIndex}->{index}");
+                RemoveChildControl(parent, child.Control);
+                ReleaseSubtree(child);
             }
-            else
+            for (int index = 0; index < oldChildren.Count; index++)
             {
-                InsertChildControl(parent, index, child.Control);
-                if (created.Contains(child))
-                    ActivateSubtree(child);
+                MountedNode child = oldChildren[index];
+                int currentIndex = IndexOfChildControl(parent, child.Control);
+                if (currentIndex < 0)
+                    InsertChildControl(parent, index, child.Control);
+                else if (currentIndex != index)
+                    MoveChildControl(parent, currentIndex, index);
             }
+            foreach (MountedNode child in removed)
+            {
+                MarkSubtreeAlive(child);
+                ActivateSubtree(child);
+            }
+            throw;
         }
 
         parent.Children.Clear();
         parent.Children.AddRange(desired);
+        foreach (MountedNode oldChild in removed)
+        {
+            _recorder.Record(
+                replaced.Contains(oldChild) ? "reconcile-replace" : "reconcile-remove",
+                detail: Describe(oldChild));
+        }
+    }
+
+    private static void MarkSubtreeAlive(MountedNode mounted)
+    {
+        mounted.Released = false;
+        foreach (MountedNode child in mounted.Children)
+            MarkSubtreeAlive(child);
+    }
+
+    private void DisposeDamagedRoot()
+    {
+        _disposed = true;
+        if (_mounted is not null)
+        {
+            MountedNode mounted = _mounted;
+            try { ReleaseSubtree(mounted); }
+            finally
+            {
+                var window = (Window)mounted.Control;
+                window.Content = null;
+                window.Close();
+                _mounted = null;
+            }
+        }
+        _releaseRoot(this);
+        _recorder.Record("fatal-rollback-dispose");
     }
 
     private void UpdateRef(MountedNode mounted, GuiVNode next)
@@ -343,7 +429,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     mounted.TextHandler = handler;
                     textBox.TextChanged += handler;
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case ToggleButton checkBox:
@@ -365,7 +451,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     mounted.RoutedHandler = handler;
                     checkBox.IsCheckedChanged += handler;
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case Button button:
@@ -382,7 +468,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     mounted.RoutedHandler = handler;
                     button.Click += handler;
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case MenuItem menuItem:
@@ -399,7 +485,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     menuItem.Click += handler;
                     mounted.ExtraUnsubscribe.Add(() => menuItem.Click -= handler);
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case ComboBox comboBox:
@@ -422,7 +508,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     mounted.SelectionHandler = handler;
                     comboBox.SelectionChanged += handler;
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case Slider slider:
@@ -444,7 +530,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     mounted.ValueHandler = handler;
                     slider.ValueChanged += handler;
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case ListBox listBox:
@@ -461,7 +547,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     listBox.SelectionChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => listBox.SelectionChanged -= handler);
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case NumericUpDown numeric:
@@ -478,7 +564,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     numeric.ValueChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => numeric.ValueChanged -= handler);
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case DatePicker date:
@@ -492,7 +578,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     date.SelectedDateChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => date.SelectedDateChanged -= handler);
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case TimePicker time:
@@ -508,7 +594,7 @@ public sealed class DesktopRoot : IDisposable
                     };
                     time.SelectedTimeChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => time.SelectedTimeChanged -= handler);
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
                 case TabControl tabs:
@@ -523,12 +609,13 @@ public sealed class DesktopRoot : IDisposable
                     };
                     tabs.SelectionChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => tabs.SelectionChanged -= handler);
-                    MarkSubscribed(mounted);
+                    MarkPrimarySubscribed(mounted);
                     break;
                 }
             }
 
-            AttachKeyboard(mounted);
+            SynchronizeKeyboard(mounted);
+            AttachWindowKeyReset(mounted);
         }
 
         AttachRef(mounted);
@@ -536,11 +623,21 @@ public sealed class DesktopRoot : IDisposable
             ActivateSubtree(child);
     }
 
-    private void MarkSubscribed(MountedNode mounted)
+    private void MarkPrimarySubscribed(MountedNode mounted)
     {
-        mounted.EventAttached = true;
-        _activeSubscriptions++;
-        _recorder.Record("subscribe", detail: Describe(mounted));
+        mounted.PrimaryEventAttached = true;
+        UpdateSubscriptionState(mounted);
+    }
+
+    private void UpdateSubscriptionState(MountedNode mounted)
+    {
+        bool attached = mounted.PrimaryEventAttached ||
+            mounted.KeyDownHandler is not null || mounted.KeyUpHandler is not null;
+        if (attached == mounted.EventAttached)
+            return;
+        mounted.EventAttached = attached;
+        _activeSubscriptions += attached ? 1 : -1;
+        _recorder.Record(attached ? "subscribe" : "unsubscribe", detail: Describe(mounted));
     }
 
     private void ReleaseSubtree(MountedNode mounted)
@@ -570,57 +667,115 @@ public sealed class DesktopRoot : IDisposable
                     slider.ValueChanged -= mounted.ValueHandler;
                     break;
             }
-            foreach (Action unsubscribe in mounted.ExtraUnsubscribe)
-                unsubscribe();
-            mounted.ExtraUnsubscribe.Clear();
-            mounted.EventAttached = false;
+            if (mounted.KeyDownHandler is not null)
+                mounted.Control.KeyDown -= mounted.KeyDownHandler;
+            if (mounted.KeyUpHandler is not null)
+                mounted.Control.KeyUp -= mounted.KeyUpHandler;
+            mounted.KeyDownHandler = null;
+            mounted.KeyUpHandler = null;
+            mounted.PrimaryEventAttached = false;
             mounted.RoutedHandler = null;
             mounted.TextHandler = null;
             mounted.SelectionHandler = null;
             mounted.ValueHandler = null;
-            _activeSubscriptions--;
-            _recorder.Record("unsubscribe", detail: Describe(mounted));
+            UpdateSubscriptionState(mounted);
         }
+        foreach (Action unsubscribe in mounted.ExtraUnsubscribe)
+            unsubscribe();
+        mounted.ExtraUnsubscribe.Clear();
+        mounted.WindowKeyResetAttached = false;
         DetachRef(mounted);
         mounted.Released = true;
     }
 
-    private void AttachKeyboard(MountedNode mounted)
+    private void SynchronizeKeyboard(MountedNode mounted)
     {
-        if (mounted.LatestKeyDown is not null)
+        if (mounted.LatestKeyDown is not null && mounted.KeyDownHandler is null)
         {
             EventHandler<KeyEventArgs> handler = (_, args) => DispatchKey(mounted, args, keyDown: true);
             mounted.Control.KeyDown += handler;
-            mounted.ExtraUnsubscribe.Add(() => mounted.Control.KeyDown -= handler);
-            if (!mounted.EventAttached) MarkSubscribed(mounted);
+            mounted.KeyDownHandler = handler;
         }
-        if (mounted.LatestKeyUp is not null)
+        else if (mounted.LatestKeyDown is null && mounted.KeyDownHandler is not null)
+        {
+            mounted.Control.KeyDown -= mounted.KeyDownHandler;
+            mounted.KeyDownHandler = null;
+            ClearHeldKeys();
+        }
+        bool needsKeyUp = mounted.LatestKeyDown is not null || mounted.LatestKeyUp is not null;
+        if (needsKeyUp && mounted.KeyUpHandler is null)
         {
             EventHandler<KeyEventArgs> handler = (_, args) => DispatchKey(mounted, args, keyDown: false);
             mounted.Control.KeyUp += handler;
-            mounted.ExtraUnsubscribe.Add(() => mounted.Control.KeyUp -= handler);
-            if (!mounted.EventAttached) MarkSubscribed(mounted);
+            mounted.KeyUpHandler = handler;
         }
+        else if (!needsKeyUp && mounted.KeyUpHandler is not null)
+        {
+            mounted.Control.KeyUp -= mounted.KeyUpHandler;
+            mounted.KeyUpHandler = null;
+            ClearHeldKeys();
+        }
+        UpdateSubscriptionState(mounted);
+    }
+
+    private void AttachWindowKeyReset(MountedNode mounted)
+    {
+        if (mounted.WindowKeyResetAttached || mounted.Control is not Window window)
+            return;
+        EventHandler deactivated = (_, _) => ClearHeldKeys();
+        EventHandler<RoutedEventArgs> lostFocus = (_, _) => ClearHeldKeys();
+        window.Deactivated += deactivated;
+        window.LostFocus += lostFocus;
+        mounted.ExtraUnsubscribe.Add(() => window.Deactivated -= deactivated);
+        mounted.ExtraUnsubscribe.Add(() => window.LostFocus -= lostFocus);
+        mounted.WindowKeyResetAttached = true;
     }
 
     private void DispatchKey(MountedNode mounted, KeyEventArgs args, bool keyDown)
     {
+        bool repeat = false;
+        if (keyDown)
+        {
+            if (ReferenceEquals(args, _lastKeyDownArgs))
+            {
+                repeat = _lastKeyDownRepeat;
+            }
+            else
+            {
+                repeat = !_heldKeys.Add(args.Key);
+                _lastKeyDownArgs = args;
+                _lastKeyDownRepeat = repeat;
+            }
+        }
+        if (!keyDown)
+        {
+            _heldKeys.Remove(args.Key);
+            _lastKeyDownArgs = null;
+        }
         Func<string, bool, bool, bool, bool, bool, bool>? latest = keyDown ? mounted.LatestKeyDown : mounted.LatestKeyUp;
         if (latest is null) return;
         KeyModifiers modifiers = args.KeyModifiers;
         bool handled = false;
         _dispatchGuestCallback(() => handled = latest(
-            NormalizeKey(args.Key),
+            NormalizeKey(args.Key, modifiers),
             modifiers.HasFlag(KeyModifiers.Control),
             modifiers.HasFlag(KeyModifiers.Alt),
             modifiers.HasFlag(KeyModifiers.Shift),
             modifiers.HasFlag(KeyModifiers.Meta),
-            args.KeyModifiers.HasFlag(KeyModifiers.None) && false));
+            repeat));
         args.Handled = handled;
     }
 
-    private static string NormalizeKey(Key key) => key switch
+    private void ClearHeldKeys()
     {
+        _heldKeys.Clear();
+        _lastKeyDownArgs = null;
+        _lastKeyDownRepeat = false;
+    }
+
+    private static string NormalizeKey(Key key, KeyModifiers modifiers) => key switch
+    {
+        Key.D5 when modifiers.HasFlag(KeyModifiers.Shift) => "%",
         >= Key.D0 and <= Key.D9 => ((int)key - (int)Key.D0).ToString(System.Globalization.CultureInfo.InvariantCulture),
         >= Key.NumPad0 and <= Key.NumPad9 => ((int)key - (int)Key.NumPad0).ToString(System.Globalization.CultureInfo.InvariantCulture),
         Key.Add or Key.OemPlus => "+",

@@ -54,7 +54,7 @@ function New-TestFixture {
         documentationFiles = @('README.md', 'docs/sdk.md')
         packages = @(
             @($publishedPackageIds | ForEach-Object { [ordered]@{ id = $_ } })
-            [ordered]@{ id = $previewPackageId; version = '0.1.0-preview.1'; publish = $false }
+            [ordered]@{ id = $previewPackageId; version = '0.2.0-preview.1'; publish = $false }
         )
     }
     $manifestPath = Join-Path $root 'nuget-packages.json'
@@ -64,7 +64,7 @@ function New-TestFixture {
     foreach ($packageId in $publishedPackageIds) {
         'test package' | Set-Content -LiteralPath (Join-Path $packageDirectory "$packageId.2.0.0.nupkg")
     }
-    'test package' | Set-Content -LiteralPath (Join-Path $packageDirectory "$previewPackageId.0.1.0-preview.1.nupkg")
+    'test package' | Set-Content -LiteralPath (Join-Path $packageDirectory "$previewPackageId.0.2.0-preview.1.nupkg")
 
     return [pscustomobject]@{
         Root = $root
@@ -115,12 +115,12 @@ Invoke-Test 'preflight rejects a missing package artifact' {
 Invoke-Test 'preflight requires the fixed preview artifact' {
     $fixture = New-TestFixture
     try {
-        Remove-Item -LiteralPath (Join-Path $fixture.PackageDirectory 'SharpTS.Gui.Sdk.0.1.0-preview.1.nupkg')
+        Remove-Item -LiteralPath (Join-Path $fixture.PackageDirectory 'SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg')
         $published = New-PublishedVersionMap $fixture.PackageIds
         $fetch = { param($PackageId, $BaseUri) @($published[$PackageId]) }.GetNewClosure()
         Assert-ThrowsContaining {
             Assert-NuGetReleasePreflight -Manifest $fixture.Manifest -PackageDirectory $fixture.PackageDirectory -Version '2.0.0' -RepositoryRoot $fixture.Root -FetchPackageVersions $fetch
-        } 'SharpTS.Gui.Sdk.0.1.0-preview.1.nupkg'
+        } 'SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg'
     }
     finally {
         Remove-Item -LiteralPath $fixture.Root -Recurse -Force

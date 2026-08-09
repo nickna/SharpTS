@@ -28,11 +28,15 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public Action<string?>? LatestNullableStringChanged { get; set; }
     public Func<string, bool, bool, bool, bool, bool, bool>? LatestKeyDown { get; set; }
     public Func<string, bool, bool, bool, bool, bool, bool>? LatestKeyUp { get; set; }
+    public EventHandler<Avalonia.Input.KeyEventArgs>? KeyDownHandler { get; set; }
+    public EventHandler<Avalonia.Input.KeyEventArgs>? KeyUpHandler { get; set; }
     public EventHandler<RoutedEventArgs>? RoutedHandler { get; set; }
     public EventHandler<TextChangedEventArgs>? TextHandler { get; set; }
     public EventHandler<SelectionChangedEventArgs>? SelectionHandler { get; set; }
     public EventHandler<RangeBaseValueChangedEventArgs>? ValueHandler { get; set; }
     public bool EventAttached { get; set; }
+    public bool PrimaryEventAttached { get; set; }
+    public bool WindowKeyResetAttached { get; set; }
     public bool SuppressEvents { get; set; }
     public string? LastTextValue { get; set; }
     public bool LastCheckedValue { get; set; }

@@ -17,7 +17,7 @@
     <SharpTSGuiPackageSource>$(SharpTSGuiSdkRoot)gui\</SharpTSGuiPackageSource>
     <SharpTSGuiTasksAssembly>$(SharpTSGuiSdkRoot)build\SharpTS.Sdk.Tasks.dll</SharpTSGuiTasksAssembly>
     <SharpTSGuiHostedAbiVersion>1</SharpTSGuiHostedAbiVersion>
-    <SharpTSGuiApiVersion>1</SharpTSGuiApiVersion>
+    <SharpTSGuiApiVersion>2</SharpTSGuiApiVersion>
     <SharpTSGuiPublishMode Condition="'$(SharpTSGuiPublishMode)' == ''">SingleFile</SharpTSGuiPublishMode>
     <SharpTSGuiValidatePublishedOutput
       Condition="'$(SharpTSGuiValidatePublishedOutput)' == '' and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)')">true</SharpTSGuiValidatePublishedOutput>

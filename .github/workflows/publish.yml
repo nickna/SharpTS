@@ -82,7 +82,7 @@ jobs:
       # packaged and preflighted on every release, but the manifest marks it as
       # non-publishable until its NuGet ID and API-key scope are onboarded.
       - name: Pack Windows GUI SDK preview
-        run: dotnet pack SharpTS.Gui.Sdk/SharpTS.Gui.Sdk.csproj --no-build --configuration Release -p:MinVerVersionOverride=0.1.0-preview.1 --output ./nupkg
+        run: dotnet pack SharpTS.Gui.Sdk/SharpTS.Gui.Sdk.csproj --no-build --configuration Release -p:MinVerVersionOverride=0.2.0-preview.1 --output ./nupkg
 
       - name: Verify packages created
         run: |
@@ -92,7 +92,7 @@ jobs:
           test -f "./nupkg/SharpTS.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Sdk package not found"; exit 1; }
           test -f "./nupkg/SharpTS.Hosting.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Hosting package not found"; exit 1; }
           test -f "./nupkg/SharpTS.LanguageServer.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.LanguageServer package not found"; exit 1; }
-          test -f "./nupkg/SharpTS.Gui.Sdk.0.1.0-preview.1.nupkg" || { echo "❌ SharpTS.Gui.Sdk preview package not found"; exit 1; }
+          test -f "./nupkg/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg" || { echo "❌ SharpTS.Gui.Sdk preview package not found"; exit 1; }
           echo "✓ All packages created successfully"
 
       # A new package ID must be onboarded on NuGet and added to the API key's

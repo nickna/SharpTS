@@ -983,7 +983,7 @@ public partial class ILCompiler
         // identifiers like `braceExpand` inside a class method resolve to
         // the module-level `export const braceExpand = ...`. Scoped to the
         // class-method context to avoid perturbing imports/module-init paths.
-        ApplyCapturedTopLevelVariableAccess(ctx, classMethodExports: true);
+        ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
         // CJS resolution — needed so `exports`, `module.exports`, and `require(...)`
         // work inside class method bodies nested in a CJS module.
         ApplyCommonJsModuleAccess(ctx);

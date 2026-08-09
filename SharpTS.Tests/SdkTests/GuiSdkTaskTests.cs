@@ -77,14 +77,14 @@ public sealed class GuiSdkTaskTests : IDisposable
             EntryPath = "Guest\\src\\main.tsx",
             CompiledAssembly = "SharpTS.Gui.Guest.dll",
             HostedAbiVersion = "1",
-            GuiApiVersion = "1",
+            GuiApiVersion = "2",
         };
 
         Assert.True(task.Execute());
         using var document = JsonDocument.Parse(File.ReadAllText(output));
         Assert.Equal("Guest/src/main.tsx", document.RootElement.GetProperty("entryPath").GetString());
         Assert.Equal(1, document.RootElement.GetProperty("hostedAbiVersion").GetInt32());
-        Assert.Equal(1, document.RootElement.GetProperty("guiApiVersion").GetInt32());
+        Assert.Equal(2, document.RootElement.GetProperty("guiApiVersion").GetInt32());
     }
 
     [Fact]

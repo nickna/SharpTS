@@ -13,7 +13,7 @@ namespace SharpTS.Gui;
 
 internal static class DescriptorRegistry
 {
-    private static readonly IReadOnlyDictionary<string, NodeDescriptor> Descriptors =
+    private static readonly Dictionary<string, NodeDescriptor> Descriptors =
         new NodeDescriptor[]
         {
             new WindowDescriptor(),
@@ -52,6 +52,19 @@ internal static class DescriptorRegistry
         kind is not null && Descriptors.TryGetValue(kind, out NodeDescriptor? descriptor)
             ? descriptor
             : null;
+
+    internal static IDisposable RegisterForTesting(NodeDescriptor descriptor)
+    {
+        ArgumentNullException.ThrowIfNull(descriptor);
+        if (!Descriptors.TryAdd(descriptor.Kind, descriptor))
+            throw new InvalidOperationException($"A descriptor named '{descriptor.Kind}' is already registered.");
+        return new TestRegistration(descriptor.Kind);
+    }
+
+    private sealed class TestRegistration(string kind) : IDisposable
+    {
+        public void Dispose() => Descriptors.Remove(kind);
+    }
 }
 
 internal abstract class NodeDescriptor(string kind, int minimumChildren, int maximumChildren)

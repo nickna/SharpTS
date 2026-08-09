@@ -4,6 +4,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $artifactRoot = Join-Path $root 'artifacts\calculator-local'
 $feed = Join-Path $root 'artifacts\tsx-api-feed'
 $packages = Join-Path $artifactRoot 'packages'
+$sdkVersion = '0.2.0-preview.1'
 New-Item -ItemType Directory -Force -Path $feed, $packages | Out-Null
 $env:AVALONIA_TELEMETRY_OPTOUT = '1'
 $env:NUGET_PACKAGES = $packages
@@ -11,8 +12,20 @@ dotnet build (Join-Path $root 'SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj') -c R
 if ($LASTEXITCODE -ne 0) { throw 'Failed to build the GUI SDK tasks.' }
 dotnet publish (Join-Path $root 'SharpTS.Gui.Host\SharpTS.Gui.Host.csproj') -c Release --self-contained false
 if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the GUI host.' }
-dotnet pack (Join-Path $root 'SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj') -c Release -o $feed -p:MinVerVersionOverride=0.1.0-preview.1
+dotnet pack (Join-Path $root 'SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj') -c Release -o $feed -p:MinVerVersionOverride=$sdkVersion
 if ($LASTEXITCODE -ne 0) { throw 'Failed to pack the GUI SDK.' }
+# This script intentionally republishes the same preview version while developing locally.
+# NuGet otherwise reuses the previously extracted package and can run stale compiler/runtime
+# binaries even though the package in the local feed was just rebuilt.
+$sdkPackageCache = Join-Path $packages (Join-Path 'sharpts.gui.sdk' $sdkVersion)
+if (Test-Path -LiteralPath $sdkPackageCache) {
+    $resolvedCache = (Resolve-Path -LiteralPath $sdkPackageCache).Path
+    $resolvedPackages = (Resolve-Path -LiteralPath $packages).Path
+    if (-not $resolvedCache.StartsWith($resolvedPackages + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to remove package cache outside $resolvedPackages."
+    }
+    Remove-Item -LiteralPath $resolvedCache -Recurse -Force
+}
 $project = Join-Path $PSScriptRoot 'Calculator.csproj'
 dotnet restore $project --force
 if ($LASTEXITCODE -ne 0) { throw 'Failed to restore the Calculator.' }

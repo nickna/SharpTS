@@ -27,7 +27,7 @@ The tagged release is deliberately blocked if any manifest ID is not already
 registered. This prevents an untested new-package permission from publishing an
 established package first.
 
-`SharpTS.Gui.Sdk` is currently recorded as `0.1.0-preview.1` with
+`SharpTS.Gui.Sdk` is currently recorded as `0.2.0-preview.1` with
 `publish: false`. Before removing that guard, an operator must reserve and
 publish an approved preview of the package ID, confirm the release API key is
 scoped to it, run the packaged Windows x64 and ARM64 gates, and rerun the Publish

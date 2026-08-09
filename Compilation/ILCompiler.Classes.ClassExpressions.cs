@@ -522,7 +522,7 @@ public partial class ILCompiler
         // class-expression method or accessor body referencing a top-level
         // binding throws ReferenceError at runtime (same omission #300 fixed
         // for class-declaration accessor bodies).
-        ApplyCapturedTopLevelVariableAccess(ctx, classMethodExports: true);
+        ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
         return ctx;
     }
 

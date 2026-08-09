@@ -133,6 +133,7 @@ public partial class ILCompiler
         ApplyModuleMaps(ctx);
         ctx.CurrentModulePath = _modules.CurrentPath;
         ctx.CurrentNamespacePath = _currentNamespacePath;
+        ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
         AttachLocalSymbols(ctx);
         return ctx;
     }
@@ -144,7 +145,7 @@ public partial class ILCompiler
     {
         var ctx = CreateBaseCompilationContext(il, method);
         ApplyModuleMaps(ctx);
-        ApplyCapturedTopLevelVariableAccess(ctx);
+        ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: false);
         ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
@@ -169,7 +170,7 @@ public partial class ILCompiler
     private CompilationContext CreateEntryPointTopLevelContext(ILGenerator il, MethodBase? method = null)
     {
         var ctx = CreateBaseCompilationContext(il, method);
-        ApplyCapturedTopLevelVariableAccess(ctx);
+        ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: false);
         ctx.LiftedBlockScopedTopLevelVars = BuildLiftedBlockScopedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
         ctx.FunctionOverloads = _functions.Overloads;
@@ -294,14 +295,14 @@ public partial class ILCompiler
     /// <summary>
     /// Applies module-level variable access: the current module's top-level static var map, the
     /// captured-top-level-var set, and the entry-point display-class field map/static field.
-    /// <paramref name="classMethodExports"/> selects the class-method variant of the static-var
+    /// <paramref name="memberBodyExports"/> selects the member-body variant of the static-var
     /// map, which augments it with this module's ESM export fields so bare identifiers inside
-    /// class bodies resolve to module-level exports.
+    /// functions, arrows, state machines, and class bodies resolve to live module exports.
     /// </summary>
-    private void ApplyCapturedTopLevelVariableAccess(CompilationContext ctx, bool classMethodExports = false)
+    private void ApplyCapturedTopLevelVariableAccess(CompilationContext ctx, bool memberBodyExports = true)
     {
-        ctx.TopLevelStaticVars = classMethodExports
-            ? BuildClassMethodTopLevelStaticVarsForModule(_modules.CurrentPath)
+        ctx.TopLevelStaticVars = memberBodyExports
+            ? BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath)
             : BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
         ctx.CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath);

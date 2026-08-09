@@ -4,7 +4,7 @@ Public-preview MSBuild SDK for building retained, reactive Windows desktop appli
 SharpTS TSX and Avalonia.
 
 ```xml
-<Project Sdk="SharpTS.Gui.Sdk/0.1.0-preview.1">
+<Project Sdk="SharpTS.Gui.Sdk/0.2.0-preview.1">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>main.tsx</SharpTSEntryPoint>

@@ -1,5 +1,6 @@
 export {
     Fragment,
+    ErrorBoundary,
     Window,
     StackPanel,
     WrapPanel,
@@ -49,12 +50,15 @@ export {
 
 export type {
     GuiChild,
+    TextualChild,
+    TextualChildArray,
     GuiElement,
     Component,
     DesktopRoot,
     SignalSetter,
     StateSetter,
     Dispatch,
+    ErrorBoundaryProps,
     MutableRef,
     ControlRef,
     WindowHandle,

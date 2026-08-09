@@ -64,6 +64,17 @@ public sealed class RetainedRendererIntegrationTests
         Assert.Contains(events, item => item.Stage == "transient-ref-cleaned");
         Assert.Contains(events, item => item.Stage == "late-reactive-work-ignored");
         AssertStageOrder(events, "late-reactive-work-ignored", "unmount");
+        Assert.Single(events, item => item.Stage == "effect-setup");
+        Assert.Contains(events, item => item.Stage == "effect-state-applied");
+        Assert.Single(events, item => item.Stage == "effect-cleanup");
+        AssertStageOrder(events, "mount", "effect-setup");
+        AssertStageOrder(events, "effect-cleanup", "unmount");
+        Assert.Contains(events, item => item.Stage == "render-boundary-fallback");
+        Assert.Single(events, item => item.Stage == "effect-failure-setup");
+        Assert.Contains(events, item => item.Stage == "effect-boundary-fallback");
+        Assert.True(
+            events.Single(item => item.Stage == "effect-failure-setup").Sequence <
+            events.First(item => item.Stage == "effect-boundary-fallback").Sequence);
 
         TraceEvent[] subscriptions = events.Where(item => item.Stage == "subscribe").ToArray();
         TraceEvent[] unsubscriptions = events.Where(item => item.Stage == "unsubscribe").ToArray();
@@ -119,6 +130,15 @@ public sealed class RetainedRendererIntegrationTests
             Assert.Equal(after.Id, last.Id);
             Assert.Equal(before.Kind, after.Kind);
         }
+
+        foreach (string key in new[] { "$component-a/0", "$component-b/0" })
+        {
+            Assert.Equal(initial.Single(item => item.Key == key).Id, reordered.Single(item => item.Key == key).Id);
+            Assert.Equal(reordered.Single(item => item.Key == key).Id, final.Single(item => item.Key == key).Id);
+        }
+        Assert.DoesNotContain(initial, item => item.Key == "transparent-pair");
+        Assert.Contains(initial, item => item.Key == "$transparent-pair/$fragment-a");
+        Assert.Contains(initial, item => item.Key == "$transparent-pair/$fragment-b");
 
         KeyedIdentity oldReplacement = initial.Single(item => item.Key == "replacement");
         KeyedIdentity newReplacement = reordered.Single(item => item.Key == "replacement");

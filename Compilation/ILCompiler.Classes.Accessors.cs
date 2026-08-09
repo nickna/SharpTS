@@ -176,7 +176,7 @@ public partial class ILCompiler
         // a same-module export, an import) throws ReferenceError at runtime —
         // every other body-emission context (methods, ctors, functions, …)
         // sets them; the accessor path was the lone omission. (#300)
-        ApplyCapturedTopLevelVariableAccess(ctx, classMethodExports: true);
+        ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
 
         // Add class generic type parameters to context
         if (_classes.GenericParams.TryGetValue(typeBuilder.Name, out var classGenericParams))

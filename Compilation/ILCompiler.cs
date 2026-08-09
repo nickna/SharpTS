@@ -2326,17 +2326,18 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Builds a class-method-scoped top-level static var map that augments the base
+    /// Builds a module-member-scoped top-level static var map that augments the base
     /// <see cref="BuildTopLevelStaticVarsForModule"/> with this module's own ESM export
     /// fields. A method body like
     ///   <c>braceExpand() { return braceExpand(this.x, this.y); }</c>
     /// references the same-module export by bare identifier — that reference has to
     /// resolve to the export's static field or the runtime throws a <c>ReferenceError</c>.
-    /// Deliberately scoped to class methods because other emission sites (module init,
-    /// imported-function calls, __dirname resolution) already rely on their existing
-    /// view and adding ESM exports there broke 280+ tests when tried.
+    /// Deliberately scoped to member bodies because module initializers and import setup
+    /// rely on their existing view and adding ESM exports there causes declarations to
+    /// bind through the wrong storage. Every function/method/arrow/state-machine body,
+    /// however, must see the canonical live export field for the enclosing module.
     /// </summary>
-    private Dictionary<string, FieldBuilder>? BuildClassMethodTopLevelStaticVarsForModule(string? modulePath)
+    private Dictionary<string, FieldBuilder>? BuildModuleMemberTopLevelStaticVarsForModule(string? modulePath)
     {
         var result = BuildTopLevelStaticVarsForModule(modulePath);
         if (modulePath == null || !_modules.ExportFields.TryGetValue(modulePath, out var exports))
