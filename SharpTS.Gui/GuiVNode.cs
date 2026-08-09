@@ -23,6 +23,7 @@ public sealed record GuiVNode(
     double Opacity = 1,
     string? ToolTip = null,
     string? AutomationName = null,
+    string[]? Classes = null,
     int GridRow = 0,
     int GridColumn = 0,
     int GridRowSpan = 1,
@@ -99,4 +100,5 @@ public sealed record GuiVNode(
     int SourceColumn = 0)
 {
     internal string? BoundaryPath { get; init; }
+    internal string[] SpecifiedProperties { get; init; } = [];
 }

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "15dd5a2083ee53fb1877d2bee4cc9e5d26660b9dfac389852a90da2b6fe82238",
+  "schemaHash": "197228ac1bd9cd28536868bb12246b0383b479b9419e1052599feb878d828f57",
   "controls": [
     {
       "kind": "Window",
@@ -104,6 +104,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -282,6 +288,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -447,6 +459,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -618,6 +636,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -786,6 +810,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -942,6 +972,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -1107,6 +1143,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -1293,6 +1335,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -1476,6 +1524,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -1648,6 +1702,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -1859,6 +1919,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -2107,6 +2173,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -2388,6 +2460,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -2660,6 +2738,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -2911,6 +2995,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -3174,6 +3264,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -3425,6 +3521,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -3685,6 +3787,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -3954,6 +4062,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -4229,6 +4343,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -4394,6 +4514,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -4556,6 +4682,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -4736,6 +4868,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -4907,6 +5045,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5057,6 +5201,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {
@@ -5242,6 +5392,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5407,6 +5563,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5566,6 +5728,12 @@
           "enumValues": null
         },
         {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
+          "enumValues": null
+        },
+        {
           "name": "gridRow",
           "type": "number",
           "documentation": "",
@@ -5716,6 +5884,12 @@
           "name": "automationName",
           "type": "string",
           "documentation": "",
+          "enumValues": null
+        },
+        {
+          "name": "classes",
+          "type": "readonly string[]",
+          "documentation": "Avalonia style classes applied to the native control.",
           "enumValues": null
         },
         {

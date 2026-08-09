@@ -38,6 +38,7 @@ export interface CommonProps<THandle = unknown> {
     width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number;
     margin?: Thickness; horizontalAlignment?: HorizontalAlignment; verticalAlignment?: VerticalAlignment;
     isVisible?: boolean; isEnabled?: boolean; opacity?: number; toolTip?: string; automationName?: string;
+    classes?: readonly string[];
     gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number; dock?: Dock;
     onKeyDown?: (event: KeyEvent) => boolean; onKeyUp?: (event: KeyEvent) => boolean;
 }
@@ -262,6 +263,7 @@ function withCommon(node: GuiVNode, safe: any): GuiVNode {
         safe.isVisible === undefined ? true : safe.isVisible, safe.isEnabled === undefined ? true : safe.isEnabled,
         safe.opacity === undefined ? 1 : safe.opacity, safe.toolTip === undefined ? null : safe.toolTip,
         safe.automationName === undefined ? null : safe.automationName,
+        safe.classes === undefined ? [] : safe.classes.slice(),
         safe.gridRow === undefined ? 0 : safe.gridRow, safe.gridColumn === undefined ? 0 : safe.gridColumn,
         safe.gridRowSpan === undefined ? 1 : safe.gridRowSpan, safe.gridColumnSpan === undefined ? 1 : safe.gridColumnSpan,
         safe.dock === undefined ? "left" : safe.dock,
@@ -457,7 +459,9 @@ class ReactiveRoot {
             case "Menu": node = DesktopBridge.CreateMenu(children.nodes, key, ref); break;
             default: throw new Error("Unknown @sharpts/gui TSX tag: " + element.type);
         }
-        node = source(withCommon(withStyle(node, safe), safe), element.source);
+        node = DesktopBridge.WithSpecifiedProperties(
+            source(withCommon(withStyle(node, safe), safe), element.source),
+            Object.keys(safe)) as any;
         if (nearestBoundary !== null) node = DesktopBridge.WithBoundary(node, nearestBoundary.path) as any;
         return { node, fibers: children.fibers };
     }
@@ -578,9 +582,38 @@ export function renderDesktop(element: GuiChild): DesktopRoot {
 }
 
 export type DesktopShutdownMode = "onLastWindowClose" | "onMainWindowClose" | "explicit";
+export type DesktopControlKind =
+    "Control" | "Window" | "StackPanel" | "ToolBar" | "WrapPanel" | "DockPanel" | "Grid" |
+    "Border" | "StatusBar" | "ScrollViewer" | "TextBlock" | "Button" | "TextBox" |
+    "PasswordBox" | "CheckBox" | "RadioButton" | "ToggleSwitch" | "ComboBox" | "ListBox" |
+    "NumericUpDown" | "DatePicker" | "TimePicker" | "Slider" | "ProgressBar" | "Separator" |
+    "Image" | "TabControl" | "TabItem" | "Menu" | "MenuItem";
+export type DesktopResourceValue = string | number | boolean | Thickness;
+export interface DesktopResourceReference { resource: string; }
+export type DesktopStyleValue = DesktopResourceValue | DesktopResourceReference;
+export interface DesktopStyleSelector {
+    control: DesktopControlKind;
+    classes?: readonly string[];
+}
+export interface DesktopStyleSetters {
+    width?: DesktopStyleValue; height?: DesktopStyleValue;
+    minWidth?: DesktopStyleValue; minHeight?: DesktopStyleValue;
+    maxWidth?: DesktopStyleValue; maxHeight?: DesktopStyleValue;
+    opacity?: DesktopStyleValue; isVisible?: DesktopStyleValue; isEnabled?: DesktopStyleValue;
+    margin?: DesktopStyleValue; padding?: DesktopStyleValue;
+    background?: DesktopStyleValue; foreground?: DesktopStyleValue;
+    fontSize?: DesktopStyleValue; fontWeight?: DesktopStyleValue; fontStyle?: DesktopStyleValue;
+    horizontalAlignment?: DesktopStyleValue; verticalAlignment?: DesktopStyleValue;
+}
+export interface DesktopStyle {
+    selector: DesktopStyleSelector;
+    setters: DesktopStyleSetters;
+}
 export interface DesktopApplicationOptions {
     shutdownMode?: DesktopShutdownMode;
     onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
+    resources?: Readonly<{ [key: string]: DesktopResourceValue }>;
+    styles?: readonly DesktopStyle[];
 }
 export interface DesktopWindowOptions {
     owner?: DesktopWindow;
@@ -592,6 +625,7 @@ export interface DesktopWindow extends DesktopRoot {
     readonly closed: Promise<void>;
     activate(): void;
     close(): void;
+    findResource(key: string): DesktopResourceValue | null;
 }
 export interface DesktopApplication {
     readonly isDisposed: boolean;
@@ -603,6 +637,10 @@ export interface DesktopApplication {
 
 export function createDesktopApplication(options: DesktopApplicationOptions = {}): DesktopApplication {
     const managed: any = DesktopBridge.CreateDesktopApplication(options.shutdownMode || "onLastWindowClose");
+    DesktopBridge.ConfigureDesktopStyleResources(managed, JSON.stringify({
+        resources: options.resources || {},
+        styles: options.styles || [],
+    }));
     let application: DesktopApplication;
     application = {
         get isDisposed(): boolean { return managed.IsDisposed; },
@@ -632,6 +670,9 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
                 closed,
                 activate(): void { root.Activate(); },
                 close(): void { root.Close(); },
+                findResource(key: string): DesktopResourceValue | null {
+                    return DesktopBridge.FindDesktopResource(managed, root, key) as any;
+                },
                 dispose(): void { root.Dispose(); },
             };
             (window as any).__managedRoot = root;

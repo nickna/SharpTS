@@ -118,6 +118,46 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
+    public void DesktopApplication_AppliesValidatedResourcesStylesAndControlClasses()
+    {
+        using DesktopApplicationSession application =
+            DesktopBridge.CreateDesktopApplication("explicit");
+        application.ConfigureStyleResources(
+            """
+            {
+              "resources": { "accent": "#336699", "spacing": 8 },
+              "styles": [{
+                "selector": { "control": "Button", "classes": ["accent"] },
+                "setters": {
+                  "background": { "resource": "accent" },
+                  "padding": { "resource": "spacing" }
+                }
+              }]
+            }
+            """);
+        DesktopRoot root = application.CreateWindowRoot(
+            () => { }, owner: null, modal: false, mainWindow: true);
+        root.Render(Window(Panel(0, new GuiVNode(
+            "Button", Key: "styled", Text: "Styled", Classes: ["accent"]))));
+
+        Assert.Equal("#336699", application.FindResource(root, "accent"));
+        Assert.Null(application.FindResource(root, "missing"));
+        Assert.Single(root.Window!.Styles);
+        Assert.Equal(["accent"], root.FindControl("styled")!.Classes);
+    }
+
+    [Theory]
+    [InlineData("{\"resources\":{},\"styles\":[{\"selector\":{\"control\":\"Unknown\"},\"setters\":{\"width\":1}}]}")]
+    [InlineData("{\"resources\":{},\"styles\":[{\"selector\":{\"control\":\"Button\"},\"setters\":{\"notAProperty\":1}}]}")]
+    [InlineData("{\"resources\":{},\"styles\":[{\"selector\":{\"control\":\"Button\"},\"setters\":{\"background\":{\"resource\":\"missing\"}}}]}")]
+    public void DesktopApplication_RejectsInvalidStyleContracts(string json)
+    {
+        using DesktopApplicationSession application =
+            DesktopBridge.CreateDesktopApplication("explicit");
+        Assert.ThrowsAny<ArgumentException>(() => application.ConfigureStyleResources(json));
+    }
+
+    [Fact]
     public void Render_UpdatesPropertiesAndMovesKeyedControlsWithoutRecreation()
     {
         DesktopRoot root = CreateRoot();

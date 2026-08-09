@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Automation;
+using Avalonia.Input;
 
 namespace SharpTS.Gui;
 
@@ -33,51 +34,50 @@ internal static class CommonProperties
         if (node.GridRowSpan < 1 || node.GridColumnSpan < 1)
             throw new ArgumentOutOfRangeException("gridRowSpan/gridColumnSpan", "Grid spans must be at least one.");
         _ = ParseDock(node.Dock);
+        if (node.Classes is not null)
+        {
+            var seenClasses = new HashSet<string>(StringComparer.Ordinal);
+            foreach (string styleClass in node.Classes)
+            {
+                if (string.IsNullOrWhiteSpace(styleClass) || styleClass[0] == ':')
+                    throw new ArgumentException("Style classes must be non-empty user class names.", "classes");
+                if (!seenClasses.Add(styleClass))
+                    throw new ArgumentException($"Duplicate style class '{styleClass}'.", "classes");
+            }
+        }
     }
 
     public static bool Apply(Control control, GuiVNode node)
     {
         bool changed = false;
-        changed |= SetDouble(control.Width, EffectiveWidth(node), value => control.Width = value);
-        changed |= SetDouble(control.Height, EffectiveHeight(node), value => control.Height = value);
-        changed |= SetDouble(control.MinWidth, node.MinWidth, value => control.MinWidth = value);
-        changed |= SetDouble(control.MinHeight, node.MinHeight, value => control.MinHeight = value);
-        changed |= SetDouble(control.MaxWidth, node.MaxWidth, value => control.MaxWidth = value);
-        changed |= SetDouble(control.MaxHeight, node.MaxHeight, value => control.MaxHeight = value);
+        changed |= ApplyStyled(control, Layoutable.WidthProperty, EffectiveWidth(node),
+            IsSpecified(node, "width") || !double.IsNaN(node.Width) || node.Kind == "Window");
+        changed |= ApplyStyled(control, Layoutable.HeightProperty, EffectiveHeight(node),
+            IsSpecified(node, "height") || !double.IsNaN(node.Height) || node.Kind == "Window");
+        changed |= ApplyStyled(control, Layoutable.MinWidthProperty, node.MinWidth,
+            IsSpecified(node, "minWidth") || node.MinWidth != 0);
+        changed |= ApplyStyled(control, Layoutable.MinHeightProperty, node.MinHeight,
+            IsSpecified(node, "minHeight") || node.MinHeight != 0);
+        changed |= ApplyStyled(control, Layoutable.MaxWidthProperty, node.MaxWidth,
+            IsSpecified(node, "maxWidth") || !double.IsPositiveInfinity(node.MaxWidth));
+        changed |= ApplyStyled(control, Layoutable.MaxHeightProperty, node.MaxHeight,
+            IsSpecified(node, "maxHeight") || !double.IsPositiveInfinity(node.MaxHeight));
         double[] margins = Margins(node);
         var margin = new Thickness(margins[0], margins[1], margins[2], margins[3]);
-        if (control.Margin != margin)
-        {
-            control.Margin = margin;
-            changed = true;
-        }
+        changed |= ApplyStyled(control, Layoutable.MarginProperty, margin,
+            IsSpecified(node, "margin") || margin != default);
         HorizontalAlignment horizontal = ParseHorizontalAlignment(node.HorizontalAlignment);
-        if (control.HorizontalAlignment != horizontal)
-        {
-            control.HorizontalAlignment = horizontal;
-            changed = true;
-        }
+        changed |= ApplyStyled(control, Layoutable.HorizontalAlignmentProperty, horizontal,
+            IsSpecified(node, "horizontalAlignment") || horizontal != HorizontalAlignment.Stretch);
         VerticalAlignment vertical = ParseVerticalAlignment(node.VerticalAlignment);
-        if (control.VerticalAlignment != vertical)
-        {
-            control.VerticalAlignment = vertical;
-            changed = true;
-        }
-        if (control.IsVisible != node.IsVisible)
-        {
-            control.IsVisible = node.IsVisible;
-            changed = true;
-        }
-        if (control.IsEnabled != node.IsEnabled)
-        {
-            control.IsEnabled = node.IsEnabled;
-            changed = true;
-        }
-        if (control.Opacity != node.Opacity)
-        {
-            control.Opacity = node.Opacity;
-            changed = true;
-        }
+        changed |= ApplyStyled(control, Layoutable.VerticalAlignmentProperty, vertical,
+            IsSpecified(node, "verticalAlignment") || vertical != VerticalAlignment.Stretch);
+        changed |= ApplyStyled(control, Visual.IsVisibleProperty, node.IsVisible,
+            IsSpecified(node, "isVisible") || !node.IsVisible);
+        changed |= ApplyStyled(control, InputElement.IsEnabledProperty, node.IsEnabled,
+            IsSpecified(node, "isEnabled") || !node.IsEnabled);
+        changed |= ApplyStyled(control, Visual.OpacityProperty, node.Opacity,
+            IsSpecified(node, "opacity") || node.Opacity != 1);
         object? currentTip = ToolTip.GetTip(control);
         if (!Equals(currentTip, node.ToolTip))
         {
@@ -87,6 +87,14 @@ internal static class CommonProperties
         if (!string.Equals(AutomationProperties.GetName(control), node.AutomationName, StringComparison.Ordinal))
         {
             AutomationProperties.SetName(control, node.AutomationName);
+            changed = true;
+        }
+        string[] classes = node.Classes ?? [];
+        if (!control.Classes.SequenceEqual(classes, StringComparer.Ordinal))
+        {
+            control.Classes.Clear();
+            foreach (string styleClass in classes)
+                control.Classes.Add(styleClass);
             changed = true;
         }
         if (Grid.GetRow(control) != node.GridRow)
@@ -176,18 +184,24 @@ internal static class CommonProperties
         bool changed = false;
         IBrush? background = ParseBrush(node.Background);
         IBrush? foreground = ParseBrush(node.Foreground);
-        if (!Equals(control.Background, background)) { control.Background = background; changed = true; }
-        if (!Equals(control.Foreground, foreground)) { control.Foreground = foreground; changed = true; }
-        if (!double.IsNaN(node.FontSize) && control.FontSize != node.FontSize) { control.FontSize = node.FontSize; changed = true; }
+        changed |= ApplyStyled(control, TemplatedControl.BackgroundProperty, background,
+            IsSpecified(node, "background") || background is not null);
+        changed |= ApplyStyled(control, TemplatedControl.ForegroundProperty, foreground,
+            IsSpecified(node, "foreground") || foreground is not null);
+        changed |= ApplyStyled(control, TemplatedControl.FontSizeProperty, node.FontSize,
+            IsSpecified(node, "fontSize") || !double.IsNaN(node.FontSize));
         FontWeight weight = ParseFontWeight(node.FontWeight);
-        if (control.FontWeight != weight) { control.FontWeight = weight; changed = true; }
+        changed |= ApplyStyled(control, TemplatedControl.FontWeightProperty, weight,
+            IsSpecified(node, "fontWeight") || weight != FontWeight.Normal);
         FontStyle style = ParseFontStyle(node.FontStyle);
-        if (control.FontStyle != style) { control.FontStyle = style; changed = true; }
+        changed |= ApplyStyled(control, TemplatedControl.FontStyleProperty, style,
+            IsSpecified(node, "fontStyle") || style != FontStyle.Normal);
         if (!string.IsNullOrWhiteSpace(node.FontFamily))
         {
             var family = new FontFamily(node.FontFamily);
-            if (!Equals(control.FontFamily, family)) { control.FontFamily = family; changed = true; }
+            changed |= ApplyStyled(control, TemplatedControl.FontFamilyProperty, family, specified: true);
         }
+        else changed |= ApplyStyled(control, TemplatedControl.FontFamilyProperty, control.FontFamily, specified: false);
         return changed;
     }
 
@@ -199,7 +213,8 @@ internal static class CommonProperties
         if (control.HorizontalContentAlignment != horizontal) { control.HorizontalContentAlignment = horizontal; changed = true; }
         if (control.VerticalContentAlignment != vertical) { control.VerticalContentAlignment = vertical; changed = true; }
         Thickness padding = Padding(node);
-        if (control.Padding != padding) { control.Padding = padding; changed = true; }
+        changed |= ApplyStyled(control, TemplatedControl.PaddingProperty, padding,
+            IsSpecified(node, "padding") || padding != default);
         return changed;
     }
 
@@ -260,11 +275,23 @@ internal static class CommonProperties
         _ => throw new ArgumentException($"Unsupported dock '{value}'."),
     };
 
-    private static bool SetDouble(double current, double value, Action<double> assign)
+    private static bool IsSpecified(GuiVNode node, string property) =>
+        node.SpecifiedProperties.Contains(property, StringComparer.Ordinal);
+
+    private static bool ApplyStyled<T>(
+        AvaloniaObject target,
+        StyledProperty<T> property,
+        T value,
+        bool specified)
     {
-        if (current.Equals(value))
+        if (!specified)
+        {
+            target.ClearValue(property);
             return false;
-        assign(value);
+        }
+        if (Equals(target.GetValue(property), value))
+            return false;
+        target.SetValue(property, value);
         return true;
     }
 }

@@ -93,6 +93,9 @@ and reordering. Controlled input commits suppress callback echoes while real use
 the latest guest callback through one stable native subscription.
 
 The module also provides message, file, folder, and save dialogs plus clipboard read/write helpers.
+Explicit desktop applications accept primitive resource dictionaries and native Avalonia styles
+with built-in type/class selectors and a trimming-safe setter allow-list. Controls opt into class
+selectors with `classes`, and a window can query its effective resources with `findResource`.
 Files under a project's `Assets` directory are embedded automatically and referenced as
 `asset:///relative/path.png`. Reproducible URL assets may be declared with `SharpTSGuiRemoteAsset`
 items that supply `LogicalName` and a required SHA-256 digest.
@@ -102,8 +105,9 @@ generated overlay while reserving the JSX runtime and `@sharpts/gui` module mapp
 `SharpTSVerifyIL` to `true` to verify the persisted hosted guest during compilation.
 
 Current preview boundaries: Windows `win-x64` and `win-arm64` only, one root element per Window,
-built-in controls only, string-backed list/combo items, and no public theme-resource,
-custom-control, drawing, or data-grid/tree API. macOS support is intentionally deferred and is not
+built-in controls only, string-backed list/combo items, and no public custom-control, template,
+drawing, or data-grid/tree API. Native resources/styles/theme variants are supported. macOS
+support is intentionally deferred and is not
 claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
 application.
 

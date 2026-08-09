@@ -29,10 +29,15 @@ export const positive = (
 
 const application = createDesktopApplication({
     shutdownMode: "onMainWindowClose",
+    resources: { accent: "#336699", spacing: 8 },
+    styles: [{
+        selector: { control: "Button", classes: ["primary"] },
+        setters: { background: { resource: "accent" }, padding: { resource: "spacing" } },
+    }],
     onUnhandledError: (_error, failedWindow) => failedWindow.dispose(),
 });
 const mainWindow = application.createWindow(
-    <Window title="Main"><TextBlock>Main</TextBlock></Window>,
+    <Window title="Main"><Button classes={["primary"]}>Main</Button></Window>,
     { main: true },
 );
 const modalWindow = application.createWindow(
@@ -40,5 +45,6 @@ const modalWindow = application.createWindow(
     { owner: mainWindow, modal: true },
 );
 modalWindow.activate();
+const accent: string | number | boolean | readonly number[] | null = mainWindow.findResource("accent");
 void modalWindow.closed;
 application.shutdown(0);

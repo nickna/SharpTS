@@ -1,13 +1,15 @@
 import {
     DesktopApplication,
+    Button,
     TextBlock,
     Window,
     createDesktopApplication,
     createSignal,
 } from "@sharpts/gui";
-import { trace } from "@sharpts/gui/internal-testing";
+import { getProperty, queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/internal-testing";
 
 const [fail, setFail] = createSignal<boolean>(false);
+const [stylePhase, setStylePhase] = createSignal<number>(0);
 let application: DesktopApplication;
 
 function FailureWindow(): JSX.Element {
@@ -15,8 +17,20 @@ function FailureWindow(): JSX.Element {
     return <Window title="Failure probe"><TextBlock>Ready</TextBlock></Window>;
 }
 
+function MainWindow(): JSX.Element {
+    return <Window title="Main"><Button key="styled" classes={["accent"]}>{"Main " + stylePhase()}</Button></Window>;
+}
+
 application = createDesktopApplication({
     shutdownMode: "onMainWindowClose",
+    resources: { accent: "#336699", buttonPadding: 8 },
+    styles: [{
+        selector: { control: "Button", classes: ["accent"] },
+        setters: {
+            background: { resource: "accent" },
+            padding: { resource: "buttonPadding" },
+        },
+    }],
     onUnhandledError: (error, window) => {
         if (String(error).indexOf("expected isolated window failure") < 0)
             throw error;
@@ -29,7 +43,7 @@ application = createDesktopApplication({
 });
 
 const mainWindow = application.createWindow(
-    <Window title="Main"><TextBlock>Main</TextBlock></Window>,
+    <MainWindow />,
     { main: true },
 );
 const secondaryWindow = application.createWindow(
@@ -39,8 +53,18 @@ const secondaryWindow = application.createWindow(
 application.createWindow(<FailureWindow />);
 
 if (application.windowCount !== 3) throw new Error("Expected three mounted windows.");
+if (mainWindow.findResource("accent") !== "#336699") throw new Error("Resource lookup failed.");
 trace("multi-window-mounted");
 secondaryWindow.close();
 if (!secondaryWindow.isDisposed) throw new Error("Secondary close did not dispose its root.");
 trace("multi-window-secondary-closed");
-setFail(true);
+setTimeout((() => {
+    if (getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style did not apply.");
+    trace("multi-window-style-applied");
+    setStylePhase(1);
+    queueHostedMicrotask(() => {
+        if (getProperty("styled", "background").indexOf("336699") < 0) throw new Error("Native style was lost after update.");
+        trace("multi-window-style-retained");
+        setFail(true);
+    });
+}) as any, 0);

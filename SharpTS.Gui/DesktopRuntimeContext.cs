@@ -274,6 +274,7 @@ public sealed class DesktopApplicationSession : IDisposable
     private readonly DesktopRuntimeContext _context;
     private readonly string _shutdownMode;
     private bool _disposed;
+    private DesktopStyleResources? _styleResources;
 
     internal DesktopApplicationSession(DesktopRuntimeContext context, string shutdownMode)
     {
@@ -292,6 +293,25 @@ public sealed class DesktopApplicationSession : IDisposable
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         return _context.CreateApplicationRoot(this, reactiveCleanup, owner, modal, mainWindow);
+    }
+
+    public void ConfigureStyleResources(string json)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (WindowCount != 0)
+            throw new InvalidOperationException("Desktop resources and styles must be configured before creating a window.");
+        _styleResources = DesktopStyleResources.Parse(json);
+    }
+
+    internal void ApplyStyleResources(Window window) => _styleResources?.Apply(window);
+
+    public object? FindResource(DesktopRoot root, string key)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!ReferenceEquals(root.Application, this) || root.IsDisposed)
+            throw new ArgumentException("The window must be active and belong to this desktop application.", nameof(root));
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return root.Window?.TryFindResource(key, out object? value) == true ? value : null;
     }
 
     public void Shutdown(int exitCode = 0)

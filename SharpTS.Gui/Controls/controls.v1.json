@@ -24,6 +24,7 @@
       { "name": "opacity", "type": "number", "default": 1, "setter": "common" },
       { "name": "toolTip", "type": "string", "setter": "common" },
       { "name": "automationName", "type": "string", "setter": "common" },
+      { "name": "classes", "type": "readonly string[]", "converter": "copy-array", "setter": "style", "documentation": "Avalonia style classes applied to the native control." },
       { "name": "gridRow", "type": "number", "default": 0, "converter": "int32", "setter": "attached" },
       { "name": "gridColumn", "type": "number", "default": 0, "converter": "int32", "setter": "attached" },
       { "name": "gridRowSpan", "type": "number", "default": 1, "converter": "int32", "setter": "attached" },

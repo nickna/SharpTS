@@ -53,6 +53,31 @@ effect failure invokes the window handler first and disposes only that window; e
 detached asynchronous errors remain host-level failures. Initial mount errors are thrown by
 `createWindow` before it returns.
 
+Application options also accept primitive `resources` and native Avalonia `styles`. Selectors are
+allow-listed built-in control kinds plus optional class names; setters are a reviewed property set
+and may refer to resources. This remains trimming-safe and does not use runtime reflection:
+
+```tsx
+const app = createDesktopApplication({
+    resources: { accent: "#336699", commandPadding: 8 },
+    styles: [{
+        selector: { control: "Button", classes: ["primary"] },
+        setters: {
+            background: { resource: "accent" },
+            padding: { resource: "commandPadding" },
+        },
+    }],
+});
+const window = app.createWindow(
+    <Window><Button classes={["primary"]}>Save</Button></Window>,
+);
+console.log(window.findResource("accent"));
+```
+
+Resources and styles are immutable after the first window is created. Written JSX props have
+normal Avalonia local-value precedence; omitted props continue to inherit matching styles after
+reactive updates. Window `theme="system" | "light" | "dark"` selects the native theme variant.
+
 Function components may return an element, primitive text/number, fragment, nested array, or
 `null`/`undefined`/boolean. Components use `useState`, `useReducer`, `useEffect`, `useMemo`,
 `useCallback`, `useRef`, and `useControlRef`. Hooks must be called unconditionally in the same
@@ -120,10 +145,10 @@ and SHA-256 pin:
 ## Current version 2 boundaries
 
 Each window still requires exactly one `Window` root and built-in descriptors. Combo/list data is
-string-backed. Public theme/resource dictionaries, custom controls, item templates, data grids,
-trees, drawing/canvas, rich text, and macOS are not yet supported. Multi-window orchestration is
-available through `createDesktopApplication`; `renderDesktop` remains the one-window convenience
-API.
+string-backed. Public custom controls, item/control templates, data grids, trees, drawing/canvas,
+rich text, and macOS are not yet supported. Native resources, class/type selectors, styles, theme
+variants, and resource lookup are supported. Multi-window orchestration is available through
+`createDesktopApplication`; `renderDesktop` remains the one-window convenience API.
 API 1 manifests are rejected with a migration diagnostic; see
 [Migrating GUI API 1 to 2](migrating-api-1-to-2.md). The complete proof application is in
 `Examples/Calculator`.

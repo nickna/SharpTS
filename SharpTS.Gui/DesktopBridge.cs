@@ -78,6 +78,7 @@ public static class DesktopBridge
         double opacity,
         string? toolTip,
         string? automationName,
+        string[] classes,
         double gridRow,
         double gridColumn,
         double gridRowSpan,
@@ -106,6 +107,7 @@ public static class DesktopBridge
             Opacity = opacity,
             ToolTip = EmptyToNull(toolTip),
             AutomationName = EmptyToNull(automationName),
+            Classes = classes,
             GridRow = ToInteger(gridRow, nameof(gridRow)),
             GridColumn = ToInteger(gridColumn, nameof(gridColumn)),
             GridRowSpan = ToInteger(gridRowSpan, nameof(gridRowSpan)),
@@ -122,7 +124,7 @@ public static class DesktopBridge
         double gridColumn, double gridRowSpan, double gridColumnSpan) =>
         WithCommon(node, width, height, minWidth, minHeight, maxWidth, maxHeight,
             margin, margin, margin, margin, horizontalAlignment, verticalAlignment,
-            isVisible, isEnabled, 1, null, null, gridRow, gridColumn, gridRowSpan,
+            isVisible, isEnabled, 1, null, null, [], gridRow, gridColumn, gridRowSpan,
             gridColumnSpan, "left", null, null, false, false);
 
     public static GuiVNode WithStyle(
@@ -440,6 +442,13 @@ public static class DesktopBridge
     public static GuiVNode WithSource(GuiVNode node, string file, double line, double column) =>
         node with { SourceFile = file, SourceLine = (int)line, SourceColumn = (int)column };
 
+    public static GuiVNode WithSpecifiedProperties(GuiVNode node, string[] properties)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentNullException.ThrowIfNull(properties);
+        return node with { SpecifiedProperties = properties };
+    }
+
     public static GuiVNode WithBoundary(GuiVNode node, string boundaryPath)
     {
         ArgumentNullException.ThrowIfNull(node);
@@ -461,6 +470,24 @@ public static class DesktopBridge
     {
         ArgumentNullException.ThrowIfNull(application);
         return application.CreateWindowRoot(reactiveCleanup, owner, modal, mainWindow);
+    }
+
+    public static void ConfigureDesktopStyleResources(
+        DesktopApplicationSession application,
+        string json)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        application.ConfigureStyleResources(json);
+    }
+
+    public static object? FindDesktopResource(
+        DesktopApplicationSession application,
+        DesktopRoot root,
+        string key)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        ArgumentNullException.ThrowIfNull(root);
+        return application.FindResource(root, key);
     }
 
     internal static string? GetBoundaryPath(GuiVNode node) =>

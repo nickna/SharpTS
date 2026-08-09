@@ -400,7 +400,9 @@ contract stabilizes.
   compatible one-window helper.
 - **Complete:** define window ownership, activation, main/last/explicit shutdown modes, modal
   relationships, and per-window render/effect error isolation in interpreted and compiled modes.
-- Add public Avalonia-native styles, resources, themes, selectors, templates, and resource lookup.
+- **Partially complete:** Avalonia-native resources, type/class selectors, styles, theme variants,
+  resource lookup, and local-value precedence are implemented without reflection. Public
+  item/control templates remain with the generic item-control work below.
 - Add generic item sources/templates, virtualization-preserving list controls, trees, data grids,
   rich text, drawing/canvas, and custom rendering.
 - Add a reviewed third-party/custom-control registration and packaging contract.

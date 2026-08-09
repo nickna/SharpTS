@@ -95,6 +95,7 @@ public sealed class DesktopRoot : IDisposable
             _mounted = mounted;
             try
             {
+                Application?.ApplyStyleResources((Window)mounted.Control);
                 ObserveWindow((Window)mounted.Control);
                 _showWindow(this, (Window)mounted.Control);
                 ActivateSubtree(mounted);
@@ -177,6 +178,7 @@ public sealed class DesktopRoot : IDisposable
         _mounted = replacement;
         try
         {
+            Application?.ApplyStyleResources((Window)replacement.Control);
             ObserveWindow((Window)replacement.Control);
             _showWindow(this, (Window)replacement.Control);
             ActivateSubtree(replacement);

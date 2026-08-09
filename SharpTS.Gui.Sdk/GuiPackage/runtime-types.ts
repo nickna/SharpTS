@@ -62,6 +62,7 @@ export interface CommonProps<THandle = unknown> {
     verticalAlignment?: VerticalAlignment;
     isVisible?: boolean; isEnabled?: boolean; opacity?: number;
     toolTip?: string; automationName?: string;
+    classes?: readonly string[];
     gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number;
     dock?: Dock;
     onKeyDown?: (event: KeyEvent) => boolean;
