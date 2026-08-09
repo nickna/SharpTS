@@ -336,6 +336,12 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!);
         }
 
+        if (_name == "toSpliced")
+        {
+            return BuiltIns.ArrayBuiltIns.ToSplicedArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
         if (_name == "splice" && receiver is not SharpTSArray)
         {
             return BuiltIns.ArrayBuiltIns.SpliceArrayLike(
@@ -343,7 +349,7 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
         }
 
         // Fast path: receiver is a real array (ToObject is identity for objects).
-        bool requiresObservableIndexedGet = _name is "toSorted" or "toSpliced";
+        bool requiresObservableIndexedGet = _name == "toSorted";
         if (receiver is SharpTSArray arr && !requiresObservableIndexedGet)
             return _inner.Bind(arr).Call(interpreter, arguments);
 

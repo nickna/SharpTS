@@ -1743,6 +1743,12 @@ public sealed class Issue1279ParityTests
     public void Array_toReversed_reads_captured_indices_in_descending_order(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Array_toSpliced_clamps_generic_length_before_deleting()
+        => AssertPass(
+            "built-ins/Array/prototype/toSpliced/length-clamped-to-2pow53minus1.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/length-exceeding-array-length-limit.js")]
     [InlineData("built-ins/Array/prototype/toSorted/length-exceeding-array-length-limit.js")]

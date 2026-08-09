@@ -280,54 +280,6 @@ public static class ArrayBuiltIns
         return new SharpTSArray(deleted);
     }
 
-    private static object? ToSpliced(Interpreter interpreter, SharpTSArray arr, List<object?> args)
-    {
-        int len = arr.Length;
-
-        // toSpliced works on frozen/sealed arrays (creates new array)
-
-        // If no arguments, return a copy of the array
-        if (args.Count == 0)
-            return new SharpTSArray(new List<object?>(arr));
-
-        // Parse start with negative handling
-        int relStart = ToIntegerOrInfinityAsInt(interpreter, args[0]);
-        int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
-
-        // Parse skipCount (deleteCount equivalent)
-        int actualSkipCount;
-        if (args.Count == 1)
-        {
-            // No skipCount argument = skip to end
-            actualSkipCount = len - actualStart;
-        }
-        else
-        {
-            int sc = ToIntegerOrInfinityAsInt(interpreter, args[1]);
-            actualSkipCount = Math.Max(0, Math.Min(sc, len - actualStart));
-        }
-
-        // Build new array: before + items + after
-        // Pre-size to avoid reallocations: before(actualStart) + inserted(args.Count-2) + after(len - actualStart - actualSkipCount)
-        int insertCount = args.Count > 2 ? args.Count - 2 : 0;
-        int afterCount = len - actualStart - actualSkipCount;
-        var result = new List<object?>(actualStart + insertCount + afterCount);
-
-        // Add elements before splice point
-        for (int i = 0; i < actualStart; i++)
-            result.Add(arr[i]);
-
-        // Add inserted elements
-        for (int i = 2; i < args.Count; i++)
-            result.Add(args[i]);
-
-        // Add elements after splice point
-        for (int i = actualStart + actualSkipCount; i < len; i++)
-            result.Add(arr[i]);
-
-        return new SharpTSArray(result);
-    }
-
     #region V2 Implementations (RuntimeValue — no boxing)
 
     private static RuntimeValue PushV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -1251,6 +1203,61 @@ public static class ArrayBuiltIns
     }
 
     /// <summary>
+    /// ECMA-262 23.1.3.35 copying splice algorithm. It supports the full
+    /// ToLength range when most of that range is discarded, and performs live
+    /// Get operations only for values retained in the dense result.
+    /// </summary>
+    internal static SharpTSArray ToSplicedArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        double relativeStart = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long actualStart = NormalizeRelativeIndex(relativeStart, length);
+
+        long actualSkipCount;
+        if (args.Count == 0)
+            actualSkipCount = 0;
+        else if (args.Count == 1)
+            actualSkipCount = length - actualStart;
+        else
+            actualSkipCount = (long)Math.Min(
+                Math.Max(ToIntegerOrInfinity(interpreter, args[1]), 0),
+                length - actualStart);
+
+        long insertCount = Math.Max(args.Count - 2, 0);
+        if (insertCount > MaxSafeInteger - length + actualSkipCount)
+            throw TypeError("Array.prototype.toSpliced result exceeds the maximum safe integer.");
+        long newLength = length + insertCount - actualSkipCount;
+        if (newLength > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var result = new SharpTSArray();
+        result.SetLength(newLength);
+        long destination = 0;
+        for (long source = 0; source < actualStart; source++, destination++)
+        {
+            result.Set(destination, interpreter.GetPropertyValue(
+                receiver,
+                source.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        for (int index = 2; index < args.Count; index++, destination++)
+            result.Set(destination, args[index]);
+        for (long source = actualStart + actualSkipCount;
+             source < length;
+             source++, destination++)
+        {
+            result.Set(destination, interpreter.GetPropertyValue(
+                receiver,
+                source.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        return result;
+    }
+
+    /// <summary>
     /// ECMA-262 23.1.3.28 generic splice algorithm. The receiver is mutated
     /// through ordinary property operations so sparse objects, inherited
     /// properties, accessors, proxies, and abrupt completions remain observable.
@@ -1963,5 +1970,6 @@ public static class ArrayBuiltIns
         => RuntimeValue.FromBoxed(Splice(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToSplicedV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(ToSpliced(interp, arr, CallableInterop.ToBoxedList(args)));
+        => RuntimeValue.FromObject(ToSplicedArrayLike(
+            interp, arr, CallableInterop.ToBoxedList(args)));
 }
