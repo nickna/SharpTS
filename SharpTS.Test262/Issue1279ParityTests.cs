@@ -1451,6 +1451,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Object/entries/return-order.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Object_values_uses_the_snapshotted_spec_key_order()
+        => AssertPass(
+            "built-ins/Object/values/return-order.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
