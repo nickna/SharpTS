@@ -1574,6 +1574,11 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-array.js")]
+    public void Proxy_ownKeys_rejects_non_property_key_entries(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
     public void Date_prototype_methods_expose_standard_descriptors(string relativePath)
