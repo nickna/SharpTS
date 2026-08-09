@@ -174,30 +174,8 @@ public static class ReflectBuiltIns
                 if (target is SharpTSProxy proxy)
                     return RuntimeValue.FromBoolean(proxy.TrapSetProperty(
                         propertyKey, value, interpreter, receiver));
-                try
-                {
-                    switch (target)
-                    {
-                        case SharpTSObject obj:
-                            if (obj.IsFrozen) return RuntimeValue.False;
-                            obj.SetProperty(propertyKey, value);
-                            return RuntimeValue.True;
-                        case SharpTSInstance inst:
-                            if (inst.IsFrozen) return RuntimeValue.False;
-                            inst.SetRawField(propertyKey, value);
-                            return RuntimeValue.True;
-                        case Dictionary<string, object?> dict:
-                            if (PropertyDescriptorStore.IsFrozen(dict)) return RuntimeValue.False;
-                            dict[propertyKey] = value;
-                            return RuntimeValue.True;
-                        default:
-                            return RuntimeValue.False;
-                    }
-                }
-                catch
-                {
-                    return RuntimeValue.False;
-                }
+                return RuntimeValue.FromBoolean(SharpTSProxy.OrdinarySet(
+                    interpreter, target, propertyKey, value, receiver));
             }),
 
             "getPrototypeOf" => BuiltInMethod.CreateV2("getPrototypeOf", 1, static (_, _, args) =>
