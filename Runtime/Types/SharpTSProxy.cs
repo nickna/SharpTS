@@ -902,8 +902,11 @@ public class SharpTSProxy : ISharpTSCallable
         var trap = GetTrapCallable("apply", interp);
         if (trap == null)
         {
-            if (_target is ISharpTSCallable callable)
-                return callable.Call(interp!, args);
+            if (_target is SharpTSProxy targetProxy)
+                return targetProxy.TrapApply(thisArg, args, interp);
+            if (_target is ISharpTSCallable callable && interp != null)
+                return FunctionBuiltIns.CallWithThis(
+                    interp, callable, thisArg, args);
 
             // Compiled mode: target is a TSFunction, not ISharpTSCallable
             if (interp == null)
