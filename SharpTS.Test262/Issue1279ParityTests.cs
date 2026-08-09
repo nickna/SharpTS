@@ -2670,6 +2670,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/construct/trap-is-null.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_construct_forwards_absent_construct_properties()
+        => AssertPass(
+            "built-ins/Proxy/construct/trap-is-undefined-no-property.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
