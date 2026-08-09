@@ -2274,6 +2274,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/get/not-same-value-configurable-false-writable-false-throws.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_get_rejects_fixed_accessor_lies()
+        => AssertPass(
+            "built-ins/Proxy/get/accessor-get-is-undefined-throws.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
