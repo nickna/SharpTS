@@ -391,7 +391,7 @@ public static class JSONBuiltIns
         string key)
     {
         if (value is null or string or bool or double
-            or SharpTSUndefined or SharpTSSymbol or SharpTSBigInt)
+            or SharpTSUndefined or SharpTSSymbol)
             return value;
 
         var toJson = interp.GetPropertyValue(value, "toJSON");

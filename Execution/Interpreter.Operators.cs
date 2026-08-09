@@ -772,7 +772,7 @@ public partial class Interpreter
 
     /// <summary>
     /// ECMA-262 §25.5.2.2 SerializeJSONProperty step 4: coerce a boxed
-    /// Number/String/Boolean wrapper to the primitive JSON serializes. Number→
+    /// Number/String/Boolean/BigInt wrapper to the primitive JSON serializes. Number→
     /// ToNumber, String→ToString (both via <see cref="ToPrimitive"/>, so a user
     /// override of valueOf/toString is honored — #574); Boolean→its
     /// [[BooleanData]] (no coercion per spec). Returns false for any non-wrapper.
@@ -793,6 +793,9 @@ public partial class Interpreter
                 primitive = sp as string ?? Stringify(sp);
                 return true;
             case "Boolean":
+                primitive = obj.GetProperty("__primitiveValue");
+                return true;
+            case "BigInt":
                 primitive = obj.GetProperty("__primitiveValue");
                 return true;
             default:

@@ -578,6 +578,19 @@ public partial class Interpreter
                     ?? SharpTSUndefined.Instance;
             }
 
+            if (current is SharpTSBigInt)
+            {
+                var prototype = GetBigIntPrototype();
+                if (prototype.GetExtraGetter(name) is { } getter)
+                    return BindAccessorToObject(getter, receiver!).CallBoxed(this, []);
+                if (prototype.HasExtra(name))
+                    return prototype.TryGetExtra(name);
+                if (prototype.GetMember(name) is { } member)
+                    return member;
+                return GetObjectPrototype().GetMember(name)
+                    ?? SharpTSUndefined.Instance;
+            }
+
             if (current is SharpTSArray array)
             {
                 if (name == "length") return (double)array.LongLength;

@@ -101,6 +101,29 @@ public class BigIntTests
         Assert.Equal("object\ntrue\ntrue\n", output);
     }
 
+    [Fact]
+    public void JsonStringify_CallsBigIntToJsonBeforeReplacer_InInterpreter()
+    {
+        var source = """
+            let step = 0;
+            (BigInt.prototype as any).toJSON = function(key: string) {
+                console.log("toJSON", step++, key, typeof this);
+                return 1n;
+            };
+            try {
+                JSON.stringify(0n, function(key: string, value: any) {
+                    console.log("replacer", step++, key, value);
+                    return 2n;
+                });
+            } catch (error) {
+                console.log(error instanceof TypeError, step);
+            }
+            """;
+
+        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        Assert.Equal("toJSON 0  bigint\nreplacer 1  1n\ntrue 2\n", output);
+    }
+
     [Theory, ModeData]
     public void BigInt_ConstructorFromNumber_Works(ExecutionMode mode)
     {

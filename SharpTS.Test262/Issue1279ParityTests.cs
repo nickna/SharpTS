@@ -1749,6 +1749,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Array/prototype/toSpliced/length-clamped-to-2pow53minus1.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void JSON_stringify_calls_bigint_toJSON_before_replacer()
+        => AssertPass(
+            "built-ins/JSON/stringify/value-bigint-order.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/length-exceeding-array-length-limit.js")]
     [InlineData("built-ins/Array/prototype/toSorted/length-exceeding-array-length-limit.js")]
