@@ -2394,6 +2394,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/set/boolean-trap-result-is-false-null-return-false.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_set_coerces_zero_trap_results_to_false()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-number-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
