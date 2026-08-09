@@ -2478,6 +2478,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/set/trap-is-missing-receiver-multiple-calls-index.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_set_forwards_repeated_named_writes()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-missing-receiver-multiple-calls.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
