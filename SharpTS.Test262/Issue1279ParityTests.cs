@@ -2634,6 +2634,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/construct/return-not-object-throws-null.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_construct_rejects_number_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-number.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
