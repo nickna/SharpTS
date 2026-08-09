@@ -1,5 +1,5 @@
 import { TextBlock, Window, renderDesktop } from "@sharpts/gui";
-import { closeWindow, getText, queueMicrotask } from "@sharpts/gui/internal-testing";
+import { closeWindow, getText } from "@sharpts/gui/internal-testing";
 
 renderDesktop(
     <Window title="SharpTS GUI test" width={320} height={160}>
@@ -11,4 +11,4 @@ if (getText("message") !== "Template Headless test") {
     throw new Error("Template Headless assertion failed.");
 }
 
-queueMicrotask(() => closeWindow());
+setTimeout((() => closeWindow()) as any, 0);

@@ -9,6 +9,18 @@ retries the protected subtree on a later render.
 Public-preview MSBuild SDK for building retained, reactive Windows desktop applications from
 SharpTS TSX and Avalonia.
 
+With the SharpTS tool installed, a projectless application uses this SDK internally:
+
+```powershell
+sharpts new avalonia -n CounterApp
+cd CounterApp
+sharpts app run
+sharpts app publish --rid win-x64 --self-contained true --single-file true
+```
+
+The generated application has no user-authored `.csproj`; `sharpts.json` pins this package and
+selects the Avalonia host. The explicit MSBuild SDK workflow remains available below.
+
 Install the package's project template and create an application without C# or AXAML:
 
 ```powershell

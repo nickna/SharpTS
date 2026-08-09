@@ -12,6 +12,10 @@
     <SharpTSGuiEntryFullPath Condition="'$(SharpTSGuiEntryFullPath)' == ''">$(MSBuildProjectDirectory)\$(SharpTSEntryPoint)</SharpTSGuiEntryFullPath>
     <RunCommand>dotnet</RunCommand>
     <RunArguments>&quot;$(TargetPath)&quot;</RunArguments>
+    <!-- Dynamic GUI payload items must exist before AssignTargetPaths/SplitResourcesByCulture
+         classify EmbeddedResource. Hooking PrepareResourceNames itself, or the conditional
+         CreateManifestResourceNames target, is too late when no static resources exist. -->
+    <PrepareResourceNamesDependsOn>SharpTSGuiCompile;$(PrepareResourceNamesDependsOn)</PrepareResourceNamesDependsOn>
   </PropertyGroup>
 
   <UsingTask TaskName="SharpTS.Sdk.Tasks.WriteGuiTsConfigTask"
@@ -88,7 +92,6 @@
 
   <Target Name="SharpTSGuiCompile"
           DependsOnTargets="SharpTSGuiPrepare"
-          BeforeTargets="PrepareResourceNames"
           Inputs="$(SharpTSGuiEntryFullPath);@(_SharpTSGuiGuestSources);@(_SharpTSGuiPackageFiles);$(SharpTSTsConfigPath);$(MSBuildProjectFullPath);$(SharpTSGuiBuildFingerprint);$(SharpTSGuiHostRoot)SharpTS.dll;$(SharpTSGuiHostRoot)SharpTS.Gui.dll"
           Outputs="$(SharpTSGuiGuestAssembly)">
     <PropertyGroup>

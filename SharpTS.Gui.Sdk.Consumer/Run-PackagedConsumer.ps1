@@ -1,6 +1,8 @@
 param(
     [string]$Configuration = "Release",
     [string]$RuntimeIdentifier = "win-x64",
+    [string]$CandidatePackage,
+    [switch]$PackageOnly,
     [switch]$RealWindow,
     [switch]$PublishOnly
 )
@@ -26,10 +28,25 @@ $singleFilePublishRoot = Join-Path $artifactRoot "published single file"
 $templateHive = Join-Path $artifactRoot "template hive"
 $templateRoot = Join-Path $artifactRoot "template app with spaces"
 $templatePublishRoot = Join-Path $artifactRoot "template compiled-only publish"
+$cliRoot = Join-Path $artifactRoot "cli app with spaces"
+$cliDirectoryPublishRoot = Join-Path $artifactRoot "cli published directory"
+$cliSingleFilePublishRoot = Join-Path $artifactRoot "cli published single file"
 $osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
 $canExecute = -not $PublishOnly -and (
     ($RuntimeIdentifier -eq "win-x64" -and $osArchitecture -eq "X64") -or
     ($RuntimeIdentifier -eq "win-arm64" -and $osArchitecture -eq "Arm64"))
+$candidatePackagePath = $null
+if (-not [string]::IsNullOrWhiteSpace($CandidatePackage)) {
+    $candidatePackagePath = [IO.Path]::GetFullPath($CandidatePackage, $repositoryRoot)
+    if (-not (Test-Path -LiteralPath $candidatePackagePath -PathType Leaf)) {
+        throw "Candidate GUI SDK package does not exist: $candidatePackagePath"
+    }
+    if ($candidatePackagePath.StartsWith(
+        [IO.Path]::GetFullPath($artifactRoot) + [IO.Path]::DirectorySeparatorChar,
+        [StringComparison]::OrdinalIgnoreCase)) {
+        throw "CandidatePackage must be outside the per-RID artifact directory, which the harness recreates."
+    }
+}
 
 function Invoke-DotNet([string[]]$Arguments, [string]$WorkingDirectory = $repositoryRoot) {
     Push-Location $WorkingDirectory
@@ -45,15 +62,22 @@ function Invoke-DotNet([string[]]$Arguments, [string]$WorkingDirectory = $reposi
 }
 
 function Invoke-Application([string]$Executable, [string[]]$Arguments, [string]$WorkingDirectory) {
-    Push-Location $WorkingDirectory
+    $startInfo = [Diagnostics.ProcessStartInfo]::new()
+    $startInfo.FileName = $Executable
+    $startInfo.WorkingDirectory = $WorkingDirectory
+    $startInfo.UseShellExecute = $false
+    foreach ($argument in $Arguments) {
+        $startInfo.ArgumentList.Add($argument)
+    }
+    $process = [Diagnostics.Process]::Start($startInfo)
     try {
-        & $Executable @Arguments
-        if ($LASTEXITCODE -ne 0) {
-            throw "$Executable $($Arguments -join ' ') failed with exit code $LASTEXITCODE."
+        $process.WaitForExit()
+        if ($process.ExitCode -ne 0) {
+            throw "$Executable $($Arguments -join ' ') failed with exit code $($process.ExitCode)."
         }
     }
     finally {
-        Pop-Location
+        $process.Dispose()
     }
 }
 
@@ -73,12 +97,18 @@ if (Test-Path $artifactRoot) {
 }
 New-Item -ItemType Directory -Path $feed, $consumerRoot | Out-Null
 
+Invoke-DotNet @("restore", "SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj")
+Invoke-DotNet @("restore", "SharpTS.Gui.Host\SharpTS.Gui.Host.csproj")
 Invoke-DotNet @("build", "SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj", "-c", "Release", "--no-restore")
 Invoke-DotNet @("publish", "SharpTS.Gui.Host\SharpTS.Gui.Host.csproj", "-c", "Release", "--self-contained", "false", "--no-restore")
-Invoke-DotNet @("restore", "SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj")
-Invoke-DotNet @("pack", "SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj", "-c", "Release", "--no-restore", "-o", $feed, "-p:MinVerVersionOverride=$version")
-
 $packagePath = Join-Path $feed "SharpTS.Gui.Sdk.$version.nupkg"
+if ($null -ne $candidatePackagePath) {
+    Copy-Item -LiteralPath $candidatePackagePath -Destination $packagePath
+}
+else {
+    Invoke-DotNet @("restore", "SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj")
+    Invoke-DotNet @("pack", "SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj", "-c", "Release", "--no-restore", "-o", $feed, "-p:MinVerVersionOverride=$version")
+}
 if (-not (Test-Path $packagePath)) {
     throw "GUI SDK package was not created: $packagePath"
 }
@@ -135,6 +165,13 @@ finally {
     $archive.Dispose()
 }
 
+$packageHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash
+Write-Host "GUI SDK candidate: $packagePath ($((Get-Item -LiteralPath $packagePath).Length) bytes, SHA-256 $packageHash)"
+if ($PackageOnly) {
+    Write-Host "SharpTS.Gui.Sdk candidate package audit passed."
+    return
+}
+
 $env:NUGET_PACKAGES = $packageCache
 
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "SharpTS.Gui.Sdk.Consumer.csproj") -Destination $consumerRoot
@@ -167,6 +204,16 @@ foreach ($mode in @("interpreted", "compiled")) {
     Invoke-DotNet @(
         "run", "--project", $templateProject, "-c", $Configuration, "--no-restore",
         "-p:SharpTSEntryPoint=headless.tests.tsx", "--", "--mode", $mode, "--headless") $templateRoot
+}
+
+function Assert-GuestTrace([string]$Path, [string]$Scenario) {
+    if (-not (Test-Path -LiteralPath $Path)) {
+        throw "$Scenario did not produce an execution trace."
+    }
+    $events = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    if (@($events | Where-Object Stage -eq "guest-init-end").Count -ne 1) {
+        throw "$Scenario did not complete guest initialization."
+    }
 }
 Invoke-DotNet @("clean", $templateProject, "-c", $Configuration) $templateRoot
 Invoke-DotNet @(
@@ -300,6 +347,128 @@ if ($canExecute) {
     if ($interpretedExitCode -eq 0 -or $interpretedDiagnostic -notmatch "contains only the compiled guest") {
         throw "Single-file interpreted mode did not produce the expected diagnostic.`n$interpretedDiagnostic"
     }
+}
+
+# Exercise the TypeScript-only CLI against the exact SDK package under test. The generated
+# project is an internal implementation detail; users author no .csproj.
+$sharpTsCli = Join-Path $repositoryRoot "bin\Release\net10.0\SharpTS.dll"
+if (-not (Test-Path -LiteralPath $sharpTsCli)) {
+    throw "SharpTS CLI was not built: $sharpTsCli"
+}
+Invoke-DotNet @(
+    $sharpTsCli, "new", "avalonia", "-n", "PackagedCliApp", "-o", $cliRoot,
+    "--sdk-version", $version)
+[IO.File]::WriteAllText((Join-Path $cliRoot "Directory.Build.props"), "<Project />")
+[IO.File]::WriteAllText((Join-Path $cliRoot "NuGet.config"), $nugetConfig)
+
+Invoke-DotNet @(
+    $sharpTsCli, "app", "compile", "headless.tests.tsx", "--source", $feed,
+    "--configuration", $Configuration) $cliRoot
+$generatedProject = Join-Path $cliRoot ".sharpts-gui.generated.csproj"
+if (-not (Test-Path -LiteralPath $generatedProject)) {
+    throw "TypeScript-only CLI did not materialize its internal SDK project."
+}
+$generatedProjectText = Get-Content -LiteralPath $generatedProject -Raw
+if ($generatedProjectText -notmatch [regex]::Escape("SharpTS.Gui.Sdk/$version")) {
+    throw "TypeScript-only CLI generated project did not pin the candidate GUI SDK version."
+}
+$generatedProjectWrite = (Get-Item -LiteralPath $generatedProject).LastWriteTimeUtc
+$cliGuest = Get-ChildItem -LiteralPath (Join-Path $cliRoot ".sharpts\gui\obj") -Recurse -File -Filter "SharpTS.Gui.Guest.dll" |
+    Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
+if ($null -eq $cliGuest) {
+    throw "TypeScript-only CLI compile did not create a guest assembly."
+}
+$cliGuestWrite = $cliGuest.LastWriteTimeUtc
+Invoke-DotNet @(
+    $sharpTsCli, "app", "build", "headless.tests.tsx", "--source", $feed,
+    "--configuration", $Configuration) $cliRoot
+if ((Get-Item -LiteralPath $generatedProject).LastWriteTimeUtc -ne $generatedProjectWrite) {
+    throw "TypeScript-only CLI rewrote an unchanged generated project."
+}
+if ((Get-Item -LiteralPath $cliGuest.FullName).LastWriteTimeUtc -ne $cliGuestWrite) {
+    throw "TypeScript-only CLI rebuilt an unchanged guest assembly."
+}
+
+foreach ($mode in @("interpreted", "compiled")) {
+    $cliRunTrace = Join-Path $artifactRoot "cli-run-$mode-trace.json"
+    Invoke-DotNet @(
+        $sharpTsCli, "app", "run", "headless.tests.tsx", "--source", $feed,
+        "--mode", $mode, "--", "--headless", "--trace", $cliRunTrace) $cliRoot
+    Assert-GuestTrace $cliRunTrace "TypeScript-only CLI $mode run"
+}
+
+Invoke-DotNet @(
+    $sharpTsCli, "app", "publish", "headless.tests.tsx", "--source", $feed,
+    "--rid", $RuntimeIdentifier, "--self-contained", "false", "--single-file", "false",
+    "--output", $cliDirectoryPublishRoot) $cliRoot
+$cliDirectoryLauncher = Join-Path $cliDirectoryPublishRoot "cli_app_with_spaces.dll"
+if (-not (Test-Path -LiteralPath $cliDirectoryLauncher)) {
+    throw "TypeScript-only CLI directory publish did not create its app host assembly."
+}
+if ($canExecute) {
+    foreach ($mode in @("interpreted", "compiled")) {
+        $cliDirectoryTrace = Join-Path $artifactRoot "cli-directory-$mode-trace.json"
+        Invoke-DotNet @(
+            $cliDirectoryLauncher, "--mode", $mode, "--headless", "--trace", $cliDirectoryTrace) $cliDirectoryPublishRoot
+        Assert-GuestTrace $cliDirectoryTrace "TypeScript-only CLI published $mode application"
+    }
+}
+
+$sdkManifest = Get-Content -LiteralPath (Join-Path $directoryPublishRoot ".sharpts\app.json") -Raw | ConvertFrom-Json
+$cliManifest = Get-Content -LiteralPath (Join-Path $cliDirectoryPublishRoot ".sharpts\app.json") -Raw | ConvertFrom-Json
+foreach ($property in @("hostedAbiVersion", "guiApiVersion", "descriptorSchemaVersion", "descriptorSchemaHash")) {
+    if ($sdkManifest.$property -ne $cliManifest.$property) {
+        throw "SDK/CLI application manifest parity failed for '$property'."
+    }
+}
+$sdkManagedClosure = @(Get-ChildItem -LiteralPath $directoryPublishRoot -File -Filter "*.dll" |
+    Where-Object Name -ne "SharpTS.Gui.Sdk.Consumer.dll" | ForEach-Object Name | Sort-Object)
+$cliManagedClosure = @(Get-ChildItem -LiteralPath $cliDirectoryPublishRoot -File -Filter "*.dll" |
+    Where-Object Name -ne "cli_app_with_spaces.dll" | ForEach-Object Name | Sort-Object)
+if (Compare-Object $sdkManagedClosure $cliManagedClosure -SyncWindow 0) {
+    throw "SDK/CLI managed dependency closure differs."
+}
+$sdkNativeClosure = @(Get-ChildItem -LiteralPath $directoryPublishRoot -File |
+    Where-Object Extension -notin @(".dll", ".json", ".pdb") | ForEach-Object Name | Sort-Object)
+$cliNativeClosure = @(Get-ChildItem -LiteralPath $cliDirectoryPublishRoot -File |
+    Where-Object Extension -notin @(".dll", ".json", ".pdb") |
+    Where-Object Name -notin @("SharpTS.Gui.Sdk.Consumer.exe", "cli_app_with_spaces.exe") |
+    ForEach-Object Name | Sort-Object)
+$sdkNativeClosure = @($sdkNativeClosure | Where-Object { $_ -ne "SharpTS.Gui.Sdk.Consumer.exe" })
+if (Compare-Object $sdkNativeClosure $cliNativeClosure -SyncWindow 0) {
+    throw "SDK/CLI native dependency closure differs."
+}
+
+Invoke-DotNet @(
+    $sharpTsCli, "app", "publish", "headless.tests.tsx", "--source", $feed,
+    "--rid", $RuntimeIdentifier, "--self-contained", "true", "--single-file", "true",
+    "--output", $cliSingleFilePublishRoot) $cliRoot
+$cliSingleFile = Join-Path $cliSingleFilePublishRoot "cli_app_with_spaces.exe"
+if (-not (Test-Path -LiteralPath $cliSingleFile)) {
+    throw "TypeScript-only CLI self-contained single-file publish did not create an executable."
+}
+if ($canExecute) {
+    $oldDotnetRoot = $env:DOTNET_ROOT
+    $env:DOTNET_ROOT = Join-Path $artifactRoot "intentionally missing cli dotnet"
+    try {
+        $cliSingleFileTrace = Join-Path $artifactRoot "cli-single-file-trace.json"
+        Invoke-Application $cliSingleFile @("--headless", "--trace", $cliSingleFileTrace) $cliSingleFilePublishRoot
+        Assert-GuestTrace $cliSingleFileTrace "TypeScript-only CLI single-file application"
+    }
+    finally {
+        $env:DOTNET_ROOT = $oldDotnetRoot
+    }
+}
+
+Push-Location $cliRoot
+try {
+    $cliMissingOutput = & dotnet $sharpTsCli app build missing.tsx --host avalonia --source $feed 2>&1 | Out-String
+}
+finally {
+    Pop-Location
+}
+if ($LASTEXITCODE -eq 0 -or $cliMissingOutput -notmatch "Application entry not found") {
+    throw "TypeScript-only CLI missing-entry diagnostic was not actionable.`n$cliMissingOutput"
 }
 
 $missingRoot = Join-Path $artifactRoot "missing entry point"

@@ -67,6 +67,17 @@ The public preview supports `win-x64` and `win-arm64`, interpreted and compiled 
 framework-dependent directory publishing, and compiled self-contained single-file publishing.
 
 ```powershell
+sharpts new avalonia -n CounterApp
+cd CounterApp
+sharpts app run
+sharpts app run --mode compiled
+sharpts app publish --rid win-x64 --self-contained true --single-file true
+```
+
+These commands materialize an internal `SharpTS.Gui.Sdk` project; the application contains only
+TypeScript/TSX, assets, `tsconfig.json`, and `sharpts.json`. The equivalent explicit SDK workflow is:
+
+```powershell
 dotnet new install SharpTS.Gui.Sdk::0.2.0-preview.1
 dotnet new sharpts-gui -n CounterApp
 cd CounterApp

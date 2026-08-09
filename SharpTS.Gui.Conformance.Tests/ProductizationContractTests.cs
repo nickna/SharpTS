@@ -34,8 +34,15 @@ public sealed class ProductizationContractTests
         string workflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "windows-desktop-preview.yml"));
 
         Assert.Contains("SharpTSGuiSupportedRuntimeIdentifiers", sdkTargets, StringComparison.Ordinal);
+        Assert.Contains(
+            "<PrepareResourceNamesDependsOn>SharpTSGuiCompile;$(PrepareResourceNamesDependsOn)</PrepareResourceNamesDependsOn>",
+            sdkTargets,
+            StringComparison.Ordinal);
         Assert.Contains("@(SharpTSGuiRuntimeAsset)", packageProject, StringComparison.Ordinal);
         Assert.Contains("SupportedPlatforms.props", harness, StringComparison.Ordinal);
+        Assert.Contains("CandidatePackage", harness, StringComparison.Ordinal);
+        Assert.Contains("gui-sdk-candidate", workflow, StringComparison.Ordinal);
+        Assert.Equal(3, CountOccurrences(workflow, "-CandidatePackage artifacts/windows-preview/candidate/"));
         foreach (string runtimeIdentifier in runtimeIdentifiers)
             Assert.Contains($"-RuntimeIdentifier {runtimeIdentifier}", workflow, StringComparison.Ordinal);
     }
@@ -64,5 +71,17 @@ public sealed class ProductizationContractTests
             directory = Path.GetDirectoryName(directory);
         }
         throw new InvalidOperationException("Could not locate the SharpTS repository root.");
+    }
+
+    private static int CountOccurrences(string text, string value)
+    {
+        int count = 0;
+        int offset = 0;
+        while ((offset = text.IndexOf(value, offset, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            offset += value.Length;
+        }
+        return count;
     }
 }

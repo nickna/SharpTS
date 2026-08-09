@@ -89,6 +89,14 @@ switch (command)
         Console.WriteLine($"sharpts {GetVersion()}");
         return 0;
 
+    case ParsedCommand.NewAvalonia create:
+        try { return GuiApplicationCli.Create(create); }
+        catch (Exception exception) { Console.Error.WriteLine($"Error: {exception.Message}"); return 1; }
+
+    case ParsedCommand.Application application:
+        try { return GuiApplicationCli.Run(application); }
+        catch (Exception exception) { Console.Error.WriteLine($"Error: {exception.Message}"); return 1; }
+
     case ParsedCommand.Error error:
         Console.WriteLine(error.Message);
         if (error.ShowCompileUsage)
@@ -1586,6 +1594,11 @@ static void PrintHelp()
     Console.WriteLine("  sharpts -p <tsconfig> [--watch] [--incremental]");
     Console.WriteLine("  sharpts --build [project ...] [--watch] [--force]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
+    Console.WriteLine("  sharpts new avalonia -n <name> [-o directory] [--sdk-version version]");
+    Console.WriteLine("  sharpts app run [entry.tsx] [--host avalonia|console] [--mode mode] [-- args]");
+    Console.WriteLine("  sharpts app build [entry.tsx] [--host avalonia|console]");
+    Console.WriteLine("  sharpts app publish [entry.tsx] [--rid rid] [--self-contained true|false]");
+    Console.WriteLine("                      [--single-file true|false] [-o directory]");
     Console.WriteLine("  sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]");
     Console.WriteLine();
     Console.WriteLine("Options:");

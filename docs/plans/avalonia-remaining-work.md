@@ -42,7 +42,7 @@ tooling, release closure, and ecosystem depth.
 | Phase 2A | Complete | No additional phase work; regression coverage only |
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | **Complete in the Phase 3A implementation commit.** Template, ordinary-command workflow, incremental inputs, compiled-only output, docs, and packaged lifecycle gate landed | Regression coverage and release evidence only |
-| Phase 3B | Windows SDK publishing works; TypeScript-only CLI and release publication do not | Deliver the CLI front door and close Windows preview publication gates |
+| Phase 3B | **CLI complete; local x64 and ARM64 cross-publish candidate gates pass.** Public NuGet onboarding and native ARM64 execution remain externally blocked | Publish only after package ownership/key scope and native ARM64 evidence exist |
 | Phase 4 | Selected services landed early; most ecosystem/AOT work remains | Stabilize and expand the platform after the public preview |
 
 ## Prerequisite integration gate
@@ -320,7 +320,22 @@ C#, or AXAML. The same project works from a read-only install location after pub
 
 ## Phase 3B residual: TypeScript-only CLI and Windows preview release
 
+**Resolution (2026-08-09): 3B.1 complete; 3B.2 locally complete and externally blocked.** The
+projectless CLI creates an explicit Avalonia manifest, applies host precedence, materializes a
+deterministic internal project, and delegates build/run/publish to `SharpTS.Gui.Sdk`. The packaged
+harness compares SDK and CLI manifests and managed/native closures and runs both modes plus a
+self-contained single file. Candidate packaging is now a single workflow artifact reused by x64,
+ARM64 cross-publish, and the optional native ARM64 job.
+
+The exact local candidate (`SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg`, 26,332,519 bytes, SHA-256
+`B0E3EEF8C1B9A0329097D858C01409BED28155FE287684F28300580CA57BB28E`) passed native x64 Headless
+and real-window execution and ARM64 cross-publish. Native ARM64 Headless/real-window execution
+requires ARM64 Windows hardware. Public publication remains blocked on NuGet package-ID onboarding
+and release API-key scope, so `.github/nuget-packages.json` intentionally retains `publish: false`.
+
 ### 3B.1 TypeScript-only CLI front door
+
+**Complete.** The numbered requirements below are retained as the shipped contract.
 
 #### Work
 
@@ -347,6 +362,9 @@ application using only `sharpts` commands and without authoring a `.csproj`. CLI
 front doors use the same implementation and pass artifact-parity tests.
 
 ### 3B.2 Windows preview publication
+
+**Blocked only on external release authority/hardware.** Items 3–6 have local evidence. Items 1,
+2, 7, and 8 must not be inferred from cross-publish or local package validation.
 
 #### Work
 

@@ -163,10 +163,35 @@ manifests receive a migration-oriented rejection. The JSX checker now infers gen
 component props, validates callable-object signatures, checks `children` and `ref` as declared
 props, and validates `key` through `JSX.IntrinsicAttributes`.
 
-The remaining roadmap items—including descriptor-commit error-boundary recovery, the full JSX
-checker parity set, the multi-window application API, styles,
-generic collections, plugins, LSP integration, and Windows v1 distribution—remain subsequent
-work. See `docs/gui/migrating-api-1-to-2.md` for the implemented preview.1 contract.
+The generated descriptor contract, native-commit boundary recovery, full JSX parity set, GUI-aware
+LSP metadata, SDK template, and projectless CLI are complete. Multi-window APIs, public styles and
+resources, generic collections, plugins, Native AOT certification, and signed distribution remain
+Phase 4 work. See `docs/gui/migrating-api-1-to-2.md` for the preview.1 contract.
+
+## Phase 3B CLI and candidate status
+
+`sharpts new avalonia` creates a TypeScript-only application with an explicit Avalonia host marker
+and pinned `0.2.0-preview.1` SDK. `sharpts app run|build|compile|publish` applies explicit-host,
+manifest, safe-inference, then console precedence and routes Avalonia work through a deterministic
+internal `SharpTS.Gui.Sdk` project. SDK and CLI package gates compare ABI/API/schema manifest fields
+and managed/native closures.
+
+The exact local candidate is 26,332,519 bytes with SHA-256
+`B0E3EEF8C1B9A0329097D858C01409BED28155FE287684F28300580CA57BB28E`. On Windows x64 it passed
+direct-SDK and CLI build/no-op/clean/publish gates, interpreted and compiled Headless runs,
+real-window runs, and self-contained single-file execution with an invalid `DOTNET_ROOT`. The same
+package bytes passed ARM64 directory and single-file cross-publish. Native ARM64 execution and
+public NuGet publication remain unpassed external gates; `publish: false` is intentionally retained.
+
+| Phase 3B gate | Result on 2026-08-09 |
+| --- | --- |
+| Release solution build | Passed with zero warnings and zero errors |
+| Canonical core suite | 16,547 passed, two documented HTTP lifecycle skips, zero failed |
+| GUI conformance | 51 passed, zero skipped, zero failed |
+| Exact x64 candidate | 14 retained traces; SDK and CLI Headless/directory/single-file plus real-window gates passed |
+| Exact ARM64 candidate | The same SHA-256 package produced both SDK and CLI directory/single-file outputs; five host-architecture development traces passed |
+| NuGet release helper | Nine preflight/publication-inventory scenarios passed |
+| Public NuGet state | Exact package search returned no `SharpTS.Gui.Sdk`; ID onboarding and API-key scope remain external blockers |
 
 ## API 1 baseline decision
 
@@ -352,7 +377,7 @@ The pre-publication cleanup is complete and behavior-preserving:
 ## Windows preview publication gate
 
 Publication is complete only when all of the following are recorded against the candidate commit
-and exact `0.1.0-preview.1` artifact:
+and exact `0.2.0-preview.1` artifact:
 
 1. Run native ARM64 Headless and real-window scenarios on a Windows ARM64 machine and retain both
    traces. Cross-publish success is necessary but does not satisfy this gate.
@@ -406,6 +431,8 @@ None of these items is evidence of present compatibility, and none gates the Win
 
 The Avalonia baseline was replayed onto `main` at `a97e361e` and validated at integration commit
 `2ab6186093087628d62fc3146d062b0f265f2f7a` on 2026-08-08.
+This is a historical integration snapshot; the Phase 3B table above supersedes its candidate hash
+and test counts.
 
 | Gate | Integrated result |
 | --- | --- |
@@ -444,9 +471,9 @@ full-suite pass; CI or a network-capable environment must close that regression 
 
 | Gate | Final recorded result |
 | --- | --- |
-| Release solution tests | 16,453 core tests and 18 desktop/conformance tests passed; two pre-existing HTTP lifecycle skips; zero failures |
+| Release solution tests | 16,547 core tests and 51 desktop/conformance tests passed; two documented HTTP lifecycle skips; zero failures |
 | Release solution build | Passed with zero warnings and zero errors |
-| Isolated x64 package lifecycle | Restore, build, no-op build, clean/rebuild, path-with-spaces, IL verification, and missing-entry diagnostic passed |
+| Isolated x64 package lifecycle | Direct SDK and projectless CLI restore, build, no-op build, clean/rebuild, path-with-spaces, IL verification, parity, and missing-entry diagnostics passed |
 | Development modes | Interpreted and compiled traces matched |
 | x64 framework-dependent directory | Headless and real-window passed in interpreted and compiled modes; dependency closure passed |
 | x64 compiled single file | Headless and real-window passed with invalid `DOTNET_ROOT`; interpreted mode rejection produced the expected fatal diagnostic |

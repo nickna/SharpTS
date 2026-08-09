@@ -590,5 +590,50 @@ public class CommandLineParserTests
         Assert.True(script.Options.TypeScriptProgramOptions.PreferDeclarationFiles);
     }
 
+    [Fact]
+    public void Parse_NewAvaloniaApplication()
+    {
+        var command = Assert.IsType<ParsedCommand.NewAvalonia>(
+            _parser.Parse(["new", "avalonia", "-n", "Counter", "-o", "apps/Counter"]));
+        Assert.Equal("Counter", command.Name);
+        Assert.Equal("apps/Counter", command.OutputDirectory);
+        Assert.Equal("0.2.0-preview.1", command.GuiSdkVersion);
+    }
+
+    [Fact]
+    public void Parse_ApplicationPublishKeepsDeploymentConceptsSeparate()
+    {
+        var command = Assert.IsType<ParsedCommand.Application>(_parser.Parse([
+            "app", "publish", "main.tsx", "--host", "avalonia", "--rid", "win-x64",
+            "--self-contained", "true", "--single-file", "false", "--source", "feed", "-o", "dist",
+        ]));
+        Assert.Equal("publish", command.Action);
+        Assert.Equal("avalonia", command.Host);
+        Assert.Equal("win-x64", command.RuntimeIdentifier);
+        Assert.True(command.SelfContained);
+        Assert.False(command.SingleFile);
+        Assert.Equal("feed", command.GuiSdkSource);
+        Assert.Equal("dist", command.OutputDirectory);
+    }
+
+    [Fact]
+    public void Parse_ApplicationRunForwardsOnlyArgumentsAfterSeparator()
+    {
+        var command = Assert.IsType<ParsedCommand.Application>(_parser.Parse([
+            "app", "run", "main.tsx", "--mode", "compiled", "--", "--headless", "value",
+        ]));
+        Assert.Equal("compiled", command.Mode);
+        Assert.Equal(["--headless", "value"], command.ApplicationArgs);
+    }
+
+    [Theory]
+    [InlineData("--self-contained")]
+    [InlineData("--single-file")]
+    public void Parse_ApplicationRejectsMissingDeploymentBoolean(string option)
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(_parser.Parse(["app", "publish", option]));
+        Assert.Equal(64, error.ExitCode);
+    }
+
     #endregion
 }

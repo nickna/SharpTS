@@ -21,7 +21,9 @@ on:
       - "Runtime/BuiltIns/TimerBuiltIns.cs"
       - "SharpTS.Tests/Hosting/**"
       - "Compilation/**"
-      - "Cli/CommandLineParser.cs"
+      - "Cli/**"
+      - "References/SharpTsManifest.cs"
+      - "SharpTS.Tests/CliTests/**"
       - "Program.cs"
       - "SharpTS.Gui/**"
       - "SharpTS.Gui.Host/**"
@@ -34,7 +36,24 @@ on:
       - ".github/workflows/windows-desktop-preview.yml"
 
 jobs:
+  gui-sdk-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Build and audit the exact GUI SDK candidate
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/win-x64/feed/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
+
   windows-x64:
+    needs: gui-sdk-candidate
     runs-on: windows-latest
     timeout-minutes: 35
     steps:
@@ -42,13 +61,17 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/candidate
       - name: Hosted scheduler and lifecycle conformance
         run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests|FullyQualifiedName~Parse_Compile_Hosted"
       - name: Renderer core and dual-mode headless integration
         run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
       - name: Packaged x64 SDK, single file, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -57,8 +80,10 @@ jobs:
             artifacts/windows-preview/win-x64/*-trace.json
             artifacts/windows-preview/win-x64/feed/*.nupkg
             artifacts/windows-preview/win-x64/published single file/*.exe
+            artifacts/windows-preview/win-x64/cli published single file/*.exe
 
   windows-arm64-cross-publish:
+    needs: gui-sdk-candidate
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -66,9 +91,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/candidate
       - name: Cross-publish packaged ARM64 directory and single-file outputs
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -76,8 +105,10 @@ jobs:
           path: |
             artifacts/windows-preview/win-arm64/feed/*.nupkg
             artifacts/windows-preview/win-arm64/published single file/*.exe
+            artifacts/windows-preview/win-arm64/cli published single file/*.exe
 
   windows-arm64-native:
+    needs: gui-sdk-candidate
     if: github.event_name == 'workflow_dispatch' && inputs.run_arm64_native
     runs-on: [self-hosted, Windows, ARM64, sharpts-gui]
     timeout-minutes: 35
@@ -86,9 +117,13 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/candidate
       - name: Packaged ARM64 SDK, single file, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.2.0-preview.1.nupkg
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -97,3 +132,4 @@ jobs:
             artifacts/windows-preview/win-arm64/*-trace.json
             artifacts/windows-preview/win-arm64/feed/*.nupkg
             artifacts/windows-preview/win-arm64/published single file/*.exe
+            artifacts/windows-preview/win-arm64/cli published single file/*.exe

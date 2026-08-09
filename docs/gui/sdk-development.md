@@ -5,6 +5,31 @@ matching `@sharpts/gui` package under `obj`, type-checks and compiles the guest,
 application manifest, and assembles the Avalonia host. A separate global SharpTS installation,
 repository checkout, C# source file, and AXAML file are not required.
 
+## Projectless SharpTS CLI workflow
+
+The SharpTS tool can create and drive the same SDK pipeline without a user-authored project file:
+
+```powershell
+sharpts new avalonia -n CounterApp
+cd CounterApp
+sharpts app run
+sharpts app run --mode compiled
+sharpts app compile
+sharpts app publish --rid win-x64 --self-contained true --single-file true
+```
+
+`sharpts.json` records `application.type`, the entry module, and the pinned GUI SDK version. Host
+selection precedence is an explicit `--host avalonia|console`, then the manifest, then conservative
+import inference, then the console default. Mixed GUI and another JSX runtime require an explicit
+host. `--source` selects a local or HTTP(S) SDK feed; `--output`, `--configuration`, and
+`--sdk-version` override their corresponding defaults.
+
+The CLI writes a deterministic `.sharpts-gui.generated.csproj`, keeps generated build state under
+`.sharpts/gui`, and invokes `SharpTS.Gui.Sdk` for restore, compilation, launcher generation, native
+asset selection, and publishing. `--rid`, `--self-contained`, and `--single-file` are independent;
+single-file output requires a self-contained deployment. Directory output retains interpreted mode,
+while the default self-contained single file contains only the compiled guest.
+
 ## Create and develop an application
 
 ```powershell
