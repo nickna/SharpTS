@@ -1517,6 +1517,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor.js")]
+    [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-not-configurable-target.js")]
     [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-configurable-writable-desc-not-writable.js")]
     public void Proxy_defineProperty_enforces_target_descriptor_invariants(
         string relativePath)
