@@ -1626,6 +1626,12 @@ public sealed class Issue1279ParityTests
     public void Proxy_ownKeys_matches_nonextensible_target_keys(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
