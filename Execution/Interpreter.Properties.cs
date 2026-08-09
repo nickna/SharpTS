@@ -634,6 +634,16 @@ public partial class Interpreter
                 continue;
             }
 
+            if (current is ISharpTSCallable callable)
+            {
+                // Return inherited Function.prototype methods unbound. A
+                // member call binds the original receiver afterwards; binding
+                // to a proxy target here would bypass the proxy [[Call]] trap.
+                return FunctionBuiltIns.GetPrototypeMethod(name)
+                    ?? FunctionBuiltIns.GetMember(callable, name)
+                    ?? SharpTSUndefined.Instance;
+            }
+
             return GetProperty(current, name);
         }
         return SharpTSUndefined.Instance;
@@ -1586,7 +1596,8 @@ public partial class Interpreter
             ErrorToStringCallable m => m.Bind(receiver),
             BuiltInAsyncMethod m => m.Bind(receiver),
             BuiltInMethod m when !m.IsBound
-                && m.FunctionName is "catch" or "finally" or "resolve" => m.Bind(receiver),
+                && m.FunctionName is "call" or "apply" or "bind"
+                    or "catch" or "finally" or "resolve" => m.Bind(receiver),
             _ => null,
         };
     }
