@@ -736,6 +736,9 @@ public partial class Interpreter
 
         for (int depth = 0; depth < 64 && obj is not (null or SharpTSUndefined); depth++)
         {
+            if (obj is SharpTSProxy prototypeProxy)
+                return prototypeProxy.TrapHas(name, this);
+
             if (obj is SharpTSArray array)
             {
                 if (array.HasOwnProperty(name)) return true;

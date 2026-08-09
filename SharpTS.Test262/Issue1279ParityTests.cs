@@ -2178,6 +2178,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/has/return-false-targetdesc-not-configurable.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_has_handles_indexed_prototype_queries()
+        => AssertPass(
+            "built-ins/Proxy/has/call-in-prototype-index.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
