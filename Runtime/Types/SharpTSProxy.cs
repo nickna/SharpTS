@@ -215,19 +215,75 @@ public class SharpTSProxy : ISharpTSCallable
             ? proxy.TrapGetOwnPropertyDescriptor(prop, interpreter)
             : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop);
         bool targetHasProperty = targetDescriptor is not (null or SharpTSUndefined);
+        var requested = SharpTSPropertyDescriptor.FromAnyObject(descriptor);
         if (!targetHasProperty)
         {
             if (!TargetIsExtensible(_target))
                 throw new ThrowException(new SharpTSTypeError(
                     "Proxy defineProperty trap cannot add a property to a non-extensible target"));
 
-            var requested = SharpTSPropertyDescriptor.FromAnyObject(descriptor);
             if (requested.HasConfigurable && !requested.Configurable)
                 throw new ThrowException(new SharpTSTypeError(
                     "Proxy defineProperty trap cannot create a non-configurable target property"));
         }
+        else
+        {
+            ValidateDefinePropertyInvariant(
+                requested,
+                SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!));
+        }
 
         return true;
+    }
+
+    private static void ValidateDefinePropertyInvariant(
+        SharpTSPropertyDescriptor requested,
+        SharpTSPropertyDescriptor target)
+    {
+        bool settingConfigFalse = requested.HasConfigurable
+            && !requested.Configurable;
+        if (settingConfigFalse && target.Configurable)
+            ThrowInvariant();
+
+        if (target.Configurable) return;
+        if (requested.HasConfigurable && requested.Configurable)
+            ThrowInvariant();
+        if (requested.HasEnumerable
+            && requested.Enumerable != target.Enumerable)
+            ThrowInvariant();
+
+        bool requestedAccessor = requested.HasGet || requested.HasSet;
+        bool requestedData = requested.HasValue || requested.HasWritable;
+        bool targetAccessor = target.HasGet || target.HasSet;
+        if ((requestedAccessor && !targetAccessor)
+            || (requestedData && targetAccessor))
+            ThrowInvariant();
+
+        if (targetAccessor)
+        {
+            if (requested.HasGet
+                && !SharpTSObject.SameValue(requested.Get, target.Get))
+                ThrowInvariant();
+            if (requested.HasSet
+                && !SharpTSObject.SameValue(requested.Set, target.Set))
+                ThrowInvariant();
+            return;
+        }
+
+        if (target.Writable && requested.HasWritable && !requested.Writable)
+            ThrowInvariant();
+        if (!target.Writable)
+        {
+            if (requested.HasWritable && requested.Writable)
+                ThrowInvariant();
+            if (requested.HasValue
+                && !SharpTSObject.SameValue(requested.Value, target.Value))
+                ThrowInvariant();
+        }
+
+        static void ThrowInvariant() => throw new ThrowException(
+            new SharpTSTypeError(
+                "Proxy defineProperty trap returned an incompatible descriptor"));
     }
 
     private static bool TargetIsExtensible(object target) => target switch

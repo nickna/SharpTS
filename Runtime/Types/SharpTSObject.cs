@@ -828,7 +828,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// Object/callable identity is reference-based; numbers additionally keep
     /// NaN equal to itself and distinguish positive from negative zero.
     /// </summary>
-    private static bool SameValue(object? left, object? right)
+    internal static bool SameValue(object? left, object? right)
     {
         if (ReferenceEquals(left, right)) return true;
         if (left is double ld && right is double rd)
