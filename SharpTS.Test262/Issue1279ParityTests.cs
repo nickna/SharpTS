@@ -2190,6 +2190,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/has/call-in-prototype.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_has_handles_object_create_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/has/call-object-create.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
