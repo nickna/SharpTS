@@ -1523,6 +1523,12 @@ public sealed class Issue1279ParityTests
         string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_defineProperty_allows_compatible_target_updates()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/return-boolean-and-define-target.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
