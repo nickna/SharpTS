@@ -1633,6 +1633,15 @@ public partial class Interpreter
                     if (strictMode)
                         throw new InterpreterException($"Cannot set property '{t.Key}' which has only a getter.");
                 }
+                else if (t.Target.GetOwnPropertyDescriptor(t.Key) is null
+                    && t.Target.Prototype is SharpTSProxy prototypeProxy)
+                {
+                    bool assigned = prototypeProxy.TrapSetProperty(
+                        t.Key, value, this, t.Target);
+                    if (!assigned && strictMode)
+                        throw new ThrowException(new SharpTSTypeError(
+                            $"Proxy set trap rejected property '{t.Key}'"));
+                }
                 else if (TrySetBoxedPrimitiveInheritedProperty(
                     t.Target, t.Key, value, strictMode))
                 {

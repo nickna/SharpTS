@@ -2495,6 +2495,17 @@ public partial class Interpreter
                 return value;
             }
 
+            if (simpleObj.GetOwnPropertyDescriptor(memberName) is null
+                && simpleObj.Prototype is SharpTSProxy prototypeProxy)
+            {
+                bool assigned = prototypeProxy.TrapSetProperty(
+                    memberName, value, this, simpleObj);
+                if (!assigned && strictMode)
+                    throw new ThrowException(new SharpTSTypeError(
+                        $"Proxy set trap rejected property '{memberName}'"));
+                return value;
+            }
+
             // Boxed primitives inherit user-defined descriptors from their
             // realm-local prototype. An inherited setter handles the write;
             // non-writable data and getter-only accessors block own shadowing.
