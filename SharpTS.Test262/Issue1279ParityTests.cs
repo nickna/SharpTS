@@ -1567,6 +1567,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/ownKeys/trap-is-not-callable.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_ownKeys_rejects_non_object_results()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/return-not-list-object-throws.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]

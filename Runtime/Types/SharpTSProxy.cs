@@ -339,23 +339,44 @@ public class SharpTSProxy : ISharpTSCallable
             return ForwardOwnPropertyKeys(interp);
 
         var result = InvokeTrap(trap, interp, [_target]);
-        var keys = new List<object?>();
+        var values = new List<object?>();
         switch (result)
         {
             case SharpTSArray arr:
                 foreach (var item in arr)
-                    if (item is string or SharpTSSymbol) keys.Add(item);
+                    values.Add(item);
                 break;
             case List<object?> list:
-                foreach (var item in list)
-                    if (item is string or SharpTSSymbol) keys.Add(item);
+                values.AddRange(list);
                 break;
             case IEnumerable<object?> seq:
-                foreach (var item in seq)
-                    if (item is string or SharpTSSymbol) keys.Add(item);
+                values.AddRange(seq);
                 break;
+            case null or SharpTSUndefined or string or bool or double or int
+                or long or SharpTSBigInt or SharpTSSymbol:
+                throw InvalidOwnKeysResult();
+            case object when interp != null:
+                long length = ArrayBuiltIns.ToLength(
+                    interp.GetProperty(result, "length"), interp);
+                for (long index = 0; index < length; index++)
+                {
+                    values.Add(interp.GetProperty(
+                        result,
+                        index.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                }
+                break;
+            default:
+                throw InvalidOwnKeysResult();
         }
-        return keys;
+
+        foreach (object? value in values)
+            if (value is not (string or SharpTSSymbol))
+                throw InvalidOwnKeysResult();
+        return values;
+
+        static ThrowException InvalidOwnKeysResult() => new(
+            new SharpTSTypeError(
+                "Proxy ownKeys trap result must contain only strings and symbols"));
     }
 
     private List<object?> ForwardOwnPropertyKeys(Interpreter? interpreter)
