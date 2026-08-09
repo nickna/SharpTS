@@ -131,40 +131,12 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static object? Sort(Interpreter interp, SharpTSArray arr, List<object?> args)
-    {
-        // Frozen arrays cannot be modified; silent fail (matches reverse behavior)
-        if (arr.IsFrozen) return arr;
-
-        ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
-
-        // Partition undefined to end (JS behavior)
-        var defined = new List<(object? Element, int Index)>();
-        int undefinedCount = 0;
-        for (int i = 0; i < arr.Length; i++)
-        {
-            if (IsUndefined(arr[i]))
-                undefinedCount++;
-            else
-                defined.Add((arr[i], i));
-        }
-
-        var sorted = StableSort(defined, compareFn, interp);
-
-        arr.Clear();
-        arr.AddRange(sorted);
-        for (int i = 0; i < undefinedCount; i++)
-            arr.Add(SharpTSUndefined.Instance);
-
-        return arr;
-    }
-
     private static object? ToSorted(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
         ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
 
         // Same logic but returns NEW array
-        var defined = new List<(object? Element, int Index)>();
+        var defined = new List<(object? Element, long Index)>();
         int undefinedCount = 0;
         for (int i = 0; i < arr.Length; i++)
         {
@@ -185,14 +157,14 @@ public static class ArrayBuiltIns
     /// Performs a stable sort using LINQ OrderBy (which is stable).
     /// </summary>
     private static List<object?> StableSort(
-        List<(object? Element, int Index)> items,
+        List<(object? Element, long Index)> items,
         ISharpTSCallable? compareFn,
         Interpreter interp)
     {
         if (items.Count <= 1)
             return items.Select(x => x.Element).ToList();
 
-        IEnumerable<(object? Element, int Index)> sorted;
+        IEnumerable<(object? Element, long Index)> sorted;
         if (compareFn != null)
         {
             sorted = items.OrderBy(x => x, new CompareFnComparer(compareFn, interp));
@@ -221,7 +193,7 @@ public static class ArrayBuiltIns
     /// <summary>
     /// Comparer that uses a user-provided comparison function.
     /// </summary>
-    private class CompareFnComparer : IComparer<(object? Element, int Index)>
+    private class CompareFnComparer : IComparer<(object? Element, long Index)>
     {
         private readonly ISharpTSCallable _fn;
         private readonly Interpreter _interp;
@@ -230,7 +202,7 @@ public static class ArrayBuiltIns
         public CompareFnComparer(ISharpTSCallable fn, Interpreter interp)
             => (_fn, _interp) = (fn, interp);
 
-        public int Compare((object? Element, int Index) x, (object? Element, int Index) y)
+        public int Compare((object? Element, long Index) x, (object? Element, long Index) y)
         {
             _compareArgs[0] = x.Element;
             _compareArgs[1] = y.Element;
@@ -240,8 +212,9 @@ public static class ArrayBuiltIns
             // measured ~13% SLOWER on a 100k interpreter sort — the boxed Call lets the
             // comparator body unbox lazily. Revisit only with a non-boxing comparator path.
             var result = _fn.Call(_interp, _compareArgs);
-            if (result is double d && !double.IsNaN(d) && d != 0)
-                return d < 0 ? -1 : 1;
+            double numericResult = _interp.ToNumberWithPrimitive(result);
+            if (!double.IsNaN(numericResult) && numericResult != 0)
+                return numericResult < 0 ? -1 : 1;
             // Stability tie-breaker: preserve original order
             return x.Index.CompareTo(y.Index);
         }
@@ -1133,6 +1106,66 @@ public static class ArrayBuiltIns
     }
 
     /// <summary>
+    /// ECMA-262 23.1.3.30 sort algorithm for arrays and generic array-like
+    /// receivers. Indexed values are collected through HasProperty/Get, then
+    /// written back with strict Set/Delete operations so holes and accessors
+    /// retain their specified behavior.
+    /// </summary>
+    internal static object SortArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        ISharpTSCallable? compareFn = null;
+        if (args.Count > 0 && args[0] is not SharpTSUndefined)
+        {
+            compareFn = args[0] as ISharpTSCallable
+                ?? throw TypeError("Array.prototype.sort comparator must be callable");
+        }
+
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        var defined = new List<(object? Element, long Index)>();
+        long undefinedCount = 0;
+        for (long index = 0; index < length; index++)
+        {
+            string key = index.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (!interpreter.HasProperty(receiver, key)) continue;
+
+            object? value = interpreter.GetPropertyValue(receiver, key);
+            if (IsUndefined(value))
+                undefinedCount++;
+            else
+                defined.Add((value, index));
+        }
+
+        List<object?> sorted = StableSort(defined, compareFn, interpreter);
+        long nextIndex = 0;
+        for (int index = 0; index < sorted.Count; index++, nextIndex++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                nextIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                sorted[index]);
+        }
+        for (long index = 0; index < undefinedCount; index++, nextIndex++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                nextIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                SharpTSUndefined.Instance);
+        }
+        while (nextIndex < length)
+        {
+            interpreter.DeleteProperty(
+                receiver,
+                nextIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            nextIndex++;
+        }
+
+        return receiver;
+    }
+
+    /// <summary>
     /// ECMA-262 23.1.3.28 generic splice algorithm. The receiver is mutated
     /// through ordinary property operations so sparse objects, inherited
     /// properties, accessors, proxies, and abrupt completions remain observable.
@@ -1844,7 +1877,8 @@ public static class ArrayBuiltIns
         => RuntimeValue.FromBoxed(FlatMap(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue SortV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Sort(interp, arr, CallableInterop.ToBoxedList(args)));
+        => RuntimeValue.FromObject(SortArrayLike(
+            interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToSortedV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(ToSorted(interp, arr, CallableInterop.ToBoxedList(args)));

@@ -1832,6 +1832,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A3_T2.js")]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A4_T3.js")]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A6_T2.js")]
+    public void Array_sort_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)

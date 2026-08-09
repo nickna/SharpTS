@@ -740,6 +740,27 @@ public class ArrayMethodTests
             output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_Sort_MutatesGenericSparseReceivers(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "b", 2: undefined, 3: "a", length: 4 };
+            const result = Array.prototype.sort.call(object);
+            console.log(result === object);
+            console.log(object[0], object[1], object[2]);
+            console.log(2 in object, 3 in object);
+
+            try {
+                Array.prototype.sort.call({ length: 0 }, null);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\na b undefined\ntrue false\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

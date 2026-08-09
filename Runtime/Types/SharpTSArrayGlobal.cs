@@ -312,6 +312,12 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!, arguments);
         }
 
+        if (_name == "sort")
+        {
+            return BuiltIns.ArrayBuiltIns.SortArrayLike(
+                interpreter, receiver!, arguments);
+        }
+
         if (_name == "splice" && receiver is not SharpTSArray)
         {
             return BuiltIns.ArrayBuiltIns.SpliceArrayLike(
