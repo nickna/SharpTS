@@ -28,7 +28,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <GuiConformancePackageSource Include="..\SharpTS.Gui.Sdk\GuiPackage\index.ts;..\SharpTS.Gui.Sdk\GuiPackage\internal-testing.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-dev-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\package.json" />
+    <GuiConformancePackageSource Include="..\SharpTS.Gui.Sdk\GuiPackage\index.ts;..\SharpTS.Gui.Sdk\GuiPackage\internal-testing.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-dev-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime-types.ts;..\SharpTS.Gui.Sdk\GuiPackage\control-surface.generated.ts;..\SharpTS.Gui.Sdk\GuiPackage\control-docs.generated.json;..\SharpTS.Gui.Sdk\GuiPackage\package.json" />
   </ItemGroup>
 
   <Target Name="PrepareGuiConformanceHost" AfterTargets="Build">

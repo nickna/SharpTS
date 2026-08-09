@@ -183,6 +183,34 @@ public sealed class HostInfrastructureTests
                     EntryPath = "Guest/main.tsx",
                     CompiledAssembly = "SharpTS.Gui.Guest.dll",
                     HostedAbiVersion = 1,
+                    GuiApiVersion = 2
+                }));
+            InvalidOperationException rebuild = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
+            Assert.Contains("rebuild", rebuild.Message, StringComparison.OrdinalIgnoreCase);
+
+            File.WriteAllText(
+                Path.Combine(metadata, "app.json"),
+                JsonSerializer.Serialize(new
+                {
+                    EntryPath = "Guest/main.tsx",
+                    CompiledAssembly = "SharpTS.Gui.Guest.dll",
+                    HostedAbiVersion = 1,
+                    GuiApiVersion = 2,
+                    DescriptorSchemaVersion = 99,
+                    DescriptorSchemaHash = new string('0', 64)
+                }));
+            InvalidOperationException schema = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));
+            Assert.Contains("host version 1", schema.Message, StringComparison.Ordinal);
+            Assert.Contains("application version 99", schema.Message, StringComparison.Ordinal);
+            Assert.Contains(DesktopBridge.DescriptorSchemaHash, schema.Message, StringComparison.Ordinal);
+
+            File.WriteAllText(
+                Path.Combine(metadata, "app.json"),
+                JsonSerializer.Serialize(new
+                {
+                    EntryPath = "Guest/main.tsx",
+                    CompiledAssembly = "SharpTS.Gui.Guest.dll",
+                    HostedAbiVersion = 1,
                     GuiApiVersion = 1
                 }));
             InvalidOperationException migration = Assert.Throws<InvalidOperationException>(() => GuiPayloadLoader.LoadFile(root));

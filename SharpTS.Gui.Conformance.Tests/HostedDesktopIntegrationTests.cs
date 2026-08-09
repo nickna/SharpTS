@@ -101,7 +101,7 @@ public sealed class HostedDesktopIntegrationTests
         }
 
         Assert.NotEqual(owner, events.Single(item => item.Stage == "task-complete-off-thread").Thread);
-        Assert.Equal(4, events.Count(item => item.Stage.StartsWith("view-render-", StringComparison.Ordinal)));
+        Assert.Equal(8, events.Count(item => item.Stage.StartsWith("view-render-", StringComparison.Ordinal)));
         Assert.Equal(7, events.Count(item => item.Stage == "unsubscribe"));
         Assert.DoesNotContain(events, item => item.Stage == "stale-guest-click");
         Assert.True(

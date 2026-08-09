@@ -10,7 +10,9 @@ internal sealed record GuiAppManifest(
     string EntryPath,
     string CompiledAssembly,
     int HostedAbiVersion,
-    int GuiApiVersion);
+    int GuiApiVersion,
+    int? DescriptorSchemaVersion,
+    string? DescriptorSchemaHash);
 
 internal static class GuiPayloadLoader
 {
@@ -75,6 +77,26 @@ internal static class GuiPayloadLoader
             throw new InvalidOperationException(
                 $"SharpTS GUI host supports GUI API {DesktopBridge.GuiApiVersion}; " +
                 $"application requires GUI API {manifest.GuiApiVersion}." + migration);
+        }
+        if (manifest.DescriptorSchemaVersion is null || string.IsNullOrWhiteSpace(manifest.DescriptorSchemaHash))
+        {
+            throw new InvalidOperationException(
+                "SharpTS GUI API 2 application manifest is missing descriptor schema metadata; " +
+                "rebuild the application with the current SharpTS.Gui.Sdk.");
+        }
+        if (manifest.DescriptorSchemaHash.Length != 64 ||
+            manifest.DescriptorSchemaHash.Any(character => character is not (>= '0' and <= '9') and not (>= 'a' and <= 'f')))
+        {
+            throw new InvalidOperationException(
+                $"SharpTS GUI application descriptor schema hash is malformed: '{manifest.DescriptorSchemaHash}'.");
+        }
+        if (manifest.DescriptorSchemaVersion != DesktopBridge.DescriptorSchemaVersion ||
+            !string.Equals(manifest.DescriptorSchemaHash, DesktopBridge.DescriptorSchemaHash, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"SharpTS GUI descriptor schema mismatch: host version {DesktopBridge.DescriptorSchemaVersion} " +
+                $"hash {DesktopBridge.DescriptorSchemaHash}; application version {manifest.DescriptorSchemaVersion} " +
+                $"hash {manifest.DescriptorSchemaHash}.");
         }
     }
 }

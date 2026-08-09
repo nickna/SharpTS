@@ -42,6 +42,13 @@ public static class DesktopConformanceBridge
         Context.CurrentRoot?.ActiveSubscriptions
         ?? throw new InvalidOperationException("No desktop root is active.");
 
+    public static void FailNextNativeSetter(string key)
+    {
+        Context.EnsureOwnerThread();
+        (Context.CurrentRoot ?? throw new InvalidOperationException("No desktop root is active."))
+            .FailNextSetter(key);
+    }
+
     public static void SetTextBoxValue(string key, string value) =>
         Context.RequireControl<TextBox>(key).Text = value;
 

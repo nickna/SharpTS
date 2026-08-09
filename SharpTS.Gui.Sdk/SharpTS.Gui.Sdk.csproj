@@ -20,6 +20,8 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\SharpTS.Gui.Generator\SharpTS.Gui.Generator.csproj"
+                      ReferenceOutputAssembly="false" />
     <Compile Remove="Launcher\Launcher.cs" />
     <None Include="Sdk\**" Pack="true" PackagePath="Sdk\" />
     <None Include="..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll"
@@ -42,6 +44,10 @@
     <None Include="readme.md" Pack="true" PackagePath="\" />
     <None Include="..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <Target Name="VerifyGeneratedGuiControlContract" BeforeTargets="CoreCompile">
+    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)..\SharpTS.Gui.Generator\bin\$(Configuration)\net10.0\SharpTS.Gui.Generator.dll&quot; verify" />
+  </Target>
 
   <Target Name="EnsureGuiSdkPayloadPresent" BeforeTargets="GenerateNuspec">
     <Error Condition="!Exists('..\SharpTS.Sdk.Tasks\bin\Release\net10.0\SharpTS.Sdk.Tasks.dll')"

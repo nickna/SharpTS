@@ -1,5 +1,11 @@
 # SharpTS.Gui.Sdk
 
+`ErrorBoundary` handles synchronous component/effect errors and native create, setter,
+child-collection, event, and ref commit failures when the host successfully restores the
+last committed native tree. Rollback failures, event-handler exceptions, and detached
+asynchronous failures remain fatal host errors. Calling the fallback's `reset` callback
+retries the protected subtree on a later render.
+
 Public-preview MSBuild SDK for building retained, reactive Windows desktop applications from
 SharpTS TSX and Avalonia.
 

@@ -24,6 +24,23 @@ public sealed class GuiJsxDeclarationTests
         Assert.Contains("__buttonHandle", result.Output, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task ClassAlternateChildrenUnionGenericCallableAndOverloadContractsTypeCheck()
+    {
+        ProcessResult result = await CheckAsync("advanced-positive");
+        Assert.True(result.ExitCode == 0, result.Output);
+    }
+
+    [Fact]
+    public async Task InvalidClassChildrenUnionCallableAndAsyncComponentsAreRejected()
+    {
+        ProcessResult result = await CheckAsync("advanced-negative");
+        Assert.Equal(1, result.ExitCode);
+        Assert.Contains("async components are not supported", result.Output, StringComparison.Ordinal);
+        Assert.Contains("union constituent", result.Output, StringComparison.Ordinal);
+        Assert.Contains("No overload matches", result.Output, StringComparison.Ordinal);
+    }
+
     private static async Task<ProcessResult> CheckAsync(string fixture)
     {
         string root = FindRepositoryRoot();

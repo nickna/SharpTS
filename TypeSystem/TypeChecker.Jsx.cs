@@ -69,6 +69,8 @@ public partial class TypeChecker
             CheckExpr(argument);
         }
 
+        propsType = ApplyJsxChildrenContract(jsx, jsxNamespace, propsType);
+
         switch (jsx.Kind)
         {
             case JsxElementKind.Intrinsic:
@@ -159,10 +161,32 @@ public partial class TypeChecker
                 return;
             }
 
-            // Class components (basic scope): constructable, so the tag itself is valid.
-            // ElementClass/ElementAttributesProperty-driven props checking is deferred.
+            case TypeInfo.GenericOverloadedFunction genericOverloaded:
+            {
+                foreach (TypeInfo.Function signature in genericOverloaded.Signatures)
+                {
+                    var generic = new TypeInfo.GenericFunction(
+                        genericOverloaded.TypeParams, signature.ParamTypes, signature.ReturnType,
+                        signature.RequiredParams, signature.HasRestParam, signature.ThisType, signature.ParamNames);
+                    TypeInfo.Function instantiated = (TypeInfo.Function)InstantiateGenericFunction(
+                        generic, InferTypeArguments(generic, [propsType]));
+                    TypeInfo expected = JsxFirstParameter(instantiated.ParamTypes);
+                    if (!AreJsxAttributesCompatible(expected, propsType, jsxNamespace)) continue;
+                    CheckJsxAttributes(expected, propsType, jsx, jsxNamespace);
+                    CheckJsxComponentReturnType(jsx, jsxNamespace, instantiated.ReturnType);
+                    return;
+                }
+                ReportJsx(new TypeCheckException("No overload matches this call.", jsx.Line, tsCode: "TS2769"));
+                return;
+            }
+
+            case TypeInfo.OverloadSet overloadSet:
+                CheckJsxMixedSignatures(jsx, jsxNamespace, overloadSet.Signatures, propsType);
+                return;
+
             case TypeInfo.Class or TypeInfo.MutableClass or TypeInfo.GenericClass
                 or TypeInfo.InstantiatedGeneric:
+                CheckJsxClassComponent(jsx, jsxNamespace, componentType, propsType);
                 return;
 
             // Callable object types ({ (props): Element }) use their call signatures just like
@@ -175,11 +199,8 @@ public partial class TypeChecker
                 return;
 
             case TypeInfo.Union union:
-                // Constituent-by-constituent fidelity is deferred; only flag the clearly
-                // uncallable case where no constituent could ever render.
-                if (union.FlattenedTypes.Any(IsJsxRenderableTagType))
-                    return;
-                break;
+                CheckJsxUnionComponent(jsx, jsxNamespace, union, propsType);
+                return;
         }
 
         ReportJsx(new TypeCheckException(
@@ -202,9 +223,13 @@ public partial class TypeChecker
         TypeInfo elementType = ResolveJsxElementType(jsxNamespace, jsx.Line, reportMissing: false);
         if (elementType is TypeInfo.Any || returnType is TypeInfo.Any)
             return;
-        // Async/lazy component escape hatches: leave promise-shaped returns alone.
         if (returnType is TypeInfo.Promise)
+        {
+            ReportJsx(new TypeCheckException(
+                $"'{jsx.TagName}' cannot be used as a JSX component. Its return type '{returnType}' is not a valid JSX element; async components are not supported.",
+                jsx.Line, tsCode: "TS2786"));
             return;
+        }
         if (!IsJsxComponentResult(elementType, returnType))
         {
             ReportJsx(new TypeCheckException(
@@ -222,17 +247,274 @@ public partial class TypeChecker
     {
         foreach (TypeInfo.CallSignature signature in signatures)
         {
-            TypeInfo expected = signature.ParamTypes.Count > 0
-                ? signature.ParamTypes[0]
-                : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
-            if (!IsCompatible(expected, propsType))
+            TypeInfo expected;
+            TypeInfo returnType;
+            if (signature.IsGeneric)
+            {
+                var generic = new TypeInfo.GenericFunction(
+                    signature.TypeParams!, signature.ParamTypes, signature.ReturnType,
+                    signature.RequiredParams, signature.HasRestParam, ParamNames: signature.ParamNames);
+                var instantiated = (TypeInfo.Function)InstantiateGenericFunction(
+                    generic, InferTypeArguments(generic, [propsType]));
+                expected = JsxFirstParameter(instantiated.ParamTypes);
+                returnType = instantiated.ReturnType;
+            }
+            else
+            {
+                expected = JsxFirstParameter(signature.ParamTypes);
+                returnType = signature.ReturnType;
+            }
+            if (!AreJsxAttributesCompatible(expected, propsType, jsxNamespace))
                 continue;
             CheckJsxAttributes(expected, propsType, jsx, jsxNamespace);
-            CheckJsxComponentReturnType(jsx, jsxNamespace, signature.ReturnType);
+            CheckJsxComponentReturnType(jsx, jsxNamespace, returnType);
             return;
         }
         ReportJsx(new TypeCheckException(
             "No overload matches this call.", jsx.Line, tsCode: "TS2769"));
+    }
+
+    private static TypeInfo JsxFirstParameter(IReadOnlyList<TypeInfo> parameters) =>
+        parameters.Count > 0 ? parameters[0] : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
+
+    private TypeInfo ApplyJsxChildrenContract(
+        JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo propsType)
+    {
+        if (jsx.ChildExprs.Count == 0 || propsType is not TypeInfo.Record record)
+            return propsType;
+
+        string childrenName = "children";
+        if (jsxNamespace?.Types.GetValueOrDefault("ElementChildrenAttribute") is { } marker &&
+            TryGetJsxMemberView(marker, out var members, out _, out _) && members.Count > 0)
+        {
+            childrenName = members.Keys.First();
+        }
+
+        var fields = record.Fields.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        TypeInfo childType;
+        if (jsx.Mode is JsxMode.ReactJsx or JsxMode.ReactJsxDev &&
+            fields.TryGetValue("children", out TypeInfo? loweredChildren))
+        {
+            childType = loweredChildren;
+            if (childrenName != "children") fields.Remove("children");
+        }
+        else
+        {
+            var childTypes = jsx.ChildExprs.Select(child => _typeMap.Get(child) ?? TypeInfo.Any.Shared).ToList();
+            childType = childTypes.Count == 1
+                ? childTypes[0]
+                : new TypeInfo.Array(CollapseOrCreateUnion(childTypes));
+        }
+        fields[childrenName] = childType;
+        return new TypeInfo.Record(
+            fields.ToFrozenDictionary(StringComparer.Ordinal),
+            StringIndexType: record.StringIndexType,
+            NumberIndexType: record.NumberIndexType,
+            SymbolIndexType: record.SymbolIndexType,
+            OptionalFields: record.OptionalFields,
+            IsReadonly: record.IsReadonly,
+            GetterOnlyFields: record.GetterOnlyFields,
+            CallSignatures: record.CallSignatures,
+            ConstructorSignatures: record.ConstructorSignatures,
+            MethodMembers: record.MethodMembers);
+    }
+
+    private void CheckJsxClassComponent(
+        JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo classType, TypeInfo propsType)
+    {
+        TypeInfo instanceType = classType is TypeInfo.MutableClass mutable ? mutable.Freeze() : classType;
+        TypeInfo? elementClass = jsxNamespace?.Types.GetValueOrDefault("ElementClass");
+        if (elementClass is not null && !IsJsxElementClassCompatible(elementClass, instanceType))
+        {
+            ReportJsx(new TypeCheckException(
+                $"'{jsx.TagName}' cannot be used as a JSX component. Its instance type '{instanceType}' is not a valid JSX element class.",
+                jsx.Line, tsCode: "TS2786"));
+            return;
+        }
+
+        string? propertyName = null;
+        if (jsxNamespace?.Types.GetValueOrDefault("ElementAttributesProperty") is { } marker &&
+            TryGetJsxMemberView(marker, out var markerMembers, out _, out _) && markerMembers.Count > 0)
+            propertyName = markerMembers.Keys.First();
+
+        TypeInfo expected = propertyName is null
+            ? new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty)
+            : LookupJsxClassInstanceMember(instanceType, propertyName) ?? TypeInfo.Any.Shared;
+
+        if (classType is TypeInfo.GenericClass genericClass && propertyName is not null)
+        {
+            TypeInfo? genericExpected = LookupJsxClassCoreMember(genericClass.Core, propertyName);
+            if (genericExpected is not null)
+            {
+                var inference = new TypeInfo.GenericFunction(genericClass.TypeParams, [genericExpected], TypeInfo.Any.Shared);
+                expected = Substitute(genericExpected, genericClass.TypeParams
+                    .Select((parameter, index) => (parameter.Name, Type: InferTypeArguments(inference, [propsType])[index]))
+                    .ToDictionary(pair => pair.Name, pair => pair.Type, StringComparer.Ordinal));
+            }
+        }
+        CheckJsxAttributes(expected, propsType, jsx, jsxNamespace);
+    }
+
+    private bool IsJsxElementClassCompatible(TypeInfo contract, TypeInfo instanceType)
+    {
+        if (!TryGetJsxMemberView(contract, out var members, out var optional, out _))
+            return IsCompatible(contract, instanceType);
+        foreach ((string name, TypeInfo expected) in members)
+        {
+            TypeInfo? actual = LookupJsxClassInstanceMember(instanceType, name);
+            if (actual is null)
+            {
+                if (optional.Contains(name)) continue;
+                return false;
+            }
+            if (!IsCompatible(expected, actual)) return false;
+        }
+        return true;
+    }
+
+    private TypeInfo? LookupJsxClassInstanceMember(TypeInfo type, string name) => type switch
+    {
+        TypeInfo.Class cls => LookupJsxClassCoreMember(cls.Core, name),
+        TypeInfo.GenericClass generic => LookupJsxClassCoreMember(generic.Core, name),
+        TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } instantiated =>
+            LookupJsxClassCoreMember(generic.Core, name) is { } member
+                ? Substitute(member, generic.TypeParams.Select((parameter, index) =>
+                    (parameter.Name, Type: instantiated.TypeArguments[index]))
+                    .ToDictionary(pair => pair.Name, pair => pair.Type, StringComparer.Ordinal))
+                : null,
+        _ => null,
+    };
+
+    private static TypeInfo? LookupJsxClassCoreMember(ClassMetadataCore core, string name)
+    {
+        if (core.FieldTypes.TryGetValue(name, out TypeInfo? field)) return field;
+        if (core.Getters.TryGetValue(name, out TypeInfo? getter)) return getter;
+        if (core.Methods.TryGetValue(name, out TypeInfo? method)) return method;
+        return core.Superclass switch
+        {
+            TypeInfo.Class cls => LookupJsxClassCoreMember(cls.Core, name),
+            TypeInfo.GenericClass generic => LookupJsxClassCoreMember(generic.Core, name),
+            _ => null,
+        };
+    }
+
+    private void CheckJsxUnionComponent(
+        JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo.Union union, TypeInfo propsType)
+    {
+        foreach (TypeInfo constituent in union.FlattenedTypes)
+        {
+            if (!IsJsxRenderableTagType(constituent))
+            {
+                ReportJsx(new TypeCheckException(
+                    $"JSX element type '{jsx.TagName}' has a union constituent '{constituent}' with no construct or call signatures.",
+                    jsx.Line, tsCode: "TS2604"));
+                return;
+            }
+        }
+
+        var candidates = new List<(TypeInfo Props, TypeInfo? Return)>();
+        foreach (TypeInfo constituent in union.FlattenedTypes)
+            CollectJsxCandidates(constituent, propsType, candidates);
+        (TypeInfo Props, TypeInfo? Return)? match = candidates.FirstOrDefault(candidate =>
+            AreJsxAttributesCompatible(candidate.Props, propsType, jsxNamespace));
+        if (match is null)
+        {
+            ReportJsx(new TypeCheckException("No union component signature accepts these JSX attributes.", jsx.Line, tsCode: "TS2769"));
+            return;
+        }
+        CheckJsxAttributes(match.Value.Props, propsType, jsx, jsxNamespace);
+        foreach ((_, TypeInfo? returnType) in candidates)
+            if (returnType is not null) CheckJsxComponentReturnType(jsx, jsxNamespace, returnType);
+    }
+
+    private void CollectJsxCandidates(
+        TypeInfo type, TypeInfo propsType, List<(TypeInfo Props, TypeInfo? Return)> candidates)
+    {
+        switch (type)
+        {
+            case TypeInfo.Function function:
+                candidates.Add((JsxFirstParameter(function.ParamTypes), function.ReturnType));
+                break;
+            case TypeInfo.GenericFunction generic:
+                var instantiated = (TypeInfo.Function)InstantiateGenericFunction(generic, InferTypeArguments(generic, [propsType]));
+                candidates.Add((JsxFirstParameter(instantiated.ParamTypes), instantiated.ReturnType));
+                break;
+            case TypeInfo.OverloadedFunction overloaded:
+                candidates.AddRange(overloaded.Signatures.Select(signature =>
+                    (JsxFirstParameter(signature.ParamTypes), (TypeInfo?)signature.ReturnType)));
+                break;
+            case TypeInfo.Record { CallSignatures: { } signatures }:
+                CollectCallSignatureCandidates(signatures, propsType, candidates);
+                break;
+            case TypeInfo.Interface { CallSignatures: { } signatures }:
+                CollectCallSignatureCandidates(signatures, propsType, candidates);
+                break;
+            case TypeInfo.Any or TypeInfo.Unknown:
+                candidates.Add((TypeInfo.Any.Shared, null));
+                break;
+            default:
+                candidates.Add((TypeInfo.Any.Shared, null));
+                break;
+        }
+    }
+
+    private void CollectCallSignatureCandidates(
+        IEnumerable<TypeInfo.CallSignature> signatures, TypeInfo propsType,
+        List<(TypeInfo Props, TypeInfo? Return)> candidates)
+    {
+        foreach (TypeInfo.CallSignature signature in signatures)
+        {
+            if (!signature.IsGeneric)
+            {
+                candidates.Add((JsxFirstParameter(signature.ParamTypes), signature.ReturnType));
+                continue;
+            }
+            var generic = new TypeInfo.GenericFunction(signature.TypeParams!, signature.ParamTypes, signature.ReturnType,
+                signature.RequiredParams, signature.HasRestParam, ParamNames: signature.ParamNames);
+            var instantiated = (TypeInfo.Function)InstantiateGenericFunction(generic, InferTypeArguments(generic, [propsType]));
+            candidates.Add((JsxFirstParameter(instantiated.ParamTypes), instantiated.ReturnType));
+        }
+    }
+
+    private void CheckJsxMixedSignatures(
+        JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, IEnumerable<TypeInfo> signatures, TypeInfo propsType)
+    {
+        var candidates = new List<(TypeInfo Props, TypeInfo? Return)>();
+        foreach (TypeInfo signature in signatures) CollectJsxCandidates(signature, propsType, candidates);
+        var match = candidates.FirstOrDefault(candidate => AreJsxAttributesCompatible(candidate.Props, propsType, jsxNamespace));
+        if (match == default)
+        {
+            ReportJsx(new TypeCheckException("No overload matches this call.", jsx.Line, tsCode: "TS2769"));
+            return;
+        }
+        CheckJsxAttributes(match.Props, propsType, jsx, jsxNamespace);
+        if (match.Return is not null) CheckJsxComponentReturnType(jsx, jsxNamespace, match.Return);
+    }
+
+    private bool AreJsxAttributesCompatible(
+        TypeInfo expected, TypeInfo actual, TypeInfo.Namespace? jsxNamespace)
+    {
+        if (expected is TypeInfo.Any or TypeInfo.Unknown || actual is not TypeInfo.Record actualRecord)
+            return true;
+        if (!TryGetJsxMemberView(expected, out var members, out _, out TypeInfo? stringIndex))
+            return false;
+        TypeInfo? intrinsic = jsxNamespace?.Types.GetValueOrDefault("IntrinsicAttributes");
+        foreach (string required in RequiredMemberNames(expected))
+            if (required != "key" && !actualRecord.Fields.ContainsKey(required)) return false;
+        foreach ((string name, TypeInfo value) in actualRecord.Fields)
+        {
+            if (name == "key")
+            {
+                TypeInfo? key = intrinsic is null ? null : LookupJsxObjectMember(intrinsic, "key");
+                if (key is null || !IsCompatible(key, value)) return false;
+                continue;
+            }
+            if (!IsCheckedJsxAttribute(name)) continue;
+            TypeInfo? member = members.GetValueOrDefault(name) ?? stringIndex ??
+                (intrinsic is null ? null : LookupJsxObjectMember(intrinsic, name));
+            if (member is null || !IsCompatible(member, value)) return false;
+        }
+        return true;
     }
 
     private bool IsJsxComponentResult(TypeInfo elementType, TypeInfo returnType)

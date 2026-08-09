@@ -96,4 +96,7 @@ public sealed record GuiVNode(
     object? RefIdentity = null,
     string? SourceFile = null,
     int SourceLine = 0,
-    int SourceColumn = 0);
+    int SourceColumn = 0)
+{
+    internal string? BoundaryPath { get; init; }
+}

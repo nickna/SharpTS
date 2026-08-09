@@ -184,6 +184,10 @@
     <None Remove="Examples/**" />
     <Compile Remove="SharpTS.Gui/**" />
     <None Remove="SharpTS.Gui/**" />
+    <Compile Remove="SharpTS.Gui.Generator/**" />
+    <None Remove="SharpTS.Gui.Generator/**" />
+    <Compile Remove="SharpTS.Gui.Benchmarks/**" />
+    <None Remove="SharpTS.Gui.Benchmarks/**" />
     <Compile Remove="SharpTS.Gui.Host/**" />
     <None Remove="SharpTS.Gui.Host/**" />
     <Compile Remove="SharpTS.Gui.Conformance.Tests/**" />

@@ -54,6 +54,10 @@ export function getActiveSubscriptionCount(): number {
     return DesktopConformanceBridge.GetActiveSubscriptionCount();
 }
 
+export function failNextNativeSetter(key: string): void {
+    DesktopConformanceBridge.FailNextNativeSetter(key);
+}
+
 export function isRefAttached(reference: unknown): boolean {
     return DesktopConformanceBridge.IsRefAttached(reference as any);
 }

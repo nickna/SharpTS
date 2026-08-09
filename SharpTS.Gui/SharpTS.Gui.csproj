@@ -9,5 +9,11 @@
 
   <ItemGroup>
     <PackageReference Include="Avalonia" />
+    <ProjectReference Include="..\SharpTS.Gui.Generator\SharpTS.Gui.Generator.csproj"
+                      ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="VerifyGeneratedGuiControlContract" BeforeTargets="CoreCompile">
+    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)..\SharpTS.Gui.Generator\bin\$(Configuration)\net10.0\SharpTS.Gui.Generator.dll&quot; verify" />
+  </Target>
 </Project>

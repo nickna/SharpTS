@@ -25,6 +25,7 @@ import {
     beginOffThreadTask,
     cancelNextWindowClose,
     closeWindow,
+    failNextNativeSetter,
     isRefAttached,
     queueMicrotask as queueHostedMicrotask,
     setCheckBoxValue,
@@ -48,8 +49,10 @@ const [phase, setPhase] = createSignal<number>(0);
 const [useAlternate, setUseAlternate] = createSignal<boolean>(false);
 const [primary, setPrimary] = createSignal<number>(0);
 const [alternate, setAlternate] = createSignal<number>(0);
+const [nativeValue, setNativeValue] = createSignal<number>(0);
 let viewCount = 0;
 let desktopRoot: any = null;
+let resetNativeBoundary: (() => void) | null = null;
 
 function EffectProbe(): JSX.Element {
     const [ready, setReady] = useState<boolean>(false);
@@ -148,6 +151,13 @@ function ConformanceApp(): JSX.Element {
                         }}>
                             <EffectFailure />
                         </ErrorBoundary>
+                        <ErrorBoundary key="native-boundary" fallback={(_error, reset) => {
+                            resetNativeBoundary = reset;
+                            trace("native-commit-boundary-fallback");
+                            return <TextBlock key="native-fallback">native commit recovered</TextBlock>;
+                        }}>
+                            <TextBlock key="native-probe">{"native " + nativeValue()}</TextBlock>
+                        </ErrorBoundary>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
@@ -156,6 +166,8 @@ function ConformanceApp(): JSX.Element {
 }
 
 desktopRoot = renderDesktop(<ConformanceApp />);
+failNextNativeSetter("native-probe");
+setNativeValue(1);
 
 const lifecycleScenario = process.env.SHARPTS_GUI_LIFECYCLE_SCENARIO;
 if (lifecycleScenario === "initialization") {
@@ -171,6 +183,19 @@ function afterCoalescedUpdate(): void {
     if (!isRefAttached(transientRef)) {
         trace("transient-ref-cleaned");
     }
+    failNextNativeSetter("native-probe");
+    resetNativeBoundary!();
+    queueHostedMicrotask(afterRepeatedNativeFailure);
+}
+
+function afterRepeatedNativeFailure(): void {
+    trace("native-commit-repeated-failure-complete");
+    resetNativeBoundary!();
+    queueHostedMicrotask(afterNativeResetSuccess);
+}
+
+function afterNativeResetSuccess(): void {
+    trace("native-commit-reset-success");
     setUseAlternate(true);
     queueHostedMicrotask(afterDependencySwitch);
 }

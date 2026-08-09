@@ -6,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using SharpTS.Gui;
 using Xunit;
 
@@ -547,6 +548,80 @@ public sealed class DesktopRendererTests : IDisposable
         Assert.Same(probe, root.FindControl("probe"));
         Assert.Equal(100, probe.Width);
         Assert.Equal("stable", probe.Text);
+    }
+
+    [Fact]
+    public void SuccessfullyRolledBackNativeFailureCarriesOwningBoundaryAndSource()
+    {
+        using IDisposable registration = DescriptorRegistry.RegisterForTesting(new RollbackProbeDescriptor());
+        DesktopRoot root = CreateRoot();
+        GuiVNode stable = DesktopBridge.WithBoundary(
+            new GuiVNode("$RollbackProbe", Key: "probe", Text: "stable", Width: 100,
+                SourceFile: "view.tsx", SourceLine: 12, SourceColumn: 7),
+            "root/0:boundary");
+        root.Render(Window(stable));
+
+        GuiVNode failing = DesktopBridge.WithBoundary(
+            stable with { Text = "throw", Width = 200 },
+            "root/0:boundary");
+        RecoverableNativeCommitException error = Assert.Throws<RecoverableNativeCommitException>(
+            () => root.Render(Window(failing)));
+
+        Assert.Equal("root/0:boundary", error.BoundaryPath);
+        Assert.Equal("view.tsx", error.SourceFile);
+        Assert.Equal(12, error.SourceLine);
+        Assert.Equal("setter", error.Operation);
+        Assert.False(root.IsDisposed);
+        Assert.Equal("stable", Assert.IsType<TextBlock>(root.FindControl("probe")).Text);
+    }
+
+    [Fact]
+    public void ScalarUpdateTouchesOnlyItsAffectedNativePath()
+    {
+        DesktopRoot root = CreateRoot();
+        root.Render(Window(Panel(0, Text("before", "affected"), Text("stable", "unrelated"))));
+        Control unrelated = root.FindControl("unrelated")!;
+        root.ResetOperationCounts();
+
+        root.Render(Window(Panel(0, Text("after", "affected"), Text("stable", "unrelated"))));
+
+        Assert.Same(unrelated, root.FindControl("unrelated"));
+        Assert.Equal(new RendererOperationCounts(0, 1, 0, 0), root.OperationCounts);
+    }
+
+    [Fact]
+    public void ThousandMountUpdateUnmountCyclesReleaseRootsControlsCallbacksRefsAndSubscriptions()
+    {
+        var retained = new List<WeakReference>();
+        for (int index = 0; index < 1_000; index++)
+            AddDisposedCycle(retained, index);
+
+        Dispatcher.UIThread.RunJobs();
+        GC.Collect();
+        GC.WaitForPendingFinalizers();
+        GC.Collect();
+
+        Assert.All(retained, reference => Assert.False(reference.IsAlive));
+        Assert.Equal(0, _runtimeRegistration.Context.CurrentRoot?.ActiveSubscriptions ?? 0);
+    }
+
+    private static void AddDisposedCycle(List<WeakReference> retained, int value)
+    {
+        object callbackTarget = new();
+        var reference = DesktopBridge.CreateRef();
+        DesktopRoot root = CreateRoot();
+        var controlNode = new GuiVNode(
+            "Button", Key: "cycle", Text: value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Click: () => GC.KeepAlive(callbackTarget), AttachRef: reference.Attach, RefIdentity: reference);
+        root.Render(Window(controlNode));
+        Control control = root.FindControl("cycle")!;
+        root.Render(Window(controlNode with { Text = "updated" }));
+        root.Dispose();
+        Assert.Equal(0, root.ActiveSubscriptions);
+        retained.Add(new WeakReference(root));
+        retained.Add(new WeakReference(control));
+        retained.Add(new WeakReference(callbackTarget));
+        retained.Add(new WeakReference(reference));
     }
 
     [Fact]

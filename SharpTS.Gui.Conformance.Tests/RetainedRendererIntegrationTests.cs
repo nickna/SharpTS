@@ -43,7 +43,11 @@ public sealed class RetainedRendererIntegrationTests
         Assert.NotEqual(owner, events.Single(item => item.Stage == "task-complete-off-thread").Thread);
 
         Assert.Equal(
-            new[] { "view-render-1", "view-render-2", "view-render-3", "view-render-4" },
+            new[]
+            {
+                "view-render-1", "view-render-2", "view-render-3", "view-render-4",
+                "view-render-5", "view-render-6", "view-render-7", "view-render-8"
+            },
             events.Where(item => item.Stage.StartsWith("view-render-", StringComparison.Ordinal))
                 .Select(item => item.Stage));
         AssertStageOrder(events, "view-render-2", "coalesced-update-complete");
@@ -72,6 +76,9 @@ public sealed class RetainedRendererIntegrationTests
         Assert.Contains(events, item => item.Stage == "render-boundary-fallback");
         Assert.Single(events, item => item.Stage == "effect-failure-setup");
         Assert.Contains(events, item => item.Stage == "effect-boundary-fallback");
+        Assert.Equal(2, events.Count(item => item.Stage == "native-commit-boundary-fallback"));
+        Assert.Contains(events, item => item.Stage == "native-commit-repeated-failure-complete");
+        Assert.Contains(events, item => item.Stage == "native-commit-reset-success");
         Assert.True(
             events.Single(item => item.Stage == "effect-failure-setup").Sequence <
             events.First(item => item.Stage == "effect-boundary-fallback").Sequence);

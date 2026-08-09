@@ -50,6 +50,7 @@ public static class SharpTSLanguageServer
                     .AddSingleton<DiagnosticsCoordinator>()
                     .AddSingleton(new DecoratorService(resolve, typeNames))
                     .AddSingleton(new MemberHoverService(resolve))
+                    .AddSingleton<GuiContractService>()
                     .AddSingleton<InteropCodeActionService>()
                     .AddSingleton<DocumentSymbolService>()
                     .AddSingleton<DefinitionService>()

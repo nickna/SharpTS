@@ -78,6 +78,8 @@ public sealed class GuiSdkTaskTests : IDisposable
             CompiledAssembly = "SharpTS.Gui.Guest.dll",
             HostedAbiVersion = "1",
             GuiApiVersion = "2",
+            DescriptorSchemaVersion = "1",
+            DescriptorSchemaHash = new string('a', 64),
         };
 
         Assert.True(task.Execute());
@@ -85,6 +87,8 @@ public sealed class GuiSdkTaskTests : IDisposable
         Assert.Equal("Guest/src/main.tsx", document.RootElement.GetProperty("entryPath").GetString());
         Assert.Equal(1, document.RootElement.GetProperty("hostedAbiVersion").GetInt32());
         Assert.Equal(2, document.RootElement.GetProperty("guiApiVersion").GetInt32());
+        Assert.Equal(1, document.RootElement.GetProperty("descriptorSchemaVersion").GetInt32());
+        Assert.Equal(new string('a', 64), document.RootElement.GetProperty("descriptorSchemaHash").GetString());
     }
 
     [Fact]

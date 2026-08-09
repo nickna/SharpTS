@@ -32,6 +32,8 @@
     <DebugSymbols Condition="'$(PublishSingleFile)' == 'true'">false</DebugSymbols>
   </PropertyGroup>
 
+  <Import Project="$(MSBuildThisFileDirectory)DescriptorContract.Generated.props" />
+
   <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\Assets')">
     <SharpTSGuiAsset Include="$(MSBuildProjectDirectory)\Assets\**\*" />
   </ItemGroup>

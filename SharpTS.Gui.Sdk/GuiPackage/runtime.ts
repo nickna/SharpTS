@@ -1,4 +1,5 @@
 import { DesktopBridge, GuiVNode } from "dotnet:SharpTS.Gui";
+export * from "./control-surface.generated";
 
 export type Thickness = number | readonly [number, number] | readonly [number, number, number, number];
 export type HorizontalAlignment = "left" | "center" | "right" | "stretch";
@@ -11,38 +12,19 @@ export type SelectionMode = "single" | "multiple";
 export type Dock = "left" | "top" | "right" | "bottom";
 export type FontWeight = "normal" | "medium" | "semibold" | "bold";
 export type TextAlignment = "left" | "center" | "right" | "justify";
-
-export interface GuiElement {
-    readonly __guiElement: true;
-    readonly type: any;
-    readonly props: any;
-    readonly key: string | null;
-    readonly source: SourceInfo | null;
-}
-
-interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
+export interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
+export interface GuiElement { readonly __guiElement: true; readonly type: any; readonly props: any; readonly key: string | null; readonly source: SourceInfo | null; }
 export type GuiChild = GuiElement | string | number | boolean | null | undefined | readonly GuiChild[];
-export interface TextualChildArray {
-    readonly length: number;
-    readonly [index: number]: TextualChild;
-}
+export interface TextualChildArray { readonly length: number; readonly [index: number]: TextualChild; }
 export type TextualChild = string | number | boolean | null | undefined | TextualChildArray;
 export type Component<P = {}> = (props: Readonly<P & { children?: GuiChild }>) => GuiChild;
 export type SignalSetter<T> = (value: T | ((previous: T) => T)) => void;
 export type StateSetter<T> = SignalSetter<T>;
 export type Dispatch<A> = (action: A) => void;
-export interface ErrorBoundaryProps {
-    readonly children?: GuiChild;
-    readonly fallback: (error: unknown, reset: () => void) => GuiChild;
-}
-
+/** Catches render/effect failures and native commit failures only after the previous native tree is restored. */
+export interface ErrorBoundaryProps { readonly children?: GuiChild; readonly fallback: (error: unknown, reset: () => void) => GuiChild; }
 export interface MutableRef<T> { current: T; }
-export interface ControlRef<THandle> {
-    readonly __controlHandle: THandle;
-    readonly isAttached: boolean;
-    focus(): boolean;
-}
-
+export interface ControlRef<THandle> { readonly __controlHandle: THandle; readonly isAttached: boolean; focus(): boolean; }
 export type WindowHandle = { readonly __windowHandle: never };
 export type StackPanelHandle = { readonly __stackPanelHandle: never };
 export type GridHandle = { readonly __gridHandle: never };
@@ -50,118 +32,18 @@ export type BorderHandle = { readonly __borderHandle: never };
 export type TextBlockHandle = { readonly __textBlockHandle: never };
 export type ButtonHandle = { readonly __buttonHandle: never };
 export type TextBoxHandle = { readonly __textBoxHandle: never };
-
-export interface KeyEvent {
-    readonly key: string;
-    readonly ctrl: boolean;
-    readonly alt: boolean;
-    readonly shift: boolean;
-    readonly meta: boolean;
-    readonly repeat: boolean;
-}
-
+export interface KeyEvent { readonly key: string; readonly ctrl: boolean; readonly alt: boolean; readonly shift: boolean; readonly meta: boolean; readonly repeat: boolean; }
 export interface CommonProps<THandle = unknown> {
     ref?: ControlRef<THandle>;
-    width?: number; height?: number;
-    minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number;
-    margin?: Thickness;
-    horizontalAlignment?: HorizontalAlignment;
-    verticalAlignment?: VerticalAlignment;
-    isVisible?: boolean; isEnabled?: boolean; opacity?: number;
-    toolTip?: string; automationName?: string;
-    gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number;
-    dock?: Dock;
-    onKeyDown?: (event: KeyEvent) => boolean;
-    onKeyUp?: (event: KeyEvent) => boolean;
+    width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number;
+    margin?: Thickness; horizontalAlignment?: HorizontalAlignment; verticalAlignment?: VerticalAlignment;
+    isVisible?: boolean; isEnabled?: boolean; opacity?: number; toolTip?: string; automationName?: string;
+    gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number; dock?: Dock;
+    onKeyDown?: (event: KeyEvent) => boolean; onKeyUp?: (event: KeyEvent) => boolean;
 }
+export interface TextStyleProps { foreground?: string; fontFamily?: string; fontSize?: number; fontWeight?: FontWeight; fontStyle?: "normal" | "italic"; textAlignment?: TextAlignment; }
+export interface ContentStyleProps extends TextStyleProps { background?: string; padding?: Thickness; cornerRadius?: number; horizontalContentAlignment?: HorizontalAlignment; verticalContentAlignment?: VerticalAlignment; }
 
-export interface ChildrenProps { children?: GuiChild; }
-export interface TextualChildrenProps { children?: TextualChild; }
-export interface SingleElementChildProps { children?: GuiElement | null | undefined; }
-export interface TextStyleProps {
-    foreground?: string; fontFamily?: string; fontSize?: number;
-    fontWeight?: FontWeight; fontStyle?: "normal" | "italic";
-    textAlignment?: TextAlignment;
-}
-export interface ContentStyleProps extends TextStyleProps {
-    background?: string; padding?: Thickness;
-    cornerRadius?: number;
-    horizontalContentAlignment?: HorizontalAlignment;
-    verticalContentAlignment?: VerticalAlignment;
-}
-
-export interface WindowProps extends CommonProps<WindowHandle>, SingleElementChildProps {
-    title?: string; canResize?: boolean; theme?: Theme;
-}
-export interface StackPanelProps extends CommonProps<StackPanelHandle>, ChildrenProps { spacing?: number; orientation?: Orientation; }
-export interface WrapPanelProps extends CommonProps<unknown>, ChildrenProps { spacing?: number; orientation?: Orientation; }
-export interface DockPanelProps extends CommonProps<unknown>, ChildrenProps { lastChildFill?: boolean; }
-export interface GridProps extends CommonProps<GridHandle>, ChildrenProps { rows?: string; columns?: string; }
-export interface BorderProps extends CommonProps<BorderHandle>, SingleElementChildProps {
-    padding?: Thickness; background?: string; borderBrush?: string;
-    borderThickness?: Thickness; cornerRadius?: number;
-}
-export interface ScrollViewerProps extends CommonProps<unknown>, SingleElementChildProps {
-    horizontalScrollBarVisibility?: ScrollBarVisibility;
-    verticalScrollBarVisibility?: ScrollBarVisibility;
-}
-export interface TextBlockProps extends CommonProps<TextBlockHandle>, TextualChildrenProps, TextStyleProps { textWrapping?: "noWrap" | "wrap"; }
-export interface ButtonProps extends CommonProps<ButtonHandle>, TextualChildrenProps, ContentStyleProps { onClick?: () => void; }
-export interface TextBoxProps extends CommonProps<TextBoxHandle>, ContentStyleProps {
-    text?: string; placeholder?: string; isReadOnly?: boolean; acceptsReturn?: boolean; maxLength?: number;
-    onTextChanged?: (value: string) => void;
-}
-export interface PasswordBoxProps extends CommonProps<TextBoxHandle>, ContentStyleProps {
-    value?: string; placeholder?: string; revealPassword?: boolean; maxLength?: number;
-    onValueChanged?: (value: string) => void;
-}
-export interface CheckBoxProps extends CommonProps<unknown>, TextualChildrenProps, ContentStyleProps { isChecked?: boolean; onCheckedChanged?: (value: boolean) => void; }
-export interface RadioButtonProps extends CheckBoxProps { groupName: string; }
-export interface ToggleSwitchProps extends CheckBoxProps {}
-export interface ComboBoxProps extends CommonProps<unknown>, ContentStyleProps { items: readonly string[]; selectedIndex?: number; onSelectionChanged?: (index: number) => void; }
-export interface ListBoxProps extends CommonProps<unknown>, ContentStyleProps { items: readonly string[]; selectedIndices?: readonly number[]; selectionMode?: SelectionMode; onSelectionChanged?: (indices: number[]) => void; }
-export interface NumericUpDownProps extends CommonProps<unknown>, ContentStyleProps { minimum?: number; maximum?: number; increment?: number; value?: number | null; onValueChanged?: (value: number | null) => void; }
-export interface DatePickerProps extends CommonProps<unknown> { value?: string | null; onValueChanged?: (value: string | null) => void; }
-export interface TimePickerProps extends CommonProps<unknown> { value?: string | null; onValueChanged?: (value: string | null) => void; }
-export interface SliderProps extends CommonProps<unknown> { minimum?: number; maximum?: number; value?: number; onValueChanged?: (value: number) => void; }
-export interface ProgressBarProps extends CommonProps<unknown> { minimum?: number; maximum?: number; value?: number; }
-export interface ImageProps extends CommonProps<unknown> { source: string; stretch?: Stretch; onLoad?: () => void; onError?: (message: string) => void; }
-export interface TabControlProps extends CommonProps<unknown>, ChildrenProps { selectedIndex?: number; onSelectionChanged?: (index: number) => void; }
-export interface TabItemProps extends CommonProps<unknown>, SingleElementChildProps { header: string; }
-export interface MenuProps extends CommonProps<unknown>, ChildrenProps {}
-export interface MenuItemProps extends CommonProps<unknown>, ChildrenProps { header: string; onClick?: () => void; isChecked?: boolean; }
-
-type DesktopTag<TProps> = (props: TProps) => GuiElement;
-function tag<TProps>(name: string): DesktopTag<TProps> { return name as any; }
-export const Window = tag<WindowProps>("Window");
-export const StackPanel = tag<StackPanelProps>("StackPanel");
-export const WrapPanel = tag<WrapPanelProps>("WrapPanel");
-export const DockPanel = tag<DockPanelProps>("DockPanel");
-export const Grid = tag<GridProps>("Grid");
-export const Border = tag<BorderProps>("Border");
-export const ScrollViewer = tag<ScrollViewerProps>("ScrollViewer");
-export const ToolBar = tag<StackPanelProps>("ToolBar");
-export const StatusBar = tag<BorderProps>("StatusBar");
-export const Separator = tag<CommonProps>("Separator");
-export const TextBlock = tag<TextBlockProps>("TextBlock");
-export const Image = tag<ImageProps>("Image");
-export const Button = tag<ButtonProps>("Button");
-export const TextBox = tag<TextBoxProps>("TextBox");
-export const PasswordBox = tag<PasswordBoxProps>("PasswordBox");
-export const CheckBox = tag<CheckBoxProps>("CheckBox");
-export const RadioButton = tag<RadioButtonProps>("RadioButton");
-export const ToggleSwitch = tag<ToggleSwitchProps>("ToggleSwitch");
-export const ComboBox = tag<ComboBoxProps>("ComboBox");
-export const ListBox = tag<ListBoxProps>("ListBox");
-export const NumericUpDown = tag<NumericUpDownProps>("NumericUpDown");
-export const DatePicker = tag<DatePickerProps>("DatePicker");
-export const TimePicker = tag<TimePickerProps>("TimePicker");
-export const Slider = tag<SliderProps>("Slider");
-export const ProgressBar = tag<ProgressBarProps>("ProgressBar");
-export const TabControl = tag<TabControlProps>("TabControl");
-export const TabItem = tag<TabItemProps>("TabItem");
-export const Menu = tag<MenuProps>("Menu");
-export const MenuItem = tag<MenuItemProps>("MenuItem");
 export const Fragment: any = "Fragment";
 export function ErrorBoundary(props: ErrorBoundaryProps): GuiElement { return props.children as any; }
 
@@ -568,7 +450,9 @@ class ReactiveRoot {
             case "Menu": node = DesktopBridge.CreateMenu(children.nodes, key, ref); break;
             default: throw new Error("Unknown @sharpts/gui TSX tag: " + element.type);
         }
-        return { node: source(withCommon(withStyle(node, safe), safe), element.source), fibers: children.fibers };
+        node = source(withCommon(withStyle(node, safe), safe), element.source);
+        if (nearestBoundary !== null) node = DesktopBridge.WithBoundary(node, nearestBoundary.path) as any;
+        return { node, fibers: children.fibers };
     }
     public renderNow(): void {
         if (this.disposed) return;
@@ -577,12 +461,39 @@ class ReactiveRoot {
         for (const boundary of this.boundaries) boundary.seen = false;
         const nextDependencies: SignalState[] = [];
         const previousCollector = activeSignalCollector; activeSignalCollector = nextDependencies;
+        let recoveredCommitError: any = null;
         try {
             const materialized = this.materialize(this.element, "root");
             if (materialized.nodes.length !== 1) throw new Error("renderDesktop requires exactly one Window root.");
             this.managed.Render(materialized.nodes[0]);
             this.fibers = materialized.fibers;
+        } catch (error) {
+            const value: any = error as any;
+            let boundaryPath = value === null || value === undefined
+                ? null
+                : (value.BoundaryPath === undefined ? value.boundaryPath : value.BoundaryPath);
+            if (typeof boundaryPath !== "string") {
+                const message = value === null || value === undefined
+                    ? ""
+                    : String(value.message === undefined ? (value.Message === undefined ? value : value.Message) : value.message);
+                const prefix = "[SharpTSRecoverableCommit:";
+                const start = message.indexOf(prefix);
+                const end = start < 0 ? -1 : message.indexOf("]", start + prefix.length);
+                if (start >= 0 && end > start) boundaryPath = message.substring(start + prefix.length, end);
+            }
+            if (typeof boundaryPath !== "string") throw error;
+            let target: ErrorBoundaryState | null = null;
+            for (const boundary of this.boundaries) if (boundary.path === boundaryPath) { target = boundary; break; }
+            if (target === null) throw error;
+            target.error = error;
+            target.seen = true;
+            for (const component of this.components) {
+                component.nextHooks = [];
+                if (component.path.indexOf(target.path + "/") === 0) component.seen = false;
+            }
+            recoveredCommitError = error;
         } finally { activeSignalCollector = previousCollector; this.rendering = false; }
+        if (recoveredCommitError !== null) { this.renderNow(); return; }
         this.commitComponents();
         this.boundaries = this.boundaries.filter(boundary => boundary.seen);
         for (const dependency of this.dependencies) if (!contains(nextDependencies, dependency)) remove(dependency.subscribers, this);

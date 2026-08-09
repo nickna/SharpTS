@@ -22,6 +22,8 @@ public sealed class DesktopRef
 public static class DesktopBridge
 {
     public const int GuiApiVersion = 2;
+    public const int DescriptorSchemaVersion = GeneratedControlContract.SchemaVersion;
+    public const string DescriptorSchemaHash = GeneratedControlContract.SchemaHash;
     private static DesktopRuntimeContext? _context;
 
     internal static DesktopRuntimeRegistration Configure(
@@ -435,6 +437,16 @@ public static class DesktopBridge
 
     public static GuiVNode WithSource(GuiVNode node, string file, double line, double column) =>
         node with { SourceFile = file, SourceLine = (int)line, SourceColumn = (int)column };
+
+    public static GuiVNode WithBoundary(GuiVNode node, string boundaryPath)
+    {
+        ArgumentNullException.ThrowIfNull(node);
+        ArgumentException.ThrowIfNullOrWhiteSpace(boundaryPath);
+        return node with { BoundaryPath = boundaryPath };
+    }
+
+    internal static string? GetBoundaryPath(GuiVNode node) =>
+        node.BoundaryPath;
 
     internal static DesktopRoot? CurrentRoot => RequireContext().CurrentRoot;
 

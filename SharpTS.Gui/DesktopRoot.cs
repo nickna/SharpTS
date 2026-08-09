@@ -26,6 +26,11 @@ public sealed class DesktopRoot : IDisposable
     private readonly HashSet<Key> _heldKeys = [];
     private KeyEventArgs? _lastKeyDownArgs;
     private bool _lastKeyDownRepeat;
+    private int _createOperations;
+    private int _descriptorUpdateCalls;
+    private int _removeOperations;
+    private int _moveOperations;
+    private string? _failNextSetterKey;
 
     internal DesktopRoot(
         TraceRecorder recorder,
@@ -46,6 +51,11 @@ public sealed class DesktopRoot : IDisposable
     public Window? Window => _mounted?.Control as Window;
     public int ActiveSubscriptions => _activeSubscriptions;
     public bool IsDisposed => _disposed;
+    internal RendererOperationCounts OperationCounts =>
+        new(_createOperations, _descriptorUpdateCalls, _removeOperations, _moveOperations);
+    internal void ResetOperationCounts() =>
+        (_createOperations, _descriptorUpdateCalls, _removeOperations, _moveOperations) = (0, 0, 0, 0);
+    internal void FailNextSetter(string key) => _failNextSetterKey = key;
 
     public void Render(GuiVNode root)
     {
@@ -56,7 +66,15 @@ public sealed class DesktopRoot : IDisposable
         PreparedNode prepared = VNodeValidator.Prepare(root, requireWindowRoot: true);
         if (_mounted is null)
         {
-            MountedNode mounted = BuildDetached(prepared);
+            MountedNode mounted;
+            try
+            {
+                mounted = BuildDetached(prepared);
+            }
+            catch (NativeCommitException failure) when (failure.BoundaryPath is not null)
+            {
+                throw new RecoverableNativeCommitException(failure);
+            }
             _mounted = mounted;
             try
             {
@@ -65,12 +83,27 @@ public sealed class DesktopRoot : IDisposable
                 _recorder.Record("mount", detail: root.SourceFile);
                 _recorder.Record(_headless ? "headless-window-shown" : "real-window-shown");
             }
-            catch
+            catch (Exception commitError)
             {
-                ReleaseSubtree(mounted);
-                ((Window)mounted.Control).Content = null;
-                ((Window)mounted.Control).Close();
-                _mounted = null;
+                try
+                {
+                    ReleaseSubtree(mounted);
+                    DetachNativeTree(mounted);
+                    ((Window)mounted.Control).Content = null;
+                    ((Window)mounted.Control).Close();
+                    _mounted = null;
+                }
+                catch (Exception releaseError)
+                {
+                    _mounted = null;
+                    _disposed = true;
+                    _releaseRoot(this);
+                    throw new AggregateException(
+                        "SharpTS GUI initial mount failed and its detached native tree could not be released; the root was disposed.",
+                        commitError, releaseError);
+                }
+                if (commitError is NativeCommitException failure && failure.BoundaryPath is not null)
+                    throw new RecoverableNativeCommitException(failure);
                 throw;
             }
             return;
@@ -85,6 +118,14 @@ public sealed class DesktopRoot : IDisposable
             }
             catch (Exception commitError)
             {
+                if (commitError is NativeSetterRecoveryException setterRecovery)
+                {
+                    DisposeDamagedRoot();
+                    throw new AggregateException(
+                        "SharpTS GUI native commit and rollback both failed; the window root was disposed.",
+                        setterRecovery.CommitError,
+                        setterRecovery.RecoveryError);
+                }
                 try
                 {
                     ReconcileNode(_mounted, VNodeValidator.Prepare(previousTree, requireWindowRoot: true));
@@ -97,7 +138,9 @@ public sealed class DesktopRoot : IDisposable
                         commitError,
                         rollbackError);
                 }
-                throw;
+                if (commitError is NativeCommitException failure && failure.BoundaryPath is not null)
+                    throw new RecoverableNativeCommitException(failure);
+                throw commitError is NativeCommitException native ? native.InnerException! : commitError;
             }
             _recorder.Record("render-commit");
             return;
@@ -106,6 +149,7 @@ public sealed class DesktopRoot : IDisposable
         MountedNode replacement = BuildDetached(prepared);
         MountedNode previous = _mounted;
         ReleaseSubtree(previous);
+        DetachNativeTree(previous);
         var previousWindow = (Window)previous.Control;
         previousWindow.Content = null;
         previousWindow.Close();
@@ -145,6 +189,7 @@ public sealed class DesktopRoot : IDisposable
             {
                 MountedNode mounted = _mounted;
                 ReleaseSubtree(mounted);
+                DetachNativeTree(mounted);
                 var window = (Window)mounted.Control;
                 window.Content = null;
                 window.Close();
@@ -175,7 +220,17 @@ public sealed class DesktopRoot : IDisposable
 
     private MountedNode BuildDetached(PreparedNode prepared)
     {
-        Control control = prepared.Descriptor.Create(prepared.VNode);
+        Control control;
+        try
+        {
+            if (ConsumeInjectedFailure(prepared.VNode.Key))
+                throw new InvalidOperationException("Injected native create failure for GUI conformance.");
+            control = prepared.Descriptor.Create(prepared.VNode);
+        }
+        catch (Exception error)
+        {
+            throw NativeCommitException.Wrap(error, prepared.VNode, "create");
+        }
         var mounted = new MountedNode(prepared.VNode, prepared.Descriptor, control)
         {
             RefCallback = prepared.VNode.AttachRef,
@@ -183,10 +238,27 @@ public sealed class DesktopRoot : IDisposable
         };
         UpdateCallbacks(mounted, prepared.VNode);
 
-        foreach (PreparedNode child in prepared.Children)
-            mounted.Children.Add(BuildDetached(child));
-        InstallDetachedChildren(mounted);
+        try
+        {
+            foreach (PreparedNode child in prepared.Children)
+                mounted.Children.Add(BuildDetached(child));
+            InstallDetachedChildren(mounted);
+        }
+        catch (Exception error)
+        {
+            try { ReleaseSubtree(mounted); }
+            catch (Exception releaseError)
+            {
+                throw new AggregateException(
+                    "Native GUI create failed and its detached partial tree could not be released.",
+                    error, releaseError);
+            }
+            throw error is NativeCommitException
+                ? error
+                : NativeCommitException.Wrap(error, prepared.VNode, "child collection");
+        }
         _recorder.Record("reconcile-create", detail: Describe(mounted));
+        _createOperations++;
         return mounted;
     }
 
@@ -195,23 +267,38 @@ public sealed class DesktopRoot : IDisposable
         if (!CanReuse(mounted, prepared))
             throw new InvalidOperationException("The reconciler attempted to update an incompatible node.");
 
-        bool changed;
-        mounted.SuppressEvents = true;
         GuiVNode previousNode = mounted.VNode;
-        try
+        bool changed = false;
+        if (!SameNativeProperties(previousNode, prepared.VNode))
         {
-            changed = mounted.Descriptor.Update(mounted.Control, previousNode, prepared.VNode);
+            mounted.SuppressEvents = true;
+            try
+            {
+                _descriptorUpdateCalls++;
+                if (ConsumeInjectedFailure(prepared.VNode.Key))
+                {
+                    throw new InvalidOperationException("Injected native setter failure for GUI conformance.");
+                }
+                changed = mounted.Descriptor.Update(mounted.Control, previousNode, prepared.VNode);
+            }
+            catch (Exception error)
+            {
+                try
+                {
+                    mounted.Descriptor.Update(mounted.Control, prepared.VNode, previousNode);
+                }
+                catch (Exception recoveryError)
+                {
+                    throw new NativeSetterRecoveryException(error, recoveryError);
+                }
+                throw NativeCommitException.Wrap(error, prepared.VNode, "setter");
+            }
+            finally
+            {
+                mounted.SuppressEvents = false;
+            }
+            SynchronizeEventValue(mounted);
         }
-        catch
-        {
-            mounted.Descriptor.Update(mounted.Control, prepared.VNode, previousNode);
-            throw;
-        }
-        finally
-        {
-            mounted.SuppressEvents = false;
-        }
-        SynchronizeEventValue(mounted);
         if (changed)
             _recorder.Record("reconcile-update", detail: Describe(mounted));
 
@@ -308,6 +395,7 @@ public sealed class DesktopRoot : IDisposable
             {
                 ReleaseSubtree(oldChild);
                 RemoveChildControl(parent, oldChild.Control);
+                _removeOperations++;
             }
 
             for (int index = 0; index < desired.Count; index++)
@@ -320,6 +408,7 @@ public sealed class DesktopRoot : IDisposable
                 if (currentIndex >= 0)
                 {
                     MoveChildControl(parent, currentIndex, index);
+                    _moveOperations++;
                     _recorder.Record("reconcile-move", detail: $"{Describe(child)}:{currentIndex}->{index}");
                 }
                 else
@@ -330,28 +419,39 @@ public sealed class DesktopRoot : IDisposable
                 }
             }
         }
-        catch
+        catch (Exception commitError)
         {
-            foreach (MountedNode child in created)
+            try
             {
-                RemoveChildControl(parent, child.Control);
-                ReleaseSubtree(child);
+                foreach (MountedNode child in created)
+                {
+                    RemoveChildControl(parent, child.Control);
+                    ReleaseSubtree(child);
+                }
+                for (int index = 0; index < oldChildren.Count; index++)
+                {
+                    MountedNode child = oldChildren[index];
+                    int currentIndex = IndexOfChildControl(parent, child.Control);
+                    if (currentIndex < 0)
+                        InsertChildControl(parent, index, child.Control);
+                    else if (currentIndex != index)
+                        MoveChildControl(parent, currentIndex, index);
+                }
+                foreach (MountedNode child in removed)
+                {
+                    MarkSubtreeAlive(child);
+                    ActivateSubtree(child);
+                }
             }
-            for (int index = 0; index < oldChildren.Count; index++)
+            catch (Exception recoveryError)
             {
-                MountedNode child = oldChildren[index];
-                int currentIndex = IndexOfChildControl(parent, child.Control);
-                if (currentIndex < 0)
-                    InsertChildControl(parent, index, child.Control);
-                else if (currentIndex != index)
-                    MoveChildControl(parent, currentIndex, index);
+                throw new AggregateException(
+                    "Native GUI child mutation and its local recovery both failed.",
+                    commitError, recoveryError);
             }
-            foreach (MountedNode child in removed)
-            {
-                MarkSubtreeAlive(child);
-                ActivateSubtree(child);
-            }
-            throw;
+            throw commitError is NativeCommitException
+                ? commitError
+                : NativeCommitException.Wrap(commitError, parent.VNode, "child collection");
         }
 
         parent.Children.Clear();
@@ -380,6 +480,7 @@ public sealed class DesktopRoot : IDisposable
             try { ReleaseSubtree(mounted); }
             finally
             {
+                DetachNativeTree(mounted);
                 var window = (Window)mounted.Control;
                 window.Content = null;
                 window.Close();
@@ -398,10 +499,17 @@ public sealed class DesktopRoot : IDisposable
             return;
         }
 
-        DetachRef(mounted);
-        mounted.RefIdentity = next.RefIdentity;
-        mounted.RefCallback = next.AttachRef;
-        AttachRef(mounted);
+        try
+        {
+            DetachRef(mounted);
+            mounted.RefIdentity = next.RefIdentity;
+            mounted.RefCallback = next.AttachRef;
+            AttachRef(mounted);
+        }
+        catch (Exception error)
+        {
+            throw NativeCommitException.Wrap(error, next, "ref attach/detach");
+        }
     }
 
     private void ActivateSubtree(MountedNode mounted)
@@ -802,7 +910,8 @@ public sealed class DesktopRoot : IDisposable
         if (mounted.RefAttached || mounted.RefCallback is null)
             return;
         EnsureAccess();
-        mounted.RefCallback(mounted.Handle);
+        try { mounted.RefCallback(mounted.Handle); }
+        catch (Exception error) { throw NativeCommitException.Wrap(error, mounted.VNode, "ref attach"); }
         mounted.RefAttached = true;
         _recorder.Record("ref-attach", detail: Describe(mounted));
     }
@@ -812,7 +921,8 @@ public sealed class DesktopRoot : IDisposable
         if (!mounted.RefAttached || mounted.RefCallback is null)
             return;
         EnsureAccess();
-        mounted.RefCallback(null);
+        try { mounted.RefCallback(null); }
+        catch (Exception error) { throw NativeCommitException.Wrap(error, mounted.VNode, "ref detach"); }
         mounted.RefAttached = false;
         _recorder.Record("ref-detach", detail: Describe(mounted));
     }
@@ -820,6 +930,48 @@ public sealed class DesktopRoot : IDisposable
     private static bool CanReuse(MountedNode mounted, PreparedNode prepared) =>
         mounted.Descriptor.Kind == prepared.Descriptor.Kind &&
         string.Equals(mounted.VNode.Key, prepared.VNode.Key, StringComparison.Ordinal);
+
+    private bool ConsumeInjectedFailure(string? nativeKey)
+    {
+        if (_failNextSetterKey is not { } failureKey ||
+            !(string.Equals(failureKey, nativeKey, StringComparison.Ordinal) ||
+              string.Equals("$" + failureKey, nativeKey, StringComparison.Ordinal) ||
+              nativeKey?.EndsWith("/$" + failureKey, StringComparison.Ordinal) == true))
+            return false;
+        _failNextSetterKey = null;
+        return true;
+    }
+
+    private static bool SameNativeProperties(GuiVNode left, GuiVNode right)
+    {
+        GuiVNode Normalize(GuiVNode node) => node with
+        {
+            Children = null,
+            Items = null,
+            SelectedIndices = null,
+            Click = null,
+            TextChanged = null,
+            CheckedChanged = null,
+            SelectionChanged = null,
+            ValueChanged = null,
+            IndicesChanged = null,
+            NullableValueChanged = null,
+            NullableStringChanged = null,
+            KeyDown = null,
+            KeyUp = null,
+            Loaded = null,
+            LoadError = null,
+            AttachRef = null,
+            RefIdentity = null,
+            SourceFile = null,
+            SourceLine = 0,
+            SourceColumn = 0,
+            BoundaryPath = null,
+        };
+        return Normalize(left) == Normalize(right) &&
+            (left.Items ?? []).SequenceEqual(right.Items ?? [], StringComparer.Ordinal) &&
+            (left.SelectedIndices ?? []).SequenceEqual(right.SelectedIndices ?? []);
+    }
 
     private static void InstallDetachedChildren(MountedNode parent)
     {
@@ -927,6 +1079,25 @@ public sealed class DesktopRoot : IDisposable
                     throw new InvalidOperationException($"{control.GetType().Name} does not accept child controls.");
                 break;
         }
+    }
+
+    private static void DetachNativeTree(MountedNode mounted)
+    {
+        foreach (MountedNode child in mounted.Children)
+            DetachNativeTree(child);
+        switch (mounted.Control)
+        {
+            case Panel panel:
+                panel.Children.Clear();
+                break;
+            case ItemsControl items when items.ItemsSource is null:
+                items.Items.Clear();
+                break;
+            default:
+                SetSingleChild(mounted.Control, null);
+                break;
+        }
+        mounted.Children.Clear();
     }
 
     private void EnsureAccess()

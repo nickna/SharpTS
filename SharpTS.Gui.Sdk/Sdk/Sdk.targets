@@ -72,7 +72,9 @@
                           EntryPath="Guest\$(_SharpTSGuiEntryRelative)"
                           CompiledAssembly="SharpTS.Gui.Guest.dll"
                           HostedAbiVersion="$(SharpTSGuiHostedAbiVersion)"
-                          GuiApiVersion="$(SharpTSGuiApiVersion)" />
+                          GuiApiVersion="$(SharpTSGuiApiVersion)"
+                          DescriptorSchemaVersion="$(SharpTSGuiDescriptorSchemaVersion)"
+                          DescriptorSchemaHash="$(SharpTSGuiDescriptorSchemaHash)" />
     <ItemGroup>
       <EmbeddedResource Include="$(SharpTSGuiGuestAssembly)" LogicalName="SharpTS.Gui.Guest.dll" />
       <EmbeddedResource Include="$(SharpTSGuiManifest)" LogicalName="SharpTS.Gui.App.json" />
