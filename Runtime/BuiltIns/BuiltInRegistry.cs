@@ -611,14 +611,14 @@ public sealed class BuiltInRegistry
                     {
                         proxy.Revoke();
                         return RuntimeValue.Undefined;
-                    });
+                    }).AsNonConstructor();
                     var result = new SharpTSObject(new Dictionary<string, object?>
                     {
                         ["proxy"] = proxy,
                         ["revoke"] = revoke
                     });
                     return RuntimeValue.FromObject(result);
-                }),
+                }).AsNonConstructor(),
                 _ => null
             }
         ));
