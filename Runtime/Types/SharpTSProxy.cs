@@ -932,6 +932,9 @@ public class SharpTSProxy : ISharpTSCallable
         var trap = GetTrapCallable("construct", interp);
         if (trap == null)
         {
+            if (_target is SharpTSProxy targetProxy)
+                return targetProxy.TrapConstruct(
+                    args, interp, newTarget ?? this);
             if (_target is SharpTSClass klass)
                 return klass.Call(interp!, args);
             if (_target is ISharpTSCallable callable)
