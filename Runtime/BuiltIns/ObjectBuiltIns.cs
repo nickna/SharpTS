@@ -1227,29 +1227,35 @@ public static partial class ObjectBuiltIns
             throw new ThrowException(new SharpTSTypeError(
                 "Object.getOwnPropertyDescriptors called on null or undefined"));
 
-        // Get all own property names (including non-enumerable ones from defineProperty)
-        List<string> names = target switch
+        // [[OwnPropertyKeys]] order: strings (including non-enumerable ones)
+        // followed by symbols, each in the order supplied by the target.
+        List<object?> keys = target switch
         {
-            SharpTSObject obj => GetAllOwnPropertyNames(obj),
-            SharpTSInstance inst => inst.GetFieldNames().ToList(),
-            SharpTSArray arr => GetOwnPropertyNamesFromArray(arr).Select(n => n!.ToString()!).ToList(),
-            SharpTSProxy proxy => proxy.TrapOwnKeys(interpreter),
-            Dictionary<string, object?> dict => dict.Keys.ToList(),
+            SharpTSObject obj => GetAllOwnPropertyNames(obj).Cast<object?>()
+                .Concat(obj.GetSymbolPropertyNames().Cast<object?>()).ToList(),
+            SharpTSInstance inst => inst.GetFieldNames().Cast<object?>().ToList(),
+            SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
+            SharpTSRegExp regex => regex.OwnStringKeys().Cast<object?>().ToList(),
+            SharpTSProxy proxy => proxy.TrapOwnKeys(interpreter).Cast<object?>().ToList(),
+            Dictionary<string, object?> dict => dict.Keys.Cast<object?>().ToList(),
             _ => []
         };
 
-        var result = new Dictionary<string, object?>();
+        var result = new SharpTSObject([]);
 
-        foreach (var name in names)
+        foreach (var key in keys)
         {
-            var descriptor = GetOwnPropertyDescriptor(interpreter, [target, name]);
+            var descriptor = GetOwnPropertyDescriptor(interpreter, [target, key]);
             if (descriptor is not (null or SharpTSUndefined))
             {
-                result[name] = descriptor;
+                if (key is SharpTSSymbol symbol)
+                    result.SetBySymbol(symbol, descriptor);
+                else
+                    result.SetProperty((string)key!, descriptor);
             }
         }
 
-        return new SharpTSObject(result);
+        return result;
     }
 
     /// <summary>

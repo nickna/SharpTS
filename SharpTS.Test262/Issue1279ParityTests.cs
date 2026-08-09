@@ -1491,6 +1491,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Object_getOwnPropertyDescriptors_preserves_source_key_order()
+        => AssertPass(
+            "built-ins/Object/getOwnPropertyDescriptors/order-after-define-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
 

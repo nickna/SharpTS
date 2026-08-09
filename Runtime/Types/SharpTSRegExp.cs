@@ -151,6 +151,7 @@ public class SharpTSRegExp : ITypeCategorized
     internal bool DeleteProperty(string name) => _properties.DeleteProperty(name);
 
     internal IEnumerable<string> OwnEnumerableKeys() => _properties.OwnEnumerableKeys();
+    internal IEnumerable<string> OwnStringKeys() => _properties.OwnStringKeys();
     internal void FreezeOwnProperties() => _properties.Freeze();
     internal void SealOwnProperties() => _properties.Seal();
 
