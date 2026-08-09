@@ -486,21 +486,9 @@ public static partial class ObjectBuiltIns
                     $"Property description must be an object (got {descriptorArg?.GetType().Name ?? "null"})"));
         }
 
-        // Parse descriptor from object - use FromAnyObject to handle any object type
-        SharpTSPropertyDescriptor descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorArg);
-        // ECMA-262 §6.2.5.5 ToPropertyDescriptor: the boolean attributes are read
-        // via Get (walking the prototype chain and invoking getters) and
-        // ToBoolean-coerced. FromAnyObject only handles own `is bool` values, so
-        // re-derive them with interpreter access — covers truthy non-booleans
-        // (e.g. the string "false"), inherited attributes, and accessor-sourced
-        // attributes. Correct flags are required for the delete configurability
-        // check in SharpTSObject.
-        ApplyBooleanAttributes(descriptor, descriptorArg, interpreter);
-        // §6.2.5.5 also reads value/get/set through the prototype chain (honoring
-        // accessors); FromAnyObject only saw own fields. Re-derive them prototype-aware
-        // and record presence so omitted-vs-undefined is preserved downstream (#801).
-        ApplyValueAndAccessors(descriptor, descriptorArg, interpreter);
-        ValidatePropertyDescriptor(descriptor);
+        // Parse through ordinary property access so inherited fields and accessor
+        // side effects participate in ToPropertyDescriptor.
+        SharpTSPropertyDescriptor descriptor = ToPropertyDescriptor(interpreter, descriptorArg);
 
         // Handle Symbol-keyed property definition — route through Symbol storage.
         // Per ECMA-262 §10.1.6 / §6.2.5.6, a descriptor that omits `value` (only
@@ -714,6 +702,20 @@ public static partial class ObjectBuiltIns
         }
 
         return target;
+    }
+
+    /// <summary>
+    /// Converts a guest object to a property descriptor using ordinary [[HasProperty]]
+    /// and [[Get]] semantics, including inherited fields and accessor side effects.
+    /// </summary>
+    internal static SharpTSPropertyDescriptor ToPropertyDescriptor(
+        Interpreter interpreter, object descriptorObject)
+    {
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorObject);
+        ApplyBooleanAttributes(descriptor, descriptorObject, interpreter);
+        ApplyValueAndAccessors(descriptor, descriptorObject, interpreter);
+        ValidatePropertyDescriptor(descriptor);
+        return descriptor;
     }
 
     internal static bool DefinePropertyOnProxyTarget(
