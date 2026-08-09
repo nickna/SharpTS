@@ -2202,6 +2202,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/has/null-handler.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_has_rejects_hidden_properties_on_fixed_targets()
+        => AssertPass(
+            "built-ins/Proxy/has/return-false-target-not-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
