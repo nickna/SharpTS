@@ -1290,6 +1290,10 @@ public static partial class ObjectBuiltIns
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSError error => error.OwnPropertyNames.Select(k => (object?)k).ToList(),
+            IBuiltInFunctionMetadata metadata => new[] { "length", "name" }
+                .Where(metadata.HasMetadataProperty)
+                .Select(k => (object?)k)
+                .ToList(),
             Dictionary<string, object?> dict => dict.Keys.Select(k => (object?)k).ToList(),
             _ => []
         };
