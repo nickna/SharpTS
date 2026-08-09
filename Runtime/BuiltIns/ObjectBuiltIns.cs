@@ -1792,12 +1792,14 @@ public static partial class ObjectBuiltIns
             case SharpTSArray array:
                 if (ReferenceEquals(PrototypeOf(interpreter, array), proto)) return true;
                 if (!array.IsExtensible) return false;
+                if (WouldCreatePrototypeCycle(interpreter, array, proto)) return false;
                 array.SetExplicitPrototype(proto);
                 return true;
 
             case SharpTSObject obj:
                 if (ReferenceEquals(PrototypeOf(interpreter, obj), proto)) return true;
                 if (!obj.IsExtensible) return false;
+                if (WouldCreatePrototypeCycle(interpreter, obj, proto)) return false;
                 obj.Prototype = proto;
                 // An explicit null prototype is distinct from "never linked": the latter
                 // still inherits Object.prototype. Record which one this is so
@@ -1811,12 +1813,39 @@ public static partial class ObjectBuiltIns
             case Dictionary<string, object?> dict:
                 if (ReferenceEquals(PropertyDescriptorStore.GetPrototype(dict), proto)) return true;
                 if (!PropertyDescriptorStore.IsExtensible(dict)) return false;
+                if (WouldCreatePrototypeCycle(interpreter, dict, proto)) return false;
                 PropertyDescriptorStore.SetPrototype(dict, proto);
                 return true;
 
             default:
                 return false;
         }
+    }
+
+    private static bool WouldCreatePrototypeCycle(
+        Interpreter interpreter,
+        object target,
+        object? prototype)
+    {
+        var visited = new HashSet<object>(
+            System.Collections.Generic.ReferenceEqualityComparer.Instance);
+        object? candidate = prototype;
+        while (candidate != null)
+        {
+            if (ReferenceEquals(candidate, target)) return true;
+            if (!visited.Add(candidate)) return true;
+
+            // OrdinarySetPrototypeOf only continues through ordinary
+            // [[GetPrototypeOf]] methods. Proxies and other exotic objects stop
+            // this preflight rather than having their traps invoked here.
+            candidate = candidate switch
+            {
+                SharpTSObject or SharpTSArray or Dictionary<string, object?>
+                    => PrototypeOf(interpreter, candidate),
+                _ => null
+            };
+        }
+        return false;
     }
 
     private static bool IsPrototypeValue(object? value)
