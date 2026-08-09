@@ -253,9 +253,9 @@ if (lifecycleScenario === "normal") {
         closeWindow();
     }) as any, 100);
 } else if (lifecycleScenario === "queued") {
-    setTimeout((() => trace("late-window-timer")) as any, 200);
     setTimeout((() => {
         trace("window-close-request");
         closeWindow();
     }) as any, 1);
+    setTimeout((() => trace("late-window-timer")) as any, 200);
 }

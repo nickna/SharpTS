@@ -10,6 +10,17 @@ internal static class Launcher
     public static int Main(string[] args)
     {
         string developmentManifest = Path.Combine(AppContext.BaseDirectory, ".sharpts", "app.json");
+#if SHARPTS_GUI_COMPILED_ONLY
+        if (File.Exists(developmentManifest) &&
+            Array.IndexOf(args, "--mode") < 0)
+        {
+            var compiledArgs = new string[args.Length + 2];
+            compiledArgs[0] = "--mode";
+            compiledArgs[1] = "compiled";
+            Array.Copy(args, 0, compiledArgs, 2, args.Length);
+            args = compiledArgs;
+        }
+#endif
         return File.Exists(developmentManifest)
             ? global::SharpTS.Gui.Host.Program.Main(args)
             : global::SharpTS.Gui.Host.Program.MainEmbedded(args, Assembly.GetExecutingAssembly());

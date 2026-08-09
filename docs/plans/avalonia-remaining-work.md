@@ -41,7 +41,7 @@ tooling, release closure, and ecosystem depth.
 | Phase 1B | **Complete in the Phase 1B implementation commit.** Compiled module jobs, dynamic imports, shutdown, traces, and terminology match the Hosted ABI 1 contract | Regression coverage and release evidence only |
 | Phase 2A | Complete | No additional phase work; regression coverage only |
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
-| Phase 3A | SDK build/run/publish works | Add templates, documentation, install-location robustness, and complete SDK ergonomics |
+| Phase 3A | **Complete in the Phase 3A implementation commit.** Template, ordinary-command workflow, incremental inputs, compiled-only output, docs, and packaged lifecycle gate landed | Regression coverage and release evidence only |
 | Phase 3B | Windows SDK publishing works; TypeScript-only CLI and release publication do not | Deliver the CLI front door and close Windows preview publication gates |
 | Phase 4 | Selected services landed early; most ecosystem/AOT work remains | Stabilize and expand the platform after the public preview |
 
@@ -283,6 +283,17 @@ do not reconcile unrelated subtrees; and soak tests show no unbounded retained r
 guest callbacks.
 
 ## Phase 3A residual: dedicated SDK development workflow
+
+**Resolution (2026-08-09): complete.** `SharpTS.Gui.Sdk` now contains the installable
+`sharpts-gui` template with a TSX application, config, asset example, and both-mode Headless test.
+The packaged-consumer gate installs and creates it through an isolated template hive under a path
+containing spaces, then restores, builds, runs both modes, cleans, and RID-publishes it. Incremental
+compilation fingerprints imported project sources, inherited config, generated package inputs, the
+project, compiler/bridge binaries, descriptor metadata, and relevant SDK properties. Directory
+publishes can set `SharpTSGuiIncludeSourcePayload=false`; validation then enforces the compiled
+closure while the launcher defaults to compiled mode. Root and SDK documentation record the
+Windows RIDs, modes, footprint, preview limits, raw-Avalonia threading rules, and custom-control
+extension boundary.
 
 ### Work
 

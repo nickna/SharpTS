@@ -25,6 +25,11 @@ public sealed class HostInfrastructureTests
         Assert.True(options.AutoClose);
         Assert.Equal("trace.json", options.TracePath);
         Assert.False(options.IsTracePathHostManaged);
+        Assert.False(options.ValidateCompiledOnly);
+        HostOptions compiledOnlyValidation = HostOptionsParser.Parse(
+            ["--validate-deps-compiled-only", "publish"], GuestMode.Interpreted);
+        Assert.Equal("publish", compiledOnlyValidation.ValidateDepsDirectory);
+        Assert.True(compiledOnlyValidation.ValidateCompiledOnly);
         Assert.Throws<ArgumentException>(() =>
             HostOptionsParser.Parse(["--mode"], GuestMode.Interpreted));
         Assert.Throws<ArgumentException>(() =>

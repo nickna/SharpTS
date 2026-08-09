@@ -1,0 +1,14 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "SharpTS contributors",
+  "classifications": ["Desktop", "TypeScript", "Avalonia"],
+  "identity": "SharpTS.Gui.Templates.Application",
+  "name": "SharpTS GUI Application",
+  "shortName": "sharpts-gui",
+  "sourceName": "SharpTSGuiApp",
+  "preferNameDirectory": true,
+  "tags": {
+    "language": "TypeScript",
+    "type": "project"
+  }
+}

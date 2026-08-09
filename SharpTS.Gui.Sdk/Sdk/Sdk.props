@@ -11,6 +11,7 @@
     <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''">main.tsx</SharpTSEntryPoint>
     <SharpTSTsConfigPath Condition="'$(SharpTSTsConfigPath)' == '' and Exists('$(MSBuildProjectDirectory)\tsconfig.json')">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
     <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
+    <SharpTSGuiIncludeSourcePayload Condition="'$(SharpTSGuiIncludeSourcePayload)' == ''">true</SharpTSGuiIncludeSourcePayload>
 
     <SharpTSGuiSdkRoot>$(MSBuildThisFileDirectory)..\</SharpTSGuiSdkRoot>
     <SharpTSGuiHostRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiHostRoot>
@@ -30,6 +31,7 @@
     <PublishTrimmed Condition="'$(PublishSingleFile)' == 'true'">false</PublishTrimmed>
     <DebugType Condition="'$(PublishSingleFile)' == 'true'">None</DebugType>
     <DebugSymbols Condition="'$(PublishSingleFile)' == 'true'">false</DebugSymbols>
+    <DefineConstants Condition="'$(SharpTSGuiIncludeSourcePayload)' != 'true'">$(DefineConstants);SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
   </PropertyGroup>
 
   <Import Project="$(MSBuildThisFileDirectory)DescriptorContract.Generated.props" />

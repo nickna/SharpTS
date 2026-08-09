@@ -23,6 +23,13 @@ $packageCache = Join-Path $artifactRoot "packages"
 $consumerRoot = Join-Path $artifactRoot "consumer with spaces"
 $directoryPublishRoot = Join-Path $artifactRoot "published directory"
 $singleFilePublishRoot = Join-Path $artifactRoot "published single file"
+$templateHive = Join-Path $artifactRoot "template hive"
+$templateRoot = Join-Path $artifactRoot "template app with spaces"
+$templatePublishRoot = Join-Path $artifactRoot "template compiled-only publish"
+$osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+$canExecute = -not $PublishOnly -and (
+    ($RuntimeIdentifier -eq "win-x64" -and $osArchitecture -eq "X64") -or
+    ($RuntimeIdentifier -eq "win-arm64" -and $osArchitecture -eq "Arm64"))
 
 function Invoke-DotNet([string[]]$Arguments, [string]$WorkingDirectory = $repositoryRoot) {
     Push-Location $WorkingDirectory
@@ -88,6 +95,9 @@ try {
         "gui/jsx-runtime.ts",
         "gui/internal-testing.ts",
         "launcher/Launcher.cs",
+        "content/Templates/sharpts-gui/.template.config/template.json",
+        "content/Templates/sharpts-gui/SharpTSGuiApp.csproj",
+        "content/Templates/sharpts-gui/headless.tests.tsx",
         "tools/net10.0/any/host/SharpTS.Gui.Host.dll",
         "tools/net10.0/any/host/SharpTS.dll",
         "tools/net10.0/any/host/SharpTS.Gui.dll"
@@ -144,6 +154,48 @@ $nugetConfig = @"
 "@
 [IO.File]::WriteAllText((Join-Path $consumerRoot "NuGet.config"), $nugetConfig)
 
+Invoke-DotNet @("new", "--debug:custom-hive", $templateHive, "install", $packagePath)
+Invoke-DotNet @(
+    "new", "--debug:custom-hive", $templateHive, "sharpts-gui",
+    "-n", "PackagedTemplateApp", "-o", $templateRoot)
+[IO.File]::WriteAllText((Join-Path $templateRoot "Directory.Build.props"), "<Project />")
+[IO.File]::WriteAllText((Join-Path $templateRoot "NuGet.config"), $nugetConfig)
+$templateProject = Join-Path $templateRoot "PackagedTemplateApp.csproj"
+Invoke-DotNet @("restore", $templateProject, "--configfile", (Join-Path $templateRoot "NuGet.config")) $templateRoot
+Invoke-DotNet @("build", $templateProject, "-c", $Configuration, "--no-restore") $templateRoot
+foreach ($mode in @("interpreted", "compiled")) {
+    Invoke-DotNet @(
+        "run", "--project", $templateProject, "-c", $Configuration, "--no-restore",
+        "-p:SharpTSEntryPoint=headless.tests.tsx", "--", "--mode", $mode, "--headless") $templateRoot
+}
+Invoke-DotNet @("clean", $templateProject, "-c", $Configuration) $templateRoot
+Invoke-DotNet @(
+    "restore", $templateProject, "-r", $RuntimeIdentifier,
+    "--configfile", (Join-Path $templateRoot "NuGet.config")) $templateRoot
+Invoke-DotNet @(
+    "publish", $templateProject, "-c", $Configuration, "-r", $RuntimeIdentifier,
+    "--self-contained", "false", "--no-restore", "-p:SharpTSGuiPublishMode=Directory",
+    "-p:SharpTSGuiIncludeSourcePayload=false", "-p:SharpTSEntryPoint=headless.tests.tsx",
+    "-o", $templatePublishRoot) $templateRoot
+$templateSourcePayload = @(Get-ChildItem -LiteralPath $templatePublishRoot -Recurse -File | Where-Object {
+    $_.Extension -in @(".ts", ".tsx") -or $_.FullName -match "node_modules"
+})
+if ($templateSourcePayload.Count -ne 0) {
+    throw "Compiled-only template publish retained source payload: $($templateSourcePayload.FullName -join ', ')"
+}
+if ($canExecute) {
+    $templateInstallSnapshot = @(Get-ChildItem -LiteralPath $templatePublishRoot -Recurse -File | ForEach-Object {
+        "$($_.FullName.Substring($templatePublishRoot.Length))|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)"
+    })
+    Invoke-DotNet @((Join-Path $templatePublishRoot "PackagedTemplateApp.dll"), "--headless") $templatePublishRoot
+    $templateInstallAfter = @(Get-ChildItem -LiteralPath $templatePublishRoot -Recurse -File | ForEach-Object {
+        "$($_.FullName.Substring($templatePublishRoot.Length))|$($_.Length)|$($_.LastWriteTimeUtc.Ticks)"
+    })
+    if (Compare-Object $templateInstallSnapshot $templateInstallAfter -SyncWindow 0) {
+        throw "Published template application wrote into its installation directory at runtime."
+    }
+}
+
 $consumerProject = Join-Path $consumerRoot "SharpTS.Gui.Sdk.Consumer.csproj"
 Invoke-DotNet @("restore", $consumerProject, "--configfile", (Join-Path $consumerRoot "NuGet.config")) $consumerRoot
 Invoke-DotNet @("build", $consumerProject, "-c", $Configuration, "--no-restore") $consumerRoot
@@ -152,6 +204,19 @@ $firstGuestWrite = (Get-Item -LiteralPath $guestAssembly).LastWriteTimeUtc
 Invoke-DotNet @("build", $consumerProject, "-c", $Configuration, "--no-restore") $consumerRoot
 if ((Get-Item -LiteralPath $guestAssembly).LastWriteTimeUtc -ne $firstGuestWrite) {
     throw "Incremental GUI build recreated an unchanged guest assembly."
+}
+$consumerSource = Join-Path $consumerRoot "main.tsx"
+[IO.File]::AppendAllText($consumerSource, [Environment]::NewLine)
+Invoke-DotNet @("build", $consumerProject, "-c", $Configuration, "--no-restore") $consumerRoot
+$sourceGuestWrite = (Get-Item -LiteralPath $guestAssembly).LastWriteTimeUtc
+if ($sourceGuestWrite -le $firstGuestWrite) {
+    throw "Incremental GUI build ignored a changed TypeScript source."
+}
+Invoke-DotNet @(
+    "build", $consumerProject, "-c", $Configuration, "--no-restore",
+    "-p:SharpTSVerifyIL=false") $consumerRoot
+if ((Get-Item -LiteralPath $guestAssembly).LastWriteTimeUtc -le $sourceGuestWrite) {
+    throw "Incremental GUI build ignored a changed SDK compilation property."
 }
 Invoke-DotNet @("clean", $consumerProject, "-c", $Configuration) $consumerRoot
 if (Test-Path (Join-Path $consumerRoot "bin\$Configuration\net10.0\SharpTS.Gui.Host.dll")) {
@@ -178,10 +243,6 @@ Invoke-DotNet @(
     "publish", $consumerProject, "-c", $Configuration, "-r", $RuntimeIdentifier,
     "--self-contained", "false", "--no-restore", "-p:SharpTSGuiPublishMode=Directory", "-o", $directoryPublishRoot) $consumerRoot
 
-$osArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
-$canExecute = -not $PublishOnly -and (
-    ($RuntimeIdentifier -eq "win-x64" -and $osArchitecture -eq "X64") -or
-    ($RuntimeIdentifier -eq "win-arm64" -and $osArchitecture -eq "Arm64"))
 $directoryLauncher = Join-Path $directoryPublishRoot "SharpTS.Gui.Sdk.Consumer.dll"
 if ($canExecute) {
     foreach ($mode in @("interpreted", "compiled")) {

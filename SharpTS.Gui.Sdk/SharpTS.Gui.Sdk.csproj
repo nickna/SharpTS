@@ -33,6 +33,7 @@
           Pack="true"
           PackagePath="gui" />
     <None Include="Launcher\Launcher.cs" Pack="true" PackagePath="launcher" />
+    <None Include="Templates\**\*" Pack="true" PackagePath="content\Templates\" />
     <None Include="$(GuiHostPublishRoot)**"
           Exclude="$(GuiHostPublishRoot)runtimes\**;$(GuiHostPublishRoot)**\*.pdb"
           Pack="true"

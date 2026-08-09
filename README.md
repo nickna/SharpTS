@@ -60,6 +60,25 @@ SharpTS supports two execution modes:
 - Full standalone navigation: document symbols, definition, references, and completeness-gated rename
 - Neovim, Helix, and generic stdio-LSP setup documented in the [language server guide](docs/language-server.md)
 
+### Windows desktop GUI preview
+
+SharpTS can build retained, reactive Avalonia desktop applications entirely in TypeScript/TSX.
+The public preview supports `win-x64` and `win-arm64`, interpreted and compiled development runs,
+framework-dependent directory publishing, and compiled self-contained single-file publishing.
+
+```powershell
+dotnet new install SharpTS.Gui.Sdk::0.2.0-preview.1
+dotnet new sharpts-gui -n CounterApp
+cd CounterApp
+dotnet run -- --mode interpreted
+```
+
+The compressed SDK package is approximately 26 MB and a minimal framework-dependent Windows x64
+directory is approximately 47 MB before application assets. Current limits are one `Window` root,
+built-in controls only, Windows only, no public custom-control registration, and no Native AOT
+certification. See the [GUI SDK workflow](docs/gui/sdk-development.md) and
+[TSX API reference](docs/gui/tsx-api.md).
+
 ### .NET Interop
 
 - **Use .NET types from TypeScript** via `dotnet:` imports (or the `@DotNetType` decorator)

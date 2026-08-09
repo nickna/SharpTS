@@ -7,7 +7,9 @@ namespace SharpTS.Gui.Host;
 
 internal static class DepsAssetValidator
 {
-    public static IReadOnlyList<string> Validate(string publishDirectory)
+    public static IReadOnlyList<string> Validate(
+        string publishDirectory,
+        bool requireSourcePayload = true)
     {
         // MSBuild's Windows Exec quoting preserves a literal trailing quote when
         // PublishDir itself ends in a backslash. Normalize that harmless shell
@@ -51,12 +53,7 @@ internal static class DepsAssetValidator
         [
             "SharpTS.Gui.Guest.dll",
             "SharpTS.Hosting.Abstractions.dll",
-            Path.Combine(".sharpts", "app.json"),
-            Path.Combine(".sharpts", "tsconfig.json"),
-            Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "index.ts"),
-            Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "jsx-runtime.ts"),
-            Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "jsx-dev-runtime.ts"),
-            Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "internal-testing.ts")
+            Path.Combine(".sharpts", "app.json")
         ];
         foreach (string relativePath in requiredContent)
             if (!File.Exists(Path.Combine(fullDirectory, relativePath)))
@@ -76,10 +73,28 @@ internal static class DepsAssetValidator
             {
                 if (manifest.HostedAbiVersion != SharpTS.Hosting.SharpTSHostedAbi.CurrentVersion)
                     failures.Add($"unsupported hosted ABI {manifest.HostedAbiVersion}");
-                foreach (string relativePath in new[] { manifest.EntryPath, manifest.CompiledAssembly })
+                string[] manifestPayloads = requireSourcePayload
+                    ? [manifest.EntryPath, manifest.CompiledAssembly]
+                    : [manifest.CompiledAssembly];
+                foreach (string relativePath in manifestPayloads)
                     if (!File.Exists(ResolveContainedPath(fullDirectory, relativePath)))
                         failures.Add($"manifest payload is missing '{relativePath}'");
             }
+        }
+
+        if (requireSourcePayload)
+        {
+            string[] sourceContent =
+            [
+                Path.Combine(".sharpts", "tsconfig.json"),
+                Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "index.ts"),
+                Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "jsx-runtime.ts"),
+                Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "jsx-dev-runtime.ts"),
+                Path.Combine(".sharpts", "node_modules", "@sharpts", "gui", "internal-testing.ts")
+            ];
+            foreach (string relativePath in sourceContent)
+                if (!File.Exists(Path.Combine(fullDirectory, relativePath)))
+                    failures.Add($"missing required SharpTS GUI content '{relativePath}'");
         }
 
         return failures;

@@ -128,6 +128,28 @@ await.
 | Canonical core suite | CI/release exclusions for `LiveNetwork`, `LoadSensitive`, and `npm`: 16,536 passed, two documented HTTP lifecycle skips, zero failed |
 | Packaged Windows x64 consumer | `SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow`: package audit, path-with-spaces rebuild, IL verification, interpreted/compiled Headless and real-window directory runs, asset closure, and compiled single-file Headless/real-window runs passed |
 
+## Phase 3A SDK workflow completion
+
+Phase 3A is complete in the Phase 3A implementation commit. The `SharpTS.Gui.Sdk` NuGet package
+now carries a `dotnet new sharpts-gui` template containing a minimal TSX application, strict
+tsconfig, asset example, and a Headless assertion fixture. Its package pin matches the SDK release.
+The package-consumer gate installs the template into an isolated hive, creates it under a path with
+spaces, and exercises restore, IL-verified build, interpreted and compiled Headless runs, clean,
+RID restore, framework-dependent publish, and startup from the published directory.
+
+Incremental guest compilation now fingerprints all project TS/TSX files, inherited config,
+generated GUI package files, project/SDK properties, descriptor schema, and compiler/bridge
+binaries. An unchanged build retains the guest assembly timestamp; source and compilation-property
+changes regenerate it. `SharpTSGuiIncludeSourcePayload=false` omits `Guest`, generated tsconfig,
+and materialized TypeScript package files from a directory distribution, selects compiled mode by
+default, and uses a compiled-only dependency validator. The packaged test proves that output has no
+source payload and does not modify its installation directory while running.
+
+The root README, package readme, and `docs/gui/sdk-development.md` document ordinary commands,
+supported Windows RIDs and modes, approximate package/directory footprint, source-payload control,
+preview limitations, dispatcher ownership, and why raw Avalonia/custom-control registration remains
+internal.
+
 ## Current 0.2 development status
 
 `0.2.0-preview.1` advances the manifest to GUI API 2 while keeping Hosted ABI 1. Its implemented

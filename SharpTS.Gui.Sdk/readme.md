@@ -9,6 +9,15 @@ retries the protected subtree on a later render.
 Public-preview MSBuild SDK for building retained, reactive Windows desktop applications from
 SharpTS TSX and Avalonia.
 
+Install the package's project template and create an application without C# or AXAML:
+
+```powershell
+dotnet new install SharpTS.Gui.Sdk::0.2.0-preview.1
+dotnet new sharpts-gui -n CounterApp
+cd CounterApp
+dotnet build
+```
+
 ```xml
 <Project Sdk="SharpTS.Gui.Sdk/0.2.0-preview.1">
   <PropertyGroup>
@@ -41,6 +50,11 @@ framework-dependent directory instead, publish with:
 dotnet publish -c Release -r win-x64 --self-contained false `
   -p:SharpTSGuiPublishMode=Directory
 ```
+
+Directory output includes the TypeScript sources and materialized `@sharpts/gui` package so the
+same application can start in either mode. For a smaller compiled-only framework-dependent
+directory, set `-p:SharpTSGuiIncludeSourcePayload=false`; the generated launcher then defaults to
+compiled mode, and interpreted mode is unavailable because no source payload is distributed.
 
 Published applications use the Windows GUI subsystem. Fatal startup/runtime failures are appended
 to `%LOCALAPPDATA%\SharpTS.Gui\<application>.log`; an interactive launch with no attached console
@@ -77,3 +91,10 @@ controls only, string-backed list/combo items, and no public theme-resource, cus
 drawing, data-grid/tree, or multi-window API. macOS support is intentionally deferred and is not
 claimed by this preview. See `Examples/Calculator` in the SharpTS repository for a complete TSX
 application.
+
+The SDK package is approximately 26 MB compressed; a minimal framework-dependent x64 directory is
+approximately 47 MB before application assets. Exact sizes vary with SDK/runtime servicing. Raw
+Avalonia objects and descriptor registration are internal in this preview. Native controls must
+only be touched on the Avalonia dispatcher; application code should use generated props, events,
+refs, and services instead. See `docs/gui/sdk-development.md` in the repository for the complete
+threading and extension policy.

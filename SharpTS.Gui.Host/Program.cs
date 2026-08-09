@@ -38,7 +38,9 @@ public static class Program
 
         if (options.ValidateDepsDirectory != null)
         {
-            var failures = DepsAssetValidator.Validate(options.ValidateDepsDirectory);
+            var failures = DepsAssetValidator.Validate(
+                options.ValidateDepsDirectory,
+                requireSourcePayload: !options.ValidateCompiledOnly);
             foreach (string failure in failures)
                 Console.Error.WriteLine(failure);
             if (failures.Count == 0)
