@@ -93,6 +93,53 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
+    public void DragDrop_NormalizesPayloadUsesLatestCallbacksAndReleasesSubscriptions()
+    {
+        var events = new List<string>();
+        using DesktopRoot root = DesktopBridge.CreateDesktopRoot(() => { });
+        GuiVNode Target(string version) => new(
+            "Border",
+            Key: "drop-target",
+            AllowDrop: true,
+            DragOver: (files, text, effect, ctrl, alt, shift, meta) =>
+            {
+                events.Add($"{version}-over:{text}:{effect}:{ctrl}");
+                return "copy";
+            },
+            Drop: (files, text, effect, ctrl, alt, shift, meta) =>
+                events.Add($"{version}-drop:{text}:{effect}:{ctrl}"));
+
+        root.Render(Window(Target("old")));
+        var target = _runtimeRegistration.Context.RequireControl<Border>("drop-target");
+        Assert.True(DragDrop.GetAllowDrop(target));
+        Assert.Equal(1, root.ActiveSubscriptions);
+        root.Render(Window(Target("new")));
+
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.CreateText("payload"));
+        var over = new DragEventArgs(
+            DragDrop.DragOverEvent, transfer, target, new Point(4, 8), KeyModifiers.Control)
+        {
+            DragEffects = DragDropEffects.Move,
+        };
+        target.RaiseEvent(over);
+        Assert.Equal(DragDropEffects.Copy, over.DragEffects);
+        Assert.True(over.Handled);
+
+        var drop = new DragEventArgs(
+            DragDrop.DropEvent, transfer, target, new Point(4, 8), KeyModifiers.Control)
+        {
+            DragEffects = DragDropEffects.Copy,
+        };
+        target.RaiseEvent(drop);
+        Assert.True(drop.Handled);
+        Assert.Equal(["new-over:payload:move:True", "new-drop:payload:copy:True"], events);
+
+        root.Dispose();
+        Assert.Equal(0, root.ActiveSubscriptions);
+    }
+
+    [Fact]
     public void DesktopApplication_TracksOwnedModalWindowsAndLastWindowShutdown()
     {
         using DesktopApplicationSession application =

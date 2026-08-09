@@ -36,7 +36,8 @@ export const positive = (
         <CalculatorButton key="typed-component" definition={definition} active={false} onPress={() => {}} />
         <TextBlock>{["recursive", 1, false, null]}</TextBlock>
         <Button ref={buttonRef}>Text only</Button>
-        <Border><TextBlock>One logical child</TextBlock></Border>
+        <Border allowDrop onDragOver={event => event.files.length > 0 ? "copy" : "none"}
+            onDrop={event => { void event.text; }}><TextBlock>One logical child</TextBlock></Border>
         <Badge label="custom" automationName="Custom badge" />
         <Fragment><TextBlock>A</TextBlock><TextBlock>B</TextBlock></Fragment>
     </Grid>

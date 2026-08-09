@@ -118,7 +118,12 @@ public static class DesktopBridge
         Func<string, bool, bool, bool, bool, bool, bool>? keyDown,
         Func<string, bool, bool, bool, bool, bool, bool>? keyUp,
         bool hasKeyDown,
-        bool hasKeyUp) =>
+        bool hasKeyUp,
+        bool allowDrop,
+        Func<string[], string?, string, bool, bool, bool, bool, string>? dragOver,
+        Action<string[], string?, string, bool, bool, bool, bool>? drop,
+        bool hasDragOver,
+        bool hasDrop) =>
         node with
         {
             Width = width,
@@ -148,6 +153,9 @@ public static class DesktopBridge
             CanvasTop = canvasTop,
             KeyDown = hasKeyDown ? keyDown : null,
             KeyUp = hasKeyUp ? keyUp : null,
+            AllowDrop = allowDrop,
+            DragOver = hasDragOver ? dragOver : null,
+            Drop = hasDrop ? drop : null,
         };
 
     public static GuiVNode WithCommon(
@@ -158,7 +166,8 @@ public static class DesktopBridge
         WithCommon(node, width, height, minWidth, minHeight, maxWidth, maxHeight,
             margin, margin, margin, margin, horizontalAlignment, verticalAlignment,
             isVisible, isEnabled, 1, null, null, [], gridRow, gridColumn, gridRowSpan,
-            gridColumnSpan, "left", double.NaN, double.NaN, null, null, false, false);
+            gridColumnSpan, "left", double.NaN, double.NaN, null, null, false, false,
+            false, null, null, false, false);
 
     public static GuiVNode WithStyle(
         GuiVNode node, string? background, string? foreground,

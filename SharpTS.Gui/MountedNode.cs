@@ -29,8 +29,12 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public Action<string?>? LatestNullableStringChanged { get; set; }
     public Func<string, bool, bool, bool, bool, bool, bool>? LatestKeyDown { get; set; }
     public Func<string, bool, bool, bool, bool, bool, bool>? LatestKeyUp { get; set; }
+    public Func<string[], string?, string, bool, bool, bool, bool, string>? LatestDragOver { get; set; }
+    public Action<string[], string?, string, bool, bool, bool, bool>? LatestDrop { get; set; }
     public EventHandler<Avalonia.Input.KeyEventArgs>? KeyDownHandler { get; set; }
     public EventHandler<Avalonia.Input.KeyEventArgs>? KeyUpHandler { get; set; }
+    public EventHandler<Avalonia.Input.DragEventArgs>? DragOverHandler { get; set; }
+    public EventHandler<Avalonia.Input.DragEventArgs>? DropHandler { get; set; }
     public EventHandler<RoutedEventArgs>? RoutedHandler { get; set; }
     public EventHandler<TextChangedEventArgs>? TextHandler { get; set; }
     public EventHandler<SelectionChangedEventArgs>? SelectionHandler { get; set; }

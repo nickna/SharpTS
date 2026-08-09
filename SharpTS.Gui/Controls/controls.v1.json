@@ -34,7 +34,10 @@
       { "name": "gridColumnSpan", "type": "number", "default": 1, "converter": "int32", "setter": "attached" },
       { "name": "dock", "type": "Dock", "default": "left", "setter": "attached", "enumValues": ["left", "top", "right", "bottom"] },
       { "name": "onKeyDown", "type": "(event: KeyEvent) => boolean", "setter": "event", "documentation": "Handles a normalized key-down event." },
-      { "name": "onKeyUp", "type": "(event: KeyEvent) => boolean", "setter": "event", "documentation": "Handles a normalized key-up event." }
+      { "name": "onKeyUp", "type": "(event: KeyEvent) => boolean", "setter": "event", "documentation": "Handles a normalized key-up event." },
+      { "name": "allowDrop", "type": "boolean", "default": false, "setter": "drag-drop", "documentation": "Allows native drag data to be dropped on this control." },
+      { "name": "onDragOver", "type": "(event: DropEvent) => DropEffect", "setter": "event", "documentation": "Chooses the accepted native drag effect." },
+      { "name": "onDrop", "type": "(event: DropEvent) => void", "setter": "event", "documentation": "Receives normalized text and local-file drop data." }
     ],
     "textStyle": [
       { "name": "foreground", "type": "string", "converter": "brush", "setter": "style" },

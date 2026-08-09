@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "bbe93f8d6f526acb9a579e57777a66787a7611db9b6a2c743b75720964cfa800",
+  "schemaHash": "7384ad1b4c183d7cd97dc12d422dff594ed82038e6a01bce3e661066f44e46da",
   "controls": [
     {
       "kind": "Window",
@@ -169,6 +169,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -365,6 +383,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "spacing",
           "type": "number",
           "documentation": "",
@@ -548,6 +584,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -737,6 +791,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "spacing",
           "type": "number",
           "documentation": "",
@@ -923,6 +995,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "lastChildFill",
           "type": "boolean",
           "documentation": "",
@@ -1097,6 +1187,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -1280,6 +1388,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -1484,6 +1610,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "padding",
           "type": "Thickness",
           "documentation": "",
@@ -1685,6 +1829,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "horizontalScrollBarVisibility",
           "type": "ScrollBarVisibility",
           "documentation": "",
@@ -1875,6 +2037,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -2104,6 +2284,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -2370,6 +2568,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -2669,6 +2885,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "foreground",
           "type": "string",
           "documentation": "",
@@ -2959,6 +3193,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "foreground",
           "type": "string",
           "documentation": "",
@@ -3228,6 +3480,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -3509,6 +3779,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "foreground",
           "type": "string",
           "documentation": "",
@@ -3778,6 +4066,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -4056,6 +4362,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -4344,6 +4668,24 @@
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
           "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
         }
       ]
     },
@@ -4514,6 +4856,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -4707,6 +5067,24 @@
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
           "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
         }
       ]
     },
@@ -4877,6 +5255,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -5067,6 +5463,24 @@
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
           "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
         }
       ]
     },
@@ -5237,6 +5651,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -5417,6 +5849,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "commands",
           "type": "readonly DrawingCommand[]",
           "documentation": "",
@@ -5591,6 +6041,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -5884,6 +6352,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "value",
           "type": "string | null",
           "documentation": "",
@@ -6067,6 +6553,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "value",
           "type": "string | null",
           "documentation": "",
@@ -6247,6 +6751,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -6445,6 +6967,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "minimum",
           "type": "number",
           "documentation": "",
@@ -6632,6 +7172,24 @@
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
           "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
         }
       ]
     },
@@ -6802,6 +7360,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {
@@ -7005,6 +7581,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "selectedIndex",
           "type": "number",
           "documentation": "",
@@ -7188,6 +7782,24 @@
           "enumValues": null
         },
         {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
+        },
+        {
           "name": "header",
           "type": "string",
           "documentation": "",
@@ -7363,6 +7975,24 @@
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
           "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
+          "enumValues": null
         }
       ]
     },
@@ -7533,6 +8163,24 @@
           "name": "onKeyUp",
           "type": "(event: KeyEvent) =\u003E boolean",
           "documentation": "Handles a normalized key-up event.",
+          "enumValues": null
+        },
+        {
+          "name": "allowDrop",
+          "type": "boolean",
+          "documentation": "Allows native drag data to be dropped on this control.",
+          "enumValues": null
+        },
+        {
+          "name": "onDragOver",
+          "type": "(event: DropEvent) =\u003E DropEffect",
+          "documentation": "Chooses the accepted native drag effect.",
+          "enumValues": null
+        },
+        {
+          "name": "onDrop",
+          "type": "(event: DropEvent) =\u003E void",
+          "documentation": "Receives normalized text and local-file drop data.",
           "enumValues": null
         },
         {

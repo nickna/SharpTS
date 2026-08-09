@@ -137,6 +137,11 @@ internal static class CommonProperties
             Canvas.SetTop(control, node.CanvasTop);
             changed = true;
         }
+        if (DragDrop.GetAllowDrop(control) != node.AllowDrop)
+        {
+            DragDrop.SetAllowDrop(control, node.AllowDrop);
+            changed = true;
+        }
         return changed;
     }
 

@@ -77,3 +77,7 @@ export function setComboBoxIndex(key: string, value: number): void {
 export function setSliderValue(key: string, value: number): void {
     DesktopConformanceBridge.SetSliderValue(key, value);
 }
+
+export function dropText(key: string, value: string): string {
+    return DesktopConformanceBridge.DropText(key, value);
+}

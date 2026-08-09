@@ -43,6 +43,8 @@ export type TextBlockHandle = { readonly __textBlockHandle: never };
 export type ButtonHandle = { readonly __buttonHandle: never };
 export type TextBoxHandle = { readonly __textBoxHandle: never };
 export interface KeyEvent { readonly key: string; readonly ctrl: boolean; readonly alt: boolean; readonly shift: boolean; readonly meta: boolean; readonly repeat: boolean; }
+export type DropEffect = "none" | "copy" | "move" | "link";
+export interface DropEvent { readonly files: readonly string[]; readonly text: string | null; readonly effect: DropEffect; readonly ctrl: boolean; readonly alt: boolean; readonly shift: boolean; readonly meta: boolean; }
 export interface CommonProps<THandle = unknown> {
     ref?: ControlRef<THandle>;
     width?: number; height?: number; minWidth?: number; minHeight?: number; maxWidth?: number; maxHeight?: number;
@@ -52,6 +54,7 @@ export interface CommonProps<THandle = unknown> {
     gridRow?: number; gridColumn?: number; gridRowSpan?: number; gridColumnSpan?: number; dock?: Dock;
     canvasLeft?: number; canvasTop?: number;
     onKeyDown?: (event: KeyEvent) => boolean; onKeyUp?: (event: KeyEvent) => boolean;
+    allowDrop?: boolean; onDragOver?: (event: DropEvent) => DropEffect; onDrop?: (event: DropEvent) => void;
 }
 export interface TextStyleProps { foreground?: string; fontFamily?: string; fontSize?: number; fontWeight?: FontWeight; fontStyle?: "normal" | "italic"; textAlignment?: TextAlignment; }
 export interface ContentStyleProps extends TextStyleProps { background?: string; padding?: Thickness; cornerRadius?: number; horizontalContentAlignment?: HorizontalAlignment; verticalContentAlignment?: VerticalAlignment; }
@@ -271,6 +274,28 @@ function keyAction(handler: any): any {
     }
     return result;
 }
+function dropEvent(files: string[], text: string | null, effect: DropEffect,
+    ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): DropEvent {
+    return { files: files.slice(), text, effect, ctrl, alt, shift, meta };
+}
+function dragOverAction(handler: any): any {
+    let result: any = null;
+    if (typeof handler === "function") {
+        result = (files: string[], text: string | null, effect: DropEffect,
+            ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): DropEffect =>
+            handler(dropEvent(files, text, effect, ctrl, alt, shift, meta));
+    }
+    return result;
+}
+function dropAction(handler: any): any {
+    let result: any = null;
+    if (typeof handler === "function") {
+        result = (files: string[], text: string | null, effect: DropEffect,
+            ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): void =>
+            handler(dropEvent(files, text, effect, ctrl, alt, shift, meta));
+    }
+    return result;
+}
 
 function hasProperty(value: any, name: string): boolean {
     const keys = Object.keys(value);
@@ -297,7 +322,9 @@ function withCommon(node: GuiVNode, safe: any): GuiVNode {
         safe.canvasLeft === undefined ? NaN : safe.canvasLeft,
         safe.canvasTop === undefined ? NaN : safe.canvasTop,
         keyAction(safe.onKeyDown), keyAction(safe.onKeyUp),
-        hasProperty(safe, "onKeyDown"), hasProperty(safe, "onKeyUp")) as any;
+        hasProperty(safe, "onKeyDown"), hasProperty(safe, "onKeyUp"),
+        safe.allowDrop === true, dragOverAction(safe.onDragOver), dropAction(safe.onDrop),
+        hasProperty(safe, "onDragOver"), hasProperty(safe, "onDrop")) as any;
 }
 
 function withStyle(node: GuiVNode, safe: any): GuiVNode {

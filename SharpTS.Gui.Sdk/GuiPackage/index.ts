@@ -99,6 +99,8 @@ export type {
     ButtonHandle,
     TextBoxHandle,
     KeyEvent,
+    DropEffect,
+    DropEvent,
     Thickness,
     HorizontalAlignment,
     VerticalAlignment,

@@ -66,6 +66,16 @@ export interface KeyEvent {
     readonly meta: boolean;
     readonly repeat: boolean;
 }
+export type DropEffect = "none" | "copy" | "move" | "link";
+export interface DropEvent {
+    readonly files: readonly string[];
+    readonly text: string | null;
+    readonly effect: DropEffect;
+    readonly ctrl: boolean;
+    readonly alt: boolean;
+    readonly shift: boolean;
+    readonly meta: boolean;
+}
 export interface CommonProps<THandle = unknown> {
     ref?: ControlRef<THandle>;
     width?: number; height?: number;
@@ -81,6 +91,9 @@ export interface CommonProps<THandle = unknown> {
     canvasLeft?: number; canvasTop?: number;
     onKeyDown?: (event: KeyEvent) => boolean;
     onKeyUp?: (event: KeyEvent) => boolean;
+    allowDrop?: boolean;
+    onDragOver?: (event: DropEvent) => DropEffect;
+    onDrop?: (event: DropEvent) => void;
 }
 export interface TextStyleProps {
     foreground?: string; fontFamily?: string; fontSize?: number;

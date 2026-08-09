@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Automation;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using System.Runtime.CompilerServices;
 
 namespace SharpTS.Gui;
@@ -60,6 +61,26 @@ public static class DesktopConformanceBridge
 
     public static void SetSliderValue(string key, double value) =>
         Context.RequireControl<Slider>(key).Value = value;
+
+    public static string DropText(string key, string value)
+    {
+        Control target = Context.RequireControl<Control>(key);
+        var transfer = new DataTransfer();
+        transfer.Add(DataTransferItem.CreateText(value));
+        var over = new DragEventArgs(
+            DragDrop.DragOverEvent, transfer, target, default, KeyModifiers.None)
+        {
+            DragEffects = DragDropEffects.Copy,
+        };
+        target.RaiseEvent(over);
+        var drop = new DragEventArgs(
+            DragDrop.DropEvent, transfer, target, default, KeyModifiers.None)
+        {
+            DragEffects = over.DragEffects,
+        };
+        target.RaiseEvent(drop);
+        return over.DragEffects.ToString().ToLowerInvariant();
+    }
 
     public static void TraceControlIdentities(string stage)
     {

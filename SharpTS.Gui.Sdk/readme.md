@@ -90,7 +90,9 @@ return elements, primitive text, fragments, arrays, or `null`. The standard stat
   `RichTextBlock`, and `DrawingCanvas`.
 
 Controls expose typed direct props for layout, styling, accessibility names, focus refs, keyboard
-events, values, and callbacks. Keys preserve native identity through sibling insertion, removal,
+events, values, callbacks, and normalized text/local-file drag-and-drop. Set `allowDrop` and use
+`onDragOver` to select `copy`, `move`, `link`, or `none`; `onDrop` receives the accepted payload.
+Keys preserve native identity through sibling insertion, removal,
 and reordering. Controlled input commits suppress callback echoes while real user changes dispatch
 the latest guest callback through one stable native subscription.
 

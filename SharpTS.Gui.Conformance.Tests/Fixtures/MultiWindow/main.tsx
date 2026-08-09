@@ -12,7 +12,7 @@ import {
     createVirtualDataGrid,
     createVirtualList,
 } from "@sharpts/gui";
-import { getProperty, queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/internal-testing";
+import { dropText, getProperty, queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/internal-testing";
 
 const [fail, setFail] = createSignal<boolean>(false);
 const [stylePhase, setStylePhase] = createSignal<number>(0);
@@ -28,6 +28,10 @@ function MainWindow(): JSX.Element {
     const treeItems = [{ id: "root", label: "Root", children: [{ id: "leaf", label: "Leaf", children: [] as any[] }] }];
     return <Window title="Main"><Canvas>
         <Button key="styled" classes={["accent"]} canvasLeft={0} canvasTop={0}>{"Main " + stylePhase()}</Button>
+        <Button key="drop-target" allowDrop
+            onDragOver={event => event.text === "payload" ? "copy" : "none"}
+            onDrop={event => { if (event.text !== "payload") throw new Error("Drop payload mismatch."); trace("multi-window-drop"); }}
+            canvasLeft={120} canvasTop={0}>Drop</Button>
         {createVirtualList({
             key: "virtual-list", items, itemKey: item => item.id,
             renderItem: item => <TextBlock>{item.label}</TextBlock>,
@@ -92,6 +96,7 @@ application.createWindow(<FailureWindow />);
 if (application.windowCount !== 3) throw new Error("Expected three mounted windows.");
 if (mainWindow.findResource("accent") !== "#336699") throw new Error("Resource lookup failed.");
 trace("multi-window-mounted");
+if (dropText("drop-target", "payload") !== "copy") throw new Error("Drag effect mismatch.");
 secondaryWindow.close();
 if (!secondaryWindow.isDisposed) throw new Error("Secondary close did not dispose its root.");
 trace("multi-window-secondary-closed");

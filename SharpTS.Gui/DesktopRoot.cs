@@ -7,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Avalonia.Platform.Storage;
 using Avalonia.Input;
 using Avalonia.Controls.Primitives;
 
@@ -373,6 +374,7 @@ public sealed class DesktopRoot : IDisposable
 
         UpdateCallbacks(mounted, prepared.VNode);
         SynchronizeKeyboard(mounted);
+        SynchronizeDragDrop(mounted);
         ReconcileChildren(mounted, prepared.Children, prepared.VNode);
         UpdateRef(mounted, prepared.VNode);
         mounted.VNode = prepared.VNode;
@@ -391,6 +393,8 @@ public sealed class DesktopRoot : IDisposable
         mounted.LatestNullableStringChanged = node.NullableStringChanged;
         mounted.LatestKeyDown = node.KeyDown;
         mounted.LatestKeyUp = node.KeyUp;
+        mounted.LatestDragOver = node.DragOver;
+        mounted.LatestDrop = node.Drop;
     }
 
     private static void SynchronizeEventValue(MountedNode mounted)
@@ -830,6 +834,7 @@ public sealed class DesktopRoot : IDisposable
             }
 
             SynchronizeKeyboard(mounted);
+            SynchronizeDragDrop(mounted);
             AttachWindowKeyReset(mounted);
         }
 
@@ -847,7 +852,8 @@ public sealed class DesktopRoot : IDisposable
     private void UpdateSubscriptionState(MountedNode mounted)
     {
         bool attached = mounted.PrimaryEventAttached ||
-            mounted.KeyDownHandler is not null || mounted.KeyUpHandler is not null;
+            mounted.KeyDownHandler is not null || mounted.KeyUpHandler is not null ||
+            mounted.DragOverHandler is not null || mounted.DropHandler is not null;
         if (attached == mounted.EventAttached)
             return;
         mounted.EventAttached = attached;
@@ -886,8 +892,14 @@ public sealed class DesktopRoot : IDisposable
                 mounted.Control.KeyDown -= mounted.KeyDownHandler;
             if (mounted.KeyUpHandler is not null)
                 mounted.Control.KeyUp -= mounted.KeyUpHandler;
+            if (mounted.DragOverHandler is not null)
+                DragDrop.RemoveDragOverHandler(mounted.Control, mounted.DragOverHandler);
+            if (mounted.DropHandler is not null)
+                DragDrop.RemoveDropHandler(mounted.Control, mounted.DropHandler);
             mounted.KeyDownHandler = null;
             mounted.KeyUpHandler = null;
+            mounted.DragOverHandler = null;
+            mounted.DropHandler = null;
             mounted.PrimaryEventAttached = false;
             mounted.RoutedHandler = null;
             mounted.TextHandler = null;
@@ -932,6 +944,96 @@ public sealed class DesktopRoot : IDisposable
         }
         UpdateSubscriptionState(mounted);
     }
+
+    private void SynchronizeDragDrop(MountedNode mounted)
+    {
+        if (mounted.LatestDragOver is not null && mounted.DragOverHandler is null)
+        {
+            EventHandler<DragEventArgs> handler = (_, args) => DispatchDragOver(mounted, args);
+            DragDrop.AddDragOverHandler(mounted.Control, handler);
+            mounted.DragOverHandler = handler;
+        }
+        else if (mounted.LatestDragOver is null && mounted.DragOverHandler is not null)
+        {
+            DragDrop.RemoveDragOverHandler(mounted.Control, mounted.DragOverHandler);
+            mounted.DragOverHandler = null;
+        }
+
+        if (mounted.LatestDrop is not null && mounted.DropHandler is null)
+        {
+            EventHandler<DragEventArgs> handler = (_, args) => DispatchDrop(mounted, args);
+            DragDrop.AddDropHandler(mounted.Control, handler);
+            mounted.DropHandler = handler;
+        }
+        else if (mounted.LatestDrop is null && mounted.DropHandler is not null)
+        {
+            DragDrop.RemoveDropHandler(mounted.Control, mounted.DropHandler);
+            mounted.DropHandler = null;
+        }
+        UpdateSubscriptionState(mounted);
+    }
+
+    private void DispatchDragOver(MountedNode mounted, DragEventArgs args)
+    {
+        Func<string[], string?, string, bool, bool, bool, bool, string>? latest = mounted.LatestDragOver;
+        if (latest is null)
+            return;
+        (string[] files, string? text) = DragData(args);
+        KeyModifiers modifiers = args.KeyModifiers;
+        string effect = "none";
+        _dispatchGuestCallback(() => effect = latest(
+            files,
+            text,
+            NormalizeDropEffect(args.DragEffects),
+            modifiers.HasFlag(KeyModifiers.Control),
+            modifiers.HasFlag(KeyModifiers.Alt),
+            modifiers.HasFlag(KeyModifiers.Shift),
+            modifiers.HasFlag(KeyModifiers.Meta)));
+        args.DragEffects = ParseDropEffect(effect);
+        args.Handled = true;
+    }
+
+    private void DispatchDrop(MountedNode mounted, DragEventArgs args)
+    {
+        Action<string[], string?, string, bool, bool, bool, bool>? latest = mounted.LatestDrop;
+        if (latest is null)
+            return;
+        (string[] files, string? text) = DragData(args);
+        KeyModifiers modifiers = args.KeyModifiers;
+        _dispatchGuestCallback(() => latest(
+            files,
+            text,
+            NormalizeDropEffect(args.DragEffects),
+            modifiers.HasFlag(KeyModifiers.Control),
+            modifiers.HasFlag(KeyModifiers.Alt),
+            modifiers.HasFlag(KeyModifiers.Shift),
+            modifiers.HasFlag(KeyModifiers.Meta)));
+        args.Handled = true;
+    }
+
+    private static (string[] Files, string? Text) DragData(DragEventArgs args)
+    {
+        string[] files = (args.DataTransfer.TryGetFiles() ?? [])
+            .Select(file => file.TryGetLocalPath())
+            .Where(path => path is not null)
+            .Cast<string>()
+            .ToArray();
+        return (files, args.DataTransfer.TryGetText());
+    }
+
+    private static string NormalizeDropEffect(DragDropEffects effect) =>
+        effect.HasFlag(DragDropEffects.Move) ? "move" :
+        effect.HasFlag(DragDropEffects.Copy) ? "copy" :
+        effect.HasFlag(DragDropEffects.Link) ? "link" : "none";
+
+    private static DragDropEffects ParseDropEffect(string effect) => effect switch
+    {
+        "none" => DragDropEffects.None,
+        "copy" => DragDropEffects.Copy,
+        "move" => DragDropEffects.Move,
+        "link" => DragDropEffects.Link,
+        _ => throw new ArgumentException($"Unsupported drag/drop effect '{effect}'."),
+    };
 
     private void AttachWindowKeyReset(MountedNode mounted)
     {
@@ -1068,6 +1170,8 @@ public sealed class DesktopRoot : IDisposable
             NullableStringChanged = null,
             KeyDown = null,
             KeyUp = null,
+            DragOver = null,
+            Drop = null,
             Loaded = null,
             LoadError = null,
             AttachRef = null,
