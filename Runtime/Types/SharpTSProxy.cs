@@ -439,7 +439,8 @@ public class SharpTSProxy : ISharpTSCallable
     private static bool IsObjectValue(object? value)
         => value is not (null or SharpTSUndefined or string or bool or byte
             or sbyte or short or ushort or int or uint or long or ulong or float
-            or double or decimal or SharpTSBigInt or SharpTSSymbol);
+            or double or decimal or System.Numerics.BigInteger or SharpTSBigInt
+            or SharpTSSymbol);
 
     public bool TrapHas(string prop, Interpreter? interp)
         => TrapHasCore(prop, interp);
@@ -939,7 +940,12 @@ public class SharpTSProxy : ISharpTSCallable
         }
 
         var argsArray = new SharpTSArray(args);
-        return InvokeTrap(trap, interp, [_target, argsArray, newTarget ?? this]);
+        object? result = InvokeTrap(
+            trap, interp, [_target, argsArray, newTarget ?? this]);
+        if (!IsObjectValue(result))
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy construct trap must return an object"));
+        return result;
     }
 
     #endregion
