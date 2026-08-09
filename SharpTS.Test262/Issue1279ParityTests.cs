@@ -1746,6 +1746,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/getPrototypeOf/call-parameters.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_getPrototypeOf_accepts_custom_prototypes_for_extensible_targets()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/extensible-target-return-handlerproto.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
