@@ -1542,6 +1542,11 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/call-parameters-object-getownpropertynames.js")]
+    public void Proxy_ownKeys_drives_own_property_introspection(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
     public void Date_prototype_methods_expose_standard_descriptors(string relativePath)

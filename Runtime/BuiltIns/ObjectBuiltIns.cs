@@ -1264,7 +1264,7 @@ public static partial class ObjectBuiltIns
     /// <summary>
     /// Object.getOwnPropertyNames(obj) - returns an array of all own property names (including non-enumerable).
     /// </summary>
-    private static object? GetOwnPropertyNames(Interpreter _, List<object?> args)
+    private static object? GetOwnPropertyNames(Interpreter interpreter, List<object?> args)
     {
         var target = args[0];
 
@@ -1278,6 +1278,8 @@ public static partial class ObjectBuiltIns
                 new object?[] { "length", "name", "prototype" }
                     .Concat(StaticMemberNames.Cast<object?>()).ToList(),
             SharpTSObject obj => GetOwnPropertyNamesFromObject(obj),
+            SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
+                .OfType<string>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetFieldNames().Select(k => (object?)k).ToList(),
             SharpTSArray arr => GetOwnPropertyNamesFromArray(arr),
             SharpTSError error => error.OwnPropertyNames.Select(k => (object?)k).ToList(),
