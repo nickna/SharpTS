@@ -2652,6 +2652,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/construct/return-not-object-throws-symbol.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_construct_rejects_undefined_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
