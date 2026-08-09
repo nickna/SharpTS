@@ -2562,6 +2562,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/apply/trap-is-not-callable.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_apply_forwards_null_traps()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-null.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
