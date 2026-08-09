@@ -22,7 +22,7 @@ public static partial class ObjectBuiltIns
             .MethodV2("isFrozen", 1, IsFrozenV2)
             .MethodV2("isSealed", 1, IsSealedV2)
             .MethodV2("defineProperty", 3, DefinePropertyV2)
-            .MethodV2("getOwnPropertyDescriptor", 2, GetOwnPropertyDescriptorV2)
+            .MethodV2("getOwnPropertyDescriptor", 0, 2, specLength: 2, GetOwnPropertyDescriptorV2)
             .MethodV2("getOwnPropertyNames", 1, GetOwnPropertyNamesV2)
             .MethodV2("create", 1, 2, 2, CreateV2)
             .MethodV2("preventExtensions", 1, PreventExtensionsV2)
@@ -467,7 +467,9 @@ public static partial class ObjectBuiltIns
     /// </summary>
     private static object? DefineProperty(Interpreter interpreter, List<object?> args)
     {
-        var target = args[0];
+        var target = args.Count > 0
+            ? args[0]
+            : SharpTSUndefined.Instance;
         var descriptorArg = args[2];
 
         if (target == null)
@@ -735,7 +737,10 @@ public static partial class ObjectBuiltIns
         // Symbol-keyed lookup goes through the symbol-dict path; the spec keeps
         // symbols distinct from string keys, and SharpTSObject/Instance store
         // them in a separate map.
-        if (args[1] is SharpTSSymbol symKey)
+        object? keyArg = args.Count > 1
+            ? args[1]
+            : SharpTSUndefined.Instance;
+        if (keyArg is SharpTSSymbol symKey)
         {
             if (target is SharpTSProxy symbolProxy)
                 return symbolProxy.TrapGetOwnPropertyDescriptor(symKey, interpreter);
@@ -743,7 +748,7 @@ public static partial class ObjectBuiltIns
         }
 
         // ECMA-262 §7.1.19: ToPropertyKey on the name argument.
-        var propertyKey = interpreter.ToPropertyKeyString(args[1]);
+        var propertyKey = interpreter.ToPropertyKeyString(keyArg);
 
         if (target is SharpTSProxy proxy)
         {
