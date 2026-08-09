@@ -22,6 +22,12 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     private readonly List<SharpTSSymbol> _symbolPropertyOrder = [];
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
         _symbolAccessors;
+
+    /// <summary>
+    /// True only for runtime-created boxed primitive objects. Their marker
+    /// fields model internal slots and must not appear as guest properties.
+    /// </summary>
+    internal bool IsPrimitiveWrapper { get; init; }
     private Dictionary<SharpTSSymbol, PropertyDescriptorFlags>? _symbolDescriptors;
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
@@ -967,10 +973,15 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
-        foreach (string key in OwnStringKeys())
+        foreach (string key in OwnVisibleStringKeys())
             if (GetPropertyFlags(key).Enumerable)
                 yield return key;
     }
+
+    internal IEnumerable<string> OwnVisibleStringKeys()
+        => IsPrimitiveWrapper
+            ? OwnStringKeys().Where(key => !IsInternalSlot(key))
+            : OwnStringKeys();
 
     /// <summary>
     /// All own string-keyed property names in ECMA-262 OwnPropertyKeys order:

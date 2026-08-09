@@ -339,7 +339,7 @@ public static class ReflectBuiltIns
                         keys.AddRange(proxy.TrapOwnPropertyKeys(interpreter));
                         break;
                     case SharpTSObject obj:
-                        keys.AddRange(obj.Fields.Keys.Select(k => (object?)k));
+                        keys.AddRange(obj.OwnVisibleStringKeys().Select(k => (object?)k));
                         keys.AddRange(obj.GetSymbolPropertyNames().Select(s => (object?)s));
                         break;
                     case SharpTSInstance inst:

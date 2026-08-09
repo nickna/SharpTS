@@ -360,7 +360,7 @@ public class SharpTSProxy : ISharpTSCallable
         switch (_target)
         {
             case SharpTSObject obj:
-                keys.AddRange(obj.OwnStringKeys());
+                keys.AddRange(obj.OwnVisibleStringKeys());
                 keys.AddRange(obj.GetSymbolPropertyNames());
                 break;
             case SharpTSInstance inst:

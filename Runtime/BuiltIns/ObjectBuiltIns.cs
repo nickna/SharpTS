@@ -1210,23 +1210,7 @@ public static partial class ObjectBuiltIns
     /// fields (see <see cref="SharpTSObject.AccessorPropertyNames"/>).
     /// </summary>
     private static IEnumerable<string> OwnEnumerablePropertyKeys(SharpTSObject obj)
-    {
-        foreach (var key in obj.Fields.Keys)
-            if (!IsBoxedPrimitiveInternalSlot(key) && obj.GetPropertyFlags(key).Enumerable)
-                yield return key;
-        foreach (var key in obj.AccessorPropertyNames)
-            if (obj.GetPropertyFlags(key).Enumerable)
-                yield return key;
-    }
-
-    /// <summary>
-    /// True for the internal-slot field names used by boxed primitive wrappers
-    /// (see <see cref="BuiltInConstructorFactory"/>). They hold [[StringData]] /
-    /// [[NumberData]] / [[BooleanData]] plus the wrapper's type tag — not real
-    /// own properties — so enumeration-based spec operations must skip them.
-    /// </summary>
-    private static bool IsBoxedPrimitiveInternalSlot(string key)
-        => key is "__primitiveType" or "__primitiveValue";
+        => obj.OwnEnumerableKeys();
 
     /// <summary>
     /// Object.getOwnPropertyDescriptors(obj) - returns all own property descriptors.
@@ -1275,9 +1259,7 @@ public static partial class ObjectBuiltIns
     /// Gets all own property names from a SharpTSObject, including accessor-only properties.
     /// </summary>
     private static List<string> GetAllOwnPropertyNames(SharpTSObject obj)
-        => obj.OwnStringKeys()
-            .Where(k => !IsBoxedPrimitiveInternalSlot(k))
-            .ToList();
+        => obj.OwnVisibleStringKeys().ToList();
 
     /// <summary>
     /// Object.getOwnPropertyNames(obj) - returns an array of all own property names (including non-enumerable).
@@ -1310,8 +1292,7 @@ public static partial class ObjectBuiltIns
     /// Gets all own property names from a SharpTSObject (including accessor properties).
     /// </summary>
     private static List<object?> GetOwnPropertyNamesFromObject(SharpTSObject obj)
-        => obj.OwnStringKeys()
-            .Where(k => !IsBoxedPrimitiveInternalSlot(k))
+        => obj.OwnVisibleStringKeys()
             .Select(k => (object?)k)
             .ToList();
 

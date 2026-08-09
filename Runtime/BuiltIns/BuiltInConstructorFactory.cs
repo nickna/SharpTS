@@ -416,6 +416,7 @@ public static class BuiltInConstructorFactory
             ["__primitiveValue"] = value,
         })
         {
+            IsPrimitiveWrapper = true,
             Prototype = interpreter?.GetNumberPrototype(),
         };
     }
@@ -461,6 +462,7 @@ public static class BuiltInConstructorFactory
             dict[i.ToString()] = value[i].ToString();
         var wrapper = new SharpTSObject(dict)
         {
+            IsPrimitiveWrapper = true,
             Prototype = interpreter?.GetStringPrototype(),
         };
         // String exotic indexed properties are enumerable but immutable, while
@@ -502,6 +504,7 @@ public static class BuiltInConstructorFactory
             ["__primitiveValue"] = value,
         })
         {
+            IsPrimitiveWrapper = true,
             Prototype = interpreter?.GetBooleanPrototype(),
         };
     }
@@ -514,6 +517,7 @@ public static class BuiltInConstructorFactory
             ["__primitiveValue"] = primitiveValue,
         })
         {
+            IsPrimitiveWrapper = true,
             Prototype = prototype,
         };
 
