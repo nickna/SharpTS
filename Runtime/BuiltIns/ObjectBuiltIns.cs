@@ -1603,7 +1603,7 @@ public static partial class ObjectBuiltIns
     /// <summary>
     /// Object.getOwnPropertySymbols(obj) - returns an array of symbol-keyed properties.
     /// </summary>
-    private static object? GetOwnPropertySymbols(Interpreter _, List<object?> args)
+    private static object? GetOwnPropertySymbols(Interpreter interpreter, List<object?> args)
     {
         if (args[0] is null or SharpTSUndefined)
             throw new ThrowException(new SharpTSTypeError(
@@ -1612,6 +1612,8 @@ public static partial class ObjectBuiltIns
         List<object?> symbols = args[0] switch
         {
             SharpTSObject obj => obj.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
+            SharpTSProxy proxy => proxy.TrapOwnPropertyKeys(interpreter)
+                .OfType<SharpTSSymbol>().Cast<object?>().ToList(),
             SharpTSInstance inst => inst.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSArray array => array.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),
             SharpTSMath math => math.GetSymbolPropertyNames().Select(s => (object?)s).ToList(),

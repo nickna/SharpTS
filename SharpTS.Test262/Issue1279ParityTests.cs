@@ -1543,6 +1543,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Proxy/ownKeys/call-parameters-object-getownpropertynames.js")]
+    [InlineData("built-ins/Proxy/ownKeys/call-parameters-object-getownpropertysymbols.js")]
     public void Proxy_ownKeys_drives_own_property_introspection(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
