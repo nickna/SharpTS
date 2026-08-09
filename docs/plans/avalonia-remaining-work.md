@@ -418,7 +418,9 @@ contract stabilizes.
   owned system tray/menu handles, Windows shell printing, external launch/reveal, and platform/
   known-folder services, and normalized text/local-file drag-and-drop are implemented and dual-mode
   tested. Notifications require the installer identity selected in Track D.
-- Add interpreted remount/hot reload with explicit state-preservation rules.
+- **Complete:** interpreted `--watch` validates each changed module graph while the last good UI
+  remains mounted, then disposes it and performs a fresh remount. Component, hook, timer, effect,
+  and subscription state is intentionally reset; rejected edits retain the last good tree.
 - Add a component inspector and Headless visual-regression workflow.
 - Complete accessibility, keyboard navigation, focus, IME, high-DPI, multiple-monitor, and theme
   conformance.

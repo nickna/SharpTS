@@ -9,6 +9,10 @@ dotnet run -- --mode interpreted
 dotnet run -- --mode compiled
 ```
 
+For interpreted development remounts, run `dotnet run -- --mode interpreted --watch`. Valid edits
+start a fresh application runtime; local state and lifecycle resources are reset. Invalid edits
+leave the last good UI mounted until the next successful change.
+
 Run the included Headless smoke test in either guest mode:
 
 ```powershell

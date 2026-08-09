@@ -56,6 +56,18 @@ internal sealed class InterpretedGuestRuntime : IGuestRuntime
         return _runtime.InitializeAsync();
     }
 
+    public static void ValidateProgram(string entryPath, string tsconfigPath)
+    {
+        string bridgePath = typeof(DesktopBridge).Assembly.Location;
+        _ = SharpTSProgramLoader.Load(
+            entryPath,
+            new SharpTSProgramLoadOptions
+            {
+                TsConfigPath = tsconfigPath,
+                References = [bridgePath],
+            });
+    }
+
     public void Notify(Action callback) =>
         (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).Notify(callback);
 

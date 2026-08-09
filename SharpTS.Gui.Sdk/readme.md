@@ -47,6 +47,17 @@ dotnet run -- --mode interpreted
 dotnet run -- --mode compiled
 ```
 
+During development, interpreted mode can watch project TypeScript and TSX files:
+
+```powershell
+dotnet run -- --mode interpreted --watch
+```
+
+Each valid edit disposes the current roots and runtime, then mounts a fresh application. Component
+state, hooks, effects, subscriptions, refs, and timers do not carry across a reload. An invalid
+edit is reported without removing the last successfully mounted UI, so a later edit can retry.
+Watch mode is unavailable for compiled and embedded single-file applications.
+
 Publish a self-contained compiled application as one distributable Windows executable:
 
 ```powershell

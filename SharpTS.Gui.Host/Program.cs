@@ -29,6 +29,10 @@ public static class Program
             }
             if (embeddedPayloadAssembly is not null && options.ValidateDepsDirectory is not null)
                 throw new ArgumentException("--validate-deps is not available from an embedded single-file application.");
+            if (options.Watch && options.Mode != GuestMode.Interpreted)
+                throw new ArgumentException("--watch is available only in interpreted mode.");
+            if (options.Watch && embeddedPayloadAssembly is not null)
+                throw new ArgumentException("--watch is unavailable from an embedded single-file application.");
         }
         catch (Exception exception)
         {

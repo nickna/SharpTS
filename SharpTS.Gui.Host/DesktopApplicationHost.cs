@@ -8,6 +8,7 @@ using Avalonia.Threading;
 using SharpTS.Gui;
 using SharpTS.Hosting;
 using System.Reflection;
+using System.Security.Cryptography;
 
 namespace SharpTS.Gui.Host;
 
@@ -38,6 +39,17 @@ internal static class DesktopApplicationHost
         IGuestRuntime? guest = null;
         Exception? failure = null;
         ISharpTSScheduledWork? watchdog = null;
+        ISharpTSScheduledWork? hotReloadDelay = null;
+        Timer? hotReloadPoll = null;
+        FileSystemWatcher? hotReloadWatcher = null;
+        string? hotReloadEntryPath = null;
+        string? hotReloadConfigPath = null;
+        bool hotReloadAttempt = false;
+        bool hotReloadRunning = false;
+        bool guestInitializationComplete = false;
+        bool hotReloadChangePending = false;
+        string hotReloadFingerprint = string.Empty;
+        var hotReloadGate = new object();
 
         void RecordFailure(Exception exception)
         {
@@ -127,9 +139,174 @@ internal static class DesktopApplicationHost
 
         void ReportHostedError(SharpTSHostedError error)
         {
-            RecordFailure(error.Exception);
+            if (hotReloadAttempt)
+                Console.Error.WriteLine($"SharpTS GUI hot reload rejected: {error.Exception.Message}");
+            else
+                RecordFailure(error.Exception);
             // HostedInterpreterRuntime owns error shutdown ordering and requests
             // the host exit only after guest cleanup and lifecycle delivery.
+        }
+
+        void ReportReloadFailure(Exception exception)
+        {
+            try { Console.Error.WriteLine($"SharpTS GUI hot reload rejected: {exception.Message}"); }
+            catch { }
+            trace.Record("hot-reload-rejected", detail: exception.Message);
+        }
+
+        async Task ReloadInterpretedGuestAsync()
+        {
+            if (hotReloadRunning || shutdown.IsShutdownStarted ||
+                hotReloadEntryPath is null || hotReloadConfigPath is null)
+                return;
+            SynchronizationContext reloadContext = SynchronizationContext.Current
+                ?? throw new InvalidOperationException("Hot reload did not start on the Avalonia dispatcher.");
+            hotReloadRunning = true;
+            try
+            {
+                try
+                {
+                    InterpretedGuestRuntime.ValidateProgram(hotReloadEntryPath, hotReloadConfigPath);
+                }
+                catch (Exception exception)
+                {
+                    ReportReloadFailure(exception);
+                    return;
+                }
+
+                trace.Record("hot-reload-begin");
+                DesktopBridge.DisposeAllRoots();
+                IGuestRuntime? previous = guest;
+                guest = null;
+                previous?.Dispose();
+
+                var reloadLifetime = new AvaloniaHostLifetime(exitCode =>
+                {
+                    if (!hotReloadAttempt)
+                        hostLifetime.RequestExit(exitCode);
+                });
+                var next = new InterpretedGuestRuntime(
+                    hotReloadEntryPath,
+                    hotReloadConfigPath,
+                    hostDispatcher,
+                    reloadLifetime,
+                    new DelegateHostedErrorSink(ReportHostedError));
+                guest = next;
+                hotReloadAttempt = true;
+                try
+                {
+                    await next.InitializeAsync();
+                }
+                finally
+                {
+                    hotReloadAttempt = false;
+                }
+                AssertSynchronizationContext(reloadContext);
+                if (bridgeRegistration.Context.CurrentRoot?.Window is null)
+                    throw new InvalidOperationException("Reloaded guest did not mount a Window.");
+                trace.Record("hot-reload-end");
+                if (options.AutoClose)
+                {
+                    watchdog?.Cancel();
+                    shutdown.RequestShutdown(SharpTSHostedShutdownReason.HostRequested, 0);
+                }
+            }
+            catch (Exception exception)
+            {
+                hotReloadAttempt = false;
+                try { DesktopBridge.DisposeAllRoots(); } catch { }
+                try { guest?.Dispose(); } catch { }
+                guest = null;
+                ReportReloadFailure(exception);
+            }
+            finally
+            {
+                hotReloadRunning = false;
+                if (hotReloadChangePending && !shutdown.IsShutdownStarted)
+                    QueueHotReload();
+            }
+        }
+
+        void QueueHotReload()
+        {
+            if (shutdown.IsShutdownStarted)
+                return;
+            hotReloadChangePending = false;
+            hotReloadDelay?.Cancel();
+            hotReloadDelay?.Dispose();
+            hotReloadDelay = hostDispatcher.Schedule(
+                TimeSpan.FromMilliseconds(175),
+                () => _ = ReloadInterpretedGuestAsync());
+        }
+
+        void NotifyHotReloadChange(string detail, bool ownerThread)
+        {
+            trace.Record("hot-reload-change", detail: detail, requireOwnerThread: ownerThread);
+            if (ownerThread)
+            {
+                hotReloadChangePending = true;
+                if (guestInitializationComplete)
+                    QueueHotReload();
+            }
+            else
+            {
+                dispatcher.Post(() =>
+                {
+                    hotReloadChangePending = true;
+                    if (guestInitializationComplete)
+                        QueueHotReload();
+                }, DispatcherPriority.Background);
+            }
+        }
+
+        void PollHotReload(string root)
+        {
+            if (shutdown.IsShutdownStarted)
+                return;
+            try
+            {
+                string next = WatchFingerprint(root);
+                bool changed;
+                lock (hotReloadGate)
+                {
+                    changed = !string.Equals(next, hotReloadFingerprint, StringComparison.Ordinal);
+                    if (changed)
+                        hotReloadFingerprint = next;
+                }
+                if (changed)
+                    NotifyHotReloadChange("poll", ownerThread: false);
+            }
+            catch (Exception exception)
+            {
+                Console.Error.WriteLine($"SharpTS GUI hot-reload polling warning: {exception.Message}");
+            }
+        }
+
+        void StartHotReloadWatcher(string root)
+        {
+            var watcher = new FileSystemWatcher(root)
+            {
+                IncludeSubdirectories = true,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+            };
+            void Changed(object? sender, FileSystemEventArgs args)
+            {
+                string extension = Path.GetExtension(args.FullPath);
+                if (extension is not (".ts" or ".tsx") || IsIgnoredWatchPath(root, args.FullPath))
+                    return;
+                NotifyHotReloadChange(args.FullPath, ownerThread: false);
+            }
+            watcher.Changed += Changed;
+            watcher.Created += Changed;
+            watcher.Deleted += Changed;
+            watcher.Renamed += Changed;
+            watcher.EnableRaisingEvents = true;
+            hotReloadWatcher = watcher;
+            lock (hotReloadGate)
+                hotReloadFingerprint = WatchFingerprint(root);
+            hotReloadPoll = new Timer(
+                _ => PollHotReload(root), null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
+            trace.Record("hot-reload-watch", detail: root);
         }
 
         void CompleteAutoClose()
@@ -188,11 +365,20 @@ internal static class DesktopApplicationHost
                 GuiAppManifest manifest = embeddedPayloadAssembly is null
                     ? GuiPayloadLoader.LoadFile(baseDirectory)
                     : GuiPayloadLoader.LoadEmbedded(embeddedPayloadAssembly);
+                string interpretedEntryPath = GuiPayloadLoader.ResolvePath(baseDirectory, manifest.EntryPath);
+                string interpretedConfigPath = Path.Combine(baseDirectory, ".sharpts", "tsconfig.json");
+                if (options.Watch)
+                {
+                    interpretedEntryPath = ResolveDevelopmentEntry(Environment.CurrentDirectory, manifest.EntryPath);
+                    hotReloadEntryPath = interpretedEntryPath;
+                    hotReloadConfigPath = interpretedConfigPath;
+                    StartHotReloadWatcher(Environment.CurrentDirectory);
+                }
                 guest = options.Mode switch
                 {
                     GuestMode.Interpreted => new InterpretedGuestRuntime(
-                        GuiPayloadLoader.ResolvePath(baseDirectory, manifest.EntryPath),
-                        Path.Combine(baseDirectory, ".sharpts", "tsconfig.json"),
+                        interpretedEntryPath,
+                        interpretedConfigPath,
                         hostDispatcher,
                         hostLifetime,
                         new DelegateHostedErrorSink(ReportHostedError)),
@@ -210,10 +396,13 @@ internal static class DesktopApplicationHost
                     _ => throw new ArgumentOutOfRangeException()
                 };
                 await guest.InitializeAsync();
+                guestInitializationComplete = true;
                 AssertSynchronizationContext(hostedContext);
                 if (bridgeRegistration.Context.CurrentRoot?.Window is null)
                     throw new InvalidOperationException("Guest initialization returned without mounting a Window.");
                 trace.Record("guest-init-end");
+                if (hotReloadChangePending)
+                    QueueHotReload();
                 dispatcher.Post(() => trace.Record("dispatcher-sentinel"), DispatcherPriority.Background);
                 if (options.AutoClose)
                 {
@@ -240,6 +429,10 @@ internal static class DesktopApplicationHost
         finally
         {
             watchdog?.Cancel();
+            hotReloadDelay?.Cancel();
+            hotReloadDelay?.Dispose();
+            hotReloadPoll?.Dispose();
+            hotReloadWatcher?.Dispose();
             try
             {
                 DesktopBridge.DisposeAllRoots();
@@ -264,7 +457,7 @@ internal static class DesktopApplicationHost
 
         string? writtenTracePath = TryWriteTrace(trace, options);
 
-        if (failure == null && options.AutoClose)
+        if (failure == null && options.AutoClose && !options.Watch)
         {
             var validationFailures = trace.ValidateRequiredStages(options.Headless);
             if (validationFailures.Count > 0)
@@ -326,5 +519,45 @@ internal static class DesktopApplicationHost
                 $"'{SynchronizationContext.Current?.GetType().FullName ?? "<null>"}'.");
         }
     }
+
+    private static string ResolveDevelopmentEntry(string root, string manifestEntry)
+    {
+        string relative = manifestEntry.Replace('/', Path.DirectorySeparatorChar);
+        string prefix = "Guest" + Path.DirectorySeparatorChar;
+        string withoutGuest = relative.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+            ? relative[prefix.Length..]
+            : relative;
+        string direct = Path.GetFullPath(withoutGuest, root);
+        if (File.Exists(direct))
+            return direct;
+        string packagedLayout = Path.GetFullPath(relative, root);
+        if (File.Exists(packagedLayout))
+            return packagedLayout;
+        throw new FileNotFoundException(
+            $"SharpTS GUI watch entry '{withoutGuest}' was not found under '{root}'.", direct);
+    }
+
+    private static bool IsIgnoredWatchPath(string root, string path)
+    {
+        string relative = Path.GetRelativePath(root, path).Replace('\\', '/');
+        return relative.Split('/').Any(segment =>
+            segment.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+            segment.Equals("obj", StringComparison.OrdinalIgnoreCase) ||
+            segment.Equals("node_modules", StringComparison.OrdinalIgnoreCase) ||
+            segment.Equals(".git", StringComparison.OrdinalIgnoreCase) ||
+            segment.Equals(".sharpts", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string WatchFingerprint(string root) =>
+        string.Join("|", Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories)
+            .Where(path => Path.GetExtension(path) is ".ts" or ".tsx")
+            .Where(path => !IsIgnoredWatchPath(root, path))
+            .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+            .Select(path =>
+            {
+                var info = new FileInfo(path);
+                string contentHash = Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(path)));
+                return $"{Path.GetRelativePath(root, path)}:{info.Length}:{info.LastWriteTimeUtc.Ticks}:{contentHash}";
+            }));
 
 }

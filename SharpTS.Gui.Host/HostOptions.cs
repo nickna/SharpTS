@@ -13,7 +13,8 @@ internal sealed record HostOptions(
     bool IsTracePathHostManaged,
     string? ValidateDepsDirectory,
     bool ValidateCompiledOnly,
-    string[] GuestArguments);
+    string[] GuestArguments,
+    bool Watch);
 
 internal static class HostOptionsParser
 {
@@ -28,6 +29,7 @@ internal static class HostOptionsParser
         string? validateDeps = null;
         bool validateCompiledOnly = false;
         var guestArguments = new List<string>();
+        bool watch = false;
 
         for (int i = 0; i < args.Length; i++)
         {
@@ -52,6 +54,9 @@ internal static class HostOptionsParser
                     break;
                 case "--headless":
                     headless = true;
+                    break;
+                case "--watch":
+                    watch = true;
                     break;
                 case "--trace":
                     traceRequested = true;
@@ -87,7 +92,8 @@ internal static class HostOptionsParser
             hostManagedTrace,
             validateDeps,
             validateCompiledOnly,
-            guestArguments.ToArray());
+            guestArguments.ToArray(),
+            watch);
     }
 
     public static bool ShouldShowFatalDialog(string[] args) =>

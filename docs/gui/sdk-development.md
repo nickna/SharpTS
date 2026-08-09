@@ -42,6 +42,11 @@ dotnet run -- --mode interpreted
 dotnet run -- --mode compiled
 ```
 
+Use `dotnet run -- --mode interpreted --watch` for development remounts. A changed module graph is
+validated before the existing UI is removed; valid changes start a fresh runtime and intentionally
+reset component state, hooks, effects, subscriptions, refs, and timers. Invalid changes leave the
+last good UI mounted. Compiled and embedded single-file applications do not support watch mode.
+
 The template includes `headless.tests.tsx`. Run it against either execution mode with ordinary
 SDK commands:
 

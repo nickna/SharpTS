@@ -27,6 +27,8 @@ public sealed class HostInfrastructureTests
         Assert.False(options.IsTracePathHostManaged);
         Assert.False(options.ValidateCompiledOnly);
         Assert.Empty(options.GuestArguments);
+        Assert.False(options.Watch);
+        Assert.True(HostOptionsParser.Parse(["--watch"], GuestMode.Interpreted).Watch);
         HostOptions fileLaunch = HostOptionsParser.Parse(
             ["document.sharpts", "--", "--literal", "second.txt"], GuestMode.Compiled);
         Assert.Equal(["document.sharpts", "--literal", "second.txt"], fileLaunch.GuestArguments);
