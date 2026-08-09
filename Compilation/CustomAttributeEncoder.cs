@@ -16,8 +16,7 @@ public readonly record struct EncodedCustomAttribute(ConstructorInfo Ctor, byte[
 /// CustomAttributeBuilder included — is a <see cref="PlatformNotSupportedException"/> thrower,
 /// while <see cref="PersistedAssemblyBuilder"/>'s builders and their
 /// <c>SetCustomAttribute(ConstructorInfo, byte[])</c> overloads are fully supported. The emitter
-/// only ever uses positional arguments (no named fields/properties), so the encoding is the
-/// §II.23.3 prolog, the fixed args in constructor-parameter order, and a zero named-arg count.
+/// uses positional arguments and a small reviewed set of named properties.
 /// </summary>
 internal static class CustomAttributeEncoder
 {
@@ -25,12 +24,18 @@ internal static class CustomAttributeEncoder
     internal static readonly byte[] EmptyBlob = [0x01, 0x00, 0x00, 0x00];
 
     internal static byte[] Encode(ConstructorInfo ctor, params object?[] args)
+        => Encode(ctor, args, []);
+
+    internal static byte[] Encode(
+        ConstructorInfo ctor,
+        object?[] args,
+        params (PropertyInfo Property, object? Value)[] namedProperties)
     {
         var parameters = ctor.GetParameters();
         if (parameters.Length != args.Length)
             throw new ArgumentException(
                 $"Attribute constructor {ctor.DeclaringType?.Name} expects {parameters.Length} args, got {args.Length}.");
-        if (args.Length == 0)
+        if (args.Length == 0 && namedProperties.Length == 0)
             return EmptyBlob;
 
         using var ms = new MemoryStream();
@@ -38,9 +43,40 @@ internal static class CustomAttributeEncoder
         w.Write((ushort)0x0001); // prolog
         for (int i = 0; i < args.Length; i++)
             WriteFixedArg(w, parameters[i].ParameterType, args[i]);
-        w.Write((ushort)0); // named-arg count
+        w.Write(checked((ushort)namedProperties.Length));
+        foreach ((PropertyInfo property, object? value) in namedProperties)
+        {
+            w.Write((byte)0x54); // PROPERTY
+            WriteFieldOrPropType(w, property.PropertyType);
+            WriteSerString(w, property.Name);
+            WriteFixedArg(w, property.PropertyType, value);
+        }
         w.Flush();
         return ms.ToArray();
+    }
+
+    private static void WriteFieldOrPropType(BinaryWriter w, Type type)
+    {
+        if (type.IsEnum)
+        {
+            w.Write((byte)0x55);
+            WriteSerString(w, SerializedTypeName(type));
+            return;
+        }
+        byte elementType = Type.GetTypeCode(type) switch
+        {
+            TypeCode.Boolean => 0x02, TypeCode.Char => 0x03,
+            TypeCode.SByte => 0x04, TypeCode.Byte => 0x05,
+            TypeCode.Int16 => 0x06, TypeCode.UInt16 => 0x07,
+            TypeCode.Int32 => 0x08, TypeCode.UInt32 => 0x09,
+            TypeCode.Int64 => 0x0a, TypeCode.UInt64 => 0x0b,
+            TypeCode.Single => 0x0c, TypeCode.Double => 0x0d,
+            TypeCode.String => 0x0e,
+            _ when type == typeof(Type) => 0x50,
+            _ => throw new NotSupportedException(
+                $"CustomAttributeEncoder: unsupported named property type '{type}'."),
+        };
+        w.Write(elementType);
     }
 
     private static void WriteFixedArg(BinaryWriter w, Type parameterType, object? value)

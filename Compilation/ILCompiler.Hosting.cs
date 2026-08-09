@@ -173,11 +173,12 @@ public partial class ILCompiler
             nameof(UnconditionalSuppressMessageAttribute.Justification))!;
         foreach (string diagnosticId in diagnosticIds)
         {
-            _assemblyBuilder.SetCustomAttribute(new CustomAttributeBuilder(
+            _assemblyBuilder.SetCustomAttribute(
                 constructor,
-                ["Trimming/AOT", diagnosticId],
-                [justificationProperty],
-                [justification]));
+                CustomAttributeEncoder.Encode(
+                    constructor,
+                    ["Trimming/AOT", diagnosticId],
+                    (justificationProperty, justification)));
         }
     }
 

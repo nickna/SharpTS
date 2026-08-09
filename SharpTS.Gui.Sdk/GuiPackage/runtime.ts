@@ -922,6 +922,11 @@ export interface DesktopDisplayInfo {
     bounds: DesktopDisplayBounds;
     workingArea: DesktopDisplayBounds;
 }
+export interface DesktopNotificationOptions {
+    title: string;
+    message?: string;
+    silent?: boolean;
+}
 export async function showMessageDialog(options: MessageDialogOptions): Promise<MessageDialogResult> { return await DesktopBridge.ShowMessageDialogAsync(options.title || "", options.message, options.buttons || "ok") as any; }
 export async function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> { return await DesktopBridge.ShowOpenFileDialogAsync(options.title || "", options.allowMultiple === true, JSON.stringify(options.filters || [])) as any; }
 export async function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise<string | null> { return await DesktopBridge.ShowSaveFileDialogAsync(options.title || "", options.suggestedFileName || "", options.defaultExtension || "", JSON.stringify(options.filters || [])) as any; }
@@ -934,3 +939,6 @@ export function getDesktopDisplays(): DesktopDisplayInfo[] { return JSON.parse(D
 export async function openExternal(target: string): Promise<void> { await DesktopBridge.OpenDesktopExternalAsync(target); }
 export async function showItemInFolder(path: string): Promise<void> { await DesktopBridge.ShowDesktopItemInFolderAsync(path); }
 export async function printFile(path: string): Promise<void> { await DesktopBridge.PrintDesktopFileAsync(path); }
+export function showNotification(options: DesktopNotificationOptions): Promise<void> {
+    return DesktopBridge.ShowDesktopNotificationAsync(options.title, options.message || "", options.silent === true) as any;
+}

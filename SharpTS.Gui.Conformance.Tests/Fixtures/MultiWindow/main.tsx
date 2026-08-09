@@ -11,6 +11,7 @@ import {
     createTree,
     createVirtualDataGrid,
     createVirtualList,
+    showNotification,
 } from "@sharpts/gui";
 import { dropText, getProperty, queueMicrotask as queueHostedMicrotask, trace } from "@sharpts/gui/internal-testing";
 
@@ -87,6 +88,8 @@ tray.update({ icon: "asset:///headless.ico", toolTip: "Updated" });
 tray.dispose();
 if (!tray.isDisposed) throw new Error("Tray icon did not dispose.");
 trace("multi-window-platform-services");
+void showNotification({ title: "SharpTS conformance", message: "Headless delivery", silent: true });
+trace("multi-window-notification");
 const secondaryWindow = application.createWindow(
     <Window title="Secondary"><TextBlock>Secondary</TextBlock></Window>,
     { owner: mainWindow },

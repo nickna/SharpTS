@@ -6,6 +6,13 @@ feeds, or enterprise deployment. The package identity and certificate publisher 
 once an application is distributed because Windows uses that pair for upgrades, data ownership,
 and notification identity.
 
+That package identity is also the prerequisite for `showNotification`. The preview notification
+API submits informational `ToastGeneric` content through the inbox Windows Runtime notification
+interfaces; it does not register a COM activator or expose click/actions callbacks. Consequently
+the manifest needs no notification-specific capability or activation extension. An unpackaged
+executable is rejected before native notification activation rather than being assigned an
+unstable application identifier.
+
 ## Build and package
 
 Publish a compiled application first, preferably with the warning-clean Native AOT profile:

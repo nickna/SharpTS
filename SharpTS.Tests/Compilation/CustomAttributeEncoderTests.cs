@@ -137,6 +137,24 @@ public class CustomAttributeEncoderTests
     }
 
     [Fact]
+    public void Named_string_property_is_encoded_after_fixed_arguments()
+    {
+        ConstructorInfo ctor = Ctor<System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute>(
+            typeof(string), typeof(string));
+        PropertyInfo property = typeof(System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute)
+            .GetProperty(nameof(System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessageAttribute.Justification))!;
+
+        byte[] blob = CustomAttributeEncoder.Encode(
+            ctor,
+            ["A", "B"],
+            (property, "why"));
+
+        Assert.Contains((byte)0x54, blob);
+        Assert.True(blob.AsSpan().IndexOf(System.Text.Encoding.UTF8.GetBytes("Justification")) >= 0);
+        Assert.Equal(1, BitConverter.ToUInt16(blob, 6));
+    }
+
+    [Fact]
     public void Round_trips_through_a_persisted_assembly()
     {
         // End-to-end fidelity: the blob applied via SetCustomAttribute must read

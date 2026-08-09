@@ -631,6 +631,13 @@ public static class DesktopBridge
     public static Task PrintDesktopFileAsync(string path) =>
         DesktopPlatformServices.PrintFileAsync(path);
 
+    public static Task ShowDesktopNotificationAsync(string title, string message, bool silent)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return DesktopNotifications.ShowAsync(context.IsHeadless, title, message, silent);
+    }
+
     public static DesktopTrayIcon CreateDesktopTrayIcon(
         DesktopApplicationSession application,
         string icon,

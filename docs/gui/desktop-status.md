@@ -169,9 +169,20 @@ LSP metadata, SDK template, projectless CLI, multi-window lifecycle, resources/s
 controls, retained drawing, static custom providers, Windows platform services, hot reload,
 devtools, and Windows environment conformance are complete for their declared surface. The x64
 SDK now produces and runs a warning-clean Native AOT application under versioned performance and
-artifact budgets. Native ARM64 execution, public package onboarding, production signing identity,
-notifications, and macOS remain external or later-platform gates. See
+artifact budgets. Installed MSIX applications also expose bounded informational local
+notifications without adding a Windows App SDK runtime dependency. Native ARM64 execution, public
+package onboarding, production signing identity, and native macOS evidence remain external gates. See
 `docs/gui/migrating-api-1-to-2.md` for the preview.1 contract.
+
+The notification adapter is a fixed, reflection-free WinRT ABI binding guarded by package-identity
+detection. Headless calls validate and complete without native delivery; interpreted and compiled
+multi-window guests exercise the public API, while an unpackaged native call proves the explicit
+MSIX rejection. On 2026-08-09 the 76-test GUI conformance suite, 33 focused JSX/SDK tests, five
+Windows distribution tests, Release package audit, full Windows x64 real-window/Native AOT
+lifecycle, Windows ARM64 cross-publish, both macOS cross-publish matrices, and the canonical core
+suite (16,555 passed, two documented skips) passed. The exact
+candidate was 39,752,127 bytes with SHA-256
+`8A5081BC1779A84B84A563E693C7EE2539D35E398C772384F3E9CA20E09F04E3`.
 
 ## Phase 3B CLI and candidate status
 
@@ -343,7 +354,7 @@ claim that every Windows architecture has executed natively and not a cross-plat
 - NuGet ID reservation/onboarding, API-key scope validation, and package publication.
 - Production signing-certificate execution and publication of an application-owned MSIX identity;
   local packaging, update, SBOM/provenance, diagnostics, enterprise, and support-policy gates exist.
-- Packaged Windows notifications, arbitrary public control templates, and a full editing DataGrid.
+- Arbitrary public control templates and a full editing DataGrid.
 - Native AOT ARM64 certification and native macOS certification/signing evidence.
 
 ## Architecture boundaries
@@ -404,7 +415,8 @@ Compatibility/versioning policy, recoverable native commit errors, leak/soak and
 renderer gates, GUI performance budgets, static custom-control providers, and the local Windows
 distribution/support toolchain are now implemented. Remaining release stabilization is evidence:
 native ARM64 execution, public package ownership, production certificate-backed installer runs,
-packaged notifications, and native/signing evidence for the macOS candidate.
+and native/signing evidence for the macOS candidate. Packaged informational notifications are
+locally implemented; production identity-backed execution remains part of the installer evidence.
 
 ## macOS reactivation status
 
@@ -412,8 +424,8 @@ Track E implementation is locally complete. `osx-x64` and `osx-arm64` are explic
 the host uses macOS log/alert behavior; both architectures cross-publish from the same audited
 package; real Mach-O outputs pass `.app`, plist, symbol, architecture, and checksum validation;
 and native Intel/Apple-Silicon plus protected signing/notarization workflows are committed. The
-exact local package was 39,745,881 bytes with SHA-256
-`448CD57A08620B2FCCD5FCA87F7DAB7A18E97D7B9C3FAAF773314A05FB4561B8`.
+current exact local package is 39,752,127 bytes with SHA-256
+`8A5081BC1779A84B84A563E693C7EE2539D35E398C772384F3E9CA20E09F04E3`.
 
 Still required before support: execute interpreted and compiled Headless and real-window cases
 natively on both architectures, then run Developer ID signing, app/DMG notarization, stapling,

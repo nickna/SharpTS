@@ -100,6 +100,27 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
+    public async Task DesktopNotifications_ValidateEscapeAndNoOpInHeadlessMode()
+    {
+        string xml = DesktopNotifications.CreateToastXml("Ready <now>", "Use A&B", silent: true);
+        var toast = System.Xml.Linq.XDocument.Parse(xml);
+        Assert.Equal("Ready <now>", toast.Descendants("text").First().Value);
+        Assert.Equal("Use A&B", toast.Descendants("text").Last().Value);
+        Assert.Equal("true", toast.Descendants("audio").Single().Attribute("silent")?.Value);
+
+        await DesktopBridge.ShowDesktopNotificationAsync("Headless", "Validated", silent: false);
+        Assert.Throws<ArgumentException>(() => DesktopNotifications.CreateToastXml(" ", "body", false));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DesktopNotifications.CreateToastXml(new string('x', 257), "body", false));
+        if (OperatingSystem.IsWindows() && !DesktopNotifications.HasPackageIdentity())
+        {
+            InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+                DesktopNotifications.ShowAsync(headless: false, "Unpackaged", "Rejected", silent: false));
+            Assert.Contains("MSIX package identity", error.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void DragDrop_NormalizesPayloadUsesLatestCallbacksAndReleasesSubscriptions()
     {
         var events = new List<string>();

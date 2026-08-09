@@ -128,8 +128,10 @@ The module also provides message, file, folder, and save dialogs; clipboard read
 statically owned system-tray icons and menus; launch/file-association arguments; platform and known
 folder information; safe external URI/file launching; Explorer reveal; and Windows shell printing.
 Tray resources are application-owned and dispose automatically with their desktop application.
-Notification delivery remains outside the preview until the installer can provide a stable Windows
-application identity.
+Installed Windows MSIX applications can submit informational local notifications with
+`showNotification({ title, message, silent })`. The call validates its bounded text contract and
+rejects unpackaged launches with an MSIX-identity diagnostic. Notification actions, images,
+progress updates, and click-activation callbacks are not part of this preview surface.
 Explicit desktop applications accept primitive resource dictionaries and native Avalonia styles
 with built-in type/class selectors and a trimming-safe setter allow-list. Controls opt into class
 selectors with `classes`, and a window can query its effective resources with `findResource`.

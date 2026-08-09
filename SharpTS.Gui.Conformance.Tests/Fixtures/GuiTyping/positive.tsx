@@ -19,6 +19,7 @@ import {
     getLaunchArguments,
     openExternal,
     printFile,
+    showNotification,
     showItemInFolder,
     useControlRef,
 } from "@sharpts/gui";
@@ -78,6 +79,7 @@ void getLaunchArguments();
 void openExternal("https://example.com");
 void showItemInFolder("document.txt");
 void printFile("document.txt");
+void showNotification({ title: "Build complete", message: "The package is ready.", silent: true });
 application.shutdown(0);
 
 const records = [{ id: 1, name: "One", children: [] as any[] }];

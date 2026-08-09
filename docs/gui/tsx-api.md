@@ -157,6 +157,13 @@ and SHA-256 pin:
 `showMessageDialog`, `showOpenFileDialog`, `showSaveFileDialog`, `showFolderDialog`,
 `readClipboardText`, and `writeClipboardText` require a mounted, non-Headless window.
 
+`showNotification({ title, message?, silent? })` submits an informational local notification from
+an installed Windows MSIX application. The required title is limited to 256 UTF-16 code units and
+the optional message to 4,096; both are XML-escaped by the host. `silent: true` suppresses the
+notification sound. An unpackaged launch rejects with an explicit package-identity diagnostic.
+Actions, images, progress updates, and click-activation callbacks are intentionally outside this
+preview contract, so applications must not use notification interaction as a required workflow.
+
 `getDesktopDisplays()` requires a mounted window and reports every display visible to that window:
 name, primary state, pixel bounds, working area, orientation, and scaling factor. This is the
 supported basis for high-DPI and multiple-monitor layout decisions. Common `automationName`,
@@ -165,9 +172,9 @@ the Window `system`/`light`/`dark` theme selector map directly to Avalonia nativ
 
 ## Current version 2 boundaries
 
-Each window still requires exactly one `Window` root and built-in descriptors. Combo/list data is
-string-backed. Public custom controls, arbitrary Avalonia control templates, a full editing
-`DataGrid`, and macOS are not yet supported. Typed item templates, a windowed virtual grid, native
+Each window still requires exactly one `Window` root and built-in or statically registered
+descriptors. Combo/list data is string-backed. Arbitrary Avalonia control templates, a full editing
+`DataGrid`, and certified macOS execution are not yet supported. Typed item templates, a windowed virtual grid, native
 list/tree hosts, rich text, canvas/drawing, resources, class/type selectors, styles, theme variants,
 and resource lookup are supported. Multi-window orchestration is available through
 `createDesktopApplication`; `renderDesktop` remains the one-window convenience API.

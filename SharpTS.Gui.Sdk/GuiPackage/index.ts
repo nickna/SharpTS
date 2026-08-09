@@ -61,6 +61,7 @@ export {
     openExternal,
     showItemInFolder,
     printFile,
+    showNotification,
     createVirtualList,
     createTree,
     createVirtualDataGrid,
@@ -165,4 +166,5 @@ export type {
     DesktopPlatformInfo,
     DesktopDisplayBounds,
     DesktopDisplayInfo,
+    DesktopNotificationOptions,
 } from "./runtime";

@@ -43,7 +43,7 @@ tooling, release closure, and ecosystem depth.
 | Phase 2B | **Complete at `383be81e`.** Generated contract, JSX completion, commit recovery, LSP metadata, benchmarks, and retention gates landed | Regression coverage and release evidence only |
 | Phase 3A | **Complete in the Phase 3A implementation commit.** Template, ordinary-command workflow, incremental inputs, compiled-only output, docs, and packaged lifecycle gate landed | Regression coverage and release evidence only |
 | Phase 3B | **CLI complete; local x64 and ARM64 cross-publish candidate gates pass.** Public NuGet onboarding and native ARM64 execution remain externally blocked | Publish only after package ownership/key scope and native ARM64 evidence exist |
-| Phase 4 | Track A is complete for its declared surface; Track B lacks packaged notifications. Tracks C and D are locally complete with external ARM64/signing gates. Track E implementation and cross-publish are complete, with native macOS and Apple release evidence externally blocked | Complete each independently selected release track without weakening its native evidence |
+| Phase 4 | Tracks A and B are complete for their declared surfaces. Tracks C and D are locally complete with external ARM64/signing gates. Track E implementation and cross-publish are complete, with native macOS and Apple release evidence externally blocked | Complete each independently selected release track without weakening its native evidence |
 
 ## Prerequisite integration gate
 
@@ -414,10 +414,11 @@ contract stabilizes.
 
 ### Track B: desktop services and developer experience
 
-- **Partially complete:** menus, dialogs, clipboard, file-association launch arguments, application-
+- **Complete for the supported surface:** menus, dialogs, clipboard, file-association launch arguments, application-
   owned system tray/menu handles, Windows shell printing, external launch/reveal, and platform/
-  known-folder services, and normalized text/local-file drag-and-drop are implemented and dual-mode
-  tested. Notifications require the installer identity selected in Track D.
+  known-folder services, normalized text/local-file drag-and-drop, and informational packaged
+  Windows notifications are implemented and dual-mode tested. Notifications require the MSIX
+  identity selected in Track D; actions and activation callbacks remain outside the preview API.
 - **Complete:** interpreted `--watch` validates each changed module graph while the last good UI
   remains mounted, then disposes it and performs a fresh remount. Component, hook, timer, effect,
   and subscription state is intentionally reset; rejected edits retain the last good tree.

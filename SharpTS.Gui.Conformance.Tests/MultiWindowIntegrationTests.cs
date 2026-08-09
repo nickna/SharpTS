@@ -51,6 +51,7 @@ public sealed class MultiWindowIntegrationTests
             string[] expected =
             [
                 "multi-window-platform-services",
+                "multi-window-notification",
                 "multi-window-mounted",
                 "multi-window-drop",
                 "multi-window-secondary-closed",

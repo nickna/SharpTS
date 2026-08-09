@@ -5,6 +5,7 @@
     <AssemblyName>SharpTS.Gui</AssemblyName>
     <RootNamespace>SharpTS.Gui</RootNamespace>
     <Description>Retained Avalonia renderer for the SharpTS GUI SDK public preview.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
