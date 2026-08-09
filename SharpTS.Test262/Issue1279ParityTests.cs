@@ -1459,6 +1459,7 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Object/entries/order-after-define-property-with-function.js")]
+    [InlineData("built-ins/Object/entries/order-after-define-property.js")]
     [InlineData("built-ins/Object/keys/order-after-define-property-with-function.js")]
     [InlineData("built-ins/Object/keys/order-after-define-property.js")]
     public void Object_enumeration_preserves_key_creation_order(string relativePath)
