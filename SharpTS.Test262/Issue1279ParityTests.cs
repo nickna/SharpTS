@@ -1439,6 +1439,12 @@ public sealed class Issue1279ParityTests
     public void Object_enumeration_methods_omit_inherited_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_keys_returns_integer_indices_before_creation_ordered_strings()
+        => AssertPass(
+            "built-ins/Object/keys/return-order.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
