@@ -16,6 +16,6 @@
   </ItemGroup>
 
   <Target Name="VerifyGeneratedGuiControlContract" BeforeTargets="CoreCompile">
-    <Exec Command="dotnet &quot;$(MSBuildThisFileDirectory)..\SharpTS.Gui.Generator\bin\$(Configuration)\net10.0\SharpTS.Gui.Generator.dll&quot; verify" />
+    <Exec Command="dotnet &quot;$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'SharpTS.Gui.Generator', 'bin', '$(Configuration)', 'net10.0', 'SharpTS.Gui.Generator.dll'))&quot; verify" />
   </Target>
 </Project>
