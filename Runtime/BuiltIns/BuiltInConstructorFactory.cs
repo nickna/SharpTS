@@ -474,8 +474,11 @@ public static class BuiltInConstructorFactory
                 Value = value[i].ToString(),
                 HasValue = true,
                 Writable = false,
+                HasWritable = true,
                 Enumerable = true,
+                HasEnumerable = true,
                 Configurable = false,
+                HasConfigurable = true,
             });
         }
         wrapper.DefineProperty("length", new SharpTSPropertyDescriptor
@@ -483,8 +486,11 @@ public static class BuiltInConstructorFactory
             Value = (double)value.Length,
             HasValue = true,
             Writable = false,
+            HasWritable = true,
             Enumerable = false,
+            HasEnumerable = true,
             Configurable = false,
+            HasConfigurable = true,
         });
         return wrapper;
     }
