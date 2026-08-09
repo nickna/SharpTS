@@ -261,5 +261,8 @@ if (lifecycleScenario === "normal") {
         trace("window-close-request");
         closeWindow();
     }) as any, 1);
-    setTimeout((() => trace("late-window-timer")) as any, 200);
+    // This is a cancellation sentinel, not a latency assertion. Keep it well
+    // beyond dispatcher delays seen when the GUI suite shares a saturated CI
+    // runner with the full compiler suite.
+    setTimeout((() => trace("late-window-timer")) as any, 5000);
 }
