@@ -1,3 +1,4 @@
+using SharpTS.Compilation;
 using SharpTS.Execution;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Exceptions;
@@ -206,9 +207,41 @@ public class SharpTSProxy : ISharpTSCallable
             return ObjectBuiltIns.DefinePropertyOnProxyTarget(
                 interpreter, _target, prop, descriptor);
 
-        return ToBoolean(InvokeTrap(
+        bool trapResult = ToBoolean(InvokeTrap(
             trap, interpreter, [_target, prop, descriptor]));
+        if (!trapResult) return false;
+
+        object? targetDescriptor = _target is SharpTSProxy proxy
+            ? proxy.TrapGetOwnPropertyDescriptor(prop, interpreter)
+            : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop);
+        bool targetHasProperty = targetDescriptor is not (null or SharpTSUndefined);
+        if (!targetHasProperty)
+        {
+            if (!TargetIsExtensible(_target))
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy defineProperty trap cannot add a property to a non-extensible target"));
+
+            var requested = SharpTSPropertyDescriptor.FromAnyObject(descriptor);
+            if (requested.HasConfigurable && !requested.Configurable)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy defineProperty trap cannot create a non-configurable target property"));
+        }
+
+        return true;
     }
+
+    private static bool TargetIsExtensible(object target) => target switch
+    {
+        SharpTSProxy proxy => TargetIsExtensible(proxy.Target),
+        SharpTSObject obj => obj.IsExtensible,
+        SharpTSInstance instance => instance.IsExtensible,
+        SharpTSArray array => array.IsExtensible,
+        Dictionary<string, object?> dictionary
+            => PropertyDescriptorStore.IsExtensible(dictionary),
+        System.Collections.IDictionary dictionary
+            => PropertyDescriptorStore.IsExtensible(dictionary),
+        _ => PropertyDescriptorStore.IsExtensible(target),
+    };
 
     /// <summary>
     /// ECMA-262 10.5.11 [[OwnPropertyKeys]] trap. Returns the property names visible
