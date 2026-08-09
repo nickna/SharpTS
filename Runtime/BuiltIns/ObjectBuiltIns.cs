@@ -99,7 +99,10 @@ public static partial class ObjectBuiltIns
                 }
                 yield break;
             case SharpTSObject obj:
-                foreach (var k in obj.OwnEnumerableKeys())
+                // EnumerableOwnProperties snapshots [[OwnPropertyKeys]] before
+                // reading values. A getter may add or delete siblings without
+                // changing the key list being traversed by entries()/values().
+                foreach (var k in obj.OwnEnumerableKeys().ToList())
                     yield return new(k, interpreter.GetProperty(obj, k));
                 yield break;
             case SharpTSArray arr:
