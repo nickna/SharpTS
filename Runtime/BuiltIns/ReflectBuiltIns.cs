@@ -295,14 +295,14 @@ public static class ReflectBuiltIns
                 var target = args[0].ToObject() ?? throw new Exception("Runtime Error: Reflect.defineProperty requires a target object.");
                 var propertyKey = args[1].ToObject()?.ToString() ?? "";
                 var descriptorArg = args[2].ToObject() ?? throw new Exception("TypeError: Property description must be an object");
+                if (target is SharpTSProxy proxy)
+                {
+                    return RuntimeValue.FromBoolean(proxy.TrapDefineProperty(
+                        propertyKey, descriptorArg, interpreter));
+                }
+
                 try
                 {
-                    if (target is SharpTSProxy proxy)
-                    {
-                        return RuntimeValue.FromBoolean(proxy.TrapDefineProperty(
-                            propertyKey, descriptorArg, interpreter));
-                    }
-
                     SharpTSPropertyDescriptor descriptor = SharpTSPropertyDescriptor.FromAnyObject(descriptorArg);
                     if (target is SharpTSArray
                         && propertyKey == "length"
