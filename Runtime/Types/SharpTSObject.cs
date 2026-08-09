@@ -878,7 +878,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 HasGet = true,
                 HasSet = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
         else
@@ -887,9 +889,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return new SharpTSPropertyDescriptor
             {
                 Value = fieldValue,
+                HasValue = true,
                 Writable = flags.Writable,
+                HasWritable = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
     }
