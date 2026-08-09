@@ -1286,11 +1286,11 @@ public partial class Interpreter
 
         if (right is SharpTSObject obj)
         {
-            return obj.HasProperty(key);
+            return HasProperty(obj, key);
         }
         if (right is SharpTSInstance instance)
         {
-            return instance.HasProperty(key);
+            return HasProperty(instance, key);
         }
         if (right is SharpTSArray arr)
         {
