@@ -424,8 +424,9 @@ contract stabilizes.
 - **Complete:** the `@sharpts/gui/devtools` subpath exposes a source-aware component/native-tree
   inspector plus Skia-backed Headless PNG capture and exact baseline comparison. Mismatches retain
   an `.actual.png` artifact and report both SHA-256 values.
-- Complete accessibility, keyboard navigation, focus, IME, high-DPI, multiple-monitor, and theme
-  conformance.
+- **Complete for Windows:** native automation names, keyboard routing/repeat state, typed control
+  focus, committed IME text, per-window light/dark/system themes, and display bounds/working-area/
+  scaling/orientation enumeration are covered by Headless and renderer conformance gates.
 
 ### Track C: optimization and Native AOT
 

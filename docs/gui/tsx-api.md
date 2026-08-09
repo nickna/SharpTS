@@ -157,6 +157,12 @@ and SHA-256 pin:
 `showMessageDialog`, `showOpenFileDialog`, `showSaveFileDialog`, `showFolderDialog`,
 `readClipboardText`, and `writeClipboardText` require a mounted, non-Headless window.
 
+`getDesktopDisplays()` requires a mounted window and reports every display visible to that window:
+name, primary state, pixel bounds, working area, orientation, and scaling factor. This is the
+supported basis for high-DPI and multiple-monitor layout decisions. Common `automationName`,
+keyboard handlers, typed ref `focus()`, committed text-change events (including IME commits), and
+the Window `system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
+
 ## Current version 2 boundaries
 
 Each window still requires exactly one `Window` root and built-in descriptors. Combo/list data is

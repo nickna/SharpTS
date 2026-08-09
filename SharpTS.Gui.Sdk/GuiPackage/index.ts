@@ -57,6 +57,7 @@ export {
     writeClipboardText,
     getLaunchArguments,
     getDesktopPlatformInfo,
+    getDesktopDisplays,
     openExternal,
     showItemInFolder,
     printFile,
@@ -162,4 +163,6 @@ export type {
     TrayIconOptions,
     DesktopTrayIcon,
     DesktopPlatformInfo,
+    DesktopDisplayBounds,
+    DesktopDisplayInfo,
 } from "./runtime";

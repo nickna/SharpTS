@@ -913,6 +913,15 @@ export interface DesktopPlatformInfo {
     desktop: string;
     temporaryDirectory: string;
 }
+export interface DesktopDisplayBounds { x: number; y: number; width: number; height: number; }
+export interface DesktopDisplayInfo {
+    name: string;
+    isPrimary: boolean;
+    scaling: number;
+    orientation: "landscape" | "portrait" | "landscapeflipped" | "portraitflipped" | "none";
+    bounds: DesktopDisplayBounds;
+    workingArea: DesktopDisplayBounds;
+}
 export async function showMessageDialog(options: MessageDialogOptions): Promise<MessageDialogResult> { return await DesktopBridge.ShowMessageDialogAsync(options.title || "", options.message, options.buttons || "ok") as any; }
 export async function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> { return await DesktopBridge.ShowOpenFileDialogAsync(options.title || "", options.allowMultiple === true, JSON.stringify(options.filters || [])) as any; }
 export async function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise<string | null> { return await DesktopBridge.ShowSaveFileDialogAsync(options.title || "", options.suggestedFileName || "", options.defaultExtension || "", JSON.stringify(options.filters || [])) as any; }
@@ -921,6 +930,7 @@ export async function readClipboardText(): Promise<string> { return await Deskto
 export async function writeClipboardText(value: string): Promise<void> { await DesktopBridge.WriteClipboardTextAsync(value); }
 export function getLaunchArguments(): string[] { return DesktopBridge.GetDesktopLaunchArguments() as any; }
 export function getDesktopPlatformInfo(): DesktopPlatformInfo { return JSON.parse(DesktopBridge.GetDesktopPlatformInfoJson()) as DesktopPlatformInfo; }
+export function getDesktopDisplays(): DesktopDisplayInfo[] { return JSON.parse(DesktopBridge.GetDesktopDisplaysJson()) as DesktopDisplayInfo[]; }
 export async function openExternal(target: string): Promise<void> { await DesktopBridge.OpenDesktopExternalAsync(target); }
 export async function showItemInFolder(path: string): Promise<void> { await DesktopBridge.ShowDesktopItemInFolderAsync(path); }
 export async function printFile(path: string): Promise<void> { await DesktopBridge.PrintDesktopFileAsync(path); }

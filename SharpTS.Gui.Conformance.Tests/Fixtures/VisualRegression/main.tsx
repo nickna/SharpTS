@@ -1,4 +1,4 @@
-import { Border, TextBlock, Window, renderDesktop } from "@sharpts/gui";
+import { Border, TextBlock, Window, getDesktopDisplays, renderDesktop } from "@sharpts/gui";
 import { assertHeadlessSnapshot, inspectDesktopTree } from "@sharpts/gui/devtools";
 import { closeWindow } from "@sharpts/gui/internal-testing";
 
@@ -14,6 +14,10 @@ setTimeout((() => {
     const tree = inspectDesktopTree();
     if (tree.windows.length !== 1 || tree.windows[0].children[0].kind !== "Border") {
         throw new Error("Visual regression inspector failed.");
+    }
+    const displays = getDesktopDisplays();
+    if (displays.length === 0 || displays[0].scaling <= 0 || displays[0].bounds.width <= 0) {
+        throw new Error("Desktop display/scaling contract failed.");
     }
     const created = assertHeadlessSnapshot("visual-baseline.png", true);
     const verified = assertHeadlessSnapshot("visual-baseline.png");

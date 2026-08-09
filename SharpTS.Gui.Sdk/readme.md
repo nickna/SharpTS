@@ -66,6 +66,11 @@ in normal tests. A mismatch writes `Snapshots/main.actual.png` and reports expec
 values. Snapshot capture is restricted to `--headless` runs and uses the deterministic Skia-backed
 Headless renderer.
 
+`getDesktopDisplays()` returns the current Avalonia display topology with primary-display state,
+pixel bounds and working areas, orientation, and per-display scaling. Controls retain native
+automation names, tab/focus behavior, keyboard routing, and committed IME text behavior; window
+`theme` accepts `system`, `light`, or `dark`.
+
 Publish a self-contained compiled application as one distributable Windows executable:
 
 ```powershell

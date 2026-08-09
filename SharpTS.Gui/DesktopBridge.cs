@@ -619,6 +619,9 @@ public static class DesktopBridge
     public static string GetDesktopPlatformInfoJson() =>
         DesktopPlatformServices.PlatformInfoJson();
 
+    public static string GetDesktopDisplaysJson() =>
+        RequireContext().GetDisplaysJson();
+
     public static Task OpenDesktopExternalAsync(string target) =>
         DesktopPlatformServices.OpenExternalAsync(target);
 

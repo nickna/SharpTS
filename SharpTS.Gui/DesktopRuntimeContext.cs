@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Media.Imaging;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text.Json;
 
 namespace SharpTS.Gui;
 
@@ -48,6 +49,34 @@ internal sealed class DesktopRuntimeContext
 
     public IReadOnlyList<DesktopRoot> Roots => _roots;
     public string[] GetLaunchArguments() => _launchArguments.ToArray();
+
+    public string GetDisplaysJson()
+    {
+        EnsureOwnerThread();
+        Window window = CurrentRoot?.Window
+            ?? throw new InvalidOperationException("No desktop Window is mounted.");
+        return JsonSerializer.Serialize(window.Screens.All.Select(screen => new
+        {
+            name = screen.DisplayName ?? string.Empty,
+            isPrimary = screen.IsPrimary,
+            scaling = screen.Scaling,
+            orientation = screen.CurrentOrientation.ToString().ToLowerInvariant(),
+            bounds = new
+            {
+                x = screen.Bounds.X,
+                y = screen.Bounds.Y,
+                width = screen.Bounds.Width,
+                height = screen.Bounds.Height,
+            },
+            workingArea = new
+            {
+                x = screen.WorkingArea.X,
+                y = screen.WorkingArea.Y,
+                width = screen.WorkingArea.Width,
+                height = screen.WorkingArea.Height,
+            },
+        }));
+    }
 
     public DesktopRoot CreateRoot(Action reactiveCleanup)
     {

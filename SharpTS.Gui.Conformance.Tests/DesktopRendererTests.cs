@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
@@ -6,6 +7,7 @@ using Avalonia.Interactivity;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -821,6 +823,32 @@ public sealed class DesktopRendererTests : IDisposable
         Assert.Same(probe, root.FindControl("probe"));
         Assert.Equal(100, probe.Width);
         Assert.Equal("stable", probe.Text);
+    }
+
+    [Fact]
+    public void AccessibilityFocusImeAndThemeUseNativeAvaloniaContracts()
+    {
+        var committedText = new List<string>();
+        DesktopRef reference = DesktopBridge.CreateRef();
+        using DesktopRoot root = CreateRoot();
+        root.Render(new GuiVNode(
+            "Window", Key: "window", Theme: "dark", Width: 320, Height: 180,
+            Children: new[] { new GuiVNode(
+                "TextBox", Key: "editor", Text: string.Empty, AutomationName: "Document editor",
+                TextChanged: value => committedText.Add(value), AttachRef: reference.Attach, RefIdentity: reference) }));
+
+        var editor = Assert.IsType<TextBox>(root.FindControl("editor"));
+        Assert.Equal("Document editor", AutomationProperties.GetName(editor));
+        Assert.Equal(ThemeVariant.Dark, root.Window!.RequestedThemeVariant);
+        Assert.True(reference.IsAttached);
+        root.Window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(reference.focus());
+        Assert.True(editor.IsFocused);
+
+        editor.Text = "日本語";
+        editor.RaiseEvent(new TextChangedEventArgs(TextBox.TextChangedEvent));
+        Assert.Equal("日本語", Assert.Single(committedText));
     }
 
     [Fact]

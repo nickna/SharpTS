@@ -15,6 +15,7 @@ import {
     createVirtualDataGrid,
     createVirtualList,
     getDesktopPlatformInfo,
+    getDesktopDisplays,
     getLaunchArguments,
     openExternal,
     printFile,
@@ -72,6 +73,7 @@ tray.dispose();
 const accent: string | number | boolean | readonly number[] | null = mainWindow.findResource("accent");
 void modalWindow.closed;
 void getDesktopPlatformInfo().applicationDirectory;
+void getDesktopDisplays()[0].scaling;
 void getLaunchArguments();
 void openExternal("https://example.com");
 void showItemInFolder("document.txt");
