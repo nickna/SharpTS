@@ -1503,6 +1503,12 @@ public sealed class Issue1279ParityTests
             "built-ins/Proxy/defineProperty/targetdesc-undefined-target-is-not-extensible.js",
             Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Proxy_defineProperty_rejects_phantom_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/targetdesc-undefined-not-configurable-descriptor.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
