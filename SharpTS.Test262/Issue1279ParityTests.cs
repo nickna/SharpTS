@@ -1458,6 +1458,7 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Object/keys/order-after-define-property-with-function.js")]
     [InlineData("built-ins/Object/keys/order-after-define-property.js")]
     public void Object_enumeration_preserves_key_creation_order(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
