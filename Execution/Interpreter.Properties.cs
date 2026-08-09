@@ -2337,6 +2337,22 @@ public partial class Interpreter
                         out uint arrayIndex)
                     && arrayIndex < uint.MaxValue)
                 {
+                    if (array.TryGetIndexAccessor(
+                            arrayIndex, out _, out var ownSetter))
+                    {
+                        if (ownSetter != null)
+                        {
+                            BindAccessorToObject(ownSetter, array)
+                                .CallBoxed(this, [value]);
+                            return value;
+                        }
+                        if (strictMode)
+                        {
+                            throw new ThrowException(new SharpTSTypeError(
+                                $"Cannot set property '{memberName}' which has only a getter."));
+                        }
+                        return value;
+                    }
                     if (!array.HasIndex(arrayIndex)
                         && GetArrayPrototype().GetOwnPropertyDescriptor(memberName)
                             is { } inherited)

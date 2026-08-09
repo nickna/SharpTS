@@ -1840,6 +1840,20 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-appends-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-decreases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-deletes-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-deletes-successor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-increases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-pops-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-sets-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-sets-successor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-prototype-element.js")]
+    public void Array_sort_observes_collection_side_effects(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
     [InlineData("built-ins/Array/from/iter-map-fn-this-arg.js")]
     public void Array_from_binds_the_mapping_this_argument(string relativePath)
