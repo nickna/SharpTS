@@ -493,7 +493,7 @@ $generatedProjectText = Get-Content -LiteralPath $generatedProject -Raw
 if ($generatedProjectText -notmatch [regex]::Escape("SharpTS.Gui.Sdk/$version")) {
     throw "TypeScript-only CLI generated project did not pin the candidate GUI SDK version."
 }
-$generatedProjectWrite = (Get-Item -LiteralPath $generatedProject).LastWriteTimeUtc
+$generatedProjectWrite = (Get-Item -LiteralPath $generatedProject -Force).LastWriteTimeUtc
 $cliGuest = Get-ChildItem -LiteralPath (Join-Path $cliRoot ".sharpts\gui\obj") -Recurse -File -Filter "SharpTS.Gui.Guest.dll" |
     Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($null -eq $cliGuest) {
@@ -503,7 +503,7 @@ $cliGuestWrite = $cliGuest.LastWriteTimeUtc
 Invoke-DotNet @(
     $sharpTsCli, "app", "build", "headless.tests.tsx", "--source", $feed,
     "--configuration", $Configuration) $cliRoot
-if ((Get-Item -LiteralPath $generatedProject).LastWriteTimeUtc -ne $generatedProjectWrite) {
+if ((Get-Item -LiteralPath $generatedProject -Force).LastWriteTimeUtc -ne $generatedProjectWrite) {
     throw "TypeScript-only CLI rewrote an unchanged generated project."
 }
 if ((Get-Item -LiteralPath $cliGuest.FullName).LastWriteTimeUtc -ne $cliGuestWrite) {
@@ -603,3 +603,4 @@ if ($LASTEXITCODE -eq 0 -or $missingOutput -notmatch "SharpTSEntryPoint.*does no
 }
 
 Write-Host "SharpTS.Gui.Sdk packaged consumer verification passed for $RuntimeIdentifier."
+exit 0

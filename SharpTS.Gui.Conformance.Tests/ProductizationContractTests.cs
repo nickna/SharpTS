@@ -48,6 +48,13 @@ public sealed class ProductizationContractTests
         Assert.Contains("@(SharpTSGuiRuntimeAsset)", packageProject, StringComparison.Ordinal);
         Assert.Contains("SupportedPlatforms.props", harness, StringComparison.Ordinal);
         Assert.Contains("CandidatePackage", harness, StringComparison.Ordinal);
+        Assert.Equal(2, CountOccurrences(
+            harness,
+            "Get-Item -LiteralPath $generatedProject -Force"));
+        Assert.EndsWith(
+            "Write-Host \"SharpTS.Gui.Sdk packaged consumer verification passed for $RuntimeIdentifier.\"\nexit 0\n",
+            harness.Replace("\r\n", "\n", StringComparison.Ordinal),
+            StringComparison.Ordinal);
         Assert.Contains("gui-sdk-candidate", windowsWorkflow, StringComparison.Ordinal);
         Assert.Equal(3, CountOccurrences(windowsWorkflow, "-CandidatePackage artifacts/windows-preview/candidate/"));
         Assert.Contains("-RuntimeIdentifier win-x64", windowsWorkflow, StringComparison.Ordinal);
