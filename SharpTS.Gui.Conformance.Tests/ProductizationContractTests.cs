@@ -130,11 +130,15 @@ public sealed class ProductizationContractTests
         XElement templateManifestItem = Assert.Single(
             packageProjectXml.Descendants("None"),
             item => item.Attribute("Include")?.Value ==
-                "Templates\\sharpts-gui\\.template.config\\template.json");
+                "$(MSBuildProjectDirectory)/Templates/sharpts-gui/.template.config/template.json");
         Assert.Equal("true", templateManifestItem.Attribute("Pack")?.Value);
         Assert.Equal(
-            "content\\Templates\\sharpts-gui\\.template.config\\",
+            "content/Templates/sharpts-gui/.template.config/",
             templateManifestItem.Attribute("PackagePath")?.Value);
+        XElement templateManifestTarget = Assert.Single(
+            packageProjectXml.Descendants("Target"),
+            item => item.Attribute("Name")?.Value == "IncludeGuiTemplateManifestInPackage");
+        Assert.Equal("_GetPackageFiles", templateManifestTarget.Attribute("BeforeTargets")?.Value);
         XElement templateGlobItem = Assert.Single(
             packageProjectXml.Descendants("None"),
             item => item.Attribute("Include")?.Value == "Templates\\**\\*");

@@ -39,9 +39,6 @@
           Exclude="Templates\sharpts-gui\.template.config\template.json"
           Pack="true"
           PackagePath="content\Templates\" />
-    <None Include="Templates\sharpts-gui\.template.config\template.json"
-          Pack="true"
-          PackagePath="content\Templates\sharpts-gui\.template.config\" />
     <None Include="$(GuiHostPublishRoot)**"
           Exclude="$(GuiHostPublishRoot)runtimes\**;$(GuiHostPublishRoot)**\*.pdb"
           Pack="true"
@@ -65,6 +62,14 @@
     <None Include="readme.md" Pack="true" PackagePath="\" />
     <None Include="..\LICENSE" Pack="true" PackagePath="\" />
   </ItemGroup>
+
+  <Target Name="IncludeGuiTemplateManifestInPackage" BeforeTargets="_GetPackageFiles">
+    <ItemGroup>
+      <None Include="$(MSBuildProjectDirectory)/Templates/sharpts-gui/.template.config/template.json"
+            Pack="true"
+            PackagePath="content/Templates/sharpts-gui/.template.config/" />
+    </ItemGroup>
+  </Target>
 
   <Target Name="VerifyGeneratedGuiControlContract" BeforeTargets="CoreCompile">
     <Exec Command="dotnet &quot;$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'SharpTS.Gui.Generator', 'bin', '$(Configuration)', 'net10.0', 'SharpTS.Gui.Generator.dll'))&quot; verify" />
