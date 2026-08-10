@@ -137,14 +137,17 @@ public sealed class ProductizationContractTests
             templateManifestItem.Attribute("PackagePath")?.Value);
         XElement templateManifestTarget = Assert.Single(
             packageProjectXml.Descendants("Target"),
-            item => item.Attribute("Name")?.Value == "IncludeGuiTemplateManifestInPackage");
+            item => item.Attribute("Name")?.Value == "IncludeGuiTemplatesInPackage");
         Assert.Equal("_GetPackageFiles", templateManifestTarget.Attribute("BeforeTargets")?.Value);
         XElement templateGlobItem = Assert.Single(
             packageProjectXml.Descendants("None"),
-            item => item.Attribute("Include")?.Value == "Templates\\**\\*");
+            item => item.Attribute("Include")?.Value ==
+                "$(MSBuildProjectDirectory)/Templates/**/*");
         Assert.Equal(
-            "Templates\\sharpts-gui\\.template.config\\template.json",
+            "$(MSBuildProjectDirectory)/Templates/sharpts-gui/.template.config/template.json",
             templateGlobItem.Attribute("Exclude")?.Value);
+        Assert.Equal("true", templateGlobItem.Attribute("Pack")?.Value);
+        Assert.Equal("content/Templates/", templateGlobItem.Attribute("PackagePath")?.Value);
     }
 
     private static string FindRepositoryRoot()
