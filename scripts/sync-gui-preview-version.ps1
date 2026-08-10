@@ -39,7 +39,7 @@ foreach ($projection in $projections) {
     }
 }
 
-$evidenceFiles = @('docs/gui/desktop-status.md', 'docs/gui/macos-distribution.md')
+$evidenceFiles = @('docs/gui/README.md', 'docs/gui/macos-distribution.md')
 foreach ($relativePath in $evidenceFiles) {
     $content = Get-Content -LiteralPath (Join-Path $repositoryRoot $relativePath) -Raw
     if ($content -notmatch [regex]::Escape($version)) {

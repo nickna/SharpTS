@@ -2,7 +2,8 @@
 
 This policy defines the contract required before a stable SharpTS GUI 1.0 release. Preview builds
 remain evaluation releases: they receive best-effort fixes but no production support window or
-forward-compatibility promise beyond the explicit fail-fast checks below.
+forward-compatibility promise beyond the explicit fail-fast checks below. Current platform
+designations are listed in the [GUI overview](README.md#platform-status).
 
 ## Versioned contracts
 
@@ -12,7 +13,7 @@ forward-compatibility promise beyond the explicit fail-fast checks below.
 | GUI API in `app.json` | An integer runtime contract. The host rejects unsupported values before guest initialization. A breaking application API increments it. |
 | Descriptor schema version/hash | Exact SDK/host match. A mismatch requires rebuilding the application; hashes are not negotiated. |
 | Hosted ABI | Versioned independently from GUI API. A host may support multiple documented ABI versions, otherwise it fails before executing guest code. |
-| Custom-control provider contract | Statically registered, versioned, and checked before guest initialization. Providers must declare compatible SDK ranges and rebuild when the contract changes. |
+| Private custom-control provider contract | Statically registered, versioned, and checked before guest initialization. Private providers must declare compatible SDK ranges and rebuild when the contract changes; no public loading API is supported. |
 | Application/MSIX version | Owned by the application. It does not imply a SharpTS SDK version and must increase for every Windows update. |
 
 Stable API removals require a major SDK release. Deprecations remain for at least one stable minor
@@ -25,7 +26,7 @@ The descriptor hash intentionally forces a rebuild even for some additive host c
 safety boundary, not a semantic-versioning exception: source compatibility and binary descriptor
 compatibility answer different questions.
 
-## Supported release lines
+## Stable release lines
 
 After 1.0, the latest patch of the current stable minor and the immediately previous stable minor
 receive correctness and security fixes. The previous minor remains supported for 12 months after

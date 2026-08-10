@@ -3,7 +3,8 @@
 SharpTS.Gui.Sdk contains an intentional `osx-arm64` payload for Apple Silicon. It can be
 cross-published from Windows, but macOS is a candidate platform until the native workflow has
 recorded Headless and real-window traces. Cross-publish and bundle inspection do not establish
-runtime compatibility. macOS Intel is not supported.
+runtime compatibility. macOS Intel is not supported. See the canonical
+[platform status](README.md#platform-status) for the current support designation.
 
 ## Build and bundle
 
@@ -11,7 +12,11 @@ Create a compiled, self-contained Mach-O executable with either the projectless 
 
 ```bash
 sharpts app publish --rid osx-arm64 --self-contained true --single-file true
-# or
+```
+
+Or use an explicit SDK project:
+
+```bash
 dotnet publish -c Release -r osx-arm64
 ```
 
@@ -24,7 +29,7 @@ must remain available together.
 SHA-256 inventory. `-StageOnly` works cross-platform for structural inspection:
 
 ```powershell
-scripts/package-gui-macos.ps1 `
+./scripts/package-gui-macos.ps1 `
   -PublishDirectory artifacts/publish `
   -OutputDirectory artifacts/macos-bundle `
   -BundleIdentifier dev.example.counter `
@@ -65,16 +70,21 @@ GitHub provenance attestations. Signing material is removed in an unconditional 
 Other applications may call it after uploading a `publish/` artifact and supplying the executable
 file name, bundle identity, display name, versions, and architecture.
 
-## Diagnostics and current evidence
+## Diagnostics
 
 On macOS, default fatal logs are retained under
 `~/Library/Logs/SharpTS.Gui`; traces use
 `~/Library/Application Support/SharpTS.Gui/Traces`. Interactive fatal errors use the native macOS
 alert path after the durable log is written.
 
-On 2026-08-09, the current `SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg` candidate (39,745,308 bytes, SHA-256
-`1C0579F836C58A10895EB23227D936E2162A5B93D01CB0A64ED3C6434D5B3E5F`) passed package audit and
-SDK/CLI cross-publish for `osx-arm64`. The resulting ARM64 Mach-O executables passed stage-only
-`.app`, plist, architecture, symbol, and checksum validation. No native macOS runner, Apple signing
-identity, or notarization credential was available locally, so the two workflows remain required
-before Apple Silicon macOS can become a supported platform.
+## Evidence snapshot: 2026-08-09
+
+This dated result records evidence for one candidate; it is not a current support guarantee. The
+`SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg` candidate was 39,745,308 bytes with SHA-256
+`1C0579F836C58A10895EB23227D936E2162A5B93D01CB0A64ED3C6434D5B3E5F`. It passed package audit and
+SDK/CLI cross-publishing for `osx-arm64`. The resulting ARM64 Mach-O executables passed stage-only
+`.app`, plist, architecture, symbol, and checksum validation.
+
+No native macOS runner, Apple signing identity, or notarization credential was available for that
+local run. The native and release workflows remain required before Apple Silicon macOS can become
+a supported platform.

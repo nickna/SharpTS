@@ -86,16 +86,13 @@ cd CounterApp
 dotnet run -- --mode interpreted
 ```
 
-The compressed multi-platform SDK package is approximately 38 MiB and a minimal framework-dependent Windows x64
-directory is approximately 47 MB before application assets. Current limits are one root element
-per window, built-in and statically registered controls only, Windows support only, and no cross-architecture Native
-AOT certification. Warning-clean x64 Native AOT publish/run is available with
-`dotnet publish -r win-x64 -p:PublishAot=true`. See the [GUI SDK workflow](docs/gui/sdk-development.md) and
-[TSX API reference](docs/gui/tsx-api.md). Signed MSIX packaging, updates, SBOM/provenance, enterprise
-deployment, and support bundles are covered by the [Windows distribution guide](docs/gui/windows-distribution.md)
-and [GUI support policy](docs/gui/support-policy.md).
-The [macOS distribution guide](docs/gui/macos-distribution.md) documents the experimental payload,
-bundle, native-execution, signing, and notarization gates.
+Warning-clean x64 Native AOT publish/run is available with
+`dotnet publish -r win-x64 -p:PublishAot=true`. Start with the
+[GUI overview](docs/gui/README.md) for the current platform matrix and task-based documentation.
+Application authors can continue to the [SDK workflow](docs/gui/sdk-development.md),
+[TSX API reference](docs/gui/tsx-api.md), and
+[testing guide](docs/gui/testing-and-devtools.md). The overview also links the performance,
+distribution, and support material used by maintainers and release owners.
 
 ### .NET Interop
 

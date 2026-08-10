@@ -4,7 +4,8 @@ SharpTS GUI applications use MSIX as the supported Windows installer identity. P
 layer above `dotnet publish`: the renderer and Hosted ABI do not know about certificates, update
 feeds, or enterprise deployment. The package identity and certificate publisher become immutable
 once an application is distributed because Windows uses that pair for upgrades, data ownership,
-and notification identity.
+and notification identity. See the [GUI overview](README.md#platform-status) for the current
+Windows target matrix.
 
 That package identity is also the prerequisite for `showNotification`. The preview notification
 API submits informational `ToastGeneric` content through the inbox Windows Runtime notification
@@ -26,7 +27,7 @@ Prepare application-owned PNG assets named `Square44x44Logo.png`, `Square150x150
 `StoreLogo.png`, then create the installer and release evidence:
 
 ```powershell
-.\scripts\package-gui-windows.ps1 `
+./scripts/package-gui-windows.ps1 `
   -PublishDirectory artifacts/publish `
   -OutputDirectory artifacts/distribution `
   -PackageIdentity Contoso.Product `
@@ -112,7 +113,7 @@ Fatal host diagnostics are retained under `%LOCALAPPDATA%\SharpTS.Gui\Errors`; o
 traces are under `Traces`. Create a bounded support bundle with:
 
 ```powershell
-.\scripts\collect-gui-support-bundle.ps1 -OutputPath .\sharpts-support.zip -ApplicationName Product
+./scripts/collect-gui-support-bundle.ps1 -OutputPath ./sharpts-support.zip -ApplicationName Product
 ```
 
 The collector includes recent error logs plus OS/runtime metadata, replaces user-profile and temp

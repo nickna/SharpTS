@@ -22,24 +22,10 @@ const application = createDesktopApplication();
 const window = application.createWindow(<App />, { main: true });
 ```
 
-Headless interaction tests use a driver scoped to that explicit window:
+Headless interaction uses the window-scoped driver documented in
+[GUI testing and developer tools](testing-and-devtools.md).
 
-```tsx
-import { createDesktopTestDriver } from "@sharpts/gui/testing";
-
-const driver = createDesktopTestDriver(window);
-driver.click("increment");
-driver.afterRender(() => {
-    if (driver.getText("count") !== "Count: 1") throw new Error("Count did not update");
-    application.dispose();
-});
-```
-
-The driver is available only under `--headless`. It supports keyed clicks, window keyboard input,
-text and allow-listed property queries, form value changes, and text drag/drop. Testing one window
-cannot resolve keys from another window. `afterRender` queues an assertion after an interaction's
-pending render commits. Scheduler manipulation, native-failure injection, renderer
-identity, and subscription counters are not public APIs.
+## Application lifecycle
 
 Applications that own more than one window use an explicit application session:
 
@@ -73,6 +59,8 @@ effect failure invokes the window handler first and disposes only that window; e
 detached asynchronous errors remain host-level failures. Initial mount errors are thrown by
 `createWindow` before it returns.
 
+## Resources and styling
+
 Application options also accept primitive `resources` and native Avalonia `styles`. Selectors are
 allow-listed built-in control kinds plus optional class names; setters are a reviewed property set
 and may refer to resources. This remains trimming-safe and does not use runtime reflection:
@@ -98,6 +86,8 @@ Resources and styles are immutable after the first window is created. Written JS
 normal Avalonia local-value precedence; omitted props continue to inherit matching styles after
 reactive updates. Window `theme="system" | "light" | "dark"` selects the native theme variant.
 
+## Components, hooks, and error handling
+
 Function components may return an element, primitive text/number, fragment, nested array, or
 `null`/`undefined`/boolean. Components use `useState`, `useReducer`, `useEffect`, `useMemo`,
 `useCallback`, `useRef`, and `useControlRef`. Hooks must be called unconditionally in the same
@@ -110,6 +100,8 @@ state owned outside the component tree.
 `fallback(error, reset)` callback returns the recovery UI; calling `reset()` retries the protected
 subtree on a subsequent render. Event-handler and detached asynchronous failures remain host-level
 errors.
+
+## Children, identity, and commit recovery
 
 Natural children are supported. Text-bearing controls (`TextBlock`, `Button`, `CheckBox`,
 `RadioButton`, and `ToggleSwitch`) accept string/number children; container controls accept
@@ -190,13 +182,14 @@ supported basis for high-DPI and multiple-monitor layout decisions. Common `auto
 keyboard handlers, typed ref `focus()`, committed text-change events (including IME commits), and
 the Window `system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
 
-## Current version 1 boundaries
+## GUI API 1 boundaries
 
-Each window still requires exactly one `Window` root and built-in or statically registered
-descriptors. Combo/list data is string-backed. Arbitrary Avalonia control templates, a full editing
-`DataGrid`, and certified macOS execution are not yet supported. Typed item templates, a windowed virtual grid, native
-list/tree hosts, rich text, canvas/drawing, resources, class/type selectors, styles, theme variants,
-and resource lookup are supported. Multi-window orchestration is available through
-`createDesktopApplication`. Incompatible
-GUI API and descriptor contracts fail before payload loading. The complete proof application is in
+Each window requires exactly one `Window` root and built-in or statically registered descriptors.
+Simple combo/list data is string-backed. Arbitrary Avalonia control templates, public third-party
+control loading, a full editing `DataGrid`, and certified macOS execution are not supported.
+
+Typed item templates, a windowed virtual grid, native list/tree hosts, rich text, canvas/drawing,
+resources, class/type selectors, styles, theme variants, and resource lookup are supported.
+Multi-window orchestration is available through `createDesktopApplication`. Incompatible GUI API
+and descriptor contracts fail before payload loading. The complete proof application is in
 `Examples/Calculator`.
