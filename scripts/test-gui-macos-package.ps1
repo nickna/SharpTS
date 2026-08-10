@@ -15,11 +15,16 @@ function Invoke-Test([string]$Name, [scriptblock]$Test) {
     try { & $Test; $script:passed++; Write-Host "PASS: $Name" }
     catch { $script:failed++; Write-Error "FAIL: $Name`n$($_.Exception.Message)`n$($_.ScriptStackTrace)" -ErrorAction Continue }
 }
-function Write-ThinMachO([string]$Path, [ValidateSet('x86_64', 'arm64')][string]$Architecture) {
+function Write-ThinArm64MachO([string]$Path) {
     [byte[]]$bytes = 0..63 | ForEach-Object { 0 }
     [Array]::Copy([byte[]](0xCF, 0xFA, 0xED, 0xFE), 0, $bytes, 0, 4)
-    $cpu = if ($Architecture -eq 'x86_64') { [byte[]](0x07, 0x00, 0x00, 0x01) } else { [byte[]](0x0C, 0x00, 0x00, 0x01) }
-    [Array]::Copy($cpu, 0, $bytes, 4, 4)
+    [Array]::Copy([byte[]](0x0C, 0x00, 0x00, 0x01), 0, $bytes, 4, 4)
+    [IO.File]::WriteAllBytes($Path, $bytes)
+}
+function Write-UnsupportedMachO([string]$Path) {
+    [byte[]]$bytes = 0..63 | ForEach-Object { 0 }
+    [Array]::Copy([byte[]](0xCF, 0xFA, 0xED, 0xFE), 0, $bytes, 0, 4)
+    [Array]::Copy([byte[]](0x07, 0x00, 0x00, 0x01), 0, $bytes, 4, 4)
     [IO.File]::WriteAllBytes($Path, $bytes)
 }
 function Write-UniversalMachO([string]$Path) {
@@ -29,15 +34,20 @@ function Write-UniversalMachO([string]$Path) {
     [Array]::Copy([byte[]](0x01, 0x00, 0x00, 0x0C), 0, $bytes, 28, 4)
     [IO.File]::WriteAllBytes($Path, $bytes)
 }
-function New-Fixture([string]$Architecture) {
+function New-Fixture([switch]$UnsupportedArchitecture) {
     $root = Join-Path ([IO.Path]::GetTempPath()) "sharpts-gui-macos-package-$([Guid]::NewGuid().ToString('N'))"
     $publish = Join-Path $root 'publish'
     New-Item -ItemType Directory -Path $publish | Out-Null
-    Write-ThinMachO (Join-Path $publish 'Demo') $Architecture
+    if ($UnsupportedArchitecture) {
+        Write-UnsupportedMachO (Join-Path $publish 'Demo')
+    }
+    else {
+        Write-ThinArm64MachO (Join-Path $publish 'Demo')
+    }
     Write-UniversalMachO (Join-Path $publish 'libAvaloniaNative.dylib')
     [IO.File]::WriteAllText((Join-Path $publish 'Demo.dll'), 'managed')
     [IO.File]::WriteAllText((Join-Path $publish 'Demo.pdb'), 'symbols')
-    [pscustomobject]@{ Root = $root; Publish = $publish; Output = (Join-Path $root 'output'); Architecture = $Architecture }
+    [pscustomobject]@{ Root = $root; Publish = $publish; Output = (Join-Path $root 'output'); Architecture = 'arm64' }
 }
 function Invoke-Packager($Fixture, [hashtable]$Extra = @{}) {
     $arguments = @{
@@ -55,37 +65,34 @@ function Invoke-Packager($Fixture, [hashtable]$Extra = @{}) {
     & $packager @arguments
 }
 
-foreach ($architecture in @('x86_64', 'arm64')) {
-    Invoke-Test "stage-only .app validates $architecture Mach-O and plist metadata" {
-        $fixture = New-Fixture $architecture
-        try {
-            $result = Invoke-Packager $fixture
-            $bundleExecutable = Join-Path (Join-Path (Join-Path $result.App 'Contents') 'MacOS') 'Demo'
-            Assert-True (Test-Path -LiteralPath $bundleExecutable) 'Executable is missing from bundle.'
-            Assert-True (-not (Test-Path -LiteralPath "$bundleExecutable.pdb")) 'Symbols must not ship.'
-            [xml]$plist = Get-Content -LiteralPath $result.InfoPlist -Raw
-            $keys = @($plist.plist.dict.key)
-            Assert-True ($keys -contains 'CFBundleIdentifier') 'Bundle identifier is missing.'
-            Assert-True ($keys -contains 'LSArchitecturePriority') 'Architecture metadata is missing.'
-            $checksums = @(Get-Content -LiteralPath $result.Checksums)
-            Assert-True ($checksums.Count -ge 3) 'Stage-only checksum inventory did not cover the app bundle.'
-            Assert-True ([bool]($checksums -match 'Demo---Test.app/Contents/MacOS/Demo$')) 'Checksum inventory omitted the executable.'
-        }
-        finally { Remove-Item -LiteralPath $fixture.Root -Recurse -Force }
+Invoke-Test 'stage-only .app validates arm64 Mach-O and plist metadata' {
+    $fixture = New-Fixture
+    try {
+        $result = Invoke-Packager $fixture
+        $bundleExecutable = Join-Path (Join-Path (Join-Path $result.App 'Contents') 'MacOS') 'Demo'
+        Assert-True (Test-Path -LiteralPath $bundleExecutable) 'Executable is missing from bundle.'
+        Assert-True (-not (Test-Path -LiteralPath "$bundleExecutable.pdb")) 'Symbols must not ship.'
+        [xml]$plist = Get-Content -LiteralPath $result.InfoPlist -Raw
+        $keys = @($plist.plist.dict.key)
+        Assert-True ($keys -contains 'CFBundleIdentifier') 'Bundle identifier is missing.'
+        Assert-True ($keys -contains 'LSArchitecturePriority') 'Architecture metadata is missing.'
+        $checksums = @(Get-Content -LiteralPath $result.Checksums)
+        Assert-True ($checksums.Count -ge 3) 'Stage-only checksum inventory did not cover the app bundle.'
+        Assert-True ([bool]($checksums -match 'Demo---Test.app/Contents/MacOS/Demo$')) 'Checksum inventory omitted the executable.'
     }
+    finally { Remove-Item -LiteralPath $fixture.Root -Recurse -Force }
 }
 
 Invoke-Test 'packager rejects a mismatched Mach-O architecture' {
-    $fixture = New-Fixture 'x86_64'
+    $fixture = New-Fixture -UnsupportedArchitecture
     try {
-        $fixture.Architecture = 'arm64'
         Assert-ThrowsContaining { Invoke-Packager $fixture } "does not contain 'arm64'"
     }
     finally { Remove-Item -LiteralPath $fixture.Root -Recurse -Force }
 }
 
 Invoke-Test 'packager rejects malformed bundle metadata' {
-    $fixture = New-Fixture 'x86_64'
+    $fixture = New-Fixture
     try {
         Assert-ThrowsContaining { Invoke-Packager $fixture @{ BundleIdentifier = 'not-a-domain' } } 'BundleIdentifier'
         Assert-ThrowsContaining { Invoke-Packager $fixture @{ BuildVersion = '1..2' } } 'BuildVersion'
@@ -94,7 +101,7 @@ Invoke-Test 'packager rejects malformed bundle metadata' {
 }
 
 Invoke-Test 'release signing and notarization cannot silently downgrade to unsigned output' {
-    $fixture = New-Fixture 'x86_64'
+    $fixture = New-Fixture
     try {
         Assert-ThrowsContaining { Invoke-Packager $fixture @{ RequireSigned = $true } } 'requires SigningIdentity'
         Assert-ThrowsContaining { Invoke-Packager $fixture @{ RequireNotarized = $true } } 'requires SigningIdentity and NotaryKeychainProfile'

@@ -422,7 +422,7 @@ SharpTS passes an explicit compatibility policy. Item 8 can choose
    The built-in bundler stays Windows/Linux-only until Mach-O adjustment +
    ad-hoc signing exist.
 10. **Release matrix: wired, and it gates the publish.** Tagged releases build
-    six Native AOT assets (win-x64/arm64, linux-x64/arm64, osx-x64/arm64) on
+    five Native AOT assets (win-x64/arm64, linux-x64/arm64, osx-arm64) on
     matching-architecture GitHub runners. Every artifact runs interpret,
     managed compile, embedded runtime extraction, the five Managed-SKU-only
     refusal assertions, and the per-RID publish-warning ratchet. Windows/Linux

@@ -84,8 +84,7 @@ Publish a self-contained compiled application as one distributable Windows execu
 ```powershell
 dotnet publish -c Release -r win-x64
 # or: dotnet publish -c Release -r win-arm64
-# experimental candidates: dotnet publish -c Release -r osx-x64
-# or: dotnet publish -c Release -r osx-arm64
+# experimental Apple Silicon candidate: dotnet publish -c Release -r osx-arm64
 ```
 
 Single-file publish is the default whenever a runtime identifier is supplied. It embeds the
@@ -174,9 +173,9 @@ Current supported-preview boundaries: Windows `win-x64` and `win-arm64`, one roo
 statically packaged custom controls only, simple string-backed list/combo items, and no dynamic
 descriptor discovery, arbitrary control-template, or full editing DataGrid API. Native resources/styles/theme variants,
 typed item templates, a windowed grid, trees, rich text, and canvas/drawing are supported.
-`osx-x64` and `osx-arm64` are experimental build candidates, not support claims; native x64/ARM64
-execution plus Developer ID signing and notarization remain mandatory. See `Examples/Calculator`
-in the SharpTS repository for a complete TSX application.
+`osx-arm64` is an experimental Apple Silicon build candidate, not a support claim; native execution
+plus Developer ID signing and notarization remain mandatory. macOS Intel is not supported. See
+`Examples/Calculator` in the SharpTS repository for a complete TSX application.
 
 For a compiler-free, compiled-only Windows x64 executable, publish with:
 

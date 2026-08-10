@@ -21,9 +21,9 @@ public sealed class ProductizationContractTests
             .Cast<string>()
             .ToArray();
 
-        Assert.Equal(["win-x64", "win-arm64", "osx-x64", "osx-arm64"], runtimeIdentifiers);
+        Assert.Equal(["win-x64", "win-arm64", "osx-arm64"], runtimeIdentifiers);
         Assert.Equal(
-            ["win-x64", "win-arm64", "osx", "osx"],
+            ["win-x64", "win-arm64", "osx"],
             runtimeItems.Select(item => item.Element("RuntimeAssetDirectory")?.Value ?? string.Empty).ToArray());
         string[] runtimeAssetIdentifiers = platforms
             .Descendants("SharpTSGuiRuntimeAsset")
@@ -65,19 +65,23 @@ public sealed class ProductizationContractTests
         Assert.Contains("-RuntimeIdentifier win-arm64", windowsWorkflow, StringComparison.Ordinal);
         Assert.Contains("gui-sdk-candidate", macOsWorkflow, StringComparison.Ordinal);
         Assert.Equal(1, CountOccurrences(macOsWorkflow, "-CandidatePackage artifacts/macos-preview/candidate/"));
-        Assert.Contains("rid: osx-x64", macOsWorkflow, StringComparison.Ordinal);
         Assert.Contains("rid: osx-arm64", macOsWorkflow, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(macOsWorkflow, "rid: osx-arm64"));
         Assert.Contains("-RealWindow", macOsWorkflow, StringComparison.Ordinal);
         Assert.Contains("package-gui-macos.ps1", macOsWorkflow, StringComparison.Ordinal);
 
         string macOsDistributionWorkflow = File.ReadAllText(
             Path.Combine(root, ".github", "workflows", "macos-gui-distribution.yml"));
         Assert.Contains("environment: macos-gui-distribution", macOsDistributionWorkflow, StringComparison.Ordinal);
+        Assert.Contains("rid: osx-arm64", macOsDistributionWorkflow, StringComparison.Ordinal);
+        Assert.Equal(1, CountOccurrences(macOsDistributionWorkflow, "rid: osx-arm64"));
         Assert.Contains("-RequireSigned", macOsDistributionWorkflow, StringComparison.Ordinal);
         Assert.Contains("-RequireNotarized", macOsDistributionWorkflow, StringComparison.Ordinal);
         Assert.Contains("notarytool store-credentials", macOsDistributionWorkflow, StringComparison.Ordinal);
 
         string publishWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "publish.yml"));
+        Assert.Contains("rid: osx-arm64", publishWorkflow, StringComparison.Ordinal);
+        Assert.Equal(2, CountOccurrences(publishWorkflow, "rid: osx-arm64"));
         Assert.Contains("gui_package_filename: ${{ steps.gui_sdk.outputs.PACKAGE_FILE_NAME }}", publishWorkflow, StringComparison.Ordinal);
         Assert.Contains("PACKAGE_FILE_NAME=$fileName", publishWorkflow, StringComparison.Ordinal);
         Assert.Contains("needs.build.outputs.gui_package_filename", publishWorkflow, StringComparison.Ordinal);

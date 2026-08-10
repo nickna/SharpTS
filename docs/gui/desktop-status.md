@@ -14,7 +14,7 @@ styles, and shutdown policy.
 | --- | --- |
 | `win-x64` | Supported preview target; Headless, real-window, packaged, single-file, and Native AOT gates are required for release. |
 | `win-arm64` | Supported preview RID; cross-publish is automated and native ARM64 execution remains a release-evidence gate. |
-| `osx-x64`, `osx-arm64` | Experimental package candidates only. Cross-publish does not establish support; native execution, signing, and notarization remain deferred. |
+| `osx-arm64` | Experimental Apple Silicon package candidate only. Cross-publish does not establish support; native execution, signing, and notarization remain deferred. |
 
 ## Contracts and package boundaries
 
@@ -29,7 +29,7 @@ styles, and shutdown policy.
 
 ## Current boundaries
 
-- Windows is the supported product focus. macOS assets are experimental and do not block Windows.
+- Windows is the supported product focus. The Apple Silicon macOS asset is experimental and does not block Windows; macOS Intel is not supported.
 - Each window has one `Window` root. Custom controls are statically registered; runtime descriptor
   discovery and arbitrary Avalonia templates are not supported.
 - Simple string-backed `ComboBox` and `ListBox` items remain alongside typed item-template helpers.

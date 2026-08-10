@@ -6,7 +6,7 @@ param(
     [Parameter(Mandatory)][string]$DisplayName,
     [Parameter(Mandatory)][ValidatePattern('^\d+(\.\d+){0,2}$')][string]$ShortVersion,
     [Parameter(Mandatory)][ValidatePattern('^\d+(\.\d+){0,2}$')][string]$BuildVersion,
-    [Parameter(Mandatory)][ValidateSet('x86_64', 'arm64')][string]$Architecture,
+    [Parameter(Mandatory)][ValidateSet('arm64')][string]$Architecture,
     [Parameter(Mandatory)][string]$Executable,
     [ValidatePattern('^\d+(\.\d+){0,2}$')][string]$MinimumSystemVersion = '12.0',
     [string]$IconFile,
@@ -56,7 +56,6 @@ function Get-MachOArchitectures([string]$Path) {
     else { throw "File is not a supported Mach-O binary: $Path" }
     return @($cpuTypes | ForEach-Object {
         switch ($_ -band 0xFFFFFFFF) {
-            0x01000007 { 'x86_64' }
             0x0100000C { 'arm64' }
             default { "cpu-0x$($_.ToString('X8'))" }
         }

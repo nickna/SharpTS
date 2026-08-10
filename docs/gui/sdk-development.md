@@ -70,8 +70,8 @@ dotnet publish -c Release -r win-x64 --self-contained false `
   -p:SharpTSGuiPublishMode=Directory
 ```
 
-Use `win-arm64` to cross-publish for Windows ARM64. Experimental macOS candidates use `osx-x64`
-or `osx-arm64`; see [macOS GUI preview and distribution](macos-distribution.md). Set
+Use `win-arm64` to cross-publish for Windows ARM64. The experimental Apple Silicon macOS candidate
+uses `osx-arm64`; see [macOS GUI preview and distribution](macos-distribution.md). Set
 `-p:SharpTSGuiIncludeSourcePayload=false` to omit `Guest`, the generated tsconfig, and the
 materialized TypeScript package. That directory is compiled-only and defaults to compiled mode.
 
@@ -119,7 +119,7 @@ schema-hash rules. Public custom controls require a future versioned provider mo
 
 ## Preview limits
 
-The supported RIDs are `win-x64` and `win-arm64`; `osx-x64` and `osx-arm64` are available as
-uncertified candidates. Native execution on both macOS architectures and Apple signing/notarization
-must pass before a support claim. Cross-architecture Windows ARM64 Native AOT certification also
-remains outstanding.
+The supported RIDs are `win-x64` and `win-arm64`; `osx-arm64` is available as an uncertified Apple
+Silicon candidate. Native execution and Apple signing/notarization must pass before a support
+claim. macOS Intel is not supported. Cross-architecture Windows ARM64 Native AOT certification
+also remains outstanding.

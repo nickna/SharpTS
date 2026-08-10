@@ -167,7 +167,6 @@ jobs:
           - { rid: win-arm64,   os: windows-11-vs2026-arm,    smoke: true }
           - { rid: linux-x64,   os: ubuntu-latest,            smoke: true }
           - { rid: linux-arm64, os: ubuntu-24.04-arm,         smoke: true }
-          - { rid: osx-x64,     os: ubuntu-latest,            smoke: false }
           - { rid: osx-arm64,   os: ubuntu-latest,            smoke: false }
 
     steps:
@@ -289,7 +288,6 @@ jobs:
           - { rid: win-arm64,   os: windows-11-vs2026-arm }
           - { rid: linux-x64,   os: ubuntu-latest }
           - { rid: linux-arm64, os: ubuntu-24.04-arm }
-          - { rid: osx-x64,     os: macos-15-intel }
           - { rid: osx-arm64,   os: macos-latest }
 
     steps:

@@ -53,9 +53,6 @@ jobs:
           - rid: osx-arm64
             architecture: arm64
             runner: macos-15
-          - rid: osx-x64
-            architecture: x86_64
-            runner: macos-15-intel
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     steps:
