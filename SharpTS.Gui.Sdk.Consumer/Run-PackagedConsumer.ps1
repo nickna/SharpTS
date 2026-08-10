@@ -494,7 +494,7 @@ if ($generatedProjectText -notmatch [regex]::Escape("SharpTS.Gui.Sdk/$version"))
     throw "TypeScript-only CLI generated project did not pin the candidate GUI SDK version."
 }
 $generatedProjectWrite = (Get-Item -LiteralPath $generatedProject -Force).LastWriteTimeUtc
-$cliGuest = Get-ChildItem -LiteralPath (Join-Path $cliRoot ".sharpts\gui\obj") -Recurse -File -Filter "SharpTS.Gui.Guest.dll" |
+$cliGuest = Get-ChildItem -LiteralPath (Join-Path $cliRoot ".sharpts\gui\obj") -Force -Recurse -File -Filter "SharpTS.Gui.Guest.dll" |
     Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
 if ($null -eq $cliGuest) {
     throw "TypeScript-only CLI compile did not create a guest assembly."

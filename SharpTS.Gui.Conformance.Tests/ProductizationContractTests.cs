@@ -51,6 +51,10 @@ public sealed class ProductizationContractTests
         Assert.Equal(2, CountOccurrences(
             harness,
             "Get-Item -LiteralPath $generatedProject -Force"));
+        Assert.Contains(
+            "Get-ChildItem -LiteralPath (Join-Path $cliRoot \".sharpts\\gui\\obj\") -Force",
+            harness,
+            StringComparison.Ordinal);
         Assert.EndsWith(
             "Write-Host \"SharpTS.Gui.Sdk packaged consumer verification passed for $RuntimeIdentifier.\"\nexit 0\n",
             harness.Replace("\r\n", "\n", StringComparison.Ordinal),
