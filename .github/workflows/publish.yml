@@ -17,24 +17,24 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
       gui_package_filename: ${{ steps.gui_sdk.outputs.PACKAGE_FILE_NAME }}
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: 10.0.x
-
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
       # Tag pushes release the tag's version; dispatch dry runs stamp a version
       # that can never be mistaken for (or collide with) a real release.
       - name: Determine version
@@ -136,7 +136,7 @@ jobs:
           -PackageVersion "${{ steps.version.outputs.VERSION }}"
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: nupkg
           path: ./nupkg/*.nupkg
@@ -144,9 +144,9 @@ jobs:
 
   # Managed SKU (#1324 Track 0): self-contained single-file binaries per RID,
   # attached to the GitHub Release. No .NET install required on the target
-  # machine; full feature set (interop, -r, --verify, --gen-decl). Exception:
-  # child_process.fork still shells `dotnet exec SharpTS.dll` and so needs an
-  # installed .NET until Phase 1 moves it to Environment.ProcessPath.
+  # machine; full feature set (interop, -r, --verify, --gen-decl). When the
+  # managed self-contained CLI handles child_process.fork it launches its own
+  # Environment.ProcessPath, so the child does not require a separate SDK.
   #
   # Runner selection: self-contained *managed* publishing is cross-RID capable,
   # but four RIDs run on their own architecture so the published binary is
@@ -163,20 +163,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rid: win-x64,     os: windows-latest,           smoke: true }
+          - { rid: win-x64,     os: windows-2025,           smoke: true }
           - { rid: win-arm64,   os: windows-11-vs2026-arm,    smoke: true }
-          - { rid: linux-x64,   os: ubuntu-latest,            smoke: true }
+          - { rid: linux-x64,   os: ubuntu-24.04,            smoke: true }
           - { rid: linux-arm64, os: ubuntu-24.04-arm,         smoke: true }
-          - { rid: osx-arm64,   os: ubuntu-latest,            smoke: false }
+          - { rid: osx-arm64,   os: ubuntu-24.04,            smoke: false }
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: 10.0.x
-
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
       # IncludeAllContentForSelfExtract (not just native libs): several managed-SKU
       # features need real files on disk behind Assembly.Location — --verify
       # (ILVerifier resolves the BCL from typeof(object).Assembly.Location, fails
@@ -264,7 +264,7 @@ jobs:
           esac
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: managed-${{ matrix.rid }}
           path: sharpts-${{ needs.build.outputs.version }}-${{ matrix.rid }}.*
@@ -284,20 +284,20 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { rid: win-x64,     os: windows-latest }
+          - { rid: win-x64,     os: windows-2025 }
           - { rid: win-arm64,   os: windows-11-vs2026-arm }
-          - { rid: linux-x64,   os: ubuntu-latest }
+          - { rid: linux-x64,   os: ubuntu-24.04 }
           - { rid: linux-arm64, os: ubuntu-24.04-arm }
-          - { rid: osx-arm64,   os: macos-latest }
+          - { rid: osx-arm64,   os: macos-15 }
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: 10.0.x
-
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
       - name: Install Native AOT prerequisites
         if: startsWith(matrix.rid, 'linux-')
         shell: bash
@@ -484,7 +484,7 @@ jobs:
           esac
 
       - name: Upload archive artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: native-${{ matrix.rid }}
           path: sharpts-native-${{ needs.build.outputs.version }}-${{ matrix.rid }}.*
@@ -492,7 +492,7 @@ jobs:
 
       - name: Upload publish diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           # Not "native-<rid>": the release job downloads '{managed,native}-*'
           # as release assets, and diagnostics must not ship in the release.
@@ -508,31 +508,33 @@ jobs:
   release:
     needs: [build, binaries, native-binaries]
     if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: 10.0.x
-
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
       - name: Download package artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: nupkg
           path: ./nupkg
 
       - name: Download managed archive artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: 'managed-*'
           path: ./assets
           merge-multiple: true
 
       - name: Download native archive artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           pattern: 'native-*'
           path: ./assets
@@ -549,7 +551,7 @@ jobs:
           -PackageDirectory ./nupkg
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           generate_release_notes: true
           files: |

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <!-- Canonical source for the active, source-built SharpTS GUI preview train. -->
+    <SharpTSGuiSdkVersion>0.3.0-preview.1</SharpTSGuiSdkVersion>
+    <SharpTSGuiMarketingVersion>0.3.0</SharpTSGuiMarketingVersion>
+  </PropertyGroup>
+</Project>
