@@ -17,7 +17,43 @@ sharpts --compile Examples/<example-name>.ts
 dotnet Examples/<example-name>.dll [arguments]
 ```
 
+On Unix-like systems, examples with a SharpTS shebang can also be run directly
+after they have been marked executable:
+
+```bash
+chmod +x Examples/text-stats.ts
+./Examples/text-stats.ts README.md --top 5
+```
+
 ## Examples Overview
+
+### Executable Text Statistics (`text-stats.ts`)
+
+**What it does:** Summarizes a text file and lists its most frequent words. Because the file starts
+with `#!/usr/bin/env sharpts`, it behaves like a Python or shell script on Unix-like systems.
+
+**Usage:**
+```bash
+chmod +x Examples/text-stats.ts
+
+# Show the five most common words with at least four characters
+./Examples/text-stats.ts README.md --top 5 --min-length 4
+
+# Keep differently-cased words separate
+./Examples/text-stats.ts README.md --case-sensitive
+```
+
+The `sharpts` executable must be available on `PATH`. You can also invoke the example portably as
+`sharpts Examples/text-stats.ts README.md --top 5`.
+
+**Demonstrates:**
+- Unix shebang execution with `#!/usr/bin/env sharpts`
+- Executable TypeScript scripts and normal command-line parameters
+- `fs` and `path` module usage
+- Argument validation and process exit codes
+- Word-frequency counting with `Map` and deterministic sorting
+
+---
 
 ### 1. File Hasher (`file-hasher.ts`)
 
@@ -391,35 +427,36 @@ sharpts Examples/web-server.ts --help
 
 ## Feature Matrix
 
-This table shows which SharpTS/TypeScript features each example demonstrates. Abbreviations: fh = file-hasher, fo = file-organizer, pg = password-generator, si = system-info, ut = url-toolkit, sa = source-analyzer, ip = interop, ws = web-server, bm = benchmark, dn = dotnet-types, nu = npm-uuid.
+This table shows which SharpTS/TypeScript features each example demonstrates. Abbreviations: tx = text-stats, fh = file-hasher, fo = file-organizer, pg = password-generator, si = system-info, ut = url-toolkit, sa = source-analyzer, ip = interop, ws = web-server, bm = benchmark, dn = dotnet-types, nu = npm-uuid.
 
-| Feature              | fh | fo | pg | si | ut | sa | ip | ws | bm | dn | nu |
-|----------------------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| Classes              |    |    |    |    |    | ✓  | ✓  |    |    | ✓  |    |
-| Interfaces           |    |    |    |    |    | ✓  |    |    | ✓  |    |    |
-| Inheritance          |    |    |    |    |    |    | ✓  |    |    |    |    |
-| For-of loops         | ✓  | ✓  |    | ✓  | ✓  |    |    | ✓  | ✓  |    |    |
-| While loops          |    |    |    |    | ✓  | ✓  |    |    |    |    |    |
-| Object literals      |    | ✓  |    |    | ✓  |    |    | ✓  | ✓  |    |    |
-| Arrays               | ✓  | ✓  |    | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    | ✓  |
-| String manipulation  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    |    |    |
-| Type annotations     |    |    |    |    |    | ✓  | ✓  |    | ✓  | ✓  |    |
-| Functions            | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |
-| Modules (import)     | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    | ✓  | ✓  |    |    |
-| CommonJS (require)   |    |    |    |    |    |    |    |    |    |    | ✓  |
-| CLI arguments        | ✓  | ✓  | ✓  |    | ✓  | ✓  |    | ✓  |    |    |    |
-| File I/O             | ✓  | ✓  |    |    |    | ✓  |    |    |    |    |    |
-| Crypto               | ✓  |    | ✓  |    |    |    |    |    |    |    |    |
-| User input           |    |    | ✓  |    | ✓  |    |    |    |    |    |    |
-| Process info         | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    | ✓  |    |    |    |
-| OS info              |    |    |    | ✓  |    |    |    |    |    |    |    |
-| Path manipulation    | ✓  | ✓  |    | ✓  |    | ✓  |    |    |    |    |    |
-| URL parsing          |    |    |    |    | ✓  |    |    | ✓  |    |    |    |
-| HTTP server          |    |    |    |    |    |    |    | ✓  |    |    |    |
-| Outbound C# interop  |    |    |    |    |    |    | ✓  |    |    |    |    |
-| Inbound .NET interop |    |    |    |    |    |    |    |    |    | ✓  |    |
-| perf_hooks           |    |    |    |    |    |    |    |    | ✓  |    |    |
-| npm package          |    |    |    |    |    |    |    |    |    |    | ✓  |
+| Feature              | tx | fh | fo | pg | si | ut | sa | ip | ws | bm | dn | nu |
+|----------------------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| Unix shebang         | ✓  |    |    |    |    |    |    |    |    |    |    |    |
+| Classes              |    |    |    |    |    |    | ✓  | ✓  |    |    | ✓  |    |
+| Interfaces           | ✓  |    |    |    |    |    | ✓  |    |    | ✓  |    |    |
+| Inheritance          |    |    |    |    |    |    |    | ✓  |    |    |    |    |
+| For-of loops         | ✓  | ✓  | ✓  |    | ✓  | ✓  |    |    | ✓  | ✓  |    |    |
+| While loops          |    |    |    |    |    | ✓  | ✓  |    |    |    |    |    |
+| Object literals      | ✓  |    | ✓  |    |    | ✓  |    |    | ✓  | ✓  |    |    |
+| Arrays               | ✓  | ✓  | ✓  |    | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    | ✓  |
+| String manipulation  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    |    |    |
+| Type annotations     | ✓  |    |    |    |    |    | ✓  | ✓  |    | ✓  | ✓  |    |
+| Functions            | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |
+| Modules (import)     | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    | ✓  | ✓  |    |    |
+| CommonJS (require)   |    |    |    |    |    |    |    |    |    |    |    | ✓  |
+| CLI arguments        | ✓  | ✓  | ✓  | ✓  |    | ✓  | ✓  |    | ✓  |    |    |    |
+| File I/O             | ✓  | ✓  | ✓  |    |    |    | ✓  |    |    |    |    |    |
+| Crypto               |    | ✓  |    | ✓  |    |    |    |    |    |    |    |    |
+| User input           |    |    |    | ✓  |    | ✓  |    |    |    |    |    |    |
+| Process info         | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  | ✓  |    | ✓  |    |    |    |
+| OS info              |    |    |    |    | ✓  |    |    |    |    |    |    |    |
+| Path manipulation    | ✓  | ✓  | ✓  |    | ✓  |    | ✓  |    |    |    |    |    |
+| URL parsing          |    |    |    |    |    | ✓  |    |    | ✓  |    |    |    |
+| HTTP server          |    |    |    |    |    |    |    |    | ✓  |    |    |    |
+| Outbound C# interop  |    |    |    |    |    |    |    | ✓  |    |    |    |    |
+| Inbound .NET interop |    |    |    |    |    |    |    |    |    |    | ✓  |    |
+| perf_hooks           |    |    |    |    |    |    |    |    |    | ✓  |    |    |
+| npm package          |    |    |    |    |    |    |    |    |    |    |    | ✓  |
 
 ## Built-in Modules Used
 
