@@ -2,7 +2,7 @@
 
 Runs SharpTS's type checker against the canonical [microsoft/TypeScript](https://github.com/microsoft/TypeScript) conformance corpus and diffs our diagnostics against `tsc`'s `*.errors.txt` baselines. Mirrors the shape of `SharpTS.Test262/`.
 
-Tracking epic: [#80](https://github.com/nickna/SharpTS/issues/80).
+Standing tracking issue: [#1281](https://github.com/nickna/SharpTS/issues/1281).
 
 ## Pinned TypeScript version
 
@@ -124,5 +124,5 @@ for expected missing-surface diagnostics that produce no SharpTS diagnostic.
 ## See also
 
 - `SharpTS.Test262/` — equivalent project for the ECMA-262 / JavaScript spec; this one mirrors its harness shape.
-- [#80](https://github.com/nickna/SharpTS/issues/80) — tracking epic for the conformance runner.
-- [#99](https://github.com/nickna/SharpTS/issues/99) — deferred Phase-1.5 work (load `tsc`'s lib files into the type checker).
+- [#1281](https://github.com/nickna/SharpTS/issues/1281) — standing TypeScript conformance work,
+  corpus growth, and diagnostic-alignment tracking.

@@ -91,8 +91,9 @@ import { Dictionary } from "dotnet:System.Collections.Generic.Dictionary<string,
   methods returning the type itself keep fluent chains typed; other .NET types surface as
   `any` (they still work — the runtime marshaller handles them dynamically).
 - **Both execution modes** — the interpreter binds the same runtime wrapper `@DotNetType`
-  uses; compiled mode resolves members at compile time and emits direct IL calls, so the
-  output DLL stays fully standalone (no SharpTS.dll dependency).
+  uses; compiled mode resolves ordinary members at compile time and emits direct IL calls.
+  Whether the output is deployable as one DLL depends on the selected interop features and
+  assemblies; see [Deployment by execution mode](#deployment-by-execution-mode).
 - **Overload resolution** — cost-based, same as `@DotNetType`. If you need to force a
   specific overload with `@DotNetOverload`, use a `@DotNetType` declaration for that type
   instead; the two binding styles compose freely in one program.
@@ -212,6 +213,29 @@ assets only); package versions are exact or standard NuGet ranges.
 > **Security note:** referenced assemblies run with **full trust** the first time a member
 > is used. Listing a DLL or package in sharpts.json is an explicit opt-in, the same trust
 > decision as installing an npm dependency.
+
+---
+
+## Deployment by execution mode
+
+"Standalone" describes a compiled artifact's dependency closure; it does not mean that every
+.NET interop program is a single independent DLL.
+
+| Interop behavior | Interpreter | Compiled output |
+| --- | --- | --- |
+| Curated BCL type through `dotnet:` or `@DotNetType` | Uses the SharpTS process and loaded BCL. | Ordinary direct calls can live entirely in the emitted assembly plus the target .NET runtime. |
+| External assembly or NuGet package | The reference resolver loads it into the SharpTS process. | The emitted assembly has a hard reference; the used DLL and its copy-local dependency closure are copied beside the output unless `--standalone` suppresses copying. |
+| Delegate callback | A runtime shim invokes the TypeScript callable on the calling thread. | The emitted adapter is local where possible; the external delegate's assembly remains a hard dependency. |
+| Event subscription | The runtime binder attaches and tracks the handler. | Dynamic event binding is a soft dependency on `SharpTS.dll`; the compiler copies it when required unless `--standalone` is set. |
+| .NET exception | Common CLR exceptions are mapped to JavaScript-style error names and preserve the original exception as `cause`. | The raw CLR exception currently propagates; use a C# boundary or `DotNetExceptionMapper.ClassifyAsJsErrorName` when matching names matters. |
+
+`--standalone` is a deployment override, not a compatibility transformation. It prevents automatic
+copies of `SharpTS.dll` and external reference DLLs. Features that require those files still require
+the application to supply them; soft-dependent features otherwise fail with a named runtime error.
+
+Native AOT is a separate boundary: the official native CLI exposes only its generated closed BCL
+catalog. Application and third-party types require a custom `SharpTS.Hosting` executable that roots
+the exact closed types at build time. See [Native AOT](native-aot.md).
 
 ---
 
@@ -862,4 +886,4 @@ loaded before the script runs — e.g., reference it from the host app or
 
 - [.NET Integration Guide](dotnet-integration.md) - Compiling TypeScript for C# consumption
 - [Execution Modes](execution-modes.md) - Interpreted vs compiled mode details
-- [Code Samples](code-samples.md) - TypeScript to C# mappings
+- [Runnable examples](../Examples/README.md) - Canonical cookbook for both execution modes

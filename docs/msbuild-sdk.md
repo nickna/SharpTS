@@ -1,70 +1,39 @@
-# MSBuild SDK Guide
+# MSBuild SDK guide
 
-SharpTS provides an MSBuild SDK that integrates TypeScript-to-.NET compilation directly into your build process. Instead of running `sharpts --compile` manually, the SDK compiles your TypeScript automatically when you run `dotnet build`.
+`SharpTS.Sdk` is the canonical MSBuild integration for compiling a TypeScript entry module directly
+to a .NET assembly. It composes with `Microsoft.NET.Sdk`, runs the compiler bundled in the selected
+package, participates in normal build/clean/publish targets, and does not require a global SharpTS
+tool.
 
-The SDK composes with `Microsoft.NET.Sdk` to provide the standard restore,
-reference-resolution, build, rebuild, publish, and clean lifecycle. Compilation
-uses the SharpTS compiler bundled in the selected `SharpTS.Sdk` package, so the
-global `sharpts` tool is neither consulted nor required.
+## Select and pin the SDK
 
-## Quick Start
-
-Create a project file:
+MSBuild SDK packages must resolve to a NuGet version. Either put a placeholder pin in the project:
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
-  </PropertyGroup>
-</Project>
+<Project Sdk="SharpTS.Sdk/<version>">
 ```
 
-Build and run:
-
-```bash
-dotnet build
-dotnet bin/Debug/net10.0/MyProject.dll
-```
-
----
-
-## Installation
-
-### NuGet Package Reference
-
-The SDK is distributed as a NuGet package. Reference it in your project file:
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-```
-
-### Version Pinning with global.json
-
-Pin the SDK version across your solution:
-
-```json
-{
-  "msbuild-sdks": {
-    "SharpTS.Sdk": "1.0.7"
-  }
-}
-```
-
-Then use the SDK without a version number:
+or keep project files versionless and centralize the pin in `global.json`:
 
 ```xml
 <Project Sdk="SharpTS.Sdk">
 ```
 
----
+```json
+{
+  "msbuild-sdks": {
+    "SharpTS.Sdk": "<version>"
+  }
+}
+```
 
-## Project File Configuration
+Replace `<version>` with a published package version selected by your application. The repository
+documentation deliberately does not couple releases to one copyable package number.
 
-### Minimal Configuration
+## Minimal project
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
+<Project Sdk="SharpTS.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
@@ -72,500 +41,142 @@ Then use the SDK without a version number:
 </Project>
 ```
 
-### Full Configuration
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-
-    <!-- Required: Entry point TypeScript file -->
-    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
-
-    <!-- Output configuration -->
-    <SharpTSOutputPath>$(OutputPath)</SharpTSOutputPath>
-    <SharpTSOutputFileName>$(AssemblyName).dll</SharpTSOutputFileName>
-
-    <!-- Compiler options -->
-    <SharpTSPreserveConstEnums>false</SharpTSPreserveConstEnums>
-    <SharpTSExperimentalDecorators>false</SharpTSExperimentalDecorators>
-    <SharpTSNoDecorators>false</SharpTSNoDecorators>
-    <SharpTSEmitDecoratorMetadata>false</SharpTSEmitDecoratorMetadata>
-    <SharpTSVerifyIL>false</SharpTSVerifyIL>
-    <SharpTSUseReferenceAssemblies>false</SharpTSUseReferenceAssemblies>
-
-    <!-- tsconfig.json path (auto-detected by default) -->
-    <SharpTSTsConfigPath>$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
-  </PropertyGroup>
-</Project>
+```bash
+dotnet build
+dotnet run
+dotnet publish
+dotnet clean
 ```
 
----
+`SharpTSEntryPoint` can instead come from the first `files` entry in `tsconfig.json`. The SDK emits
+`$(AssemblyName).dll` and its runtimeconfig under the normal configuration output directory.
 
-## MSBuild Properties Reference
+## Public properties
 
-### Required Properties
+This table is derived from `SharpTS.Sdk/Sdk/Sdk.props` and `Sdk.targets`. It lists the supported
+consumer properties; underscore-prefixed values and tool/task paths are implementation details.
 
-| Property | Description |
-|----------|-------------|
-| `SharpTSEntryPoint` | Path to the entry point TypeScript file. Can be absolute or relative to the project directory. If not specified, the SDK attempts to read from `tsconfig.json`'s `files` array. |
+| Property | Default | Effect |
+| --- | --- | --- |
+| `SharpTSEntryPoint` | Empty; then `tsconfig` `files[0]` | Runtime entry TypeScript/TSX file. Required after configuration is read. |
+| `SharpTSTsConfigPath` | `$(MSBuildProjectDirectory)\tsconfig.json` | Configuration passed to the compiler when the file exists. A missing path causes the SDK to pass `--no-tsconfig`. |
+| `SharpTSOutputPath` | `$(OutputPath)` | Directory for compiler output. Evaluated after the base SDK finalizes `OutputPath`. |
+| `SharpTSOutputFileName` | `$(AssemblyName).dll` | Output assembly name. The runtimeconfig name is derived from it. |
+| `SharpTSPreserveConstEnums` | `false` | Pass `--preserveConstEnums` when true. |
+| `SharpTSExperimentalDecorators` | `false` | Pass `--experimentalDecorators` for legacy decorators when true. |
+| `SharpTSDecorators` | `false` | Pass `--decorators` to select TC39 Stage 3 decorators when true. |
+| `SharpTSEmitDecoratorMetadata` | `false` | Pass `--emitDecoratorMetadata` when true. |
+| `SharpTSGenerateDeclarations` | `false` | Pass `--declaration` when true. |
+| `SharpTSEmitDeclarationOnly` | `false` | Pass `--emitDeclarationOnly`; also forces declaration generation. |
+| `SharpTSDeclarationDir` | Empty | Pass `--declarationDir` when nonempty. Otherwise compiler `rootDir`/`outDir` rules apply. |
+| `SharpTSVerifyIL` | `false` | Pass `--verify` when true. |
+| `SharpTSUseReferenceAssemblies` | `false` | Pass `--ref-asm` for C#-reference-compatible output when true. |
 
-### Output Properties
+Choose decorator behavior with `SharpTSDecorators`, `SharpTSExperimentalDecorators`, and the
+corresponding `tsconfig` settings.
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `SharpTSOutputPath` | `$(OutputPath)` | Directory where the compiled DLL is written |
-| `SharpTSOutputFileName` | `$(AssemblyName).dll` | Name of the output assembly |
+The SDK also defines `UsingSharpTSSdk=true` as an identification marker and resolves
+`SharpTSToolPath`, `SharpTSCompilerExe`, and `SharpTSTasksAssembly` from its own package. Consumers
+should not pin or override those internal locations.
 
-### Compiler Options
+## `tsconfig.json` mapping and precedence
 
-| Property | Default | CLI Equivalent | Description |
-|----------|---------|----------------|-------------|
-| `SharpTSPreserveConstEnums` | `false` | `--preserveConstEnums` | Keep const enum declarations in output |
-| `SharpTSExperimentalDecorators` | `false` | `--experimentalDecorators` | Use Legacy (Stage 2) decorators instead of default Stage 3 |
-| `SharpTSNoDecorators` | `false` | `--noDecorators` | Disable decorator support |
-| `SharpTSEmitDecoratorMetadata` | `false` | `--emitDecoratorMetadata` | Emit design-time type metadata |
-| `SharpTSGenerateDeclarations` | `false` | `--declaration` | Emit TypeScript `.d.ts` declarations |
-| `SharpTSEmitDeclarationOnly` | `false` | `--emitDeclarationOnly` | Emit declarations without a .NET assembly |
-| `SharpTSDeclarationDir` | _(empty)_ | `--declarationDir` | Declaration output directory |
-| `SharpTSVerifyIL` | `false` | `--verify` | Verify generated IL after compilation |
-| `SharpTSUseReferenceAssemblies` | `false` | `--ref-asm` | Emit reference-assembly-compatible output |
+Before compilation, the SDK task reads these values:
 
-### Configuration Properties
+| `tsconfig.json` value | MSBuild property |
+| --- | --- |
+| `compilerOptions.preserveConstEnums` | `SharpTSPreserveConstEnums` |
+| `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` |
+| `compilerOptions.decorators` | `SharpTSDecorators` |
+| `compilerOptions.emitDecoratorMetadata` | `SharpTSEmitDecoratorMetadata` |
+| `compilerOptions.declaration` | `SharpTSGenerateDeclarations` |
+| `compilerOptions.emitDeclarationOnly` | `SharpTSEmitDeclarationOnly` |
+| `compilerOptions.declarationDir` | `SharpTSDeclarationDir` |
+| `files[0]` | `SharpTSEntryPoint` |
 
-| Property | Default | Description |
-|----------|---------|-------------|
-| `SharpTSTsConfigPath` | `$(MSBuildProjectDirectory)\tsconfig.json` | Path to tsconfig.json for reading compiler options |
+The actual merge rules are:
 
----
+1. A nonempty `SharpTSEntryPoint` or `SharpTSDeclarationDir` wins; configuration fills only an
+   empty value.
+2. For the mapped boolean switches, `true` from either MSBuild or `tsconfig` enables the feature.
+   The current targets treat the property default `false` as a fallback, so an explicit MSBuild
+   `false` does not override `true` in `tsconfig`.
+3. `SharpTSEmitDeclarationOnly=true` also sets `SharpTSGenerateDeclarations=true`.
+4. The compiler receives `--project` as well as the explicit resolved switches. Its normal project
+   model handles `extends`, strictness, `baseUrl`/`paths`, module resolution, JSX, libraries,
+   ambient packages, `rootDir`, and `outDir`.
+5. Explicit arguments assembled by the SDK are later than configuration and therefore determine
+   the final compiler value for those switches.
 
-## tsconfig.json Integration
+If a project needs to force a mapped option off, set it to `false` in the selected `tsconfig` (or
+use a separate config via `SharpTSTsConfigPath`) instead of relying on an MSBuild false override.
 
-The SDK automatically reads `tsconfig.json` if present in the project directory. This provides IDE compatibility and allows sharing configuration between SharpTS and standard TypeScript tooling.
-
-### Supported Settings
-
-| tsconfig.json Path | Maps To | Notes |
-|--------------------|---------|-------|
-| `compilerOptions.preserveConstEnums` | `SharpTSPreserveConstEnums` | |
-| `compilerOptions.experimentalDecorators` | `SharpTSExperimentalDecorators` | Use Legacy (Stage 2) decorators |
-| `compilerOptions.decorators` | `SharpTSDecorators` | Use TC39 Stage 3 decorators |
-| `compilerOptions.emitDecoratorMetadata` | `SharpTSEmitDecoratorMetadata` | |
-| `compilerOptions.declaration` | `SharpTSGenerateDeclarations` | |
-| `compilerOptions.emitDeclarationOnly` | `SharpTSEmitDeclarationOnly` | Implies declaration output |
-| `compilerOptions.declarationDir` | `SharpTSDeclarationDir` | |
-| `files[0]` | `SharpTSEntryPoint` | First file used as runtime entry point |
-
-> **The CLI is the project-system authority.** `Sdk.targets` passes
-> `--project "$(SharpTSTsConfigPath)"`, so SDK compilation applies the same `extends` chain,
-> strictness, module resolution, and declaration inputs as direct CLI use. The MSBuild task
-> still extracts the entry point and options that have explicit MSBuild overrides; those
-> command-line flags take precedence over values in the config.
-
-The CLI-applied project settings include `baseUrl`, `paths`, `moduleResolution`, `lib`, `types`,
-and `typeRoots`. `files`/`include`/`exclude` select roots for `sharpts -p`; SDK IL compilation
-still requires one `SharpTSEntryPoint` because a .NET assembly has a single runtime entry graph.
-Use `sharpts -p` or `sharpts --build` as a separate check when every project root must be
-validated.
-
-The bool merge below is a one-way OR — a `tsconfig.json` value of `false` cannot turn off an
-MSBuild property that is `true`. The CLI's own merge is fully tri-state for the strictness
-options; this asymmetry is deliberate, to avoid changing behavior for shipped SDK consumers.
-
-### Priority Order
-
-MSBuild properties take precedence over tsconfig.json values:
-
-1. **Explicit MSBuild property** (highest priority)
-2. **tsconfig.json value**
-3. **Default value** (lowest priority)
-
-This allows you to use tsconfig.json for IDE compatibility while overriding specific settings in MSBuild.
-
-### Example tsconfig.json
+Example:
 
 ```json
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "ESNext",
     "strict": true,
-    "preserveConstEnums": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true
+    "decorators": true,
+    "declaration": true,
+    "declarationDir": "types"
   },
   "files": ["src/main.ts"]
 }
 ```
 
-With this tsconfig.json, you can simplify your project file:
+## Full project example
 
 ```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
+<Project Sdk="SharpTS.Sdk">
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
-    <!-- Entry point and options read from tsconfig.json -->
+    <AssemblyName>Acme.Scripts</AssemblyName>
+    <SharpTSEntryPoint>src/library.ts</SharpTSEntryPoint>
+    <SharpTSTsConfigPath>config/tsconfig.build.json</SharpTSTsConfigPath>
+    <SharpTSDecorators>true</SharpTSDecorators>
+    <SharpTSEmitDecoratorMetadata>true</SharpTSEmitDecoratorMetadata>
+    <SharpTSGenerateDeclarations>true</SharpTSGenerateDeclarations>
+    <SharpTSDeclarationDir>$(MSBuildProjectDirectory)/types</SharpTSDeclarationDir>
+    <SharpTSUseReferenceAssemblies>true</SharpTSUseReferenceAssemblies>
+    <SharpTSVerifyIL>true</SharpTSVerifyIL>
   </PropertyGroup>
 </Project>
 ```
 
----
+Standard resolved .NET references from `@(ReferencePath)` are forwarded as repeatable `-r`
+arguments, so project/package references can participate in TypeScript-to-.NET interop.
 
-## Build Targets
+## Build lifecycle
 
-The SDK defines these MSBuild targets:
+`SharpTSCompile` runs before `CoreCompile` and depends on configuration reading, input validation,
+entry-point resolution, and `ResolveAssemblyReferences`. The SDK disables Roslyn build-product
+copying, points `IntermediateAssembly` at the SharpTS output, and adds the compiler-generated
+runtimeconfig to publish output. `SharpTSClean` removes the assembly and runtimeconfig.
 
-| Target | Description |
-|--------|-------------|
-| `SharpTSCompile` | Main compilation target. Runs before `CoreCompile`. |
-| `SharpTSClean` | Removes compiled output. Runs before `Clean`. |
-| `_SharpTSReadTsConfig` | Reads tsconfig.json settings. |
-| `_SharpTSValidateInputs` | Validates entry point exists. |
-
-### Extending Build Behavior
-
-You can hook into the build process:
+Extend the build with ordinary target ordering instead of replacing `SharpTSCompile`:
 
 ```xml
-<Target Name="BeforeSharpTSCompile" BeforeTargets="SharpTSCompile">
-  <Message Importance="high" Text="About to compile TypeScript..." />
+<Target Name="AfterSharpTS" AfterTargets="SharpTSCompile">
+  <Message Text="Built $(SharpTSOutputPath)$(SharpTSOutputFileName)" />
 </Target>
-
-<Target Name="AfterSharpTSCompile" AfterTargets="SharpTSCompile">
-  <Message Importance="high" Text="TypeScript compilation complete!" />
-</Target>
 ```
-
----
-
-## Project Structures
-
-### Single-File Project
-
-```
-MyProject/
-├── MyProject.csproj
-└── src/
-    └── main.ts
-```
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
-  </PropertyGroup>
-</Project>
-```
-
-### Multi-Module Project
-
-The SDK uses SharpTS's ModuleResolver to automatically discover and compile imported modules:
-
-```
-MyProject/
-├── MyProject.csproj
-├── tsconfig.json
-└── src/
-    ├── main.ts          # Entry point
-    ├── utils/
-    │   └── helpers.ts   # Imported by main.ts
-    └── models/
-        └── person.ts    # Imported by main.ts
-```
-
-```typescript
-// src/main.ts
-import { formatName } from './utils/helpers';
-import { Person } from './models/person';
-
-const p = new Person("Alice", 30);
-console.log(formatName(p.name));
-```
-
-All imported modules are compiled into a single DLL automatically.
-
-### With tsconfig.json
-
-```
-MyProject/
-├── MyProject.csproj
-├── tsconfig.json
-└── src/
-    └── main.ts
-```
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <!-- Entry point read from tsconfig.json -->
-  </PropertyGroup>
-</Project>
-```
-
----
-
-## Build Commands
-
-Standard MSBuild commands work transparently:
-
-```bash
-# Build in Debug mode
-dotnet build
-
-# Build in Release mode
-dotnet build -c Release
-
-# Clean output
-dotnet clean
-
-# Rebuild (clean + build)
-dotnet build --no-incremental
-
-# Publish
-dotnet publish -c Release
-```
-
-### Verbose Output
-
-For debugging build issues:
-
-```bash
-dotnet build -v detailed
-```
-
----
-
-## Error Handling
-
-### Error Format
-
-The SDK outputs errors in MSBuild-compatible format for IDE integration:
-
-```
-src/main.ts(15,10): error SHARPTS001: Type 'string' is not assignable to type 'number'
-```
-
-### Error Codes
-
-| Code | Category | Description |
-|------|----------|-------------|
-| SHARPTS000 | General | Unclassified error |
-| SHARPTS001 | Type Error | Type mismatch, invalid assignment |
-| SHARPTS002 | Parse Error | Syntax error, unexpected token |
-| SHARPTS003 | Module Error | Import not found, circular dependency |
-| SHARPTS004 | Compile Error | IL emission failure |
-| SHARPTS005 | Config Error | Invalid configuration |
-
-### Common Errors
-
-**"SharpTSEntryPoint must be specified"**
-- Set `<SharpTSEntryPoint>` in your project file, or
-- Add a `files` array to your tsconfig.json
-
-**"Entry point file 'X' does not exist"**
-- Check the path is correct relative to the project directory
-- Ensure the file exists
-
-**"SharpTS compilation failed with exit code 1"**
-- Check the build output for specific error messages
-- Use `dotnet build -v detailed` for more information
-
----
-
-## CI/CD Integration
-
-### GitHub Actions
-
-```yaml
-name: Build
-
-on: [push, pull_request]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '10.0.x'
-
-      - name: Build
-        run: dotnet build -c Release
-
-      - name: Test
-        run: dotnet test -c Release
-```
-
-### Azure DevOps
-
-```yaml
-trigger:
-  - main
-
-pool:
-  vmImage: 'ubuntu-latest'
-
-steps:
-  - task: UseDotNet@2
-    inputs:
-      version: '10.0.x'
-
-  - task: DotNetCoreCLI@2
-    inputs:
-      command: 'build'
-      arguments: '-c Release'
-
-  - task: DotNetCoreCLI@2
-    inputs:
-      command: 'test'
-      arguments: '-c Release'
-```
-
----
-
-## Migration from Manual Targets
-
-If you're using manual pre-build targets, migrate to the SDK:
-
-### Before (Manual Target)
-
-```xml
-<Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-  </PropertyGroup>
-
-  <Target Name="CompileTypeScript" BeforeTargets="Build">
-    <Exec Command="sharpts --compile src/main.ts -o $(OutputPath)app.dll" />
-  </Target>
-</Project>
-```
-
-### After (SDK)
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
-  </PropertyGroup>
-</Project>
-```
-
-### Benefits of Migration
-
-- Automatic tsconfig.json integration
-- Proper Clean target support
-- MSBuild-compatible error output
-- Simplified project file
-- Version management via global.json
-
----
 
 ## Troubleshooting
 
-### SDK Not Found
+- **SDK cannot be resolved:** ensure the selected `<version>` exists on configured NuGet sources,
+  or confirm the versionless SDK has a `global.json` `msbuild-sdks` entry.
+- **Entry point is empty:** set `SharpTSEntryPoint` or provide a `tsconfig.json` with a nonempty
+  `files` array.
+- **Configuration is ignored:** confirm `SharpTSTsConfigPath` points to an existing file; otherwise
+  the SDK intentionally compiles with `--no-tsconfig`.
+- **An option will not turn off:** mapped booleans are additive; set the value false in the selected
+  `tsconfig` as described above.
+- **C# cannot reference the result:** enable `SharpTSUseReferenceAssemblies` and keep the public
+  TypeScript boundary CLR-consumable; see [.NET integration](dotnet-integration.md).
+- **IL verification fails:** treat it as a compiler defect and retain the minimal TypeScript input
+  and build log when reporting it.
 
-**Error:** `The SDK 'SharpTS.Sdk/1.0.7' could not be resolved`
-
-- Ensure the NuGet package is available (nuget.org or private feed)
-- Check your NuGet.config includes the correct package source
-- Try `dotnet restore` before building
-
-### Build Hangs
-
-- Check for infinite loops in TypeScript code
-- Use `--timeout` if available in future versions
-
-### IL Verification Fails
-
-**Error:** IL verification errors with `SharpTSVerifyIL=true`
-
-- This may indicate a compiler bug - please report with source code
-- Disable verification as a workaround: `<SharpTSVerifyIL>false</SharpTSVerifyIL>`
-
-### tsconfig.json Not Read
-
-- Ensure the file is valid JSON (comments and trailing commas are supported)
-- Check `SharpTSTsConfigPath` points to the correct location
-- Use `dotnet build -v detailed` to see what values were read
-
----
-
-## Examples
-
-### Console Application
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net10.0</TargetFramework>
-    <SharpTSEntryPoint>src/main.ts</SharpTSEntryPoint>
-  </PropertyGroup>
-</Project>
-```
-
-```typescript
-// src/main.ts
-console.log("Hello from SharpTS!");
-
-function fibonacci(n: number): number {
-    if (n <= 1) return n;
-    return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-console.log("Fibonacci(10) =", fibonacci(10));
-```
-
-### Library with Decorators
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <SharpTSEntryPoint>src/index.ts</SharpTSEntryPoint>
-    <!-- Decorators are enabled by default (Stage 3) -->
-    <SharpTSEmitDecoratorMetadata>true</SharpTSEmitDecoratorMetadata>
-    <SharpTSUseReferenceAssemblies>true</SharpTSUseReferenceAssemblies>
-  </PropertyGroup>
-</Project>
-```
-
-### With Custom Namespace
-
-```xml
-<Project Sdk="SharpTS.Sdk/1.0.7">
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <SharpTSEntryPoint>src/library.ts</SharpTSEntryPoint>
-    <!-- Decorators are enabled by default -->
-  </PropertyGroup>
-</Project>
-```
-
-```typescript
-// src/library.ts
-@Namespace("MyCompany.Libraries")
-class Calculator {
-    static add(a: number, b: number): number {
-        return a + b;
-    }
-}
-```
-
-The `Calculator` class will be emitted in the `MyCompany.Libraries` namespace.
-
----
-
-## See Also
-
-- [Execution Modes](execution-modes.md) - Interpreted vs compiled mode
-- [.NET Integration](dotnet-integration.md) - Consuming compiled TypeScript from C#
-- [Code Samples](code-samples.md) - TypeScript to C# mappings
+For CLI-only workflows and project-reference checking, see
+[Execution modes](execution-modes.md). Runnable projects live in the
+[Examples cookbook](../Examples/README.md).

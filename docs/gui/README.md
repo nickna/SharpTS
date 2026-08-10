@@ -1,71 +1,61 @@
 # SharpTS GUI
 
-SharpTS GUI is the retained TypeScript/TSX desktop application layer built on Avalonia. The
-current `SharpTS.Gui.Sdk` `0.3.0-preview.1` train supports explicit application and window
-lifecycle management, interpreted and compiled guests, Headless execution, hot reload, Windows
-packaging, and compiled single-file and Native AOT deployment.
+SharpTS GUI is the retained TypeScript/TSX desktop application layer built on Avalonia. It provides
+explicit application/window lifecycle, interpreted and compiled guests, Headless execution,
+development reloads, Windows packaging, and compiled single-file and Native AOT deployment.
 
-Preview identifies the release channel and compatibility policy. The SDK, workflows, artifact
-names, and package train are maintained product infrastructure until an explicit lifecycle change
-moves them to a stable channel.
+Preview identifies the release channel, not a frozen package number. Windows is the supported
+product focus; Apple Silicon macOS remains an experimental candidate until its native and Apple
+distribution gates pass.
 
 ## Build an application
 
-1. Use the [SDK development workflow](sdk-development.md) to create, run, test, and publish an
-   application with either the SharpTS CLI or the .NET SDK template.
-2. Use the [TSX API reference](tsx-api.md) for application lifecycle, components, controls,
-   resources, assets, and desktop services.
-3. Use [testing and developer tools](testing-and-devtools.md) for Headless interaction tests,
-   structural inspection, and visual regression snapshots.
+1. Follow the [SDK development workflow](sdk-development.md) for CLI and explicit MSBuild projects.
+2. Use the [TSX API reference](tsx-api.md) for lifecycle, components, built-in controls, resources,
+   assets, and desktop services.
+3. Use [testing and developer tools](testing-and-devtools.md) for Headless interaction tests, tree
+   inspection, and visual snapshots.
 
-`@sharpts/gui` is the application API. The supported `@sharpts/gui/testing` subpath provides a
-window-scoped Headless test driver, while `@sharpts/gui/devtools` provides read-only inspection and
-pixel snapshots. Fault injection, scheduler manipulation, trace staging, renderer identity, and
-subscription counters are repository-only conformance infrastructure.
+`@sharpts/gui` is the public application API. `@sharpts/gui/testing` is the public Headless test
+driver, and `@sharpts/gui/devtools` supplies read-only inspection and pixel snapshots. Repository
+conformance hooks are not public application APIs.
 
-## Maintain and release the GUI
-
-- [Performance and retention](performance.md) documents the benchmark suite, release budgets, and
-  dated measurement evidence.
-- [Windows distribution](windows-distribution.md) covers MSIX identity, signing, updates,
-  enterprise deployment, provenance, and support bundles.
-- [macOS distribution](macos-distribution.md) covers the experimental Apple Silicon candidate,
-  native certification, signing, and notarization.
-- [Compatibility and support policy](support-policy.md) defines versioned contracts, servicing
-  boundaries, and the stable-release gate.
+There is no supported public third-party custom-control provider, descriptor-registration, raw
+Avalonia object, or dynamic control-loading API. Internal provider seams are private, can change
+without notice, and carry no compatibility promise. Public applications extend behavior through
+components, hooks, typed item factories, resources/styles, assets, drawing commands, and the
+documented desktop services.
 
 ## Platform status
 
 | Target | Status |
 | --- | --- |
-| `win-x64` | Supported preview target. Release evidence requires Headless, real-window, packaged, single-file, and Native AOT execution. |
-| `win-arm64` | Supported preview RID for cross-publishing. Native ARM64 execution remains a certification requirement. |
-| `osx-arm64` | Experimental Apple Silicon candidate. Cross-publishing does not establish runtime support; native execution, signing, and notarization remain required. |
+| `win-x64` | Supported preview target; releases require Headless, real-window, packaged, single-file, and Native AOT evidence. |
+| `win-arm64` | Supported preview RID for cross-publishing; native execution remains a certification requirement. |
+| `osx-arm64` | Experimental candidate; native execution, Developer ID signing, and notarization are required before support. |
 
-macOS Intel is not supported. Windows remains the supported product focus, and the experimental
-macOS candidate does not block a Windows release.
+macOS Intel is not supported. Cross-publishing alone never changes a platform designation.
 
-## Versioned boundaries
+## Versioned public boundaries
 
-The SDK package is an atomic distribution of the matching compiler, host, GUI bridge, MSBuild
-tasks, TypeScript modules, native assets, launcher, and templates. Hosted ABI 1, GUI API 1, the
-descriptor schema version and hash, and custom-provider contract 1 are checked before guest
-initialization. Incompatible payloads fail before application code runs; the preview line does not
-load a historical GUI compatibility path.
+The SDK is an atomic distribution of its compiler, host, bridge, TypeScript modules, native assets,
+launcher, and templates. Hosted ABI, GUI API, and descriptor schema values are checked before guest
+initialization. Incompatible payloads fail fast instead of loading a historical compatibility path.
 
-Each window has one `Window` root. Applications use built-in or statically registered descriptors;
-runtime descriptor discovery, arbitrary Avalonia templates, public third-party control loading,
-and a full editing `DataGrid` are not supported. Simple `ComboBox` and `ListBox` items remain
-string-backed, with typed factories available for virtual lists, trees, and a windowed virtual
-grid. Installed MSIX identity is required for Windows notifications.
+Each window has one `Window` root. Applications use the built-in generated descriptors. Arbitrary
+Avalonia templates, dynamic descriptor discovery, public third-party native controls, and a full
+editing DataGrid are outside the public surface.
 
-## Repository release checks
+## Maintainer documentation
 
-GUI changes should pass a warning-clean Release solution build, the canonical core and GUI suites,
-generated-contract verification, SDK/CLI/template package lifecycles, distribution checks, x64
-real-window and Native AOT execution, ARM64 cross-publishing, macOS candidate structure checks,
+- [Performance and retention](performance.md) — benchmark suite and release budgets
+- [Windows distribution](windows-distribution.md) — MSIX, signing, updates, enterprise deployment,
+  provenance, and support bundles
+- [macOS distribution](macos-distribution.md) — experimental bundle construction, native
+  certification, signing, and notarization
+- [Compatibility and support policy](support-policy.md) — versioned contracts, servicing boundaries,
+  and the stable-release gate
+
+GUI changes should pass the core and GUI suites, generated-contract verification,
+SDK/CLI/template package lifecycles, distribution checks, native evidence for claimed platforms,
 package-content audit, and `git diff --check`.
-
-Publishing additionally requires approved NuGet credentials, a production Windows signing
-identity, immutable package bytes, and the native hardware evidence claimed by the release notes.
-Platform-specific release requirements are documented in the distribution guides above.

@@ -1,646 +1,171 @@
-# SharpTS Implementation Status
-
-This document tracks TypeScript language features and their implementation status in SharpTS.
-
-**Last Updated:** 2026-07-25 (`path.win32` correctness — `normalize` discarded everything after a single leading separator, so `path.join('/foo','bar')` returned `"\"` on Windows, where the win32 variants are the platform default; its UNC branch also dropped the root separator; and `isAbsolute` rejected single-separator paths while `resolve`/`parse` in the same module accepted them. Fixed with a Node-generated conformance table (§15). Separately, compiled mode did not expand `...spread` into a rest parameter on the dynamic method-call path, and only one of the three parameter resolvers pinned the `List<object>` rest marker — so class methods and constructors collected just their first trailing argument. Both were interpreter↔compiled divergences; see [#1282](https://github.com/nickna/SharpTS/issues/1282). Prior, 2026-07-24: §17 conformance figures corrected against the committed baselines — the previously published Test262 line was badly stale, and the TS-conformance table understated `Pass`; issue-tracker reset consolidated the open work into standing issues [#1278](https://github.com/nickna/SharpTS/issues/1278)–[#1282](https://github.com/nickna/SharpTS/issues/1282), and forward-looking pointers here now target those. Prior, 2026-06-23: Tier-1 tech-debt cleanup — NaN-guard parity in RuntimeTypes equality, async-function suspension-walker reconciliation, dead-code removal, and the "Known regression" entry below corrected per PR [#906](https://github.com/nickna/SharpTS/issues/906). Perf epic [#856](https://github.com/nickna/SharpTS/issues/856) — compiled output now meets or beats Node.js on 5 of 7 cross-runtime workloads, the other two within ~1.2×; loop-backedge cancellation now emits `throw` instead of a returning `call`, recovering ~1.8× on tight numeric loops — see §18)
-
-## Legend
-- ✅ Implemented
-- ❌ Missing
-- ⚠️ Partially Implemented
-
----
-
-## 1. TYPE SYSTEM
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Primitive types (`string`, `number`, `boolean`, `null`) | ✅ | |
-| `void` type | ✅ | |
-| `any` type | ✅ | |
-| Array types (`T[]`) | ✅ | |
-| Object types | ✅ | Structural typing |
-| Interfaces | ✅ | Structural typing |
-| Classes | ✅ | Nominal typing |
-| Generics (`<T>`) | ✅ | Full support with true .NET generics and constraints |
-| Variance annotations (`in`, `out`, `in out`) | ✅ | Explicit variance control for generic type parameters (TS 4.7+) |
-| Union Types (`string \| number`) | ✅ | With type narrowing support |
-| Intersection Types (`A & B`) | ✅ | For combining types with full TypeScript semantics |
-| Literal Types (`"success" \| "error"`) | ✅ | String, number, and boolean literals |
-| Type Aliases (`type Name = ...`) | ✅ | Including function types |
-| Tuple Types (`[string, number]`) | ✅ | Fixed-length typed arrays with optional, rest, and named elements |
-| `unknown` type | ✅ | Safer alternative to `any` |
-| `never` type | ✅ | For exhaustive checking |
-| Type Assertions (`as`, `<Type>`) | ✅ | Both `as` and angle-bracket syntax |
-| `as const` assertions | ✅ | Deep readonly inference for literals |
-| Type Guards (`is`, `typeof` narrowing) | ✅ | `typeof` narrowing, user-defined type guards (`x is T`), assertion functions, property access narrowing |
-| `readonly` modifier | ✅ | Compile-time enforcement |
-| Optional Properties (`prop?:`) | ✅ | Partial object shapes |
-| Index Signatures (`[key: string]: T`) | ✅ | String, number, and symbol key types |
-| `object` type | ✅ | Non-primitive type (excludes string, number, boolean, bigint, symbol, null, undefined) |
-| `unique symbol` type | ✅ | Nominally-typed symbols for const declarations |
-| Type predicates (`is`, `asserts`) | ✅ | User-defined type guards (`x is T`), assertion functions (`asserts x is T`, `asserts x`) |
-| `satisfies` operator | ✅ | Validates expression matches type without widening (TS 4.9+) |
-| Variadic tuple types | ✅ | `[...T]` spread in tuples, Prepend/Append/Concat patterns |
-| Definite assignment assertion | ✅ | `let x!: number` syntax for variables and class fields |
-
----
-
-## 2. ENUMS
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Numeric Enums | ✅ | `enum Color { Red, Green }` with auto-increment |
-| String Enums | ✅ | `enum Color { Red = "RED" }` |
-| Const Enums | ✅ | Compile-time inlined enums with computed value support |
-| Heterogeneous Enums | ✅ | Mixed string/number values |
-
----
-
-## 3. CLASSES
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Basic classes | ✅ | Constructors, methods, fields |
-| Inheritance (`extends`) | ✅ | Single inheritance |
-| `super` calls | ✅ | |
-| `this` keyword | ✅ | |
-| Access modifiers (`public`/`private`/`protected`) | ✅ | Compile-time enforcement |
-| `static` members | ✅ | Class-level properties/methods |
-| `abstract` classes | ✅ | Cannot be instantiated |
-| `abstract` methods | ✅ | Must be overridden, includes abstract accessors |
-| Getters/Setters (`get`/`set`) | ✅ | Property accessors |
-| Parameter properties | ✅ | `constructor(public x: number)` |
-| `implements` keyword | ✅ | Class implementing interface |
-| Method overloading | ✅ | Multiple signatures with implementation function |
-| `override` keyword | ✅ | Explicit override marker for methods/accessors |
-| Private fields (`#field`) | ✅ | ES2022 hard private fields with ConditionalWeakTable isolation; full interpreter and IL compiler support |
-| Static blocks | ✅ | `static { }` for static initialization; executes in declaration order with static fields; `this` binds to class |
-| `accessor` keyword | ✅ | Auto-accessor class fields (TS 4.9+); full interpreter and IL compiler support with deferred boxing optimization |
-| `declare` field modifier | ✅ | Ambient field declarations for external initialization (decorators, DI); full interpreter and IL compiler support |
-
----
-
-## 4. FUNCTIONS
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Function declarations | ✅ | |
-| Arrow functions | ✅ | |
-| Closures | ✅ | Variable capture works |
-| Default parameters | ✅ | `(x = 5)` |
-| Type annotations | ✅ | Parameters and return types |
-| Rest parameters (`...args`) | ✅ | Variable arguments |
-| Spread in calls (`fn(...arr)`) | ✅ | Array expansion |
-| Overloads | ✅ | Multiple signatures with implementation function |
-| `this` parameter typing | ✅ | Explicit `this` type in function declarations |
-| Generic functions | ✅ | `function identity<T>(x: T)` with type inference |
-| Named function expressions | ✅ | `const f = function myFunc() {}` with self-reference for recursion |
-| Constructor signatures | ✅ | `new (params): T` in interfaces, `new` on expressions |
-| Call signatures | ✅ | `(params): T` in interfaces, callable interface types |
-
----
-
-## 5. ASYNC/PROMISES
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Promises | ✅ | `Promise<T>` type with await support, `new Promise((resolve, reject) => { })` executor constructor |
-| Promise instance methods | ✅ | `.then()`, `.catch()`, `.finally()` with chaining support |
-| `async` functions | ✅ | Full state machine compilation |
-| `await` keyword | ✅ | Pause and resume via .NET Task infrastructure |
-| Async arrow functions | ✅ | Including nested async arrows |
-| Async class methods | ✅ | Full `this` capture support |
-| Try/catch in async | ✅ | Await inside try/catch/finally blocks |
-| Nested await in args | ✅ | `await fn(await getValue())` |
-| `Promise.all/race/any/allSettled` | ✅ | Full interpreter support; IL compiler: all/race/allSettled as pure IL state machines, any delegates to runtime |
-| `Promise.resolve/reject` | ✅ | Static factory methods with Promise flattening |
-| `Promise.withResolvers` | ✅ | Returns `{promise, resolve, reject}` for external promise resolution (ES2024) |
-
----
-
-## 6. MODULES
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `import` statements | ✅ | `import { x } from './file'` |
-| `export` statements | ✅ | `export function/class/const` |
-| Default exports | ✅ | `export default` |
-| Namespace imports | ✅ | `import * as X from './file'` |
-| Re-exports | ✅ | `export { x } from './file'`, `export * from './file'` |
-| TypeScript namespaces | ✅ | `namespace X { }` with declaration merging, dotted syntax, functions, variables, enums, nested namespaces, classes with `new Namespace.Class()` instantiation |
-| Namespace import alias | ✅ | `import X = Namespace.Member`, `export import X = Namespace.Member` |
-| Dynamic imports | ✅ | `await import('./file')` with module registry for compiled mode, `typeof import()` typing for literal paths |
-| `import type` | ✅ | Statement-level (`import type { T }`) and inline (`import { type T }`) type-only imports |
-| `import.meta` | ✅ | `import.meta.url` for module metadata |
-| `export =` / `import =` | ✅ | CommonJS interop: `export = value`, `import x = require('path')`, `export import x = require()` (class exports have known limitation) |
-| Ambient module declarations | ✅ | `declare module 'x' { }` - type-only declarations for external packages |
-| Module augmentation | ✅ | `declare module './path' { }` extends existing modules, `declare global { }` extends global types |
-| Triple-slash references | ✅ | `/// <reference path="...">` for script-style file merging |
-| `package.json` exports | ✅ | Subpath exports, conditional exports (`types`/`import`/`default`), wildcard patterns, null restrictions, array fallbacks |
-| Subpath imports (`#`) | ✅ | `"imports"` field in package.json with `#`-prefixed specifiers |
-| Self-referencing | ✅ | Package imports itself by name through its own `exports` |
-
----
-
-## 7. OPERATORS
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Arithmetic (`+`, `-`, `*`, `/`, `%`) | ✅ | |
-| Comparison (`==`, `!=`, `<`, `>`, `<=`, `>=`) | ✅ | |
-| Logical (`&&`, `\|\|`, `!`) | ✅ | Short-circuit evaluation |
-| Nullish coalescing (`??`) | ✅ | |
-| Optional chaining (`?.`) | ✅ | |
-| Ternary (`? :`) | ✅ | |
-| `typeof` | ✅ | Returns `"undefined"` for undeclared variables (no ReferenceError) |
-| Assignment (`=`, `+=`, `-=`, `*=`, `/=`, `%=`) | ✅ | |
-| Increment/Decrement (`++`, `--`) | ✅ | Pre and post |
-| Bitwise (`&`, `\|`, `^`, `~`, `<<`, `>>`, `>>>`) | ✅ | Including compound assignments |
-| Strict equality (`===`, `!==`) | ✅ | Same behavior as `==`/`!=` |
-| `instanceof` | ✅ | With inheritance chain support |
-| `in` operator | ✅ | Property existence check |
-| Exponentiation (`**`) | ✅ | Right-associative |
-| Spread operator (`...`) | ✅ | In arrays/objects/calls |
-| Non-null assertion (`x!`) | ✅ | Postfix operator to assert non-null |
-| Logical assignment (`&&=`, `\|\|=`, `??=`) | ✅ | Compound logical assignment operators with short-circuit evaluation |
-| `keyof` operator | ✅ | Extract keys as union type |
-| `typeof` in type position | ✅ | Extract type from value |
-| Comma operator (`,`) | ✅ | Sequence expression: evaluates left-to-right, returns last value |
-
----
-
-## 8. DESTRUCTURING
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Array destructuring | ✅ | `const [a, b] = arr` |
-| Object destructuring | ✅ | `const { x, y } = obj` |
-| Nested destructuring | ✅ | Deep pattern matching |
-| Default values in destructuring | ✅ | `const { x = 5 } = obj` (via nullish coalescing) |
-| Array rest pattern | ✅ | `const [first, ...rest] = arr` |
-| Object rest pattern | ✅ | `const { x, ...rest } = obj` |
-| Array holes | ✅ | `const [a, , c] = arr` |
-| Object rename | ✅ | `const { x: newName } = obj` |
-| Parameter destructuring | ✅ | `function f({ x, y })` and `([a, b]) => ...` |
-
----
-
-## 9. CONTROL FLOW
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `if`/`else` | ✅ | |
-| `while` loops | ✅ | |
-| `for` loops | ✅ | Desugared to while |
-| `for...of` loops | ✅ | Array iteration |
-| `switch`/`case` | ✅ | With fall-through |
-| `break` | ✅ | |
-| `continue` | ✅ | |
-| `return` | ✅ | |
-| `try`/`catch`/`finally` | ✅ | |
-| `throw` | ✅ | |
-| `for...in` loops | ✅ | Object key iteration |
-| `do...while` loops | ✅ | Post-condition loop |
-| Label statements | ✅ | `label: for (...)` with break/continue support |
-| Optional catch binding | ✅ | `catch { }` without parameter (ES2019) |
-
----
-
-## 10. BUILT-IN APIS
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `console.log` | ✅ | Multiple arguments, printf-style format specifiers (%s, %d, %i, %f, %o, %O, %j, %%) |
-| `Math` object | ✅ | PI, E, abs, floor, ceil, round, sqrt, sin, cos, tan, log, exp, sign, trunc, pow, min, max, random |
-| String methods | ✅ | length, charAt, substring, indexOf, toUpperCase, toLowerCase, trim, replace, split, includes, startsWith, endsWith, slice, repeat, padStart, padEnd, charCodeAt, codePointAt, concat, lastIndexOf, trimStart, trimEnd, replaceAll, at, matchAll |
-| Array methods | ✅ | push, pop, shift, unshift, reverse, slice, concat, map, filter, forEach, find, findIndex, findLast, findLastIndex, some, every, reduce, reduceRight, includes, indexOf, join, sort, toSorted, toReversed, with, flat, flatMap, splice, toSpliced, at, fill, copyWithin, entries, keys, values |
-| `JSON.parse`/`stringify` | ✅ | With reviver, replacer, indentation, class instances, toJSON(), BigInt TypeError |
-| `Object.keys`/`values`/`entries`/`fromEntries`/`hasOwn` | ✅ | Full support for object literals and class instances |
-| `Array.isArray` | ✅ | Type guard for array detection |
-| `Number` methods | ✅ | parseInt, parseFloat, isNaN, isFinite, isInteger, isSafeInteger, toFixed, toPrecision, toExponential, toString(radix); constants: MAX_VALUE, MIN_VALUE, NaN, POSITIVE_INFINITY, NEGATIVE_INFINITY, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER, EPSILON |
-| `Date` object | ✅ | Full local timezone support with constructors, getters, setters, conversion methods |
-| `Map`/`Set` | ✅ | Full API (get, set, has, delete, clear, size, keys, values, entries, forEach); for...of iteration; reference equality for object keys; `Map.groupBy()` (ES2024); ES2025 Set operations (union, intersection, difference, symmetricDifference, isSubsetOf, isSupersetOf, isDisjointFrom) |
-| `WeakMap`/`WeakSet` | ✅ | Full API (get, set, has, delete for WeakMap; add, has, delete for WeakSet); object-only keys/values; no iteration or size |
-| `RegExp` | ✅ | Full API (test, exec, source, flags, global, ignoreCase, multiline, lastIndex); `/pattern/flags` literal and `new RegExp()` constructor; string methods (match, replace, search, split, matchAll) with regex support; named capture groups (`(?<name>...)`) with `.groups` property on match results |
-| `Array.from()` | ✅ | Create array from iterable with optional map function |
-| `Array.of()` | ✅ | Create array from arguments |
-| `Object.assign()` | ✅ | Merge objects - copies properties from one or more source objects to a target object, returns the target |
-| `Object.fromEntries()` | ✅ | Inverse of `Object.entries()` - converts iterable of [key, value] pairs to object |
-| `Object.hasOwn()` | ✅ | Safer `hasOwnProperty` check - returns true for own properties, false for methods |
-| `Object.freeze()`/`seal()`/`isFrozen()`/`isSealed()` | ✅ | Object immutability - freeze prevents all changes, seal allows modification but prevents adding/removing properties; shallow freeze/seal (nested objects unaffected); works on objects, arrays, class instances |
-| `Error` class | ✅ | Error, TypeError, RangeError, ReferenceError, SyntaxError, URIError, EvalError, AggregateError with name, message, stack, cause (ES2022) properties |
-| Strict mode (`"use strict"`) | ✅ | File-level and function-level strict mode; frozen/sealed object mutations throw TypeError in strict mode |
-| `setTimeout`/`clearTimeout` | ✅ | Timer functions with Timeout handle, ref/unref support |
-| `setInterval`/`clearInterval` | ✅ | Repeating timer functions with Timeout handle, no overlap between executions |
-| `setImmediate`/`clearImmediate` | ✅ | Immediate execution timer (runs after current event loop iteration) |
-| `globalThis` | ✅ | ES2020 global object reference with property access and method calls |
-| `structuredClone` | ✅ | Deep clone of values (objects, arrays, Map, Set, etc.) |
-| `AbortController`/`AbortSignal` | ✅ | `new AbortController()`, `signal.aborted`, `abort(reason?)`, `addEventListener`/`removeEventListener`, `throwIfAborted`, `onabort`, `AbortSignal.abort()`/`timeout()`/`any()`, fetch `signal` option |
-| `fetch()` API | ✅ | `fetch(url, options?)` returns `Promise<Response>`; Response: `status`, `statusText`, `ok`, `url`, `headers`, `body` (Readable stream), `bodyUsed`, `json()`, `text()`, `arrayBuffer()`, `clone()`; Headers: `get()`, `set()`, `has()`, `delete()`, `append()`, `forEach()`, `entries()`, `keys()`, `values()`; options: `method`, `headers`, `body`, `signal`, `redirect` (`follow`/`manual`/`error`) |
-| Web Streams API | ✅ | `ReadableStream`, `WritableStream`, `TransformStream` with default controllers/readers/writers; `pipeTo()`, `pipeThrough()`, `tee()`, `cancel()`, `getReader()`/`getWriter()`, `closed`/`ready` promises, `desiredSize` backpressure; `ByteLengthQueuingStrategy`, `CountQueuingStrategy`; `ReadableStream.from(iterable)` (eager array/string/Set forms); also exported from `node:stream/web`. **Deferred:** BYOB readers, transferable streams, `Symbol.asyncIterator` on ReadableStream, `Response.body` migration. |
-| `URL`/`URLSearchParams` | ✅ | Full WHATWG URL API: constructor, `href`, `protocol`, `host`, `hostname`, `port`, `pathname`, `search`, `hash`, `origin`, `username`, `password`, `searchParams`, `toString()`; URLSearchParams: `get()`, `set()`, `has()`, `delete()`, `append()`, `entries()`, `keys()`, `values()`, `forEach()`, `toString()`, `sort()` |
-| `TextEncoder`/`TextDecoder` | ✅ | `TextEncoder.encode(string)` → `Uint8Array`; `TextDecoder.decode(buffer)` → `string`; UTF-8 encoding/decoding |
-| `console` methods | ✅ | `log`, `error`, `warn`, `info`, `debug`, `clear`, `time`/`timeEnd`/`timeLog`, `assert`, `count`/`countReset`, `table`, `dir`, `group`/`groupCollapsed`/`groupEnd`, `trace` |
-| `Intl.NumberFormat` | ✅ | Locale-aware number/currency/percent formatting; `format()`, `resolvedOptions()`; options: style, currency, minimumFractionDigits, maximumFractionDigits, minimumIntegerDigits, useGrouping |
-| `Intl.DateTimeFormat` | ✅ | Locale-aware date/time formatting; `format()`, `resolvedOptions()`; options: dateStyle, timeStyle, year, month, day, weekday, hour, minute, second, hour12, timeZone, timeZoneName, era, fractionalSecondDigits |
-| `Intl.Collator` | ✅ | Locale-aware string comparison; `compare()`, `resolvedOptions()`; options: usage, sensitivity (base/accent/case/variant), ignorePunctuation, numeric, caseFirst |
-| `Intl.PluralRules` | ✅ | Plural category selection (CLDR rules); `select()`, `resolvedOptions()`; options: type (cardinal/ordinal); categories: zero, one, two, few, many, other |
-| `Intl.RelativeTimeFormat` | ✅ | Locale-aware relative time formatting; `format()`, `formatToParts()`, `resolvedOptions()`; options: style (long/short/narrow), numeric (always/auto); units: year, quarter, month, week, day, hour, minute, second |
-| `Intl.ListFormat` | ✅ | Locale-aware list formatting; `format()`, `formatToParts()`, `resolvedOptions()`; options: style (long/short/narrow), type (conjunction/disjunction/unit) |
-| `Intl.Segmenter` | ✅ | Unicode text segmentation; `segment()` returns iterable Segments with `containing()`; options: granularity (grapheme/word/sentence); segment data: segment, index, input, isWordLike |
-| `Intl.DisplayNames` | ✅ | Locale-aware display names; `of()`, `resolvedOptions()`; types: language, region, script, currency, calendar, dateTimeField; options: style, fallback (code/none), languageDisplay |
-
----
-
-## 11. SYNTAX
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `let` / `const` declarations | ✅ | Block-scoped per spec |
-| `var` declarations | ✅ | Function-scoped semantics via parser-time hoisting; supports declarations in nested blocks (if/for/while/try) referenced in the enclosing function scope. Multi-declarator (`var a = 1, b = 2`) supported. |
-| Multi-declarator `let`/`const` | ✅ | `let a = 1, b = 2` and `const x = 1, y = 2` |
-| Line comments (`//`) | ✅ | |
-| Double-quoted strings | ✅ | |
-| Template literals | ✅ | With interpolation |
-| Object literals | ✅ | |
-| Array literals | ✅ | |
-| Block comments (`/* */`) | ✅ | |
-| Single-quoted strings | ✅ | |
-| Object method shorthand | ✅ | `{ fn() {} }` |
-| Object literal accessors | ✅ | `{ get x() {}, set x(v) {} }` with proper `this` binding |
-| Computed property names | ✅ | `{ [expr]: value }`, `{ "key": v }`, `{ 123: v }` |
-| Class expressions | ✅ | `const C = class { }` - interpreter and IL compiler full support |
-| Shorthand properties | ✅ | `{ x }` instead of `{ x: x }` |
-| Tagged template literals | ✅ | `` tag`template` `` syntax with TemplateStringsArray and raw property |
-| Numeric separators | ✅ | `1_000_000` for readability |
-| JSX/TSX | ✅ | `.tsx` parses in the TSX dialect (JSX commits at `<`; angle-bracket assertions rejected, as tsc). Faithful text/entity scanning; classic (`jsx: react`, `jsxFactory`/`jsxFragmentFactory`) and automatic (`react-jsx`/`react-jsxdev`, `jsxImportSource`) transforms; `@jsx`-family pragmas. Default `react-jsx` (deviation: tsc errors without `--jsx`; restore via `--jsx none`). Checker: intrinsics vs `JSX.IntrinsicElements` (TS2322/TS2339/TS2559/TS2741/TS2739/TS7026), component props + return type (TS2786/TS2604/TS2769), result type `JSX.Element`. Embedded react shim + `react-dom/server.renderToString` run bare `.tsx` with zero installs (real react in node_modules wins). Deferred: contextual typing of attribute callbacks, generic-component inference, `ElementClass`-driven class-component props, children arity fidelity, `JSX.Element` qualification in emitted `.d.ts` (prints bare `Element`). |
-
----
-
-## 12. ADVANCED FEATURES
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Decorators (`@decorator`) | ✅ | Legacy & TC39 Stage 3, class/method/property/parameter decorators, Reflect API, `@Namespace` for .NET namespaces |
-| Generators (`function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; for...of integration |
-| Async Generators (`async function*`) | ✅ | `yield`, `yield*`, `.next()`, `.return()`, `.throw()`; `for await...of`; full IL compiler support |
-| Well-known Symbols | ✅ | `Symbol.iterator`, `Symbol.asyncIterator`, `Symbol.toStringTag`, `Symbol.hasInstance`, `Symbol.isConcatSpreadable`, `Symbol.toPrimitive`, `Symbol.species`, `Symbol.unscopables`, `Symbol.dispose`, `Symbol.asyncDispose` |
-| Iterator Protocol | ✅ | Custom iterables via `[Symbol.iterator]()` method (interpreter and compiler) |
-| Iterator Helpers (ES2025) | ✅ | `.map()`, `.filter()`, `.take()`, `.drop()`, `.flatMap()`, `.reduce()`, `.toArray()`, `.forEach()`, `.some()`, `.every()`, `.find()`, `.next()` protocol; lazy evaluation; chaining; works on arrays, generators, Map/Set iterators |
-| Async Iterator Protocol | ✅ | Custom async iterables via `[Symbol.asyncIterator]()` method |
-| `for await...of` | ✅ | Async iteration over async iterators and generators |
-| `Symbol.for`/`Symbol.keyFor` | ✅ | Global symbol registry |
-| Symbols | ✅ | Unique identifiers via `Symbol()` constructor |
-| `bigint` type | ✅ | Arbitrary precision integers with full operation support |
-| Mapped types | ✅ | `{ [K in keyof T]: ... }`, `keyof`, indexed access `T[K]`, modifiers (+/-readonly, +/-?) |
-| Conditional types | ✅ | `T extends U ? X : Y`, `infer` keyword, distribution over unions |
-| Template literal types | ✅ | `` `prefix${string}` ``, union expansion, pattern matching, `infer` support |
-| Utility types | ✅ | `Partial<T>`, `Required<T>`, `Readonly<T>`, `Record<K, V>`, `Pick<T, K>`, `Omit<T, K>`, `Uppercase<S>`, `Lowercase<S>`, `Capitalize<S>`, `Uncapitalize<S>` |
-| Additional utility types | ✅ | `ReturnType<T>`, `Parameters<T>`, `ConstructorParameters<T>`, `InstanceType<T>`, `ThisType<T>`, `Awaited<T>`, `NonNullable<T>`, `Extract<T, U>`, `Exclude<T, U>` |
-| `using`/`await using` | ✅ | Explicit resource management (TS 5.2+); `Symbol.dispose`/`Symbol.asyncDispose`; automatic disposal at scope exit; SuppressedError for disposal errors |
-| Const type parameters | ✅ | `<const T>` syntax (TS 5.0+) for preserving literal types during inference; readonly semantics for objects/arrays |
-| Variance annotations | ✅ | `in`/`out`/`in out` modifiers on type parameters (TS 4.7+) |
-| Recursive type aliases | ✅ | Self-referential type definitions like `type Node = { next: Node | null }` and generic `type Tree<T> = { children: Tree<T>[] }` |
-
----
-
-## 13. BINARY DATA & THREADING
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| **TypedArrays** | | |
-| `Int8Array` | ✅ | Signed 8-bit integer array |
-| `Uint8Array` | ✅ | Unsigned 8-bit integer array |
-| `Int16Array` | ✅ | Signed 16-bit integer array |
-| `Uint16Array` | ✅ | Unsigned 16-bit integer array |
-| `Int32Array` | ✅ | Signed 32-bit integer array |
-| `Uint32Array` | ✅ | Unsigned 32-bit integer array |
-| `Float32Array` | ✅ | 32-bit float array |
-| `Float64Array` | ✅ | 64-bit float array |
-| `BigInt64Array` | ✅ | Signed 64-bit BigInt array |
-| `BigUint64Array` | ✅ | Unsigned 64-bit BigInt array |
-| `Uint8ClampedArray` | ✅ | Clamped unsigned 8-bit integer array |
-| **Shared Memory** | | |
-| `SharedArrayBuffer` | ✅ | Shared memory for worker threads |
-| `Atomics` | ✅ | load, store, add, sub, and, or, xor, exchange, compareExchange, wait, notify |
-| `ArrayBuffer` | ✅ | Non-shared binary buffer: constructor, byteLength, slice(), isView() |
-| **DataView** | | |
-| `DataView` | ✅ | Full API: constructor, properties (buffer, byteLength, byteOffset), getter/setter methods with endianness support |
-
----
-
-## 14. EXTENDED BUILT-IN APIS
-
-This section tracks JavaScript/TypeScript APIs that were historically unimplemented in SharpTS. **Most are now supported** (✅) and are kept here for status visibility; the rows below reflect current state. The only fully-unimplemented item is the `Function` constructor (❌); `eval` is partial (⚠️).
-
-### Objects & Types
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `Proxy` | ✅ | `new Proxy(target, handler)`, `Proxy.revocable()`, traps: get/set/has/deleteProperty/apply/construct |
-| `WeakRef` | ✅ | `new WeakRef(target)`, `.deref()` |
-| `FinalizationRegistry` | ✅ | `new FinalizationRegistry(callback)`, `.register(target, heldValue, token?)`, `.unregister(token)` |
-| `Intl.NumberFormat` | ✅ | See Section 10 |
-| `Intl.DateTimeFormat` | ✅ | See Section 10 |
-| `Intl.Collator` | ✅ | See Section 10 |
-| `Intl.PluralRules` | ✅ | See Section 10 |
-| `Intl.RelativeTimeFormat` | ✅ | See Section 10 |
-| `Intl.ListFormat` | ✅ | See Section 10 |
-| `Intl.Segmenter` | ✅ | See Section 10 |
-| `Intl.DisplayNames` | ✅ | See Section 10 |
-
-### Global Functions
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `eval()` | ⚠️ | Typed as `(s: string) => any`. **Interpreted:** direct eval — source runs against the caller's scope chain. **Compiled:** indirect eval via the SharpTS runtime (`EvalBridge`) — global builtins resolve but compiled locals are not visible. The build auto-copies SharpTS.dll next to the output when eval is used (see "Standalone DLL Constraint" in CLAUDE.md); with `--standalone` it is not copied and eval throws "eval not supported" at runtime. Eval'd source is not type-checked. Non-string args returned unchanged (ECMA-262 §19.2.1). |
-| `Function` constructor | ❌ | Cannot create functions from strings |
-| `queueMicrotask()` | ✅ | Schedules microtask for execution |
-
-### Object Static Methods
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `Object.create()` | ✅ | Creates new object with prototype; supports propertiesObject argument for defining properties via descriptors |
-| `Object.is()` | ✅ | Same-value comparison; handles NaN and +0/-0 edge cases |
-| `Object.getOwnPropertyDescriptor()` | ✅ | Full support in both interpreter and compiled mode |
-| `Object.defineProperty()` | ✅ | Full support including accessor properties (get/set) and descriptor flags in both modes |
-| `Object.getPrototypeOf()` | ✅ | Returns prototype of an object |
-| `Object.setPrototypeOf()` | ✅ | Sets prototype of an object |
-| `Object.getOwnPropertyNames()` | ✅ | Returns all own property names including non-enumerable |
-| `Object.getOwnPropertySymbols()` | ✅ | Returns array of symbol-keyed properties |
-| `Object.preventExtensions()` | ✅ | Prevents adding new properties to an object |
-| `Object.isExtensible()` | ✅ | Returns whether object allows new properties |
-| `Object.groupBy()` | ✅ | Groups iterable elements by callback return value (ES2024); returns plain object with string keys |
-| `Object.defineProperties()` | ✅ | Batch version of defineProperty; defines multiple properties from a descriptors object |
-| `Object.getOwnPropertyDescriptors()` | ✅ | Returns all own property descriptors as an object; works with defineProperties for proper object cloning |
-
-### Array Methods
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `fill()` | ✅ | |
-| `reduceRight()` | ✅ | Iterates right-to-left |
-| `entries()` | ✅ | Returns iterator of [index, value] pairs |
-| `keys()` | ✅ | Returns iterator of indices |
-| `values()` | ✅ | Returns iterator of values |
-| `copyWithin()` | ✅ | Copies array elements within the array |
-
-### String Methods & Static
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `normalize()` | ✅ | Unicode normalization (NFC, NFD, NFKC, NFKD) |
-| `localeCompare()` | ✅ | Locale-aware comparison via string.Compare with CurrentCulture |
-| `codePointAt()` | ✅ | Full Unicode code point at position; handles surrogate pairs for supplementary characters |
-| `String.fromCharCode()` | ✅ | Creates string from UTF-16 code units |
-| `String.fromCodePoint()` | ✅ | Creates string from Unicode code points; handles supplementary characters (> U+FFFF) via surrogate pairs |
-| `String.raw` | ✅ | Tagged template for raw string access without escape processing |
-
-### Reflect API (Standard)
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `Reflect.get()` | ✅ | Property access on target object |
-| `Reflect.set()` | ✅ | Returns `bool`; `false` for frozen objects |
-| `Reflect.has()` | ✅ | Equivalent to `in` operator |
-| `Reflect.deleteProperty()` | ✅ | Returns `bool`; `false` for frozen objects |
-| `Reflect.apply()` | ✅ | Calls function with thisArg and args array |
-| `Reflect.construct()` | ✅ | Creates instance; interpreter mode only for classes |
-| `Reflect.ownKeys()` | ✅ | Returns string keys + symbol keys |
-| `Reflect.getPrototypeOf()` | ✅ | Returns object prototype |
-| `Reflect.setPrototypeOf()` | ✅ | Returns `bool`; `false` for non-extensible objects |
-| `Reflect.isExtensible()` | ✅ | Returns `bool` |
-| `Reflect.preventExtensions()` | ✅ | Returns `true` |
-| `Reflect.getOwnPropertyDescriptor()` | ✅ | Returns property descriptor or undefined |
-| `Reflect.defineProperty()` | ✅ | Returns `bool`; `false` on failure (unlike `Object.defineProperty` which throws) |
-
----
-
-## 15. NODE.JS BUILT-IN MODULES
-
-SharpTS implements 35 Node.js built-in module specifiers, accessible via `import ... from "node:..."` or bare specifiers. Breadth (modules not yet present, e.g. `module`, `v8`, `http2`, `diagnostics_channel`, `node:test`) and depth (the documented per-module ceilings below) are tracked on [#1282](https://github.com/nickna/SharpTS/issues/1282).
-
-| Module | Status | Notes |
-|--------|--------|-------|
-| `fs` / `fs/promises` | ✅ | readFileSync, writeFileSync, existsSync, mkdirSync, readdirSync, statSync, unlinkSync, renameSync, copyFileSync, appendFileSync, readFile, writeFile, mkdir, readdir, stat, unlink, rename, rm, access, lstat, realpath, createReadStream, createWriteStream, watch, watchFile, unwatchFile |
-| `path` | ✅ | join, resolve, dirname, basename, extname, normalize, isAbsolute, relative, parse, format, sep, delimiter, posix, win32. The `win32` namespace matches Node against a table generated from the real runtime (`PathWin32ConformanceTests`); the previously-documented `win32.isAbsolute('/foo')` divergence is gone — any leading separator is absolute, as in Node. |
-| `os` | ✅ | platform, arch, cpus, hostname, homedir, tmpdir, type, release, uptime, totalmem, freemem, EOL, networkInterfaces, loadavg, userInfo |
-| `process` | ✅ | Module facade === global (same live object; `import process from 'process'` is the global, epic #1078). argv, env (live), cwd(), chdir(), exit() (fires 'exit'), pid, ppid, platform, arch, version (`v24.15.0` Node-compat), versions, title (get/set), execPath, execArgv, argv0, config, release, features, debugPort, allowedNodeEnvironmentFlags, stdout, stderr, stdin, hrtime + hrtime.bigint(), nextTick, memoryUsage + memoryUsage.rss(), cpuUsage, resourceUsage, availableMemory, constrainedMemory, getActiveResourcesInfo, exitCode (get/set), kill (signal 0 check, self-signal dispatch; cross-process termination maps to Process.Kill; optional `SharpTS.RestrictProcessControl` host switch), abort, umask, emitWarning + throwDeprecation/traceDeprecation/noDeprecation, sourceMapsEnabled/setSourceMapsEnabled, report.getReport/writeReport + config props; full EventEmitter surface; lifecycle events 'exit'/'beforeExit' (natural drain, re-entrant) + 'warning'; signal events SIGINT/SIGTERM/SIGHUP/SIGBREAK/SIGQUIT/SIGWINCH via PosixSignalRegistration; 'unhandledRejection'/'rejectionHandled' (interpreted; compiled deferred); POSIX getuid/geteuid/getgid/getegid/getgroups/setuid/setgid (POSIX interp; undefined on Windows like Node; compiled POSIX deferred); IPC send/disconnect/connected/channel when forked. Compiled `--standalone` ceilings: ppid → 0 (late-binds to SharpTS.dll when co-located) |
-| `crypto` | ✅ | createHash (+ SHA-3/SHAKE with `outputLength`, Hash.copy), createHmac, one-shot hash/sign/verify (epic #1054), randomBytes, randomUUID, randomInt, randomFillSync + async randomFill, createCipheriv/Decipheriv (+ GCM `authTagLength`), pbkdf2/pbkdf2Sync, scrypt/scryptSync, timingSafeEqual, generateKeyPair/generateKeyPairSync, generateKey/generateKeySync, createSign/Verify (+ `{padding,saltLength,dsaEncoding}`), publicEncrypt/privateDecrypt (+ `{padding,oaepHash}`), createDiffieHellman/createDiffieHellmanGroup, diffieHellman (one-shot), createECDH (raw-point encodings + convertKey), createSecretKey/createPublicKey/createPrivateKey (PEM/DER/JWK import + export), KeyObject (export pem/der/jwk, equals, asymmetricKeyDetails), hkdf/hkdfSync, getHashes, getCiphers, getCurves, getCipherInfo, constants, generatePrime(Sync)/checkPrime(Sync), getFips/setFips/fips, X509Certificate. Ceilings (.NET 10 BCL): EdDSA/x25519/x448 unsupported (clear error). Interp-only (compiled-deferred, clear errors): KeyObject jwk/der import + equals, ECDH.convertKey, X509 checkEmail/toLegacyObject |
-| `events` | ✅ | EventEmitter: on, once, emit, removeListener, removeAllListeners, listenerCount, listeners, prependListener, prependOnceListener, off, setMaxListeners, getMaxListeners, eventNames |
-| `stream` | ✅ | Readable, Writable, Duplex, Transform, PassThrough; `finished(stream, opts?, cb)`, `pipeline(source, ...transforms, dest, cb?)`, `addAbortSignal(signal, stream)`; `Readable.from(iterable)`, `Readable.isReadable(stream)`, `Writable.isWritable(stream)`; instance: `toArray()`, `forEach(fn)`, `map(fn)`, `filter(fn)`; `pause`/`resume`/`prefinish` events, `autoDestroy` option, `highWaterMark` enforcement; object mode support; `stream/promises` sub-module (`pipeline`, `finished`) |
-| `buffer` | ✅ | Buffer.from, Buffer.alloc, Buffer.allocUnsafe, Buffer.concat, Buffer.isBuffer, Buffer.byteLength; instance methods: toString, slice, copy, write, fill, includes, indexOf, compare, equals, readUInt/Int, writeUInt/Int, toJSON |
-| `http` / `https` | ✅ | createServer, request, get; Agent class with constructor, destroy, getName, globalAgent; Server: host-aware listen/address, draining close, closeAllConnections; IncomingMessage bounded body streaming + complete/aborted/destroy; ServerResponse preserves Buffer bodies and extends Writable; full event lifecycle; SharpTS extension: best-effort `probeConnection()` for long-running JSON responses |
-| `net` | ✅ | createServer (options: highWaterMark, allowHalfOpen, blockList), createConnection/connect, Socket (EventEmitter + Duplex; write backpressure + 'drain', writableLength/writableHighWaterMark/writableNeedDrain, allowHalfOpen half-close with readOnly/writeOnly readyState, localFamily/pending), Server (EventEmitter; maxConnections + 'drop' event, live getConnections); BlockList (addAddress/addRange/addSubnet/check/rules) + SocketAddress; isIP, isIPv4, isIPv6; get/setDefaultAutoSelectFamily(AttemptTimeout) (best-effort — .NET connects try all resolved addresses); IPC sockets (named pipes on Windows, Unix domain sockets on Linux/macOS) (epic #1067) |
-| `tls` | ✅ | createServer, connect, createSecureContext, TLSSocket (extends Socket), Server; DEFAULT_MIN_VERSION/MAX_VERSION; ALPNProtocols, SNICallback, servername; secureConnect/secureConnection/tlsClientError events |
-| `dgram` | ✅ | createSocket, Socket; bind, send (destination validation: ERR_SOCKET_DGRAM_IS_CONNECTED/NOT_CONNECTED), close, address, setBroadcast, setTTL, setMulticastTTL, setMulticastLoopback, setMulticastInterface, addMembership, dropMembership, add/dropSourceSpecificMembership (IPv4; udp6 SSM throws — no portable .NET mapping); connect, disconnect, remoteAddress, get/setRecvBufferSize, get/setSendBufferSize; message/listening/close/error/connect events (epic #1067) |
-| `cluster` | ✅ | isPrimary/isWorker/isMaster, fork, live workers/worker/settings, worker.send/disconnect/kill/destroy/isDead/isConnected, worker.process handle, process.send/on('message') IPC, cluster events incl. 'listening'/'setup', disconnect, setupPrimary (full settings: exec/args/silent/… honored by fork), schedulingPolicy + SCHED_RR/SCHED_NONE (+ NODE_CLUSTER_SCHED_POLICY), shared-port round-robin. Thread model (workers are in-process threads; worker.process.pid is the host pid). Compiled: fork runs the entry script interpreted — SharpTS.dll co-located, entry .ts must be deployed; `--standalone` throws |
-| `child_process` | ✅ | execSync, spawnSync, exec, spawn, execFileSync, execFile, fork (IPC via named pipes); ChildProcess: pid, exitCode, killed, stdout, stderr, stdin, connected, kill, send, disconnect |
-| `vm` | ✅ | runInNewContext, runInThisContext, runInContext, createContext (name/origin/codeGeneration/microtaskMode), isContext, compileFunction, measureMemory, constants (USE_MAIN_CONTEXT_DEFAULT_LOADER/DONT_CONTEXTIFY); Script (runIn*Context, createCachedData, filename/offsets, cachedData); ESM-in-vm: SourceTextModule + SyntheticModule (link/evaluate/status/namespace/setExport), importModuleDynamically |
-| `url` | ✅ | URL, URLSearchParams, fileURLToPath, pathToFileURL, format, parse |
-| `util` | ✅ | promisify, deprecate, types (isDate, isRegExp, isMap, isSet, etc.), format, inspect, TextEncoder, TextDecoder |
-| `querystring` | ✅ | parse, stringify, escape, unescape |
-| `zlib` | ✅ | Sync: gzipSync, gunzipSync, deflateSync, inflateSync, deflateRawSync, inflateRawSync, brotliCompressSync, brotliDecompressSync; Streaming: createGzip, createGunzip, createDeflate, createInflate, createDeflateRaw, createInflateRaw, createBrotliCompress, createBrotliDecompress, createUnzip; Async callback: gzip, gunzip, deflate, inflate, deflateRaw, inflateRaw, brotliCompress, brotliDecompress, unzip |
-| `dns` | ✅ | lookup (family/all/order options), lookupService, resolve, resolve4, resolve6 (CNAME-chain following, bounded 8), reverse, resolveMx, resolveTxt, resolveSrv, resolveCname, resolveNs, resolveSoa, resolvePtr, resolveCaa, resolveNaptr (callback + dns/promises); set/getDefaultResultOrder; Resolver with setServers/getServers, setLocalAddress, cancel() (prompt ECANCELLED interpreted; compiled resolver callbacks run inline-sync — documented deviation) (epic #1067) |
-| `assert` | ✅ | ok, equal, notEqual, deepEqual, notDeepEqual, strictEqual, notStrictEqual, deepStrictEqual, throws, doesNotThrow, rejects, doesNotReject, fail, match, doesNotMatch, assert.strict |
-| `readline` | ✅ | createInterface (extends EventEmitter), question, close, prompt, pause, resume, write, setPrompt, getPrompt, questionSync |
-| `string_decoder` | ✅ | StringDecoder: write, end, encoding |
-| `timers` | ✅ | setTimeout, clearTimeout, setInterval, clearInterval, setImmediate, clearImmediate |
-| `timers/promises` | ✅ | Promise-based setTimeout, setImmediate, setInterval |
-| `perf_hooks` | ✅ | performance.now(), timeOrigin, mark(), measure(), getEntries(), getEntriesByName(), getEntriesByType(), clearMarks(), clearMeasures(); PerformanceObserver |
-| `worker_threads` | ✅ | Worker, isMainThread, parentPort, workerData, MessageChannel, MessagePort. Worker `stdin`/`stdout`/`stderr` and `resourceLimits` options are not supported (workers share the parent's console; resourceLimits has no .NET equivalent) |
-| `async_hooks` | ✅ | AsyncLocalStorage: run, getStore, enterWith, exit, disable; async context propagation via .NET AsyncLocal |
-
-### Module Implementation Source
-
-18 modules are implemented in TypeScript under `stdlib/node/*.ts`, embedded in `SharpTS.dll` as resources and compiled alongside user code at `--compile` time. Modules with host-I/O keep their heavy lifting in C#/IL behind a narrow `primitive:*` seam (`fs` raw syscalls, `zlib` compression cores + Transform streams) while the TS facade owns the Node-shape surface. The remaining modules stay fully C#-backed. See `docs/plans/embedded-stdlib.md` for the provider chain, `primitive:*` layer, and migration rationale.
-
-| Implementation | Modules |
-|---|---|
-| **TypeScript stdlib** | `assert`, `async_hooks`, `events`, `fs`, `fs/promises`, `os`, `path`, `perf_hooks`, `process`, `querystring`, `readline`, `string_decoder`, `timers`, `timers/promises`, `tty`, `url`, `util`, `zlib` |
-| **C# / IL (host-I/O)** | `crypto`, `stream`, `stream/promises`, `stream/web`, `buffer`, `http`, `https`, `net`, `tls`, `dgram`, `cluster`, `child_process`, `vm`, `dns`, `dns/promises`, `worker_threads` |
-
----
-
-## 16. EDITOR TOOLING
-
-| Feature | Status | Notes |
-|---|---|---|
-| TypeScript-source portable PDBs | ✅ | `sharpts --compile app.ts -g`; source checksums, imported documents, sequence points, locals/scopes, state-machine mappings, and async stepping metadata |
-| VS Code debugging | ✅ | **SharpTS: Debug Current File** compiles the saved file and launches the installed `coreclr` adapter |
-| Interop language features | ✅ | Diagnostics, decorator/member hover, completion, signature help, and structured quick fixes in both LSP feature modes |
-| Standalone navigation | ✅ | Document symbols, definition, references, and safe rename across complete configured/project-reference workspaces |
-| Workspace lifecycle | ✅ | Incremental versioned sync, atomic snapshots, debounce/cancellation, cached analysis, reverse diagnostic invalidation, live diagnostics settings, and safe assembly reload |
-| General property/member rename | Deferred | Refused rather than producing a partial semantic edit |
-
-See [Language server setup](docs/language-server.md) and
-[Debugging compiled TypeScript](docs/debugging-typescript.md).
-
----
-
-## 17. .NET INTEROP (`dotnet:` imports + `@DotNetType`)
-
-.NET types can be consumed two ways: **`dotnet:` import specifiers** (recommended — zero boilerplate, type surface synthesized from reflection; epic #1195) and **`@DotNetType` declare classes** (manual, curated surface, supports `@DotNetOverload` hints). **Both work in interpreter and compiled modes.**
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| `import { X } from "dotnet:Ns.Type"` (single-type form) | ✅ | Static types synthesized from reflection via `DotNetTypeSynthesizer`; members filtered by `DotNetInteropClassifier`; fluent chains stay typed (epic #1195) |
-| `import { X, Y } from "dotnet:Namespace"` (namespace form) | ✅ | Each named import resolves as `Namespace.Name`; nested types resolve through their declaring type's specifier; aliasing supported |
-| `dotnet:` scope | — | Named imports only (no default/star/re-export/require/dynamic import); no generic types (use `@DotNetType` for closed generics); no paths in specifiers (use `sharpts.json`) |
-| `sharpts.json` reference manifest | ✅ | `{ "references": [dll paths], "packages": { id: version } }` discovered by upward walk from the entry script; applies uniformly to interpreter, compiler, LSP, and `--gen-decl`; global `-r/--reference` flag augments per-invocation (issue #1197) |
-| NuGet packages in manifest | ✅ | Restored via `dotnet restore` on a generated project under `.sharpts/` (hash-gated — skipped when the package set is unchanged; offline after first restore); transitive dependencies resolved, loaded, and co-located with compiled output |
-| `@DotNetType("Namespace.Type")` on `declare class` | ✅ | Instance methods, static methods, constructors, properties, fields |
-| `@DotNetOverload("type1,type2,...")` overload hints | ✅ | Pin a specific overload when argument-based resolution is ambiguous |
-| Overload resolution | ✅ | Identity → widening → narrowing → object cost scale; same semantics in both modes |
-| Generic type instantiation | ✅ | Closed generics via string specifier (e.g., `"System.Collections.Generic.List<string>"`) |
-| Delegate parameters | ✅ | TS functions auto-marshaled to .NET delegates (`Action`, `Func<...>`, custom delegates) via `DotNetDelegateShim` |
-| Event subscription | ✅ | `addEventListener(name, handler)` / `removeEventListener(name, handler)` pseudo-methods on instances and classes (no C#-style `+=`/`-=` — not TS syntax); both modes; main-thread-only |
-| Exception mapping | ✅ | .NET exceptions surface as JS-catchable errors with message preservation (`DotNetExceptionMapper`) |
-| Value / reference type marshaling | ✅ | Primitives, strings, arrays, dictionaries; `DotNetMarshaller` centralizes conversion |
-| External assembly discovery | ✅ | `TryResolveExternalType` scans loaded AppDomain assemblies; `sharpts.json`/`-r` assemblies load at startup so every seam sees them; compiled output co-locates used reference DLLs (+ closure) next to the output |
-| `--gen-decl` discovery tool | ✅ | Inspect a type/namespace/assembly: faithful CLR signatures + per-member usable/unsupported marker + `dotnet:` import line + `--json` (issue #1194) |
-
-Compiled mode uses late-bound reflection to the shim (`DotNetDelegateShim` / `DotNetEventBinder`) so the output DLL stays standalone. See `docs/dotnet-types.md` for the full guide.
-
-`--gen-decl` (`DiscoveryGenerator` / `DiscoveryEmitter`) reports which members are usable from interop using `DotNetInteropClassifier` — the same by-ref/pointer/ref-struct/open-generic rules the runtime marshaller and the `dotnet:` import resolver enforce, so the tool and the runtime never disagree. It reports faithfully rather than emitting pasteable TypeScript (realistic BCL surfaces have `Span<T>`/`ref`/pointer members with no valid TS spelling). The `dotnet:` import line it prints is the primary consumption path; hand-written `@DotNetType(...) export declare class` declarations remain the manual alternative.
-
----
-
-## 18. CONFORMANCE TEST SUITES
-
-Two external corpora pin SharpTS against canonical references. Both run as standalone projects (not in `SharpTS.sln`); see each project's README for full details. Pass rates here are subset-relative — neither suite runs the full corpus today.
-
-### TC39 Test262 (ECMA-262 / JavaScript spec)
-
-`SharpTS.Test262/` runs a configurable subset of [test262](https://github.com/tc39/test262) in both interpreter and compiled-IL modes. Diff harness is committed-baseline-vs-current; hard-fails on regression or new-pass. Coverage growth and harness maturity are tracked on [#1280](https://github.com/nickna/SharpTS/issues/1280).
-
-The committed subset is 11,384 tests across 13 folders (`built-ins/{Array,Boolean,Error,JSON,Math,Number,Object,Promise,RegExp,String}`, `language/expressions/{call,new,property-accessors}`), from the baselines as of `e3fadd5` (2026-07-01):
-
-| Bucket | interpreted | compiled |
-|---|---:|---:|
-| `Pass` | **4,581** | **8,003** |
-| `Fail` | 3,475 | 1,821 |
-| `RuntimeError` | 2,439 | 651 |
-| `ParseError` | 10 | 10 |
-| `HarnessError` | — | 18 |
-| `Timeout` | — | 2 |
-| `Skipped` | 879 | 879 |
-| **Total** | **11,384** | **11,384** |
-
-**Excluding skips: interpreted 4,581/10,505 (43.6%), compiled 8,003/10,505 (76.2%).** Aggregation semantics: the denominator excludes `Skipped:*` (skips are policy, not capability); the numerator is `Pass` only; every other bucket counts as not-passing.
-
-The 879 skips are `regexp-unicode-property-escapes` (516), `negative-test-deferred` (194), `regexp-v-flag` (63), `regexp-named-groups` (42), `regexp-match-indices` (21), `regexp-lookbehind` (17), `regexp-duplicate-named-groups` (15), `tail-call-optimization` (6), `iterator-helpers` (4), `SharedArrayBuffer` (1).
-
-⚠️ **The interpreter is ~3,457 passes behind the compiler**, and the two modes disagree on ~4,467 tests. Since each mode is the other's reference, every divergence means at least one is wrong about ECMA-262 — the largest single conformance signal in the project. Deficits cluster tightly on the property-descriptor APIs (`defineProperty`, `getOwnPropertyDescriptor`, `defineProperties`, `create`, `seal`/`freeze`) and on array HOFs over descriptor-backed receivers. Tracked on [#1279](https://github.com/nickna/SharpTS/issues/1279).
-
-### Microsoft TypeScript conformance (TS type-checker spec)
-
-`SharpTS.TypeScriptConformance/` runs a subset of [microsoft/TypeScript's conformance corpus](https://github.com/microsoft/TypeScript/tree/main/tests/cases/conformance) and diffs our type-checker diagnostics against `tsc`'s `*.errors.txt` baselines. Pinned to TS v6.0.3. Pass classification is on `(line, tsCode)` tuples — see [#1281](https://github.com/nickna/SharpTS/issues/1281) for the tracking issue.
-
-The committed v6.0.3 subset spans
-`types/typeRelationships/{assignmentCompatibility,subtypesAndSuperTypes}`,
-`types/conditional`, JSX, and the ES-version library folders (`Symbols`,
-`es6/Symbols`, `es2016`–`es2023`, `esnext`):
-
-| Bucket | Count | Share |
-|---|---:|---:|
-| `Pass` | **151** | 29.4% |
-| `Fail` | 214 | 41.6% |
-| `ParseError` | 141 | 27.4% |
-| `Skipped` (lib-drift 4 / directive 4) | 8 | 1.6% |
-| **Total** | **514** | |
-
-**Excluding skips: 151/506 (29.8%)** — same aggregation semantics as
-Test262 above. This is a selected slice of a much larger corpus, so the rate
-is subset-relative; growing and hardening the subset is tracked on
-[#1281](https://github.com/nickna/SharpTS/issues/1281).
-
-The v5.5.4 → v6.0.3 baseline review found 8 added cases, 1 removed case, and
-183 changed outcomes on paths present in both pins. Of those common-path
-changes, 174 have changed upstream test sources. The remaining 9 unchanged
-sources all gained or changed upstream `tsc` error baselines, explaining their
-new classification. The updated JSX corpus accounts for 137 of the 141
-`ParseError` entries; four new arbitrary-module-namespace cases account for
-the rest. The `Fail` bucket remains checker diagnostic drift rather than a
-runner crash (`TypeCheckError` and `HarnessError` are both zero).
-
-`Skipped:lib-drift` is the conservative fallback for missing-surface
-diagnostics, and the four directive skips are `allowJs` cases that the runner
-does not execute. Multi-file tests now flow through the program resolver
-instead of being skipped.
-
----
-
-## 18. PERFORMANCE (compiled output vs Node.js)
-
-Epic [#856](https://github.com/nickna/SharpTS/issues/856) closed the compiled-IL gap to Node.js on the cross-runtime benchmark suite (`benchmarks/scripts/`, run via `benchmarks/run-benchmarks.ps1`) **without** regressing .NET interop or language conformance (Test262 + `microsoft/TypeScript`); ongoing perf work is tracked on [#1278](https://github.com/nickna/SharpTS/issues/1278). Warm steady-state, compiled vs Node at the largest input size:
-
-| Workload | Status | vs Node |
-|---|---|---|
-| fibonacci | ✅ | **~2.4× faster** — recursion/call core |
-| array-methods | ✅ | **~2× faster** — typed `List<double>` HOF pipeline ([#872](https://github.com/nickna/SharpTS/issues/872)) |
-| strings | ✅ | **faster** (~0.9×) — `StringBuilder` accumulator promotion ([#870](https://github.com/nickna/SharpTS/issues/870)) + `charCodeAt` box-elision ([#873](https://github.com/nickna/SharpTS/issues/873)) |
-| objects | ✅ | **parity** (1.00×) — object literals as shape structs ([#862](https://github.com/nickna/SharpTS/issues/862)) + cancel-throw codegen (below) |
-| closures | ✅ | **parity** (~1.02×) — non-escaping local arrows de-virtualized to direct calls ([#858](https://github.com/nickna/SharpTS/issues/858)) |
-| count-primes | ✅ | ~1.13× (sieve; `List<bool>` index-write bounds checks are the residual) |
-| factorial | ✅ | ~1.22× (tight numeric loop at the codegen floor; V8 is ~0.2 ns/iter tighter; µs-scale) |
-
-The original catastrophic gaps (14–117× slower) are closed and the suite meets-or-beats Node on 5 of the 7 workloads above, with the other two within ~1.2×. (The table is the [#856](https://github.com/nickna/SharpTS/issues/856)-epic corpus; `benchmarks/scripts/` has since grown to 15 workloads — binary-trees, brainfuck, int-arrays, json, num-arrays, regex, sort, and typed-arrays run in the harness but have no published numbers here yet.) Every win came from **re-exposing static types that the naive lowering erased** — boxing, `object`/`List<object>` representations, reflective dispatch, O(n²) string concat — so RyuJIT can optimize typed code. The emitter's job is to choose the algorithm/representation/dispatch and not erase known types; the JIT optimizes the typed ops it's given.
-
-**Loop-backedge cancellation: throw, don't call (2026-06-21).** Every compiled loop polls a cooperative-cancellation flag at its backedge so the runner can unwind runaway loops (issue [#74](https://github.com/nickna/SharpTS/issues/74)). The flag test is an inlined `volatile.` field read ([#874](https://github.com/nickna/SharpTS/pull/874)); the **cold path** used to be `call $Runtime.CheckCancellation()` (a helper that throws internally). That was the dominant remaining gap on tight loops — **not** the flag read, which is free. From the JIT's flow-graph view `CheckCancellation()` is a *returning* call (its `throw` is conditional and internal), so the register allocator must assume control returns. On SysV x64 **every XMM register is caller-saved**, so a returning call inside a loop forces the loop-carried doubles (and counter) to be stack-resident across *every* iteration — a load/store per use. The backedge now emits `call $Runtime.BuildCancellationException(); throw` — a factory that only *constructs* the exception, then a real `throw` opcode. Because `throw` does not return, the loop vars are dead on the cancel path and stay in registers on the hot path. Measured **~1.8× on tight numeric loops**: objects 2.5×→parity, strings 1.26×→faster, factorial 2.27×→1.22×, count-primes 1.45×→1.13×. Cancellation semantics are unchanged (same `OperationCanceledException`, same message, thrown at the same point). This benefits **all** compiled loops, not just the benchmark suite.
-
-Why earlier attempts plateaued: the inline-volatile form (#874) removed the unconditional *call overhead* but left the returning call in the loop's flow graph, so the XMM spill remained. A throttle-every-N-iterations variant ties it — reducing read frequency doesn't remove the call from the flow graph. The fix is structural: make the cancel path *non-returning* so the loop body carries no call at all.
-
-The two remaining sub-parity workloads (count-primes ~1.13×, factorial ~1.22×) are at the codegen floor: factorial's loop already runs at the no-cancellation-check speed (V8 generates a marginally tighter multiply loop); count-primes' residual is `List<bool>` indexed-write bounds checking vs V8's packed-array elision.
-
----
-
-## Breaking Changes (2026-04-18)
-
-The embedded-stdlib migration removed implicit global bindings for several classes previously created as compile-time fallbacks. User code must now `import` these from the owning module explicitly (matches ESM-strict semantics and Node's own behavior):
-
-| Class | Previous behavior | Required now |
-|---|---|---|
-| `URL`, `URLSearchParams` | Available as globals, backed by a pattern-matched `$URL` / `$URLSearchParams` emitter over `System.Uri`. | `import { URL, URLSearchParams } from 'url'` |
-| `PerformanceObserver` | Available as a global, backed by `$Runtime.PerfHooksCreateObserver`. | `import { PerformanceObserver } from 'perf_hooks'` |
-| `AsyncLocalStorage` | Available as a global, backed by `$AsyncLocalStorage`. | `import { AsyncLocalStorage } from 'async_hooks'` |
-
-The underlying implementations are unchanged — only the import requirement is new. Behavior at the import site is identical to the previous global.
-
-Additional behavioral divergence: `path.win32.isAbsolute('/foo')` returns `false` (matches WHATWG-like strictness — requires drive-letter + separator or UNC double-separator). Node returns `true` for any leading separator.
-
-### Known stdlib workarounds (tracked debt)
-
-The following stdlib TS files carry workarounds for compiler gaps that surfaced during migration. Behavior is correct at the documented API surface; listed here so future fixes can remove them:
-
-- ~~`stdlib/node/process.ts` (`nextTick`) and `stdlib/node/timers.ts` — arity-dispatch across 8 positional args~~ (resolved: the built-in module emitters expand a trailing `Expr.Spread` at runtime via `EmitArgsArrayWithSpread`, #1149; both facades forward `...args` directly).
-- `stdlib/node/async_hooks.ts` (`run`, `exit`) — drops the optional `...args` parameter; the underlying `SharpTSAsyncLocalStorage` still supports it. No current tests exercise this path.
-
-(Resolved #925: parameter defaults — reference **and** value type — and unset optional reference params now round-trip faithfully through `$TSFunction.Invoke`. The old `param?: T` + `??` and `!= null` authoring workarounds have been retired from `stdlib/CONTRIBUTING.md`.)
-
-### Resolved: guest-error identity (2026-04-18 regression → fully resolved 2026-06-24)
-
-- Guest `throw` of a *string* value previously lost its `Error` identity when it crossed a host
-  function frame: `ThrowException.FromResult` flattened a guest string throw to a plain CLR
-  `Exception`, so a downstream `catch (e)` re-typed it (an error-prefixed string was bound as a
-  typed `Error` instead of the verbatim string). The *same-scope* half was fixed in PR #906
-  (`TimersPromises_SetInterval_AbortSignal_PreAborted` no longer skipped). The *cross-boundary*
-  residual is now fixed: `ExecutionResult` carries a `FromGuestThrow` origin bit, threaded so
-  `ThrowException.FromResult` keeps a guest string throw as an identity-carrying `ThrowException`
-  (only genuinely host-translated strings stay a plain `Exception`), and the re-catch derives
-  `fromHostException` from the exception kind. Guest string throws now survive plain function-call,
-  host-callback, and Promise-executor boundaries verbatim in the interpreter — matching compiled
-  mode and Node. See `SharpTS.Tests/SharedTests/CaughtErrorIdentityTests.cs`.
-
----
-
-## Known Bugs
-
-- **Type checker:** type alias declarations are lazily validated — errors in type alias definitions (e.g., `type R = ReturnType<string, number>;` with wrong arg count) are only caught when the alias is used, not at declaration time. TypeScript catches these at declaration.
-- **Compiled mode:** a dynamic-index miss on an object (`o[k]` for an absent key) yields `null` rather than `undefined` (`o[k] === undefined` is false; `typeof` is `'object'`) — deliberate deferred gap, documented at `RuntimeEmitter.Objects.Index.cs` `EmitDictLookup`; stdlib code works around it with `== null`.
-
-(The changelog of previously-listed fixed bugs was pruned 2026-07 — git history has it; a struck-through "Known Bugs" list is not a bug list.)
-
----
+# SharpTS implementation status
+
+This document is the canonical present-tense capability matrix for SharpTS. It describes public
+behavior, not the history of how a feature landed. Detailed usage belongs in the
+[documentation hub](docs/README.md), and changes over time belong in Git history and releases.
+
+Legend: ✅ supported, ⚠️ supported with a documented deviation, ❌ not supported.
+
+## 1. Execution engines
+
+SharpTS has one lexer, parser, type checker, project resolver, and declaration pipeline feeding two
+execution backends. The interpreter walks the checked syntax tree. The compiler independently
+emits .NET IL and an application-specific runtime. Neither backend is implemented in terms of the
+other, so shared tests and conformance baselines enforce their parity contract.
+
+| Capability | Interpreter | Compiled IL | Notes |
+| --- | :---: | :---: | --- |
+| Run a script or module graph | ✅ | ✅ | Compiled output can target a DLL or executable. |
+| Async functions, promises, generators, and top-level module work | ✅ | ✅ | Hosted output has additional lifecycle rules. |
+| TypeScript-source debugging | — | ✅ | `--debug`/`-g` emits a portable PDB. |
+| Project checking and declarations | ✅ | ✅ | These use the shared front end rather than an execution backend. |
+| External .NET interop | ✅ | ✅ | Deployment requirements differ; see [.NET types](docs/dotnet-types.md). |
+| Node-compatible built-ins | ✅ | ✅ | Per-API ceilings and deviations are documented below and in the API guide. |
+
+The contract is equal observable behavior for supported language and library features. Intentional
+deviations—such as compiled indirect `eval`, selected compiled-only Node ceilings, and hosted ABI
+rules—must be documented and tested rather than described as unconditional equivalence. See
+[Execution modes](docs/execution-modes.md).
+
+## 2. TypeScript language and type system
+
+| Area | Status | Current surface |
+| --- | :---: | --- |
+| Primitive and special types | ✅ | `string`, `number`, `boolean`, `bigint`, `symbol`, `null`, `undefined`, `void`, `any`, `unknown`, `never`, `object` |
+| Structured types | ✅ | Objects, arrays, tuples, readonly forms, index signatures, optional properties, call and construct signatures |
+| Type composition | ✅ | Unions, intersections, aliases, literal types, `keyof`, indexed access, mapped/conditional types, `typeof` in type position |
+| Generics | ✅ | Generic functions, classes, interfaces, constraints, inference, variance annotations, and variadic tuples |
+| Narrowing | ✅ | `typeof`, `instanceof`, discriminants, property checks, user predicates, assertion functions, and control-flow narrowing |
+| Classes and interfaces | ✅ | Inheritance, structural compatibility, private/protected branding, abstract members, accessors, static blocks, `#private`, parameter properties |
+| Functions | ✅ | Declarations, expressions, arrows, closures, overloads, defaults, rest/spread, explicit `this`, async functions, and generators |
+| Enums | ✅ | Numeric, string, heterogeneous, and `const enum` forms |
+| Decorators | ✅ | TC39 Stage 3 and legacy experimental decorators; metadata is opt-in. |
+| Modules | ✅ | ESM imports/exports, re-exports, dynamic import, CommonJS `require`, `export =`/`import =`, namespaces, ambient modules, augmentation |
+| JSX/TSX | ✅ | Automatic and classic runtimes, pragmas, intrinsic/component prop checking; SharpTS defaults to `react-jsx`. |
+| Projects | ✅ | `tsconfig` discovery/extends, files/include/exclude, references/build mode, incremental/watch, paths/baseUrl, declaration inputs |
+| Declaration output | ✅ | `.d.ts`, declaration-only output, declaration directories, root/out directory mapping |
+
+SharpTS deliberately keeps its own defaults where .NET output makes TypeScript emit settings
+irrelevant: `strictNullChecks` defaults on, most other strictness flags default off,
+`strictFunctionTypes` defaults off, and `target`/`module` do not select IL behavior.
+
+## 3. JavaScript runtime APIs
+
+| Area | Status | Notes |
+| --- | :---: | --- |
+| Control flow and exceptions | ✅ | Loops, labels, switch, `try`/`catch`/`finally`, guest `throw`, optional catch binding |
+| Operators and destructuring | ✅ | Optional chaining, nullish and logical assignment, spread/rest, array/object patterns |
+| Core objects | ✅ | Object/Array/String/Number/Boolean/BigInt/Symbol/Math/JSON/Reflect APIs used by the maintained suite |
+| Collections | ✅ | Map, Set, WeakMap, WeakSet, iterators, and async iterators |
+| Date, RegExp, and Intl | ✅ | Broad current surface; locale results follow the host .NET globalization data. |
+| Binary data | ✅ | ArrayBuffer, SharedArrayBuffer, DataView, typed arrays, Atomics |
+| Promises and scheduling | ✅ | Promise combinators, timers, microtasks, abort signals/controllers |
+| Web-shaped APIs | ✅ | URL, URLSearchParams, TextEncoder/Decoder, fetch primitives, streams, Blob, FormData |
+| `eval` | ⚠️ | Direct lexical eval in the interpreter; compiled mode uses indirect runtime eval and cannot see compiled locals. |
+| `Function` constructor | ❌ | Constructing functions from source strings is not supported. |
+
+## 4. Node.js built-in modules
+
+SharpTS recognizes bare and `node:` forms for 34 maintained Node module specifiers. This is a
+compatible subset, not a claim to implement every export in the corresponding Node release. The
+[Node API guide](docs/node-modules-api.md) is the user reference; breadth and depth work is tracked
+on [#1282](https://github.com/nickna/SharpTS/issues/1282).
+
+| Category | Modules | Status and boundaries |
+| --- | --- | --- |
+| Files, paths, and process | `fs`, `fs/promises`, `path`, `os`, `process`, `tty` | ✅ Core sync/async filesystem operations, streams/watchers, platform/path variants, process lifecycle and stdio. Some POSIX and rejection lifecycle behavior remains mode/platform-specific. |
+| Data and utilities | `assert`, `buffer`, `crypto`, `querystring`, `string_decoder`, `url`, `util`, `zlib` | ✅ Broad tested subsets. Crypto is bounded by .NET algorithms; selected advanced key APIs remain interpreter-only. |
+| Events and scheduling | `events`, `async_hooks`, `timers`, `timers/promises`, `perf_hooks`, `readline` | ✅ Includes EventEmitter, AsyncLocalStorage, timer promises, performance entries/observer, and readline basics. |
+| Streams and networking | `stream`, `stream/promises`, `stream/web`, `http`, `https`, `net`, `tls`, `dgram`, `dns`, `dns/promises` | ✅ HTTP/TCP/TLS/UDP/DNS and stream subsets. Resolver callback timing and a few platform facilities have documented deviations. |
+| Processes and isolation | `child_process`, `cluster`, `worker_threads`, `vm` | ⚠️ Main APIs are available, but the implementation uses .NET processes/threads and does not reproduce every Node isolation/resource option. Some compiled operations require the co-located managed runtime and source payload. |
+
+Modules absent from the maintained surface include `module`, `v8`, `http2`,
+`diagnostics_channel`, and `node:test`. Per-export signatures and examples are in the
+[Node API guide](docs/node-modules-api.md).
+
+Several user-facing modules are TypeScript sources embedded from `stdlib/node`; host I/O remains
+behind narrow primitives or C#/IL implementations. The provider chain and contribution rules are
+documented in [`stdlib/CONTRIBUTING.md`](stdlib/CONTRIBUTING.md).
+
+## 5. .NET integration and hosting
+
+| Capability | Status | Notes |
+| --- | :---: | --- |
+| `dotnet:` named imports | ✅ | Single-type and namespace forms synthesize a checked surface from reflection. |
+| `@DotNetType` declarations | ✅ | Manual curated declarations, closed generics, and overload hints. |
+| External DLL/NuGet references | ✅ | `sharpts.json` and repeatable `-r`; used dependencies are copied for compiled output unless suppressed. |
+| Delegates and events | ⚠️ | Both modes support them; callbacks follow the source .NET thread, and event deployment may require the managed runtime. |
+| Exception mapping | ⚠️ | Interpreter maps common CLR exceptions to JS-style errors; compiled mode currently propagates raw CLR exceptions. |
+| Generate interop declarations | ✅ | Managed CLI only: `--gen-decl` inspects types, namespaces, or assemblies. |
+| Compile TypeScript for C# | ✅ | Consumers can use normal reflection or a direct assembly reference where the emitted public surface permits it. |
+| Managed embedding API | ✅ | Structured compile/run and bounded single-source execution services. It is not a security sandbox. |
+| Native AOT host | ✅ | Closed generated interop catalog; open-world reflection and managed-only tooling are excluded. |
+| Hosted compiled ABI | ✅ | `--hosted --target dll` emits the versioned hosting contract and requires `SharpTS.Hosting.Abstractions`. |
+
+See [.NET types](docs/dotnet-types.md), [.NET integration](docs/dotnet-integration.md),
+[Embedding](docs/embedding.md), and [Native AOT](docs/native-aot.md).
+
+## 6. GUI and tooling
+
+| Capability | Status | Notes |
+| --- | :---: | --- |
+| Avalonia TypeScript/TSX applications | Preview | Retained/reactive application API, interpreted and compiled guests, Headless tests, Windows publishing, experimental Apple Silicon candidate. |
+| Public custom controls | ❌ | No supported public third-party provider or descriptor-registration API; internal provider seams have no compatibility promise. |
+| TypeScript-source PDBs | ✅ | Portable PDBs with source documents, sequence points, locals/scopes, and async metadata. |
+| VS Code extension | ✅ | Diagnostics, interop IntelliSense, and Debug Current File. |
+| Standalone language server | ✅ | Diagnostics, navigation, references, safe rename domains, completion, hover, signatures, and quick fixes. |
+| General property/member rename | Deferred | Refused when workspace completeness cannot make the edit safe. |
+
+See the [GUI overview](docs/gui/README.md), [language server guide](docs/language-server.md), and
+[debugging guide](docs/debugging-typescript.md).
+
+## 7. Conformance baselines
+
+Both corpora use committed path-by-path baselines. Percentages below are recalculated from the
+committed files; `Skipped` entries are policy exclusions rather than passes.
+
+### Test262
+
+The selected Test262 subset has 11,384 entries in each mode and 879 skips in each baseline.
+
+| Mode | Pass | Fail | RuntimeError | ParseError | HarnessError | Timeout | Skipped | Pass / all | Pass / non-skipped |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Interpreted | **9,291** | 878 | 326 | 10 | 0 | 0 | 879 | **81.61%** | **88.44%** |
+| Compiled | **8,090** | 1,779 | 606 | 10 | 18 | 2 | 879 | **71.06%** | **77.01%** |
+
+These totals establish current capability; they do not make one engine the reference
+implementation for the other. Any disagreement can identify a bug in either backend. The completed
+interpreter parity effort is recorded in [#1279](https://github.com/nickna/SharpTS/issues/1279);
+ongoing harness and coverage work is tracked in
+[#1280](https://github.com/nickna/SharpTS/issues/1280). See the
+[Test262 runner guide](SharpTS.Test262/README.md).
+
+### TypeScript conformance
+
+The pinned TypeScript 6.0.3 subset contains 514 entries: 151 `Pass`, 214 `Fail`, 141
+`ParseError`, and 8 `Skipped`. That is 29.38% of all selected entries or 29.84% excluding skips.
+The result is subset-relative, not whole-language coverage. Work and corpus growth are tracked on
+[#1281](https://github.com/nickna/SharpTS/issues/1281); see the
+[runner guide](SharpTS.TypeScriptConformance/README.md).
+
+## 8. Performance
+
+SharpTS maintains two complementary suites: an external whole-program comparison against Node/Bun
+and managed BenchmarkDotNet microbenchmarks against C# ceilings. Current measurements and exact
+reproduction commands live in [`benchmarks/README.md`](benchmarks/README.md); this status page does
+not freeze historical benchmark magnitudes.
+
+## 9. Current known gaps
+
+- Type aliases are validated lazily in some paths, so an error in an unused alias can be reported
+  later than `tsc` reports it.
+- A compiled dynamic-index miss on a plain object can produce `null` rather than `undefined`.
+- Compiled indirect `eval` cannot access compiled local variables.
+- The `Function` constructor is absent.
+- Compiled .NET interop propagates raw CLR exceptions rather than applying the interpreter's
+  JavaScript error-name mapping.
+- `AsyncLocalStorage.run`/`exit` do not yet forward optional trailing arguments through the
+  embedded TypeScript facade.
+- Node compatibility is intentionally a maintained subset; unsupported modules and per-export
+  ceilings should be checked before porting a Node application.
+- GUI custom-control providers are internal implementation seams, not a public extension API.

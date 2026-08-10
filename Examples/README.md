@@ -1,6 +1,8 @@
 # SharpTS Examples
 
-This directory contains practical TypeScript examples demonstrating SharpTS capabilities, from basic utilities to advanced interoperability with C#.
+This is the canonical runnable SharpTS cookbook, from basic utilities to npm, GUI, hosting, and
+advanced interoperability with C#. Documentation pages link here instead of maintaining duplicate
+snippets that can drift from executable source.
 
 ## Quick Start
 
@@ -61,7 +63,7 @@ The `sharpts` executable must be available on `PATH`. You can also invoke the ex
 
 **Demonstrates:** Function components, reducer/effect/memo/callback hooks, natural children,
 keyboard input, focus refs, direct styling, interpreted/compiled guest parity, and packaged SDK
-consumption. See `Calculator/README.md` for local build and run commands.
+consumption. See the [calculator guide](Calculator/README.md) for local build and run commands.
 
 ---
 
@@ -316,7 +318,7 @@ Interop/
 | `boolean`  | `bool`       |
 | `T[]`      | `List<object>` |
 
-**See `Examples/Interop/README.md` for detailed documentation.**
+See the [interop example guide](Interop/README.md) for detailed documentation.
 
 ---
 
@@ -333,7 +335,8 @@ sharpts --compile Examples/benchmark.ts -o b.dll && dotnet b.dll   # compiled
 **Demonstrates:**
 - `perf_hooks` module: `performance.now()`, `performance.mark()`, `performance.measure()`, `performance.getEntriesByType()`, `performance.timeOrigin`
 - Warm-up loops, iteration scaling, ops/sec reporting
-- Same-file comparison between tree-walking interpretation and compiled IL — compiled typically runs ~100× faster on the numeric loops
+- Same-file comparison between tree-walking interpretation and compiled IL; use the benchmark suite
+  for maintained cross-runtime measurements
 
 **Key Features:**
 - Runs identically in both modes; the output differs only in absolute timings
@@ -348,10 +351,12 @@ sharpts --compile Examples/benchmark.ts -o b.dll && dotnet b.dll   # compiled
 **Usage:**
 ```bash
 sharpts Examples/dotnet-types.ts                                     # interpreted
-sharpts --compile Examples/dotnet-types.ts -o d.dll && dotnet d.dll  # compiled (standalone DLL)
+sharpts --compile Examples/dotnet-types.ts -o d.dll && dotnet d.dll  # compiled .NET DLL
 ```
 
-Runs identically in both modes. The compiled DLL is fully standalone — it doesn't need `SharpTS.dll` alongside.
+This example does not cause the compiler to copy `SharpTS.dll`; its required support is emitted into
+the output. Programs that use soft-dependent runtime features or external .NET assemblies must also
+deploy those dependencies. See the linked .NET Types guide for the mode-specific boundaries.
 
 **Demonstrates:**
 - `@DotNetType("System.Text.StringBuilder")` — instance methods and properties
@@ -539,7 +544,7 @@ SharpTS provides Node.js-compatible built-in modules:
 sharpts Examples/<example>.ts
 ```
 
-**Compiled mode** (better performance, standalone executable):
+**Compiled mode** (better performance, ahead-of-time .NET assembly):
 ```bash
 # Compile
 sharpts --compile Examples/<example>.ts
@@ -612,9 +617,9 @@ main();
 ## Additional Resources
 
 - **SharpTS README** (`../README.md`) - Project overview and build instructions
-- **CLAUDE.md** (`../CLAUDE.md`) - Detailed architecture and development guide
-- **Test Suite** (`../SharpTS.Tests/`) - Comprehensive feature tests
-- **Interop Documentation** (`Interop/README.md`) - C# interop details
+- [Documentation hub](../docs/README.md) - Task-oriented user and contributor guides
+- [Architecture](../ARCHITECTURE.md) - Stable subsystem boundaries and invariants
+- [Interop documentation](Interop/README.md) - C# interop details
 
 ## Contributing Examples
 

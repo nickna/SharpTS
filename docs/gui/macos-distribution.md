@@ -77,14 +77,6 @@ On macOS, default fatal logs are retained under
 `~/Library/Application Support/SharpTS.Gui/Traces`. Interactive fatal errors use the native macOS
 alert path after the durable log is written.
 
-## Evidence snapshot: 2026-08-09
-
-This dated result records evidence for one candidate; it is not a current support guarantee. The
-`SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg` candidate was 39,745,308 bytes with SHA-256
-`1C0579F836C58A10895EB23227D936E2162A5B93D01CB0A64ED3C6434D5B3E5F`. It passed package audit and
-SDK/CLI cross-publishing for `osx-arm64`. The resulting ARM64 Mach-O executables passed stage-only
-`.app`, plist, architecture, symbol, and checksum validation.
-
-No native macOS runner, Apple signing identity, or notarization credential was available for that
-local run. The native and release workflows remain required before Apple Silicon macOS can become
-a supported platform.
+Candidate-specific package sizes, checksums, and pins belong in release metadata and evidence
+artifacts. Native execution, signing, and notarization remain required before Apple Silicon macOS
+can become a supported platform.

@@ -10,7 +10,6 @@ Thank you for your interest in contributing to SharpTS! This project is a TypeSc
 - [Code Style Guidelines](#code-style-guidelines)
 - [Adding New Language Features](#adding-new-language-features)
 - [Areas Needing Help](#areas-needing-help)
-- [Code of Conduct](#code-of-conduct)
 
 ## Getting Started
 
@@ -38,15 +37,15 @@ Thank you for your interest in contributing to SharpTS! This project is a TypeSc
 
 ### Understanding the Codebase
 
-Before diving in, we recommend reading [ARCHITECTURE.md](ARCHITECTURE.md) and
-[CLAUDE.md](CLAUDE.md) (the concise architecture contract — pipeline, directory
-map, and the standalone-DLL constraint that governs all `Compilation/` work).
+Before diving in, read [ARCHITECTURE.md](ARCHITECTURE.md) for the stable subsystem and emitted-runtime
+contracts. `CLAUDE.md` contains only tool-specific operating guidance.
 
 ## How to Contribute
 
 ### Reporting Bugs
 
-1. Check if the bug has already been reported in [Issues](../../issues)
+1. Check if the bug has already been reported in
+   [Issues](https://github.com/nickna/SharpTS/issues)
 2. Create a new issue with:
    - A clear, descriptive title
    - Steps to reproduce the bug

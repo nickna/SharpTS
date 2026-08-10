@@ -1,1274 +1,315 @@
-# Node.js Built-in Modules API Guide
+# Node.js built-in modules API reference
 
-SharpTS provides implementations of common Node.js built-in modules. This guide documents the supported APIs for TypeScript developers familiar with Node.js.
+SharpTS provides a maintained subset of Node-compatible built-in modules for TypeScript programs.
+This is the user API reference. Implementation location and capability status belong only in
+[STATUS.md](../STATUS.md#4-nodejs-built-in-modules); if an API is absent here, do not infer support
+from an internal class with a similar name.
 
-## Import Syntax
+The reference is aligned with the embedded TypeScript declarations, `BuiltInModuleTypes`, and the
+dual-mode tests under `SharpTS.Tests/SharedTests/BuiltInModules`.
 
-All three import styles are supported:
+## Imports and conventions
+
+Bare and `node:` specifiers resolve to the same module:
 
 ```typescript
-// Default import (recommended for most modules)
-import fs from 'fs';
-import os from 'os';
+import fs from "fs";
+import { readFileSync } from "node:fs";
+import * as path from "path";
 
-// Named imports (for specific functions)
-import { readFileSync, writeFileSync } from 'fs';
-import { createHash, randomUUID } from 'crypto';
-
-// Namespace import
-import * as path from 'path';
-
-// Mixed imports
-import path, { join, resolve } from 'path';
+const os = require("node:os");
 ```
 
----
+Default, named, and namespace ESM imports are available. CommonJS `require()` returns the same
+public exports. Most Node callbacks use the error-first `(error, value) => void` shape. Promise
+subpaths expose the corresponding asynchronous operations as promises.
+
+This is a compatible subset rather than a declaration that all APIs from a particular Node version
+exist. Platform facilities follow the host OS and .NET runtime. Use feature tests when an
+application depends on an advanced option.
 
 ## assert
 
-Assertion testing utilities for validating code behavior.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `ok` | `ok(value, message?)` | Assert value is truthy |
-| `strictEqual` | `strictEqual(actual, expected, message?)` | Assert strict equality (`===`) |
-| `notStrictEqual` | `notStrictEqual(actual, expected, message?)` | Assert strict inequality (`!==`) |
-| `equal` | `equal(actual, expected, message?)` | Assert loose equality (`==`) |
-| `notEqual` | `notEqual(actual, expected, message?)` | Assert loose inequality (`!=`) |
-| `deepStrictEqual` | `deepStrictEqual(actual, expected, message?)` | Assert deep strict equality |
-| `notDeepStrictEqual` | `notDeepStrictEqual(actual, expected, message?)` | Assert deep inequality |
-| `throws` | `throws(fn, message?)` | Assert function throws |
-| `doesNotThrow` | `doesNotThrow(fn, message?)` | Assert function doesn't throw |
-| `fail` | `fail(message?)` | Always throws assertion error |
-
-### Example
+`assert` exports the callable `ok` assertion plus `equal`, `notEqual`, `strictEqual`,
+`notStrictEqual`, `deepEqual`, `notDeepEqual`, `deepStrictEqual`, `notDeepStrictEqual`, `throws`,
+`doesNotThrow`, `rejects`, `doesNotReject`, `fail`, `match`, and `doesNotMatch`. `assert.strict`
+selects strict comparisons. Failed assertions expose an `AssertionError`-shaped object with
+`actual`, `expected`, and `operator` fields.
 
 ```typescript
-import { strictEqual, deepStrictEqual, throws } from 'assert';
+import assert from "assert";
 
-strictEqual(1 + 1, 2);
-strictEqual('hello'.length, 5);
-
-deepStrictEqual({ a: 1, b: 2 }, { a: 1, b: 2 });
-
-throws(() => {
-  throw new Error('expected error');
-});
+assert.strictEqual(2 + 2, 4);
+await assert.rejects(Promise.reject(new Error("expected")));
 ```
-
-### AssertionError
-
-All assertions throw `AssertionError` on failure with properties:
-- `message` - Error message
-- `actual` - Actual value
-- `expected` - Expected value
-- `operator` - Assertion operator name
-
----
-
-## child_process
-
-Execute external processes and shell commands.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `execSync` | `execSync(command, options?)` | Execute shell command synchronously |
-| `spawnSync` | `spawnSync(command, args?, options?)` | Spawn process synchronously |
-| `execFileSync` | `execFileSync(file, args?, options?)` | Execute file synchronously without shell |
-| `exec` | `exec(command, options?, callback?)` | Execute shell command asynchronously |
-| `execFile` | `execFile(file, args?, options?, callback?)` | Execute file asynchronously without shell |
-| `spawn` | `spawn(command, args?, options?)` | Spawn a child process, returns `ChildProcess` |
-| `fork` | `fork(modulePath, args?, options?)` | Spawn a Node child with IPC channel |
-
-### execSync Options
-
-```typescript
-{
-  cwd?: string,      // Working directory
-  timeout?: number,  // Timeout in milliseconds
-  env?: object       // Environment variables
-}
-```
-
-### spawnSync Options
-
-```typescript
-{
-  cwd?: string,    // Working directory
-  shell?: boolean, // Run in shell
-  env?: object     // Environment variables
-}
-```
-
-### spawnSync Return Value
-
-```typescript
-{
-  stdout: string,      // Standard output
-  stderr: string,      // Standard error
-  status: number|null, // Exit code (null on success)
-  signal: string|null, // Signal if killed
-  error: string|null   // Error message if failed
-}
-```
-
-### Example
-
-```typescript
-import { execSync, spawnSync } from 'child_process';
-
-// Execute shell command
-const output = execSync('echo hello');
-console.log(output); // "hello"
-
-// Execute with options
-const result = execSync('ls -la', { cwd: '/tmp' });
-
-// Spawn process with arguments
-const spawn = spawnSync('git', ['status'], { cwd: '/my/repo' });
-console.log(spawn.stdout);
-```
-
----
-
-## crypto
-
-Cryptographic functions for hashing and random number generation.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `createHash` | `createHash(algorithm)` | Create a Hash object |
-| `randomBytes` | `randomBytes(size)` | Generate secure random bytes |
-| `randomUUID` | `randomUUID()` | Generate random UUID v4 |
-| `randomInt` | `randomInt(max)` or `randomInt(min, max)` | Generate random integer |
-
-### Supported Hash Algorithms
-
-- `md5`
-- `sha1`
-- `sha256`
-- `sha384`
-- `sha512`
-
-### Hash Object Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `update` | `update(data)` | Add data to hash (chainable) |
-| `digest` | `digest(encoding?)` | Finalize and return digest |
-
-Digest encodings: `'hex'`, `'base64'`, or omit for raw bytes.
-
-### Example
-
-```typescript
-import { createHash, randomBytes, randomUUID, randomInt } from 'crypto';
-
-// Create SHA-256 hash
-const hash = createHash('sha256')
-  .update('hello')
-  .update('world')
-  .digest('hex');
-console.log(hash); // "936a185caaa266bb9cbe981e9e05cb78cd732b0b3280eb944412bb6f8f8f07af"
-
-// Generate random bytes
-const bytes = randomBytes(16);
-
-// Generate UUID
-const uuid = randomUUID();
-console.log(uuid); // "550e8400-e29b-41d4-a716-446655440000"
-
-// Random integers
-const n = randomInt(100);        // 0-99
-const m = randomInt(10, 20);     // 10-19
-```
-
----
-
-## fs
-
-File system operations. Synchronous, callback-style async, and promise-based APIs are all supported. For promise-based APIs see the `fs/promises` section below.
-
-### File Operations (sync)
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `existsSync` | `existsSync(path)` | Check if path exists |
-| `readFileSync` | `readFileSync(path, encoding?)` | Read file contents |
-| `writeFileSync` | `writeFileSync(path, data, encoding?)` | Write to file |
-| `appendFileSync` | `appendFileSync(path, data, encoding?)` | Append to file |
-| `copyFileSync` | `copyFileSync(src, dest)` | Copy file |
-| `renameSync` | `renameSync(oldPath, newPath)` | Rename/move file |
-| `unlinkSync` | `unlinkSync(path)` | Delete file |
-| `truncateSync` | `truncateSync(path, len?)` | Truncate file to length |
-| `openSync` | `openSync(path, flags, mode?)` | Open file, return fd |
-| `closeSync` | `closeSync(fd)` | Close file descriptor |
-| `readSync` | `readSync(fd, buffer, offset, length, position?)` | Read from fd |
-| `writeSync` | `writeSync(fd, buffer, ...)` | Write to fd |
-| `ftruncateSync` | `ftruncateSync(fd, len?)` | Truncate via fd |
-| `fstatSync` | `fstatSync(fd)` | Stat via fd |
-
-### Directory Operations (sync)
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `mkdirSync` | `mkdirSync(path, options?)` | Create directory |
-| `mkdtempSync` | `mkdtempSync(prefix)` | Create unique temp directory |
-| `rmdirSync` | `rmdirSync(path, options?)` | Remove directory |
-| `readdirSync` | `readdirSync(path, options?)` | List directory contents |
-| `opendirSync` | `opendirSync(path)` | Open directory handle |
-
-### File Information / Permissions (sync)
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `statSync` | `statSync(path)` | Get file/directory stats |
-| `lstatSync` | `lstatSync(path)` | Get stats (symlink-aware) |
-| `accessSync` | `accessSync(path, mode?)` | Check file accessibility |
-| `realpathSync` | `realpathSync(path)` | Resolve canonical path |
-| `readlinkSync` | `readlinkSync(path)` | Read symlink target |
-| `symlinkSync` | `symlinkSync(target, path, type?)` | Create symlink |
-| `linkSync` | `linkSync(existing, new)` | Create hard link |
-| `chmodSync` | `chmodSync(path, mode)` | Change permissions |
-| `chownSync` | `chownSync(path, uid, gid)` | Change ownership |
-| `lchownSync` | `lchownSync(path, uid, gid)` | Change ownership (symlink-aware) |
-| `utimesSync` | `utimesSync(path, atime, mtime)` | Update access/modification times |
-
-### Callback-style Async
-
-Most file/directory sync methods have callback-style counterparts with the trailing `(err, result) => …` pattern: `readFile`, `writeFile`, `appendFile`, `copyFile`, `rename`, `unlink`, `mkdir`, `readdir`, `stat`, `lstat`, `access`, `chmod`, `chown`. Use `fs/promises` for `Promise`-returning equivalents.
-
-### Stat Object Properties
-
-```typescript
-{
-  isDirectory: boolean,
-  isFile: boolean,
-  size: number
-}
-```
-
-### rmdirSync Options
-
-```typescript
-{
-  recursive?: boolean  // Remove directory and contents
-}
-```
-
-### Example
-
-```typescript
-import fs from 'fs';
-
-// Read and write files
-const content = fs.readFileSync('input.txt', 'utf8');
-fs.writeFileSync('output.txt', content.toUpperCase());
-
-// Check existence
-if (fs.existsSync('config.json')) {
-  const config = fs.readFileSync('config.json', 'utf8');
-}
-
-// Directory operations
-fs.mkdirSync('new-folder');
-const files = fs.readdirSync('.');
-console.log(files);
-
-// File stats
-const stats = fs.statSync('myfile.txt');
-if (stats.isFile) {
-  console.log(`Size: ${stats.size} bytes`);
-}
-
-// Remove directory recursively
-fs.rmdirSync('old-folder', { recursive: true });
-```
-
-### Error Codes
-
-Node.js-compatible error codes are thrown:
-- `ENOENT` - File/directory not found
-- `EACCES` - Permission denied
-- `EEXIST` - File already exists
-- `EISDIR` - Is a directory (expected file)
-- `ENOTDIR` - Not a directory
-- `ENOTEMPTY` - Directory not empty
-
----
-
-## os
-
-Operating system information and utilities.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `platform` | `platform()` | Get OS platform |
-| `arch` | `arch()` | Get CPU architecture |
-| `hostname` | `hostname()` | Get machine hostname |
-| `homedir` | `homedir()` | Get user home directory |
-| `tmpdir` | `tmpdir()` | Get temp directory path |
-| `type` | `type()` | Get OS type |
-| `release` | `release()` | Get OS release version |
-| `cpus` | `cpus()` | Get CPU information |
-| `totalmem` | `totalmem()` | Get total system memory |
-| `freemem` | `freemem()` | Get free system memory |
-| `userInfo` | `userInfo()` | Get current user info |
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `EOL` | `string` | End-of-line character |
-
-### Platform Values
-
-- `'win32'` - Windows
-- `'linux'` - Linux
-- `'darwin'` - macOS
-
-### Architecture Values
-
-- `'x64'` - 64-bit x86
-- `'ia32'` - 32-bit x86
-- `'arm64'` - 64-bit ARM
-- `'arm'` - 32-bit ARM
-
-### cpus() Return Value
-
-```typescript
-[
-  { model: string, speed: number },
-  // ...
-]
-```
-
-### userInfo() Return Value
-
-```typescript
-{
-  username: string,
-  uid: number,
-  gid: number,
-  shell: string,
-  homedir: string
-}
-```
-
-### Example
-
-```typescript
-import os from 'os';
-
-console.log(`Platform: ${os.platform()}`);  // "win32", "linux", "darwin"
-console.log(`Architecture: ${os.arch()}`);  // "x64"
-console.log(`Hostname: ${os.hostname()}`);
-console.log(`Home: ${os.homedir()}`);
-console.log(`Temp: ${os.tmpdir()}`);
-
-// Memory info
-const totalGB = os.totalmem() / (1024 * 1024 * 1024);
-const freeGB = os.freemem() / (1024 * 1024 * 1024);
-console.log(`Memory: ${freeGB.toFixed(1)}GB free of ${totalGB.toFixed(1)}GB`);
-
-// CPU info
-const cpus = os.cpus();
-console.log(`CPUs: ${cpus.length} cores`);
-```
-
----
-
-## path
-
-File path manipulation utilities.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `join` | `join(...parts)` | Join path segments |
-| `resolve` | `resolve(...parts)` | Resolve to absolute path |
-| `basename` | `basename(path, ext?)` | Get filename |
-| `dirname` | `dirname(path)` | Get directory name |
-| `extname` | `extname(path)` | Get file extension |
-| `normalize` | `normalize(path)` | Normalize path |
-| `isAbsolute` | `isAbsolute(path)` | Check if path is absolute |
-| `relative` | `relative(from, to)` | Get relative path |
-| `parse` | `parse(path)` | Parse path to components |
-| `format` | `format(pathObj)` | Build path from components |
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `sep` | `string` | Path separator (`/` or `\\`) |
-| `delimiter` | `string` | Path list delimiter (`:` or `;`) |
-
-### parse() Return Value
-
-```typescript
-{
-  root: string,  // "/" or "C:\\"
-  dir: string,   // Directory path
-  base: string,  // Filename with extension
-  name: string,  // Filename without extension
-  ext: string    // Extension including dot
-}
-```
-
-### Example
-
-```typescript
-import path from 'path';
-
-// Join paths
-const fullPath = path.join('/users', 'john', 'documents', 'file.txt');
-// "/users/john/documents/file.txt"
-
-// Resolve to absolute
-const absolute = path.resolve('./src', '../lib', 'utils.ts');
-
-// Extract parts
-console.log(path.dirname('/a/b/c.txt'));   // "/a/b"
-console.log(path.basename('/a/b/c.txt'));  // "c.txt"
-console.log(path.extname('/a/b/c.txt'));   // ".txt"
-
-// Remove extension
-console.log(path.basename('file.ts', '.ts')); // "file"
-
-// Parse path
-const parsed = path.parse('/home/user/file.txt');
-// { root: "/", dir: "/home/user", base: "file.txt", name: "file", ext: ".txt" }
-
-// Build path
-const built = path.format({ dir: '/home/user', base: 'file.txt' });
-// "/home/user/file.txt"
-
-// Relative path
-console.log(path.relative('/a/b/c', '/a/d/e')); // "../../d/e"
-```
-
----
-
-## process
-
-Process information and control.
-
-### Properties
-
-| Property | Type | Description |
-|----------|------|-------------|
-| `platform` | `string` | OS platform |
-| `arch` | `string` | CPU architecture |
-| `pid` | `number` | Process ID |
-| `version` | `string` | Node.js version string |
-| `env` | `object` | Environment variables |
-| `argv` | `string[]` | Command-line arguments |
-| `exitCode` | `number` | Current exit code |
-| `stdin` | `Stream` | Standard input |
-| `stdout` | `Stream` | Standard output |
-| `stderr` | `Stream` | Standard error |
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `cwd` | `cwd()` | Get current working directory |
-| `chdir` | `chdir(path)` | Change working directory |
-| `exit` | `exit(code?)` | Exit process |
-| `kill` | `kill(pid, signal?)` | Signal a process; signal `0` performs an existence check |
-| `hrtime` | `hrtime(time?)` | High-resolution time |
-| `uptime` | `uptime()` | Process uptime in seconds |
-| `memoryUsage` | `memoryUsage()` | Memory usage statistics |
-
-### Host process-control policy
-
-An embedding host can set the process-wide AppContext switch
-`SharpTS.RestrictProcessControl` to `true`. While enabled, `process.kill()` permits
-self-signals (including signal `0`) but rejects every other PID with an `EPERM`
-error before probing or signaling that process. Interpreted and compiled execution
-honor the same switch.
-
-This switch constrains the Node-compatible `process.kill()` facade; it is not a
-standalone sandbox boundary. A host treating guest code as untrusted must also
-restrict arbitrary `dotnet:` interop and other process-launch/control surfaces such
-as `child_process`, because those APIs can bypass or mutate process-wide AppContext
-policy.
-
-### Example
-
-```typescript
-import process from 'process';
-
-// Environment
-console.log(`Platform: ${process.platform}`);
-console.log(`PID: ${process.pid}`);
-console.log(`CWD: ${process.cwd()}`);
-
-// Environment variables
-const home = process.env.HOME || process.env.USERPROFILE;
-console.log(`Home: ${home}`);
-
-// Command-line arguments
-process.argv.forEach((arg, index) => {
-  console.log(`argv[${index}]: ${arg}`);
-});
-
-// Change directory
-process.chdir('/tmp');
-
-// Timing
-const start = process.hrtime();
-// ... some operation ...
-const elapsed = process.hrtime(start);
-console.log(`Took ${elapsed[0]}s ${elapsed[1]}ns`);
-
-// Memory
-const mem = process.memoryUsage();
-console.log(`Heap used: ${mem.heapUsed}`);
-```
-
----
-
-## querystring
-
-URL query string parsing and serialization.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `parse` | `parse(str, sep?, eq?, options?)` | Parse query string to object |
-| `stringify` | `stringify(obj, sep?, eq?, options?)` | Convert object to query string |
-| `escape` | `escape(str)` | Percent-encode string |
-| `unescape` | `unescape(str)` | Percent-decode string |
-| `decode` | - | Alias for `parse` |
-| `encode` | - | Alias for `stringify` |
-
-### Example
-
-```typescript
-import querystring from 'querystring';
-
-// Parse query string
-const parsed = querystring.parse('name=john&age=30&hobby=coding&hobby=gaming');
-// { name: "john", age: "30", hobby: ["coding", "gaming"] }
-
-// Stringify object
-const qs = querystring.stringify({ name: 'john', tags: ['a', 'b'] });
-// "name=john&tags=a&tags=b"
-
-// Custom separators
-const custom = querystring.parse('name:john;age:30', ';', ':');
-// { name: "john", age: "30" }
-
-// Escape/unescape
-const escaped = querystring.escape('hello world');  // "hello%20world"
-const decoded = querystring.unescape('hello%20world'); // "hello world"
-```
-
----
-
-## readline
-
-User input handling for interactive applications.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `questionSync` | `questionSync(query)` | Prompt user synchronously |
-| `createInterface` | `createInterface(options?)` | Create readline interface |
-
-### Interface Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `question` | `question(query, callback)` | Ask question with callback |
-| `close` | `close()` | Close the interface |
-| `prompt` | `prompt()` | Display prompt character |
-
-### Example
-
-```typescript
-import readline from 'readline';
-
-// Simple synchronous prompt
-const name = readline.questionSync('What is your name? ');
-console.log(`Hello, ${name}!`);
-
-// Using interface
-const rl = readline.createInterface();
-
-rl.question('Enter a number: ', (answer) => {
-  console.log(`You entered: ${answer}`);
-  rl.close();
-});
-```
-
----
-
-## url
-
-URL parsing and manipulation.
-
-### Classes
-
-#### URL (WHATWG URL API)
-
-```typescript
-new URL(urlString, baseUrl?)
-```
-
-**Properties:**
-- `href` - Full URL string
-- `protocol` - Protocol with colon (e.g., `'https:'`)
-- `host` - Host with port
-- `hostname` - Host without port
-- `port` - Port number as string
-- `pathname` - Path portion
-- `search` - Query string with `?`
-- `hash` - Fragment with `#`
-- `origin` - Protocol + host
-- `username` - Username portion
-- `password` - Password portion
-- `searchParams` - URLSearchParams object
-
-#### URLSearchParams
-
-```typescript
-new URLSearchParams(init?)
-```
-
-**Methods:**
-- `get(name)` - Get first value for name
-- `getAll(name)` - Get all values for name
-- `has(name)` - Check if name exists
-- `set(name, value)` - Set value (replaces existing)
-- `append(name, value)` - Append value
-- `delete(name)` - Remove all values for name
-- `keys()` - Get all keys
-- `values()` - Get all values
-- `size` - Number of parameters
-
-### Legacy Functions
-
-| Function | Signature | Description |
-|----------|-----------|-------------|
-| `parse` | `parse(urlString, parseQueryString?, slashesDenoteHost?)` | Parse URL string |
-| `format` | `format(urlObject)` | Format URL object to string |
-| `resolve` | `resolve(from, to)` | Resolve relative URL |
-
-### Example
-
-```typescript
-import { URL, URLSearchParams } from 'url';
-
-// Parse URL
-const url = new URL('https://example.com:8080/path?query=value#hash');
-console.log(url.hostname);  // "example.com"
-console.log(url.port);      // "8080"
-console.log(url.pathname);  // "/path"
-console.log(url.search);    // "?query=value"
-
-// Modify URL
-url.pathname = '/new-path';
-url.searchParams.set('foo', 'bar');
-console.log(url.href);
-
-// URLSearchParams
-const params = new URLSearchParams('a=1&b=2&a=3');
-console.log(params.get('a'));     // "1"
-console.log(params.getAll('a'));  // ["1", "3"]
-params.append('c', '4');
-params.delete('b');
-
-// Resolve relative URLs
-import { resolve } from 'url';
-const absolute = resolve('https://example.com/a/b', '../c');
-// "https://example.com/a/c"
-```
-
----
-
-## util
-
-Utility functions for formatting and type checking.
-
-### Methods
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `format` | `format(format, ...args)` | Format string with placeholders |
-| `inspect` | `inspect(value, options?)` | Convert value to string representation |
-
-### format() Placeholders
-
-| Placeholder | Description |
-|-------------|-------------|
-| `%s` | String |
-| `%d`, `%i` | Integer |
-| `%f` | Float |
-| `%j` | JSON |
-| `%o`, `%O` | Object |
-| `%%` | Literal `%` |
-
-### inspect() Options
-
-```typescript
-{
-  depth?: number  // Recursion depth (default: 2)
-}
-```
-
-### types Object
-
-Type checking utilities:
-
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `isArray` | `isArray(value)` | Check if array |
-| `isDate` | `isDate(value)` | Check if Date |
-| `isFunction` | `isFunction(value)` | Check if function |
-| `isNull` | `isNull(value)` | Check if null |
-| `isUndefined` | `isUndefined(value)` | Check if undefined |
-
-### Example
-
-```typescript
-import util from 'util';
-
-// Format strings
-const msg = util.format('Hello %s, you have %d messages', 'John', 5);
-// "Hello John, you have 5 messages"
-
-const json = util.format('Data: %j', { a: 1, b: 2 });
-// "Data: {\"a\":1,\"b\":2}"
-
-// Inspect objects
-const obj = { nested: { deep: { value: 42 } } };
-console.log(util.inspect(obj, { depth: 1 }));
-// "{ nested: { deep: [Object] } }"
-
-// Type checking
-console.log(util.types.isArray([1, 2, 3]));  // true
-console.log(util.types.isFunction(() => {})); // true
-console.log(util.types.isNull(null));         // true
-```
-
----
-
-## fs/promises
-
-Promise-based counterparts of the `fs` callback API. Every listed method returns a `Promise` and accepts the same arguments as the synchronous form (minus the error-first callback).
-
-| Method | Description |
-|--------|-------------|
-| `readFile` | Read file contents |
-| `writeFile` | Write file contents |
-| `appendFile` | Append to file |
-| `copyFile` | Copy file |
-| `rename` | Rename/move |
-| `unlink` | Delete file |
-| `truncate` | Truncate to length |
-| `mkdir` | Create directory |
-| `mkdtemp` | Create temp directory |
-| `rmdir` / `rm` | Remove directory/file |
-| `readdir` | List directory contents |
-| `stat` / `lstat` | File info |
-| `access` | Check accessibility |
-| `chmod` | Change permissions |
-| `realpath` | Resolve canonical path |
-| `readlink` / `symlink` / `link` | Symlink / hardlink ops |
-| `utimes` | Update atime/mtime |
-| `open` | Returns a `FileHandle` |
-
-### Example
-
-```typescript
-import { readFile, writeFile } from 'fs/promises';
-
-const content = await readFile('input.txt', 'utf8');
-await writeFile('output.txt', content.toUpperCase());
-```
-
----
 
 ## buffer
 
-Binary data handling via the `Buffer` class. `Buffer` is also exposed as a global — `import` is only required when the consumer wants the named binding.
+`buffer` exports `Buffer`, `SlowBuffer`, `atob`, `btoa`, `isUtf8`, `isAscii`, `transcode`, constants,
+and size limits. The global `Buffer` is the same constructor.
 
-### Static Methods
+Static APIs include `Buffer.from`, `alloc`, `allocUnsafe`, `concat`, `isBuffer`, `isEncoding`,
+`byteLength`, and `compare`. Instances support string conversion, slice/subarray, copy, write, fill,
+search/compare/equality, integer reads/writes, and `toJSON`. Maintained encodings include UTF-8,
+UTF-16LE/UCS-2, ASCII/Latin-1/binary, hex, base64, and base64url where the operation accepts them.
 
-| Method | Signature | Description |
-|--------|-----------|-------------|
-| `from` | `Buffer.from(source, encoding?)` | Create from string, array, or ArrayBuffer |
-| `alloc` | `Buffer.alloc(size, fill?, encoding?)` | Allocate zero-filled buffer |
-| `allocUnsafe` | `Buffer.allocUnsafe(size)` | Allocate without zeroing |
-| `allocUnsafeSlow` | `Buffer.allocUnsafeSlow(size)` | Allocate without the pool |
-| `isBuffer` | `Buffer.isBuffer(obj)` | Type guard |
-| `isEncoding` | `Buffer.isEncoding(encoding)` | Encoding supported? |
-| `byteLength` | `Buffer.byteLength(value, encoding?)` | Byte length of a string |
-| `concat` | `Buffer.concat(list, totalLength?)` | Concatenate buffers |
-| `compare` | `Buffer.compare(a, b)` | Sort-compatible compare |
+## crypto
 
-### Instance Methods
+The maintained crypto surface includes:
 
-`toString`, `write`, `slice`, `equals`, `compare`, `copy`, `fill`, `indexOf`, `includes`, `toJSON`, `swap16`, `swap32`, `swap64`. Typed read/write: `readInt8`, `readUInt8`, `readInt16BE/LE`, `readUInt16BE/LE`, `readInt32BE/LE`, `readUInt32BE/LE`, `readFloatBE/LE`, `readDoubleBE/LE`, `readBigInt64BE/LE`, `readBigUInt64BE/LE`, and the matching `write*` variants.
-
-### Supported Encodings
-
-`utf8`, `utf16le`/`ucs2`, `ascii`, `latin1`/`binary`, `base64`, `hex`.
-
-### Example
+- hashes/HMAC: `createHash`, `createHmac`, one-shot `hash`, `Hash.copy`, SHA-2, SHA-3 and supported
+  SHAKE output lengths;
+- randomness: `randomBytes`, `randomFill`, `randomFillSync`, `randomInt`, and `randomUUID`;
+- symmetric crypto: `createCipheriv`, `createDecipheriv`, GCM tags, and cipher discovery;
+- password/KDF APIs: PBKDF2, scrypt, HKDF, sync and callback forms;
+- signatures and keys: `createSign`, `createVerify`, one-shot `sign`/`verify`, key generation/import,
+  `KeyObject`, RSA encrypt/decrypt, Diffie-Hellman, and ECDH;
+- prime utilities, timing-safe equality, algorithm discovery, constants, FIPS accessors, and
+  `X509Certificate`.
 
 ```typescript
-const buf = Buffer.from('hello', 'utf8');
-console.log(buf.length);              // 5
-console.log(buf.toString('hex'));     // "68656c6c6f"
-const merged = Buffer.concat([buf, Buffer.from(' world')]);
+import { createHash, randomUUID } from "crypto";
+
+const digest = createHash("sha256").update("hello").digest("hex");
+console.log(digest, randomUUID());
 ```
 
----
+Available algorithms are those accepted by the current declaration/runtime pair and the host .NET
+cryptography provider. Unsupported EdDSA/X25519/X448 operations raise a clear error. Some advanced
+key import/export and certificate helpers remain subject to the mode ceilings listed in status.
+
+## fs
+
+`fs` provides synchronous, callback, promise, stream, and watch operations. The maintained surface
+includes file read/write/append/copy/rename/remove, directory creation/list/removal, stat/lstat,
+access/realpath, links, permissions/timestamps, file descriptors, temporary directories,
+`createReadStream`, `createWriteStream`, `watch`, `watchFile`, and `unwatchFile`.
+
+```typescript
+import fs from "fs";
+
+const text = fs.readFileSync("input.txt", "utf8");
+fs.writeFileSync("output.txt", text.toUpperCase());
+
+const stat = fs.statSync("output.txt");
+console.log(stat.isFile(), stat.size);
+```
+
+Filesystem errors carry Node-style codes such as `ENOENT`, `EACCES`, `EEXIST`, `EISDIR`,
+`ENOTDIR`, and `ENOTEMPTY`. Path, permission, symlink, and ownership behavior remains
+platform-dependent.
+
+## fs/promises
+
+`fs/promises` exposes promise-returning read/write/append/copy/rename/remove, directory,
+stat/lstat/access/realpath, link, permission, and timestamp operations from the maintained `fs`
+surface:
+
+```typescript
+import { readFile, writeFile } from "fs/promises";
+
+const text = await readFile("input.txt", "utf8");
+await writeFile("output.txt", text);
+```
+
+## path
+
+`path` exports `join`, `resolve`, `dirname`, `basename`, `extname`, `normalize`, `isAbsolute`,
+`relative`, `parse`, `format`, `sep`, and `delimiter`. `path.posix` and `path.win32` expose explicit
+platform variants.
+
+```typescript
+import path from "path";
+
+console.log(path.join("dist", "app.dll"));
+console.log(path.parse("/tmp/archive.tar.gz").ext);
+```
+
+## os
+
+`os` exports `platform`, `arch`, `cpus`, `hostname`, `homedir`, `tmpdir`, `type`, `release`,
+`uptime`, `totalmem`, `freemem`, `networkInterfaces`, `loadavg`, `userInfo`, and `EOL`.
+
+## process
+
+The default/named `process` module and global `process` refer to the same live object. The public
+surface includes:
+
+- identity/configuration: `argv`, `execArgv`, `argv0`, `execPath`, `pid`, `ppid`, `platform`,
+  `arch`, `version`, `versions`, `release`, `features`, `config`, and `title`;
+- environment/directories: live `env`, `cwd`, `chdir`, `umask`, and supported POSIX identity APIs;
+- lifecycle: `exit`, `abort`, `exitCode`, `beforeExit`, `exit`, warning and signal events;
+- scheduling/timing: `nextTick`, `hrtime`, `hrtime.bigint`, CPU/resource/memory APIs;
+- stdio: `stdin`, `stdout`, and `stderr` stream objects;
+- process control and IPC: `kill`, `send`, `disconnect`, `connected`, and `channel` where applicable;
+- reports, source-map toggles, active-resource inspection, and EventEmitter methods.
+
+```typescript
+import process from "process";
+
+console.log(process.cwd(), process.platform);
+process.nextTick(() => console.log("next tick"));
+```
+
+Hosts can restrict cross-process signaling. POSIX-only APIs are absent on Windows. See status for
+the remaining compiled lifecycle/POSIX ceilings.
 
 ## events
 
-Event-driven programming via `EventEmitter`.
+`events` exports `EventEmitter` with `on`, `once`, `emit`, `off`, `removeListener`,
+`removeAllListeners`, `listenerCount`, `listeners`, `prependListener`, `prependOnceListener`,
+`setMaxListeners`, `getMaxListeners`, and `eventNames`, plus maintained static helpers.
 
-### EventEmitter
+## timers
 
-| Method | Description |
-|--------|-------------|
-| `on(name, listener)` / `addListener` | Subscribe |
-| `once(name, listener)` | Subscribe for a single fire |
-| `prependListener` / `prependOnceListener` | Subscribe at the front of the queue |
-| `off(name, listener)` / `removeListener` | Unsubscribe |
-| `removeAllListeners(name?)` | Remove all listeners for an event (or everything) |
-| `emit(name, ...args)` | Dispatch to listeners — returns `true` if any ran |
-| `listenerCount(name)` | Number of subscribers |
-| `eventNames()` | Names with at least one listener |
-| `setMaxListeners(n)` | Warn threshold |
+`timers` exports `setTimeout`, `clearTimeout`, `setInterval`, `clearInterval`, `setImmediate`, and
+`clearImmediate`; the same functions are globals. Callback arguments after the delay are forwarded.
 
-### Example
+## timers/promises
+
+`timers/promises` exports promise-returning `setTimeout`, `setImmediate`, and async-iterable
+`setInterval`. Delay/immediate options accept an abort signal where declared.
 
 ```typescript
-import { EventEmitter } from 'events';
+import { setTimeout as delay } from "timers/promises";
 
-const ee = new EventEmitter();
-ee.on('tick', (n: number) => console.log(`tick ${n}`));
-ee.emit('tick', 1);
+await delay(100);
 ```
-
----
-
-## stream
-
-Node.js streaming primitives.
-
-### Exports
-
-Classes: `Readable`, `Writable`, `Duplex`, `Transform`, `PassThrough`.
-
-Helpers: `pipeline(...streams, cb?)`, `finished(stream, cb)`, `addAbortSignal(signal, stream)`.
-
-The submodule `stream/promises` exposes promise-returning `pipeline` and `finished`.
-
-### stream/web
-
-WHATWG streams: `ReadableStream`, `WritableStream`, `TransformStream`, `ByteLengthQueuingStrategy`, `CountQueuingStrategy`.
-
-### Example
-
-```typescript
-import { pipeline } from 'stream/promises';
-import { createReadStream, createWriteStream } from 'fs';
-import { createGzip } from 'zlib';
-
-await pipeline(
-  createReadStream('input.txt'),
-  createGzip(),
-  createWriteStream('input.txt.gz'),
-);
-```
-
----
-
-## http / https
-
-HTTP client and server.
-
-### Methods
-
-| Method | Description |
-|--------|-------------|
-| `createServer(requestListener?)` | Create an HTTP server |
-| `request(options, callback?)` | Make an HTTP request |
-| `get(options, callback?)` | `request` with method forced to `GET` |
-
-### Constants / Objects
-
-- `METHODS` — array of supported HTTP method names
-- `STATUS_CODES` — `{ code: reason-phrase }` map
-- `Agent` — connection pooling
-- `globalAgent` — default shared agent
-
-`https` exposes the same API with TLS transport.
-
-### Server lifecycle and SharpTS connection probe
-
-`server.close()` stops the server after active responses drain.
-`server.closeAllConnections()` aborts the responses that are active when it is
-called but leaves the listener open, matching Node's separation between the two
-operations.
-
-SharpTS additionally exposes `res.probeConnection()` as a best-effort extension for
-long-running JSON endpoints. It commits a chunked response, writes one JSON-safe
-whitespace byte (compiled mode also flushes it synchronously), and returns `false` if
-that write observes a disconnected peer. It returns `false` after the response has
-ended. Because it commits headers and changes the response body, it should be called
-only when that behavior is acceptable; it is not part of Node's `ServerResponse` API.
-
-### Example
-
-```typescript
-import http from 'http';
-
-const server = http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Hello\n');
-});
-server.listen(3000);
-```
-
----
-
-## net
-
-TCP networking.
-
-| Symbol | Description |
-|--------|-------------|
-| `createServer(options?, connectionListener?)` | New TCP server |
-| `createConnection(options, callback?)` / `connect` | New TCP connection |
-| `Server` | TCP server class |
-| `Socket` | TCP socket class |
-| `isIP(input)` | 4, 6, or 0 |
-| `isIPv4` / `isIPv6` | Version-specific checks |
-
-### Example
-
-```typescript
-import net from 'net';
-
-const server = net.createServer((socket) => {
-  socket.write('hello\n');
-  socket.end();
-});
-server.listen(7000);
-```
-
----
-
-## tls
-
-TLS/SSL sockets on top of `net`.
-
-| Symbol | Description |
-|--------|-------------|
-| `createServer(options, connectionListener?)` | TLS server |
-| `connect(options, callback?)` | Client connection |
-| `createSecureContext(options)` | Reusable credential bundle |
-| `Server`, `TLSSocket` | Classes |
-| `DEFAULT_MIN_VERSION`, `DEFAULT_MAX_VERSION` | Default protocol bounds |
-
-Options accept `key`, `cert`, `ca`, `host`, `port`, `minVersion`, `maxVersion`.
-
----
-
-## dgram
-
-UDP datagrams.
-
-| Symbol | Description |
-|--------|-------------|
-| `createSocket(type, callback?)` | Create a socket (`'udp4'` or `'udp6'`) |
-| `Socket` | Socket class — `bind`, `send`, `close`, EventEmitter interface |
-
-### Example
-
-```typescript
-import dgram from 'dgram';
-
-const sock = dgram.createSocket('udp4');
-sock.on('message', (msg, rinfo) => console.log(`from ${rinfo.address}: ${msg}`));
-sock.bind(41234);
-```
-
----
-
-## dns / dns/promises
-
-DNS resolution.
-
-> **`resolve*` vs `lookup`:** `resolve`/`resolve4`/`resolve6`/`resolveMx`/… use the DNS
-> wire protocol — like Node's c-ares resolver — querying the configured DNS server
-> (override with the `SHARPTS_DNS_SERVER` env var). They do **not** consult the OS hosts
-> file. `lookup`/`lookupService` use the OS resolver (`getaddrinfo`), which does read the
-> hosts file. Consequently `resolve4('localhost')` typically returns `ENOTFOUND`, whereas
-> `lookup('localhost')` returns `127.0.0.1` — matching Node.
-
-### Top-level Methods
-
-`lookup`, `lookupService`, `resolve`, `resolve4`, `resolve6`, `resolveCaa`, `resolveCname`, `resolveMx`, `resolveNs`, `resolvePtr`, `resolveSoa`, `resolveSrv`, `resolveTxt`, `resolveAny`, `reverse`, `getServers`, `setServers`.
-
-### Resolver
-
-`Resolver` class provides a private instance with its own servers: `new Resolver()`, `resolver.resolve4(host, cb)`, `resolver.setServers([...])`, `resolver.cancel()`.
-
-### Promise API
-
-`import { resolve4 } from 'dns/promises'` — same surface, Promise-returning. Also available as `dns.promises`.
-
-### Error Codes
-
-Exposed as named constants: `NOTFOUND`, `SERVFAIL`, `REFUSED`, `TIMEOUT`, `NODATA`, `FORMERR`, `NOMEM`, `BADQUERY`, `BADNAME`, `BADFAMILY`, `BADRESP`, `CONNREFUSED`, `CANCELLED`, and more.
-
----
-
-## zlib
-
-Compression/decompression.
-
-### Sync
-
-`deflateSync`, `inflateSync`, `deflateRawSync`, `inflateRawSync`, `gzipSync`, `gunzipSync`, `unzipSync`, `brotliCompressSync`, `brotliDecompressSync`.
-
-### Async (callback)
-
-`deflate`, `inflate`, `deflateRaw`, `inflateRaw`, `gzip`, `gunzip`, `unzip`, `brotliCompress`, `brotliDecompress`.
-
-### Stream Factories
-
-`createDeflate`, `createInflate`, `createDeflateRaw`, `createInflateRaw`, `createGzip`, `createGunzip`, `createUnzip`, `createBrotliCompress`, `createBrotliDecompress`, `createZstdCompress`, `createZstdDecompress`.
-
-### Example
-
-```typescript
-import { gzipSync, gunzipSync } from 'zlib';
-
-const compressed = gzipSync(Buffer.from('hello world'));
-const original = gunzipSync(compressed).toString();
-```
-
----
-
-## timers / timers/promises
-
-Timer functions. Also available as globals.
-
-| Method | Description |
-|--------|-------------|
-| `setTimeout(cb, ms, ...args)` | Run once after delay |
-| `setInterval(cb, ms, ...args)` | Repeat every delay |
-| `setImmediate(cb, ...args)` | Run on next tick |
-| `clearTimeout(handle)` / `clearInterval` / `clearImmediate` | Cancel |
-
-`timers/promises` exposes `setTimeout(ms, value?, options?)` and `setImmediate(value?, options?)` returning a `Promise`, both accepting `{ signal }` for cancellation via `AbortController`.
-
-### Example
-
-```typescript
-import { setTimeout as delay } from 'timers/promises';
-
-await delay(1000);
-console.log('one second later');
-```
-
----
-
-## vm
-
-Compile and execute code in a custom context.
-
-| Method | Description |
-|--------|-------------|
-| `createContext(contextObject?)` | Wrap an object as a sandbox |
-| `isContext(obj)` | Test for a context object |
-| `runInContext(code, context, options?)` | Run `code` in an existing context |
-| `runInNewContext(code, contextObject?, options?)` | Create a context and run |
-| `runInThisContext(code, options?)` | Run in the current context |
-| `compileFunction(code, params?, options?)` | Compile to a callable function |
-| `Script` | `new Script(code, options?)` with `.runInContext()` / `.runInNewContext()` / `.runInThisContext()` |
-
-Options include `timeout` for execution cap.
-
----
-
-## worker_threads
-
-Thread-based workers.
-
-| Symbol | Description |
-|--------|-------------|
-| `Worker` | Spawn a worker; `postMessage`, `terminate`, `on('message')` |
-| `MessageChannel`, `BroadcastChannel` | Structured messaging primitives |
-| `isMainThread` | `true` in the main thread |
-| `parentPort` | Message port to parent (in workers) |
-| `workerData` | Data passed at construction |
-| `threadId` | Current thread ID |
-| `resourceLimits` | Per-worker limits |
-| `getEnvironmentData` / `setEnvironmentData` | Shared env map |
-| `SHARE_ENV` | Sentinel to inherit environment |
-| `markAsUntransferable` / `moveMessagePortToContext` / `receiveMessageOnPort` | Advanced port ops |
-
----
-
-## cluster
-
-Fork worker processes that share server ports.
-
-| Symbol | Description |
-|--------|-------------|
-| `fork(env?)` | Create a worker |
-| `disconnect(callback?)` | Gracefully disconnect all workers |
-| `isPrimary` / `isMaster` | `true` in the primary/master process |
-| `isWorker` | `true` in worker processes |
-| `worker` | Current worker (when `isWorker`) |
-| `workers` | `{ id: Worker }` map (primary) |
-| `settings` | Active fork settings |
-| `setupPrimary(settings?)` / `setupMaster` | Configure default fork settings |
-
-Extends `EventEmitter` (`on`, `once`, `emit`, `off`, `removeAllListeners`, `listenerCount`, `listeners`, `eventNames`).
-
----
 
 ## async_hooks
 
-Asynchronous context tracking.
-
-### AsyncLocalStorage
-
-| Method | Description |
-|--------|-------------|
-| `run(store, callback, ...args)` | Execute within a store scope |
-| `enterWith(store)` | Set store for the current async chain |
-| `exit(callback, ...args)` | Run without any store |
-| `getStore()` | Current store, or `undefined` |
-| `disable()` | Drop all references |
-
-### Example
-
-```typescript
-import { AsyncLocalStorage } from 'async_hooks';
-
-const als = new AsyncLocalStorage<{ requestId: string }>();
-
-als.run({ requestId: 'abc' }, () => {
-  // Any `getStore()` call in this (and descendant) async task sees { requestId: 'abc' }
-  handleRequest();
-});
-```
-
----
+`async_hooks` exposes `AsyncLocalStorage` with `run`, `getStore`, `enterWith`, `exit`, and `disable`.
+Context flows through .NET asynchronous execution. Optional trailing callback arguments on `run`
+and `exit` are a known facade gap; close over values instead.
 
 ## perf_hooks
 
-High-resolution performance timing.
+`perf_hooks` exports `performance` (`now`, `timeOrigin`, marks, measures, entry queries and clears)
+and `PerformanceObserver` for mark/measure entries.
 
-### performance
+## readline
 
-| Member | Description |
-|--------|-------------|
-| `now()` | Monotonic time in ms since `timeOrigin` |
-| `timeOrigin` | Wall-clock anchor (ms since epoch) |
-| `mark(name, options?)` | Record a named timestamp |
-| `measure(name, startMark?, endMark?)` | Record a duration between marks |
-| `getEntries()` / `getEntriesByName` / `getEntriesByType` | Query recorded entries |
-| `clearMarks(name?)` / `clearMeasures(name?)` | Drop entries |
+`readline` exports `createInterface`. The returned interface supports EventEmitter methods,
+`question`, `questionSync`, `prompt`, `pause`, `resume`, `write`, `setPrompt`, `getPrompt`, and
+`close`.
 
-### PerformanceObserver
+## stream
 
-Subscribe to mark/measure events synchronously:
+`stream` exports `Readable`, `Writable`, `Duplex`, `Transform`, and `PassThrough`, plus `pipeline`,
+`finished`, and `addAbortSignal`. Maintained behavior includes object mode, high-water marks,
+backpressure/drain, common lifecycle events, `Readable.from`, stream predicates, and iterable
+helpers such as `toArray`, `forEach`, `map`, and `filter`.
 
-```typescript
-import { performance, PerformanceObserver } from 'perf_hooks';
+## stream/promises
 
-const obs = new PerformanceObserver((list) => {
-  for (const entry of list.getEntries()) console.log(entry.name, entry.duration);
-});
-obs.observe({ entryTypes: ['measure'] });
+`stream/promises` exposes promise-returning `pipeline` and `finished`.
 
-performance.mark('start');
-// ... work ...
-performance.mark('end');
-performance.measure('work', 'start', 'end');
-```
+## stream/web
 
----
+`stream/web` exposes the maintained Web Streams constructors and strategies used by fetch and
+stream interop. Use the declared constructors rather than Node internals.
+
+## http and https
+
+Both modules expose `createServer`, `request`, `get`, `Agent`, and `globalAgent`; `http` also exports
+method/status-code tables. Servers support listen/address/close/drain behavior, request body
+streaming, response headers/body writes, and the EventEmitter lifecycle. `https` uses TLS transport
+with the corresponding credential options.
+
+SharpTS additionally provides `ServerResponse.probeConnection()` for long-running responses. It
+commits a chunked response and writes a JSON-safe whitespace byte; use it only when changing the
+response in that way is acceptable.
+
+## net
+
+`net` exports `createServer`, `createConnection`/`connect`, `Server`, `Socket`, `BlockList`,
+`SocketAddress`, `isIP`, `isIPv4`, `isIPv6`, and default auto-family accessors. TCP and supported IPC
+socket paths expose EventEmitter and stream behavior, backpressure, half-close options, connection
+limits, address information, and block rules.
+
+## tls
+
+`tls` exports `createServer`, `connect`, `createSecureContext`, `Server`, `TLSSocket`,
+`DEFAULT_MIN_VERSION`, and `DEFAULT_MAX_VERSION`. Maintained options include credentials, CA,
+protocol bounds, ALPN, and SNI.
+
+## dgram
+
+`dgram` exports `createSocket` and `Socket` for UDP4/UDP6 bind, send, connect/disconnect, address,
+broadcast, TTL, multicast membership/interface, buffer sizing, and EventEmitter lifecycle.
+Source-specific multicast has platform/family limitations documented by raised errors.
+
+## dns and dns/promises
+
+`dns` includes `lookup`, `lookupService`, `resolve`, record-specific resolvers, `reverse`, server and
+result-order configuration, and `Resolver`. `dns/promises` and `dns.promises` expose promise forms.
+
+`lookup` uses the OS resolver (including hosts-file policy); `resolve*` uses DNS queries. Resolver
+errors expose Node-style codes. Cancellation and callback timing have the compiled deviation noted
+in status.
+
+## child_process
+
+`child_process` exports `execSync`, `spawnSync`, `execFileSync`, `exec`, `spawn`, `execFile`, and
+`fork`. `ChildProcess` exposes PID/status, stdio, events, `kill`, and IPC `send`/`disconnect` when
+forked. Commands, shell syntax, environment, signals, and executable lookup follow the host OS.
+
+Compiled `fork` requires the managed runtime and deployed TypeScript entry source.
+
+## cluster
+
+`cluster` exposes primary/worker identity, `fork`, `workers`, `worker`, `settings`,
+`setupPrimary`/`setupMaster`, scheduling policy, disconnect, worker process/IPC methods, and cluster
+events. SharpTS workers use an in-process thread model, so worker process identity and resource
+isolation are not identical to Node processes.
+
+## worker_threads
+
+`worker_threads` exports `Worker`, `MessageChannel`, `MessagePort`, `BroadcastChannel`,
+`isMainThread`, `parentPort`, `workerData`, `threadId`, environment-data helpers, transfer helpers,
+and synchronous port receive. Workers share the parent's console; Node `resourceLimits` and
+per-worker stdio options do not have equivalent isolation here.
+
+## vm
+
+`vm` exports context creation/testing, `runInContext`, `runInNewContext`, `runInThisContext`,
+`compileFunction`, `measureMemory`, `Script`, `SourceTextModule`, `SyntheticModule`, and maintained
+constants. Contexts are language environments, not security sandboxes.
+
+## url
+
+`url` exports WHATWG `URL` and `URLSearchParams` plus `fileURLToPath`, `pathToFileURL`, `format`,
+and legacy `parse`.
+
+## querystring
+
+`querystring` exports `parse`, `stringify`, `escape`, and `unescape`.
+
+## util
+
+`util` includes `promisify`, `callbackify`, `deprecate`, `format`, `inspect`, the `types` predicate
+object, `TextEncoder`, and `TextDecoder` where declared.
+
+## zlib
+
+`zlib` provides gzip, deflate, raw deflate, Brotli, Zstandard, and unzip one-shot sync/callback APIs
+plus the corresponding transform factories, `crc32`, and constants/codes. Available algorithms
+are constrained by the host .NET compression libraries; compiled Zstandard use retains its
+`ZstdSharp` runtime dependency.
 
 ## string_decoder
 
-Incremental decoding of `Buffer` chunks to strings, preserving multi-byte sequences across writes.
-
-### StringDecoder
-
-```typescript
-new StringDecoder(encoding?)  // default 'utf8'
-```
-
-| Method | Description |
-|--------|-------------|
-| `write(buffer)` | Decode chunk, buffering any trailing incomplete sequence |
-| `end(buffer?)` | Flush any buffered bytes and return the final string |
-
-### Example
-
-```typescript
-import { StringDecoder } from 'string_decoder';
-
-const decoder = new StringDecoder('utf8');
-const a = decoder.write(Buffer.from([0xE2, 0x82]));       // "" — incomplete
-const b = decoder.write(Buffer.from([0xAC]));             // "€"
-```
-
----
+`string_decoder` exports `StringDecoder`. `write` preserves incomplete multi-byte sequences across
+chunks and `end` flushes the final sequence.
 
 ## tty
 
-Terminal detection.
+`tty.isatty(fd)` tests a file descriptor. Dedicated `ReadStream`/`WriteStream` constructors are not
+part of the maintained surface; use `process.stdin`, `process.stdout`, and `process.stderr`.
 
-| Method | Description |
-|--------|-------------|
-| `isatty(fd)` | Is the file descriptor a TTY? |
+## Error and compatibility notes
 
-`ReadStream` / `WriteStream` classes are not currently implemented — use `process.stdout.isTTY` (a boolean) or `tty.isatty(1)` for the common case.
-
----
-
-## Notes
-
-### Error Handling
-
-File system errors include Node.js-compatible error codes:
-
-```typescript
-try {
-  fs.readFileSync('nonexistent.txt');
-} catch (e) {
-  if (e.code === 'ENOENT') {
-    console.log('File not found');
-  }
-}
-```
-
-### Stream Objects
-
-The `process.stdin`, `process.stdout`, and `process.stderr` properties are stream objects with standard stream methods.
+Host I/O failures carry Node-style error codes where the public declarations expose them. Stream
+objects support only the methods declared for their concrete shape; do not assume every Node stream
+internal is present. For a current module-level capability summary and documented backend/platform
+ceilings, see [STATUS.md](../STATUS.md#4-nodejs-built-in-modules).

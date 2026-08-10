@@ -125,7 +125,7 @@ as today — the shape only governs the plain data slots.
 ### Inline caches (compiled `o.x` sites) — where the speed is
 
 Each property site gets a per-site cache (static fields, like the regex-literal
-hoisting pattern in `regex-literal-hoisting-scope.md`):
+the existing per-site regex-literal hoisting pattern):
 
 ```
 // o.x  -->
@@ -278,7 +278,7 @@ is validated and Phase 1 proper can drop the double storage.
 |-------|-------|--------|
 | `$Object` storage | `RuntimeEmitter.TSObject.cs:34` (`_fields: Dictionary`) | add `_shape: object` + `_slots: object[]` fields (keep `_fields` initially as the deopt/dictionary-mode fallback) |
 | Object-literal construction | the literal emitter that builds the `Dictionary` then `newobj $Object` | emit a **pre-sized** shaped object: the compiler knows the literal's keys, so intern the terminal `$Shape` once (static field) and fill `_slots[0..k]` directly — **no runtime SlotOf/transition** |
-| Property read fast path | `ILEmitter.Properties.cs:687` (`TypeInfo.Record` branch; **must stay behind the #862 promoted-struct path at :23**) | emit the IC: `if (o._shape == site.shape) push o._slots[site.slot]; else SlowGet(o, "k", ref site)` with `site.shape`/`site.slot` as **per-site static fields** (the regex-literal-hoisting pattern) |
+| Property read fast path | `ILEmitter.Properties.cs:687` (`TypeInfo.Record` branch; **must stay behind the #862 promoted-struct path at :23**) | emit the IC: `if (o._shape == site.shape) push o._slots[site.slot]; else SlowGet(o, "k", ref site)` with `site.shape`/`site.slot` as **per-site static fields** (matching the existing literal-hoisting pattern) |
 | `$Shape` type | new emitted type | `SlotOf(string)→int` + `Add(string)→$Shape` (interned transition tree). **Only invoked on construction-of-non-literal-shapes, dynamic adds, and IC misses** — never on the IC hot path, so its IL cost is off the critical path |
 | Deopt | `delete`, dynamic string keys, megamorphic | flip to `_fields` dictionary mode; ICs miss → slow path → equals today |
 

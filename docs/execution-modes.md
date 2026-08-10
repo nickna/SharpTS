@@ -1,294 +1,184 @@
-# Execution Modes: Interpreted vs Compiled
+# Execution modes and CLI
 
-SharpTS offers two execution modes for running TypeScript code: **interpreted** (default) and **compiled** (ahead-of-time IL compilation). This guide helps you understand when to use each mode.
+SharpTS shares one parser, type checker, module resolver, and project model across interpretation
+and compilation. Choose a command by the artifact you need, then rely on the parity contract below
+for supported behavior.
 
-> **Note for Contributors**: This guide uses the `sharpts` command assuming SharpTS is installed as a global .NET tool (`dotnet tool install -g SharpTS`). If you're developing from source, replace `sharpts` with `dotnet run --` in all commands.
+## Command map
 
-## Quick Comparison
+| Goal | Command | Result |
+| --- | --- | --- |
+| Start the REPL | `sharpts` | Interactive interpreted session |
+| Run a program | `sharpts app.ts` | Interprets the module graph immediately |
+| Type-check one program | `sharpts --noEmit app.ts` | Diagnostics only |
+| Check a project | `sharpts -p .` | Checks roots selected by `tsconfig.json`; no runtime assembly |
+| Check project references | `sharpts --build` | Checks the reference graph in dependency order |
+| Compile a DLL | `sharpts --compile app.ts` | `app.dll` plus `app.runtimeconfig.json` |
+| Compile an executable | `sharpts --compile app.ts --target exe` | Platform executable output |
+| Emit declarations | `sharpts --compile app.ts --declaration` | Assembly plus checked `.d.ts` files |
+| Emit declarations only | `sharpts --compile app.ts --emitDeclarationOnly` | `.d.ts` files without an assembly |
 
-| Aspect | Interpreted | Compiled |
-|--------|-------------|----------|
-| Command | `sharpts file.ts` | `sharpts --compile file.ts` |
-| Output | Console output | `.dll` executable |
-| Startup | Instant | Requires build step |
-| Execution speed | Slower | Faster |
-| REPL support | Yes | No |
-| Distribution | Requires SharpTS | Standalone `.dll` |
-| Best for | Development | Production |
-
----
-
-## Interpreted Mode
-
-Interpreted mode executes TypeScript directly using a tree-walking interpreter. This is the default when you run SharpTS.
-
-### Usage
+Arguments after a script are exposed through `process.argv`. Use `--` when a guest argument begins
+with `-`:
 
 ```bash
-# Run a file
-sharpts myapp.ts
-
-# Start interactive REPL
-sharpts
+sharpts app.ts -- --verbose input.txt
 ```
 
-### How It Works
-
-1. **Lexer** tokenizes your source code
-2. **Parser** builds an Abstract Syntax Tree (AST)
-3. **Type Checker** validates types statically
-4. **Interpreter** walks the AST and executes each node
-
-### When to Use Interpreted Mode
-
-- **Development and debugging** - Immediate feedback without compilation
-- **Prototyping** - Quick iteration on ideas
-- **Learning** - Interactive REPL for experimenting
-- **Small scripts** - One-off automation tasks
-- **Testing language features** - Try out syntax without build overhead
-
-### Advantages
-
-- **No build step** - Changes run immediately
-- **Interactive REPL** - Test code snippets interactively
-- **Better error messages** - Direct correlation between errors and source
-- **Simpler workflow** - Edit, save, run
-
-### Limitations
-
-- **Slower execution** - Each statement is interpreted at runtime
-- **No distributable output** - Cannot share as standalone executable
-
----
-
-## Compiled Mode (IL Compilation)
-
-Compiled mode generates a .NET IL assembly that runs natively on the .NET runtime. The compiled output is significantly faster and can be distributed independently.
-
-### Usage
+## Interpreted programs
 
 ```bash
-# Basic compilation
-sharpts --compile myapp.ts
-# Output: myapp.dll, myapp.runtimeconfig.json
-
-# Custom output path
-sharpts --compile myapp.ts -o build/app.dll
-
-# Run the compiled output
-dotnet myapp.dll
+sharpts app.ts
 ```
 
-### How It Works
+The interpreter executes the checked syntax tree and is the shortest development loop. It supports
+the same project discovery, external-reference configuration, TypeScript strictness flags, JSX
+settings, and module resolver used by compilation. `-r/--reference` and the nearest `sharpts.json`
+apply in this mode too.
 
-1. **Lexer** and **Parser** - Same as interpreted mode
-2. **Type Checker** - Same static validation
-3. **Dead Code Analyzer** - Identifies unreachable code
-4. **IL Compiler** - Generates .NET IL bytecode in multiple phases:
-   - Emit runtime support types
-   - Analyze closures and variable captures
-   - Define classes and functions
-   - Generate method bodies
-   - Create entry point
+Interpretation is also used by the REPL and by some Node-compatible operations that start source
+workers. It ships no output artifact.
 
-### Output Files
-
-Compilation produces:
-- `<name>.dll` - The executable .NET assembly
-- `<name>.runtimeconfig.json` - Runtime configuration for .NET
-
-### When to Use Compiled Mode
-
-- **Production deployment** - Faster execution in production
-- **Distribution** - Share your application with others
-- **Performance-critical code** - Computation-heavy applications
-- **CI/CD pipelines** - Build once, deploy anywhere
-- **.NET integration** - Use compiled output from other .NET projects
-
-### Advantages
-
-- **Faster execution** - Native IL runs at near-.NET speeds
-- **Standalone distribution** - Share `.dll` files without SharpTS
-- **Dead code elimination** - Unused code is not emitted
-- **IL verification** - Optionally verify correctness with `--verify`
-- **.NET ecosystem** - Interop with other .NET libraries
-
-### Limitations
-
-- **Requires build step** - Must recompile after changes
-- **No REPL** - Cannot compile interactive input
-- **Larger output** - Runtime support types embedded in assembly
-
----
-
-## Feature Support
-
-Both modes support the full SharpTS language. The key differences are in execution characteristics, not language features.
-
-| Feature | Interpreted | Compiled |
-|---------|-------------|----------|
-| Variables and types | Runtime type checking | Static IL with type metadata |
-| Functions and closures | Environment chain capture | Display classes with field captures |
-| Classes and inheritance | Dynamic SharpTSClass objects with composition | Real .NET types with native inheritance |
-| Interfaces | Type-erased (compile-time only) | Type-erased (compile-time only) |
-| Async/await | Direct Task delegation | Native IAsyncStateMachine structs |
-| Generators | Eager evaluation with YieldException | Lazy IEnumerator state machines |
-| Modules (import/export) | Dynamic late-bound loading | Static types with topological init |
-| Decorators | Full execution (Stage 2 & 3) | .NET attributes (no runtime execution) |
-| Enums | Runtime objects with dynamic lookup | Compile-time metadata (zero-cost) |
-| Template literals | StringBuilder concatenation | Array building + concat helper |
-| Spread/rest operators | Single-pass inline expansion | Two-phase with runtime helpers |
-| Optional chaining (?.) | Short-circuit evaluation | IL conditional branches |
-| Nullish coalescing (??) | Null/undefined checks at runtime | IL null checks with branch optimization |
-
-### Implementation Differences
-
-While both modes support the same features, the implementation differs:
-
-- **Closures**: Interpreter uses environment chain (linked list of scopes); compiler generates display classes with field captures for only referenced variables
-- **Async/await**: Interpreter delegates directly to .NET Task system; compiler generates `IAsyncStateMachine` structs (same mechanism as C#)
-- **Generators**: Interpreter uses eager evaluation (collects all yields on first `next()`); compiler generates lazy `IEnumerator` state machines
-- **Classes**: Interpreter uses dynamic `SharpTSClass` objects with composition-based inheritance; compiler emits real .NET types with native type hierarchy
-- **Enums**: Interpreter creates runtime objects with dictionary lookup; compiler evaluates to compile-time metadata (zero runtime overhead)
-- **Decorators**: Interpreter executes decorator functions with full TypeScript semantics; compiler maps to .NET attributes (no runtime execution)
-- **Modules**: Interpreter resolves imports dynamically at runtime; compiler generates static types initialized in topological dependency order
-
-These differences are internal optimizations. For most features, your code's behavior is identical between modes. However, **decorators** lose runtime execution capability when compiled (they become static .NET attributes), and **generators** change from eager to lazy evaluation.
-
----
-
-## Command Reference
-
-### Interpreted Mode
+## Compiled output
 
 ```bash
-# Run a TypeScript file
-sharpts <file.ts>
-
-# Start REPL
-sharpts
-
-# Decorator options (Stage 3 enabled by default)
-sharpts <file.ts> --experimentalDecorators    # Legacy (Stage 2) decorators
-sharpts <file.ts> --noDecorators              # Disable decorators
-sharpts <file.ts> --emitDecoratorMetadata     # Emit type metadata
+sharpts --compile app.ts -o out/app.dll
+dotnet out/app.dll
 ```
 
-### Compiled Mode
+`--compile` emits .NET IL directly. The default target is `dll`; `-t exe` or `--target exe` selects
+an executable. Built-in executable bundling is supported on Windows and Linux. DLL output is the
+portable choice for hosting, C# references, and other platforms.
+
+| Option | Meaning |
+| --- | --- |
+| `-o <path>` | Set the output path. |
+| `-t, --target dll\|exe` | Select a DLL (default) or executable. |
+| `--bundler auto\|sdk\|builtin` | Choose executable bundling. `auto` permits fallback; an explicit mode fails instead of changing technique. |
+| `--preserveConstEnums` | Keep `const enum` declarations instead of inlining them. |
+| `--ref-asm` | Shape output for use as a C# reference assembly. |
+| `--sdk-path <path>` | Override the .NET SDK reference-assembly location. |
+| `--verify` | Run IL verification after emission. |
+| `--msbuild-errors` | Format compiler diagnostics for MSBuild. |
+| `--quiet` | Suppress success messages. |
+| `--standalone` | Suppress automatic copies of soft runtime and external interop dependencies. |
+
+### Conditional runtime dependencies
+
+The emitted program contains its ordinary JavaScript runtime and normally has no metadata
+dependency on `SharpTS.dll`. Some features deliberately late-bind to the managed SharpTS runtime,
+including compiled `eval`, Proxy/Intl paths, selected `vm`/DNS behavior, and dynamic .NET events.
+The compiler records these requirements and copies `SharpTS.dll` beside the output only when one is
+present. Pure programs do not receive that copy.
+
+External assemblies used by `.NET` interop are hard dependencies. The compiler normally copies
+the used assemblies and their copy-local closure. `--standalone` suppresses both kinds of automatic
+copy; it does not remove the program's need for them. A soft-dependent feature then raises a clear
+runtime error, and hard dependencies must be deployed by the application.
+
+### Hosted DLL output
+
+`--hosted` is an advanced compiler option used by `SharpTS.Hosting` and the GUI host:
 
 ```bash
-sharpts --compile <file.ts> [options]
-sharpts -c <file.ts> [options]
+sharpts --compile guest.ts --target dll --hosted -o guest.dll
 ```
 
-**Options:**
+It emits the versioned hosted program factory and lifecycle contract, copies
+`SharpTS.Hosting.Abstractions`, and permits host-controlled initialization and event-loop shutdown.
+It is valid only with `--target dll`; a hosted DLL is not a normal command-line entry assembly.
+Application hosts should consume the public hosting abstractions instead of reflecting over the
+generated `$`-prefixed implementation types.
 
-| Option | Description |
-|--------|-------------|
-| `-o <path>` | Set output path (default: `<input>.dll`) |
-| `--preserveConstEnums` | Keep const enum declarations in output |
-| `--ref-asm` | Emit reference-assembly-compatible output |
-| `--sdk-path <path>` | Explicit path to .NET SDK reference assemblies |
-| `--verify` | Verify emitted IL using Microsoft.ILVerification |
-| `--experimentalDecorators` | Use Legacy (Stage 2) decorators instead of Stage 3 |
-| `--noDecorators` | Disable decorator support |
-| `--emitDecoratorMetadata` | Emit design-time type metadata |
-| `--pack` | Generate NuGet package after compilation |
-| `--push <source>` | Push package to NuGet feed (implies `--pack`) |
-| `--api-key <key>` | API key for NuGet package push |
-| `--package-id <id>` | Override package ID (default: from package.json) |
-| `--version <ver>` | Override package version (default: from package.json) |
+## Projects and build mode
 
----
-
-## Common Workflows
-
-### Development Workflow
-
-During development, use interpreted mode for quick iteration:
+SharpTS discovers `tsconfig.json` next to or above a named script. Use `-p/--project` to select a
+file or directory explicitly, or `--no-tsconfig` to disable discovery:
 
 ```bash
-# Edit your code
-code myapp.ts
-
-# Run immediately
-sharpts myapp.ts
-
-# Or use REPL for testing snippets
-sharpts
-> let x = 5 * 10
-> console.log(x)
-50
+sharpts -p ./configs/tsconfig.json
+sharpts -p . --watch
+sharpts --build
+sharpts --build packages/app --force
 ```
 
-### Production Workflow
+Project commands type-check the roots selected by `files` and `include`; they do not produce a
+runtime assembly. Imports can still bring an excluded file into the semantic program. Supported
+project behavior includes `extends`, references/composite projects, incremental state, watch mode,
+`baseUrl`/`paths`, declaration inputs, JavaScript roots, and classic, Node, and bundler module
+resolution.
 
-For production deployment, compile your application:
+| Option | Meaning |
+| --- | --- |
+| `-p, --project <path>` | Select a `tsconfig.json` file or containing directory. |
+| `-b, --build [projects...]` | Check a project-reference graph. |
+| `-w, --watch` | Recheck affected project inputs after changes. |
+| `--incremental` | Reuse SharpTS build state when inputs are unchanged. |
+| `--force` | Ignore build state and recheck the graph. |
+| `--no-tsconfig` | Skip configuration discovery for a script/compile command. |
+| `--showConfig` | Print the resolved configuration and value sources as JSON, then exit. |
+
+Command-line settings win over configuration. `target` and `module` are accepted configuration
+keys but do not select .NET IL output. Set `SHARPTS_TSCONFIG_VERBOSE=1` to report every ignored
+configuration option.
+
+## Declaration output
+
+Declaration flags apply to `--compile` and project commands:
 
 ```bash
-# Compile with verification
-sharpts --compile myapp.ts --verify
-
-# Test the compiled output
-dotnet myapp.dll
-
-# Deploy: copy myapp.dll and myapp.runtimeconfig.json
+sharpts --compile src/library.ts --declaration
+sharpts --compile src/library.ts --emitDeclarationOnly --declarationDir types
+sharpts -p .
 ```
 
-### CI/CD Integration
+`--declaration` emits checked `.d.ts` files; `--emitDeclarationOnly` implies declarations and
+suppresses the .NET assembly; `--declarationDir` selects their root. The matching configuration
+properties are `declaration`, `emitDeclarationOnly`, `declarationDir`, `rootDir`, and `outDir`.
 
-In CI/CD pipelines, compile and verify:
+## Debugging compiled TypeScript
 
 ```bash
-# Build step
-sharpts --compile src/app.ts -o dist/app.dll --verify
-
-# Test step
-dotnet dist/app.dll --run-tests
-
-# Deploy step
-cp dist/app.dll dist/app.runtimeconfig.json /deploy/
+sharpts --compile app.ts --debug
 ```
 
-### Mixed Development
+`--debug`/`-g` writes a portable PDB beside the assembly with TypeScript source documents,
+checksums, sequence points, scopes, and async mappings. Keep the `.pdb` with the assembly and avoid
+moving source files if the debugger does not have source remapping. See
+[Debugging compiled TypeScript](debugging-typescript.md).
 
-Use interpreted mode during development, then compile for release:
+## Compilation timings
 
 ```bash
-# Development: fast iteration
-sharpts myapp.ts
-
-# Before release: compile and verify
-sharpts --compile myapp.ts --verify
-
-# Distribution
-dotnet myapp.dll
+sharpts --compile app.ts --timings
+sharpts --compile app.ts --timings-json > timings.json
 ```
 
----
+`--timings` writes a human-readable ordered phase report to stderr. `--timings-json` writes the
+report as the only stdout content so it can be piped into tooling. Failures include the phases
+reached through the failing phase. The flags are mutually exclusive, cannot be combined with
+`--showConfig`, and are not suppressed by `--quiet`.
 
-## Troubleshooting
+Conditional phases—such as declaration emission, verification, bundling, runtime/dependency
+copying, and packaging—appear only when they execute.
 
-### Interpreted Mode Issues
+## Parity contract and deviations
 
-**"Error: Cannot find module"**
-- Check that import paths are correct relative to the file
-- Ensure `.ts` extension is included in imports
+For supported language and library features, interpreted and compiled programs should have the
+same observable result. Every normal feature test should run in both modes. A backend-specific test
+or behavior needs an explicit reason and documentation.
 
-**Type errors preventing execution**
-- Fix type errors first; interpretation won't proceed with type errors
-- Use `any` type temporarily if needed during prototyping
+Known contractual deviations include:
 
-### Compiled Mode Issues
+- Interpreted `eval` is lexical; compiled `eval` is indirect and cannot see compiled locals.
+- Compiled .NET calls currently propagate raw CLR exceptions, while the interpreter maps common
+  CLR exceptions to JavaScript-style error names.
+- Some Node APIs expose platform or backend ceilings documented in the
+  [Node API guide](node-modules-api.md) and [status matrix](../STATUS.md#4-nodejs-built-in-modules).
+- Hosted output follows host lifecycle and ABI rules rather than the normal console entry-point
+  lifecycle.
+- Native AOT uses a closed interop catalog and excludes managed-only tooling; see
+  [Native AOT](native-aot.md).
 
-**"Cannot verify IL - SDK reference assemblies not found"**
-- Install .NET SDK or specify path with `--sdk-path`
-- IL verification is optional; remove `--verify` flag if not needed
-
-**Runtime errors in compiled output**
-- Compile with `--verify` to catch IL issues early
-- Check that all dependencies are available at runtime
-
-**Missing runtime config**
-- Ensure `<name>.runtimeconfig.json` is in same directory as `.dll`
-- This file is generated automatically during compilation
+A discrepancy outside a documented deviation is a bug; report the source, mode, platform, and
+minimal output difference.

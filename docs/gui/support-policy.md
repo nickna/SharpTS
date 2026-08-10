@@ -13,7 +13,7 @@ designations are listed in the [GUI overview](README.md#platform-status).
 | GUI API in `app.json` | An integer runtime contract. The host rejects unsupported values before guest initialization. A breaking application API increments it. |
 | Descriptor schema version/hash | Exact SDK/host match. A mismatch requires rebuilding the application; hashes are not negotiated. |
 | Hosted ABI | Versioned independently from GUI API. A host may support multiple documented ABI versions, otherwise it fails before executing guest code. |
-| Private custom-control provider contract | Statically registered, versioned, and checked before guest initialization. Private providers must declare compatible SDK ranges and rebuild when the contract changes; no public loading API is supported. |
+| Internal control-provider seam | Private host implementation detail with no public compatibility promise. No public loading or registration API is supported. |
 | Application/MSIX version | Owned by the application. It does not imply a SharpTS SDK version and must increase for every Windows update. |
 
 Stable API removals require a major SDK release. Deprecations remain for at least one stable minor
@@ -46,9 +46,10 @@ stable support window.
 ## Responsibility boundary
 
 SharpTS owns reproducible failures in the supported SDK, generated launcher, hosted runtime,
-renderer, and built-in services. Application owners own their code, assets, custom providers,
-installer identity, certificate lifecycle, update feed, privacy notice, and enterprise policy.
-Provider vendors own their native controls and trimming/AOT annotations.
+renderer, built-in controls, and public services. Application owners own their code, components,
+assets, installer identity, certificate lifecycle, update feed, privacy notice, and enterprise
+policy. Private provider forks are unsupported and carry their own compatibility, dispatcher,
+cleanup, trimming, and AOT obligations.
 
 A support report should include the exact SDK version, package/application version, RID, execution
 mode, descriptor schema values, installer hash, signature/attestation verification, minimal

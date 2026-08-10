@@ -1,13 +1,13 @@
 # SharpTS Calculator
 
-A polished standard calculator and `SharpTS.Gui.Sdk 0.3.0-preview.1` showcase. It uses typed
+A polished `SharpTS.Gui.Sdk` showcase. It uses typed
 function components, keyed data-driven rendering, retained native controls, accessible names,
 responsive sizing, keyboard input, and a window-level error boundary without adding history,
 memory, or scientific modes.
 
 ## Run it
 
-After `SharpTS.Gui.Sdk 0.3.0-preview.1` is available from a configured feed:
+After `SharpTS.Gui.Sdk` is available from a configured feed:
 
 ```powershell
 dotnet run --project Examples/Calculator -- --mode compiled

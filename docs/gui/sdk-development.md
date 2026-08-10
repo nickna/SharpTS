@@ -18,7 +18,7 @@ sharpts new avalonia -n CounterApp
 cd CounterApp
 sharpts app run
 sharpts app run --mode compiled
-sharpts app compile
+sharpts app build
 sharpts app publish --rid win-x64 --self-contained true --single-file true
 ```
 
@@ -38,10 +38,11 @@ self-contained single file contains only the compiled guest.
 
 ### .NET SDK template
 
-Install the matching template and create an explicit SDK project:
+Install the selected template and create an explicit SDK project. Keep any required NuGet pin in
+application configuration rather than copying a package release number from this guide:
 
 ```powershell
-dotnet new install SharpTS.Gui.Sdk::0.3.0-preview.1
+dotnet new install SharpTS.Gui.Sdk
 dotnet new sharpts-gui -n CounterApp
 cd CounterApp
 dotnet restore
@@ -135,9 +136,9 @@ dispatcher; synchronous return-valued off-thread callbacks are rejected.
 
 The generated built-in descriptor contract uses reviewed named adapters without runtime
 reflection. There is no public third-party descriptor-registration or custom-control loading API.
-A private fork may add a manifest entry and reviewed C#/TypeScript adapters, but that surface has
-no compatibility promise and must preserve dispatcher ownership, rollback, cleanup, trimming, and
-schema-hash rules. A public custom-control surface requires a separately versioned provider model.
+The descriptor manifest and its C#/TypeScript adapters are maintainer-only implementation details,
+have no compatibility promise, and are not supported application extension points. Internal
+changes must preserve dispatcher ownership, rollback, cleanup, trimming, and schema-hash rules.
 
 See the [TSX API reference](tsx-api.md) for application behavior and current control limitations,
 and the [compatibility and support policy](support-policy.md) for versioning rules.
