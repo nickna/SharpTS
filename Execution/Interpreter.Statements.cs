@@ -745,6 +745,7 @@ public partial class Interpreter
 
         IEnumerable<string> keys = obj switch
         {
+            SharpTSProxy proxy => proxy.TrapOwnEnumerableKeys(this),
             // Own enumerable keys only, hiding boxed-primitive internal slots and
             // honoring enumerability — consistent with Object.keys (#475).
             SharpTSObject o => o.OwnEnumerableKeys(),

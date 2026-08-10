@@ -630,6 +630,137 @@ public class ArrayMethodTests
         Assert.Equal("true\nfalse\nx\nx\nfalse\ntrue\n", output);
     }
 
+    [Theory, InterpretedOnlyData]
+    public void Array_CopyWithin_IsGenericAndPreservesHoles(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "first", 2: "third", length: 4 };
+            object.copyWithin = Array.prototype.copyWithin;
+            console.log(object.copyWithin(1, 0, 3) === object);
+            console.log(object[0]);
+            console.log(object[1]);
+            console.log(2 in object);
+            console.log(object[3]);
+
+            const overlapping: any = { 0: "a", 1: "b", 2: "c", length: 3 };
+            Array.prototype.copyWithin.call(overlapping, 1, 0);
+            console.log(overlapping[0]);
+            console.log(overlapping[1]);
+            console.log(overlapping[2]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\nfirst\nfirst\nfalse\nthird\na\na\nb\n", output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_CustomPrototypeSuppliesInheritedIndexes(ExecutionMode mode)
+    {
+        var source = """
+            const prototype: any = ["zero", "one", "two"];
+            const array: any = [];
+            array.length = 3;
+            Object.setPrototypeOf(array, prototype);
+            console.log(Object.getPrototypeOf(array) === prototype);
+            console.log(1 in array);
+            console.log(array[1]);
+            array.copyWithin = Array.prototype.copyWithin;
+            array.copyWithin(0, 1, 3);
+            console.log(array[0]);
+            console.log(array[1]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\none\none\ntwo\n", output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_LengthGetterAbruptCompletionPreservesValue(ExecutionMode mode)
+    {
+        var source = """
+            function Test262Error() {
+                this.message = "boom";
+            }
+            Test262Error.prototype.name = "Test262Error";
+            Test262Error.prototype.constructor = Test262Error;
+
+            function reportsExpectedError(callback: any) {
+                try {
+                    callback();
+                } catch (error) {
+                    console.log(error.constructor === Test262Error);
+                }
+            }
+
+            const object: any = {};
+            Object.defineProperty(object, "length", {
+                get: function() {
+                    throw new Test262Error();
+                }
+            });
+            reportsExpectedError(function() {
+                Array.prototype.copyWithin.call(object);
+            });
+
+            const valueOfObject: any = {
+                length: {
+                    valueOf: function() {
+                        throw new Test262Error();
+                    }
+                }
+            };
+            reportsExpectedError(function() {
+                Array.prototype.copyWithin.call(valueOfObject);
+            });
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Splice_MutatesGenericSparseReceivers(ExecutionMode mode)
+    {
+        var source = """
+            const shrinking: any = { 0: "a", 2: "c", 3: "d", length: 4 };
+            const removed = Array.prototype.splice.call(shrinking, 1, 2, "x");
+            console.log(removed.length);
+            console.log(0 in removed, 1 in removed, removed[1]);
+            console.log(shrinking.length, shrinking[0], shrinking[1], shrinking[2]);
+            console.log(3 in shrinking);
+
+            const growing: any = { 0: "a", 1: "b", length: 2 };
+            Array.prototype.splice.call(growing, 0, 0, "x", "y");
+            console.log(growing.length, growing[0], growing[1], growing[2], growing[3]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "2\nfalse true c\n3 a x d\nfalse\n4 x y a b\n",
+            output);
+    }
+
+    [Theory, InterpretedOnlyData]
+    public void Array_Sort_MutatesGenericSparseReceivers(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = { 0: "b", 2: undefined, 3: "a", length: 4 };
+            const result = Array.prototype.sort.call(object);
+            console.log(result === object);
+            console.log(object[0], object[1], object[2]);
+            console.log(2 in object, 3 in object);
+
+            try {
+                Array.prototype.sort.call({ length: 0 }, null);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\na b undefined\ntrue false\ntrue\n", output);
+    }
+
     [Theory, ModeData]
     public void Array_Reverse_ReversesInPlace(ExecutionMode mode)
     {

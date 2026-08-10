@@ -772,7 +772,7 @@ public partial class Interpreter
 
     /// <summary>
     /// ECMA-262 §25.5.2.2 SerializeJSONProperty step 4: coerce a boxed
-    /// Number/String/Boolean wrapper to the primitive JSON serializes. Number→
+    /// Number/String/Boolean/BigInt wrapper to the primitive JSON serializes. Number→
     /// ToNumber, String→ToString (both via <see cref="ToPrimitive"/>, so a user
     /// override of valueOf/toString is honored — #574); Boolean→its
     /// [[BooleanData]] (no coercion per spec). Returns false for any non-wrapper.
@@ -793,6 +793,9 @@ public partial class Interpreter
                 primitive = sp as string ?? Stringify(sp);
                 return true;
             case "Boolean":
+                primitive = obj.GetProperty("__primitiveValue");
+                return true;
+            case "BigInt":
                 primitive = obj.GetProperty("__primitiveValue");
                 return true;
             default:
@@ -1031,7 +1034,13 @@ public partial class Interpreter
     internal bool DeleteProperty(object? obj, string name, bool strictMode = true)
     {
         if (obj is SharpTSProxy proxy)
-            return proxy.TrapDeleteProperty(name, this);
+        {
+            bool deleted = proxy.TrapDeleteProperty(name, this);
+            if (!deleted && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot delete property '{name}' through proxy"));
+            return deleted;
+        }
 
         return obj switch
         {
@@ -1094,7 +1103,11 @@ public partial class Interpreter
         if (obj is SharpTSProxy proxy)
         {
             string proxyKey = key is SharpTSSymbol ? key.ToString()! : Stringify(key);
-            return proxy.TrapDeleteProperty(proxyKey, this);
+            bool deleted = proxy.TrapDeleteProperty(proxyKey, this);
+            if (!deleted && strictMode)
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot delete property '{proxyKey}' through proxy"));
+            return deleted;
         }
 
         // Handle symbol keys
@@ -1246,26 +1259,16 @@ public partial class Interpreter
         // Handle proxy has trap
         if (right is SharpTSProxy proxy)
         {
-            string proxyKey = left is SharpTSSymbol ? left.ToString()! : (left?.ToString() ?? "");
-            return proxy.TrapHas(proxyKey, this);
+            return left is SharpTSSymbol proxySymbol
+                ? proxy.TrapHas(proxySymbol, this)
+                : proxy.TrapHas(left?.ToString() ?? "", this);
         }
 
         // Handle symbol keys specially
         if (left is SharpTSSymbol symbol)
         {
-            if (right is SharpTSObject symObj)
-            {
-                return symObj.HasSymbolProperty(symbol);
-            }
-            if (right is SharpTSInstance symInst)
-            {
-                return symInst.HasSymbolProperty(symbol);
-            }
-            // Symbols can't be in arrays or other types
-            if (right is SharpTSArray)
-            {
-                return false;
-            }
+            if (right is SharpTSObject or SharpTSInstance or SharpTSArray)
+                return HasSymbolProperty(right, symbol);
             throw new InterpreterException("'in' operator requires an object on the right side.");
         }
 
@@ -1273,24 +1276,17 @@ public partial class Interpreter
 
         if (right is SharpTSObject obj)
         {
-            return obj.HasProperty(key);
+            return HasProperty(obj, key);
         }
         if (right is SharpTSInstance instance)
         {
-            return instance.HasProperty(key);
+            return HasProperty(instance, key);
         }
         if (right is SharpTSArray arr)
         {
-            // `i in arr` is false for holes per ECMA-262 HasProperty. A length-5
-            // array with a[2] missing returns false for `"2" in arr` but true for
-            // `"0" in arr` (present).
-            if (key == "length") return true;
-            if (double.TryParse(key, out double index))
-            {
-                int i = (int)index;
-                return arr.HasIndex(i);
-            }
-            return arr.HasNamedProperty(key);
+            // Route through the shared HasProperty operation so holes remain
+            // absent while inherited indexed and named properties participate.
+            return HasProperty(arr, key);
         }
 
         throw new InterpreterException("'in' operator requires an object on the right side.");

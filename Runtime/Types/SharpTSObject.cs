@@ -17,10 +17,17 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly Dictionary<string, object?> _fields = fields;
+    private readonly List<string> _stringPropertyOrder = [.. fields.Keys];
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
     private readonly List<SharpTSSymbol> _symbolPropertyOrder = [];
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
         _symbolAccessors;
+
+    /// <summary>
+    /// True only for runtime-created boxed primitive objects. Their marker
+    /// fields model internal slots and must not appear as guest properties.
+    /// </summary>
+    internal bool IsPrimitiveWrapper { get; init; }
     private Dictionary<SharpTSSymbol, PropertyDescriptorFlags>? _symbolDescriptors;
     private Dictionary<string, ISharpTSCallable>? _getters;
     private Dictionary<string, ISharpTSCallable>? _setters;
@@ -241,6 +248,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
+        if (!exists) _stringPropertyOrder.Add(name);
         _fields[name] = value;
     }
 
@@ -298,6 +306,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
+        if (!exists) _stringPropertyOrder.Add(name);
         _fields[name] = value;
     }
 
@@ -333,14 +342,20 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             SloppyModeWarnings.Warn("delete from frozen/sealed", $"Delete from frozen/sealed object property '{name}' returns false");
             return false;
         }
-        return RemoveOwnProperty(name);
+        bool deleted = RemoveOwnProperty(name);
+        if (!deleted && strictMode)
+        {
+            throw StrictModeErrors.TypeError(
+                $"Cannot delete non-configurable property '{name}'");
+        }
+        return deleted;
     }
 
     /// <summary>
     /// Removes an own property (data OR accessor) and its descriptor, honoring
     /// configurability. Returns true when something was removed, false when a
-    /// present non-configurable property blocks the delete (or nothing matched,
-    /// preserving the legacy absent → false result). Accessors live in
+    /// present non-configurable property blocks the delete. Deleting an absent
+    /// property succeeds, as required by OrdinaryDelete. Accessors live in
     /// <c>_getters</c>/<c>_setters</c>, so a getter-only property (e.g.
     /// RegExp.prototype.global) is now deletable. The configurability check
     /// relies on correct ToBoolean attribute coercion (interpreter-aware
@@ -348,15 +363,18 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     private bool RemoveOwnProperty(string name)
     {
+        bool present = _fields.ContainsKey(name) || IsAccessorProperty(name);
+        if (!present) return true;
         if (_descriptors != null && _descriptors.TryGetValue(name, out var flags)
             && flags.HasExplicitDescriptor && !flags.Configurable)
             return false;
-        bool removed = _fields.Remove(name);
-        if (_getters?.Remove(name) == true) removed = true;
-        if (_setters?.Remove(name) == true) removed = true;
-        if (_accessorProperties?.Remove(name) == true) removed = true;
-        if (removed) _descriptors?.Remove(name);
-        return removed;
+        _fields.Remove(name);
+        _getters?.Remove(name);
+        _setters?.Remove(name);
+        _accessorProperties?.Remove(name);
+        _descriptors?.Remove(name);
+        _stringPropertyOrder.Remove(name);
+        return true;
     }
 
     public bool HasProperty(string name)
@@ -374,6 +392,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void DefineGetter(string name, ISharpTSCallable getter)
     {
+        if (!_fields.ContainsKey(name) && !IsAccessorProperty(name))
+            _stringPropertyOrder.Add(name);
         _accessorProperties ??= [];
         _accessorProperties.Add(name);
         _getters ??= new Dictionary<string, ISharpTSCallable>();
@@ -385,6 +405,8 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public void DefineSetter(string name, ISharpTSCallable setter)
     {
+        if (!_fields.ContainsKey(name) && !IsAccessorProperty(name))
+            _stringPropertyOrder.Add(name);
         _accessorProperties ??= [];
         _accessorProperties.Add(name);
         _setters ??= new Dictionary<string, ISharpTSCallable>();
@@ -739,12 +761,24 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return false;
         }
 
+        if (!hasExisting)
+            _stringPropertyOrder.Add(name);
+
         // Store the descriptor flags
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
+        bool writable = descriptor.HasWritable
+            ? descriptor.Writable
+            : hasExisting ? existingFlags.Writable : false;
+        bool enumerable = descriptor.HasEnumerable
+            ? descriptor.Enumerable
+            : hasExisting ? existingFlags.Enumerable : false;
+        bool configurable = descriptor.HasConfigurable
+            ? descriptor.Configurable
+            : hasExisting ? existingFlags.Configurable : false;
         _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
-            descriptor.Writable,
-            descriptor.Enumerable,
-            descriptor.Configurable
+            writable,
+            enumerable,
+            configurable
         );
 
         // ECMA-262 §10.1.6.3 classification. SharpTSObject represents an accessor
@@ -809,7 +843,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// Object/callable identity is reference-based; numbers additionally keep
     /// NaN equal to itself and distinguish positive from negative zero.
     /// </summary>
-    private static bool SameValue(object? left, object? right)
+    internal static bool SameValue(object? left, object? right)
     {
         if (ReferenceEquals(left, right)) return true;
         if (left is double ld && right is double rd)
@@ -853,7 +887,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 HasGet = true,
                 HasSet = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
         else
@@ -862,9 +898,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return new SharpTSPropertyDescriptor
             {
                 Value = fieldValue,
+                HasValue = true,
                 Writable = flags.Writable,
+                HasWritable = true,
                 Enumerable = flags.Enumerable,
-                Configurable = flags.Configurable
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
             };
         }
     }
@@ -943,19 +983,63 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal static bool IsInternalSlot(string key) => key is "__primitiveType" or "__primitiveValue";
 
     /// <summary>
-    /// Own enumerable string-keyed property names: data fields first, followed by
-    /// accessor properties, honoring per-property enumerability.
+    /// Own enumerable string-keyed property names in ECMA-262 OwnPropertyKeys
+    /// order.
     /// </summary>
     internal IEnumerable<string> OwnEnumerableKeys()
     {
-        foreach (var key in _fields.Keys)
-            if (GetPropertyFlags(key).Enumerable)
-                yield return key;
-        if (_accessorProperties == null) yield break;
-        foreach (var key in _accessorProperties)
+        foreach (string key in OwnVisibleStringKeys())
             if (GetPropertyFlags(key).Enumerable)
                 yield return key;
     }
+
+    internal IEnumerable<string> OwnVisibleStringKeys()
+        => IsPrimitiveWrapper
+            ? OwnStringKeys().Where(key => !IsInternalSlot(key))
+            : OwnStringKeys();
+
+    /// <summary>
+    /// All own string-keyed property names in ECMA-262 OwnPropertyKeys order:
+    /// canonical array indices ascending, then other strings in creation order.
+    /// Data/accessor redefinitions keep their original position.
+    /// </summary>
+    internal IEnumerable<string> OwnStringKeys()
+    {
+        var indices = new List<(uint Index, string Key)>();
+        foreach (string key in _stringPropertyOrder)
+        {
+            if (!HasOwnStringProperty(key))
+                continue;
+            if (TryGetArrayIndex(key, out uint index))
+            {
+                indices.Add((index, key));
+            }
+        }
+        indices.Sort(static (left, right) => left.Index.CompareTo(right.Index));
+        foreach (var entry in indices)
+            yield return entry.Key;
+
+        foreach (string key in _stringPropertyOrder)
+        {
+            if (!HasOwnStringProperty(key))
+                continue;
+            if (TryGetArrayIndex(key, out _))
+                continue;
+            yield return key;
+        }
+    }
+
+    private bool HasOwnStringProperty(string name)
+        => _fields.ContainsKey(name) || IsAccessorProperty(name);
+
+    private static bool TryGetArrayIndex(string key, out uint index)
+        => uint.TryParse(
+                key,
+                System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out index)
+            && index < uint.MaxValue
+            && key == index.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     public override string ToString() => $"{{ {string.Join(", ", _fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
 }

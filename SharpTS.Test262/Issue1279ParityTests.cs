@@ -1439,6 +1439,1423 @@ public sealed class Issue1279ParityTests
     public void Object_enumeration_methods_omit_inherited_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void Object_keys_returns_integer_indices_before_creation_ordered_strings()
+        => AssertPass(
+            "built-ins/Object/keys/return-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_keys_observes_proxy_traps_in_spec_order()
+        => AssertPass(
+            "built-ins/Object/keys/property-traps-order-with-proxied-array.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_entries_returns_integer_indices_before_creation_ordered_strings()
+        => AssertPass(
+            "built-ins/Object/entries/return-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_values_uses_the_snapshotted_spec_key_order()
+        => AssertPass(
+            "built-ins/Object/values/return-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Object/entries/order-after-define-property-with-function.js")]
+    [InlineData("built-ins/Object/entries/order-after-define-property.js")]
+    [InlineData("built-ins/Object/keys/order-after-define-property-with-function.js")]
+    [InlineData("built-ins/Object/keys/order-after-define-property.js")]
+    [InlineData("built-ins/Object/values/order-after-define-property.js")]
+    public void Object_enumeration_preserves_key_creation_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_passes_the_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/defineProperty/trap-is-null-target-is-proxy.js")]
+    [InlineData("built-ins/Proxy/defineProperty/trap-is-undefined-target-is-proxy.js")]
+    [InlineData("built-ins/Proxy/defineProperty/trap-is-undefined.js")]
+    public void Proxy_defineProperty_forwards_missing_traps(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_boolean_coerces_false_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/trap-return-is-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_rejects_additions_to_nonextensible_targets()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/targetdesc-undefined-target-is-not-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_rejects_phantom_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/targetdesc-undefined-not-configurable-descriptor.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_cannot_hide_configurable_target_properties()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/targetdesc-configurable-desc-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor.js")]
+    [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-compatible-descriptor-not-configurable-target.js")]
+    [InlineData("built-ins/Proxy/defineProperty/targetdesc-not-configurable-writable-desc-not-writable.js")]
+    public void Proxy_defineProperty_enforces_target_descriptor_invariants(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_allows_compatible_target_updates()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/return-boolean-and-define-target.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_defineProperty_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/defineProperty/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_passes_the_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/call-parameters-object-keys.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/call-parameters-object-getownpropertynames.js")]
+    [InlineData("built-ins/Proxy/ownKeys/call-parameters-object-getownpropertysymbols.js")]
+    public void Proxy_ownKeys_drives_own_property_introspection(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/trap-is-missing-target-is-proxy.js")]
+    [InlineData("built-ins/Proxy/ownKeys/trap-is-null-target-is-proxy.js")]
+    [InlineData("built-ins/Proxy/ownKeys/trap-is-undefined-target-is-proxy.js")]
+    [InlineData("built-ins/Proxy/ownKeys/trap-is-undefined.js")]
+    public void Proxy_ownKeys_forwards_missing_traps(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_rejects_non_object_results()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/return-not-list-object-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-array.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-boolean.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-null.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-number.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-object.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-type-throws-undefined.js")]
+    public void Proxy_ownKeys_rejects_non_property_key_entries(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/return-duplicate-entries-throws.js")]
+    [InlineData("built-ins/Proxy/ownKeys/return-duplicate-symbol-entries-throws.js")]
+    public void Proxy_ownKeys_rejects_duplicate_property_keys(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_requires_nonconfigurable_target_keys()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/extensible-return-trap-result-absent-not-configurable-keys.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_allows_all_nonconfigurable_target_keys()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/return-all-non-configurable-keys.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_ownKeys_allows_extensible_target_variations()
+        => AssertPass(
+            "built-ins/Proxy/ownKeys/extensible-return-trap-result.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Proxy/ownKeys/not-extensible-missing-keys-throws.js")]
+    [InlineData("built-ins/Proxy/ownKeys/not-extensible-new-keys-throws.js")]
+    [InlineData("built-ins/Proxy/ownKeys/not-extensible-return-keys.js")]
+    public void Proxy_ownKeys_matches_nonextensible_target_keys(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_accepts_undefined_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_accepts_missing_target_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined-targetdesc-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_primitive_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-type-is-not-object-nor-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_invalid_descriptors()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-is-invalid-descriptor.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_hidden_properties_on_fixed_targets()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined-target-is-not-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_hidden_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/result-is-undefined-targetdesc-is-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_falsely_frozen_writable_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-is-not-configurable-not-writable-targetdesc-is-writable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_falsely_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-is-not-configurable-targetdesc-is-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_rejects_phantom_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-is-not-configurable-targetdesc-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_returns_complete_configurable_descriptors()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-return-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getOwnPropertyDescriptor_returns_complete_fixed_descriptors()
+        => AssertPass(
+            "built-ins/Proxy/getOwnPropertyDescriptor/resultdesc-return-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_accepts_custom_prototypes_for_extensible_targets()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/extensible-target-return-handlerproto.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_supports_instanceof_custom_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/instanceof-custom-return-accepted.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_instanceof_lies_for_fixed_targets()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/instanceof-target-not-extensible-not-same-proto-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_mismatched_fixed_target_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/not-extensible-not-same-proto-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_accepts_matching_fixed_target_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/not-extensible-same-proto.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_boolean_results()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-result-neither-object-nor-null-throws-boolean.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_numeric_results()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-result-neither-object-nor-null-throws-number.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_string_results()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-result-neither-object-nor-null-throws-string.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_symbol_results()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-result-neither-object-nor-null-throws-symbol.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_getPrototypeOf_rejects_undefined_results()
+        => AssertPass(
+            "built-ins/Proxy/getPrototypeOf/trap-result-neither-object-nor-null-throws-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_boolean_coerces_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/return-is-boolean.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_rejects_results_different_from_target()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/return-is-different-from-target.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_accepts_results_matching_target()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/return-same-result-from-target.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_isExtensible_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/isExtensible/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_rejects_false_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/return-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_rejects_extensible_target_lies()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/return-true-target-is-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_accepts_nonextensible_targets()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/return-true-target-is-not-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_preventExtensions_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/preventExtensions/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_observes_internal_call_order()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/internals-call-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_rejects_fixed_target_prototype_lies()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/not-extensible-target-not-same-target-prototype.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_accepts_matching_fixed_target_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/not-extensible-target-same-target-prototype.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_propagates_trap_lookup_errors()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/return-abrupt-from-get-trap.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_propagates_target_extensibility_errors()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/return-abrupt-from-isextensible-target.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_propagates_target_prototype_errors()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/return-abrupt-from-target-getprototypeof.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/return-abrupt-from-trap.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_coerces_false_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/toboolean-trap-result-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_coerces_truthy_results_for_extensible_targets()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/toboolean-trap-result-true-target-is-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_forwards_undefined_and_null_traps()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/trap-is-undefined-or-null.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_setPrototypeOf_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/setPrototypeOf/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_rejects_nonconfigurable_target_properties()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/targetdesc-is-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_preserves_false_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/boolean-trap-result-boolean-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_preserves_true_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/boolean-trap-result-boolean-true.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_allows_false_results_in_sloppy_code()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/return-false-not-strict.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_throws_for_false_results_in_strict_code()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/return-false-strict.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_rejects_hidden_fixed_target_properties()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/targetdesc-is-configurable-target-is-not-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_accepts_absent_target_properties()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/targetdesc-is-undefined-return-true.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_forwards_undefined_traps_in_sloppy_code()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/trap-is-undefined-not-strict.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_forwards_undefined_traps_in_strict_code()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/trap-is-undefined-strict.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_deleteProperty_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/deleteProperty/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/has/call-in.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_rejects_hidden_nonconfigurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/has/return-false-targetdesc-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_handles_indexed_prototype_queries()
+        => AssertPass(
+            "built-ins/Proxy/has/call-in-prototype-index.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_handles_named_prototype_queries()
+        => AssertPass(
+            "built-ins/Proxy/has/call-in-prototype.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_handles_object_create_prototypes()
+        => AssertPass(
+            "built-ins/Proxy/has/call-object-create.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/has/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_rejects_hidden_properties_on_fixed_targets()
+        => AssertPass(
+            "built-ins/Proxy/has/return-false-target-not-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_allows_hidden_configurable_properties()
+        => AssertPass(
+            "built-ins/Proxy/has/return-false-target-prop-exists.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_propagates_abrupt_in_traps()
+        => AssertPass(
+            "built-ins/Proxy/has/return-is-abrupt-in.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_accepts_true_results_for_existing_properties()
+        => AssertPass(
+            "built-ins/Proxy/has/return-true-target-prop-exists.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_accepts_true_results_for_phantom_properties()
+        => AssertPass(
+            "built-ins/Proxy/has/return-true-without-same-target-prop.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/has/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/has/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/has/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/has/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_has_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/has/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/get/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_rejects_fixed_data_property_lies()
+        => AssertPass(
+            "built-ins/Proxy/get/not-same-value-configurable-false-writable-false-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_rejects_fixed_accessor_lies()
+        => AssertPass(
+            "built-ins/Proxy/get/accessor-get-is-undefined-throws.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/get/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/get/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_accepts_accessor_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/get/return-trap-result-accessor-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_accepts_writable_fixed_data_results()
+        => AssertPass(
+            "built-ins/Proxy/get/return-trap-result-configurable-false-writable-true.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_accepts_configurable_accessor_results()
+        => AssertPass(
+            "built-ins/Proxy/get/return-trap-result-configurable-true-assessor-get-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_accepts_configurable_readonly_data_results()
+        => AssertPass(
+            "built-ins/Proxy/get/return-trap-result-configurable-true-writable-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_accepts_same_value_for_fixed_data_properties()
+        => AssertPass(
+            "built-ins/Proxy/get/return-trap-result-same-value-configurable-false-writable-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_returns_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/get/return-trap-result.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_returns_undefined_for_absent_forwarded_properties()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-undefined-no-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_forwards_explicit_receivers()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-undefined-receiver.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_get_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/get/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/set/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_rejects_changes_to_fixed_data_properties()
+        => AssertPass(
+            "built-ins/Proxy/set/target-property-is-not-configurable-not-writable-not-equal-to-v.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_preserves_false_boolean_results()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-boolean-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_coerces_null_trap_results_to_false()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-null-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_coerces_zero_trap_results_to_false()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-number-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_coerces_empty_string_trap_results_to_false()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-string-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_coerces_undefined_trap_results_to_false()
+        => AssertPass(
+            "built-ins/Proxy/set/boolean-trap-result-is-false-undefined-return-false.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_dispatches_dunder_proto_prototype_writes()
+        => AssertPass(
+            "built-ins/Proxy/set/call-parameters-prototype-dunder-proto.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_dispatches_indexed_prototype_writes()
+        => AssertPass(
+            "built-ins/Proxy/set/call-parameters-prototype-index.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_dispatches_named_prototype_writes()
+        => AssertPass(
+            "built-ins/Proxy/set/call-parameters-prototype.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/set/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/set/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_accepts_configurable_accessor_lies()
+        => AssertPass(
+            "built-ins/Proxy/set/return-true-target-property-accessor-is-configurable-set-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_accepts_fixed_accessors_with_setters()
+        => AssertPass(
+            "built-ins/Proxy/set/return-true-target-property-accessor-is-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_accepts_fixed_writable_data_properties()
+        => AssertPass(
+            "built-ins/Proxy/set/return-true-target-property-is-not-configurable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_accepts_same_value_for_fixed_data_properties()
+        => AssertPass(
+            "built-ins/Proxy/set/return-true-target-property-is-not-writable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_rejects_fixed_accessors_without_setters()
+        => AssertPass(
+            "built-ins/Proxy/set/target-property-is-accessor-not-configurable-set-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_repeated_indexed_writes()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-missing-receiver-multiple-calls-index.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_repeated_named_writes()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-missing-receiver-multiple-calls.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_respects_explicit_null_receivers()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-null-receiver.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_undefined_traps_for_new_properties()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-undefined-no-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_set_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/set/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_returns_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/apply/call-result.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/apply/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/apply/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/apply/return-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_forwards_missing_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-missing-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_forwards_null_traps()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-null.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_forwards_null_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-null-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_forwards_absent_apply_properties()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-undefined-no-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_forwards_undefined_traps_to_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-undefined-target-is-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_apply_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/apply/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_returns_object_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/call-result.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_passes_spec_trap_arguments()
+        => AssertPass(
+            "built-ins/Proxy/construct/call-parameters.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_passes_new_target_to_traps()
+        => AssertPass(
+            "built-ins/Proxy/construct/call-parameters-new-target.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_revoked_proxies()
+        => AssertPass(
+            "built-ins/Proxy/construct/null-handler.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_propagates_abrupt_trap_completion()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-is-abrupt.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_boolean_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-boolean.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_null_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-null.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_number_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-number.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_string_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-string.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_symbol_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-symbol.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_undefined_trap_results()
+        => AssertPass(
+            "built-ins/Proxy/construct/return-not-object-throws-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_rejects_noncallable_traps()
+        => AssertPass(
+            "built-ins/Proxy/construct/trap-is-not-callable.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_forwards_null_traps()
+        => AssertPass(
+            "built-ins/Proxy/construct/trap-is-null.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_forwards_absent_construct_properties()
+        => AssertPass(
+            "built-ins/Proxy/construct/trap-is-undefined-no-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_construct_forwards_undefined_traps()
+        => AssertPass(
+            "built-ins/Proxy/construct/trap-is-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_exposes_the_builtin_function()
+        => AssertPass(
+            "built-ins/Proxy/revocable/builtin.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_rejects_revoked_handlers()
+        => AssertPass(
+            "built-ins/Proxy/revocable/handler-is-revoked-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_has_standard_length()
+        => AssertPass(
+            "built-ins/Proxy/revocable/length.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_has_standard_name()
+        => AssertPass(
+            "built-ins/Proxy/revocable/name.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_is_not_a_constructor()
+        => AssertPass(
+            "built-ins/Proxy/revocable/not-a-constructor.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_returns_a_proxy()
+        => AssertPass(
+            "built-ins/Proxy/revocable/proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_function_is_extensible()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revocation-function-extensible.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_function_has_zero_length()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revocation-function-length.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_function_has_empty_name()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revocation-function-name.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_function_is_not_a_constructor()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revocation-function-not-a-constructor.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_function_has_no_prototype()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revocation-function-prototype.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_function_has_standard_property_order()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revocation-function-property-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_returns_undefined()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revoke-returns-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_repeated_revocation_returns_undefined()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revoke-consecutive-call-returns-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocation_disables_proxy_operations()
+        => AssertPass(
+            "built-ins/Proxy/revocable/revoke.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_accepts_revoked_proxy_targets()
+        => AssertPass(
+            "built-ins/Proxy/revocable/target-is-revoked-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_revocable_preserves_revoked_callable_targets()
+        => AssertPass(
+            "built-ins/Proxy/revocable/target-is-revoked-function-proxy.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_creates_proxy_objects()
+        => AssertPass(
+            "built-ins/Proxy/constructor.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_boolean_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-boolean.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_null_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-null.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_number_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-number.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_string_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-string.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_symbol_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-symbol.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_undefined_handlers()
+        => AssertPass(
+            "built-ins/Proxy/create-handler-not-object-throw-undefined.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_boolean_targets()
+        => AssertPass(
+            "built-ins/Proxy/create-target-not-object-throw-boolean.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_null_targets()
+        => AssertPass(
+            "built-ins/Proxy/create-target-not-object-throw-null.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_number_targets()
+        => AssertPass(
+            "built-ins/Proxy/create-target-not-object-throw-number.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_string_targets()
+        => AssertPass(
+            "built-ins/Proxy/create-target-not-object-throw-string.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Proxy_constructor_rejects_symbol_targets()
+        => AssertPass(
+            "built-ins/Proxy/create-target-not-object-throw-symbol.js",
+            Test262ExecutionMode.Interpreted);
+
     [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-623.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-624.js")]
@@ -1473,6 +2890,18 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Object_getOwnPropertyDescriptors_preserves_source_key_order()
+        => AssertPass(
+            "built-ins/Object/getOwnPropertyDescriptors/order-after-define-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Object_getOwnPropertyDescriptors_preserves_proxy_key_order()
+        => AssertPass(
+            "built-ins/Object/getOwnPropertyDescriptors/proxy-no-ownkeys-returned-keys-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Object_fromEntries_rejects_an_omitted_iterable()
         => AssertPassInBothModes("built-ins/Object/fromEntries/requires-argument.js");
 
@@ -1497,6 +2926,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Fact]
+    public void Object_getOwnPropertyNames_preserves_creation_order_on_redefinition()
+        => AssertPass(
+            "built-ins/Object/getOwnPropertyNames/order-after-define-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void Object_getOwnPropertySymbols_rejects_nullish_targets()
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertySymbols/non-object-argument-invalid.js");
@@ -1505,6 +2940,38 @@ public sealed class Issue1279ParityTests
     public void Object_getOwnPropertySymbols_preserves_creation_order()
         => AssertPassInBothModes(
             "built-ins/Object/getOwnPropertySymbols/order-after-define-property.js");
+
+    [Fact]
+    public void Reflect_ownKeys_preserves_creation_order_after_redefinition()
+        => AssertPass(
+            "built-ins/Reflect/ownKeys/order-after-define-property.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Reflect/ownKeys/return-on-corresponding-order-large-index.js")]
+    [InlineData("built-ins/Reflect/ownKeys/return-on-corresponding-order.js")]
+    [InlineData("built-ins/Reflect/ownKeys/return-array-with-own-keys-only.js")]
+    [InlineData("built-ins/Reflect/ownKeys/return-empty-array.js")]
+    public void Reflect_ownKeys_returns_spec_ordered_property_keys(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Reflect_ownKeys_includes_non_enumerable_array_and_object_keys()
+        => AssertPass(
+            "built-ins/Reflect/ownKeys/return-non-enumerable-keys.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Reflect/ownKeys/target-is-not-object-throws.js")]
+    [InlineData("built-ins/Reflect/ownKeys/target-is-symbol-throws.js")]
+    public void Reflect_ownKeys_rejects_primitive_targets(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Reflect_ownKeys_propagates_abrupt_proxy_traps()
+        => AssertPass(
+            "built-ins/Reflect/ownKeys/return-abrupt-from-result.js",
+            Test262ExecutionMode.Interpreted);
 
     [Theory]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-0-3.js")]
@@ -1702,6 +3169,26 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A1.5_T1.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2.2_T5.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T6.js")]
+    public void Array_slice_coerces_bounds_and_preserves_generic_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/slice/15.4.4.10-10-c-ii-1.js")]
+    [InlineData("built-ins/Array/prototype/slice/call-with-boolean.js")]
+    public void Array_slice_creates_own_result_properties(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/toLocaleString/invoke-element-tolocalestring.js")]
+    [InlineData("built-ins/Array/prototype/toLocaleString/primitive_this_value_getter.js")]
+    [InlineData("built-ins/Array/prototype/toLocaleString/primitive_this_value.js")]
+    public void Array_toLocaleString_invokes_element_methods(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSorted/this-value-boolean.js")]
     [InlineData("built-ins/Array/prototype/toSpliced/this-value-boolean.js")]
@@ -1716,6 +3203,24 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/with/length-increased-while-iterating.js")]
     public void Array_copying_methods_cache_source_length(string relativePath)
         => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/toReversed/get-descending-order.js")]
+    [InlineData("built-ins/Array/prototype/toReversed/length-decreased-while-iterating.js")]
+    public void Array_toReversed_reads_captured_indices_in_descending_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_toSpliced_clamps_generic_length_before_deleting()
+        => AssertPass(
+            "built-ins/Array/prototype/toSpliced/length-clamped-to-2pow53minus1.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void JSON_stringify_calls_bigint_toJSON_before_replacer()
+        => AssertPass(
+            "built-ins/JSON/stringify/value-bigint-order.js",
+            Test262ExecutionMode.Interpreted);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/toReversed/length-exceeding-array-length-limit.js")]
@@ -1802,6 +3307,88 @@ public sealed class Issue1279ParityTests
     public void Array_splice_coerces_delete_count_with_number_hint()
         => AssertPassInBothModes(
             "built-ins/Array/prototype/splice/S15.4.4.12_A2.2_T5.js");
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T3.js")]
+    public void Array_splice_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/splice/length-and-deleteCount-exceeding-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/splice/length-exceeding-integer-limit-shrink-array.js")]
+    public void Array_splice_supports_max_safe_generic_lengths(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/splice/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/splice/clamps-length-to-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/splice/length-near-integer-limit-grow-array.js")]
+    [InlineData("built-ins/Array/prototype/splice/set_length_no_args.js")]
+    [InlineData("built-ins/Array/prototype/splice/throws-if-integer-limit-exceeded.js")]
+    public void Array_splice_handles_generic_length_edges(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A3_T2.js")]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A4_T3.js")]
+    [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A6_T2.js")]
+    public void Array_sort_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-appends-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-decreases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-deletes-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-deletes-successor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-increases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-pops-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-sets-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-sets-successor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-prototype-element.js")]
+    public void Array_sort_observes_collection_side_effects(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Fact]
+    public void Array_sort_boxes_primitive_receivers()
+        => AssertPass(
+            "built-ins/Array/prototype/sort/call-with-primitive.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-appends-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-decreases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-deletes-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-deletes-successor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-increases-length.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-pops-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-sets-predecessor.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-sets-successor.js")]
+    public void Array_sort_observes_writeback_side_effects(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/stability-5-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/stability-11-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/stability-513-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/stability-2048-elements.js")]
+    public void Array_sort_is_stable_across_input_sizes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/precise-comparefn-throws.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-prototype-accessors.js")]
+    public void Array_sort_observes_object_prototype_accessors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
     [InlineData("built-ins/Array/from/calling-from-valid-2.js")]
@@ -2890,6 +4477,12 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Fact]
+    public void JSON_parse_reviver_visits_own_keys_in_spec_order()
+        => AssertPass(
+            "built-ins/JSON/parse/reviver-call-order.js",
+            Test262ExecutionMode.Interpreted);
+
+    [Fact]
     public void JSON_reviver_preserves_nonconfigurable_array_properties_on_delete()
         => AssertPass(
             "built-ins/JSON/parse/reviver-array-non-configurable-prop-delete.js",
@@ -3194,6 +4787,26 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end.js")]
     [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-setting-property-value.js")]
     public void Array_fill_mutates_generic_receivers(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/copyWithin/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-start.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-set-target-value.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-this.js")]
+    public void Array_copyWithin_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)

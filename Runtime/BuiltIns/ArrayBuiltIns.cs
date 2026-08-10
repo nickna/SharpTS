@@ -39,7 +39,10 @@ public static class ArrayBuiltIns
             .MethodV2("join", 0, 1, specLength: 1, JoinV2)
             // Array.prototype.toString = join() with ","; distinct from the debug ToString().
             .MethodV2("toString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
-            .MethodV2("toLocaleString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
+            .MethodV2(
+                "toLocaleString", 0, int.MaxValue, specLength: 0,
+                static (interp, arr, _) => RuntimeValue.FromString(
+                    ToLocaleStringArrayLike(interp, arr)))
             // Array.prototype.concat accepts any number of args (variadic).
             .MethodV2("concat", 0, int.MaxValue, specLength: 1, ConcatV2)
             .MethodV2("reverse", 0, ReverseV2)
@@ -55,7 +58,7 @@ public static class ArrayBuiltIns
             .MethodV2("with", 2, WithV2)
             .MethodV2("at", 1, AtV2)
             .MethodV2("fill", 0, 3, specLength: 1, FillV2)
-            .MethodV2("copyWithin", 1, 3, specLength: 2, CopyWithinV2)
+            .MethodV2("copyWithin", 0, 3, specLength: 2, CopyWithinV2)
             .MethodV2("entries", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateEntries(arr))))
             .MethodV2("keys", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateKeys(arr))))
             .MethodV2("values", 0, (_, arr, _) => RuntimeValue.FromObject(new SharpTSIterator(EnumerateValues(arr))))
@@ -131,40 +134,12 @@ public static class ArrayBuiltIns
         return new SharpTSArray(result);
     }
 
-    private static object? Sort(Interpreter interp, SharpTSArray arr, List<object?> args)
-    {
-        // Frozen arrays cannot be modified; silent fail (matches reverse behavior)
-        if (arr.IsFrozen) return arr;
-
-        ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
-
-        // Partition undefined to end (JS behavior)
-        var defined = new List<(object? Element, int Index)>();
-        int undefinedCount = 0;
-        for (int i = 0; i < arr.Length; i++)
-        {
-            if (IsUndefined(arr[i]))
-                undefinedCount++;
-            else
-                defined.Add((arr[i], i));
-        }
-
-        var sorted = StableSort(defined, compareFn, interp);
-
-        arr.Clear();
-        arr.AddRange(sorted);
-        for (int i = 0; i < undefinedCount; i++)
-            arr.Add(SharpTSUndefined.Instance);
-
-        return arr;
-    }
-
     private static object? ToSorted(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
         ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
 
         // Same logic but returns NEW array
-        var defined = new List<(object? Element, int Index)>();
+        var defined = new List<(object? Element, long Index)>();
         int undefinedCount = 0;
         for (int i = 0; i < arr.Length; i++)
         {
@@ -185,14 +160,14 @@ public static class ArrayBuiltIns
     /// Performs a stable sort using LINQ OrderBy (which is stable).
     /// </summary>
     private static List<object?> StableSort(
-        List<(object? Element, int Index)> items,
+        List<(object? Element, long Index)> items,
         ISharpTSCallable? compareFn,
         Interpreter interp)
     {
         if (items.Count <= 1)
             return items.Select(x => x.Element).ToList();
 
-        IEnumerable<(object? Element, int Index)> sorted;
+        IEnumerable<(object? Element, long Index)> sorted;
         if (compareFn != null)
         {
             sorted = items.OrderBy(x => x, new CompareFnComparer(compareFn, interp));
@@ -221,7 +196,7 @@ public static class ArrayBuiltIns
     /// <summary>
     /// Comparer that uses a user-provided comparison function.
     /// </summary>
-    private class CompareFnComparer : IComparer<(object? Element, int Index)>
+    private class CompareFnComparer : IComparer<(object? Element, long Index)>
     {
         private readonly ISharpTSCallable _fn;
         private readonly Interpreter _interp;
@@ -230,7 +205,7 @@ public static class ArrayBuiltIns
         public CompareFnComparer(ISharpTSCallable fn, Interpreter interp)
             => (_fn, _interp) = (fn, interp);
 
-        public int Compare((object? Element, int Index) x, (object? Element, int Index) y)
+        public int Compare((object? Element, long Index) x, (object? Element, long Index) y)
         {
             _compareArgs[0] = x.Element;
             _compareArgs[1] = y.Element;
@@ -240,8 +215,9 @@ public static class ArrayBuiltIns
             // measured ~13% SLOWER on a 100k interpreter sort — the boxed Call lets the
             // comparator body unbox lazily. Revisit only with a non-boxing comparator path.
             var result = _fn.Call(_interp, _compareArgs);
-            if (result is double d && !double.IsNaN(d) && d != 0)
-                return d < 0 ? -1 : 1;
+            double numericResult = _interp.ToNumberWithPrimitive(result);
+            if (!double.IsNaN(numericResult) && numericResult != 0)
+                return numericResult < 0 ? -1 : 1;
             // Stability tie-breaker: preserve original order
             return x.Index.CompareTo(y.Index);
         }
@@ -304,54 +280,6 @@ public static class ArrayBuiltIns
         return new SharpTSArray(deleted);
     }
 
-    private static object? ToSpliced(Interpreter interpreter, SharpTSArray arr, List<object?> args)
-    {
-        int len = arr.Length;
-
-        // toSpliced works on frozen/sealed arrays (creates new array)
-
-        // If no arguments, return a copy of the array
-        if (args.Count == 0)
-            return new SharpTSArray(new List<object?>(arr));
-
-        // Parse start with negative handling
-        int relStart = ToIntegerOrInfinityAsInt(interpreter, args[0]);
-        int actualStart = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
-
-        // Parse skipCount (deleteCount equivalent)
-        int actualSkipCount;
-        if (args.Count == 1)
-        {
-            // No skipCount argument = skip to end
-            actualSkipCount = len - actualStart;
-        }
-        else
-        {
-            int sc = ToIntegerOrInfinityAsInt(interpreter, args[1]);
-            actualSkipCount = Math.Max(0, Math.Min(sc, len - actualStart));
-        }
-
-        // Build new array: before + items + after
-        // Pre-size to avoid reallocations: before(actualStart) + inserted(args.Count-2) + after(len - actualStart - actualSkipCount)
-        int insertCount = args.Count > 2 ? args.Count - 2 : 0;
-        int afterCount = len - actualStart - actualSkipCount;
-        var result = new List<object?>(actualStart + insertCount + afterCount);
-
-        // Add elements before splice point
-        for (int i = 0; i < actualStart; i++)
-            result.Add(arr[i]);
-
-        // Add inserted elements
-        for (int i = 2; i < args.Count; i++)
-            result.Add(args[i]);
-
-        // Add elements after splice point
-        for (int i = actualStart + actualSkipCount; i < len; i++)
-            result.Add(arr[i]);
-
-        return new SharpTSArray(result);
-    }
-
     #region V2 Implementations (RuntimeValue — no boxing)
 
     private static RuntimeValue PushV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
@@ -376,18 +304,10 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromNumber(UnshiftArrayLike(interpreter, arr, items));
     }
 
-    private static RuntimeValue SliceV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        var start = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
-        var end = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : arr.Length;
-        if (start < 0) start = Math.Max(0, arr.Length + start);
-        if (end < 0) end = Math.Max(0, arr.Length + end);
-        if (start > arr.Length) start = arr.Length;
-        if (end > arr.Length) end = arr.Length;
-        if (end <= start) return RuntimeValue.FromObject(new SharpTSArray([]));
-        var sliced = arr.GetRange(start, end - start);
-        return RuntimeValue.FromObject(new SharpTSArray(new Deque<object?>(sliced)));
-    }
+    private static RuntimeValue SliceV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromObject(SliceArrayLike(
+            interpreter, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue IncludesV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
@@ -1071,6 +991,395 @@ public static class ArrayBuiltIns
         return receiver;
     }
 
+    /// <summary>
+    /// ECMA-262 23.1.3.4 generic copyWithin algorithm. The source and target
+    /// ranges are resolved from the captured length, then properties are moved
+    /// directly on the original receiver so holes, accessors, proxies, and
+    /// abrupt completions remain observable in specification order.
+    /// </summary>
+    internal static object CopyWithinArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+
+        double relativeTarget = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long target = NormalizeRelativeIndex(relativeTarget, length);
+
+        double relativeStart = args.Count > 1
+            ? ToIntegerOrInfinity(interpreter, args[1])
+            : 0;
+        long start = NormalizeRelativeIndex(relativeStart, length);
+
+        double relativeEnd = args.Count > 2 && args[2] is not SharpTSUndefined
+            ? ToIntegerOrInfinity(interpreter, args[2])
+            : length;
+        long end = NormalizeRelativeIndex(relativeEnd, length);
+
+        long count = Math.Min(end - start, length - target);
+        long direction = 1;
+        if (start < target && target < start + count)
+        {
+            direction = -1;
+            start += count - 1;
+            target += count - 1;
+        }
+
+        while (count > 0)
+        {
+            string fromKey = start.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            string toKey = target.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                interpreter.SetProperty(
+                    receiver, toKey,
+                    interpreter.GetPropertyValue(receiver, fromKey));
+            }
+            else
+            {
+                interpreter.DeleteProperty(receiver, toKey);
+            }
+
+            start += direction;
+            target += direction;
+            count--;
+        }
+
+        return receiver;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.30 sort algorithm for arrays and generic array-like
+    /// receivers. Indexed values are collected through HasProperty/Get, then
+    /// written back with strict Set/Delete operations so holes and accessors
+    /// retain their specified behavior.
+    /// </summary>
+    internal static object SortArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        ISharpTSCallable? compareFn = null;
+        if (args.Count > 0 && args[0] is not SharpTSUndefined)
+        {
+            compareFn = args[0] as ISharpTSCallable
+                ?? throw TypeError("Array.prototype.sort comparator must be callable");
+        }
+
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        var defined = new List<(object? Element, long Index)>();
+        long undefinedCount = 0;
+        for (long index = 0; index < length; index++)
+        {
+            string key = index.ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (!interpreter.HasProperty(receiver, key)) continue;
+
+            object? value = interpreter.GetPropertyValue(receiver, key);
+            if (IsUndefined(value))
+                undefinedCount++;
+            else
+                defined.Add((value, index));
+        }
+
+        List<object?> sorted = StableSort(defined, compareFn, interpreter);
+        long nextIndex = 0;
+        for (int index = 0; index < sorted.Count; index++, nextIndex++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                nextIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                sorted[index]);
+        }
+        for (long index = 0; index < undefinedCount; index++, nextIndex++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                nextIndex.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                SharpTSUndefined.Instance);
+        }
+        while (nextIndex < length)
+        {
+            interpreter.DeleteProperty(
+                receiver,
+                nextIndex.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            nextIndex++;
+        }
+
+        return receiver;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.28 generic slice algorithm. The result preserves holes,
+    /// while start/end coercion and inherited indexed reads are performed in
+    /// specification order against the original receiver.
+    /// </summary>
+    internal static SharpTSArray SliceArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        double relativeStart = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long start = NormalizeRelativeIndex(relativeStart, length);
+
+        double relativeEnd = args.Count > 1 && args[1] is not SharpTSUndefined
+            ? ToIntegerOrInfinity(interpreter, args[1])
+            : length;
+        long end = NormalizeRelativeIndex(relativeEnd, length);
+        long count = Math.Max(end - start, 0);
+        if (count > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var result = new SharpTSArray();
+        result.SetLength(count);
+        for (long index = 0; index < count; index++)
+        {
+            string key = (start + index).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, key))
+            {
+                result.Set(index, interpreter.GetPropertyValue(receiver, key));
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.33 Array.prototype.toLocaleString. Each present value is
+    /// read live and its own <c>toLocaleString</c> method is called with the
+    /// value as receiver and no forwarded locale/options arguments.
+    /// </summary>
+    internal static string ToLocaleStringArrayLike(
+        Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        var result = new System.Text.StringBuilder();
+        for (long index = 0; index < length; index++)
+        {
+            if (index > 0) result.Append(',');
+            object? element = interpreter.GetPropertyValue(
+                receiver,
+                index.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            if (element is null or SharpTSUndefined) continue;
+
+            object? method = interpreter.GetPropertyValue(element, "toLocaleString");
+            if (method is not ISharpTSCallable callable)
+                throw TypeError("Array element toLocaleString is not callable");
+            object? text = FunctionBuiltIns.CallWithThis(
+                interpreter, callable, element, []);
+            result.Append(interpreter.ToStringForBuiltInArgument(text));
+        }
+        return result.ToString();
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.33 copying reverse algorithm. Length is captured once,
+    /// then every source index is read from high to low with ordinary Get;
+    /// absent properties therefore become explicit undefined result elements.
+    /// </summary>
+    internal static SharpTSArray ToReversedArrayLike(
+        Interpreter interpreter, object receiver)
+    {
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        if (length > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var result = new SharpTSArray();
+        result.SetLength(length);
+        for (long index = 0; index < length; index++)
+        {
+            string fromKey = (length - index - 1).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            result.Set(index, interpreter.GetPropertyValue(receiver, fromKey));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.35 copying splice algorithm. It supports the full
+    /// ToLength range when most of that range is discarded, and performs live
+    /// Get operations only for values retained in the dense result.
+    /// </summary>
+    internal static SharpTSArray ToSplicedArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+        double relativeStart = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long actualStart = NormalizeRelativeIndex(relativeStart, length);
+
+        long actualSkipCount;
+        if (args.Count == 0)
+            actualSkipCount = 0;
+        else if (args.Count == 1)
+            actualSkipCount = length - actualStart;
+        else
+            actualSkipCount = (long)Math.Min(
+                Math.Max(ToIntegerOrInfinity(interpreter, args[1]), 0),
+                length - actualStart);
+
+        long insertCount = Math.Max(args.Count - 2, 0);
+        if (insertCount > MaxSafeInteger - length + actualSkipCount)
+            throw TypeError("Array.prototype.toSpliced result exceeds the maximum safe integer.");
+        long newLength = length + insertCount - actualSkipCount;
+        if (newLength > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var result = new SharpTSArray();
+        result.SetLength(newLength);
+        long destination = 0;
+        for (long source = 0; source < actualStart; source++, destination++)
+        {
+            result.Set(destination, interpreter.GetPropertyValue(
+                receiver,
+                source.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        for (int index = 2; index < args.Count; index++, destination++)
+            result.Set(destination, args[index]);
+        for (long source = actualStart + actualSkipCount;
+             source < length;
+             source++, destination++)
+        {
+            result.Set(destination, interpreter.GetPropertyValue(
+                receiver,
+                source.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// ECMA-262 23.1.3.28 generic splice algorithm. The receiver is mutated
+    /// through ordinary property operations so sparse objects, inherited
+    /// properties, accessors, proxies, and abrupt completions remain observable.
+    /// </summary>
+    internal static object SpliceArrayLike(
+        Interpreter interpreter, object receiver, IReadOnlyList<object?> args)
+    {
+        const long MaxSafeInteger = (1L << 53) - 1;
+        long length = ToLength(
+            interpreter.GetPropertyValue(receiver, "length"), interpreter);
+
+        double relativeStart = args.Count > 0
+            ? ToIntegerOrInfinity(interpreter, args[0])
+            : 0;
+        long actualStart = NormalizeRelativeIndex(relativeStart, length);
+
+        long insertCount;
+        long actualDeleteCount;
+        if (args.Count == 0)
+        {
+            insertCount = 0;
+            actualDeleteCount = 0;
+        }
+        else if (args.Count == 1)
+        {
+            insertCount = 0;
+            actualDeleteCount = length - actualStart;
+        }
+        else
+        {
+            insertCount = args.Count - 2;
+            double deleteCount = ToIntegerOrInfinity(interpreter, args[1]);
+            actualDeleteCount = (long)Math.Min(
+                Math.Max(deleteCount, 0), length - actualStart);
+        }
+
+        if (insertCount > MaxSafeInteger - length + actualDeleteCount)
+            throw TypeError("Array.prototype.splice result exceeds the maximum safe integer.");
+        if (actualDeleteCount > SharpTSArray.MaxLength)
+            throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+
+        var deleted = new SharpTSArray();
+        deleted.SetLength(actualDeleteCount);
+        for (long index = 0; index < actualDeleteCount; index++)
+        {
+            string fromKey = (actualStart + index).ToString(
+                System.Globalization.CultureInfo.InvariantCulture);
+            if (interpreter.HasProperty(receiver, fromKey))
+            {
+                deleted.Set(index, interpreter.GetPropertyValue(receiver, fromKey));
+            }
+        }
+
+        if (insertCount < actualDeleteCount)
+        {
+            for (long index = actualStart;
+                 index < length - actualDeleteCount;
+                 index++)
+            {
+                string fromKey = (index + actualDeleteCount).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                string toKey = (index + insertCount).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (interpreter.HasProperty(receiver, fromKey))
+                {
+                    interpreter.SetProperty(
+                        receiver, toKey,
+                        interpreter.GetPropertyValue(receiver, fromKey));
+                }
+                else
+                {
+                    interpreter.DeleteProperty(receiver, toKey);
+                }
+            }
+
+            for (long index = length;
+                 index > length - actualDeleteCount + insertCount;
+                 index--)
+            {
+                interpreter.DeleteProperty(
+                    receiver,
+                    (index - 1).ToString(
+                        System.Globalization.CultureInfo.InvariantCulture));
+            }
+        }
+        else if (insertCount > actualDeleteCount)
+        {
+            for (long index = length - actualDeleteCount;
+                 index > actualStart;
+                 index--)
+            {
+                string fromKey = (index + actualDeleteCount - 1).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                string toKey = (index + insertCount - 1).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (interpreter.HasProperty(receiver, fromKey))
+                {
+                    interpreter.SetProperty(
+                        receiver, toKey,
+                        interpreter.GetPropertyValue(receiver, fromKey));
+                }
+                else
+                {
+                    interpreter.DeleteProperty(receiver, toKey);
+                }
+            }
+        }
+
+        for (int index = 2; index < args.Count; index++)
+        {
+            interpreter.SetProperty(
+                receiver,
+                (actualStart + index - 2).ToString(
+                    System.Globalization.CultureInfo.InvariantCulture),
+                args[index]);
+        }
+
+        interpreter.SetProperty(
+            receiver, "length", (double)(length - actualDeleteCount + insertCount));
+        return deleted;
+    }
+
     private static long NormalizeRelativeIndex(double relativeIndex, long length)
     {
         if (double.IsNegativeInfinity(relativeIndex)) return 0;
@@ -1128,18 +1437,9 @@ public static class ArrayBuiltIns
     private static RuntimeValue ReverseV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromObject(ReverseArrayLike(interpreter, arr));
 
-    private static RuntimeValue ToReversedV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-    {
-        // ECMA-262 23.1.3.33: produces a dense array — holes are fetched via Get
-        // (returns undefined) and assigned via CreateDataPropertyOrThrow. So
-        // toReversed FILLS holes with undefined. (This is different from reverse,
-        // which preserves holes.)
-        int len = arr.Length;
-        var result = new List<object?>(len);
-        for (int i = len - 1; i >= 0; i--)
-            result.Add(arr[i]);  // user-facing read: holes become undefined
-        return RuntimeValue.FromObject(new SharpTSArray(result));
-    }
+    private static RuntimeValue ToReversedV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+        => RuntimeValue.FromObject(ToReversedArrayLike(interpreter, arr));
 
     private static RuntimeValue WithV2(Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
@@ -1174,53 +1474,14 @@ public static class ArrayBuiltIns
         return RuntimeValue.FromObject(FillArrayLike(interpreter, arr, boxedArgs));
     }
 
-    private static RuntimeValue CopyWithinV2(Interpreter _, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue CopyWithinV2(
+        Interpreter interpreter, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
     {
-        if (arr.IsFrozen)
-            return RuntimeValue.FromObject(arr);
-
-        int len = arr.Length;
-        if (len == 0) return RuntimeValue.FromObject(arr);
-
-        int relTarget = args.Length > 0 ? (int)Interpreter.ToNumber(args[0]) : 0;
-        int to = relTarget < 0 ? Math.Max(len + relTarget, 0) : Math.Min(relTarget, len);
-
-        int relStart = args.Length > 1 ? (int)Interpreter.ToNumber(args[1]) : 0;
-        int from = relStart < 0 ? Math.Max(len + relStart, 0) : Math.Min(relStart, len);
-
-        int relEnd = args.Length > 2 && !args[2].IsUndefined
-            ? (int)Interpreter.ToNumber(args[2])
-            : len;
-        int final_ = relEnd < 0 ? Math.Max(len + relEnd, 0) : Math.Min(relEnd, len);
-
-        int count = Math.Min(final_ - from, len - to);
-
-        if (count > 0)
-        {
-            // ECMA-262 23.1.3.4: if source is a hole, DELETE target (make hole).
-            // Otherwise copy the value. Order (forward/backward) matters only when
-            // source and dest ranges overlap.
-            if (from < to && to < from + count)
-            {
-                for (int i = count - 1; i >= 0; i--)
-                    CopyOrHole(arr, from + i, to + i);
-            }
-            else
-            {
-                for (int i = 0; i < count; i++)
-                    CopyOrHole(arr, from + i, to + i);
-            }
-        }
-
-        return RuntimeValue.FromObject(arr);
-    }
-
-    private static void CopyOrHole(SharpTSArray arr, int fromIdx, int toIdx)
-    {
-        if (arr.HasIndex(fromIdx))
-            arr[toIdx] = arr[fromIdx];
-        else
-            arr.DeleteAt(toIdx);
+        var boxedArgs = new object?[args.Length];
+        for (int i = 0; i < args.Length; i++)
+            boxedArgs[i] = args[i].ToObject();
+        return RuntimeValue.FromObject(
+            CopyWithinArrayLike(interpreter, arr, boxedArgs));
     }
 
     // --- Callback-based V2 methods ---
@@ -1699,7 +1960,8 @@ public static class ArrayBuiltIns
         => RuntimeValue.FromBoxed(FlatMap(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue SortV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(Sort(interp, arr, CallableInterop.ToBoxedList(args)));
+        => RuntimeValue.FromObject(SortArrayLike(
+            interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToSortedV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromBoxed(ToSorted(interp, arr, CallableInterop.ToBoxedList(args)));
@@ -1708,5 +1970,6 @@ public static class ArrayBuiltIns
         => RuntimeValue.FromBoxed(Splice(interp, arr, CallableInterop.ToBoxedList(args)));
 
     private static RuntimeValue ToSplicedV2(Interpreter interp, SharpTSArray arr, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(ToSpliced(interp, arr, CallableInterop.ToBoxedList(args)));
+        => RuntimeValue.FromObject(ToSplicedArrayLike(
+            interp, arr, CallableInterop.ToBoxedList(args)));
 }

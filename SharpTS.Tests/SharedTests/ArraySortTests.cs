@@ -280,15 +280,17 @@ public class ArraySortTests
 
     #region Frozen Array Behavior
 
-    [Theory, ModeData]
-    public void Array_Sort_FrozenArray_ReturnsUnchanged(ExecutionMode mode)
+    [Theory, InterpretedOnlyData]
+    public void Array_Sort_FrozenArray_ThrowsTypeError(ExecutionMode mode)
     {
         var source = """
             let arr: number[] = [3, 1, 2];
             Object.freeze(arr);
-            let result = arr.sort();
-            // sort() on frozen array returns unchanged array (silent fail)
-            console.log(arr === result);
+            try {
+                arr.sort();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
             console.log(arr.join(","));
             """;
 

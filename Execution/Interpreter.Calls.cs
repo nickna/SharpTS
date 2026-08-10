@@ -1060,7 +1060,7 @@ public partial class Interpreter
     /// Capped at depth 64 to prevent runaway loops on cyclic chains. Used by
     /// both the SharpTSFunction and SharpTSArrowFunction instanceof arms.
     /// </summary>
-    private static bool InstanceOfByPrototype(object? left, ISharpTSCallable ctor)
+    private bool InstanceOfByPrototype(object? left, ISharpTSCallable ctor)
     {
         object? protoObj = ctor switch
         {
@@ -1070,16 +1070,12 @@ public partial class Interpreter
         };
         if (protoObj is null) return false;
         object? current = left;
-        for (int i = 0; i < 64 && current is SharpTSObject curObj; i++)
+        for (int i = 0; i < 64 && current is not (null or SharpTSUndefined); i++)
         {
-            if (curObj.HasProperty("__proto__")
-                && curObj.GetProperty("__proto__") is var p
-                && ReferenceEquals(p, protoObj))
-            {
-                return true;
-            }
-            current = curObj.HasProperty("__proto__") ? curObj.GetProperty("__proto__") : null;
-            if (ReferenceEquals(current, curObj)) break;
+            object? next = ObjectBuiltIns.PrototypeOf(this, current);
+            if (ReferenceEquals(next, protoObj)) return true;
+            if (ReferenceEquals(next, current)) break;
+            current = next;
         }
         return false;
     }
