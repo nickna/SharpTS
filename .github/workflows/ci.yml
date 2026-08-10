@@ -9,6 +9,7 @@ on:
       - '.gitignore'
       - 'LICENSE'
       - '.editorconfig'
+
   pull_request:
     branches: [main]
     paths-ignore:
@@ -18,7 +19,31 @@ on:
       - 'LICENSE'
       - '.editorconfig'
 
+permissions:
+  contents: read
+
 jobs:
+  workflow-policy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - name: Enforce workflow policy
+        shell: pwsh
+        run: ./scripts/test-github-workflows.ps1
+
+      - name: Install and run actionlint 1.7.12
+        shell: bash
+        run: |
+          curl --fail --location --silent --show-error \
+            --output actionlint.tar.gz \
+            https://github.com/rhysd/actionlint/releases/download/v1.7.12/actionlint_1.7.12_linux_amd64.tar.gz
+          echo "8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8  actionlint.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file actionlint.tar.gz actionlint
+          ./actionlint
+
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -26,20 +51,20 @@ jobs:
       # platform's real result independently (a flake on one shouldn't hide the rest).
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-24.04, windows-2025]
 
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
       # NOTE: if macOS is ever restored to the matrix, resurrect the
       # "Register hostname in /etc/hosts (macOS mDNS workaround)" step removed in
       # the 2026-07 cleanup (git history) — without it, every http server.listen()
       # burns mDNSResponder's 5s timeout (measured: A-only 5053ms, A+AAAA 10ms).
       - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
         with:
-          dotnet-version: 10.0.x
-
+          global-json-file: global.json
       - name: Restore dependencies
         run: dotnet restore
 
@@ -96,15 +121,15 @@ jobs:
   # Counts are OS-independent (Roslyn analyzers over the same sources), so one
   # ubuntu job suffices.
   aot-ratchet:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: 10.0.x
-
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
       - name: Build and enforce AOT analyzer inventory
         shell: pwsh
         run: ./scripts/aot-analyzer-report.ps1 -EnforceBaseline
@@ -113,7 +138,7 @@ jobs:
       # summary makes category drift visible, and the log retains every callsite.
       - name: Upload analyzer log
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: aot-analyzer-log
           path: |
@@ -126,17 +151,17 @@ jobs:
   # outputs under CoreCLR. This permanently covers the Reflection.Emit fallbacks that only
   # execute when RuntimeFeature.IsDynamicCodeSupported is false (#1324 gate).
   native-aot-compile-smoke:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: 10.0.x
-
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
       - name: Install Native AOT prerequisites
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
@@ -168,7 +193,7 @@ jobs:
       # SDK analyzers run before linking and therefore cannot see warnings
       # introduced by ILC reachability or dependency closures. Exact-match only
       # SharpTS-owned subjects; external diagnostics remain visible without
-      # making 10.0.x servicing changes fail the build.
+      # making .NET SDK servicing changes fail the build.
       - name: Enforce Native AOT publish warning inventory
         shell: pwsh
         run: |
@@ -337,7 +362,7 @@ jobs:
 
       - name: Upload Native AOT publish diagnostics
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: native-aot-publish-diagnostics
           if-no-files-found: ignore

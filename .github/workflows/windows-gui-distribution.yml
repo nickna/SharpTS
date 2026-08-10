@@ -1,4 +1,4 @@
-name: Windows GUI distribution
+name: Windows GUI distribution certification
 
 on:
   workflow_dispatch:
@@ -23,110 +23,51 @@ on:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
-  package:
-    runs-on: windows-latest
+  build-candidate:
+    runs-on: windows-2025
     timeout-minutes: 40
-    environment: windows-gui-distribution
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
 
       - name: Build and execute warning-clean x64 Native AOT candidate
         shell: pwsh
         run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -NativeAot -EnforcePerformanceBudgets
 
-      - name: Import protected signing certificate
-        id: certificate
-        shell: pwsh
-        env:
-          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
-          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
-        run: |
-          if ([string]::IsNullOrWhiteSpace($env:PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:PFX_PASSWORD)) {
-            throw "The windows-gui-distribution environment must provide signing PFX secrets."
-          }
-          $pfxPath = Join-Path $env:RUNNER_TEMP "windows-gui-signing.pfx"
-          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
-          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
-          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
-          Remove-Item -LiteralPath $pfxPath -Force
-          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
-          "publisher=$($certificate.Subject)" >> $env:GITHUB_OUTPUT
-
-      - name: Create workflow-only icon assets
+      - name: Stage reusable distribution input
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Drawing
-          $assetRoot = Join-Path $env:RUNNER_TEMP "gui-package-assets"
-          New-Item -ItemType Directory -Path $assetRoot | Out-Null
-          foreach ($asset in @(
-            @{ Name = "Square44x44Logo.png"; Size = 44 },
-            @{ Name = "Square150x150Logo.png"; Size = 150 },
-            @{ Name = "StoreLogo.png"; Size = 50 })) {
-            $bitmap = [Drawing.Bitmap]::new($asset.Size, $asset.Size)
-            try {
-              $graphics = [Drawing.Graphics]::FromImage($bitmap)
-              try { $graphics.Clear([Drawing.Color]::FromArgb(31, 41, 55)) } finally { $graphics.Dispose() }
-              $bitmap.Save((Join-Path $assetRoot $asset.Name), [Drawing.Imaging.ImageFormat]::Png)
-            } finally { $bitmap.Dispose() }
-          }
+          $root = 'artifacts/windows-distribution-input'
+          New-Item -ItemType Directory -Path "$root/publish", "$root/assets" -Force | Out-Null
+          Copy-Item -Path 'artifacts/windows-preview/win-x64/published native aot/*' -Destination "$root/publish" -Recurse -Force
+          Copy-Item -Path 'distribution/windows/assets/*.png' -Destination "$root/assets" -Force
 
-      - name: Build, sign, and verify MSIX release evidence
-        shell: pwsh
-        env:
-          PACKAGE_IDENTITY: ${{ inputs.package_identity }}
-          DISPLAY_NAME: ${{ inputs.display_name }}
-          PACKAGE_VERSION: ${{ inputs.version }}
-          PACKAGE_URI: ${{ inputs.package_uri }}
-          CERTIFICATE_PUBLISHER: ${{ steps.certificate.outputs.publisher }}
-          CERTIFICATE_THUMBPRINT: ${{ steps.certificate.outputs.thumbprint }}
-        run: |
-          scripts/package-gui-windows.ps1 `
-            -PublishDirectory "artifacts/windows-preview/win-x64/published native aot" `
-            -OutputDirectory "artifacts/windows-distribution" `
-            -PackageIdentity $env:PACKAGE_IDENTITY `
-            -Publisher $env:CERTIFICATE_PUBLISHER `
-            -PublisherDisplayName $env:DISPLAY_NAME `
-            -DisplayName $env:DISPLAY_NAME `
-            -Version $env:PACKAGE_VERSION `
-            -Architecture x64 `
-            -Executable SharpTS.Gui.Sdk.Consumer.exe `
-            -AssetsDirectory (Join-Path $env:RUNNER_TEMP "gui-package-assets") `
-            -PackageUri $env:PACKAGE_URI `
-            -CertificateThumbprint $env:CERTIFICATE_THUMBPRINT `
-            -BuildInvocationId '${{ github.run_id }}' `
-            -SourceCommit '${{ github.sha }}' `
-            -RequireSigned
-
-      - name: Attest build provenance
-        uses: actions/attest@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          subject-path: artifacts/windows-distribution/*.msix
-
-      - name: Attest SPDX SBOM
-        uses: actions/attest@v4
-        with:
-          subject-path: artifacts/windows-distribution/*.msix
-          sbom-path: artifacts/windows-distribution/*.spdx.json
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: signed-windows-gui
-          path: |
-            artifacts/windows-distribution/*.msix
-            artifacts/windows-distribution/*.appinstaller
-            artifacts/windows-distribution/*.spdx.json
-            artifacts/windows-distribution/*.intoto.jsonl
-            artifacts/windows-distribution/SHA256SUMS
+          name: windows-gui-certification-payload
+          path: artifacts/windows-distribution-input
           if-no-files-found: error
 
-      - name: Remove signing certificate
-        if: always() && steps.certificate.outputs.thumbprint != ''
-        shell: pwsh
-        run: Remove-Item -LiteralPath 'Cert:\CurrentUser\My\${{ steps.certificate.outputs.thumbprint }}' -Force
+  sign-and-package:
+    needs: build-candidate
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    uses: ./.github/workflows/reusable-windows-gui-distribution.yml
+    with:
+      payload_artifact: windows-gui-certification-payload
+      executable: SharpTS.Gui.Sdk.Consumer.exe
+      package_identity: ${{ inputs.package_identity }}
+      display_name: ${{ inputs.display_name }}
+      version: ${{ inputs.version }}
+      package_uri: ${{ inputs.package_uri }}
+      architecture: x64
+    secrets: inherit

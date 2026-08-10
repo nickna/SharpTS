@@ -29,7 +29,7 @@ scripts/package-gui-macos.ps1 `
   -OutputDirectory artifacts/macos-bundle `
   -BundleIdentifier dev.example.counter `
   -DisplayName "Counter" `
-  -ShortVersion 0.2.0 `
+  -ShortVersion 0.3.0 `
   -BuildVersion 1 `
   -Architecture arm64 `
   -Executable Counter `
@@ -48,17 +48,22 @@ candidate must pass interpreted and compiled Headless runs, automatic
 real-window launch/close, asset-closure parity, single-file execution, Mach-O validation, and
 unsigned `.app`/ZIP creation.
 
-[`macos-gui-distribution.yml`](../../.github/workflows/macos-gui-distribution.yml) is a manual,
-protected-environment ceremony. It requires these secrets:
+[`macos-gui-distribution.yml`](../../.github/workflows/macos-gui-distribution.yml) is the manual
+SharpTS certification caller. It builds and executes the native candidate, uploads its already-
+published files under `publish/`, and calls
+[`reusable-macos-gui-distribution.yml`](../../.github/workflows/reusable-macos-gui-distribution.yml).
+The reusable workflow never rebuilds the input artifact. It requires these protected-environment
+secrets:
 
 - `MACOS_DEVELOPER_ID_P12_BASE64` and `MACOS_DEVELOPER_ID_P12_PASSWORD`
 - `MACOS_DEVELOPER_ID_APPLICATION`
 - `MACOS_NOTARY_KEY_BASE64`, `MACOS_NOTARY_KEY_ID`, and `MACOS_NOTARY_ISSUER_ID`
 
-It imports the certificate into an ephemeral keychain, executes the exact Apple Silicon candidate
-natively, applies hardened-runtime signing, submits and staples both the app archive and DMG,
-validates the stapled ticket, emits checksums, and creates GitHub provenance attestations.
-Signing material is removed in an unconditional cleanup step.
+It imports the certificate into an ephemeral keychain, applies hardened-runtime signing, submits
+and staples both the app archive and DMG, validates the stapled ticket, emits checksums, and creates
+GitHub provenance attestations. Signing material is removed in an unconditional cleanup step.
+Other applications may call it after uploading a `publish/` artifact and supplying the executable
+file name, bundle identity, display name, versions, and architecture.
 
 ## Diagnostics and current evidence
 

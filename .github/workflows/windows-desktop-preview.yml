@@ -31,45 +31,71 @@ on:
       - "SharpTS.Gui.Sdk.Consumer/**"
       - "SharpTS.Gui.Sdk/**"
       - "SharpTS.Sdk.Tasks/**"
+      - "Directory.Build.props"
+      - "eng/GuiPreviewVersion.props"
+      - "global.json"
       - "distribution/windows/**"
+      - "scripts/get-gui-preview-version.ps1"
+      - "scripts/sync-gui-preview-version.ps1"
       - "scripts/package-gui-windows.ps1"
+      - "scripts/generate-gui-windows-assets.ps1"
       - "scripts/collect-gui-support-bundle.ps1"
       - "scripts/test-gui-distribution.ps1"
       - ".github/workflows/windows-gui-distribution.yml"
+      - ".github/workflows/reusable-windows-gui-distribution.yml"
       - "SharpTS.csproj"
       - "SharpTS.sln"
       - ".github/workflows/windows-desktop-preview.yml"
 
+permissions:
+  contents: read
+
 jobs:
   gui-sdk-candidate:
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 15
+    outputs:
+      version: ${{ steps.gui_version.outputs.version }}
+      marketing_version: ${{ steps.gui_version.outputs.marketing_version }}
+      package_file_name: ${{ steps.gui_version.outputs.package_file_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Read GUI preview version
+        id: gui_version
+        shell: pwsh
+        run: |
+          $info = ./scripts/get-gui-preview-version.ps1
+          "version=$($info.Version)" >> $env:GITHUB_OUTPUT
+          "marketing_version=$($info.MarketingVersion)" >> $env:GITHUB_OUTPUT
+          "package_file_name=$($info.PackageFileName)" >> $env:GITHUB_OUTPUT
       - name: Distribution manifest, evidence, update, and support-bundle tests
         shell: pwsh
         run: scripts/test-gui-distribution.ps1
       - name: Build and audit the exact GUI SDK candidate
         shell: pwsh
         run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sharpts-gui-sdk-candidate
-          path: artifacts/windows-preview/win-x64/feed/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+          path: artifacts/windows-preview/win-x64/feed/${{ steps.gui_version.outputs.package_file_name }}
 
   windows-x64:
     needs: gui-sdk-candidate
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
-      - uses: actions/download-artifact@v4
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sharpts-gui-sdk-candidate
           path: artifacts/windows-preview/candidate
@@ -79,8 +105,8 @@ jobs:
         run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
       - name: Packaged x64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
-      - uses: actions/upload-artifact@v4
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/windows-preview/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: windows-desktop-preview-x64
@@ -93,21 +119,23 @@ jobs:
 
   windows-arm64-cross-publish:
     needs: gui-sdk-candidate
-    runs-on: windows-latest
+    runs-on: windows-2025
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
-      - uses: actions/download-artifact@v4
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sharpts-gui-sdk-candidate
           path: artifacts/windows-preview/candidate
       - name: Cross-publish packaged ARM64 directory and single-file outputs
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
-      - uses: actions/upload-artifact@v4
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage "artifacts/windows-preview/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: windows-desktop-preview-arm64-cross-publish
@@ -122,18 +150,20 @@ jobs:
     runs-on: [self-hosted, Windows, ARM64, sharpts-gui]
     timeout-minutes: 35
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
-      - uses: actions/download-artifact@v4
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sharpts-gui-sdk-candidate
           path: artifacts/windows-preview/candidate
       - name: Packaged ARM64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
-      - uses: actions/upload-artifact@v4
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/windows-preview/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: windows-desktop-preview-arm64-native

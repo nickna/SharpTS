@@ -14,31 +14,54 @@ on:
       - "SharpTS.Gui.Sdk.Consumer/**"
       - "SharpTS.Gui.Sdk/**"
       - "SharpTS.Sdk.Tasks/**"
+      - "Directory.Build.props"
+      - "eng/GuiPreviewVersion.props"
+      - "global.json"
       - "distribution/macos/**"
+      - "scripts/get-gui-preview-version.ps1"
+      - "scripts/sync-gui-preview-version.ps1"
       - "scripts/package-gui-macos.ps1"
       - "scripts/test-gui-macos-package.ps1"
       - ".github/workflows/macos-desktop-preview.yml"
       - ".github/workflows/macos-gui-distribution.yml"
+      - ".github/workflows/reusable-macos-gui-distribution.yml"
+
+permissions:
+  contents: read
 
 jobs:
   gui-sdk-candidate:
     runs-on: macos-15
     timeout-minutes: 20
+    outputs:
+      version: ${{ steps.gui_version.outputs.version }}
+      marketing_version: ${{ steps.gui_version.outputs.marketing_version }}
+      package_file_name: ${{ steps.gui_version.outputs.package_file_name }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - name: Read GUI preview version
+        id: gui_version
+        shell: pwsh
+        run: |
+          $info = ./scripts/get-gui-preview-version.ps1
+          "version=$($info.Version)" >> $env:GITHUB_OUTPUT
+          "marketing_version=$($info.MarketingVersion)" >> $env:GITHUB_OUTPUT
+          "package_file_name=$($info.PackageFileName)" >> $env:GITHUB_OUTPUT
       - name: macOS bundle contract tests
         shell: pwsh
         run: scripts/test-gui-macos-package.ps1
       - name: Build and audit the exact GUI SDK candidate
         shell: pwsh
         run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -PackageOnly
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sharpts-gui-sdk-candidate
-          path: artifacts/macos-preview/osx-arm64/feed/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+          path: artifacts/macos-preview/osx-arm64/feed/${{ steps.gui_version.outputs.package_file_name }}
 
   macos-native:
     needs: gui-sdk-candidate
@@ -52,11 +75,13 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 50
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          dotnet-version: "10.0.x"
-      - uses: actions/download-artifact@v4
+          persist-credentials: false
+      - uses: actions/setup-dotnet@26b0ec14cb23fa6904739307f278c14f94c95bf1 # v5
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           name: sharpts-gui-sdk-candidate
           path: artifacts/macos-preview/candidate
@@ -66,7 +91,7 @@ jobs:
         run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
       - name: Native packaged SDK, CLI, Headless, and real-window gates
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier ${{ matrix.rid }} -RealWindow -CandidatePackage artifacts/macos-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier ${{ matrix.rid }} -RealWindow -CandidatePackage "artifacts/macos-preview/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
       - name: Validate and archive unsigned app bundle
         shell: pwsh
         run: >-
@@ -75,11 +100,11 @@ jobs:
           -OutputDirectory "artifacts/macos-preview/${{ matrix.rid }}/bundle"
           -BundleIdentifier dev.sharpts.gui.preview
           -DisplayName "SharpTS GUI Preview"
-          -ShortVersion 0.2.0
+          -ShortVersion ${{ needs.gui-sdk-candidate.outputs.marketing_version }}
           -BuildVersion ${{ github.run_number }}
           -Architecture ${{ matrix.architecture }}
           -Executable SharpTS.Gui.Sdk.Consumer
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: macos-desktop-preview-${{ matrix.architecture }}
