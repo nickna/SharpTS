@@ -46,6 +46,27 @@ public sealed class GeneratedControlContractTests
     }
 
     [Fact]
+    public void ManifestDocumentsEveryPublicControlPropertyAndEvent()
+    {
+        using JsonDocument manifest = JsonDocument.Parse(File.ReadAllText(ManifestPath()));
+        JsonElement root = manifest.RootElement;
+        foreach (JsonProperty group in root.GetProperty("propertyGroups").EnumerateObject())
+            Assert.All(group.Value.EnumerateArray(), prop => Assert.False(
+                string.IsNullOrWhiteSpace(prop.GetProperty("documentation").GetString()),
+                $"Property group {group.Name}.{prop.GetProperty("name").GetString()} is undocumented."));
+        Assert.All(root.GetProperty("controls").EnumerateArray(), control =>
+        {
+            string kind = control.GetProperty("kind").GetString()!;
+            Assert.False(string.IsNullOrWhiteSpace(control.GetProperty("documentation").GetString()),
+                $"Control {kind} is undocumented.");
+            foreach (JsonElement prop in control.GetProperty("props").EnumerateArray()
+                .Concat(control.GetProperty("events").EnumerateArray()))
+                Assert.False(string.IsNullOrWhiteSpace(prop.GetProperty("documentation").GetString()),
+                    $"Control {kind}.{prop.GetProperty("name").GetString()} is undocumented.");
+        });
+    }
+
+    [Fact]
     public void CheckedInGeneratedOutputsPassStandaloneVerifyMode()
     {
         string root = FindRoot();

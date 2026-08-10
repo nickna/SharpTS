@@ -1,96 +1,1943 @@
 {
   "schemaVersion": 1,
-  "reservedProviderIds": ["builtin"],
+  "reservedProviderIds": [
+    "builtin"
+  ],
   "reservedAdapterIds": [
-    "window", "stack-panel", "toolbar", "border", "statusbar", "wrap-panel", "dock-panel", "grid",
-    "scroll-viewer", "text-block", "button", "text-box", "password-box", "check-box", "radio-button",
-    "toggle-switch", "combo-box", "slider", "progress-bar", "separator", "list-box", "numeric-up-down",
-    "date-picker", "time-picker", "image", "tab-control", "tab-item", "menu", "menu-item",
-    "items-control", "virtualizing-list", "tree-view", "tree-view-item", "canvas", "rich-text-block", "drawing-canvas"
+    "window",
+    "stack-panel",
+    "toolbar",
+    "border",
+    "statusbar",
+    "wrap-panel",
+    "dock-panel",
+    "grid",
+    "scroll-viewer",
+    "text-block",
+    "button",
+    "text-box",
+    "password-box",
+    "check-box",
+    "radio-button",
+    "toggle-switch",
+    "combo-box",
+    "slider",
+    "progress-bar",
+    "separator",
+    "list-box",
+    "numeric-up-down",
+    "date-picker",
+    "time-picker",
+    "image",
+    "tab-control",
+    "tab-item",
+    "menu",
+    "menu-item",
+    "items-control",
+    "virtualizing-list",
+    "tree-view",
+    "tree-view-item",
+    "canvas",
+    "rich-text-block",
+    "drawing-canvas"
   ],
   "propertyGroups": {
     "common": [
-      { "name": "ref", "type": "ControlRef<THandle>", "converter": "ref", "setter": "attach-ref", "documentation": "Receives the retained native control handle." },
-      { "name": "width", "type": "number", "default": "NaN", "setter": "common" },
-      { "name": "height", "type": "number", "default": "NaN", "setter": "common" },
-      { "name": "minWidth", "type": "number", "default": 0, "setter": "common" },
-      { "name": "minHeight", "type": "number", "default": 0, "setter": "common" },
-      { "name": "maxWidth", "type": "number", "default": "Infinity", "setter": "common" },
-      { "name": "maxHeight", "type": "number", "default": "Infinity", "setter": "common" },
-      { "name": "margin", "type": "Thickness", "default": 0, "converter": "thickness", "setter": "common" },
-      { "name": "horizontalAlignment", "type": "HorizontalAlignment", "default": "stretch", "setter": "common", "enumValues": ["left", "center", "right", "stretch"] },
-      { "name": "verticalAlignment", "type": "VerticalAlignment", "default": "stretch", "setter": "common", "enumValues": ["top", "center", "bottom", "stretch"] },
-      { "name": "isVisible", "type": "boolean", "default": true, "setter": "common" },
-      { "name": "isEnabled", "type": "boolean", "default": true, "setter": "common" },
-      { "name": "opacity", "type": "number", "default": 1, "setter": "common" },
-      { "name": "toolTip", "type": "string", "setter": "common" },
-      { "name": "automationName", "type": "string", "setter": "common" },
-      { "name": "classes", "type": "readonly string[]", "converter": "copy-array", "setter": "style", "documentation": "Avalonia style classes applied to the native control." },
-      { "name": "canvasLeft", "type": "number", "default": "NaN", "setter": "attached", "documentation": "Canvas left coordinate when parented by Canvas." },
-      { "name": "canvasTop", "type": "number", "default": "NaN", "setter": "attached", "documentation": "Canvas top coordinate when parented by Canvas." },
-      { "name": "gridRow", "type": "number", "default": 0, "converter": "int32", "setter": "attached" },
-      { "name": "gridColumn", "type": "number", "default": 0, "converter": "int32", "setter": "attached" },
-      { "name": "gridRowSpan", "type": "number", "default": 1, "converter": "int32", "setter": "attached" },
-      { "name": "gridColumnSpan", "type": "number", "default": 1, "converter": "int32", "setter": "attached" },
-      { "name": "dock", "type": "Dock", "default": "left", "setter": "attached", "enumValues": ["left", "top", "right", "bottom"] },
-      { "name": "onKeyDown", "type": "(event: KeyEvent) => boolean", "setter": "event", "documentation": "Handles a normalized key-down event." },
-      { "name": "onKeyUp", "type": "(event: KeyEvent) => boolean", "setter": "event", "documentation": "Handles a normalized key-up event." },
-      { "name": "allowDrop", "type": "boolean", "default": false, "setter": "drag-drop", "documentation": "Allows native drag data to be dropped on this control." },
-      { "name": "onDragOver", "type": "(event: DropEvent) => DropEffect", "setter": "event", "documentation": "Chooses the accepted native drag effect." },
-      { "name": "onDrop", "type": "(event: DropEvent) => void", "setter": "event", "documentation": "Receives normalized text and local-file drop data." }
+      {
+        "name": "ref",
+        "type": "ControlRef<THandle>",
+        "converter": "ref",
+        "setter": "attach-ref",
+        "documentation": "Receives the retained native control handle."
+      },
+      {
+        "name": "width",
+        "type": "number",
+        "default": "NaN",
+        "setter": "common",
+        "documentation": "Preferred control width in device-independent pixels."
+      },
+      {
+        "name": "height",
+        "type": "number",
+        "default": "NaN",
+        "setter": "common",
+        "documentation": "Preferred control height in device-independent pixels."
+      },
+      {
+        "name": "minWidth",
+        "type": "number",
+        "default": 0,
+        "setter": "common",
+        "documentation": "Minimum permitted control width."
+      },
+      {
+        "name": "minHeight",
+        "type": "number",
+        "default": 0,
+        "setter": "common",
+        "documentation": "Minimum permitted control height."
+      },
+      {
+        "name": "maxWidth",
+        "type": "number",
+        "default": "Infinity",
+        "setter": "common",
+        "documentation": "Maximum permitted control width."
+      },
+      {
+        "name": "maxHeight",
+        "type": "number",
+        "default": "Infinity",
+        "setter": "common",
+        "documentation": "Maximum permitted control height."
+      },
+      {
+        "name": "margin",
+        "type": "Thickness",
+        "default": 0,
+        "converter": "thickness",
+        "setter": "common",
+        "documentation": "Space outside the control."
+      },
+      {
+        "name": "horizontalAlignment",
+        "type": "HorizontalAlignment",
+        "default": "stretch",
+        "setter": "common",
+        "enumValues": [
+          "left",
+          "center",
+          "right",
+          "stretch"
+        ],
+        "documentation": "Horizontal alignment within the parent layout slot."
+      },
+      {
+        "name": "verticalAlignment",
+        "type": "VerticalAlignment",
+        "default": "stretch",
+        "setter": "common",
+        "enumValues": [
+          "top",
+          "center",
+          "bottom",
+          "stretch"
+        ],
+        "documentation": "Vertical alignment within the parent layout slot."
+      },
+      {
+        "name": "isVisible",
+        "type": "boolean",
+        "default": true,
+        "setter": "common",
+        "documentation": "Whether the control participates in rendering and layout."
+      },
+      {
+        "name": "isEnabled",
+        "type": "boolean",
+        "default": true,
+        "setter": "common",
+        "documentation": "Whether the control accepts user interaction."
+      },
+      {
+        "name": "opacity",
+        "type": "number",
+        "default": 1,
+        "setter": "common",
+        "documentation": "Opacity from zero (transparent) to one (opaque)."
+      },
+      {
+        "name": "toolTip",
+        "type": "string",
+        "setter": "common",
+        "documentation": "Text shown when the pointer pauses over the control."
+      },
+      {
+        "name": "automationName",
+        "type": "string",
+        "setter": "common",
+        "documentation": "Accessible automation name exposed to assistive technology and test drivers."
+      },
+      {
+        "name": "classes",
+        "type": "readonly string[]",
+        "converter": "copy-array",
+        "setter": "style",
+        "documentation": "Avalonia style classes applied to the native control."
+      },
+      {
+        "name": "canvasLeft",
+        "type": "number",
+        "default": "NaN",
+        "setter": "attached",
+        "documentation": "Canvas left coordinate when parented by Canvas."
+      },
+      {
+        "name": "canvasTop",
+        "type": "number",
+        "default": "NaN",
+        "setter": "attached",
+        "documentation": "Canvas top coordinate when parented by Canvas."
+      },
+      {
+        "name": "gridRow",
+        "type": "number",
+        "default": 0,
+        "converter": "int32",
+        "setter": "attached",
+        "documentation": "Zero-based row index when the control is placed in a Grid."
+      },
+      {
+        "name": "gridColumn",
+        "type": "number",
+        "default": 0,
+        "converter": "int32",
+        "setter": "attached",
+        "documentation": "Zero-based column index when the control is placed in a Grid."
+      },
+      {
+        "name": "gridRowSpan",
+        "type": "number",
+        "default": 1,
+        "converter": "int32",
+        "setter": "attached",
+        "documentation": "Number of Grid rows occupied by the control."
+      },
+      {
+        "name": "gridColumnSpan",
+        "type": "number",
+        "default": 1,
+        "converter": "int32",
+        "setter": "attached",
+        "documentation": "Number of Grid columns occupied by the control."
+      },
+      {
+        "name": "dock",
+        "type": "Dock",
+        "default": "left",
+        "setter": "attached",
+        "enumValues": [
+          "left",
+          "top",
+          "right",
+          "bottom"
+        ],
+        "documentation": "Edge used when the control is placed in a DockPanel."
+      },
+      {
+        "name": "onKeyDown",
+        "type": "(event: KeyEvent) => boolean",
+        "setter": "event",
+        "documentation": "Handles a normalized key-down event."
+      },
+      {
+        "name": "onKeyUp",
+        "type": "(event: KeyEvent) => boolean",
+        "setter": "event",
+        "documentation": "Handles a normalized key-up event."
+      },
+      {
+        "name": "allowDrop",
+        "type": "boolean",
+        "default": false,
+        "setter": "drag-drop",
+        "documentation": "Allows native drag data to be dropped on this control."
+      },
+      {
+        "name": "onDragOver",
+        "type": "(event: DropEvent) => DropEffect",
+        "setter": "event",
+        "documentation": "Chooses the accepted native drag effect."
+      },
+      {
+        "name": "onDrop",
+        "type": "(event: DropEvent) => void",
+        "setter": "event",
+        "documentation": "Receives normalized text and local-file drop data."
+      }
     ],
     "textStyle": [
-      { "name": "foreground", "type": "string", "converter": "brush", "setter": "style" },
-      { "name": "fontFamily", "type": "string", "setter": "style" },
-      { "name": "fontSize", "type": "number", "default": "NaN", "setter": "style" },
-      { "name": "fontWeight", "type": "FontWeight", "default": "normal", "setter": "style", "enumValues": ["normal", "medium", "semibold", "bold"] },
-      { "name": "fontStyle", "type": "\"normal\" | \"italic\"", "default": "normal", "setter": "style", "enumValues": ["normal", "italic"] },
-      { "name": "textAlignment", "type": "TextAlignment", "default": "left", "setter": "style", "enumValues": ["left", "center", "right", "justify"] }
+      {
+        "name": "foreground",
+        "type": "string",
+        "converter": "brush",
+        "setter": "style",
+        "documentation": "Foreground brush or color used to render content."
+      },
+      {
+        "name": "fontFamily",
+        "type": "string",
+        "setter": "style",
+        "documentation": "Font family used to render text."
+      },
+      {
+        "name": "fontSize",
+        "type": "number",
+        "default": "NaN",
+        "setter": "style",
+        "documentation": "Font size in device-independent pixels."
+      },
+      {
+        "name": "fontWeight",
+        "type": "FontWeight",
+        "default": "normal",
+        "setter": "style",
+        "enumValues": [
+          "normal",
+          "medium",
+          "semibold",
+          "bold"
+        ],
+        "documentation": "Weight used to render text."
+      },
+      {
+        "name": "fontStyle",
+        "type": "\"normal\" | \"italic\"",
+        "default": "normal",
+        "setter": "style",
+        "enumValues": [
+          "normal",
+          "italic"
+        ],
+        "documentation": "Normal or italic font style."
+      },
+      {
+        "name": "textAlignment",
+        "type": "TextAlignment",
+        "default": "left",
+        "setter": "style",
+        "enumValues": [
+          "left",
+          "center",
+          "right",
+          "justify"
+        ],
+        "documentation": "Horizontal alignment of rendered text."
+      }
     ],
     "contentStyle": [
-      { "name": "background", "type": "string", "converter": "brush", "setter": "style" },
-      { "name": "padding", "type": "Thickness", "default": 0, "converter": "thickness", "setter": "style" },
-      { "name": "cornerRadius", "type": "number", "default": 0, "setter": "style" },
-      { "name": "horizontalContentAlignment", "type": "HorizontalAlignment", "default": "center", "setter": "style", "enumValues": ["left", "center", "right", "stretch"] },
-      { "name": "verticalContentAlignment", "type": "VerticalAlignment", "default": "center", "setter": "style", "enumValues": ["top", "center", "bottom", "stretch"] }
+      {
+        "name": "background",
+        "type": "string",
+        "converter": "brush",
+        "setter": "style",
+        "documentation": "Background brush or color value."
+      },
+      {
+        "name": "padding",
+        "type": "Thickness",
+        "default": 0,
+        "converter": "thickness",
+        "setter": "style",
+        "documentation": "Space between the control border and its content."
+      },
+      {
+        "name": "cornerRadius",
+        "type": "number",
+        "default": 0,
+        "setter": "style",
+        "documentation": "Radius applied to the control corners."
+      },
+      {
+        "name": "horizontalContentAlignment",
+        "type": "HorizontalAlignment",
+        "default": "center",
+        "setter": "style",
+        "enumValues": [
+          "left",
+          "center",
+          "right",
+          "stretch"
+        ],
+        "documentation": "Horizontal alignment of content inside the control."
+      },
+      {
+        "name": "verticalContentAlignment",
+        "type": "VerticalAlignment",
+        "default": "center",
+        "setter": "style",
+        "enumValues": [
+          "top",
+          "center",
+          "bottom",
+          "stretch"
+        ],
+        "documentation": "Vertical alignment of content inside the control."
+      }
     ]
   },
   "controls": [
-    { "kind": "Window", "nativeType": "Avalonia.Controls.Window", "adapter": "window", "children": { "model": "singleElement", "minimum": 0, "maximum": 1 }, "propsType": "WindowProps", "handle": "WindowHandle", "groups": ["common"], "props": [{ "name": "title", "type": "string", "default": "SharpTS GUI", "setter": "window" }, { "name": "canResize", "type": "boolean", "default": true, "setter": "window" }, { "name": "theme", "type": "Theme", "default": "system", "setter": "window", "enumValues": ["system", "light", "dark"] }], "events": [], "operations": ["focus"], "documentation": "Top-level desktop window.", "trimming": ["Avalonia.Controls.Window"] },
-    { "kind": "StackPanel", "nativeType": "Avalonia.Controls.StackPanel", "adapter": "stack-panel", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "StackPanelProps", "handle": "StackPanelHandle", "groups": ["common"], "props": [{ "name": "spacing", "type": "number", "default": 0, "setter": "layout" }, { "name": "orientation", "type": "Orientation", "default": "vertical", "setter": "layout", "enumValues": ["horizontal", "vertical"] }], "events": [], "operations": ["focus"], "documentation": "Lays out children in one row or column.", "trimming": ["Avalonia.Controls.StackPanel"] },
-    { "kind": "ToolBar", "nativeType": "Avalonia.Controls.StackPanel", "adapter": "toolbar", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "StackPanelProps", "handle": "StackPanelHandle", "groups": ["common"], "props": [{ "name": "spacing", "type": "number", "default": 0, "setter": "layout" }, { "name": "orientation", "type": "Orientation", "default": "horizontal", "setter": "layout", "enumValues": ["horizontal", "vertical"] }], "events": [], "operations": ["focus"], "documentation": "Horizontal command container.", "trimming": ["Avalonia.Controls.StackPanel"] },
-    { "kind": "WrapPanel", "nativeType": "Avalonia.Controls.WrapPanel", "adapter": "wrap-panel", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "WrapPanelProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "spacing", "type": "number", "default": 0, "setter": "layout" }, { "name": "orientation", "type": "Orientation", "default": "horizontal", "setter": "layout", "enumValues": ["horizontal", "vertical"] }], "events": [], "operations": ["focus"], "documentation": "Wraps children across available space.", "trimming": ["Avalonia.Controls.WrapPanel"] },
-    { "kind": "DockPanel", "nativeType": "Avalonia.Controls.DockPanel", "adapter": "dock-panel", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "DockPanelProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "lastChildFill", "type": "boolean", "default": true, "setter": "layout" }], "events": [], "operations": ["focus"], "documentation": "Docks children to container edges.", "trimming": ["Avalonia.Controls.DockPanel"] },
-    { "kind": "Grid", "nativeType": "Avalonia.Controls.Grid", "adapter": "grid", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "GridProps", "handle": "GridHandle", "groups": ["common"], "props": [{ "name": "rows", "type": "string", "default": "", "converter": "grid-lengths", "setter": "layout" }, { "name": "columns", "type": "string", "default": "", "converter": "grid-lengths", "setter": "layout" }], "events": [], "operations": ["focus"], "documentation": "Grid layout using Avalonia row and column syntax.", "trimming": ["Avalonia.Controls.Grid"] },
-    { "kind": "Border", "nativeType": "Avalonia.Controls.Border", "adapter": "border", "children": { "model": "singleElement", "minimum": 0, "maximum": 1 }, "propsType": "BorderProps", "handle": "BorderHandle", "groups": ["common"], "props": [{ "name": "padding", "type": "Thickness", "default": 0, "converter": "thickness", "setter": "border" }, { "name": "background", "type": "string", "converter": "brush", "setter": "border" }, { "name": "borderBrush", "type": "string", "converter": "brush", "setter": "border" }, { "name": "borderThickness", "type": "Thickness", "default": 0, "converter": "thickness", "setter": "border" }, { "name": "cornerRadius", "type": "number", "default": 0, "setter": "border" }], "events": [], "operations": ["focus"], "documentation": "Decorates one child with background and border.", "trimming": ["Avalonia.Controls.Border"] },
-    { "kind": "StatusBar", "nativeType": "Avalonia.Controls.Border", "adapter": "statusbar", "children": { "model": "singleElement", "minimum": 0, "maximum": 1 }, "propsType": "BorderProps", "handle": "BorderHandle", "groups": ["common"], "props": [{ "name": "padding", "type": "Thickness", "default": 0, "converter": "thickness", "setter": "border" }, { "name": "background", "type": "string", "converter": "brush", "setter": "border" }, { "name": "borderBrush", "type": "string", "converter": "brush", "setter": "border" }, { "name": "borderThickness", "type": "Thickness", "default": 0, "converter": "thickness", "setter": "border" }, { "name": "cornerRadius", "type": "number", "default": 0, "setter": "border" }], "events": [], "operations": ["focus"], "documentation": "Status container backed by a Border.", "trimming": ["Avalonia.Controls.Border"] },
-    { "kind": "ScrollViewer", "nativeType": "Avalonia.Controls.ScrollViewer", "adapter": "scroll-viewer", "children": { "model": "singleElement", "minimum": 0, "maximum": 1 }, "propsType": "ScrollViewerProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "horizontalScrollBarVisibility", "type": "ScrollBarVisibility", "default": "auto", "setter": "scroll", "enumValues": ["auto", "visible", "hidden", "disabled"] }, { "name": "verticalScrollBarVisibility", "type": "ScrollBarVisibility", "default": "auto", "setter": "scroll", "enumValues": ["auto", "visible", "hidden", "disabled"] }], "events": [], "operations": ["focus"], "documentation": "Scrollable single-child viewport.", "trimming": ["Avalonia.Controls.ScrollViewer"] },
-    { "kind": "TextBlock", "nativeType": "Avalonia.Controls.TextBlock", "adapter": "text-block", "children": { "model": "text", "minimum": 0, "maximum": 0 }, "propsType": "TextBlockProps", "handle": "TextBlockHandle", "groups": ["common", "textStyle"], "props": [{ "name": "textWrapping", "type": "\"noWrap\" | \"wrap\"", "default": "noWrap", "setter": "text", "enumValues": ["noWrap", "wrap"] }], "events": [], "operations": ["focus"], "documentation": "Displays textual children.", "trimming": ["Avalonia.Controls.TextBlock"] },
-    { "kind": "Button", "nativeType": "Avalonia.Controls.Button", "adapter": "button", "children": { "model": "text", "minimum": 0, "maximum": 0 }, "propsType": "ButtonProps", "handle": "ButtonHandle", "groups": ["common", "textStyle", "contentStyle"], "props": [], "events": [{ "name": "onClick", "type": "() => void", "adapter": "action" }], "operations": ["focus"], "documentation": "Clickable textual button.", "trimming": ["Avalonia.Controls.Button"] },
-    { "kind": "TextBox", "nativeType": "Avalonia.Controls.TextBox", "adapter": "text-box", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "TextBoxProps", "handle": "TextBoxHandle", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "text", "type": "string", "default": "", "setter": "text-input" }, { "name": "placeholder", "type": "string", "setter": "text-input" }, { "name": "isReadOnly", "type": "boolean", "default": false, "setter": "text-input" }, { "name": "acceptsReturn", "type": "boolean", "default": false, "setter": "text-input" }, { "name": "maxLength", "type": "number", "default": 0, "converter": "int32", "setter": "text-input" }], "events": [{ "name": "onTextChanged", "type": "(value: string) => void", "adapter": "string-action" }], "operations": ["focus"], "documentation": "Editable text input.", "trimming": ["Avalonia.Controls.TextBox"] },
-    { "kind": "PasswordBox", "nativeType": "Avalonia.Controls.TextBox", "adapter": "password-box", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "PasswordBoxProps", "handle": "TextBoxHandle", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "value", "type": "string", "default": "", "setter": "text-input" }, { "name": "placeholder", "type": "string", "setter": "text-input" }, { "name": "revealPassword", "type": "boolean", "default": false, "setter": "text-input" }, { "name": "maxLength", "type": "number", "default": 0, "converter": "int32", "setter": "text-input" }], "events": [{ "name": "onValueChanged", "type": "(value: string) => void", "adapter": "string-action" }], "operations": ["focus"], "documentation": "Masked text input.", "trimming": ["Avalonia.Controls.TextBox"] },
-    { "kind": "CheckBox", "nativeType": "Avalonia.Controls.CheckBox", "adapter": "check-box", "children": { "model": "text", "minimum": 0, "maximum": 0 }, "propsType": "CheckBoxProps", "handle": "unknown", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "isChecked", "type": "boolean", "default": false, "setter": "toggle" }], "events": [{ "name": "onCheckedChanged", "type": "(value: boolean) => void", "adapter": "bool-action" }], "operations": ["focus"], "documentation": "Boolean toggle with a textual label.", "trimming": ["Avalonia.Controls.CheckBox"] },
-    { "kind": "RadioButton", "nativeType": "Avalonia.Controls.RadioButton", "adapter": "radio-button", "children": { "model": "text", "minimum": 0, "maximum": 0 }, "propsType": "RadioButtonProps", "handle": "unknown", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "groupName", "type": "string", "required": true, "setter": "toggle" }, { "name": "isChecked", "type": "boolean", "default": false, "setter": "toggle" }], "events": [{ "name": "onCheckedChanged", "type": "(value: boolean) => void", "adapter": "bool-action" }], "operations": ["focus"], "documentation": "Mutually exclusive grouped toggle.", "trimming": ["Avalonia.Controls.RadioButton"] },
-    { "kind": "ToggleSwitch", "nativeType": "Avalonia.Controls.ToggleSwitch", "adapter": "toggle-switch", "children": { "model": "text", "minimum": 0, "maximum": 0 }, "propsType": "ToggleSwitchProps", "handle": "unknown", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "isChecked", "type": "boolean", "default": false, "setter": "toggle" }], "events": [{ "name": "onCheckedChanged", "type": "(value: boolean) => void", "adapter": "bool-action" }], "operations": ["focus"], "documentation": "Switch-style boolean toggle.", "trimming": ["Avalonia.Controls.ToggleSwitch"] },
-    { "kind": "ComboBox", "nativeType": "Avalonia.Controls.ComboBox", "adapter": "combo-box", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "ComboBoxProps", "handle": "unknown", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "items", "type": "readonly string[]", "required": true, "converter": "copy-array", "setter": "items" }, { "name": "selectedIndex", "type": "number", "default": -1, "converter": "int32", "setter": "selection" }], "events": [{ "name": "onSelectionChanged", "type": "(index: number) => void", "adapter": "number-action" }], "operations": ["focus"], "documentation": "Single-selection drop-down list.", "trimming": ["Avalonia.Controls.ComboBox"] },
-    { "kind": "ListBox", "nativeType": "Avalonia.Controls.ListBox", "adapter": "list-box", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "ListBoxProps", "handle": "unknown", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "items", "type": "readonly string[]", "required": true, "converter": "copy-array", "setter": "items" }, { "name": "selectedIndices", "type": "readonly number[]", "converter": "copy-array", "setter": "selection" }, { "name": "selectionMode", "type": "SelectionMode", "default": "single", "setter": "selection", "enumValues": ["single", "multiple"] }], "events": [{ "name": "onSelectionChanged", "type": "(indices: number[]) => void", "adapter": "indices-action" }], "operations": ["focus"], "documentation": "Single- or multiple-selection list.", "trimming": ["Avalonia.Controls.ListBox"] },
-    { "kind": "ItemsControl", "nativeType": "Avalonia.Controls.ItemsControl", "adapter": "items-control", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "ItemsControlProps", "handle": "unknown", "groups": ["common"], "props": [], "events": [], "operations": ["focus"], "documentation": "Native items host for keyed templated children.", "trimming": ["Avalonia.Controls.ItemsControl"] },
-    { "kind": "VirtualizingList", "nativeType": "Avalonia.Controls.ListBox", "adapter": "virtualizing-list", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "VirtualizingListProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "selectedIndices", "type": "readonly number[]", "converter": "copy-array", "setter": "selection" }, { "name": "selectionMode", "type": "SelectionMode", "default": "single", "setter": "selection", "enumValues": ["single", "multiple"] }], "events": [{ "name": "onSelectionChanged", "type": "(indices: number[]) => void", "adapter": "indices-action" }], "operations": ["focus"], "documentation": "Virtualizing native list whose keyed children are produced by a typed item template.", "trimming": ["Avalonia.Controls.ListBox", "Avalonia.Controls.VirtualizingStackPanel"] },
-    { "kind": "TreeView", "nativeType": "Avalonia.Controls.TreeView", "adapter": "tree-view", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "TreeViewProps", "handle": "unknown", "groups": ["common"], "props": [], "events": [], "operations": ["focus"], "documentation": "Hierarchical native tree host.", "trimming": ["Avalonia.Controls.TreeView"] },
-    { "kind": "TreeViewItem", "nativeType": "Avalonia.Controls.TreeViewItem", "adapter": "tree-view-item", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "TreeViewItemProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "header", "type": "string", "required": true, "setter": "content" }, { "name": "isExpanded", "type": "boolean", "default": false, "setter": "tree" }], "events": [{ "name": "onExpandedChanged", "type": "(expanded: boolean) => void", "adapter": "bool-action" }], "operations": ["focus"], "documentation": "One expandable native tree node.", "trimming": ["Avalonia.Controls.TreeViewItem"] },
-    { "kind": "Canvas", "nativeType": "Avalonia.Controls.Canvas", "adapter": "canvas", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "CanvasProps", "handle": "unknown", "groups": ["common"], "props": [], "events": [], "operations": ["focus"], "documentation": "Absolute-positioned child canvas.", "trimming": ["Avalonia.Controls.Canvas"] },
-    { "kind": "RichTextBlock", "nativeType": "Avalonia.Controls.TextBlock", "adapter": "rich-text-block", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "RichTextBlockProps", "handle": "TextBlockHandle", "groups": ["common"], "props": [{ "name": "runs", "type": "readonly RichTextRun[]", "required": true, "converter": "rich-text-json", "setter": "rich-text" }], "events": [], "operations": ["focus"], "documentation": "TextBlock with independently formatted inline runs.", "trimming": ["Avalonia.Controls.TextBlock", "Avalonia.Controls.Documents.Run"] },
-    { "kind": "DrawingCanvas", "nativeType": "SharpTS.Gui.DrawingSurface", "adapter": "drawing-canvas", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "DrawingCanvasProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "commands", "type": "readonly DrawingCommand[]", "required": true, "converter": "drawing-json", "setter": "drawing" }], "events": [], "operations": ["focus"], "documentation": "Retained vector drawing surface for lines, rectangles, and ellipses.", "trimming": ["SharpTS.Gui.DrawingSurface"] },
-    { "kind": "NumericUpDown", "nativeType": "Avalonia.Controls.NumericUpDown", "adapter": "numeric-up-down", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "NumericUpDownProps", "handle": "unknown", "groups": ["common", "textStyle", "contentStyle"], "props": [{ "name": "minimum", "type": "number", "default": 0, "setter": "range" }, { "name": "maximum", "type": "number", "default": 100, "setter": "range" }, { "name": "increment", "type": "number", "default": 1, "setter": "range" }, { "name": "value", "type": "number | null", "default": null, "setter": "range" }], "events": [{ "name": "onValueChanged", "type": "(value: number | null) => void", "adapter": "nullable-number-action" }], "operations": ["focus"], "documentation": "Numeric spinner input.", "trimming": ["Avalonia.Controls.NumericUpDown"] },
-    { "kind": "DatePicker", "nativeType": "Avalonia.Controls.DatePicker", "adapter": "date-picker", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "DatePickerProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "value", "type": "string | null", "default": null, "converter": "iso-date", "setter": "date" }], "events": [{ "name": "onValueChanged", "type": "(value: string | null) => void", "adapter": "nullable-string-action" }], "operations": ["focus"], "documentation": "ISO date picker.", "trimming": ["Avalonia.Controls.DatePicker"] },
-    { "kind": "TimePicker", "nativeType": "Avalonia.Controls.TimePicker", "adapter": "time-picker", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "TimePickerProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "value", "type": "string | null", "default": null, "converter": "iso-time", "setter": "time" }], "events": [{ "name": "onValueChanged", "type": "(value: string | null) => void", "adapter": "nullable-string-action" }], "operations": ["focus"], "documentation": "Time picker.", "trimming": ["Avalonia.Controls.TimePicker"] },
-    { "kind": "Slider", "nativeType": "Avalonia.Controls.Slider", "adapter": "slider", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "SliderProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "minimum", "type": "number", "default": 0, "setter": "range" }, { "name": "maximum", "type": "number", "default": 100, "setter": "range" }, { "name": "value", "type": "number", "default": 0, "setter": "range" }], "events": [{ "name": "onValueChanged", "type": "(value: number) => void", "adapter": "number-action" }], "operations": ["focus"], "documentation": "Continuous range input.", "trimming": ["Avalonia.Controls.Slider"] },
-    { "kind": "ProgressBar", "nativeType": "Avalonia.Controls.ProgressBar", "adapter": "progress-bar", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "ProgressBarProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "minimum", "type": "number", "default": 0, "setter": "range" }, { "name": "maximum", "type": "number", "default": 100, "setter": "range" }, { "name": "value", "type": "number", "default": 0, "setter": "range" }], "events": [], "operations": ["focus"], "documentation": "Read-only range progress display.", "trimming": ["Avalonia.Controls.ProgressBar"] },
-    { "kind": "Separator", "nativeType": "Avalonia.Controls.Separator", "adapter": "separator", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "SeparatorProps", "handle": "unknown", "groups": ["common"], "props": [], "events": [], "operations": ["focus"], "documentation": "Visual separator.", "trimming": ["Avalonia.Controls.Separator"] },
-    { "kind": "Image", "nativeType": "Avalonia.Controls.Image", "adapter": "image", "children": { "model": "none", "minimum": 0, "maximum": 0 }, "propsType": "ImageProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "source", "type": "string", "required": true, "converter": "asset-uri", "setter": "image" }, { "name": "stretch", "type": "Stretch", "default": "uniform", "setter": "image", "enumValues": ["none", "fill", "uniform", "uniformToFill"] }], "events": [{ "name": "onLoad", "type": "() => void", "adapter": "action" }, { "name": "onError", "type": "(message: string) => void", "adapter": "string-action" }], "operations": ["focus"], "documentation": "Displays an application image asset.", "trimming": ["Avalonia.Controls.Image"] },
-    { "kind": "TabControl", "nativeType": "Avalonia.Controls.TabControl", "adapter": "tab-control", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "TabControlProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "selectedIndex", "type": "number", "default": 0, "converter": "int32", "setter": "selection" }], "events": [{ "name": "onSelectionChanged", "type": "(index: number) => void", "adapter": "number-action" }], "operations": ["focus"], "documentation": "Tabbed page selector.", "trimming": ["Avalonia.Controls.TabControl"] },
-    { "kind": "TabItem", "nativeType": "Avalonia.Controls.TabItem", "adapter": "tab-item", "children": { "model": "singleElement", "minimum": 0, "maximum": 1 }, "propsType": "TabItemProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "header", "type": "string", "required": true, "setter": "content" }], "events": [], "operations": ["focus"], "documentation": "One tab page.", "trimming": ["Avalonia.Controls.TabItem"] },
-    { "kind": "Menu", "nativeType": "Avalonia.Controls.Menu", "adapter": "menu", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "MenuProps", "handle": "unknown", "groups": ["common"], "props": [], "events": [], "operations": ["focus"], "documentation": "Menu item container.", "trimming": ["Avalonia.Controls.Menu"] },
-    { "kind": "MenuItem", "nativeType": "Avalonia.Controls.MenuItem", "adapter": "menu-item", "children": { "model": "many", "minimum": 0, "maximum": -1 }, "propsType": "MenuItemProps", "handle": "unknown", "groups": ["common"], "props": [{ "name": "header", "type": "string", "required": true, "setter": "content" }, { "name": "isChecked", "type": "boolean", "default": false, "setter": "toggle" }], "events": [{ "name": "onClick", "type": "() => void", "adapter": "action" }], "operations": ["focus"], "documentation": "Menu command or submenu.", "trimming": ["Avalonia.Controls.MenuItem"] }
+    {
+      "kind": "Window",
+      "nativeType": "Avalonia.Controls.Window",
+      "adapter": "window",
+      "children": {
+        "model": "singleElement",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "propsType": "WindowProps",
+      "handle": "WindowHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "title",
+          "type": "string",
+          "default": "SharpTS GUI",
+          "setter": "window",
+          "documentation": "Text displayed in the window title bar."
+        },
+        {
+          "name": "canResize",
+          "type": "boolean",
+          "default": true,
+          "setter": "window",
+          "documentation": "Whether the user can resize the window."
+        },
+        {
+          "name": "theme",
+          "type": "Theme",
+          "default": "system",
+          "setter": "window",
+          "enumValues": [
+            "system",
+            "light",
+            "dark"
+          ],
+          "documentation": "Light, dark, or operating-system window theme."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Top-level desktop window.",
+      "trimming": [
+        "Avalonia.Controls.Window"
+      ]
+    },
+    {
+      "kind": "StackPanel",
+      "nativeType": "Avalonia.Controls.StackPanel",
+      "adapter": "stack-panel",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "StackPanelProps",
+      "handle": "StackPanelHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "spacing",
+          "type": "number",
+          "default": 0,
+          "setter": "layout",
+          "documentation": "Distance between adjacent child controls."
+        },
+        {
+          "name": "orientation",
+          "type": "Orientation",
+          "default": "vertical",
+          "setter": "layout",
+          "enumValues": [
+            "horizontal",
+            "vertical"
+          ],
+          "documentation": "Direction in which child controls are arranged."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Lays out children in one row or column.",
+      "trimming": [
+        "Avalonia.Controls.StackPanel"
+      ]
+    },
+    {
+      "kind": "ToolBar",
+      "nativeType": "Avalonia.Controls.StackPanel",
+      "adapter": "toolbar",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "StackPanelProps",
+      "handle": "StackPanelHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "spacing",
+          "type": "number",
+          "default": 0,
+          "setter": "layout",
+          "documentation": "Distance between adjacent child controls."
+        },
+        {
+          "name": "orientation",
+          "type": "Orientation",
+          "default": "horizontal",
+          "setter": "layout",
+          "enumValues": [
+            "horizontal",
+            "vertical"
+          ],
+          "documentation": "Direction in which child controls are arranged."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Horizontal command container.",
+      "trimming": [
+        "Avalonia.Controls.StackPanel"
+      ]
+    },
+    {
+      "kind": "WrapPanel",
+      "nativeType": "Avalonia.Controls.WrapPanel",
+      "adapter": "wrap-panel",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "WrapPanelProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "spacing",
+          "type": "number",
+          "default": 0,
+          "setter": "layout",
+          "documentation": "Distance between adjacent child controls."
+        },
+        {
+          "name": "orientation",
+          "type": "Orientation",
+          "default": "horizontal",
+          "setter": "layout",
+          "enumValues": [
+            "horizontal",
+            "vertical"
+          ],
+          "documentation": "Direction in which child controls are arranged."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Wraps children across available space.",
+      "trimming": [
+        "Avalonia.Controls.WrapPanel"
+      ]
+    },
+    {
+      "kind": "DockPanel",
+      "nativeType": "Avalonia.Controls.DockPanel",
+      "adapter": "dock-panel",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "DockPanelProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "lastChildFill",
+          "type": "boolean",
+          "default": true,
+          "setter": "layout",
+          "documentation": "Whether the last DockPanel child fills the remaining space."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Docks children to container edges.",
+      "trimming": [
+        "Avalonia.Controls.DockPanel"
+      ]
+    },
+    {
+      "kind": "Grid",
+      "nativeType": "Avalonia.Controls.Grid",
+      "adapter": "grid",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "GridProps",
+      "handle": "GridHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "rows",
+          "type": "string",
+          "default": "",
+          "converter": "grid-lengths",
+          "setter": "layout",
+          "documentation": "Comma-separated Avalonia grid row definitions."
+        },
+        {
+          "name": "columns",
+          "type": "string",
+          "default": "",
+          "converter": "grid-lengths",
+          "setter": "layout",
+          "documentation": "Comma-separated Avalonia grid column definitions."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Grid layout using Avalonia row and column syntax.",
+      "trimming": [
+        "Avalonia.Controls.Grid"
+      ]
+    },
+    {
+      "kind": "Border",
+      "nativeType": "Avalonia.Controls.Border",
+      "adapter": "border",
+      "children": {
+        "model": "singleElement",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "propsType": "BorderProps",
+      "handle": "BorderHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "padding",
+          "type": "Thickness",
+          "default": 0,
+          "converter": "thickness",
+          "setter": "border",
+          "documentation": "Space between the control border and its content."
+        },
+        {
+          "name": "background",
+          "type": "string",
+          "converter": "brush",
+          "setter": "border",
+          "documentation": "Background brush or color value."
+        },
+        {
+          "name": "borderBrush",
+          "type": "string",
+          "converter": "brush",
+          "setter": "border",
+          "documentation": "Brush or color used to draw the border."
+        },
+        {
+          "name": "borderThickness",
+          "type": "Thickness",
+          "default": 0,
+          "converter": "thickness",
+          "setter": "border",
+          "documentation": "Thickness of the border around the control."
+        },
+        {
+          "name": "cornerRadius",
+          "type": "number",
+          "default": 0,
+          "setter": "border",
+          "documentation": "Radius applied to the control corners."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Decorates one child with background and border.",
+      "trimming": [
+        "Avalonia.Controls.Border"
+      ]
+    },
+    {
+      "kind": "StatusBar",
+      "nativeType": "Avalonia.Controls.Border",
+      "adapter": "statusbar",
+      "children": {
+        "model": "singleElement",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "propsType": "BorderProps",
+      "handle": "BorderHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "padding",
+          "type": "Thickness",
+          "default": 0,
+          "converter": "thickness",
+          "setter": "border",
+          "documentation": "Space between the control border and its content."
+        },
+        {
+          "name": "background",
+          "type": "string",
+          "converter": "brush",
+          "setter": "border",
+          "documentation": "Background brush or color value."
+        },
+        {
+          "name": "borderBrush",
+          "type": "string",
+          "converter": "brush",
+          "setter": "border",
+          "documentation": "Brush or color used to draw the border."
+        },
+        {
+          "name": "borderThickness",
+          "type": "Thickness",
+          "default": 0,
+          "converter": "thickness",
+          "setter": "border",
+          "documentation": "Thickness of the border around the control."
+        },
+        {
+          "name": "cornerRadius",
+          "type": "number",
+          "default": 0,
+          "setter": "border",
+          "documentation": "Radius applied to the control corners."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Status container backed by a Border.",
+      "trimming": [
+        "Avalonia.Controls.Border"
+      ]
+    },
+    {
+      "kind": "ScrollViewer",
+      "nativeType": "Avalonia.Controls.ScrollViewer",
+      "adapter": "scroll-viewer",
+      "children": {
+        "model": "singleElement",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "propsType": "ScrollViewerProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "horizontalScrollBarVisibility",
+          "type": "ScrollBarVisibility",
+          "default": "auto",
+          "setter": "scroll",
+          "enumValues": [
+            "auto",
+            "visible",
+            "hidden",
+            "disabled"
+          ],
+          "documentation": "Visibility policy for the horizontal scroll bar."
+        },
+        {
+          "name": "verticalScrollBarVisibility",
+          "type": "ScrollBarVisibility",
+          "default": "auto",
+          "setter": "scroll",
+          "enumValues": [
+            "auto",
+            "visible",
+            "hidden",
+            "disabled"
+          ],
+          "documentation": "Visibility policy for the vertical scroll bar."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Scrollable single-child viewport.",
+      "trimming": [
+        "Avalonia.Controls.ScrollViewer"
+      ]
+    },
+    {
+      "kind": "TextBlock",
+      "nativeType": "Avalonia.Controls.TextBlock",
+      "adapter": "text-block",
+      "children": {
+        "model": "text",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "TextBlockProps",
+      "handle": "TextBlockHandle",
+      "groups": [
+        "common",
+        "textStyle"
+      ],
+      "props": [
+        {
+          "name": "textWrapping",
+          "type": "\"noWrap\" | \"wrap\"",
+          "default": "noWrap",
+          "setter": "text",
+          "enumValues": [
+            "noWrap",
+            "wrap"
+          ],
+          "documentation": "Whether text wraps when it exceeds the available width."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Displays textual children.",
+      "trimming": [
+        "Avalonia.Controls.TextBlock"
+      ]
+    },
+    {
+      "kind": "Button",
+      "nativeType": "Avalonia.Controls.Button",
+      "adapter": "button",
+      "children": {
+        "model": "text",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ButtonProps",
+      "handle": "ButtonHandle",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [],
+      "events": [
+        {
+          "name": "onClick",
+          "type": "() => void",
+          "adapter": "action",
+          "documentation": "Called when the control is activated."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Clickable textual button.",
+      "trimming": [
+        "Avalonia.Controls.Button"
+      ]
+    },
+    {
+      "kind": "TextBox",
+      "nativeType": "Avalonia.Controls.TextBox",
+      "adapter": "text-box",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "TextBoxProps",
+      "handle": "TextBoxHandle",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "text",
+          "type": "string",
+          "default": "",
+          "setter": "text-input",
+          "documentation": "Text value displayed or edited by the control."
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "setter": "text-input",
+          "documentation": "Hint displayed when the input contains no value."
+        },
+        {
+          "name": "isReadOnly",
+          "type": "boolean",
+          "default": false,
+          "setter": "text-input",
+          "documentation": "Whether the text value can be selected but not edited."
+        },
+        {
+          "name": "acceptsReturn",
+          "type": "boolean",
+          "default": false,
+          "setter": "text-input",
+          "documentation": "Whether the text box accepts the Return key as a line break."
+        },
+        {
+          "name": "maxLength",
+          "type": "number",
+          "default": 0,
+          "converter": "int32",
+          "setter": "text-input",
+          "documentation": "Maximum number of characters accepted by the text input."
+        }
+      ],
+      "events": [
+        {
+          "name": "onTextChanged",
+          "type": "(value: string) => void",
+          "adapter": "string-action",
+          "documentation": "Called after the editable text changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Editable text input.",
+      "trimming": [
+        "Avalonia.Controls.TextBox"
+      ]
+    },
+    {
+      "kind": "PasswordBox",
+      "nativeType": "Avalonia.Controls.TextBox",
+      "adapter": "password-box",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "PasswordBoxProps",
+      "handle": "TextBoxHandle",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "value",
+          "type": "string",
+          "default": "",
+          "setter": "text-input",
+          "documentation": "Current value of the control."
+        },
+        {
+          "name": "placeholder",
+          "type": "string",
+          "setter": "text-input",
+          "documentation": "Hint displayed when the input contains no value."
+        },
+        {
+          "name": "revealPassword",
+          "type": "boolean",
+          "default": false,
+          "setter": "text-input",
+          "documentation": "Whether password characters are displayed instead of masked."
+        },
+        {
+          "name": "maxLength",
+          "type": "number",
+          "default": 0,
+          "converter": "int32",
+          "setter": "text-input",
+          "documentation": "Maximum number of characters accepted by the text input."
+        }
+      ],
+      "events": [
+        {
+          "name": "onValueChanged",
+          "type": "(value: string) => void",
+          "adapter": "string-action",
+          "documentation": "Called after the control value changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Masked text input.",
+      "trimming": [
+        "Avalonia.Controls.TextBox"
+      ]
+    },
+    {
+      "kind": "CheckBox",
+      "nativeType": "Avalonia.Controls.CheckBox",
+      "adapter": "check-box",
+      "children": {
+        "model": "text",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "CheckBoxProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "isChecked",
+          "type": "boolean",
+          "default": false,
+          "setter": "toggle",
+          "documentation": "Whether the toggle control is checked."
+        }
+      ],
+      "events": [
+        {
+          "name": "onCheckedChanged",
+          "type": "(value: boolean) => void",
+          "adapter": "bool-action",
+          "documentation": "Called after the checked state changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Boolean toggle with a textual label.",
+      "trimming": [
+        "Avalonia.Controls.CheckBox"
+      ]
+    },
+    {
+      "kind": "RadioButton",
+      "nativeType": "Avalonia.Controls.RadioButton",
+      "adapter": "radio-button",
+      "children": {
+        "model": "text",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "RadioButtonProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "groupName",
+          "type": "string",
+          "required": true,
+          "setter": "toggle",
+          "documentation": "Name that groups mutually exclusive radio buttons."
+        },
+        {
+          "name": "isChecked",
+          "type": "boolean",
+          "default": false,
+          "setter": "toggle",
+          "documentation": "Whether the toggle control is checked."
+        }
+      ],
+      "events": [
+        {
+          "name": "onCheckedChanged",
+          "type": "(value: boolean) => void",
+          "adapter": "bool-action",
+          "documentation": "Called after the checked state changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Mutually exclusive grouped toggle.",
+      "trimming": [
+        "Avalonia.Controls.RadioButton"
+      ]
+    },
+    {
+      "kind": "ToggleSwitch",
+      "nativeType": "Avalonia.Controls.ToggleSwitch",
+      "adapter": "toggle-switch",
+      "children": {
+        "model": "text",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ToggleSwitchProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "isChecked",
+          "type": "boolean",
+          "default": false,
+          "setter": "toggle",
+          "documentation": "Whether the toggle control is checked."
+        }
+      ],
+      "events": [
+        {
+          "name": "onCheckedChanged",
+          "type": "(value: boolean) => void",
+          "adapter": "bool-action",
+          "documentation": "Called after the checked state changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Switch-style boolean toggle.",
+      "trimming": [
+        "Avalonia.Controls.ToggleSwitch"
+      ]
+    },
+    {
+      "kind": "ComboBox",
+      "nativeType": "Avalonia.Controls.ComboBox",
+      "adapter": "combo-box",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ComboBoxProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "items",
+          "type": "readonly string[]",
+          "required": true,
+          "converter": "copy-array",
+          "setter": "items",
+          "documentation": "Items displayed by the control."
+        },
+        {
+          "name": "selectedIndex",
+          "type": "number",
+          "default": -1,
+          "converter": "int32",
+          "setter": "selection",
+          "documentation": "Zero-based selected item index, or -1 when no item is selected."
+        }
+      ],
+      "events": [
+        {
+          "name": "onSelectionChanged",
+          "type": "(index: number) => void",
+          "adapter": "number-action",
+          "documentation": "Called after the selected item or items change."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Single-selection drop-down list.",
+      "trimming": [
+        "Avalonia.Controls.ComboBox"
+      ]
+    },
+    {
+      "kind": "ListBox",
+      "nativeType": "Avalonia.Controls.ListBox",
+      "adapter": "list-box",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ListBoxProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "items",
+          "type": "readonly string[]",
+          "required": true,
+          "converter": "copy-array",
+          "setter": "items",
+          "documentation": "Items displayed by the control."
+        },
+        {
+          "name": "selectedIndices",
+          "type": "readonly number[]",
+          "converter": "copy-array",
+          "setter": "selection",
+          "documentation": "Zero-based indices of the selected items."
+        },
+        {
+          "name": "selectionMode",
+          "type": "SelectionMode",
+          "default": "single",
+          "setter": "selection",
+          "enumValues": [
+            "single",
+            "multiple"
+          ],
+          "documentation": "Whether one or multiple items can be selected."
+        }
+      ],
+      "events": [
+        {
+          "name": "onSelectionChanged",
+          "type": "(indices: number[]) => void",
+          "adapter": "indices-action",
+          "documentation": "Called after the selected item or items change."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Single- or multiple-selection list.",
+      "trimming": [
+        "Avalonia.Controls.ListBox"
+      ]
+    },
+    {
+      "kind": "ItemsControl",
+      "nativeType": "Avalonia.Controls.ItemsControl",
+      "adapter": "items-control",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "ItemsControlProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Native items host for keyed templated children.",
+      "trimming": [
+        "Avalonia.Controls.ItemsControl"
+      ]
+    },
+    {
+      "kind": "VirtualizingList",
+      "nativeType": "Avalonia.Controls.ListBox",
+      "adapter": "virtualizing-list",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "VirtualizingListProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "selectedIndices",
+          "type": "readonly number[]",
+          "converter": "copy-array",
+          "setter": "selection",
+          "documentation": "Zero-based indices of the selected items."
+        },
+        {
+          "name": "selectionMode",
+          "type": "SelectionMode",
+          "default": "single",
+          "setter": "selection",
+          "enumValues": [
+            "single",
+            "multiple"
+          ],
+          "documentation": "Whether one or multiple items can be selected."
+        }
+      ],
+      "events": [
+        {
+          "name": "onSelectionChanged",
+          "type": "(indices: number[]) => void",
+          "adapter": "indices-action",
+          "documentation": "Called after the selected item or items change."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Virtualizing native list whose keyed children are produced by a typed item template.",
+      "trimming": [
+        "Avalonia.Controls.ListBox",
+        "Avalonia.Controls.VirtualizingStackPanel"
+      ]
+    },
+    {
+      "kind": "TreeView",
+      "nativeType": "Avalonia.Controls.TreeView",
+      "adapter": "tree-view",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "TreeViewProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Hierarchical native tree host.",
+      "trimming": [
+        "Avalonia.Controls.TreeView"
+      ]
+    },
+    {
+      "kind": "TreeViewItem",
+      "nativeType": "Avalonia.Controls.TreeViewItem",
+      "adapter": "tree-view-item",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "TreeViewItemProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "header",
+          "type": "string",
+          "required": true,
+          "setter": "content",
+          "documentation": "Text displayed as the item header."
+        },
+        {
+          "name": "isExpanded",
+          "type": "boolean",
+          "default": false,
+          "setter": "tree",
+          "documentation": "Whether the tree item is expanded."
+        }
+      ],
+      "events": [
+        {
+          "name": "onExpandedChanged",
+          "type": "(expanded: boolean) => void",
+          "adapter": "bool-action",
+          "documentation": "Called after the expanded state changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "One expandable native tree node.",
+      "trimming": [
+        "Avalonia.Controls.TreeViewItem"
+      ]
+    },
+    {
+      "kind": "Canvas",
+      "nativeType": "Avalonia.Controls.Canvas",
+      "adapter": "canvas",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "CanvasProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Absolute-positioned child canvas.",
+      "trimming": [
+        "Avalonia.Controls.Canvas"
+      ]
+    },
+    {
+      "kind": "RichTextBlock",
+      "nativeType": "Avalonia.Controls.TextBlock",
+      "adapter": "rich-text-block",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "RichTextBlockProps",
+      "handle": "TextBlockHandle",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "runs",
+          "type": "readonly RichTextRun[]",
+          "required": true,
+          "converter": "rich-text-json",
+          "setter": "rich-text",
+          "documentation": "Independently formatted text runs rendered by the control."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "TextBlock with independently formatted inline runs.",
+      "trimming": [
+        "Avalonia.Controls.TextBlock",
+        "Avalonia.Controls.Documents.Run"
+      ]
+    },
+    {
+      "kind": "DrawingCanvas",
+      "nativeType": "SharpTS.Gui.DrawingSurface",
+      "adapter": "drawing-canvas",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "DrawingCanvasProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "commands",
+          "type": "readonly DrawingCommand[]",
+          "required": true,
+          "converter": "drawing-json",
+          "setter": "drawing",
+          "documentation": "Retained drawing commands rendered by the canvas."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Retained vector drawing surface for lines, rectangles, and ellipses.",
+      "trimming": [
+        "SharpTS.Gui.DrawingSurface"
+      ]
+    },
+    {
+      "kind": "NumericUpDown",
+      "nativeType": "Avalonia.Controls.NumericUpDown",
+      "adapter": "numeric-up-down",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "NumericUpDownProps",
+      "handle": "unknown",
+      "groups": [
+        "common",
+        "textStyle",
+        "contentStyle"
+      ],
+      "props": [
+        {
+          "name": "minimum",
+          "type": "number",
+          "default": 0,
+          "setter": "range",
+          "documentation": "Minimum value accepted by the control."
+        },
+        {
+          "name": "maximum",
+          "type": "number",
+          "default": 100,
+          "setter": "range",
+          "documentation": "Maximum value accepted by the control."
+        },
+        {
+          "name": "increment",
+          "type": "number",
+          "default": 1,
+          "setter": "range",
+          "documentation": "Step applied when the numeric value is increased or decreased."
+        },
+        {
+          "name": "value",
+          "type": "number | null",
+          "default": null,
+          "setter": "range",
+          "documentation": "Current value of the control."
+        }
+      ],
+      "events": [
+        {
+          "name": "onValueChanged",
+          "type": "(value: number | null) => void",
+          "adapter": "nullable-number-action",
+          "documentation": "Called after the control value changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Numeric spinner input.",
+      "trimming": [
+        "Avalonia.Controls.NumericUpDown"
+      ]
+    },
+    {
+      "kind": "DatePicker",
+      "nativeType": "Avalonia.Controls.DatePicker",
+      "adapter": "date-picker",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "DatePickerProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "value",
+          "type": "string | null",
+          "default": null,
+          "converter": "iso-date",
+          "setter": "date",
+          "documentation": "Current value of the control."
+        }
+      ],
+      "events": [
+        {
+          "name": "onValueChanged",
+          "type": "(value: string | null) => void",
+          "adapter": "nullable-string-action",
+          "documentation": "Called after the control value changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "ISO date picker.",
+      "trimming": [
+        "Avalonia.Controls.DatePicker"
+      ]
+    },
+    {
+      "kind": "TimePicker",
+      "nativeType": "Avalonia.Controls.TimePicker",
+      "adapter": "time-picker",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "TimePickerProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "value",
+          "type": "string | null",
+          "default": null,
+          "converter": "iso-time",
+          "setter": "time",
+          "documentation": "Current value of the control."
+        }
+      ],
+      "events": [
+        {
+          "name": "onValueChanged",
+          "type": "(value: string | null) => void",
+          "adapter": "nullable-string-action",
+          "documentation": "Called after the control value changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Time picker.",
+      "trimming": [
+        "Avalonia.Controls.TimePicker"
+      ]
+    },
+    {
+      "kind": "Slider",
+      "nativeType": "Avalonia.Controls.Slider",
+      "adapter": "slider",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "SliderProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "minimum",
+          "type": "number",
+          "default": 0,
+          "setter": "range",
+          "documentation": "Minimum value accepted by the control."
+        },
+        {
+          "name": "maximum",
+          "type": "number",
+          "default": 100,
+          "setter": "range",
+          "documentation": "Maximum value accepted by the control."
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "default": 0,
+          "setter": "range",
+          "documentation": "Current value of the control."
+        }
+      ],
+      "events": [
+        {
+          "name": "onValueChanged",
+          "type": "(value: number) => void",
+          "adapter": "number-action",
+          "documentation": "Called after the control value changes."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Continuous range input.",
+      "trimming": [
+        "Avalonia.Controls.Slider"
+      ]
+    },
+    {
+      "kind": "ProgressBar",
+      "nativeType": "Avalonia.Controls.ProgressBar",
+      "adapter": "progress-bar",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ProgressBarProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "minimum",
+          "type": "number",
+          "default": 0,
+          "setter": "range",
+          "documentation": "Minimum value accepted by the control."
+        },
+        {
+          "name": "maximum",
+          "type": "number",
+          "default": 100,
+          "setter": "range",
+          "documentation": "Maximum value accepted by the control."
+        },
+        {
+          "name": "value",
+          "type": "number",
+          "default": 0,
+          "setter": "range",
+          "documentation": "Current value of the control."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Read-only range progress display.",
+      "trimming": [
+        "Avalonia.Controls.ProgressBar"
+      ]
+    },
+    {
+      "kind": "Separator",
+      "nativeType": "Avalonia.Controls.Separator",
+      "adapter": "separator",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "SeparatorProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Visual separator.",
+      "trimming": [
+        "Avalonia.Controls.Separator"
+      ]
+    },
+    {
+      "kind": "Image",
+      "nativeType": "Avalonia.Controls.Image",
+      "adapter": "image",
+      "children": {
+        "model": "none",
+        "minimum": 0,
+        "maximum": 0
+      },
+      "propsType": "ImageProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "source",
+          "type": "string",
+          "required": true,
+          "converter": "asset-uri",
+          "setter": "image",
+          "documentation": "Application asset URI or path of the displayed image."
+        },
+        {
+          "name": "stretch",
+          "type": "Stretch",
+          "default": "uniform",
+          "setter": "image",
+          "enumValues": [
+            "none",
+            "fill",
+            "uniform",
+            "uniformToFill"
+          ],
+          "documentation": "How the image is resized to fit its layout slot."
+        }
+      ],
+      "events": [
+        {
+          "name": "onLoad",
+          "type": "() => void",
+          "adapter": "action",
+          "documentation": "Called after the image loads successfully."
+        },
+        {
+          "name": "onError",
+          "type": "(message: string) => void",
+          "adapter": "string-action",
+          "documentation": "Called when the image cannot be loaded, with an error message."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Displays an application image asset.",
+      "trimming": [
+        "Avalonia.Controls.Image"
+      ]
+    },
+    {
+      "kind": "TabControl",
+      "nativeType": "Avalonia.Controls.TabControl",
+      "adapter": "tab-control",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "TabControlProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "selectedIndex",
+          "type": "number",
+          "default": 0,
+          "converter": "int32",
+          "setter": "selection",
+          "documentation": "Zero-based selected item index, or -1 when no item is selected."
+        }
+      ],
+      "events": [
+        {
+          "name": "onSelectionChanged",
+          "type": "(index: number) => void",
+          "adapter": "number-action",
+          "documentation": "Called after the selected item or items change."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Tabbed page selector.",
+      "trimming": [
+        "Avalonia.Controls.TabControl"
+      ]
+    },
+    {
+      "kind": "TabItem",
+      "nativeType": "Avalonia.Controls.TabItem",
+      "adapter": "tab-item",
+      "children": {
+        "model": "singleElement",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "propsType": "TabItemProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "header",
+          "type": "string",
+          "required": true,
+          "setter": "content",
+          "documentation": "Text displayed as the item header."
+        }
+      ],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "One tab page.",
+      "trimming": [
+        "Avalonia.Controls.TabItem"
+      ]
+    },
+    {
+      "kind": "Menu",
+      "nativeType": "Avalonia.Controls.Menu",
+      "adapter": "menu",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "MenuProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [],
+      "events": [],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Menu item container.",
+      "trimming": [
+        "Avalonia.Controls.Menu"
+      ]
+    },
+    {
+      "kind": "MenuItem",
+      "nativeType": "Avalonia.Controls.MenuItem",
+      "adapter": "menu-item",
+      "children": {
+        "model": "many",
+        "minimum": 0,
+        "maximum": -1
+      },
+      "propsType": "MenuItemProps",
+      "handle": "unknown",
+      "groups": [
+        "common"
+      ],
+      "props": [
+        {
+          "name": "header",
+          "type": "string",
+          "required": true,
+          "setter": "content",
+          "documentation": "Text displayed as the item header."
+        },
+        {
+          "name": "isChecked",
+          "type": "boolean",
+          "default": false,
+          "setter": "toggle",
+          "documentation": "Whether the toggle control is checked."
+        }
+      ],
+      "events": [
+        {
+          "name": "onClick",
+          "type": "() => void",
+          "adapter": "action",
+          "documentation": "Called when the control is activated."
+        }
+      ],
+      "operations": [
+        "focus"
+      ],
+      "documentation": "Menu command or submenu.",
+      "trimming": [
+        "Avalonia.Controls.MenuItem"
+      ]
+    }
   ]
 }
