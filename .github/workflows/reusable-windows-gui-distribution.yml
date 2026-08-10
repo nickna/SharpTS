@@ -1,0 +1,163 @@
+name: Reusable Windows GUI distribution
+
+on:
+  workflow_call:
+    inputs:
+      payload_artifact:
+        description: Artifact containing publish/ and assets/ directories
+        required: true
+        type: string
+      executable:
+        description: Executable path relative to publish/
+        required: true
+        type: string
+      package_identity:
+        required: true
+        type: string
+      display_name:
+        required: true
+        type: string
+      version:
+        description: Four-part MSIX version
+        required: true
+        type: string
+      package_uri:
+        description: Final HTTPS URI of the versioned MSIX
+        required: true
+        type: string
+      architecture:
+        required: false
+        default: x64
+        type: string
+      environment_name:
+        required: false
+        default: windows-gui-distribution
+        type: string
+    secrets:
+      WINDOWS_SIGNING_PFX_BASE64:
+        required: true
+      WINDOWS_SIGNING_PFX_PASSWORD:
+        required: true
+    outputs:
+      distribution_artifact:
+        description: Name of the uploaded signed distribution artifact
+        value: ${{ jobs.package.outputs.distribution_artifact }}
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: windows-2025
+    timeout-minutes: 30
+    environment: ${{ inputs.environment_name }}
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    outputs:
+      distribution_artifact: ${{ steps.artifact_name.outputs.value }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: ${{ inputs.payload_artifact }}
+          path: artifacts/distribution-input
+
+      - name: Validate distribution input
+        shell: pwsh
+        env:
+          EXECUTABLE: ${{ inputs.executable }}
+        run: |
+          $publish = 'artifacts/distribution-input/publish'
+          $assets = 'artifacts/distribution-input/assets'
+          if (-not (Test-Path -LiteralPath $publish -PathType Container)) { throw 'The payload artifact must contain publish/.' }
+          if (-not (Test-Path -LiteralPath $assets -PathType Container)) { throw 'The payload artifact must contain assets/.' }
+          $executable = [IO.Path]::GetFullPath($env:EXECUTABLE, (Resolve-Path $publish).Path)
+          $prefix = (Resolve-Path $publish).Path.TrimEnd('\') + '\'
+          if (-not $executable.StartsWith($prefix, [StringComparison]::OrdinalIgnoreCase) -or -not (Test-Path -LiteralPath $executable -PathType Leaf)) {
+            throw 'The executable must resolve to a file inside publish/.'
+          }
+
+      - name: Import protected signing certificate
+        id: certificate
+        shell: pwsh
+        env:
+          PFX_BASE64: ${{ secrets.WINDOWS_SIGNING_PFX_BASE64 }}
+          PFX_PASSWORD: ${{ secrets.WINDOWS_SIGNING_PFX_PASSWORD }}
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:PFX_BASE64) -or [string]::IsNullOrWhiteSpace($env:PFX_PASSWORD)) {
+            throw 'The protected environment must provide signing PFX secrets.'
+          }
+          $pfxPath = Join-Path $env:RUNNER_TEMP 'windows-gui-signing.pfx'
+          [IO.File]::WriteAllBytes($pfxPath, [Convert]::FromBase64String($env:PFX_BASE64))
+          $password = ConvertTo-SecureString $env:PFX_PASSWORD -AsPlainText -Force
+          $certificate = Import-PfxCertificate -FilePath $pfxPath -CertStoreLocation Cert:\CurrentUser\My -Password $password
+          Remove-Item -LiteralPath $pfxPath -Force
+          "thumbprint=$($certificate.Thumbprint)" >> $env:GITHUB_OUTPUT
+          "publisher=$($certificate.Subject)" >> $env:GITHUB_OUTPUT
+
+      - name: Build, sign, and verify MSIX release evidence
+        shell: pwsh
+        env:
+          PACKAGE_IDENTITY: ${{ inputs.package_identity }}
+          DISPLAY_NAME: ${{ inputs.display_name }}
+          PACKAGE_VERSION: ${{ inputs.version }}
+          PACKAGE_URI: ${{ inputs.package_uri }}
+          PACKAGE_ARCHITECTURE: ${{ inputs.architecture }}
+          EXECUTABLE: ${{ inputs.executable }}
+          CERTIFICATE_PUBLISHER: ${{ steps.certificate.outputs.publisher }}
+          CERTIFICATE_THUMBPRINT: ${{ steps.certificate.outputs.thumbprint }}
+        run: |
+          scripts/package-gui-windows.ps1 `
+            -PublishDirectory 'artifacts/distribution-input/publish' `
+            -OutputDirectory 'artifacts/windows-distribution' `
+            -PackageIdentity $env:PACKAGE_IDENTITY `
+            -Publisher $env:CERTIFICATE_PUBLISHER `
+            -PublisherDisplayName $env:DISPLAY_NAME `
+            -DisplayName $env:DISPLAY_NAME `
+            -Version $env:PACKAGE_VERSION `
+            -Architecture $env:PACKAGE_ARCHITECTURE `
+            -Executable $env:EXECUTABLE `
+            -AssetsDirectory 'artifacts/distribution-input/assets' `
+            -PackageUri $env:PACKAGE_URI `
+            -CertificateThumbprint $env:CERTIFICATE_THUMBPRINT `
+            -BuildInvocationId '${{ github.run_id }}' `
+            -SourceCommit '${{ github.sha }}' `
+            -RequireSigned
+
+      - name: Attest build provenance
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: artifacts/windows-distribution/*.msix
+
+      - name: Attest SPDX SBOM
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: artifacts/windows-distribution/*.msix
+          sbom-path: artifacts/windows-distribution/*.spdx.json
+
+      - name: Set artifact name
+        id: artifact_name
+        shell: pwsh
+        run: '"value=signed-windows-gui" >> $env:GITHUB_OUTPUT'
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-windows-gui
+          path: |
+            artifacts/windows-distribution/*.msix
+            artifacts/windows-distribution/*.appinstaller
+            artifacts/windows-distribution/*.spdx.json
+            artifacts/windows-distribution/*.intoto.jsonl
+            artifacts/windows-distribution/SHA256SUMS
+          if-no-files-found: error
+
+      - name: Remove signing certificate
+        if: always() && steps.certificate.outputs.thumbprint != ''
+        shell: pwsh
+        run: Remove-Item -LiteralPath 'Cert:\CurrentUser\My\${{ steps.certificate.outputs.thumbprint }}' -Force

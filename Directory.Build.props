@@ -1,4 +1,6 @@
 <Project>
+  <Import Project="eng/GuiPreviewVersion.props" />
+
   <PropertyGroup>
     <!-- Target framework + C# language settings shared by every project in the repo.
          Individual projects only override these when they have a concrete reason to. -->

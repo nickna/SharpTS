@@ -23,7 +23,8 @@ $supportedRuntimeIdentifiers = @($supportedPlatforms.SelectNodes("//SharpTSGuiSu
 if ($RuntimeIdentifier -notin $supportedRuntimeIdentifiers) {
     throw "SharpTS.Gui.Sdk supports only $($supportedRuntimeIdentifiers -join ', '); got '$RuntimeIdentifier'."
 }
-$version = "0.3.0-preview.1"
+$versionInfo = & (Join-Path $repositoryRoot "scripts\get-gui-preview-version.ps1")
+$version = $versionInfo.Version
 $isWindowsRid = $RuntimeIdentifier.StartsWith("win-", [StringComparison]::Ordinal)
 $isMacOsRid = $RuntimeIdentifier.StartsWith("osx-", [StringComparison]::Ordinal)
 $platformArtifactName = if ($isWindowsRid) { "windows-preview" } else { "macos-preview" }

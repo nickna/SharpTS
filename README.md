@@ -65,8 +65,8 @@ SharpTS supports two execution modes:
 SharpTS can build retained, reactive Avalonia desktop applications entirely in TypeScript/TSX.
 The supported public preview targets `win-x64` and `win-arm64`, interpreted and compiled development runs,
 framework-dependent directory publishing, and compiled self-contained single-file publishing.
-The SDK also carries experimental `osx-x64` and `osx-arm64` candidates; those targets remain
-uncertified until their native CI and Apple distribution gates run.
+The SDK also carries an experimental `osx-arm64` candidate; that target remains uncertified until
+its native CI and Apple distribution gates run. macOS Intel is not supported.
 
 ```powershell
 sharpts new avalonia -n CounterApp

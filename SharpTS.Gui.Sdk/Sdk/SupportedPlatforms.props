@@ -1,6 +1,6 @@
 <Project>
   <PropertyGroup>
-    <SharpTSGuiSupportedRuntimeIdentifiers>win-x64;win-arm64;osx-x64;osx-arm64</SharpTSGuiSupportedRuntimeIdentifiers>
+    <SharpTSGuiSupportedRuntimeIdentifiers>win-x64;win-arm64;osx-arm64</SharpTSGuiSupportedRuntimeIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,10 +11,6 @@
     <SharpTSGuiSupportedRuntimeIdentifier Include="win-arm64">
       <Architecture>Arm64</Architecture>
       <RuntimeAssetDirectory>win-arm64</RuntimeAssetDirectory>
-    </SharpTSGuiSupportedRuntimeIdentifier>
-    <SharpTSGuiSupportedRuntimeIdentifier Include="osx-x64">
-      <Architecture>X64</Architecture>
-      <RuntimeAssetDirectory>osx</RuntimeAssetDirectory>
     </SharpTSGuiSupportedRuntimeIdentifier>
     <SharpTSGuiSupportedRuntimeIdentifier Include="osx-arm64">
       <Architecture>Arm64</Architecture>

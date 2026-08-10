@@ -4,6 +4,7 @@ param()
 $ErrorActionPreference = 'Stop'
 $packager = Join-Path $PSScriptRoot 'package-gui-windows.ps1'
 $collector = Join-Path $PSScriptRoot 'collect-gui-support-bundle.ps1'
+$canonicalAssets = Join-Path (Split-Path -Parent $PSScriptRoot) 'distribution\windows\assets'
 $script:passed = 0
 $script:failed = 0
 
@@ -65,6 +66,29 @@ function Invoke-Packager($Fixture, [hashtable]$Extra = @{}) {
     }
     foreach ($entry in $Extra.GetEnumerator()) { $arguments[$entry.Key] = $entry.Value }
     return & $packager @arguments
+}
+
+Invoke-Test 'canonical Windows assets are branded, correctly sized PNGs' {
+    Add-Type -AssemblyName System.Drawing
+    foreach ($asset in @(
+        @{ Name = 'Square44x44Logo.png'; Size = 44 },
+        @{ Name = 'Square150x150Logo.png'; Size = 150 },
+        @{ Name = 'StoreLogo.png'; Size = 50 })) {
+        $path = Join-Path $canonicalAssets $asset.Name
+        Assert-True (Test-Path -LiteralPath $path -PathType Leaf) "Missing canonical asset $($asset.Name)."
+        $bitmap = [Drawing.Bitmap]::new($path)
+        try {
+            Assert-True ($bitmap.Width -eq $asset.Size -and $bitmap.Height -eq $asset.Size) "$($asset.Name) has incorrect dimensions."
+            $colors = [Collections.Generic.HashSet[int]]::new()
+            for ($x = 0; $x -lt $bitmap.Width; $x += [Math]::Max(1, [int]($bitmap.Width / 10))) {
+                for ($y = 0; $y -lt $bitmap.Height; $y += [Math]::Max(1, [int]($bitmap.Height / 10))) {
+                    $null = $colors.Add($bitmap.GetPixel($x, $y).ToArgb())
+                }
+            }
+            Assert-True ($colors.Count -ge 3) "$($asset.Name) appears to be a blank placeholder."
+        }
+        finally { $bitmap.Dispose() }
+    }
 }
 
 Invoke-Test 'stage-only package emits valid identity, update, SBOM, provenance, and checksums' {

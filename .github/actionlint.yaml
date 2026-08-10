@@ -1,0 +1,4 @@
+self-hosted-runner:
+  labels:
+    - windows-11-vs2026-arm
+    - sharpts-gui

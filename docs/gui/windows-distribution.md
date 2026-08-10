@@ -55,10 +55,19 @@ binaries, builds and signs the MSIX with Windows SDK tools, verifies Authenticod
 requiring the Windows SDK. It is useful in pull requests but is not release evidence. A release
 must use `-RequireSigned`; an unsigned MSIX is only a development artifact.
 
-The protected `windows-gui-distribution.yml` workflow imports a production PFX into the ephemeral
-runner, packages the already-tested x64 Native AOT consumer, removes the certificate in an
-`always()` step, and publishes GitHub Sigstore provenance and SBOM attestations. Production secrets
-belong in the `windows-gui-distribution` environment and must never be printed or committed.
+The protected `windows-gui-distribution.yml` workflow is the SharpTS certification caller. It
+builds and tests the x64 Native AOT consumer, then uploads an artifact with `publish/` and `assets/`
+directories. `reusable-windows-gui-distribution.yml` consumes that immutable artifact, imports a
+production PFX into the ephemeral runner, packages it without rebuilding, removes the certificate
+in an `always()` step, and publishes GitHub Sigstore provenance and SBOM attestations.
+
+Other applications can call the reusable workflow after their own build and test jobs. The input
+artifact contract is `publish/<application files>` plus `assets/Square44x44Logo.png`,
+`assets/Square150x150Logo.png`, and `assets/StoreLogo.png`; the `executable` input is relative to
+`publish/`. The caller supplies identity, display name, four-part version, architecture, and final
+HTTPS package URI. Production secrets belong in the selected protected environment and must never
+be printed or committed. The repository's branded assets live in `distribution/windows/assets` and
+can be reproduced with `scripts/generate-gui-windows-assets.ps1`.
 
 Verify downloaded artifacts independently:
 
