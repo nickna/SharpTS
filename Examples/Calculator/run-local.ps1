@@ -4,7 +4,7 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $artifactRoot = Join-Path $root 'artifacts\calculator-local'
 $feed = Join-Path $root 'artifacts\tsx-api-feed'
 $packages = Join-Path $artifactRoot 'packages'
-$sdkVersion = '0.3.0-preview.1'
+$sdkVersion = '0.0.0-local'
 New-Item -ItemType Directory -Force -Path $feed, $packages | Out-Null
 $env:AVALONIA_TELEMETRY_OPTOUT = '1'
 $env:NUGET_PACKAGES = $packages
@@ -14,7 +14,7 @@ dotnet publish (Join-Path $root 'SharpTS.Gui.Host\SharpTS.Gui.Host.csproj') -c R
 if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the GUI host.' }
 dotnet pack (Join-Path $root 'SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj') -c Release -o $feed -p:MinVerVersionOverride=$sdkVersion
 if ($LASTEXITCODE -ne 0) { throw 'Failed to pack the GUI SDK.' }
-# This script intentionally republishes the same preview version while developing locally.
+# This script intentionally republishes the same local version while developing.
 # NuGet otherwise reuses the previously extracted package and can run stale compiler/runtime
 # binaries even though the package in the local feed was just rebuilt.
 $sdkPackageCache = Join-Path $packages (Join-Path 'sharpts.gui.sdk' $sdkVersion)

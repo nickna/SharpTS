@@ -31,6 +31,14 @@ foreach ($file in $workflowFiles) {
         }
     }
 
+    foreach ($upload in [regex]::Matches(
+        $content,
+        '(?ms)^\s*-?\s*uses:\s*actions/upload-artifact@[0-9a-f]{40}[^\r\n]*\r?\n(?<body>(?:\s{8,}[^\r\n]*\r?\n){1,20})')) {
+        if ($upload.Groups['body'].Value -notmatch '(?m)^\s+retention-days:\s*\d+\s*$') {
+            $errors.Add("$relativePath upload-artifact step must declare retention-days.")
+        }
+    }
+
     $checkouts = [regex]::Matches($content, '(?ms)^\s*- uses: actions/checkout@[0-9a-f]{40}[^\r\n]*\r?\n(?<body>(?:\s{8,}[^\r\n]*\r?\n){0,5})')
     foreach ($checkout in $checkouts) {
         if ($checkout.Groups['body'].Value -notmatch '(?m)^\s+persist-credentials:\s*false\s*$') {
@@ -47,24 +55,55 @@ if ($benchmark -notmatch 'bun-version-file:\s*\.bun-version') {
     $errors.Add('benchmarks.yml must use .bun-version.')
 }
 
-foreach ($workflowName in @('windows-desktop-preview.yml', 'macos-desktop-preview.yml')) {
-    $content = Get-Content -LiteralPath (Join-Path $workflowRoot $workflowName) -Raw
-    foreach ($requiredPath in @('Directory.Build.props', 'eng/GuiPreviewVersion.props', 'global.json', 'scripts/get-gui-preview-version.ps1')) {
-        if (-not $content.Contains($requiredPath, [StringComparison]::Ordinal)) {
-            $errors.Add("$workflowName path filters must include $requiredPath.")
-        }
+$desktop = Get-Content -LiteralPath (Join-Path $workflowRoot 'desktop-gui.yml') -Raw
+foreach ($requiredText in @(
+    'name: Desktop GUI',
+    'cancel-in-progress: ${{ github.event_name == ''pull_request'' }}',
+    'scripts/get-desktop-gui-ci-scope.ps1',
+    'runs-on: ubuntu-24.04',
+    'retention-days: 3',
+    'retention-days: 7',
+    'runs-on: windows-11-vs2026-arm',
+    'name: Gate'
+)) {
+    if (-not $desktop.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("desktop-gui.yml is missing routed desktop contract text: $requiredText")
     }
-    if ($content -match 'SharpTS\.Gui\.Sdk\.0\.3\.0-preview\.1\.nupkg' -or $content -match '-ShortVersion\s+0\.2\.0') {
-        $errors.Add("$workflowName contains a duplicated GUI version literal.")
+}
+foreach ($forbiddenText in @(
+    'windows-desktop-preview',
+    'macos-desktop-preview',
+    'self-hosted',
+    'Hosted scheduler and lifecycle conformance`n        run: dotnet test SharpTS.Tests'
+)) {
+    if ($desktop.Contains($forbiddenText, [StringComparison]::Ordinal)) {
+        $errors.Add("desktop-gui.yml retains duplicated or obsolete text: $forbiddenText")
     }
+}
+$windowsJobStart = $desktop.IndexOf('  windows-x64:', [StringComparison]::Ordinal)
+$windowsJobEnd = $desktop.IndexOf('  windows-arm64-cross-publish:', [StringComparison]::Ordinal)
+$windowsJob = $desktop.Substring($windowsJobStart, $windowsJobEnd - $windowsJobStart)
+if ($windowsJob -match 'FullyQualifiedName~HostedInterpreterRuntimeTests' -or
+    $windowsJob -match 'dotnet test SharpTS\.Gui\.Conformance\.Tests') {
+    $errors.Add('desktop-gui.yml duplicates Windows tests already executed by CI.')
 }
 
+$scopeScript = Join-Path $repositoryRoot 'scripts\get-desktop-gui-ci-scope.ps1'
+$commonScope = & $scopeScript -ChangedPath 'SharpTS.Gui/runtime.ts'
+$windowsScope = & $scopeScript -ChangedPath 'distribution/windows/AppxManifest.xml'
+$macScope = & $scopeScript -ChangedPath 'distribution/macos/Entitlements.plist'
+$irrelevantScope = & $scopeScript -ChangedPath 'docs/README.md'
+if (-not $commonScope.Windows -or -not $commonScope.MacOS) { $errors.Add('Shared GUI changes must enable both desktop platforms.') }
+if (-not $windowsScope.Windows -or $windowsScope.MacOS) { $errors.Add('Windows-only distribution changes must enable only Windows jobs.') }
+if ($macScope.Windows -or -not $macScope.MacOS) { $errors.Add('macOS-only distribution changes must enable only macOS jobs.') }
+if ($irrelevantScope.Windows -or $irrelevantScope.MacOS) { $errors.Add('Unrelated changes must skip desktop platform jobs.') }
+
 $publish = Get-Content -LiteralPath (Join-Path $workflowRoot 'publish.yml') -Raw
-foreach ($requiredText in @('./scripts/sync-gui-preview-version.ps1 -Version','-p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }}','-p:SharpTSGuiHostLibrary=true','SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg','-PackageVersion "${{ steps.version.outputs.VERSION }}"','SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg')) {
+foreach ($requiredText in @('./scripts/sync-gui-version.ps1 -Version','./scripts/sync-gui-version.ps1 -Check -Version','MinVerVersionOverride=$VERSION','environment: nuget-release','id-token: write','NuGet/login@8d196754b4036150537f80ac539e15c2f1028841','user: nbn','steps.nuget_login.outputs.NUGET_API_KEY','-p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }}','-p:SharpTSGuiHostLibrary=true','SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg','-PackageVersion "${{ steps.version.outputs.VERSION }}"','SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg')) {
     if (-not $publish.Contains($requiredText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml is missing unified GUI release contract text: $requiredText") }
 }
-foreach ($forbiddenText in @('SharpTSGuiSkipPack','Invoke-WebRequest','gui_package_filename','PACKAGE_FILE_NAME','Stage published Windows GUI SDK preview')) {
-    if ($publish.Contains($forbiddenText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml retains fixed GUI preview publication logic: $forbiddenText") }
+foreach ($forbiddenText in @('SharpTSGuiSkipPack','Invoke-WebRequest','gui_package_filename','PACKAGE_FILE_NAME','sync-gui-preview-version','secrets.NUGET_API_KEY')) {
+    if ($publish.Contains($forbiddenText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml retains fixed or obsolete GUI publication logic: $forbiddenText") }
 }
 $releaseCommand = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\nuget-release.ps1') -Raw
 if ($releaseCommand -notmatch '\$VerificationAttempts\s*=\s*30' -or $releaseCommand -notmatch '\$VerificationDelaySeconds\s*=\s*20') { $errors.Add('nuget-release.ps1 must poll NuGet 30 times at 20-second intervals by default.') }

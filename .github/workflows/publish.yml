@@ -19,9 +19,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
@@ -40,14 +45,24 @@ jobs:
         id: version
         run: |
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            VERSION=${GITHUB_REF_NAME#v}
           else
-            echo "VERSION=0.0.0-dryrun.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+            VERSION=0.0.0-dryrun.${GITHUB_RUN_NUMBER}
           fi
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $VERSION" >&2
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "MinVerVersionOverride=$VERSION" >> "$GITHUB_ENV"
 
       - name: Stage release version into GUI artifacts
         shell: pwsh
-        run: ./scripts/sync-gui-preview-version.ps1 -Version "${{ steps.version.outputs.VERSION }}"
+        run: ./scripts/sync-gui-version.ps1 -Version "${{ steps.version.outputs.VERSION }}"
+
+      - name: Verify staged GUI version projections
+        shell: pwsh
+        run: ./scripts/sync-gui-version.ps1 -Check -Version "${{ steps.version.outputs.VERSION }}"
 
       - name: Restore dependencies
         run: dotnet restore
@@ -110,9 +125,9 @@ jobs:
           -PackageVersion "${{ steps.version.outputs.VERSION }}"
           -PackageOnly
 
-      # A new package ID must be onboarded on NuGet and added to the API key's
-      # scope before a tag can publish any established package. This also keeps
-      # every package artifact tied to a package ID that NuGet already serves.
+      # A new package ID must be onboarded under the Trusted Publishing policy's
+      # NuGet owner before a tag can publish it. This also keeps every package
+      # artifact tied to a package ID that NuGet already serves.
       - name: Preflight NuGet package IDs and artifacts
         shell: pwsh
         run: >-
@@ -134,6 +149,7 @@ jobs:
           name: nupkg
           path: ./nupkg/*.nupkg
           if-no-files-found: error
+          retention-days: 7
 
   # Managed SKU (#1324 Track 0): self-contained single-file binaries per RID,
   # attached to the GitHub Release. No .NET install required on the target
@@ -152,6 +168,8 @@ jobs:
     needs: build
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      MinVerVersionOverride: ${{ needs.build.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -262,6 +280,7 @@ jobs:
           name: managed-${{ matrix.rid }}
           path: sharpts-${{ needs.build.outputs.version }}-${{ matrix.rid }}.*
           if-no-files-found: error
+          retention-days: 7
 
   # Native SKU (#1324 Phase 3): a true Native AOT compiler/interpreter for the
   # frozen straight-TypeScript surface. Each RID runs on its own architecture so
@@ -273,6 +292,8 @@ jobs:
     needs: build
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
+    env:
+      MinVerVersionOverride: ${{ needs.build.outputs.version }}
     strategy:
       fail-fast: false
       matrix:
@@ -482,6 +503,7 @@ jobs:
           name: native-${{ matrix.rid }}
           path: sharpts-native-${{ needs.build.outputs.version }}-${{ matrix.rid }}.*
           if-no-files-found: error
+          retention-days: 7
 
       - name: Upload publish diagnostics
         if: always()
@@ -494,6 +516,7 @@ jobs:
           path: |
             native-publish-${{ matrix.rid }}.log
             native-publish-warning-summary-${{ matrix.rid }}.json
+          retention-days: 7
 
   # Runs only for real tags, and only after every managed and native artifact
   # has been built and smoke-tested. This is the single publish point: NuGet
@@ -503,7 +526,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
       contents: write
+      id-token: write
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: nuget-release
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -533,10 +559,19 @@ jobs:
           path: ./assets
           merge-multiple: true
 
+      # Exchange this job's environment-bound GitHub OIDC token for a one-hour
+      # NuGet API key. The matching nuget.org policy is restricted to
+      # nickna/SharpTS, publish.yml, and the nuget-release environment.
+      - name: Authenticate to NuGet with trusted publishing
+        id: nuget_login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1
+        with:
+          user: nbn
+
       - name: Push and verify NuGet packages
         shell: pwsh
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
         run: >-
           ./scripts/nuget-release.ps1
           -Action Publish

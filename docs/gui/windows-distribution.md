@@ -7,7 +7,7 @@ once an application is distributed because Windows uses that pair for upgrades, 
 and notification identity. See the [GUI overview](README.md#platform-status) for the current
 Windows target matrix.
 
-That package identity is also the prerequisite for `showNotification`. The preview notification
+That package identity is also the prerequisite for `showNotification`. The packaged notification
 API submits informational `ToastGeneric` content through the inbox Windows Runtime notification
 interfaces; it does not register a COM activator or expose click/actions callbacks. Consequently
 the manifest needs no notification-specific capability or activation extension. An unpackaged

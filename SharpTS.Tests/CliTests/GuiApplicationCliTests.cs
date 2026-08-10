@@ -7,6 +7,8 @@ namespace SharpTS.Tests.CliTests;
 
 public sealed class GuiApplicationCliTests
 {
+    private const string TestSdkVersion = "2.3.4-test.1";
+
     [Fact]
     public void Create_WritesEscapedPinnedApplicationContract()
     {
@@ -14,13 +16,13 @@ public sealed class GuiApplicationCliTests
         string root = directory.GetPath("quoted app");
 
         Assert.Equal(0, GuiApplicationCli.Create(new ParsedCommand.NewAvalonia(
-            "A \"quoted\" app", root, "0.3.0-preview.1")));
+            "A \"quoted\" app", root, TestSdkVersion)));
 
         SharpTsApplication application = SharpTsManifestLoader.Load(
             Path.Combine(root, "sharpts.json")).Application!;
         Assert.Equal("avalonia", application.Type);
         Assert.Equal("main.tsx", application.Entry);
-        Assert.Equal("0.3.0-preview.1", application.GuiSdkVersion);
+        Assert.Equal(TestSdkVersion, application.GuiSdkVersion);
         string source = File.ReadAllText(Path.Combine(root, "main.tsx"));
         Assert.Contains("title={\"A \\u0022quoted\\u0022 app\"}", source);
         Assert.Contains(">{\"A \\u0022quoted\\u0022 app\"}</TextBlock>", source);
@@ -107,10 +109,10 @@ public sealed class GuiApplicationCliTests
         string entry = Path.Combine(root, "main.tsx");
         File.WriteAllText(entry, "export {};\n");
 
-        string project = GuiApplicationCli.MaterializeProject(root, entry, "0.3.0-preview.1");
+        string project = GuiApplicationCli.MaterializeProject(root, entry, TestSdkVersion);
         string first = File.ReadAllText(project);
         DateTime firstWrite = File.GetLastWriteTimeUtc(project);
-        string repeated = GuiApplicationCli.MaterializeProject(root, entry, "0.3.0-preview.1");
+        string repeated = GuiApplicationCli.MaterializeProject(root, entry, TestSdkVersion);
 
         Assert.Equal(project, repeated);
         Assert.Equal(first, File.ReadAllText(repeated));
@@ -118,6 +120,6 @@ public sealed class GuiApplicationCliTests
         Assert.Contains("<AssemblyName>app_with_spaces</AssemblyName>", first);
         Assert.Contains("<EnableDefaultCompileItems>false</EnableDefaultCompileItems>", first);
         Assert.DoesNotContain("BaseIntermediateOutputPath", first);
-        Assert.Contains("SharpTS.Gui.Sdk/0.3.0-preview.1", first);
+        Assert.Contains($"SharpTS.Gui.Sdk/{TestSdkVersion}", first);
     }
 }

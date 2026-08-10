@@ -5,7 +5,7 @@
     <IsPackable>false</IsPackable>
     <AssemblyName>SharpTS.Gui.Host</AssemblyName>
     <RootNamespace>SharpTS.Gui.Host</RootNamespace>
-    <Description>Avalonia host for the SharpTS GUI SDK public preview.</Description>
+    <Description>Avalonia host for the SharpTS GUI SDK.</Description>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <DefineConstants Condition="'$(SharpTSGuiHostLibrary)' == 'true'">$(DefineConstants);SHARPTS_GUI_STATIC_HOST</DefineConstants>
   </PropertyGroup>

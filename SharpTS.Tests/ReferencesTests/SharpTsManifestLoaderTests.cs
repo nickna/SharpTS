@@ -93,7 +93,7 @@ public class SharpTsManifestLoaderTests
               "application": {
                 "type": "avalonia",
                 "entry": "main.tsx",
-                "guiSdkVersion": "0.3.0-preview.1",
+                "guiSdkVersion": "2.3.4-test.1",
                 "guiSdkSource": "./feed"
               }
             }

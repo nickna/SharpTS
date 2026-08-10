@@ -49,7 +49,7 @@ permissions:
 jobs:
   package:
     runs-on: windows-2025
-    timeout-minutes: 30
+    timeout-minutes: 60
     environment: ${{ inputs.environment_name }}
     permissions:
       contents: read
@@ -156,6 +156,7 @@ jobs:
             artifacts/windows-distribution/*.intoto.jsonl
             artifacts/windows-distribution/SHA256SUMS
           if-no-files-found: error
+          retention-days: 30
 
       - name: Remove signing certificate
         if: always() && steps.certificate.outputs.thumbprint != ''

@@ -4,7 +4,7 @@
 and UI are written in TypeScript/TSX. The package contains the matching compiler, host, generated
 GUI declarations, MSBuild tasks, native assets, launcher, and templates.
 
-Windows x64 and ARM64 are the supported preview categories. Apple Silicon macOS is an experimental
+Windows x64 and ARM64 are the supported targets. Apple Silicon macOS is an experimental
 candidate that requires native execution, signing, and notarization evidence before it is a support
 claim. macOS Intel is not supported.
 

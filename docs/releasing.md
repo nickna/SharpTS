@@ -15,10 +15,8 @@ rejected so the manifest cannot silently split the release train.
 
 When adding a package:
 
-1. Onboard its ID on NuGet separately from a release tag. A prerelease publication is the reliable
-   end-to-end check for ownership and API-key scope.
-2. Confirm the release key is scoped to the new ID. NuGet does not expose an API for inspecting a
-   key's package scopes.
+1. Onboard its ID on NuGet separately from a release tag and assign it to the `nbn` package owner.
+2. Confirm the `SharpTS` Trusted Publishing policy is active; it applies to packages owned by `nbn`.
 3. Add the entry in the intended push order and run `./scripts/test-nuget-release.ps1`.
 4. Run the Publish workflow manually. Its dry run builds and packs the set and performs public-feed
    preflight without publishing.
@@ -27,20 +25,24 @@ The tagged release is blocked if any manifest ID is not registered. This prevent
 permission from publishing established packages before failing on a new ID.
 
 The contract covers `SharpTS`, `SharpTS.Sdk`, `SharpTS.Hosting`,
-`SharpTS.LanguageServer`, and `SharpTS.Gui.Sdk`. Before the next tag, verify that the key stored in
-`NUGET_API_KEY` can publish all five IDs. NuGet does not provide an API for inspecting key scope.
+`SharpTS.LanguageServer`, and `SharpTS.Gui.Sdk`. Publication uses NuGet Trusted Publishing rather
+than a stored API key. The nuget.org policy is owned by `nbn` and binds GitHub Actions to repository
+`nickna/SharpTS`, workflow `publish.yml`, and the tag-restricted `nuget-release` environment. The
+release job exchanges its GitHub OIDC token immediately before publication and uses the resulting
+one-hour API key for all five package pushes.
 
-`eng/GuiPreviewVersion.props` remains the canonical version for source-built GUI preview
+`eng/GuiVersion.props` supplies the non-publishable `0.0.0-local` fallback for source-built GUI
 workflows. Tagged and manually dispatched Publish runs stage their effective version into that
-property and artifact-bearing projections before build. CLI scaffolding, the `dotnet new` template,
-embedded `@sharpts/gui` package, GUI nuspec, and package README therefore carry the tag or dry-run
-version. Historical evidence and versionless user guides are not rewritten. Independently built
-preview packages are never included in tagged NuGet publication.
+property and every artifact-bearing projection before restore and build. CLI scaffolding, the
+`dotnet new` template, embedded `@sharpts/gui` package, GUI nuspec, package README, and compiled
+assemblies therefore carry the tag or dry-run version. Independently built local packages are never
+included in tagged NuGet publication.
 
 ## Normal release
 
 The Publish workflow builds and tests artifacts before the release job. Preflight verifies that
-every manifest-selected `.nupkg` exists and every package ID is registered. The release job pushes
+every manifest-selected `.nupkg` exists, its embedded ID and version match the manifest and tag, and
+every package ID is registered. The release job pushes
 missing versions explicitly with `--skip-duplicate`, then queries NuGet up to 30 times at 20-second
 intervals until every ID exposes the tag version. A push error is fatal only if final inventory
 still lacks the version, which safely handles a lost response after NuGet accepted a package.

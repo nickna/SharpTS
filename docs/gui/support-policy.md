@@ -1,9 +1,9 @@
 # GUI compatibility and support policy
 
-This policy defines the contract required before a stable SharpTS GUI 1.0 release. Preview builds
-remain evaluation releases: they receive best-effort fixes but no production support window or
-forward-compatibility promise beyond the explicit fail-fast checks below. Current platform
-designations are listed in the [GUI overview](README.md#platform-status).
+This policy defines the supported SharpTS GUI contract. Tagged releases follow the compatibility
+and support windows below. Prerelease and local builds receive best-effort fixes but no production
+support window. Current platform designations are listed in the
+[GUI overview](README.md#platform-status).
 
 ## Versioned contracts
 
@@ -39,7 +39,7 @@ ARM64 becomes supported only after the same package passes native Headless and r
 ARM64 hardware. Cross-publish alone does not create a support claim. macOS has no support window
 until Track E's native, bundle, signing, and notarization gates pass.
 
-End-of-support dates and security advisories must be published before a line is removed. Preview,
+End-of-support dates and security advisories must be published before a line is removed. Prerelease,
 nightly, source-built, unsigned, modified, and unsupported-platform artifacts are outside the
 stable support window.
 

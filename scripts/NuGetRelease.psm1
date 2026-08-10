@@ -1,5 +1,21 @@
 Set-StrictMode -Version Latest
 
+function Test-NuGetReleaseVersion {
+    param([Parameter(Mandatory)][string] $Version)
+
+    $match = [regex]::Match($Version, '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z.-]+))?$')
+    if (-not $match.Success) { return $false }
+    foreach ($identifier in $match.Groups[4].Value.Split('.', [StringSplitOptions]::RemoveEmptyEntries)) {
+        if ($identifier -notmatch '^[0-9A-Za-z-]+$') { return $false }
+        if ($identifier -match '^\d+$' -and $identifier.Length -gt 1 -and $identifier[0] -eq '0') { return $false }
+    }
+    $prerelease = $match.Groups[4].Value
+    return -not ($match.Groups[4].Success -and
+        ($prerelease.StartsWith('.', [StringComparison]::Ordinal) -or
+         $prerelease.EndsWith('.', [StringComparison]::Ordinal) -or
+         $prerelease.Contains('..', [StringComparison]::Ordinal)))
+}
+
 function Get-NuGetReleaseManifest {
     [CmdletBinding()]
     param([Parameter(Mandatory)][string] $Path)
@@ -46,6 +62,36 @@ function Get-NuGetPackageVersions {
     return @($response.versions)
 }
 
+function Get-NuGetPackageIdentity {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string] $Path)
+
+    try {
+        $archive = [System.IO.Compression.ZipFile]::OpenRead((Resolve-Path -LiteralPath $Path).Path)
+        try {
+            $nuspecEntries = @($archive.Entries | Where-Object { $_.FullName -match '^[^/\\]+\.nuspec$' })
+            if ($nuspecEntries.Count -ne 1) {
+                throw "expected exactly one root .nuspec, found $($nuspecEntries.Count)"
+            }
+            $reader = [IO.StreamReader]::new($nuspecEntries[0].Open())
+            try { [xml]$nuspec = $reader.ReadToEnd() }
+            finally { $reader.Dispose() }
+        }
+        finally { $archive.Dispose() }
+    }
+    catch {
+        throw "Invalid NuGet package '$Path': $($_.Exception.Message)"
+    }
+
+    $metadata = $nuspec.package.metadata
+    $id = [string]$metadata.id
+    $version = [string]$metadata.version
+    if ([string]::IsNullOrWhiteSpace($id) -or [string]::IsNullOrWhiteSpace($version)) {
+        throw "Invalid NuGet package '$Path': the embedded .nuspec must contain metadata id and version."
+    }
+    return [pscustomobject]@{ Id = $id; Version = $version }
+}
+
 function Assert-NuGetReleasePreflight {
     [CmdletBinding()]
     param(
@@ -61,12 +107,38 @@ function Assert-NuGetReleasePreflight {
         $FetchPackageVersions = { param($PackageId, $BaseUri) Get-NuGetPackageVersions -PackageId $PackageId -FlatContainerBaseUri $BaseUri }
     }
 
+    if (-not (Test-NuGetReleaseVersion $Version)) {
+        throw "Invalid release version '$Version'."
+    }
+
     $errors = [System.Collections.Generic.List[string]]::new()
+    $expectedFiles = @($Manifest.packages | ForEach-Object { "$($_.id).$Version.nupkg" })
+    $actualFiles = @(
+        Get-ChildItem -LiteralPath $PackageDirectory -Filter '*.nupkg' -File -ErrorAction SilentlyContinue |
+            ForEach-Object Name
+    )
+    foreach ($unexpectedFile in @($actualFiles | Where-Object { $_ -notin $expectedFiles })) {
+        $errors.Add("Unexpected package artifact found: $(Join-Path $PackageDirectory $unexpectedFile)")
+    }
     foreach ($package in @($Manifest.packages)) {
         $packageId = [string]$package.id
         $packagePath = Join-Path $PackageDirectory "$packageId.$Version.nupkg"
         if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
             $errors.Add("Expected package artifact not found: $packagePath")
+        }
+        else {
+            try {
+                $identity = Get-NuGetPackageIdentity -Path $packagePath
+                if ($identity.Id -cne $packageId) {
+                    $errors.Add("Package artifact '$packagePath' contains ID '$($identity.Id)', expected '$packageId'")
+                }
+                if ($identity.Version -cne $Version) {
+                    $errors.Add("Package artifact '$packagePath' contains version '$($identity.Version)', expected '$Version'")
+                }
+            }
+            catch {
+                $errors.Add($_.Exception.Message)
+            }
         }
 
         try {
@@ -199,6 +271,7 @@ function Publish-NuGetPackages {
 
 Export-ModuleMember -Function @(
     'Get-NuGetReleaseManifest',
+    'Get-NuGetPackageIdentity',
     'Get-NuGetPackageVersions',
     'Assert-NuGetReleasePreflight',
     'Publish-NuGetPackages'

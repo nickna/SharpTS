@@ -1,6 +1,6 @@
 # SharpTS GUI SDK development workflow
 
-`SharpTS.Gui.Sdk` is the supported application entry point for the Windows desktop preview and the
+`SharpTS.Gui.Sdk` is the supported application entry point for Windows desktop and the
 experimental Apple Silicon candidate. It materializes the matching `@sharpts/gui` package under
 `obj`, type-checks and compiles the guest, writes the versioned application manifest, and assembles
 the Avalonia host. Applications do not need a separate global SharpTS installation, repository

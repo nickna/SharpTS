@@ -55,7 +55,7 @@ permissions:
 jobs:
   sign-notarize:
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
     environment: ${{ inputs.environment_name }}
     permissions:
       contents: read
@@ -157,6 +157,7 @@ jobs:
             artifacts/macos-distribution/*.dmg
             artifacts/macos-distribution/SHA256SUMS
           if-no-files-found: error
+          retention-days: 30
 
       - name: Remove signing material
         if: always()

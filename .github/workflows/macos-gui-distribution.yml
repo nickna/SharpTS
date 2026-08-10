@@ -10,7 +10,7 @@ on:
       display_name:
         description: Application display name
         required: true
-        default: SharpTS GUI Preview
+        default: SharpTS GUI
         type: string
       short_version:
         description: Three-part marketing version
@@ -45,13 +45,14 @@ jobs:
         run: |
           $publish = 'artifacts/macos-distribution-input/publish'
           New-Item -ItemType Directory -Path $publish -Force | Out-Null
-          Copy-Item -Path 'artifacts/macos-preview/osx-arm64/published single file/*' -Destination $publish -Recurse -Force
+          Copy-Item -Path 'artifacts/desktop-gui/osx-arm64/published single file/*' -Destination $publish -Recurse -Force
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: macos-gui-certification-payload
           path: artifacts/macos-distribution-input
           if-no-files-found: error
+          retention-days: 30
 
   sign-notarize:
     needs: build-candidate

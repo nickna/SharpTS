@@ -1,0 +1,261 @@
+name: Desktop GUI
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Desktop platform jobs to run
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+      run_windows_arm64_native:
+        description: Run native Windows ARM64 real-window certification
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-gui-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scope:
+    name: Detect changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      windows: ${{ steps.scope.outputs.windows }}
+      macos: ${{ steps.scope.outputs.macos }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Classify desktop changes
+        id: scope
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DISPATCH_TARGET: ${{ inputs.platform }}
+        run: |
+          if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
+            $scope = ./scripts/get-desktop-gui-ci-scope.ps1 -Target $env:DISPATCH_TARGET
+          }
+          else {
+            $paths = @(git diff --name-only $env:BASE_SHA $env:HEAD_SHA)
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to determine changed paths.' }
+            $scope = ./scripts/get-desktop-gui-ci-scope.ps1 -ChangedPath $paths
+          }
+          "windows=$($scope.Windows.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "macos=$($scope.MacOS.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+  gui-sdk-candidate:
+    name: Build shared GUI SDK candidate
+    needs: scope
+    if: needs.scope.outputs.windows == 'true' || needs.scope.outputs.macos == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.gui_version.outputs.version }}
+      marketing_version: ${{ steps.gui_version.outputs.marketing_version }}
+      package_file_name: ${{ steps.gui_version.outputs.package_file_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Read GUI version
+        id: gui_version
+        shell: pwsh
+        run: |
+          $info = ./scripts/get-gui-version.ps1
+          "version=$($info.Version)" >> $env:GITHUB_OUTPUT
+          "marketing_version=$($info.MarketingVersion)" >> $env:GITHUB_OUTPUT
+          "package_file_name=$($info.PackageFileName)" >> $env:GITHUB_OUTPUT
+      - name: Build and audit the exact GUI SDK candidate
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/desktop-gui/win-x64/feed/${{ steps.gui_version.outputs.package_file_name }}
+          if-no-files-found: error
+          retention-days: 3
+
+  windows-x64:
+    name: Windows x64 packaged and native gates
+    needs: [scope, gui-sdk-candidate]
+    if: needs.scope.outputs.windows == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/desktop-gui/candidate
+      - name: Distribution manifest, evidence, update, and support-bundle tests
+        shell: pwsh
+        run: scripts/test-gui-distribution.ps1
+      - name: Packaged x64 SDK, Native AOT, performance budgets, and real windows
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: desktop-gui-windows-x64
+          path: |
+            artifacts/desktop-gui/win-x64/*-trace.json
+            artifacts/desktop-gui/win-x64/published single file/*.exe
+            artifacts/desktop-gui/win-x64/published native aot/*.exe
+            artifacts/desktop-gui/win-x64/cli published single file/*.exe
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-arm64-cross-publish:
+    name: Windows ARM64 cross-publish
+    needs: [scope, gui-sdk-candidate]
+    if: needs.scope.outputs.windows == 'true'
+    runs-on: windows-2025
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/desktop-gui/candidate
+      - name: Cross-publish packaged ARM64 outputs
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: desktop-gui-windows-arm64-cross-publish
+          path: |
+            artifacts/desktop-gui/win-arm64/published single file/*.exe
+            artifacts/desktop-gui/win-arm64/cli published single file/*.exe
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows-arm64-native:
+    name: Windows ARM64 native certification
+    needs: [scope, gui-sdk-candidate]
+    if: github.event_name == 'workflow_dispatch' && inputs.run_windows_arm64_native && needs.scope.outputs.windows == 'true'
+    runs-on: windows-11-vs2026-arm
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/desktop-gui/candidate
+      - name: Packaged ARM64 SDK, Native AOT, performance budgets, and real windows
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: desktop-gui-windows-arm64-native
+          path: |
+            artifacts/desktop-gui/win-arm64/*-trace.json
+            artifacts/desktop-gui/win-arm64/published single file/*.exe
+            artifacts/desktop-gui/win-arm64/published native aot/*.exe
+            artifacts/desktop-gui/win-arm64/cli published single file/*.exe
+          if-no-files-found: ignore
+          retention-days: 7
+
+  macos-native:
+    name: macOS ARM64 native gates
+    needs: [scope, gui-sdk-candidate]
+    if: needs.scope.outputs.macos == 'true'
+    runs-on: macos-15
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/desktop-gui/candidate
+      - name: macOS bundle contract tests
+        shell: pwsh
+        run: scripts/test-gui-macos-package.ps1
+      - name: Hosted scheduler and lifecycle conformance
+        run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests|FullyQualifiedName~Parse_Compile_Hosted"
+      - name: Renderer, diagnostics, and productization conformance
+        run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
+      - name: Native packaged SDK, CLI, Headless, and real-window gates
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -RealWindow -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+      - name: Validate and archive unsigned app bundle
+        shell: pwsh
+        run: >-
+          scripts/package-gui-macos.ps1
+          -PublishDirectory "artifacts/desktop-gui/osx-arm64/published single file"
+          -OutputDirectory "artifacts/desktop-gui/osx-arm64/bundle"
+          -BundleIdentifier dev.sharpts.gui
+          -DisplayName "SharpTS GUI"
+          -ShortVersion ${{ needs.gui-sdk-candidate.outputs.marketing_version }}
+          -BuildVersion ${{ github.run_number }}
+          -Architecture arm64
+          -Executable SharpTS.Gui.Sdk.Consumer
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        if: always()
+        with:
+          name: desktop-gui-macos-arm64
+          path: |
+            artifacts/desktop-gui/osx-arm64/*-trace.json
+            artifacts/desktop-gui/osx-arm64/published single file/SharpTS.Gui.Sdk.Consumer
+            artifacts/desktop-gui/osx-arm64/cli published single file/cli_app_with_spaces
+            artifacts/desktop-gui/osx-arm64/bundle/*.zip
+            artifacts/desktop-gui/osx-arm64/bundle/SHA256SUMS
+          if-no-files-found: ignore
+          retention-days: 7
+
+  gate:
+    name: Gate
+    if: always()
+    needs: [scope, gui-sdk-candidate, windows-x64, windows-arm64-cross-publish, windows-arm64-native, macos-native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every selected desktop job to pass
+        shell: pwsh
+        env:
+          JOB_RESULTS: ${{ toJson(needs) }}
+        run: |
+          $needs = $env:JOB_RESULTS | ConvertFrom-Json
+          $bad = @($needs.PSObject.Properties | Where-Object { $_.Value.result -in @('failure', 'cancelled') })
+          if ($bad.Count -gt 0) {
+            throw "Desktop GUI jobs did not pass: $($bad.Name -join ', ')"
+          }

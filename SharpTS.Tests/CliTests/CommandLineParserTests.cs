@@ -597,7 +597,7 @@ public class CommandLineParserTests
             _parser.Parse(["new", "avalonia", "-n", "Counter", "-o", "apps/Counter"]));
         Assert.Equal("Counter", command.Name);
         Assert.Equal("apps/Counter", command.OutputDirectory);
-        Assert.Equal("0.3.0-preview.1", command.GuiSdkVersion);
+        Assert.Equal(GuiApplicationCli.DefaultSdkVersion, command.GuiSdkVersion);
     }
 
     [Fact]

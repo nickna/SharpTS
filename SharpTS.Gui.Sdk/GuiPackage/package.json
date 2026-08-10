@@ -1,6 +1,6 @@
 {
   "name": "@sharpts/gui",
-  "version": "0.3.0-preview.1",
+  "version": "0.0.0-local",
   "type": "module",
   "exports": {
     ".": "./index.ts",

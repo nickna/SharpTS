@@ -1,4 +1,4 @@
-# macOS GUI preview and distribution
+# macOS GUI distribution
 
 SharpTS.Gui.Sdk contains an intentional `osx-arm64` payload for Apple Silicon. It can be
 cross-published from Windows, but macOS is a candidate platform until the native workflow has
@@ -47,7 +47,7 @@ Connect notarization configuration.
 
 ## Native and release gates
 
-[`macos-desktop-preview.yml`](../../.github/workflows/macos-desktop-preview.yml) builds one exact
+[`desktop-gui.yml`](../../.github/workflows/desktop-gui.yml) builds one exact
 SDK package, then runs the packaged SDK and TypeScript-only CLI on native Apple Silicon. The
 candidate must pass interpreted and compiled Headless runs, automatic
 real-window launch/close, asset-closure parity, single-file execution, Mach-O validation, and

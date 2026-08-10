@@ -12,19 +12,18 @@ on:
 
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.gitignore'
-      - 'LICENSE'
-      - '.editorconfig'
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   workflow-policy:
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -46,6 +45,7 @@ jobs:
 
   build:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       # Don't let one platform's failure cancel the others — we want to see each
       # platform's real result independently (a flake on one shouldn't hide the rest).
@@ -106,6 +106,10 @@ jobs:
         shell: pwsh
         run: ./scripts/test-nuget-release.ps1
 
+      - name: Test GUI version staging
+        shell: pwsh
+        run: ./scripts/test-gui-version.ps1
+
       # Exercise the SDK through its nupkg rather than repository-relative build
       # outputs. The script uses a local-only feed, a clean package cache, and no
       # global dotnet-tool directory on PATH.
@@ -122,6 +126,7 @@ jobs:
   # ubuntu job suffices.
   aot-ratchet:
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -144,6 +149,7 @@ jobs:
           path: |
             aot-analyzer.log
             aot-analyzer-summary.json
+          retention-days: 7
 
   # The managed xUnit suite cannot exercise the Native-AOT-hosted compiler: it loads
   # emitted assemblies back into the test process. Publish a real native SharpTS host,
@@ -369,3 +375,22 @@ jobs:
           path: |
             artifacts/native-aot-publish.log
             artifacts/native-aot-publish-warning-summary.json
+          retention-days: 7
+
+  gate:
+    name: Gate
+    if: always()
+    needs: [workflow-policy, build, aot-ratchet, native-aot-compile-smoke]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every CI job to pass
+        shell: pwsh
+        env:
+          JOB_RESULTS: ${{ toJson(needs) }}
+        run: |
+          $needs = $env:JOB_RESULTS | ConvertFrom-Json
+          $bad = @($needs.PSObject.Properties | Where-Object { $_.Value.result -ne 'success' })
+          if ($bad.Count -gt 0) {
+            throw "CI jobs did not pass: $($bad.Name -join ', ')"
+          }

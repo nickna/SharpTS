@@ -4,9 +4,8 @@ SharpTS GUI is the retained TypeScript/TSX desktop application layer built on Av
 explicit application/window lifecycle, interpreted and compiled guests, Headless execution,
 development reloads, Windows packaging, and compiled single-file and Native AOT deployment.
 
-Preview identifies the release channel, not a frozen package number. Windows is the supported
-product focus; Apple Silicon macOS remains an experimental candidate until its native and Apple
-distribution gates pass.
+Windows is the supported product focus; Apple Silicon macOS remains an experimental candidate
+until its native and Apple distribution gates pass.
 
 ## Build an application
 
@@ -30,8 +29,8 @@ documented desktop services.
 
 | Target | Status |
 | --- | --- |
-| `win-x64` | Supported preview target; releases require Headless, real-window, packaged, single-file, and Native AOT evidence. |
-| `win-arm64` | Supported preview RID for cross-publishing; native execution remains a certification requirement. |
+| `win-x64` | Supported target; releases require Headless, real-window, packaged, single-file, and Native AOT evidence. |
+| `win-arm64` | Supported RID for cross-publishing; native execution remains a certification requirement. |
 | `osx-arm64` | Experimental candidate; native execution, Developer ID signing, and notarization are required before support. |
 
 macOS Intel is not supported. Cross-publishing alone never changes a platform designation.

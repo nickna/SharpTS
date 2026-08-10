@@ -9,7 +9,7 @@ namespace SharpTS.Cli;
 
 internal static class GuiApplicationCli
 {
-    internal const string DefaultSdkVersion = GuiPreviewVersion.Value;
+    internal const string DefaultSdkVersion = GuiVersion.Value;
 
     public static int Create(ParsedCommand.NewAvalonia command)
     {

@@ -1,0 +1,8 @@
+<Project>
+  <PropertyGroup>
+    <!-- Canonical fallback for local source builds. Tagged releases stage their exact
+         version into every GUI projection before restore/build/pack. -->
+    <SharpTSGuiSdkVersion>0.0.0-local</SharpTSGuiSdkVersion>
+    <SharpTSGuiMarketingVersion>0.0.0</SharpTSGuiMarketingVersion>
+  </PropertyGroup>
+</Project>

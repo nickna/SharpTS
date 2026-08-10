@@ -10,7 +10,7 @@ on:
       display_name:
         description: Application display name
         required: true
-        default: SharpTS GUI Preview
+        default: SharpTS GUI
         type: string
       version:
         description: Four-part MSIX version
@@ -45,7 +45,7 @@ jobs:
         run: |
           $root = 'artifacts/windows-distribution-input'
           New-Item -ItemType Directory -Path "$root/publish", "$root/assets" -Force | Out-Null
-          Copy-Item -Path 'artifacts/windows-preview/win-x64/published native aot/*' -Destination "$root/publish" -Recurse -Force
+          Copy-Item -Path 'artifacts/desktop-gui/win-x64/published native aot/*' -Destination "$root/publish" -Recurse -Force
           Copy-Item -Path 'distribution/windows/assets/*.png' -Destination "$root/assets" -Force
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
@@ -53,6 +53,7 @@ jobs:
           name: windows-gui-certification-payload
           path: artifacts/windows-distribution-input
           if-no-files-found: error
+          retention-days: 30
 
   sign-and-package:
     needs: build-candidate

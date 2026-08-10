@@ -37,9 +37,8 @@ public sealed class ProductizationContractTests
         string sdkTargets = File.ReadAllText(Path.Combine(root, "SharpTS.Gui.Sdk", "Sdk", "Sdk.targets"));
         string packageProject = File.ReadAllText(Path.Combine(root, "SharpTS.Gui.Sdk", "SharpTS.Gui.Sdk.csproj"));
         string harness = File.ReadAllText(Path.Combine(root, "SharpTS.Gui.Sdk.Consumer", "Run-PackagedConsumer.ps1"));
-        string windowsWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "windows-desktop-preview.yml"));
-        string macOsWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "macos-desktop-preview.yml"));
-        XDocument guiVersionProps = XDocument.Load(Path.Combine(root, "eng", "GuiPreviewVersion.props"));
+        string desktopWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "desktop-gui.yml"));
+        XDocument guiVersionProps = XDocument.Load(Path.Combine(root, "eng", "GuiVersion.props"));
         string guiVersion = Assert.Single(guiVersionProps.Descendants("SharpTSGuiSdkVersion")).Value;
         string marketingVersion = Assert.Single(guiVersionProps.Descendants("SharpTSGuiMarketingVersion")).Value;
 
@@ -62,21 +61,24 @@ public sealed class ProductizationContractTests
             "Write-Host \"SharpTS.Gui.Sdk packaged consumer verification passed for $RuntimeIdentifier.\"\nexit 0\n",
             harness.Replace("\r\n", "\n", StringComparison.Ordinal),
             StringComparison.Ordinal);
-        Assert.Contains("gui-sdk-candidate", windowsWorkflow, StringComparison.Ordinal);
-        Assert.Equal(3, CountOccurrences(windowsWorkflow, "needs.gui-sdk-candidate.outputs.package_file_name"));
-        Assert.Contains("steps.gui_version.outputs.package_file_name", windowsWorkflow, StringComparison.Ordinal);
-        Assert.DoesNotContain($"SharpTS.Gui.Sdk.{guiVersion}.nupkg", windowsWorkflow, StringComparison.Ordinal);
-        Assert.Contains("-RuntimeIdentifier win-x64", windowsWorkflow, StringComparison.Ordinal);
-        Assert.Contains("-RuntimeIdentifier win-arm64", windowsWorkflow, StringComparison.Ordinal);
-        Assert.Contains("gui-sdk-candidate", macOsWorkflow, StringComparison.Ordinal);
-        Assert.Equal(1, CountOccurrences(macOsWorkflow, "needs.gui-sdk-candidate.outputs.package_file_name"));
-        Assert.Contains("steps.gui_version.outputs.package_file_name", macOsWorkflow, StringComparison.Ordinal);
-        Assert.Contains("needs.gui-sdk-candidate.outputs.marketing_version", macOsWorkflow, StringComparison.Ordinal);
-        Assert.DoesNotContain($"-ShortVersion {marketingVersion}", macOsWorkflow, StringComparison.Ordinal);
-        Assert.Contains("rid: osx-arm64", macOsWorkflow, StringComparison.Ordinal);
-        Assert.Equal(1, CountOccurrences(macOsWorkflow, "rid: osx-arm64"));
-        Assert.Contains("-RealWindow", macOsWorkflow, StringComparison.Ordinal);
-        Assert.Contains("package-gui-macos.ps1", macOsWorkflow, StringComparison.Ordinal);
+        Assert.Contains("gui-sdk-candidate", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Equal(4, CountOccurrences(desktopWorkflow, "needs.gui-sdk-candidate.outputs.package_file_name"));
+        Assert.Contains("steps.gui_version.outputs.package_file_name", desktopWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain($"SharpTS.Gui.Sdk.{guiVersion}.nupkg", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("-RuntimeIdentifier win-x64", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("-RuntimeIdentifier win-arm64", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("-RuntimeIdentifier osx-arm64", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("needs.gui-sdk-candidate.outputs.marketing_version", desktopWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain($"-ShortVersion {marketingVersion}", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("runs-on: windows-11-vs2026-arm", desktopWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("self-hosted", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("-RealWindow", desktopWorkflow, StringComparison.Ordinal);
+        Assert.Contains("package-gui-macos.ps1", desktopWorkflow, StringComparison.Ordinal);
+        int windowsJobStart = desktopWorkflow.IndexOf("  windows-x64:", StringComparison.Ordinal);
+        int windowsJobEnd = desktopWorkflow.IndexOf("  windows-arm64-cross-publish:", StringComparison.Ordinal);
+        string windowsJob = desktopWorkflow[windowsJobStart..windowsJobEnd];
+        Assert.DoesNotContain("HostedInterpreterRuntimeTests", windowsJob, StringComparison.Ordinal);
+        Assert.DoesNotContain("dotnet test SharpTS.Gui.Conformance.Tests", windowsJob, StringComparison.Ordinal);
 
         string macOsDistributionWorkflow = File.ReadAllText(
             Path.Combine(root, ".github", "workflows", "macos-gui-distribution.yml"));
@@ -102,7 +104,8 @@ public sealed class ProductizationContractTests
         string publishWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "publish.yml"));
         Assert.Contains("rid: osx-arm64", publishWorkflow, StringComparison.Ordinal);
         Assert.Equal(2, CountOccurrences(publishWorkflow, "rid: osx-arm64"));
-        Assert.Contains("./scripts/sync-gui-preview-version.ps1 -Version", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("./scripts/sync-gui-version.ps1 -Version", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("./scripts/sync-gui-version.ps1 -Check -Version", publishWorkflow, StringComparison.Ordinal);
         Assert.Contains("SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg", publishWorkflow, StringComparison.Ordinal);
         Assert.Contains("SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg", publishWorkflow, StringComparison.Ordinal);
         Assert.Contains("-p:SharpTSGuiHostLibrary=true", publishWorkflow, StringComparison.Ordinal);

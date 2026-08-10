@@ -48,7 +48,7 @@ without depending on locale-specific Markdown formatting.
 The same contract limits a Windows Native AOT executable to 50 MiB and its complete shipping
 directory to 65 MiB. `Run-PackagedConsumer.ps1 -NativeAot` always enforces those deterministic
 artifact limits. `-EnforcePerformanceBudgets` additionally enforces a 1.5-second cold Headless
-startup and a 256 MiB peak working-set ceiling in the Windows preview and distribution workflows.
+startup and a 256 MiB peak working-set ceiling in the Desktop GUI and distribution workflows.
 The harness records both process measurements even when enforcement is disabled.
 
 Cross-publishing `win-arm64` does not satisfy the ARM64 performance gate. Final Native AOT linking,

@@ -1,5 +1,5 @@
 <Project>
-  <Import Project="eng/GuiPreviewVersion.props" />
+  <Import Project="eng/GuiVersion.props" />
 
   <PropertyGroup>
     <!-- Target framework + C# language settings shared by every project in the repo.
@@ -16,7 +16,7 @@
     <!-- Single version source of truth: MinVer derives the version from Git tags
          (prefix `v`) for every packable project, replacing the former hard-coded
          <Version>. At release time CI passes -p:MinVerVersionOverride explicitly
-         to `dotnet pack` so tags and workflow-dispatch dry runs produce the exact
+         to every release build/publish/pack so tags and workflow-dispatch dry runs produce the exact
          version selected by .github/workflows/publish.yml. -->
     <MinVerTagPrefix>v</MinVerTagPrefix>
 

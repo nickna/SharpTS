@@ -24,12 +24,11 @@ $supportedRuntimeIdentifiers = @($supportedPlatforms.SelectNodes("//SharpTSGuiSu
 if ($RuntimeIdentifier -notin $supportedRuntimeIdentifiers) {
     throw "SharpTS.Gui.Sdk supports only $($supportedRuntimeIdentifiers -join ', '); got '$RuntimeIdentifier'."
 }
-$versionInfo = & (Join-Path $repositoryRoot "scripts\get-gui-preview-version.ps1")
+$versionInfo = & (Join-Path $repositoryRoot "scripts\get-gui-version.ps1")
 $version = if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $versionInfo.Version } else { $PackageVersion }
 $isWindowsRid = $RuntimeIdentifier.StartsWith("win-", [StringComparison]::Ordinal)
 $isMacOsRid = $RuntimeIdentifier.StartsWith("osx-", [StringComparison]::Ordinal)
-$platformArtifactName = if ($isWindowsRid) { "windows-preview" } else { "macos-preview" }
-$artifactRoot = Join-Path $repositoryRoot "artifacts\$platformArtifactName\$RuntimeIdentifier"
+$artifactRoot = Join-Path $repositoryRoot "artifacts\desktop-gui\$RuntimeIdentifier"
 $feed = Join-Path $artifactRoot "feed"
 $packageCache = Join-Path $artifactRoot "packages"
 $consumerRoot = Join-Path $artifactRoot "consumer with spaces"
@@ -281,7 +280,7 @@ $nugetConfig = @"
 <configuration>
   <packageSources>
     <clear />
-    <add key="desktop-preview" value="$escapedFeed" />
+    <add key="desktop-gui" value="$escapedFeed" />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
   </packageSources>
 </configuration>

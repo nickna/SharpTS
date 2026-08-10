@@ -109,7 +109,7 @@ See [.NET types](docs/dotnet-types.md), [.NET integration](docs/dotnet-integrati
 
 | Capability | Status | Notes |
 | --- | :---: | --- |
-| Avalonia TypeScript/TSX applications | Preview | Retained/reactive application API, interpreted and compiled guests, Headless tests, Windows publishing, experimental Apple Silicon candidate. |
+| Avalonia TypeScript/TSX applications | Supported | Retained/reactive application API, interpreted and compiled guests, Headless tests, Windows publishing, experimental Apple Silicon candidate. |
 | Public custom controls | ❌ | No supported public third-party provider or descriptor-registration API; internal provider seams have no compatibility promise. |
 | TypeScript-source PDBs | ✅ | Portable PDBs with source documents, sequence points, locals/scopes, and async metadata. |
 | VS Code extension | ✅ | Diagnostics, interop IntelliSense, and Debug Current File. |

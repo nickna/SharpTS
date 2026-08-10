@@ -174,7 +174,7 @@ an installed Windows MSIX application. The required title is limited to 256 UTF-
 the optional message to 4,096; both are XML-escaped by the host. `silent: true` suppresses the
 notification sound. An unpackaged launch rejects with an explicit package-identity diagnostic.
 Actions, images, progress updates, and click-activation callbacks are intentionally outside this
-preview contract, so applications must not use notification interaction as a required workflow.
+platform contract, so applications must not use notification interaction as a required workflow.
 
 `getDesktopDisplays()` requires a mounted window and reports every display visible to that window:
 name, primary state, pixel bounds, working area, orientation, and scaling factor. This is the
