@@ -11,8 +11,8 @@ param(
     [string] $ManifestPath,
     [string] $NuGetSource = 'https://api.nuget.org/v3/index.json',
     [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
-    [ValidateRange(1, 100)][int] $VerificationAttempts = 12,
-    [ValidateRange(0, 300)][int] $VerificationDelaySeconds = 10
+    [ValidateRange(1, 100)][int] $VerificationAttempts = 30,
+    [ValidateRange(0, 300)][int] $VerificationDelaySeconds = 20
 )
 
 $ErrorActionPreference = 'Stop'

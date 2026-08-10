@@ -2,6 +2,7 @@ param(
     [string]$Configuration = "Release",
     [string]$RuntimeIdentifier = "win-x64",
     [string]$CandidatePackage,
+    [string]$PackageVersion,
     [switch]$PackageOnly,
     [switch]$RealWindow,
     [switch]$PublishOnly,
@@ -24,7 +25,7 @@ if ($RuntimeIdentifier -notin $supportedRuntimeIdentifiers) {
     throw "SharpTS.Gui.Sdk supports only $($supportedRuntimeIdentifiers -join ', '); got '$RuntimeIdentifier'."
 }
 $versionInfo = & (Join-Path $repositoryRoot "scripts\get-gui-preview-version.ps1")
-$version = $versionInfo.Version
+$version = if ([string]::IsNullOrWhiteSpace($PackageVersion)) { $versionInfo.Version } else { $PackageVersion }
 $isWindowsRid = $RuntimeIdentifier.StartsWith("win-", [StringComparison]::Ordinal)
 $isMacOsRid = $RuntimeIdentifier.StartsWith("osx-", [StringComparison]::Ordinal)
 $platformArtifactName = if ($isWindowsRid) { "windows-preview" } else { "macos-preview" }
@@ -167,6 +168,13 @@ if (-not (Test-Path $packagePath)) {
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $archive = [IO.Compression.ZipFile]::OpenRead($packagePath)
 try {
+    function Read-ArchiveText([string]$EntryName) {
+        $entry = $archive.GetEntry($EntryName)
+        if ($null -eq $entry) { throw "GUI SDK package is missing '$EntryName'." }
+        $reader = [IO.StreamReader]::new($entry.Open())
+        try { return $reader.ReadToEnd() }
+        finally { $reader.Dispose() }
+    }
     $entryNames = @($archive.Entries | ForEach-Object FullName)
     foreach ($required in @(
         "Sdk/Sdk.props",
@@ -236,6 +244,18 @@ try {
         finally {
             $reader.Dispose()
         }
+    }
+    $nuspecEntries = @($archive.Entries | Where-Object { $_.FullName.EndsWith('.nuspec', [StringComparison]::OrdinalIgnoreCase) })
+    if ($nuspecEntries.Count -ne 1) { throw "GUI SDK package must contain exactly one nuspec; found $($nuspecEntries.Count)." }
+    [xml]$nuspec = Read-ArchiveText $nuspecEntries[0].FullName
+    if ([string]$nuspec.package.metadata.version -ne $version) { throw "GUI SDK nuspec version '$($nuspec.package.metadata.version)' does not match '$version'." }
+    $templateProject = Read-ArchiveText 'content/Templates/sharpts-gui/SharpTSGuiApp.csproj'
+    if (-not $templateProject.Contains("SharpTS.Gui.Sdk/$version", [StringComparison]::Ordinal)) { throw "GUI SDK template does not reference SharpTS.Gui.Sdk/$version." }
+    $guiPackage = Read-ArchiveText 'gui/package.json' | ConvertFrom-Json
+    if ([string]$guiPackage.version -ne $version) { throw "Embedded @sharpts/gui version '$($guiPackage.version)' does not match '$version'." }
+    if (-not [string]::IsNullOrWhiteSpace($PackageVersion)) {
+        $nugetReadme = Read-ArchiveText 'readme.md'
+        if (-not $nugetReadme.Contains("SharpTS.Gui.Sdk::$version", [StringComparison]::Ordinal)) { throw "GUI SDK NuGet README does not reference SharpTS.Gui.Sdk::$version." }
     }
 }
 finally {

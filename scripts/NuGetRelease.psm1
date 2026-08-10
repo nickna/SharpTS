@@ -9,7 +9,7 @@ function Get-NuGetReleaseManifest {
     }
 
     $manifest = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
-    if ($manifest.schemaVersion -ne 1) {
+    if ($manifest.schemaVersion -ne 2) {
         throw "Unsupported NuGet release manifest schema version '$($manifest.schemaVersion)'."
     }
 
@@ -24,37 +24,13 @@ function Get-NuGetReleaseManifest {
     }
 
     foreach ($package in @($manifest.packages)) {
-        if ($package.PSObject.Properties.Name -contains 'publish' -and
-            $package.publish -eq $false -and
-            [string]::IsNullOrWhiteSpace([string]$package.version)) {
-            throw "Non-published package '$($package.id)' must define its fixed preview version."
+        $unsupportedFields = @($package.PSObject.Properties.Name | Where-Object { $_ -ne 'id' })
+        if ($unsupportedFields.Count -gt 0) {
+            throw "NuGet release package '$($package.id)' contains unsupported field(s): $($unsupportedFields -join ', '). Every package inherits the release version; per-package version, publish, and sha256 overrides are forbidden."
         }
     }
 
-    if ([string]::IsNullOrWhiteSpace($manifest.documentedSdkVersion)) {
-        throw 'The NuGet release manifest must define documentedSdkVersion.'
-    }
-
     return $manifest
-}
-
-function Get-NuGetManifestPackageVersion {
-    param($Package, [string] $ReleaseVersion)
-
-    if ($Package.PSObject.Properties.Name -contains 'version' -and
-        -not [string]::IsNullOrWhiteSpace([string]$Package.version)) {
-        return [string]$Package.version
-    }
-
-    return $ReleaseVersion
-}
-
-function Get-PublishableNuGetManifestPackages {
-    param($Manifest)
-
-    return @($Manifest.packages | Where-Object {
-        -not ($_.PSObject.Properties.Name -contains 'publish' -and $_.publish -eq $false)
-    })
 }
 
 function Get-NuGetPackageVersions {
@@ -68,53 +44,6 @@ function Get-NuGetPackageVersions {
     $uri = "$baseUri/$($PackageId.ToLowerInvariant())/index.json"
     $response = Invoke-RestMethod -Uri $uri -Method Get
     return @($response.versions)
-}
-
-function Get-DocumentedSdkVersionErrors {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] $Manifest,
-        [Parameter(Mandatory)][string] $RepositoryRoot,
-        [Parameter(Mandatory)][scriptblock] $FetchPackageVersions,
-        [Parameter(Mandatory)][string] $FlatContainerBaseUri
-    )
-
-    $errors = [System.Collections.Generic.List[string]]::new()
-    $expectedVersion = [string]$Manifest.documentedSdkVersion
-    $versionPattern = 'SharpTS\.Sdk(?:/|"\s*:\s*")(?<version>\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)'
-
-    foreach ($relativePath in @($Manifest.documentationFiles)) {
-        $path = Join-Path $RepositoryRoot $relativePath
-        if (-not (Test-Path -LiteralPath $path -PathType Leaf)) {
-            $errors.Add("Documentation file not found: $relativePath")
-            continue
-        }
-
-        $matches = [regex]::Matches((Get-Content -LiteralPath $path -Raw), $versionPattern)
-        if ($matches.Count -eq 0) {
-            $errors.Add("No concrete SharpTS.Sdk version found in $relativePath")
-            continue
-        }
-
-        foreach ($match in $matches) {
-            $actualVersion = $match.Groups['version'].Value
-            if ($actualVersion -ne $expectedVersion) {
-                $errors.Add("$relativePath references SharpTS.Sdk/$actualVersion; expected $expectedVersion")
-            }
-        }
-    }
-
-    try {
-        $publishedVersions = @(& $FetchPackageVersions 'SharpTS.Sdk' $FlatContainerBaseUri)
-        if ($publishedVersions -notcontains $expectedVersion) {
-            $errors.Add("Documented SharpTS.Sdk version $expectedVersion is not published on NuGet")
-        }
-    }
-    catch {
-        $errors.Add("Could not verify documented SharpTS.Sdk version $expectedVersion on NuGet: $($_.Exception.Message)")
-    }
-
-    return $errors.ToArray()
 }
 
 function Assert-NuGetReleasePreflight {
@@ -135,8 +64,7 @@ function Assert-NuGetReleasePreflight {
     $errors = [System.Collections.Generic.List[string]]::new()
     foreach ($package in @($Manifest.packages)) {
         $packageId = [string]$package.id
-        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
-        $packagePath = Join-Path $PackageDirectory "$packageId.$packageVersion.nupkg"
+        $packagePath = Join-Path $PackageDirectory "$packageId.$Version.nupkg"
         if (-not (Test-Path -LiteralPath $packagePath -PathType Leaf)) {
             $errors.Add("Expected package artifact not found: $packagePath")
         }
@@ -150,14 +78,6 @@ function Assert-NuGetReleasePreflight {
         catch {
             $errors.Add("Package ID '$packageId' is not registered or NuGet could not be queried: $($_.Exception.Message)")
         }
-    }
-
-    foreach ($documentationError in @(Get-DocumentedSdkVersionErrors `
-        -Manifest $Manifest `
-        -RepositoryRoot $RepositoryRoot `
-        -FetchPackageVersions $FetchPackageVersions `
-        -FlatContainerBaseUri $FlatContainerBaseUri)) {
-        $errors.Add($documentationError)
     }
 
     if ($errors.Count -gt 0) {
@@ -176,8 +96,8 @@ function Publish-NuGetPackages {
         [Parameter(Mandatory)][string] $ApiKey,
         [string] $NuGetSource = 'https://api.nuget.org/v3/index.json',
         [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
-        [ValidateRange(1, 100)][int] $VerificationAttempts = 12,
-        [ValidateRange(0, 300)][int] $VerificationDelaySeconds = 10,
+        [ValidateRange(1, 100)][int] $VerificationAttempts = 30,
+        [ValidateRange(0, 300)][int] $VerificationDelaySeconds = 20,
         [scriptblock] $PushPackage,
         [scriptblock] $FetchPackageVersions,
         [scriptblock] $Sleep
@@ -199,21 +119,26 @@ function Publish-NuGetPackages {
         $Sleep = { param($Seconds) Start-Sleep -Seconds $Seconds }
     }
 
-    $pushFailures = [System.Collections.Generic.List[string]]::new()
-    $publishablePackages = @(Get-PublishableNuGetManifestPackages -Manifest $Manifest)
-    foreach ($package in $publishablePackages) {
+    $pushFailures = @{}
+    $packages = @($Manifest.packages)
+    foreach ($package in $packages) {
         $packageId = [string]$package.id
-        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
-        $packagePath = Join-Path $PackageDirectory "$packageId.$packageVersion.nupkg"
-        Write-Host "::group::Push $packageId $packageVersion"
+        $packagePath = Join-Path $PackageDirectory "$packageId.$Version.nupkg"
+        $alreadyPublished = $false
+        try { $alreadyPublished = @(& $FetchPackageVersions $packageId $FlatContainerBaseUri) -contains $Version }
+        catch { Write-Warning "Could not check whether $packageId $Version is already visible before push: $($_.Exception.Message)" }
+        if ($alreadyPublished) {
+            Write-Host "SKIP PUSH: $packageId $Version is already visible on NuGet."
+            continue
+        }
+        Write-Host "::group::Push $packageId $Version"
         try {
-            & $PushPackage $packagePath $packageId $packageVersion $ApiKey $NuGetSource
-            Write-Host "PUSH SUCCEEDED: $packageId $packageVersion"
+            & $PushPackage $packagePath $packageId $Version $ApiKey $NuGetSource
+            Write-Host "PUSH SUCCEEDED: $packageId $Version"
         }
         catch {
-            $message = $_.Exception.Message
-            $pushFailures.Add("$packageId ${packageVersion}: $message")
-            Write-Warning "PUSH FAILED: $packageId ${packageVersion}: $message"
+            $pushFailures[$packageId] = $_.Exception.Message
+            Write-Warning "PUSH FAILED: $packageId ${Version}: $($_.Exception.Message)"
         }
         finally {
             Write-Host '::endgroup::'
@@ -223,20 +148,19 @@ function Publish-NuGetPackages {
     $inventory = @{}
     for ($attempt = 1; $attempt -le $VerificationAttempts; $attempt++) {
         $missing = [System.Collections.Generic.List[string]]::new()
-        foreach ($package in $publishablePackages) {
+        foreach ($package in $packages) {
             $packageId = [string]$package.id
-            $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
             try {
                 $versions = @(& $FetchPackageVersions $packageId $FlatContainerBaseUri)
-                $isPublished = $versions -contains $packageVersion
+                $isPublished = $versions -contains $Version
                 $inventory[$packageId] = if ($isPublished) { 'published' } else { 'missing' }
                 if (-not $isPublished) {
-                    $missing.Add("$packageId $packageVersion")
+                    $missing.Add("$packageId $Version")
                 }
             }
             catch {
                 $inventory[$packageId] = "query failed: $($_.Exception.Message)"
-                $missing.Add("$packageId $packageVersion")
+                $missing.Add("$packageId $Version")
             }
         }
 
@@ -251,32 +175,31 @@ function Publish-NuGetPackages {
     }
 
     Write-Host 'NuGet inventory:'
-    foreach ($package in $publishablePackages) {
+    foreach ($package in $packages) {
         $packageId = [string]$package.id
-        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
-        Write-Host " - $packageId $packageVersion`: $($inventory[$packageId])"
+        Write-Host " - $packageId $Version`: $($inventory[$packageId])"
     }
 
-    $inventoryFailures = @($publishablePackages | Where-Object { $inventory[[string]$_.id] -ne 'published' } | ForEach-Object { [string]$_.id })
     $failureMessages = [System.Collections.Generic.List[string]]::new()
-    foreach ($failure in $pushFailures) { $failureMessages.Add("Push failed: $failure") }
-    foreach ($packageId in $inventoryFailures) {
-        $package = $publishablePackages | Where-Object { [string]$_.id -eq $packageId } | Select-Object -First 1
-        $packageVersion = Get-NuGetManifestPackageVersion -Package $package -ReleaseVersion $Version
-        $failureMessages.Add("Version $packageVersion is not visible for $packageId")
+    foreach ($package in $packages) {
+        $packageId = [string]$package.id
+        if ($inventory[$packageId] -eq 'published') { continue }
+        if ($pushFailures.ContainsKey($packageId)) {
+            $failureMessages.Add("Push failed: $packageId ${Version}: $($pushFailures[$packageId])")
+        }
+        $failureMessages.Add("Version $Version is not visible for $packageId")
     }
 
     if ($failureMessages.Count -gt 0) {
         throw "NuGet release did not complete:`n - $($failureMessages -join "`n - ")"
     }
 
-    Write-Host 'All expected NuGet packages expose their manifest-selected versions.'
+    Write-Host "All expected NuGet packages expose release version $Version."
 }
 
 Export-ModuleMember -Function @(
     'Get-NuGetReleaseManifest',
     'Get-NuGetPackageVersions',
-    'Get-DocumentedSdkVersionErrors',
     'Assert-NuGetReleasePreflight',
     'Publish-NuGetPackages'
 )

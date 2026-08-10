@@ -59,6 +59,16 @@ foreach ($workflowName in @('windows-desktop-preview.yml', 'macos-desktop-previe
     }
 }
 
+$publish = Get-Content -LiteralPath (Join-Path $workflowRoot 'publish.yml') -Raw
+foreach ($requiredText in @('./scripts/sync-gui-preview-version.ps1 -Version','-p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }}','-p:SharpTSGuiHostLibrary=true','SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg','-PackageVersion "${{ steps.version.outputs.VERSION }}"','SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg')) {
+    if (-not $publish.Contains($requiredText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml is missing unified GUI release contract text: $requiredText") }
+}
+foreach ($forbiddenText in @('SharpTSGuiSkipPack','Invoke-WebRequest','gui_package_filename','PACKAGE_FILE_NAME','Stage published Windows GUI SDK preview')) {
+    if ($publish.Contains($forbiddenText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml retains fixed GUI preview publication logic: $forbiddenText") }
+}
+$releaseCommand = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\nuget-release.ps1') -Raw
+if ($releaseCommand -notmatch '\$VerificationAttempts\s*=\s*30' -or $releaseCommand -notmatch '\$VerificationDelaySeconds\s*=\s*20') { $errors.Add('nuget-release.ps1 must poll NuGet 30 times at 20-second intervals by default.') }
+
 if ($errors.Count -gt 0) {
     throw "GitHub workflow policy failed:`n - $($errors -join "`n - ")"
 }

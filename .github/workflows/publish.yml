@@ -25,7 +25,6 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
-      gui_package_filename: ${{ steps.gui_sdk.outputs.PACKAGE_FILE_NAME }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +44,10 @@ jobs:
           else
             echo "VERSION=0.0.0-dryrun.${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
           fi
+
+      - name: Stage release version into GUI artifacts
+        shell: pwsh
+        run: ./scripts/sync-gui-preview-version.ps1 -Version "${{ steps.version.outputs.VERSION }}"
 
       - name: Restore dependencies
         run: dotnet restore
@@ -69,6 +72,15 @@ jobs:
       - name: Publish Windows GUI host payload
         run: dotnet publish SharpTS.Gui.Host/SharpTS.Gui.Host.csproj --configuration Release --self-contained false --no-build
 
+      - name: Publish Windows GUI AOT host payload
+        run: >-
+          dotnet publish SharpTS.Gui.Host/SharpTS.Gui.Host.csproj
+          --configuration Release
+          --self-contained false
+          --no-restore
+          -p:SharpTSGuiHostLibrary=true
+          -o SharpTS.Gui.Host/bin/Release/net10.0/aot-publish
+
       - name: Verify SDK dependencies exist
         run: |
           echo "Checking SDK package dependencies..."
@@ -77,34 +89,7 @@ jobs:
           echo "✓ All SDK dependencies found"
 
       - name: Pack packages
-        run: dotnet pack --no-build --configuration Release -p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }} -p:SharpTSGuiSkipPack=true --output ./nupkg
-
-      # The GUI SDK has an independently onboarded, immutable preview version.
-      # Stage NuGet's repository-signed package instead of rebuilding different
-      # bytes under the same ID/version on every later SharpTS tag.
-      - name: Stage published Windows GUI SDK preview
-        id: gui_sdk
-        shell: pwsh
-        run: |
-          $manifest = Get-Content .github/nuget-packages.json -Raw | ConvertFrom-Json
-          $package = @($manifest.packages | Where-Object id -eq 'SharpTS.Gui.Sdk')
-          if ($package.Count -ne 1) {
-            throw "Expected exactly one SharpTS.Gui.Sdk manifest entry."
-          }
-
-          $version = [string]$package[0].version
-          $expectedHash = [string]$package[0].sha256
-          $fileName = "SharpTS.Gui.Sdk.$version.nupkg"
-          $packagePath = Join-Path ./nupkg $fileName
-          $uri = "https://api.nuget.org/v3-flatcontainer/sharpts.gui.sdk/$version/sharpts.gui.sdk.$version.nupkg"
-          Invoke-WebRequest -Uri $uri -OutFile $packagePath -MaximumRetryCount 3 -RetryIntervalSec 5
-
-          $actualHash = (Get-FileHash -LiteralPath $packagePath -Algorithm SHA256).Hash.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) {
-            throw "SharpTS.Gui.Sdk $version SHA-256 mismatch: expected $expectedHash, got $actualHash."
-          }
-          "PACKAGE_FILE_NAME=$fileName" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
-          Write-Host "Staged repository-signed $fileName ($actualHash)."
+        run: dotnet pack --no-build --configuration Release -p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }} --output ./nupkg
 
       - name: Verify packages created
         run: |
@@ -114,13 +99,21 @@ jobs:
           test -f "./nupkg/SharpTS.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Sdk package not found"; exit 1; }
           test -f "./nupkg/SharpTS.Hosting.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Hosting package not found"; exit 1; }
           test -f "./nupkg/SharpTS.LanguageServer.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.LanguageServer package not found"; exit 1; }
-          test -f "./nupkg/${{ steps.gui_sdk.outputs.PACKAGE_FILE_NAME }}" || { echo "❌ SharpTS.Gui.Sdk preview package not found"; exit 1; }
+          test -f "./nupkg/SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Gui.Sdk package not found"; exit 1; }
           echo "✓ All packages created successfully"
+
+      - name: Audit tagged GUI SDK package
+        shell: pwsh
+        run: >-
+          ./SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1
+          -CandidatePackage "./nupkg/SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg"
+          -PackageVersion "${{ steps.version.outputs.VERSION }}"
+          -PackageOnly
 
       # A new package ID must be onboarded on NuGet and added to the API key's
       # scope before a tag can publish any established package. This also keeps
-      # every copyable SDK version in the docs pinned to a version NuGet serves.
-      - name: Preflight NuGet package IDs and documentation
+      # every package artifact tied to a package ID that NuGet already serves.
+      - name: Preflight NuGet package IDs and artifacts
         shell: pwsh
         run: >-
           ./scripts/nuget-release.ps1
@@ -559,5 +552,5 @@ jobs:
             ./nupkg/SharpTS.Hosting.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.LanguageServer.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.Sdk.${{ needs.build.outputs.version }}.nupkg
-            ./nupkg/${{ needs.build.outputs.gui_package_filename }}
+            ./nupkg/SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg
             ./assets/*

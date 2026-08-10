@@ -10,7 +10,6 @@
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
     <IsPackable>true</IsPackable>
-    <IsPackable Condition="'$(SharpTSGuiSkipPack)' == 'true'">false</IsPackable>
     <PackageId>SharpTS.Gui.Sdk</PackageId>
     <MinVerVersionOverride Condition="'$(MinVerVersionOverride)' == ''">$(SharpTSGuiSdkVersion)</MinVerVersionOverride>
     <Description>Preview MSBuild SDK for Windows desktop applications with SharpTS TSX and Avalonia; macOS payloads are experimental candidates.</Description>

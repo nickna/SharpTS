@@ -102,9 +102,13 @@ public sealed class ProductizationContractTests
         string publishWorkflow = File.ReadAllText(Path.Combine(root, ".github", "workflows", "publish.yml"));
         Assert.Contains("rid: osx-arm64", publishWorkflow, StringComparison.Ordinal);
         Assert.Equal(2, CountOccurrences(publishWorkflow, "rid: osx-arm64"));
-        Assert.Contains("gui_package_filename: ${{ steps.gui_sdk.outputs.PACKAGE_FILE_NAME }}", publishWorkflow, StringComparison.Ordinal);
-        Assert.Contains("PACKAGE_FILE_NAME=$fileName", publishWorkflow, StringComparison.Ordinal);
-        Assert.Contains("needs.build.outputs.gui_package_filename", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("./scripts/sync-gui-preview-version.ps1 -Version", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg", publishWorkflow, StringComparison.Ordinal);
+        Assert.Contains("-p:SharpTSGuiHostLibrary=true", publishWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("SharpTSGuiSkipPack", publishWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("Invoke-WebRequest", publishWorkflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("gui_package_filename", publishWorkflow, StringComparison.Ordinal);
     }
 
     [Fact]
