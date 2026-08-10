@@ -126,6 +126,7 @@ export type {
     TimePickerProps,
     SliderProps,
     ProgressBarProps,
+    SeparatorProps,
     TabControlProps,
     TabItemProps,
     MenuProps,
