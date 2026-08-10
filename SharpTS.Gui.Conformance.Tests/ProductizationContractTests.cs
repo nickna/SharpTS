@@ -124,6 +124,9 @@ public sealed class ProductizationContractTests
         Assert.DoesNotContain("SharpTS.Gui.Conformance.Tests", packageProject, StringComparison.Ordinal);
 
         XDocument packageProjectXml = XDocument.Parse(packageProject);
+        Assert.Equal(
+            "true",
+            Assert.Single(packageProjectXml.Descendants("NoDefaultExcludes")).Value);
         XElement templateManifestItem = Assert.Single(
             packageProjectXml.Descendants("None"),
             item => item.Attribute("Include")?.Value ==
