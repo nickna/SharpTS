@@ -1,5 +1,8 @@
+#pragma warning disable SHARPTS_HOSTING001
+
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Hosting;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 
@@ -497,6 +500,48 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Emits and discards a top-level expression for hosted initialization. An
+    /// async call is allowed to start, but its returned task/promise is never
+    /// synchronously observed or pumped from initialization.
+    /// </summary>
+    private void EmitHostedExpression(ILGenerator il, ILEmitter emitter, Stmt.Expression exprStmt)
+    {
+        emitter.MarkStatementStart(exprStmt);
+        emitter.EmitExpression(exprStmt.Expr);
+        emitter.Helpers.EnsureBoxed();
+        il.Emit(OpCodes.Pop);
+    }
+
+    /// <summary>
+    /// Emits the guarded private hosted initialization core on <c>$Program</c>.
+    /// The versioned ABI factory owns the public surface.
+    /// </summary>
+    private MethodBuilder EmitHostedInitializationMethod(Action<ILGenerator, MethodBuilder> emitInitialization)
+    {
+        var initializedField = _programType.DefineField(
+            "$hostedInitialized",
+            typeof(bool),
+            FieldAttributes.Private | FieldAttributes.Static);
+        var initializeMethod = _programType.DefineMethod(
+            "$InitializeHostedCore",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(void),
+            Type.EmptyTypes);
+
+        var initializeIl = initializeMethod.GetILGenerator();
+        var alreadyInitialized = initializeIl.DefineLabel();
+        initializeIl.Emit(OpCodes.Ldsfld, initializedField);
+        initializeIl.Emit(OpCodes.Brtrue, alreadyInitialized);
+        initializeIl.Emit(OpCodes.Ldc_I4_1);
+        initializeIl.Emit(OpCodes.Stsfld, initializedField);
+        emitInitialization(initializeIl, initializeMethod);
+        initializeIl.MarkLabel(alreadyInitialized);
+        initializeIl.Emit(OpCodes.Ret);
+
+        return initializeMethod;
+    }
+
+    /// <summary>
     /// Emits the initialization method for a module.
     /// Includes an initialization guard to ensure module is only initialized once.
     /// Script files are initialized in the main program type, not a module type.
@@ -523,8 +568,9 @@ public partial class ILCompiler
         var initializedField = moduleType.DefineField(
             "_initialized",
             typeof(bool),
-            FieldAttributes.Private | FieldAttributes.Static
+            FieldAttributes.Assembly | FieldAttributes.Static
         );
+        _moduleInitializedFields[module.Path] = initializedField;
 
         // Create $Initialize method
         var initMethod = moduleType.DefineMethod(
@@ -565,6 +611,16 @@ public partial class ILCompiler
         // BuildTopLevelStaticVarsForModule in CreateModuleTopLevelContext.
 
         var emitter = new ILEmitter(ctx);
+        bool hasHostedTopLevelAwait = _hosted && TopLevelAwaitDetector.Contains(module.Statements);
+        if (hasHostedTopLevelAwait)
+        {
+            // The internal async module runner executes this module through the
+            // compiler's normal async state-machine implementation. Keep the
+            // synchronous initializer inert so the statements cannot run twice.
+            il.MarkLabel(skipLabel);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
 
         foreach (var stmt in module.Statements)
         {
@@ -578,7 +634,12 @@ public partial class ILCompiler
             // Special handling for expression statements to wait for top-level async calls
             if (stmt is Stmt.Expression exprStmt)
             {
-                EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+                if (hasHostedTopLevelAwait && exprStmt.Expr is Expr.Await)
+                    continue;
+                if (_hosted)
+                    EmitHostedExpression(il, emitter, exprStmt);
+                else
+                    EmitExpressionWithAsyncWait(il, emitter, exprStmt);
             }
             else
             {
@@ -612,6 +673,7 @@ public partial class ILCompiler
             typeof(bool),
             FieldAttributes.Private | FieldAttributes.Static
         );
+        _moduleInitializedFields[script.Path] = initializedField;
 
         var il = initMethod.GetILGenerator();
 
@@ -650,7 +712,10 @@ public partial class ILCompiler
             // Special handling for expression statements to wait for top-level async calls
             if (stmt is Stmt.Expression exprStmt)
             {
-                EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+                if (_hosted)
+                    EmitHostedExpression(il, emitter, exprStmt);
+                else
+                    EmitExpressionWithAsyncWait(il, emitter, exprStmt);
             }
             else
             {
@@ -679,6 +744,16 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
 
+        MethodBuilder? hostedInitialize = null;
+        if (_hosted)
+        {
+            hostedInitialize = EmitHostedModulesInitializationMethod(modules);
+            EmitHostedAbi(
+                hostedInitialize,
+                initializerAcceptsRuntime: true,
+                initializerReturnsTask: true);
+        }
+
         // Install the event-loop SynchronizationContext before any module runs, so
         // top-level async/await continuations (e.g. fetch) resume on the event-loop
         // thread instead of escaping to the thread pool — the same durable fix the
@@ -686,6 +761,783 @@ public partial class ILCompiler
         // hold the first top-level awaits, so the context must be current before the
         // first $Initialize call captures an awaiter.
         EmitInstallEventLoopSyncContext(il);
+
+        if (hostedInitialize == null)
+        {
+            EmitModulesInitialization(il, modules);
+        }
+
+        // Run the event loop — no-op if no handles are active
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+        // Node process lifecycle at natural drain: 'beforeExit' (re-entering
+        // the loop when a listener schedules work), then 'exit' (#1080).
+        il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    private MethodBuilder EmitHostedModulesInitializationMethod(List<ParsedModule> modules)
+    {
+        var method = _programType.DefineMethod(
+            "$InitializeHostedCore",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            [typeof(SharpTSHostedRuntimeBase)]);
+        var il = method.GetILGenerator();
+
+        if (_closures.EntryPointDisplayClass != null &&
+            _closures.EntryPointDisplayClassCtor != null &&
+            _closures.EntryPointDisplayClassStaticField != null)
+        {
+            il.Emit(OpCodes.Newobj, _closures.EntryPointDisplayClassCtor);
+            il.Emit(OpCodes.Stsfld, _closures.EntryPointDisplayClassStaticField);
+        }
+
+        il.Emit(OpCodes.Call, _runtime.InitializeModuleRegistry);
+        foreach (ParsedModule module in modules)
+        {
+            if (module.IsScript)
+                continue;
+            if (_moduleGetNamespaceMethods.TryGetValue(module.Path, out MethodBuilder? getNamespaceMethod))
+            {
+                string relativePath = GetRelativeModulePath(module, modules[^1]);
+                EmitRegisterModule(il, relativePath, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(relativePath), getNamespaceMethod);
+                EmitRegisterModule(il, module.Path, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(module.Path), getNamespaceMethod);
+                if (!string.IsNullOrEmpty(module.ModuleName))
+                    EmitRegisterModule(il, module.ModuleName, getNamespaceMethod);
+            }
+        }
+        InitializeNamespaceFields(il);
+
+        ParsedModule? entryModule = modules.Count > 0 ? modules[^1] : null;
+        int wrapperIndex = 0;
+        var moduleSteps = new Dictionary<string, MethodBuilder>(StringComparer.OrdinalIgnoreCase);
+        foreach (ParsedModule module in modules)
+        {
+            if (_hostedModuleRunnerKeys.TryGetValue(module.Path, out string? runnerKey))
+            {
+                MethodBuilder asyncStep = EmitHostedAsyncModuleStep(
+                    _functions.Builders[runnerKey],
+                    module.Path,
+                    _moduleInitializedFields.GetValueOrDefault(module.Path),
+                    wrapperIndex++);
+                Stmt[] importPrelude = module.Statements
+                    .Where(IsHostedModulePreludeStatement)
+                    .ToArray();
+                Stmt[] exportPostlude = module.Statements
+                    .Where(IsHostedModulePostludeStatement)
+                    .ToArray();
+                var sequence = new List<MethodBuilder>();
+                if (importPrelude.Length > 0)
+                {
+                    sequence.Add(EmitHostedSynchronousStatementsStep(
+                        module, importPrelude, wrapperIndex++));
+                }
+                sequence.Add(asyncStep);
+                if (exportPostlude.Length > 0)
+                {
+                    sequence.Add(EmitHostedSynchronousStatementsStep(
+                        module, exportPostlude, wrapperIndex++));
+                }
+                moduleSteps[module.Path] = sequence.Count == 1
+                    ? asyncStep
+                    : EmitHostedStepSequence(sequence, wrapperIndex++);
+                continue;
+            }
+            if ((module.IsScript || module.IsCommonJs) &&
+                TopLevelAwaitDetector.Contains(module.Statements))
+            {
+                string kind = module.IsCommonJs ? "CommonJS module" : "script";
+                throw new InvalidOperationException(
+                    $"Hosted compiled top-level await is not supported in {kind} '{module.Path}'.");
+            }
+            if (_hostedModuleSteps.TryGetValue(module.Path, out List<MethodBuilder>? legacySteps))
+            {
+                if (legacySteps.Count == 1)
+                    moduleSteps[module.Path] = legacySteps[0];
+                continue;
+            }
+            if (_modules.InitMethods.TryGetValue(module.Path, out MethodBuilder? initMethod))
+                moduleSteps[module.Path] = EmitHostedSynchronousModuleStep(initMethod, wrapperIndex++);
+        }
+
+        var compositeInitializers = new Dictionary<string, MethodBuilder>(StringComparer.OrdinalIgnoreCase);
+        var importFactories = new Dictionary<string, MethodBuilder>(StringComparer.OrdinalIgnoreCase);
+        foreach (ParsedModule module in modules)
+        {
+            if (!moduleSteps.ContainsKey(module.Path))
+                continue;
+            MethodBuilder composite = EmitHostedModuleCompositeInitializer(
+                module, modules, moduleSteps, wrapperIndex++);
+            compositeInitializers[module.Path] = composite;
+
+            if (!module.IsScript &&
+                _moduleGetNamespaceMethods.TryGetValue(module.Path, out MethodBuilder? getNamespace))
+            {
+                MethodBuilder factory = EmitHostedModuleImportFactory(
+                    module, getNamespace, wrapperIndex++);
+                importFactories[module.Path] = factory;
+                string relativePath = GetRelativeModulePath(module, modules[^1]);
+                EmitRegisterHostedModule(
+                    il, relativePath, module.Path, composite);
+                EmitRegisterHostedModule(
+                    il, RemoveModuleExtension(relativePath), module.Path, composite);
+                EmitRegisterHostedModule(il, module.Path, module.Path, composite);
+                EmitRegisterHostedModule(
+                    il, RemoveModuleExtension(module.Path), module.Path, composite);
+                if (!string.IsNullOrEmpty(module.ModuleName))
+                    EmitRegisterHostedModule(il, module.ModuleName, module.Path, composite);
+            }
+        }
+
+        var steps = new List<MethodBuilder>();
+        foreach (ParsedModule module in modules)
+        {
+            if (module.IsDynamicImportOnly ||
+                (module.IsCommonJs && module != entryModule))
+                continue;
+            if (importFactories.TryGetValue(module.Path, out MethodBuilder? factory))
+                steps.Add(factory);
+            else if (compositeInitializers.TryGetValue(module.Path, out MethodBuilder? composite))
+                steps.Add(composite);
+        }
+        if (entryModule is not null &&
+            FindMainFunction(entryModule.Statements) is { } main)
+        {
+            steps.Add(EmitHostedMainStep(main));
+        }
+
+        Type funcTask = typeof(Func<Task>);
+        var stepArray = il.DeclareLocal(_types.MakeArrayType(funcTask));
+        il.Emit(OpCodes.Ldc_I4, steps.Count);
+        il.Emit(OpCodes.Newarr, funcTask);
+        il.Emit(OpCodes.Stloc, stepArray);
+        ConstructorInfo delegateCtor = funcTask.GetConstructor([typeof(object), typeof(IntPtr)])!;
+        for (int index = 0; index < steps.Count; index++)
+        {
+            il.Emit(OpCodes.Ldloc, stepArray);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, steps[index]);
+            il.Emit(OpCodes.Newobj, delegateCtor);
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stepArray);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.RunInitializationSteps))!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedAsyncModuleStep(
+        MethodBuilder runner,
+        string modulePath,
+        FieldBuilder? initializedField,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedAsyncModuleStep_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        Label run = il.DefineLabel();
+        if (initializedField is not null)
+        {
+            il.Emit(OpCodes.Ldsfld, initializedField);
+            il.Emit(OpCodes.Brfalse, run);
+            il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(run);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stsfld, initializedField);
+        }
+        il.Emit(OpCodes.Call, runner);
+        il.Emit(OpCodes.Ldstr, modulePath);
+        il.Emit(OpCodes.Call, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.AttributeModuleInitialization))!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedModuleCompositeInitializer(
+        ParsedModule module,
+        IReadOnlyList<ParsedModule> modules,
+        IReadOnlyDictionary<string, MethodBuilder> moduleSteps,
+        int index)
+    {
+        var reachable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Visit(ParsedModule current)
+        {
+            if (!reachable.Add(current.Path)) return;
+            foreach (ParsedModule dependency in current.Dependencies)
+                Visit(dependency);
+            foreach (ParsedModule dependency in current.RuntimeDependencies)
+                Visit(dependency);
+        }
+        Visit(module);
+        MethodBuilder[] steps = modules
+            .Where(candidate => reachable.Contains(candidate.Path))
+            .Select(candidate => moduleSteps.GetValueOrDefault(candidate.Path))
+            .Where(step => step is not null)
+            .Cast<MethodBuilder>()
+            .ToArray();
+
+        var method = _programType.DefineMethod(
+            $"$HostedModuleInitialize_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        EmitHostedStepArray(il, steps);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedModuleImportFactory(
+        ParsedModule module,
+        MethodBuilder getNamespace,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModuleImport_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task<object?>),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Ldstr, module.Path);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, getNamespace);
+        il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructor(
+            [typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.ImportHostedModule))!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private static void EmitRegisterHostedModule(
+        ILGenerator il,
+        string alias,
+        string canonicalPath,
+        MethodBuilder initializer)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, alias);
+        il.Emit(OpCodes.Ldstr, canonicalPath);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, initializer);
+        il.Emit(OpCodes.Newobj, typeof(Func<Task>).GetConstructor(
+            [typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.RegisterHostedModule))!);
+    }
+
+    private void EmitHostedStepArray(ILGenerator il, IReadOnlyList<MethodBuilder> steps)
+    {
+        Type funcTask = typeof(Func<Task>);
+        LocalBuilder stepArray = il.DeclareLocal(_types.MakeArrayType(funcTask));
+        il.Emit(OpCodes.Ldc_I4, steps.Count);
+        il.Emit(OpCodes.Newarr, funcTask);
+        il.Emit(OpCodes.Stloc, stepArray);
+        ConstructorInfo delegateCtor = funcTask.GetConstructor([typeof(object), typeof(IntPtr)])!;
+        for (int stepIndex = 0; stepIndex < steps.Count; stepIndex++)
+        {
+            il.Emit(OpCodes.Ldloc, stepArray);
+            il.Emit(OpCodes.Ldc_I4, stepIndex);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, steps[stepIndex]);
+            il.Emit(OpCodes.Newobj, delegateCtor);
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Ldloc, stepArray);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.RunInitializationSteps))!);
+    }
+
+    /// <summary>
+    /// Defines an internal async function for a module containing top-level await.
+    /// Using the regular async state-machine compiler gives hosted modules the same
+    /// suspension support as async functions, including compound expressions,
+    /// control flow, loops, and try/catch/finally.
+    /// </summary>
+    private void DefineHostedModuleRunner(ParsedModule module)
+    {
+        string name = "$HostedModuleRunner_" +
+            CompilationContext.SanitizeModuleName(module.ModuleName);
+        var nameToken = new Token(TokenType.IDENTIFIER, name, null, 0);
+        string? defaultBinding = RegisterHostedExportBinding(
+            module, "$default", "$HostedDefault_");
+        string? exportAssignmentBinding = RegisterHostedExportBinding(
+            module, "$exportAssignment", "$HostedExportAssignment_");
+        var body = new List<Stmt>();
+        foreach (Stmt statement in module.Statements)
+        {
+            if (LowerHostedTopLevelStatement(
+                    statement, defaultBinding, exportAssignmentBinding) is { } lowered)
+                body.Add(lowered);
+        }
+
+        var runner = new Stmt.Function(
+            nameToken,
+            TypeParams: null,
+            ThisType: null,
+            Parameters: [],
+            Body: body,
+            ReturnType: null,
+            IsAsync: true);
+        DefineFunction(runner);
+        string key = GetDefinitionContext().GetQualifiedFunctionName(name);
+        _hostedModuleRunnerKeys[module.Path] = key;
+    }
+
+    private string? RegisterHostedExportBinding(
+        ParsedModule module,
+        string exportName,
+        string prefix)
+    {
+        if (!_modules.ExportFields.TryGetValue(module.Path, out var exports) ||
+            !exports.TryGetValue(exportName, out FieldBuilder? field))
+        {
+            return null;
+        }
+
+        string binding = prefix + CompilationContext.SanitizeModuleName(module.ModuleName);
+        if (!_moduleTopLevelStaticVars.TryGetValue(module.Path, out var variables))
+        {
+            variables = new Dictionary<string, FieldBuilder>(StringComparer.Ordinal);
+            _moduleTopLevelStaticVars[module.Path] = variables;
+        }
+        variables[binding] = field;
+        return binding;
+    }
+
+    private static Stmt? LowerHostedTopLevelStatement(
+        Stmt statement,
+        string? defaultBinding,
+        string? exportAssignmentBinding) => statement switch
+    {
+        // Declarations are defined in the compiler's normal declaration phases.
+        Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum or
+            Stmt.Namespace or Stmt.DeclareModule => null,
+
+        // Module imports are emitted in a synchronous prelude using the normal
+        // module emitter. AsyncMoveNextEmitter intentionally handles executable
+        // statements only and cannot establish module bindings itself.
+        Stmt.Import or Stmt.ImportAlias or Stmt.ImportRequire => null,
+
+        // Module-level bindings already have generated static/export fields. Assign
+        // those fields from the async runner instead of introducing function locals,
+        // preserving visibility to exported dependents and top-level functions.
+        Stmt.Const declaration => new Stmt.Expression(
+            new Expr.Assign(declaration.Name, declaration.Initializer)),
+        Stmt.Var declaration when !declaration.IsDeclare => new Stmt.Expression(
+            new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer ??
+                    new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
+                IsVarRedeclaration: declaration.IsVar)),
+        Stmt.Var => null,
+        Stmt.Sequence sequence => new Stmt.Sequence(
+            sequence.Statements
+                .Select(item => LowerHostedTopLevelStatement(
+                    item, defaultBinding, exportAssignmentBinding))
+                .Where(lowered => lowered is not null)
+                .Cast<Stmt>()
+                .ToList()),
+        Stmt.Export { Declaration: Stmt.Const declaration } => new Stmt.Expression(
+            new Expr.Assign(declaration.Name, declaration.Initializer)),
+        Stmt.Export { Declaration: Stmt.Var declaration } when !declaration.IsDeclare =>
+            new Stmt.Expression(new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer ??
+                    new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
+                IsVarRedeclaration: declaration.IsVar)),
+        Stmt.Export { Declaration: Stmt.Var } => null,
+        Stmt.Export { Declaration: Stmt.Sequence sequence } => new Stmt.Sequence(
+            sequence.Statements
+                .Select(item => LowerHostedTopLevelStatement(
+                    item, defaultBinding, exportAssignmentBinding))
+                .Where(lowered => lowered is not null)
+                .Cast<Stmt>()
+                .ToList()),
+        Stmt.Export { DefaultExpr: not null } export when defaultBinding is not null =>
+            new Stmt.Expression(new Expr.Assign(
+                new Token(TokenType.IDENTIFIER, defaultBinding, null, 0),
+                export.DefaultExpr)),
+        Stmt.Export { ExportAssignment: not null } export when exportAssignmentBinding is not null =>
+            new Stmt.Expression(new Expr.Assign(
+                new Token(TokenType.IDENTIFIER, exportAssignmentBinding, null, 0),
+                export.ExportAssignment)),
+        Stmt.Export
+        {
+            Declaration: null,
+            NamedExports: null or [],
+            DefaultExpr: null,
+            ExportAssignment: null,
+            NamespaceExportName: null,
+            GlobalNamespaceName: null,
+        } => null,
+
+        // Function/class declarations and re-export wiring contain no executable
+        // await once their declarations have been defined. Emit them after the
+        // runner with the normal module emitter so export fields are populated.
+        Stmt.Export export when IsHostedModulePostludeStatement(export) => null,
+
+        // Exported declarations still need their generated export fields populated;
+        // the declarations themselves were already defined above.
+        _ => statement,
+    };
+
+    private static bool IsHostedModulePreludeStatement(Stmt statement) =>
+        statement is Stmt.Import or Stmt.ImportAlias or Stmt.ImportRequire;
+
+    private static bool IsHostedModulePostludeStatement(Stmt statement)
+    {
+        if (statement is not Stmt.Export export || export.IsTypeOnly)
+            return false;
+        if (export.Declaration is Stmt.Const or Stmt.Var or Stmt.Sequence)
+            return false;
+        if (export.DefaultExpr is not null || export.ExportAssignment is not null)
+            return false;
+        return true;
+    }
+
+    private MethodBuilder EmitHostedSynchronousStatementsStep(
+        ParsedModule module,
+        IReadOnlyList<Stmt> statements,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModulePrelude_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        CompilationContext context = CreateHostedModuleStepContext(module, il, method);
+        var emitter = new ILEmitter(context);
+        foreach (Stmt statement in statements)
+            emitter.EmitStatement(statement);
+        il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedStepSequence(
+        IReadOnlyList<MethodBuilder> steps,
+        int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModuleSequence_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = method.GetILGenerator();
+        EmitHostedStepArray(il, steps);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedSynchronousModuleStep(MethodBuilder initialize, int index)
+    {
+        var method = _programType.DefineMethod(
+            $"$HostedModuleStep_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Call, initialize);
+        il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedMainStep(
+        (Stmt.Function Func, bool IsAsync, bool ReturnsExitCode) main)
+    {
+        string key = _closures.FunctionAstNodes.First(pair =>
+            ReferenceEquals(pair.Value, main.Func)).Key;
+        MethodBuilder target = _functions.Builders[key];
+        var method = _programType.DefineMethod(
+            "$HostedMainStep",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        var il = method.GetILGenerator();
+        if (main.Func.Parameters.Count == 1)
+        {
+            il.Emit(OpCodes.Call, typeof(Environment).GetMethod(
+                nameof(Environment.GetCommandLineArgs), Type.EmptyTypes)!);
+        }
+        il.Emit(OpCodes.Call, target);
+
+        if (main.IsAsync)
+        {
+            var task = il.DeclareLocal(_types.TaskOfObject);
+            il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+            il.Emit(OpCodes.Stloc, task);
+            il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Ldloc, task);
+            il.Emit(main.ReturnsExitCode ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+                nameof(SharpTSHostedRuntimeBase.ObserveProgramMain))!);
+            il.Emit(OpCodes.Ret);
+            return method;
+        }
+
+        if (main.ReturnsExitCode)
+        {
+            il.Emit(OpCodes.Conv_I4);
+            var exitCode = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Stloc, exitCode);
+            il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+            il.Emit(OpCodes.Ldloc, exitCode);
+            il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+                nameof(SharpTSHostedRuntimeBase.CompleteProgram))!);
+        }
+        else
+        {
+            il.Emit(OpCodes.Pop);
+        }
+        il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private void EmitHostedModuleSteps(ParsedModule module, TypeBuilder moduleType)
+    {
+        var steps = new List<MethodBuilder>();
+        int index = 0;
+        foreach (Stmt statement in module.Statements)
+        {
+            if (statement is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.TypeAlias or Stmt.Enum)
+                continue;
+
+            bool containsAwait = TopLevelAwaitDetector.Contains([statement]);
+            if (TrySplitHostedAwait(statement, out Expr? awaited, out Stmt? continuation))
+            {
+                string captureName = $"$hostedAwaitResult_{index}";
+                FieldBuilder captureField = moduleType.DefineField(
+                    captureName,
+                    _types.Object,
+                    FieldAttributes.Private | FieldAttributes.Static);
+                MethodBuilder captureMethod = EmitHostedAwaitCaptureMethod(
+                    moduleType, index, captureField);
+                steps.Add(EmitHostedAwaitStep(
+                    module, moduleType, index++, awaited!, captureMethod));
+
+                if (continuation is not null)
+                {
+                    steps.Add(EmitHostedStatementStep(
+                        module, moduleType, index++, continuation, captureName, captureField));
+                }
+                continue;
+            }
+            if (containsAwait)
+            {
+                throw new InvalidOperationException(
+                    $"Hosted compiled top-level await in module '{module.Path}' is not yet " +
+                    "supported inside a compound expression or control-flow statement.");
+            }
+
+            steps.Add(EmitHostedStatementStep(
+                module, moduleType, index++, statement, null, null));
+        }
+        _hostedModuleSteps[module.Path] = steps;
+    }
+
+    private static bool TrySplitHostedAwait(
+        Stmt statement,
+        out Expr? awaited,
+        out Stmt? continuation)
+    {
+        awaited = null;
+        continuation = null;
+        var placeholder = new Expr.Variable(new Token(
+            TokenType.IDENTIFIER, "$hostedAwaitResult", null, 0));
+
+        switch (statement)
+        {
+            case Stmt.Expression { Expr: Expr.Await expression }:
+                awaited = expression.Expression;
+                return true;
+            case Stmt.Const { Initializer: Expr.Await expression } declaration:
+                awaited = expression.Expression;
+                continuation = declaration with { Initializer = placeholder };
+                return true;
+            case Stmt.Var { Initializer: Expr.Await expression } declaration:
+                awaited = expression.Expression;
+                continuation = declaration with { Initializer = placeholder };
+                return true;
+            case Stmt.Export { Declaration: Stmt.Const { Initializer: Expr.Await expression } declaration } export:
+                awaited = expression.Expression;
+                continuation = export with
+                {
+                    Declaration = declaration with { Initializer = placeholder }
+                };
+                return true;
+            case Stmt.Export { Declaration: Stmt.Var { Initializer: Expr.Await expression } declaration } export:
+                awaited = expression.Expression;
+                continuation = export with
+                {
+                    Declaration = declaration with { Initializer = placeholder }
+                };
+                return true;
+            case Stmt.Export { DefaultExpr: Expr.Await expression } export:
+                awaited = expression.Expression;
+                continuation = export with { DefaultExpr = placeholder };
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private MethodBuilder EmitHostedAwaitCaptureMethod(
+        TypeBuilder moduleType,
+        int index,
+        FieldBuilder captureField)
+    {
+        MethodBuilder method = moduleType.DefineMethod(
+            $"$CaptureHostedAwait_{index}",
+            MethodAttributes.Private | MethodAttributes.Static,
+            typeof(void),
+            [_types.Object]);
+        ILGenerator il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stsfld, captureField);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    private MethodBuilder EmitHostedAwaitStep(
+        ParsedModule module,
+        TypeBuilder moduleType,
+        int index,
+        Expr awaited,
+        MethodBuilder captureMethod)
+    {
+        MethodBuilder step = moduleType.DefineMethod(
+            $"$HostedStep_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = step.GetILGenerator();
+        CompilationContext ctx = CreateHostedModuleStepContext(module, il, step);
+        var emitter = new ILEmitter(ctx);
+        emitter.EmitExpression(awaited);
+        emitter.Helpers.EnsureBoxed();
+        EmitHostedAwaitableTask(il, prepare: false);
+        LocalBuilder task = il.DeclareLocal(_types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, task);
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetHostedRuntime);
+        il.Emit(OpCodes.Ldloc, task);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, captureMethod);
+        il.Emit(OpCodes.Newobj, typeof(Action<object?>).GetConstructor(
+            [typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Callvirt, typeof(SharpTSHostedRuntimeBase).GetMethod(
+            nameof(SharpTSHostedRuntimeBase.CaptureAwait))!);
+        il.Emit(OpCodes.Ret);
+        return step;
+    }
+
+    private MethodBuilder EmitHostedStatementStep(
+        ParsedModule module,
+        TypeBuilder moduleType,
+        int index,
+        Stmt statement,
+        string? captureName,
+        FieldBuilder? captureField)
+    {
+        MethodBuilder step = moduleType.DefineMethod(
+            $"$HostedStep_{index}",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            typeof(Task),
+            Type.EmptyTypes);
+        ILGenerator il = step.GetILGenerator();
+        CompilationContext ctx = CreateHostedModuleStepContext(module, il, step);
+        if (captureName is not null && captureField is not null)
+        {
+            ctx.TopLevelStaticVars ??= [];
+            ctx.TopLevelStaticVars["$hostedAwaitResult"] = captureField;
+        }
+        var emitter = new ILEmitter(ctx);
+        if (statement is Stmt.Expression expressionStatement)
+            EmitHostedExpression(il, emitter, expressionStatement);
+        else
+            emitter.EmitStatement(statement);
+        il.Emit(OpCodes.Call, typeof(Task).GetProperty(nameof(Task.CompletedTask))!.GetMethod!);
+        il.Emit(OpCodes.Ret);
+        return step;
+    }
+
+    private CompilationContext CreateHostedModuleStepContext(
+        ParsedModule module,
+        ILGenerator il,
+        MethodBuilder method)
+    {
+        string? savedPath = _modules.CurrentPath;
+        _modules.CurrentPath = module.Path;
+        CompilationContext ctx = CreateModuleTopLevelContext(il, method);
+        _modules.CurrentPath = savedPath;
+        ctx.CurrentModulePath = module.Path;
+        ctx.ModuleExportFields = _modules.ExportFields;
+        ctx.ModuleTypes = _modules.Types;
+        ctx.ModuleInitMethods = _modules.InitMethods;
+        ctx.ModuleImportFields = _modules.ImportFields;
+        ctx.ModuleResolver = _modules.Resolver;
+        ctx.CommonJsExportFields = _modules.CommonJsExportFields;
+        ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
+        return ctx;
+    }
+
+    private void EmitHostedAwaitableTask(ILGenerator il, bool prepare = true)
+    {
+        var value = il.DeclareLocal(_types.Object);
+        var task = il.DeclareLocal(_types.TaskOfObject);
+        var isPromise = il.DefineLabel();
+        var isTask = il.DefineLabel();
+        var haveTask = il.DefineLabel();
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
+        il.Emit(OpCodes.Brtrue, isPromise);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Brtrue, isTask);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Call, _runtime.CoerceAwaitableToTaskMethod);
+        il.Emit(OpCodes.Stloc, task);
+        il.Emit(OpCodes.Br, haveTask);
+        il.MarkLabel(isPromise);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
+        il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Stloc, task);
+        il.Emit(OpCodes.Br, haveTask);
+        il.MarkLabel(isTask);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, task);
+        il.MarkLabel(haveTask);
+        il.Emit(OpCodes.Ldloc, task);
+        if (prepare)
+            il.Emit(OpCodes.Call, _runtime.EventLoopPrepareHostedAwait);
+    }
+
+    /// <summary>
+    /// Emits synchronous module registration and initialization. The caller
+    /// decides whether this body belongs to the console <c>Main</c> or the
+    /// experimental host-owned initializer.
+    /// </summary>
+    private void EmitModulesInitialization(ILGenerator il, List<ParsedModule> modules)
+    {
 
         // Create entry-point display class instance if there are captured top-level variables
         if (_closures.EntryPointDisplayClass != null &&
@@ -713,9 +1565,11 @@ public partial class ILCompiler
                 // Register under relative path (e.g., "./utils.ts")
                 string relativePath = GetRelativeModulePath(module, modules[^1]);
                 EmitRegisterModule(il, relativePath, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(relativePath), getNamespaceMethod);
 
                 // Also register under absolute path for direct matches
                 EmitRegisterModule(il, module.Path, getNamespaceMethod);
+                EmitRegisterModule(il, RemoveModuleExtension(module.Path), getNamespaceMethod);
 
                 // Register under module name without extension (e.g., "utils")
                 string moduleName = module.ModuleName;
@@ -751,15 +1605,6 @@ public partial class ILCompiler
                 il.Emit(OpCodes.Call, initMethod);
             }
         }
-
-        // Run the event loop — no-op if no handles are active
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, _runtime.EventLoopRun);
-        // Node process lifecycle at natural drain: 'beforeExit' (re-entering
-        // the loop when a listener schedules work), then 'exit' (#1080).
-        il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
-
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -795,6 +1640,14 @@ public partial class ILCompiler
 
         // Fall back to filename
         return "./" + Path.GetFileName(targetPath);
+    }
+
+    private static string RemoveModuleExtension(string path)
+    {
+        string extension = Path.GetExtension(path);
+        return extension is ".ts" or ".tsx" or ".js" or ".jsx" or ".mts" or ".cts"
+            ? path[..^extension.Length]
+            : path;
     }
 
     /// <summary>

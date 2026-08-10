@@ -11,6 +11,27 @@ namespace SharpTS.Tests.CompilerTests;
 public class ILVerificationTests
 {
     [Fact]
+    public void SameModuleExportBindingsInFunctionBody_PassILVerification()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["state.ts"] = """
+                export const seed = 4;
+                export let value = seed;
+                export function advance(): number { value += seed; return value; }
+                """,
+            ["main.ts"] = """
+                import { advance } from './state';
+                console.log(advance());
+                """
+        };
+
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
     public void HttpServerLifecycleRuntime_PassesILVerification()
     {
         var files = new Dictionary<string, string>

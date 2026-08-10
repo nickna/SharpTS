@@ -222,9 +222,13 @@ public partial class TypeChecker
 
     private TypeInfo CheckAwait(Expr.Await awaitExpr)
     {
-        if (!_inAsyncFunction)
+        bool isModuleTopLevel = _allowHostedTopLevelAwait && _currentFunctionReturnType is null &&
+            _currentModule is { IsScript: false, IsCommonJs: false };
+        if (!_inAsyncFunction && !isModuleTopLevel)
         {
-            throw new TypeCheckException("'await' is only valid inside an async function.", tsCode: "TS1308");
+            throw new TypeCheckException(
+                "'await' is only valid inside an async function.",
+                tsCode: "TS1308");
         }
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
@@ -263,6 +267,8 @@ public partial class TypeChecker
         {
             // Track this path for module discovery (even if resolution fails)
             _dynamicImportPaths.Add(literal.Value);
+            if (_currentModule is not null)
+                _dynamicImportReferences.Add((literal.Value, _currentModule.Path));
 
             // Try to resolve the module and get its exports
             if (_moduleResolver != null && _currentModule != null)

@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "nativeAot": {
+    "maxColdStartupMilliseconds": 1500,
+    "maxPeakWorkingSetBytes": 268435456,
+    "maxExecutableBytes": 52428800,
+    "maxShippingBytes": 68157440
+  },
+  "benchmarks": {
+    "SharpTsInitialMount": {
+      "maxMeanNanoseconds": 400000,
+      "maxAllocatedBytes": 81920
+    },
+    "ScalarUpdate": {
+      "maxMeanNanoseconds": 550000,
+      "maxAllocatedBytes": 102400
+    },
+    "BatchedScalarUpdates": {
+      "maxMeanNanoseconds": 100000,
+      "maxAllocatedBytes": 40960
+    },
+    "KeyedInsertMoveRemove": {
+      "maxMeanNanoseconds": 700000,
+      "maxAllocatedBytes": 143360
+    },
+    "InputToRenderLatency": {
+      "maxMeanNanoseconds": 600000,
+      "maxAllocatedBytes": 117760
+    }
+  }
+}

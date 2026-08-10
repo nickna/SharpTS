@@ -1,0 +1,4 @@
+{
+  "compilerOptions": { "strict": true, "jsx": "react", "jsxFactory": "h" },
+  "files": ["../advanced-negative.tsx"]
+}

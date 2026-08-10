@@ -130,6 +130,7 @@ public partial class Interpreter
         }
 
         HadUnhandledRejection = true;
+        _hostedUnhandledError?.Invoke(exception);
 
         string message = exception switch
         {

@@ -11,11 +11,13 @@ public sealed class CompletionHandler : CompletionHandlerBase
 {
     private readonly DocumentStore _store;
     private readonly DecoratorService _decorators;
+    private readonly GuiContractService _gui;
 
-    public CompletionHandler(DocumentStore store, DecoratorService decorators)
+    public CompletionHandler(DocumentStore store, DecoratorService decorators, GuiContractService? gui = null)
     {
         _store = store;
         _decorators = decorators;
+        _gui = gui ?? new GuiContractService();
     }
 
     public override Task<CompletionList> Handle(CompletionParams request, CancellationToken ct)
@@ -25,7 +27,8 @@ public sealed class CompletionHandler : CompletionHandlerBase
                 out DocumentSnapshot? snapshot))
             return Task.FromResult(new CompletionList());
 
-        var list = _decorators.Completion(
+        var list = _gui.Completion(snapshot.FilePath, snapshot.Text, request.Position.Line, request.Position.Character) ??
+            _decorators.Completion(
             snapshot.Text,
             request.Position.Line,
             request.Position.Character);
@@ -41,6 +44,6 @@ public sealed class CompletionHandler : CompletionHandlerBase
         => new()
         {
             DocumentSelector = TextDocumentSelector.ForLanguage("typescript", "typescriptreact"),
-            TriggerCharacters = new[] { "@" }
+            TriggerCharacters = new[] { "@", "<", " ", "=", "\"" }
         };
 }

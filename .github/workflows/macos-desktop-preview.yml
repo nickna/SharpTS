@@ -1,0 +1,95 @@
+name: macOS desktop preview
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "Execution/**"
+      - "Hosting/**"
+      - "Compilation/**"
+      - "Cli/**"
+      - "SharpTS.Gui/**"
+      - "SharpTS.Gui.Host/**"
+      - "SharpTS.Gui.Conformance.Tests/**"
+      - "SharpTS.Gui.Sdk.Consumer/**"
+      - "SharpTS.Gui.Sdk/**"
+      - "SharpTS.Sdk.Tasks/**"
+      - "distribution/macos/**"
+      - "scripts/package-gui-macos.ps1"
+      - "scripts/test-gui-macos-package.ps1"
+      - ".github/workflows/macos-desktop-preview.yml"
+      - ".github/workflows/macos-gui-distribution.yml"
+
+jobs:
+  gui-sdk-candidate:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: macOS bundle contract tests
+        shell: pwsh
+        run: scripts/test-gui-macos-package.ps1
+      - name: Build and audit the exact GUI SDK candidate
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -PackageOnly
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/macos-preview/osx-arm64/feed/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+
+  macos-native:
+    needs: gui-sdk-candidate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: osx-arm64
+            architecture: arm64
+            runner: macos-15
+          - rid: osx-x64
+            architecture: x86_64
+            runner: macos-15-intel
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/macos-preview/candidate
+      - name: Hosted scheduler and lifecycle conformance
+        run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests|FullyQualifiedName~Parse_Compile_Hosted"
+      - name: Renderer, diagnostics, and productization conformance
+        run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
+      - name: Native packaged SDK, CLI, Headless, and real-window gates
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier ${{ matrix.rid }} -RealWindow -CandidatePackage artifacts/macos-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+      - name: Validate and archive unsigned app bundle
+        shell: pwsh
+        run: >-
+          scripts/package-gui-macos.ps1
+          -PublishDirectory "artifacts/macos-preview/${{ matrix.rid }}/published single file"
+          -OutputDirectory "artifacts/macos-preview/${{ matrix.rid }}/bundle"
+          -BundleIdentifier dev.sharpts.gui.preview
+          -DisplayName "SharpTS GUI Preview"
+          -ShortVersion 0.2.0
+          -BuildVersion ${{ github.run_number }}
+          -Architecture ${{ matrix.architecture }}
+          -Executable SharpTS.Gui.Sdk.Consumer
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: macos-desktop-preview-${{ matrix.architecture }}
+          path: |
+            artifacts/macos-preview/${{ matrix.rid }}/*-trace.json
+            artifacts/macos-preview/${{ matrix.rid }}/published single file/SharpTS.Gui.Sdk.Consumer
+            artifacts/macos-preview/${{ matrix.rid }}/cli published single file/cli_app_with_spaces
+            artifacts/macos-preview/${{ matrix.rid }}/bundle/*.zip
+            artifacts/macos-preview/${{ matrix.rid }}/bundle/SHA256SUMS
+          if-no-files-found: error

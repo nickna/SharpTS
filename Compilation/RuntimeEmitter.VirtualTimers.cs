@@ -98,7 +98,224 @@ public partial class RuntimeEmitter
         EmitEnsureTimerInitialized(runtimeType, runtime, timerQueueField, startTicksField, initializedField);
         EmitGetCurrentTimeMs(runtimeType, runtime, startTicksField, initializedField);
         EmitProcessPendingTimers(runtimeType, runtime, timerQueueField, processingTimersField);
+        EmitHostedTimerMethods(runtimeType, runtime, timerQueueField);
         EmitAddVirtualTimer(runtimeType, runtime, timerQueueField);
+    }
+
+    private void EmitHostedTimerMethods(
+        TypeBuilder runtimeType,
+        EmittedRuntime runtime,
+        FieldBuilder timerQueueField)
+    {
+        var listType = _types.MakeGenericType(_types.ListOpen, runtime.VirtualTimerType);
+        var countGetter = EmitterTypeHelpers.ResolveMethod(
+            listType, _types.GetProperty(_types.ListOpen, "Count")!.GetGetMethod()!);
+        var getItem = EmitterTypeHelpers.ResolveMethod(
+            listType, _types.GetMethod(_types.ListOpen, "get_Item")!);
+        var removeAt = EmitterTypeHelpers.ResolveMethod(
+            listType, _types.GetMethod(_types.ListOpen, "RemoveAt")!);
+
+        var getDelay = runtimeType.DefineMethod(
+            "GetNextTimerDelay",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Int32,
+            Type.EmptyTypes);
+        runtime.GetNextTimerDelay = getDelay;
+        var il = getDelay.GetILGenerator();
+        var index = il.DeclareLocal(_types.Int32);
+        var count = il.DeclareLocal(_types.Int32);
+        var timer = il.DeclareLocal(runtime.VirtualTimerType);
+        var minimum = il.DeclareLocal(_types.Int64);
+        var current = il.DeclareLocal(_types.Int64);
+        var loop = il.DefineLabel();
+        var next = il.DefineLabel();
+        var done = il.DefineLabel();
+        var found = il.DefineLabel();
+
+        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
+        il.Emit(OpCodes.Ldc_I8, long.MaxValue);
+        il.Emit(OpCodes.Stloc, minimum);
+        il.Emit(OpCodes.Call, runtime.GetCurrentTimeMs);
+        il.Emit(OpCodes.Stloc, current);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Callvirt, countGetter);
+        il.Emit(OpCodes.Stloc, count);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, getItem);
+        il.Emit(OpCodes.Stloc, timer);
+        il.Emit(OpCodes.Ldloc, timer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Brtrue, next);
+        il.Emit(OpCodes.Ldloc, timer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldloc, minimum);
+        il.Emit(OpCodes.Bge, next);
+        il.Emit(OpCodes.Ldloc, timer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Stloc, minimum);
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, minimum);
+        il.Emit(OpCodes.Ldc_I8, long.MaxValue);
+        il.Emit(OpCodes.Bne_Un, found);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(found);
+        il.Emit(OpCodes.Ldloc, minimum);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Ret);
+
+        var processOne = runtimeType.DefineMethod(
+            "ProcessOnePendingTimer",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            Type.EmptyTypes);
+        runtime.ProcessOnePendingTimer = processOne;
+        il = processOne.GetILGenerator();
+        var hostedIndex = il.DeclareLocal(_types.Int32);
+        var hostedCount = il.DeclareLocal(_types.Int32);
+        var selectedIndex = il.DeclareLocal(_types.Int32);
+        var hostedTimer = il.DeclareLocal(runtime.VirtualTimerType);
+        var selectedTime = il.DeclareLocal(_types.Int64);
+        var hostedCurrent = il.DeclareLocal(_types.Int64);
+        var scan = il.DefineLabel();
+        var scanNext = il.DefineLabel();
+        var scanDone = il.DefineLabel();
+        var selected = il.DefineLabel();
+        var remove = il.DefineLabel();
+        var invoke = il.DefineLabel();
+        var skipUnref = il.DefineLabel();
+
+        il.Emit(OpCodes.Call, runtime.EnsureTimerInitialized);
+        il.Emit(OpCodes.Call, runtime.GetCurrentTimeMs);
+        il.Emit(OpCodes.Stloc, hostedCurrent);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stloc, selectedIndex);
+        il.Emit(OpCodes.Ldc_I8, long.MaxValue);
+        il.Emit(OpCodes.Stloc, selectedTime);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Callvirt, countGetter);
+        il.Emit(OpCodes.Stloc, hostedCount);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hostedIndex);
+        il.MarkLabel(scan);
+        il.Emit(OpCodes.Ldloc, hostedIndex);
+        il.Emit(OpCodes.Ldloc, hostedCount);
+        il.Emit(OpCodes.Bge, scanDone);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Ldloc, hostedIndex);
+        il.Emit(OpCodes.Callvirt, getItem);
+        il.Emit(OpCodes.Stloc, hostedTimer);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Brtrue, scanNext);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldloc, hostedCurrent);
+        il.Emit(OpCodes.Bgt, scanNext);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldloc, selectedTime);
+        il.Emit(OpCodes.Bge, scanNext);
+        il.Emit(OpCodes.Ldloc, hostedIndex);
+        il.Emit(OpCodes.Stloc, selectedIndex);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Stloc, selectedTime);
+        il.MarkLabel(scanNext);
+        il.Emit(OpCodes.Ldloc, hostedIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, hostedIndex);
+        il.Emit(OpCodes.Br, scan);
+
+        il.MarkLabel(scanDone);
+        il.Emit(OpCodes.Ldloc, selectedIndex);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, selected);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(selected);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Ldloc, selectedIndex);
+        il.Emit(OpCodes.Callvirt, getItem);
+        il.Emit(OpCodes.Stloc, hostedTimer);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsInterval);
+        il.Emit(OpCodes.Brfalse, remove);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Brtrue, remove);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerIntervalMs);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stfld, runtime.VirtualTimerScheduledTime);
+        il.Emit(OpCodes.Br, invoke);
+
+        il.MarkLabel(remove);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Ldloc, selectedIndex);
+        il.Emit(OpCodes.Callvirt, removeAt);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, runtime.VirtualTimerIsCancelled);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Brfalse, skipUnref);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, runtime.VirtualTimerHasRef);
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+        il.MarkLabel(skipUnref);
+
+        il.MarkLabel(invoke);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerCallback);
+        il.Emit(OpCodes.Ldloc, hostedTimer);
+        il.Emit(OpCodes.Ldfld, runtime.VirtualTimerArgs);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        var cancelAll = runtimeType.DefineMethod(
+            "CancelAllTimers",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            Type.EmptyTypes);
+        runtime.CancelAllTimers = cancelAll;
+        il = cancelAll.GetILGenerator();
+        var skip = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Brfalse, skip);
+        var clear = EmitterTypeHelpers.ResolveMethod(
+            listType, _types.GetMethod(_types.ListOpen, "Clear")!);
+        il.Emit(OpCodes.Ldsfld, timerQueueField);
+        il.Emit(OpCodes.Callvirt, clear);
+        il.MarkLabel(skip);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

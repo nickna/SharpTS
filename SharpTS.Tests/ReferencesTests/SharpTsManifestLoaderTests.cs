@@ -83,4 +83,25 @@ public class SharpTsManifestLoaderTests
         using var dir = CliTestHelper.CreateTempDirectory();
         Assert.Throws<FileNotFoundException>(() => SharpTsManifestLoader.Load(dir.GetPath("sharpts.json")));
     }
+
+    [Fact]
+    public void Load_ApplicationHostMetadata()
+    {
+        using var dir = CliTestHelper.CreateTempDirectory();
+        var path = dir.CreateFile("sharpts.json", """
+            {
+              "application": {
+                "type": "avalonia",
+                "entry": "main.tsx",
+                "guiSdkVersion": "0.3.0-preview.1",
+                "guiSdkSource": "./feed"
+              }
+            }
+            """);
+
+        var application = SharpTsManifestLoader.Load(path).Application!;
+        Assert.Equal("avalonia", application.Type);
+        Assert.Equal("main.tsx", application.Entry);
+        Assert.Equal("./feed", application.GuiSdkSource);
+    }
 }

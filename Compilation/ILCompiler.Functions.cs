@@ -342,9 +342,9 @@ public partial class ILCompiler
         // Build module-scoped top-level vars so this function only sees its own
         // module's bindings plus global imports. When emitting a namespace member body this
         // also surfaces the enclosing namespace's var/let/const backing fields (#567) — the
-        // augmentation now lives in BuildTopLevelStaticVarsForModule so every emission site
+        // augmentation now lives in BuildModuleMemberTopLevelStaticVarsForModule so every emission site
         // (state machines, class methods) gets it uniformly, not just this plain-function path.
-        Dictionary<string, FieldBuilder>? topLevelVars = BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
+        Dictionary<string, FieldBuilder>? topLevelVars = BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
 
         var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.FunctionOverloads = _functions.Overloads;
@@ -867,13 +867,10 @@ public partial class ILCompiler
         {
             if (stmt is Stmt.Function func && func.Name.Lexeme == "main" && func.Body != null)
             {
-                // Validate signature: exactly one parameter (args: string[])
-                if (func.Parameters.Count != 1)
+                // Hosted/console entry functions may take no parameters or args: string[].
+                if (func.Parameters.Count > 1)
                     continue;
-
-                var param = func.Parameters[0];
-                // Parameter should be named 'args' with type 'string[]'
-                if (param.Type != "string[]")
+                if (func.Parameters.Count == 1 && func.Parameters[0].Type != "string[]")
                     continue;
 
                 // Determine return type:
@@ -953,7 +950,37 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
-        var ctx = CreateEntryPointTopLevelContext(il, mainMethod);
+
+        if (_hosted)
+        {
+            var hostedInitialize = EmitHostedInitializationMethod(
+                (hostedIl, hostedMethod) =>
+                    EmitSingleFileInitialization(hostedIl, hostedMethod, statements, waitForPromises: false));
+            EmitHostedAbi(hostedInitialize);
+            il.Emit(OpCodes.Call, hostedInitialize);
+        }
+        else
+        {
+            EmitSingleFileInitialization(il, mainMethod, statements, waitForPromises: true);
+        }
+
+        // Run the event loop — no-op if no handles are active
+        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Call, _runtime.EventLoopRun);
+        // Node process lifecycle at natural drain: 'beforeExit' (re-entering
+        // the loop when a listener schedules work), then 'exit' (#1080).
+        il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitSingleFileInitialization(
+        ILGenerator il,
+        MethodBuilder owningMethod,
+        List<Stmt> statements,
+        bool waitForPromises)
+    {
+        var ctx = CreateEntryPointTopLevelContext(il, owningMethod);
         ctx.PropertyTypes = _typedInterop.PropertyTypes;
         // Program type for GetMethodFromHandle resolution
         ctx.ProgramType = _programType;
@@ -1043,7 +1070,10 @@ public partial class ILCompiler
             // on EmitExpressionWithAsyncWait for why this must pump, not block).
             if (stmt is Stmt.Expression exprStmt)
             {
-                EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+                if (waitForPromises)
+                    EmitExpressionWithAsyncWait(il, emitter, exprStmt);
+                else
+                    EmitHostedExpression(il, emitter, exprStmt);
             }
             else
             {
@@ -1051,14 +1081,6 @@ public partial class ILCompiler
             }
         }
 
-        // Run the event loop — no-op if no handles are active
-        il.Emit(OpCodes.Call, _runtime.EventLoopGetInstance);
-        il.Emit(OpCodes.Call, _runtime.EventLoopRun);
-        // Node process lifecycle at natural drain: 'beforeExit' (re-entering
-        // the loop when a listener schedules work), then 'exit' (#1080).
-        il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
-
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -1190,8 +1212,9 @@ public partial class ILCompiler
         }
 
         // Now call the user's main(args) function
-        // Load the args parameter (arg 0) - string[] is a reference type, no boxing needed
-        il.Emit(OpCodes.Ldarg_0);  // Load string[] args (reference types implicitly convert to object)
+        // Load args only when the guest main declares it.
+        if (mainFunc.Parameters.Count == 1)
+            il.Emit(OpCodes.Ldarg_0);
 
         // Call the user's main function
         var userMainMethod = _functions.Builders[mainFunc.Name.Lexeme];

@@ -1379,6 +1379,10 @@ public class ModuleResolver
     /// entries for the declaration entries used by the type-check graph.
     /// </summary>
     public List<ParsedModule> GetRuntimeModulesInOrder(ParsedModule entryPoint)
+        => GetRuntimeModulesInOrder([entryPoint]);
+
+    /// <summary>Returns the union of executable root graphs in dependency order.</summary>
+    public List<ParsedModule> GetRuntimeModulesInOrder(IEnumerable<ParsedModule> entryPoints)
     {
         List<ParsedModule> result = [];
         HashSet<string> visited = [];
@@ -1398,7 +1402,8 @@ public class ModuleResolver
                 result.Add(module);
         }
 
-        Visit(entryPoint);
+        foreach (ParsedModule entryPoint in entryPoints)
+            Visit(entryPoint);
         return result;
     }
 
@@ -1862,9 +1867,18 @@ public class ModuleResolver
                     continue;
                 }
 
-                // Load the module (this will also load its dependencies)
+                HashSet<string> previouslyLoaded = _moduleCache.Keys.ToHashSet(
+                    StringComparer.OrdinalIgnoreCase);
+
+                // Load the module (this will also load its dependencies).
                 var module = LoadModule(resolvedPath, decoratorMode);
-                newModules.Add(module);
+                foreach (ParsedModule loaded in GetRuntimeModulesInOrder(module))
+                {
+                    if (previouslyLoaded.Contains(loaded.Path))
+                        continue;
+                    loaded.IsDynamicImportOnly = true;
+                    newModules.Add(loaded);
+                }
             }
             catch
             {

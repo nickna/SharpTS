@@ -141,6 +141,7 @@ public record GlobalOptions(
 /// <param name="EmitDebugSymbols">Emit a portable PDB beside the assembly (<c>--debug</c>/<c>-g</c>)</param>
 /// <param name="Timings">Print a human-readable compilation timing table.</param>
 /// <param name="TimingsJson">Print the compilation timing report as JSON.</param>
+/// <param name="Hosted">Emit the experimental versioned hosted runtime ABI.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -154,7 +155,8 @@ public record CompileOptions(
     bool Standalone = false,
     bool EmitDebugSymbols = false,
     bool Timings = false,
-    bool TimingsJson = false
+    bool TimingsJson = false,
+    bool Hosted = false
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -187,6 +189,25 @@ public abstract record ParsedCommand
 
     /// <summary>Display version and exit.</summary>
     public sealed record Version() : ParsedCommand;
+
+    public sealed record NewAvalonia(
+        string Name,
+        string OutputDirectory,
+        string GuiSdkVersion) : ParsedCommand;
+
+    public sealed record Application(
+        string Action,
+        string? Entry,
+        string? Host,
+        string? RuntimeIdentifier,
+        bool? SelfContained,
+        bool? SingleFile,
+        string Configuration,
+        string? OutputDirectory,
+        string? GuiSdkVersion,
+        string? GuiSdkSource,
+        string? Mode,
+        string[] ApplicationArgs) : ParsedCommand;
 
     /// <summary>Start interactive REPL mode.</summary>
     /// <param name="Options">Global options for the session</param>
@@ -277,6 +298,11 @@ public class CommandLineParser
                 "Error: --noEmit cannot be combined with --emitDeclarationOnly.",
                 64);
         }
+
+        if (remainingArgs.Length > 0 && remainingArgs[0] == "new")
+            return ParseNewCommand(remainingArgs);
+        if (remainingArgs.Length > 0 && remainingArgs[0] == "app")
+            return ParseApplicationCommand(remainingArgs, scriptArgs);
 
         if (remainingArgs.Length == 0)
         {
@@ -372,6 +398,63 @@ public class CommandLineParser
             "       sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]",
             64
         );
+    }
+
+    private static ParsedCommand ParseNewCommand(string[] args)
+    {
+        if (args.Length < 2 || args[1] != "avalonia")
+            return new ParsedCommand.Error("Usage: sharpts new avalonia -n <name> [-o directory]", 64);
+        string? name = null;
+        string? output = null;
+        string version = GuiApplicationCli.DefaultSdkVersion;
+        for (int i = 2; i < args.Length; i++)
+        {
+            if ((args[i] is "-n" or "--name") && i + 1 < args.Length) name = args[++i];
+            else if ((args[i] is "-o" or "--output") && i + 1 < args.Length) output = args[++i];
+            else if (args[i] == "--sdk-version" && i + 1 < args.Length) version = args[++i];
+            else return new ParsedCommand.Error($"Error: Unknown or incomplete new option '{args[i]}'.", 64);
+        }
+        if (string.IsNullOrWhiteSpace(name))
+            return new ParsedCommand.Error("Error: sharpts new avalonia requires -n <name>.", 64);
+        return new ParsedCommand.NewAvalonia(name, output ?? name, version);
+    }
+
+    private static ParsedCommand ParseApplicationCommand(string[] args, string[] applicationArgs)
+    {
+        if (args.Length < 2 || args[1] is not ("run" or "build" or "compile" or "publish"))
+            return new ParsedCommand.Error("Usage: sharpts app <run|build|publish> [entry.tsx] [options]", 64);
+        string action = args[1] == "compile" ? "build" : args[1];
+        string? entry = null, host = null, rid = null, output = null, sdkVersion = null,
+            sdkSource = null, mode = null;
+        bool? selfContained = null, singleFile = null;
+        string configuration = action == "run" ? "Debug" : "Release";
+        for (int i = 2; i < args.Length; i++)
+        {
+            string value;
+            if (!args[i].StartsWith('-') && entry is null) { entry = args[i]; continue; }
+            if (args[i] == "--host" && i + 1 < args.Length) host = args[++i];
+            else if (args[i] == "--rid" && i + 1 < args.Length) rid = args[++i];
+            else if (args[i] is "-o" or "--output" && i + 1 < args.Length) output = args[++i];
+            else if (args[i] == "--configuration" && i + 1 < args.Length) configuration = args[++i];
+            else if (args[i] == "--sdk-version" && i + 1 < args.Length) sdkVersion = args[++i];
+            else if (args[i] == "--source" && i + 1 < args.Length) sdkSource = args[++i];
+            else if (args[i] == "--mode" && i + 1 < args.Length) mode = args[++i];
+            else if (args[i] == "--self-contained" && i + 1 < args.Length)
+            {
+                value = args[++i];
+                if (!bool.TryParse(value, out bool parsed)) return new ParsedCommand.Error("Error: --self-contained expects true or false.", 64);
+                selfContained = parsed;
+            }
+            else if (args[i] == "--single-file" && i + 1 < args.Length)
+            {
+                value = args[++i];
+                if (!bool.TryParse(value, out bool parsed)) return new ParsedCommand.Error("Error: --single-file expects true or false.", 64);
+                singleFile = parsed;
+            }
+            else return new ParsedCommand.Error($"Error: Unknown or incomplete app option '{args[i]}'.", 64);
+        }
+        return new ParsedCommand.Application(action, entry, host, rid, selfContained, singleFile,
+            configuration, output, sdkVersion, sdkSource, mode, applicationArgs);
     }
 
     /// <summary>
@@ -668,6 +751,7 @@ public class CommandLineParser
         bool standalone = false;
         bool timings = false;
         bool timingsJson = false;
+        bool hosted = false;
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
 
@@ -780,6 +864,10 @@ public class CommandLineParser
             {
                 standalone = true;
             }
+            else if (args[i] == "--hosted")
+            {
+                hosted = true;
+            }
             else if (args[i] == "--pack")
             {
                 pack = true;
@@ -829,6 +917,14 @@ public class CommandLineParser
                 ShowCompileUsage: true);
         }
 
+        if (hosted && target != OutputTarget.Dll)
+        {
+            return new ParsedCommand.Error(
+                "Error: --hosted is valid only with --target dll.",
+                64,
+                ShowCompileUsage: true);
+        }
+
         if (timings && timingsJson)
         {
             return new ParsedCommand.Error(
@@ -861,7 +957,8 @@ public class CommandLineParser
             Standalone: standalone,
             EmitDebugSymbols: emitDebugSymbols,
             Timings: timings,
-            TimingsJson: timingsJson
+            TimingsJson: timingsJson,
+            Hosted: hosted
         );
 
         var packOptions = new PackOptions(

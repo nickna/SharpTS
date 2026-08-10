@@ -1,0 +1,368 @@
+using Avalonia.Controls;
+using Avalonia.Media.Imaging;
+using System.Diagnostics;
+using System.Reflection;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
+namespace SharpTS.Gui;
+
+internal sealed class DesktopRuntimeContext
+{
+    private readonly Action<DesktopRoot, Window> _showWindow;
+    private readonly Action<Action> _dispatchGuestCallback;
+    private readonly Action<Action> _scheduleGuestMicrotask;
+    private readonly Action<int> _requestShutdown;
+    private readonly string[] _launchArguments;
+    private readonly bool _headless;
+    private readonly List<DesktopRoot> _roots = [];
+    private readonly List<DesktopTrayIcon> _trayIcons = [];
+    private DesktopApplicationSession? _application;
+    private bool _cancelNextWindowClose;
+
+    public DesktopRuntimeContext(
+        TraceRecorder recorder,
+        Action<DesktopRoot, Window> showWindow,
+        bool headless,
+        Action<Action> dispatchGuestCallback,
+        Action<Action> scheduleGuestMicrotask,
+        Action<int> requestShutdown,
+        string[] launchArguments)
+    {
+        Recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
+        _showWindow = showWindow ?? throw new ArgumentNullException(nameof(showWindow));
+        _dispatchGuestCallback = dispatchGuestCallback
+            ?? throw new ArgumentNullException(nameof(dispatchGuestCallback));
+        _scheduleGuestMicrotask = scheduleGuestMicrotask
+            ?? throw new ArgumentNullException(nameof(scheduleGuestMicrotask));
+        _requestShutdown = requestShutdown ?? throw new ArgumentNullException(nameof(requestShutdown));
+        _launchArguments = launchArguments?.ToArray() ?? throw new ArgumentNullException(nameof(launchArguments));
+        _headless = headless;
+        EnsureOwnerThread();
+    }
+
+    public TraceRecorder Recorder { get; }
+    public bool IsHeadless => _headless;
+    public DesktopRoot? CurrentRoot =>
+        _roots.FirstOrDefault(root => root.IsMainWindow) ?? _roots.LastOrDefault();
+
+    public IReadOnlyList<DesktopRoot> Roots => _roots;
+    public string[] GetLaunchArguments() => _launchArguments.ToArray();
+
+    public string GetDisplaysJson()
+    {
+        EnsureOwnerThread();
+        Window window = CurrentRoot?.Window
+            ?? throw new InvalidOperationException("No desktop Window is mounted.");
+        DisplayInfo[] displays = window.Screens.All.Select(screen => new DisplayInfo(
+            screen.DisplayName ?? string.Empty,
+            screen.IsPrimary,
+            screen.Scaling,
+            screen.CurrentOrientation.ToString().ToLowerInvariant(),
+            new DisplayBounds(
+                screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height),
+            new DisplayBounds(
+                screen.WorkingArea.X, screen.WorkingArea.Y,
+                screen.WorkingArea.Width, screen.WorkingArea.Height))).ToArray();
+        return JsonSerializer.Serialize(displays, DisplayJsonContext.Default.DisplayInfoArray);
+    }
+
+    public DesktopApplicationSession CreateApplication(string shutdownMode)
+    {
+        EnsureOwnerThread();
+        if (_application is not null || _roots.Count != 0)
+            throw new InvalidOperationException("Only one active desktop application is permitted per guest runtime.");
+
+        _application = new DesktopApplicationSession(this, shutdownMode);
+        return _application;
+    }
+
+    internal DesktopRoot CreateApplicationRoot(
+        DesktopApplicationSession application,
+        Action reactiveCleanup,
+        DesktopRoot? owner,
+        bool modal,
+        bool mainWindow)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(reactiveCleanup);
+        if (!ReferenceEquals(application, _application) || application.IsDisposed)
+            throw new ObjectDisposedException(nameof(DesktopApplicationSession));
+        if (owner is not null && (!ReferenceEquals(owner.Application, application) || owner.IsDisposed))
+            throw new ArgumentException("The owner must be an active window from the same desktop application.", nameof(owner));
+        if (modal && owner is null)
+            throw new ArgumentException("A modal window requires an owner.", nameof(owner));
+        if (mainWindow && _roots.Any(root => ReferenceEquals(root.Application, application) && root.IsMainWindow))
+            throw new InvalidOperationException("The desktop application already has a main window.");
+
+        bool effectiveMainWindow = mainWindow || !_roots.Any(root => ReferenceEquals(root.Application, application));
+        var root = new DesktopRoot(
+            Recorder,
+            _showWindow,
+            _dispatchGuestCallback,
+            _headless,
+            reactiveCleanup,
+            ReleaseRoot,
+            application,
+            owner,
+            modal,
+            effectiveMainWindow);
+        _roots.Add(root);
+        return root;
+    }
+
+    public void DisposeAllRoots()
+    {
+        EnsureOwnerThread();
+        _application?.Dispose();
+        foreach (DesktopRoot root in _roots.ToArray().Reverse())
+            root.Dispose();
+    }
+
+    internal void DisposeApplication(DesktopApplicationSession application)
+    {
+        EnsureOwnerThread();
+        foreach (DesktopTrayIcon trayIcon in _trayIcons.Where(icon => ReferenceEquals(icon.Application, application)).ToArray().Reverse())
+            trayIcon.Dispose();
+        foreach (DesktopRoot root in _roots.Where(root => ReferenceEquals(root.Application, application)).ToArray().Reverse())
+            root.Dispose();
+        if (ReferenceEquals(_application, application))
+            _application = null;
+    }
+
+    public bool ShouldRequestShutdown(DesktopRoot closingRoot)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(closingRoot);
+        return closingRoot.Application?.ShouldRequestShutdown(closingRoot) ?? true;
+    }
+
+    public void RequestShutdown(int exitCode)
+    {
+        EnsureOwnerThread();
+        _requestShutdown(exitCode);
+    }
+
+    public void ScheduleGuestMicrotask(Action callback)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(callback);
+        _scheduleGuestMicrotask(callback);
+    }
+
+    public void CancelNextWindowClose()
+    {
+        EnsureOwnerThread();
+        _cancelNextWindowClose = true;
+    }
+
+    public bool ConsumeCloseCancellation()
+    {
+        EnsureOwnerThread();
+        bool cancel = _cancelNextWindowClose;
+        _cancelNextWindowClose = false;
+        return cancel;
+    }
+
+    public void DispatchGuestCallback(Action callback) => _dispatchGuestCallback(callback);
+
+    public Window RequireWindowForServices()
+    {
+        EnsureOwnerThread();
+        if (_headless)
+            throw new InvalidOperationException("Desktop dialogs and clipboard are unavailable in Headless mode.");
+        return CurrentRoot?.Window
+            ?? throw new InvalidOperationException("A mounted desktop root is required for this service.");
+    }
+
+    internal DesktopTrayIcon CreateTrayIcon(
+        DesktopApplicationSession application,
+        string icon,
+        string toolTip,
+        string menuJson,
+        Action? clicked,
+        Action<string>? menuClicked)
+    {
+        EnsureOwnerThread();
+        if (!ReferenceEquals(application, _application) || application.IsDisposed)
+            throw new ObjectDisposedException(nameof(DesktopApplicationSession));
+        var handle = new DesktopTrayIcon(
+            this, application, _headless, icon, toolTip, menuJson, clicked, menuClicked, ReleaseTrayIcon);
+        _trayIcons.Add(handle);
+        return handle;
+    }
+
+    public Bitmap LoadImage(string source)
+    {
+        EnsureOwnerThread();
+        if (source.StartsWith("asset:///", StringComparison.OrdinalIgnoreCase))
+        {
+            string logicalName = source[9..].Replace('\\', '/');
+            Stream stream = Assembly.GetEntryAssembly()?.GetManifestResourceStream($"SharpTS.Gui.Asset/{logicalName}")
+                ?? throw new FileNotFoundException($"Packaged GUI asset '{logicalName}' was not found.");
+            using (stream)
+                return new Bitmap(stream);
+        }
+
+        string path = Uri.TryCreate(source, UriKind.Absolute, out Uri? uri) && uri.IsFile
+            ? uri.LocalPath
+            : source;
+        if (!Path.IsPathRooted(path))
+            path = Path.GetFullPath(path, AppContext.BaseDirectory);
+        return new Bitmap(path);
+    }
+
+    public WindowIcon LoadWindowIcon(string source)
+    {
+        EnsureOwnerThread();
+        if (source.StartsWith("asset:///", StringComparison.OrdinalIgnoreCase))
+        {
+            string logicalName = source[9..].Replace('\\', '/');
+            Stream stream = Assembly.GetEntryAssembly()?.GetManifestResourceStream($"SharpTS.Gui.Asset/{logicalName}")
+                ?? throw new FileNotFoundException($"Packaged GUI asset '{logicalName}' was not found.");
+            using (stream)
+                return new WindowIcon(stream);
+        }
+
+        string path = Uri.TryCreate(source, UriKind.Absolute, out Uri? uri) && uri.IsFile
+            ? uri.LocalPath
+            : source;
+        if (!Path.IsPathRooted(path))
+            path = Path.GetFullPath(path, AppContext.BaseDirectory);
+        return new WindowIcon(path);
+    }
+
+    public void EnsureOwnerThread()
+    {
+        if (Environment.CurrentManagedThreadId != Recorder.OwnerThreadId)
+        {
+            throw new InvalidOperationException(
+                $"Avalonia bridge ran on managed thread {Environment.CurrentManagedThreadId}; " +
+                $"owner is {Recorder.OwnerThreadId}.");
+        }
+    }
+
+    private void ReleaseRoot(DesktopRoot root)
+    {
+        EnsureOwnerThread();
+        _roots.Remove(root);
+    }
+
+    private void ReleaseTrayIcon(DesktopTrayIcon trayIcon)
+    {
+        EnsureOwnerThread();
+        _trayIcons.Remove(trayIcon);
+    }
+
+    internal int CountApplicationRoots(DesktopApplicationSession application) =>
+        _roots.Count(root => ReferenceEquals(root.Application, application) && !root.IsDisposed);
+}
+
+internal sealed record DisplayInfo(
+    string Name,
+    bool IsPrimary,
+    double Scaling,
+    string Orientation,
+    DisplayBounds Bounds,
+    DisplayBounds WorkingArea);
+internal sealed record DisplayBounds(double X, double Y, double Width, double Height);
+
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(DisplayInfo[]))]
+internal sealed partial class DisplayJsonContext : JsonSerializerContext;
+
+public sealed class DesktopApplicationSession : IDisposable
+{
+    private readonly DesktopRuntimeContext _context;
+    private readonly string _shutdownMode;
+    private bool _disposed;
+    private DesktopStyleResources? _styleResources;
+
+    internal DesktopApplicationSession(DesktopRuntimeContext context, string shutdownMode)
+    {
+        _context = context;
+        _shutdownMode = shutdownMode switch
+        {
+            "onLastWindowClose" or "onMainWindowClose" or "explicit" => shutdownMode,
+            _ => throw new ArgumentException($"Unsupported desktop shutdown mode '{shutdownMode}'.", nameof(shutdownMode)),
+        };
+    }
+
+    public bool IsDisposed => _disposed;
+    public int WindowCount => _disposed ? 0 : _context.CountApplicationRoots(this);
+
+    internal DesktopTrayIcon CreateTrayIcon(
+        string icon,
+        string toolTip,
+        string menuJson,
+        Action? clicked,
+        Action<string>? menuClicked)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _context.CreateTrayIcon(this, icon, toolTip, menuJson, clicked, menuClicked);
+    }
+
+    internal DesktopRoot CreateWindowRoot(Action reactiveCleanup, DesktopRoot? owner, bool modal, bool mainWindow)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _context.CreateApplicationRoot(this, reactiveCleanup, owner, modal, mainWindow);
+    }
+
+    internal void ConfigureStyleResources(string json)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (WindowCount != 0)
+            throw new InvalidOperationException("Desktop resources and styles must be configured before creating a window.");
+        _styleResources = DesktopStyleResources.Parse(json);
+    }
+
+    internal void ApplyStyleResources(Window window) => _styleResources?.Apply(window);
+
+    internal object? FindResource(DesktopRoot root, string key)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (!ReferenceEquals(root.Application, this) || root.IsDisposed)
+            throw new ArgumentException("The window must be active and belong to this desktop application.", nameof(root));
+        ArgumentException.ThrowIfNullOrWhiteSpace(key);
+        return root.Window?.TryFindResource(key, out object? value) == true ? value : null;
+    }
+
+    public void Shutdown(int exitCode = 0)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        _context.RequestShutdown(exitCode);
+    }
+
+    internal bool ShouldRequestShutdown(DesktopRoot closingRoot) => _shutdownMode switch
+    {
+        "onLastWindowClose" => _context.CountApplicationRoots(this) <= 1,
+        "onMainWindowClose" => closingRoot.IsMainWindow,
+        "explicit" => false,
+        _ => throw new UnreachableException(),
+    };
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+        _disposed = true;
+        _context.DisposeApplication(this);
+    }
+}
+
+internal sealed class DesktopRuntimeRegistration(
+    DesktopRuntimeContext context,
+    Action<DesktopRuntimeContext> release) : IDisposable
+{
+    private int _disposed;
+
+    public DesktopRuntimeContext Context { get; } = context;
+
+    public void Dispose()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            return;
+        Context.DisposeAllRoots();
+        release(Context);
+    }
+}

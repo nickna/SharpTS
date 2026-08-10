@@ -1,0 +1,72 @@
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
+  <Import Project="$(MSBuildThisFileDirectory)SupportedPlatforms.props" />
+
+  <PropertyGroup>
+    <UsingSharpTSGuiSdk>true</UsingSharpTSGuiSdk>
+    <OutputType>WinExe</OutputType>
+    <StartupObject>SharpTS.Gui.Generated.Launcher</StartupObject>
+    <UseAppHost>true</UseAppHost>
+
+    <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''">main.tsx</SharpTSEntryPoint>
+    <SharpTSTsConfigPath Condition="'$(SharpTSTsConfigPath)' == '' and Exists('$(MSBuildProjectDirectory)\tsconfig.json')">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
+    <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
+    <SharpTSGuiIncludeSourcePayload Condition="'$(SharpTSGuiIncludeSourcePayload)' == ''">true</SharpTSGuiIncludeSourcePayload>
+
+    <SharpTSGuiSdkRoot>$(MSBuildThisFileDirectory)..\</SharpTSGuiSdkRoot>
+    <SharpTSGuiHostRoot Condition="'$(PublishAot)' != 'true'">$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiHostRoot>
+    <SharpTSGuiHostRoot Condition="'$(PublishAot)' == 'true'">$(SharpTSGuiSdkRoot)tools\net10.0\any\aot-host\</SharpTSGuiHostRoot>
+    <SharpTSGuiCompilerRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\</SharpTSGuiCompilerRoot>
+    <SharpTSGuiRuntimeRoot>$(SharpTSGuiSdkRoot)tools\net10.0\any\host\runtimes\</SharpTSGuiRuntimeRoot>
+    <SharpTSGuiPackageSource>$(SharpTSGuiSdkRoot)gui\</SharpTSGuiPackageSource>
+    <SharpTSGuiTasksAssembly>$(SharpTSGuiSdkRoot)build\SharpTS.Sdk.Tasks.dll</SharpTSGuiTasksAssembly>
+    <SharpTSGuiHostedAbiVersion>1</SharpTSGuiHostedAbiVersion>
+    <SharpTSGuiApiVersion>1</SharpTSGuiApiVersion>
+    <SharpTSGuiIntermediateRoot Condition="'$(SharpTSGuiIntermediateRoot)' == ''">$(BaseIntermediateOutputPath)$(Configuration)\.sharpts-gui\</SharpTSGuiIntermediateRoot>
+    <SharpTSGuiGuestAssembly Condition="'$(SharpTSGuiGuestAssembly)' == ''">$(SharpTSGuiIntermediateRoot)SharpTS.Gui.Guest.dll</SharpTSGuiGuestAssembly>
+    <SharpTSGuiPublishMode Condition="'$(PublishAot)' == 'true' and '$(SharpTSGuiPublishMode)' == ''">NativeAot</SharpTSGuiPublishMode>
+    <SharpTSGuiPublishMode Condition="'$(SharpTSGuiPublishMode)' == ''">SingleFile</SharpTSGuiPublishMode>
+    <SharpTSGuiValidatePublishedOutput
+      Condition="'$(SharpTSGuiValidatePublishedOutput)' == '' and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == '$(NETCoreSdkRuntimeIdentifier)')">true</SharpTSGuiValidatePublishedOutput>
+    <SharpTSGuiValidatePublishedOutput
+      Condition="'$(SharpTSGuiValidatePublishedOutput)' == ''">false</SharpTSGuiValidatePublishedOutput>
+    <SelfContained Condition="'$(SharpTSGuiPublishMode)' == 'SingleFile' and '$(RuntimeIdentifier)' != ''">true</SelfContained>
+    <PublishSingleFile Condition="'$(SharpTSGuiPublishMode)' == 'SingleFile' and '$(RuntimeIdentifier)' != ''">true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">true</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract Condition="'$(PublishSingleFile)' == 'true'">false</IncludeAllContentForSelfExtract>
+    <PublishTrimmed Condition="'$(PublishSingleFile)' == 'true'">false</PublishTrimmed>
+    <SelfContained Condition="'$(PublishAot)' == 'true'">true</SelfContained>
+    <PublishSingleFile Condition="'$(PublishAot)' == 'true'">false</PublishSingleFile>
+    <PublishTrimmed Condition="'$(PublishAot)' == 'true'">true</PublishTrimmed>
+    <TrimMode Condition="'$(PublishAot)' == 'true'">partial</TrimMode>
+    <IlcTrimMetadata Condition="'$(PublishAot)' == 'true'">false</IlcTrimMetadata>
+    <IlcGenerateCompleteTypeMetadata Condition="'$(PublishAot)' == 'true'">false</IlcGenerateCompleteTypeMetadata>
+    <StackTraceSupport Condition="'$(PublishAot)' == 'true'">true</StackTraceSupport>
+    <StripSymbols Condition="'$(PublishAot)' == 'true'">true</StripSymbols>
+    <CopyOutputSymbolsToPublishDirectory Condition="'$(PublishAot)' == 'true'">false</CopyOutputSymbolsToPublishDirectory>
+    <DebugType Condition="'$(PublishSingleFile)' == 'true' or '$(PublishAot)' == 'true'">None</DebugType>
+    <DebugSymbols Condition="'$(PublishSingleFile)' == 'true' or '$(PublishAot)' == 'true'">false</DebugSymbols>
+    <DefineConstants Condition="'$(SharpTSGuiIncludeSourcePayload)' != 'true'">$(DefineConstants);SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
+    <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);SHARPTS_GUI_NATIVE_AOT;SHARPTS_GUI_COMPILED_ONLY</DefineConstants>
+    <SharpTSGuiIncludeSourcePayload Condition="'$(PublishAot)' == 'true'">false</SharpTSGuiIncludeSourcePayload>
+  </PropertyGroup>
+
+  <Import Project="$(MSBuildThisFileDirectory)DescriptorContract.Generated.props" />
+
+  <ItemGroup Condition="Exists('$(MSBuildProjectDirectory)\Assets')">
+    <SharpTSGuiAsset Include="$(MSBuildProjectDirectory)\Assets\**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="$(SharpTSGuiSdkRoot)launcher\Launcher.cs" Link="SharpTS.Gui.Launcher.g.cs" />
+    <_SharpTSGuiManagedReference Include="$(SharpTSGuiHostRoot)*.dll"
+                                 Condition="'$(PublishAot)' != 'true'" />
+    <_SharpTSGuiManagedReference
+      Include="$(SharpTSGuiHostRoot)SharpTS.Gui.Host.dll;$(SharpTSGuiHostRoot)SharpTS.Gui.dll;$(SharpTSGuiHostRoot)SharpTS.Hosting.Abstractions.dll"
+      Condition="'$(PublishAot)' == 'true'" />
+    <Reference Include="@(_SharpTSGuiManagedReference)">
+      <HintPath>%(Identity)</HintPath>
+      <Private>true</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

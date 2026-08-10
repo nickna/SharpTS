@@ -50,7 +50,7 @@ public static class TimerBuiltIns
         }, isInterval: false);
 
         // Link cancellation to virtual timer
-        cts.Token.Register(() => virtualTimer.IsCancelled = true);
+        cts.Token.Register(() => interpreter.CancelTimer(virtualTimer));
 
         // Register timer with interpreter for cleanup on disposal
         interpreter.RegisterTimer(timeout);
@@ -99,7 +99,7 @@ public static class TimerBuiltIns
         }, isInterval: true);
 
         // Link cancellation to virtual timer
-        cts.Token.Register(() => virtualTimer.IsCancelled = true);
+        cts.Token.Register(() => interpreter.CancelTimer(virtualTimer));
 
         // Register timer with interpreter for cleanup on disposal
         interpreter.RegisterTimer(interval);

@@ -11,12 +11,14 @@
     <PackageId>SharpTS.LanguageServer</PackageId>
     <IsPackable>true</IsPackable>
     <Description>LSP language server for SharpTS (.NET interop diagnostics, completion, and standalone navigation).</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
 
   <!-- Directory.Build.props sets PackageLicenseFile=LICENSE for all packages; include the
        repo-root LICENSE so `dotnet pack` doesn't fail NU5030 (same as SharpTS.Sdk). -->
   <ItemGroup>
     <None Include="..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\docs\language-server.md" Pack="true" PackagePath="README.md" />
   </ItemGroup>
 
   <ItemGroup>

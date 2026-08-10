@@ -2,4 +2,8 @@ Modules/TypeScriptLibResources/lib*.d.ts text eol=lf
 Modules/TypeScriptLibResources/LICENSE.txt text eol=lf whitespace=-trailing-space
 Modules/TypeScriptLibResources/SHA256SUMS text eol=lf
 *.sh text eol=lf
+SharpTS.Gui/Generated/ControlContract.Generated.cs text eol=lf
+SharpTS.Gui.Sdk/GuiPackage/control-surface.generated.ts text eol=lf
+SharpTS.Gui.Sdk/GuiPackage/control-docs.generated.json text eol=lf
+SharpTS.Gui.Sdk/Sdk/DescriptorContract.Generated.props text eol=lf
 Examples/text-stats.ts text eol=lf

@@ -221,6 +221,21 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_Compile_Hosted_RequiresDllAndSetsHiddenOption()
+    {
+        var result = _parser.Parse(["-c", "file.ts", "--hosted"]);
+
+        var compile = Assert.IsType<ParsedCommand.Compile>(result);
+        Assert.True(compile.CompileOptions.Hosted);
+
+        var invalid = _parser.Parse([
+            "-c", "file.ts", "--hosted", "--target", "exe"]);
+        var error = Assert.IsType<ParsedCommand.Error>(invalid);
+        Assert.Contains("valid only with --target dll", error.Message);
+        Assert.Equal(64, error.ExitCode);
+    }
+
+    [Fact]
     public void Parse_Compile_AllPackageFlags_ParsesCorrectly()
     {
         var result = _parser.Parse([
@@ -573,6 +588,51 @@ public class CommandLineParserTests
         Assert.False(script.Options.NoLib);
         Assert.True(script.Options.TypeScriptProgramOptions.LoadDefaultLib);
         Assert.True(script.Options.TypeScriptProgramOptions.PreferDeclarationFiles);
+    }
+
+    [Fact]
+    public void Parse_NewAvaloniaApplication()
+    {
+        var command = Assert.IsType<ParsedCommand.NewAvalonia>(
+            _parser.Parse(["new", "avalonia", "-n", "Counter", "-o", "apps/Counter"]));
+        Assert.Equal("Counter", command.Name);
+        Assert.Equal("apps/Counter", command.OutputDirectory);
+        Assert.Equal("0.3.0-preview.1", command.GuiSdkVersion);
+    }
+
+    [Fact]
+    public void Parse_ApplicationPublishKeepsDeploymentConceptsSeparate()
+    {
+        var command = Assert.IsType<ParsedCommand.Application>(_parser.Parse([
+            "app", "publish", "main.tsx", "--host", "avalonia", "--rid", "win-x64",
+            "--self-contained", "true", "--single-file", "false", "--source", "feed", "-o", "dist",
+        ]));
+        Assert.Equal("publish", command.Action);
+        Assert.Equal("avalonia", command.Host);
+        Assert.Equal("win-x64", command.RuntimeIdentifier);
+        Assert.True(command.SelfContained);
+        Assert.False(command.SingleFile);
+        Assert.Equal("feed", command.GuiSdkSource);
+        Assert.Equal("dist", command.OutputDirectory);
+    }
+
+    [Fact]
+    public void Parse_ApplicationRunForwardsOnlyArgumentsAfterSeparator()
+    {
+        var command = Assert.IsType<ParsedCommand.Application>(_parser.Parse([
+            "app", "run", "main.tsx", "--mode", "compiled", "--", "--headless", "value",
+        ]));
+        Assert.Equal("compiled", command.Mode);
+        Assert.Equal(["--headless", "value"], command.ApplicationArgs);
+    }
+
+    [Theory]
+    [InlineData("--self-contained")]
+    [InlineData("--single-file")]
+    public void Parse_ApplicationRejectsMissingDeploymentBoolean(string option)
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(_parser.Parse(["app", "publish", option]));
+        Assert.Equal(64, error.ExitCode);
     }
 
     #endregion

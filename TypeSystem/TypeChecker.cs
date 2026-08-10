@@ -353,6 +353,9 @@ public partial class TypeChecker
 
     // We need to track the current function's expected return type to validate 'return' statements
     private TypeInfo? _currentFunctionReturnType = null;
+    // Phase 1A enables this only for hosted program preparation. Keeping the
+    // default false preserves the ordinary CLI/interpreter/compiler contract.
+    private bool _allowHostedTopLevelAwait;
     // When non-null, VisitReturn collects return expression types here instead of validating (for inference)
     private List<TypeInfo>? _inferredReturnTypes = null;
     // When non-null (set only while inferring a generator's return type), CheckYield collects the operand
@@ -1053,6 +1056,8 @@ public partial class TypeChecker
     /// </summary>
     public void SetDecoratorMode(DecoratorMode mode) => _decoratorMode = mode;
 
+    internal void EnableHostedTopLevelAwait() => _allowHostedTopLevelAwait = true;
+
     // Module support - track the current module being type-checked
     private ParsedModule? _currentModule = null;
     private ModuleResolver? _moduleResolver = null;
@@ -1060,12 +1065,21 @@ public partial class TypeChecker
     // Track dynamic import paths discovered during type checking
     // Used for module discovery - ensures dynamically imported modules are compiled
     private readonly HashSet<string> _dynamicImportPaths = [];
+    private readonly HashSet<(string Specifier, string ImportingModulePath)>
+        _dynamicImportReferences = [];
 
     /// <summary>
     /// Gets the set of module paths discovered in dynamic import expressions with string literal paths.
     /// These paths are relative to the importing module and should be resolved before use.
     /// </summary>
     public IReadOnlySet<string> DynamicImportPaths => _dynamicImportPaths;
+
+    /// <summary>
+    /// Literal dynamic imports paired with the source module that owns the
+    /// specifier. Compilers use this to resolve nested relative imports correctly.
+    /// </summary>
+    public IReadOnlySet<(string Specifier, string ImportingModulePath)>
+        DynamicImportReferences => _dynamicImportReferences;
 
     /// <summary>
     /// Type-checks the given statements and returns a TypeMap with resolved types for all expressions.

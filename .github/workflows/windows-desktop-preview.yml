@@ -1,0 +1,145 @@
+name: Windows desktop preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_arm64_native:
+        description: Run the real-window gate on a registered Windows ARM64 runner
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    paths:
+      - "Execution/Interpreter.cs"
+      - "Execution/Interpreter.Hosting.cs"
+      - "Hosting/**"
+      - "SharpTS.Hosting.Abstractions/**"
+      - "Parsing/TopLevelAwaitDetector.cs"
+      - "TypeSystem/**"
+      - "Runtime/BuiltIns/ProcessBuiltIns.cs"
+      - "Runtime/BuiltIns/PromiseBuiltIns.cs"
+      - "Runtime/BuiltIns/TimerBuiltIns.cs"
+      - "SharpTS.Tests/Hosting/**"
+      - "Compilation/**"
+      - "Cli/**"
+      - "References/SharpTsManifest.cs"
+      - "SharpTS.Tests/CliTests/**"
+      - "Program.cs"
+      - "SharpTS.Gui/**"
+      - "SharpTS.Gui.Host/**"
+      - "SharpTS.Gui.Conformance.Tests/**"
+      - "SharpTS.Gui.Sdk.Consumer/**"
+      - "SharpTS.Gui.Sdk/**"
+      - "SharpTS.Sdk.Tasks/**"
+      - "distribution/windows/**"
+      - "scripts/package-gui-windows.ps1"
+      - "scripts/collect-gui-support-bundle.ps1"
+      - "scripts/test-gui-distribution.ps1"
+      - ".github/workflows/windows-gui-distribution.yml"
+      - "SharpTS.csproj"
+      - "SharpTS.sln"
+      - ".github/workflows/windows-desktop-preview.yml"
+
+jobs:
+  gui-sdk-candidate:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - name: Distribution manifest, evidence, update, and support-bundle tests
+        shell: pwsh
+        run: scripts/test-gui-distribution.ps1
+      - name: Build and audit the exact GUI SDK candidate
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/win-x64/feed/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+
+  windows-x64:
+    needs: gui-sdk-candidate
+    runs-on: windows-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/candidate
+      - name: Hosted scheduler and lifecycle conformance
+        run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests|FullyQualifiedName~Parse_Compile_Hosted"
+      - name: Renderer core and dual-mode headless integration
+        run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
+      - name: Packaged x64 SDK, Native AOT, performance budgets, and real windows
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-desktop-preview-x64
+          path: |
+            artifacts/windows-preview/win-x64/*-trace.json
+            artifacts/windows-preview/win-x64/feed/*.nupkg
+            artifacts/windows-preview/win-x64/published single file/*.exe
+            artifacts/windows-preview/win-x64/published native aot/*.exe
+            artifacts/windows-preview/win-x64/cli published single file/*.exe
+
+  windows-arm64-cross-publish:
+    needs: gui-sdk-candidate
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/candidate
+      - name: Cross-publish packaged ARM64 directory and single-file outputs
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-desktop-preview-arm64-cross-publish
+          path: |
+            artifacts/windows-preview/win-arm64/feed/*.nupkg
+            artifacts/windows-preview/win-arm64/published single file/*.exe
+            artifacts/windows-preview/win-arm64/cli published single file/*.exe
+
+  windows-arm64-native:
+    needs: gui-sdk-candidate
+    if: github.event_name == 'workflow_dispatch' && inputs.run_arm64_native
+    runs-on: [self-hosted, Windows, ARM64, sharpts-gui]
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+      - uses: actions/download-artifact@v4
+        with:
+          name: sharpts-gui-sdk-candidate
+          path: artifacts/windows-preview/candidate
+      - name: Packaged ARM64 SDK, Native AOT, performance budgets, and real windows
+        shell: pwsh
+        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage artifacts/windows-preview/candidate/SharpTS.Gui.Sdk.0.3.0-preview.1.nupkg
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-desktop-preview-arm64-native
+          path: |
+            artifacts/windows-preview/win-arm64/*-trace.json
+            artifacts/windows-preview/win-arm64/feed/*.nupkg
+            artifacts/windows-preview/win-arm64/published single file/*.exe
+            artifacts/windows-preview/win-arm64/published native aot/*.exe
+            artifacts/windows-preview/win-arm64/cli published single file/*.exe

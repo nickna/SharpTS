@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AssemblyName>SharpTS.Gui</AssemblyName>
+    <RootNamespace>SharpTS.Gui</RootNamespace>
+    <Description>Retained Avalonia renderer for the SharpTS GUI SDK public preview.</Description>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Headless" />
+    <ProjectReference Include="..\SharpTS.Gui.Generator\SharpTS.Gui.Generator.csproj"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <Target Name="VerifyGeneratedGuiControlContract" BeforeTargets="CoreCompile">
+    <Exec Command="dotnet &quot;$([MSBuild]::NormalizePath('$(MSBuildThisFileDirectory)', '..', 'SharpTS.Gui.Generator', 'bin', '$(Configuration)', 'net10.0', 'SharpTS.Gui.Generator.dll'))&quot; verify" />
+  </Target>
+</Project>

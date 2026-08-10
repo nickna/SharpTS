@@ -217,6 +217,25 @@ public partial class ILCompiler
 
     // Output target type (DLL or EXE)
     private readonly OutputTarget _outputTarget;
+    private bool _hosted;
+    private TypeBuilder? _hostedRuntimeType;
+    private TypeBuilder? _hostedFactoryType;
+    private readonly Dictionary<string, List<MethodBuilder>> _hostedModuleSteps = [];
+    private readonly Dictionary<string, string> _hostedModuleRunnerKeys = [];
+    private readonly Dictionary<string, FieldBuilder> _moduleInitializedFields = [];
+
+    /// <summary>
+    /// Enables the experimental versioned hosted ABI for DLL output.
+    /// </summary>
+    internal void EnableHostedOutput()
+    {
+        if (_outputTarget != OutputTarget.Dll)
+        {
+            throw new InvalidOperationException("Hosted output is valid only for DLL output.");
+        }
+
+        _hosted = true;
+    }
 
     // Simple name of the emitted assembly, used to derive a default PDB file name.
     private readonly string _assemblyName;
@@ -557,6 +576,7 @@ public partial class ILCompiler
 
     public void Compile(List<Stmt> statements, TypeMap typeMap, DeadCodeInfo? deadCodeInfo = null)
     {
+        RejectHostedTopLevelAwait(statements);
         if (_timingCollector is null)
         {
             statements = PrepareSingleCompilation(statements, typeMap, deadCodeInfo);
@@ -648,7 +668,7 @@ public partial class ILCompiler
     /// </summary>
     private void Phase1_EmitRuntimeTypes()
     {
-        _runtime = new RuntimeEmitter(_types) { EntryModulePath = _entryModulePath }
+        _runtime = new RuntimeEmitter(_types, _hosted) { EntryModulePath = _entryModulePath }
             .EmitAll(_moduleBuilder, _features ?? RuntimeFeatureSet.EmitEverything());
         _typeMapper.SetRuntime(_runtime);
     }
@@ -992,6 +1012,8 @@ public partial class ILCompiler
             tb.CreateType();
         }
         _programType.CreateType();
+        _hostedRuntimeType?.CreateType();
+        _hostedFactoryType?.CreateType();
     }
 
     /// <summary>
@@ -1178,6 +1200,11 @@ public partial class ILCompiler
         _timingCollector.Measure(ExecutionPhaseTiming.FinalizeTypes, ModulePhase11_FinalizeTypes);
     }
 
+    private void RejectHostedTopLevelAwait(IEnumerable<Stmt> statements)
+    {
+        // Hosted output owns top-level await through its asynchronous initializer.
+    }
+
     private List<Stmt> PrepareModuleCompilation(
         List<ParsedModule> modules,
         ModuleResolver resolver,
@@ -1298,6 +1325,9 @@ public partial class ILCompiler
             {
                 DefineDeclarationFromStatement(stmt);
             }
+
+            if (_hosted && TopLevelAwaitDetector.Contains(module.Statements))
+                DefineHostedModuleRunner(module);
         }
         _modules.CurrentPath = null;
         _modules.CurrentDotNetNamespace = null;
@@ -1525,6 +1555,8 @@ public partial class ILCompiler
             tb.CreateType();
         }
         _programType.CreateType();
+        _hostedRuntimeType?.CreateType();
+        _hostedFactoryType?.CreateType();
     }
 
     #endregion
@@ -1606,7 +1638,11 @@ public partial class ILCompiler
         var hasSharpTsReference = HasAssemblyReference(tempStream, "SharpTS");
         tempStream.Position = 0;
 
-        bool rewritingReferences = _useReferenceAssemblies || hasSharpTsReference;
+        // Hosted DLLs are consumed as ordinary compile-time references by the GUI SDK's
+        // Native AOT launcher. Retarget their CoreLib metadata to the public reference
+        // assemblies even though their runtime dependency is SharpTS.Hosting rather than
+        // SharpTS itself.
+        bool rewritingReferences = _useReferenceAssemblies || hasSharpTsReference || _hosted;
 
         // Kept only to verify the rewriter preserved MethodDef identity, so it is not materialized
         // for builds that will not emit symbols.
@@ -2299,17 +2335,18 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Builds a class-method-scoped top-level static var map that augments the base
+    /// Builds a module-member-scoped top-level static var map that augments the base
     /// <see cref="BuildTopLevelStaticVarsForModule"/> with this module's own ESM export
     /// fields. A method body like
     ///   <c>braceExpand() { return braceExpand(this.x, this.y); }</c>
     /// references the same-module export by bare identifier — that reference has to
     /// resolve to the export's static field or the runtime throws a <c>ReferenceError</c>.
-    /// Deliberately scoped to class methods because other emission sites (module init,
-    /// imported-function calls, __dirname resolution) already rely on their existing
-    /// view and adding ESM exports there broke 280+ tests when tried.
+    /// Deliberately scoped to member bodies because module initializers and import setup
+    /// rely on their existing view and adding ESM exports there causes declarations to
+    /// bind through the wrong storage. Every function/method/arrow/state-machine body,
+    /// however, must see the canonical live export field for the enclosing module.
     /// </summary>
-    private Dictionary<string, FieldBuilder>? BuildClassMethodTopLevelStaticVarsForModule(string? modulePath)
+    private Dictionary<string, FieldBuilder>? BuildModuleMemberTopLevelStaticVarsForModule(string? modulePath)
     {
         var result = BuildTopLevelStaticVarsForModule(modulePath);
         if (modulePath == null || !_modules.ExportFields.TryGetValue(modulePath, out var exports))

@@ -151,7 +151,7 @@ public partial class Interpreter
                     try
                     {
                         object? result = Evaluate(exprStmt.Expr);
-                        if (result is SharpTSPromise promise)
+                        if (_waitForTopLevelPromises && result is SharpTSPromise promise)
                         {
                             // Pump the event loop while waiting: a bare GetResult()
                             // here hard-hangs when the promise needs a timer or I/O

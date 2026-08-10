@@ -9,7 +9,10 @@ inventory verification.
 
 `.github/nuget-packages.json` is the source of truth for the expected package
 IDs, their deterministic push order, and the stable `SharpTS.Sdk` version used
-by copyable documentation examples. When adding a package:
+by copyable documentation examples. An entry with `publish: false` is still
+packed and preflighted, but is excluded from the stable release push and
+post-publish inventory. Its fixed `version` keeps an independent preview train
+from inheriting the repository tag. When adding a package:
 
 1. Onboard the package ID on NuGet separately from a release tag.
    Publishing an approved prerelease package is the only reliable end-to-end
@@ -24,13 +27,20 @@ The tagged release is deliberately blocked if any manifest ID is not already
 registered. This prevents an untested new-package permission from publishing an
 established package first.
 
+`SharpTS.Gui.Sdk` is onboarded separately from tagged releases. Its manifest entry keeps that
+independent preview version fixed while the other packages inherit the release tag. Keep the
+release API key scoped to this ID as well as the tagged package IDs. Because NuGet versions are
+immutable, publish a new GUI preview before updating the manifest; then pin the SHA-256 of the
+repository-signed package served by NuGet. Tagged releases download those exact bytes, verify the
+hash, publish idempotently, and verify the GUI SDK's own version in the final inventory.
+
 ## Normal release
 
 The Publish workflow builds and tests all artifacts before its release job. The
-release job pushes each package explicitly with `--skip-duplicate`, records a
-result for every package, and then queries NuGet until every manifest ID exposes
-the tag version. The job fails if any push failed or the final inventory remains
-incomplete.
+release job pushes each publishable package explicitly with `--skip-duplicate`,
+records a result for every publishable package, and then queries NuGet until each
+one exposes its manifest-selected version. The job fails if any push failed or
+the final inventory remains incomplete.
 
 Rerunning a failed release is safe. Already published packages are skipped and
 missing packages are retried, allowing a partial release to converge without

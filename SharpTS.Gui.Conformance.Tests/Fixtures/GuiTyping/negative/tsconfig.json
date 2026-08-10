@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "jsxImportSource": "@sharpts/gui",
+    "baseUrl": "../../../..",
+    "paths": {
+      "@sharpts/gui": ["SharpTS.Gui.Sdk/GuiPackage/index.ts"],
+      "@sharpts/gui/*": ["SharpTS.Gui.Sdk/GuiPackage/*"]
+    }
+  },
+  "files": ["../negative.tsx"]
+}

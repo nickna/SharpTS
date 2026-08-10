@@ -55,6 +55,16 @@ The `sharpts` executable must be available on `PATH`. You can also invoke the ex
 
 ---
 
+### Desktop Calculator (`Calculator/`)
+
+**What it does:** Builds a complete retained Avalonia desktop calculator from typed TSX.
+
+**Demonstrates:** Function components, reducer/effect/memo/callback hooks, natural children,
+keyboard input, focus refs, direct styling, interpreted/compiled guest parity, and packaged SDK
+consumption. See `Calculator/README.md` for local build and run commands.
+
+---
+
 ### 1. File Hasher (`file-hasher.ts`)
 
 **What it does:** Generates multiple checksums (MD5, SHA1, SHA256, SHA512) for any file.

@@ -125,8 +125,10 @@
       <_SharpTSNativeInteropCatalogLine Include="    private static global::SharpTS.Runtime.DotNet.INativeDotNetCatalog Create() =&gt;" />
       <_SharpTSNativeInteropCatalogLine Include="        new global::SharpTS.Runtime.DotNet.NativeDotNetCatalogBuilder()" />
       <_SharpTSNativeInteropCatalogLine Include="            .AddDefaultTypes()" />
-      <_SharpTSNativeInteropCatalogLine Include="            .Add(typeof(global::%(SharpTSNativeInteropType.Identity)), &quot;%(SharpTSNativeInteropType.Alias)&quot;)" />
-      <_SharpTSNativeInteropCatalogLine Include="            .AddAssemblyPayload(&quot;%(_SharpTSNativeInteropPayload.Filename)%(_SharpTSNativeInteropPayload.Extension)&quot;, &quot;%(_SharpTSNativeInteropPayload.LogicalName)&quot;)" />
+      <_SharpTSNativeInteropCatalogLine Include="            .Add(typeof(global::%(SharpTSNativeInteropType.Identity)), &quot;%(SharpTSNativeInteropType.Alias)&quot;)"
+                                        Condition="'@(SharpTSNativeInteropType)' != ''" />
+      <_SharpTSNativeInteropCatalogLine Include="            .AddAssemblyPayload(&quot;%(_SharpTSNativeInteropPayload.Filename)%(_SharpTSNativeInteropPayload.Extension)&quot;, &quot;%(_SharpTSNativeInteropPayload.LogicalName)&quot;)"
+                                        Condition="'@(_SharpTSNativeInteropPayload)' != ''" />
       <_SharpTSNativeInteropCatalogLine Include="            .Build()%3B" />
       <_SharpTSNativeInteropCatalogLine Include="}" />
     </ItemGroup>

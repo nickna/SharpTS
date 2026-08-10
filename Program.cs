@@ -57,6 +57,8 @@ using SharpTS.Projects;
 using SharpTS.References;
 using SharpTS.Runtime.DotNet;
 using SharpTS.TypeSystem;
+#pragma warning disable SHARPTS_HOSTING001
+using SharpTS.Hosting;
 
 return SharpTSCli.Run(args);
 
@@ -86,6 +88,14 @@ switch (command)
     case ParsedCommand.Version:
         Console.WriteLine($"sharpts {GetVersion()}");
         return 0;
+
+    case ParsedCommand.NewAvalonia create:
+        try { return GuiApplicationCli.Create(create); }
+        catch (Exception exception) { Console.Error.WriteLine($"Error: {exception.Message}"); return 1; }
+
+    case ParsedCommand.Application application:
+        try { return GuiApplicationCli.Run(application); }
+        catch (Exception exception) { Console.Error.WriteLine($"Error: {exception.Message}"); return 1; }
 
     case ParsedCommand.Error error:
         Console.WriteLine(error.Message);
@@ -231,6 +241,7 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 compile.CompileOptions.References,
                 compile.CompileOptions.Target,
                 compile.CompileOptions.Bundler,
+                compile.CompileOptions.Hosted,
                 compileOptions,
                 timings,
                 compileConfig);
@@ -670,7 +681,7 @@ static async Task RunPromptAsync(GlobalOptions options)
     await repl.RunAsync();
 }
 
-static int CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
+static int CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, bool hosted, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
 {
     try
     {
@@ -739,7 +750,7 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
         // keeping declaration-only inputs out of emitted IL.
         CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies,
             sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target,
-            bundlerMode, externalRefs, globalOptions, timings, project);
+            bundlerMode, hosted, externalRefs, globalOptions, timings, project);
 
         // These modes stopped before any assembly was written, so there is nothing to pack.
         if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return 0;
@@ -786,7 +797,7 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, bool hosted, ReferenceSet externalRefs, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
 {
     var loaded = MeasurePhase(timings, ExecutionPhaseTiming.LoadModules, () =>
     {
@@ -818,6 +829,8 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 
     var checker = new TypeChecker(globalOptions.TypeCheckerOptions);
     checker.SetDecoratorMode(decoratorMode);
+    if (hosted)
+        checker.EnableHostedTopLevelAwait();
     TypeMap typeMap;
     var typeCheckStartedAt = timings?.Start() ?? 0;
     try
@@ -841,16 +854,32 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
     }
     timings?.Complete(ExecutionPhaseTiming.TypeCheck, typeCheckStartedAt);
 
-    var dynamicPaths = checker.DynamicImportPaths;
-    if (dynamicPaths.Count > 0)
+    var dynamicModules = new List<ParsedModule>();
+    var dynamicModulePaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    var processedDynamicImports = new HashSet<(string Specifier, string ImportingModulePath)>();
+    while (true)
     {
+        var pendingImports = checker.DynamicImportReferences
+            .Where(reference => processedDynamicImports.Add(reference))
+            .ToArray();
+        if (pendingImports.Length == 0)
+            break;
         var newModules = MeasurePhase(timings,
             ExecutionPhaseTiming.LoadDynamicImports,
-            () => resolver.LoadDynamicImportModules(dynamicPaths, absolutePath, decoratorMode));
+            () => pendingImports
+                .SelectMany(reference => resolver.LoadDynamicImportModules(
+                    [reference.Specifier],
+                    reference.ImportingModulePath,
+                    decoratorMode))
+                .Where(module => dynamicModulePaths.Add(module.Path))
+                .ToList());
         if (newModules.Count > 0)
         {
-            allModules = resolver.GetRuntimeModulesInOrder(entryModule);
-            typeModules = resolver.GetModulesInOrder(declarationModules.Append(entryModule));
+            dynamicModules.AddRange(newModules);
+            allModules = resolver.GetRuntimeModulesInOrder(
+                dynamicModules.Append(entryModule));
+            typeModules = resolver.GetModulesInOrder(
+                declarationModules.Concat(dynamicModules).Append(entryModule));
 
             typeCheckStartedAt = timings?.Start() ?? 0;
             try
@@ -914,7 +943,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         () => new DeadCodeAnalyzer(typeMap).Analyze(allStatements));
 
     // Compilation
-    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, externalRefs, timings,
+    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, hosted, externalRefs, timings,
         compiler => compiler.CompileModules(emittedModules, resolver, typeMap, deadCodeInfo));
 }
 
@@ -926,9 +955,13 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 /// the configured compiler and performs the one step that differs between the drivers
 /// (whole-module-graph vs single-file compile).
 /// </summary>
-static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, ReferenceSet externalRefs, ExecutionTimingCollector? timings, Action<ILCompiler> compileBody)
+static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, bool hosted, ReferenceSet externalRefs, ExecutionTimingCollector? timings, Action<ILCompiler> compileBody)
 {
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
+
+    if (hosted && target != OutputTarget.Dll)
+        throw new InvalidOperationException("Hosted ABI output is valid only for DLL output.");
+    string? hostedAbstractionsPath = hosted ? ResolveHostedAbstractionsPath() : null;
 
     if (target == OutputTarget.Exe)
     {
@@ -944,6 +977,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
             compiler.SetTimingCollector(timings);
             compiler.SetDecoratorMode(decoratorMode);
             compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
+            if (hosted) compiler.EnableHostedOutput();
             compileBody(compiler);
             PrintCompilerWarnings(compiler);
             ValidateCompiledRuntimeRequirements(compiler);
@@ -1016,10 +1050,13 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
         compiler.SetTimingCollector(timings);
         compiler.SetDecoratorMode(decoratorMode);
         compiler.EmitDebugSymbols = outputOptions.EmitDebugSymbols;
+        if (hosted) compiler.EnableHostedOutput();
         compileBody(compiler);
         PrintCompilerWarnings(compiler);
         ValidateCompiledRuntimeRequirements(compiler);
         compiler.Save(outputPath);
+        if (hosted)
+            CopyHostedAbstractions(hostedAbstractionsPath!, outputPath);
 
         MeasurePhase(timings,
             ExecutionPhaseTiming.GenerateRuntimeConfig,
@@ -1042,6 +1079,41 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
                 ExecutionPhaseTiming.VerifyAssembly,
                 () => VerifyCompiledAssembly(outputPath, sdkPath, externalRefs));
         }
+    }
+}
+
+static string ResolveHostedAbstractionsPath()
+{
+    const string fileName = "SharpTS.Hosting.Abstractions.dll";
+    string sidecar = Path.Combine(AppContext.BaseDirectory, fileName);
+    if (File.Exists(sidecar)) return sidecar;
+
+    string managedLocation = GetManagedHostedAbstractionsLocation();
+    if (!string.IsNullOrEmpty(managedLocation) && File.Exists(managedLocation))
+        return managedLocation;
+
+    throw new InvalidOperationException(
+        "Hosted output requires a physical SharpTS.Hosting.Abstractions.dll. " +
+        "The Native AOT/single-file SharpTS compiler does not support --hosted; " +
+        "use the managed SharpTS compiler instead.");
+}
+
+[System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage(
+    "SingleFile",
+    "IL3000",
+    Justification = "Managed custom hosts may load the Hosted ABI away from AppContext.BaseDirectory; an empty bundled location is explicitly rejected before output is emitted.")]
+static string GetManagedHostedAbstractionsLocation() =>
+    typeof(SharpTSHostedAbi).Assembly.Location;
+
+static void CopyHostedAbstractions(string source, string outputPath)
+{
+    string destination = Path.Combine(
+        Path.GetDirectoryName(Path.GetFullPath(outputPath))!,
+        "SharpTS.Hosting.Abstractions.dll");
+    if (!string.Equals(Path.GetFullPath(source), Path.GetFullPath(destination),
+            StringComparison.OrdinalIgnoreCase))
+    {
+        File.Copy(source, destination, overwrite: true);
     }
 }
 
@@ -1378,10 +1450,12 @@ static void VerifyCompiledAssembly(string outputPath, string? sdkPath, Reference
     // The verifier resolves against the shared-framework runtime directory; an explicit
     // --sdk-path and the directories of third-party reference assemblies (whose types the
     // emitted IL references by token) are additional probe locations.
-    var probeDirs = externalRefs?.References
+    var probeDirs = (externalRefs?.References
         .Select(r => Path.GetDirectoryName(r.Path))
         .Where(d => !string.IsNullOrEmpty(d))
-        .Cast<string>();
+        .Cast<string>() ?? [])
+        .Append(Path.GetDirectoryName(Path.GetFullPath(outputPath))!)
+        .Distinct(StringComparer.OrdinalIgnoreCase);
     using var verifier = new ILVerifier(sdkPath, probeDirs);
     using var stream = File.OpenRead(outputPath);
     verifier.VerifyAndReport(stream);
@@ -1538,6 +1612,11 @@ static void PrintHelp()
     Console.WriteLine("  sharpts -p <tsconfig> [--watch] [--incremental]");
     Console.WriteLine("  sharpts --build [project ...] [--watch] [--force]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
+    Console.WriteLine("  sharpts new avalonia -n <name> [-o directory] [--sdk-version version]");
+    Console.WriteLine("  sharpts app run [entry.tsx] [--host avalonia|console] [--mode mode] [-- args]");
+    Console.WriteLine("  sharpts app build [entry.tsx] [--host avalonia|console]");
+    Console.WriteLine("  sharpts app publish [entry.tsx] [--rid rid] [--self-contained true|false]");
+    Console.WriteLine("                      [--single-file true|false] [-o directory]");
     Console.WriteLine("  sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]");
     Console.WriteLine();
     Console.WriteLine("Options:");

@@ -351,7 +351,7 @@ public static partial class ProcessBuiltIns
     private static object? Exit(Interpreter i, object? r, List<object?> args)
     {
         // process.exit() with no (or non-numeric) argument uses process.exitCode.
-        int exitCode = Environment.ExitCode;
+        int exitCode = i.GetProcessExitCode();
         if (args.Count > 0 && args[0] is double d)
         {
             exitCode = (int)d;
@@ -359,10 +359,10 @@ public static partial class ProcessBuiltIns
 
         // Publish the code first so 'exit' listeners reading process.exitCode
         // observe the final value, then emit synchronously (Node semantics).
-        Environment.ExitCode = exitCode;
+        i.SetProcessExitCode(exitCode);
         EmitExitEvent(i, exitCode);
 
-        ProcessControl.Exit(exitCode);
+        i.RequestProcessExit(exitCode);
         return null; // Reached only when an embedder's ExitHandler returns
     }
 

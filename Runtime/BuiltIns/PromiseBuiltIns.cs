@@ -601,29 +601,34 @@ public static class PromiseBuiltIns
         {
             if (onRejected != null)
             {
-                return await InvokeHandler(onRejected, ex.Reason, interpreter);
+                return await interpreter.QueuePromiseReaction(
+                    () => InvokeHandler(onRejected, ex.Reason, interpreter));
             }
 
             // No onRejected callback - re-throw to propagate rejection
-            throw;
+            return await interpreter.QueuePromiseReaction(
+                () => Task.FromException<object?>(ex));
         }
         catch (AggregateException aggEx) when (aggEx.InnerException is SharpTSPromiseRejectedException rejEx)
         {
             if (onRejected != null)
             {
-                return await InvokeHandler(onRejected, rejEx.Reason, interpreter);
+                return await interpreter.QueuePromiseReaction(
+                    () => InvokeHandler(onRejected, rejEx.Reason, interpreter));
             }
-            throw rejEx;
+            return await interpreter.QueuePromiseReaction(
+                () => Task.FromException<object?>(rejEx));
         }
 
         // Fulfilled: call onFulfilled (its throw rejects the output promise)
         if (onFulfilled != null)
         {
-            return await InvokeHandler(onFulfilled, value, interpreter);
+            return await interpreter.QueuePromiseReaction(
+                () => InvokeHandler(onFulfilled, value, interpreter));
         }
 
         // No onFulfilled callback - pass through value
-        return value;
+        return await interpreter.QueuePromiseReaction(() => Task.FromResult(value));
     }
 
     /// <summary>
@@ -670,17 +675,21 @@ public static class PromiseBuiltIns
         {
             if (onRejected != null)
             {
-                return await InvokeHandler(onRejected, ex.Reason, interpreter);
+                return await interpreter.QueuePromiseReaction(
+                    () => InvokeHandler(onRejected, ex.Reason, interpreter));
             }
-            throw;
+            return await interpreter.QueuePromiseReaction(
+                () => Task.FromException<object?>(ex));
         }
         catch (AggregateException aggEx) when (aggEx.InnerException is SharpTSPromiseRejectedException rejEx)
         {
             if (onRejected != null)
             {
-                return await InvokeHandler(onRejected, rejEx.Reason, interpreter);
+                return await interpreter.QueuePromiseReaction(
+                    () => InvokeHandler(onRejected, rejEx.Reason, interpreter));
             }
-            throw rejEx;
+            return await interpreter.QueuePromiseReaction(
+                () => Task.FromException<object?>(rejEx));
         }
     }
 

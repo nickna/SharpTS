@@ -60,6 +60,43 @@ SharpTS supports two execution modes:
 - Full standalone navigation: document symbols, definition, references, and completeness-gated rename
 - Neovim, Helix, and generic stdio-LSP setup documented in the [language server guide](docs/language-server.md)
 
+### Desktop GUI preview
+
+SharpTS can build retained, reactive Avalonia desktop applications entirely in TypeScript/TSX.
+The supported public preview targets `win-x64` and `win-arm64`, interpreted and compiled development runs,
+framework-dependent directory publishing, and compiled self-contained single-file publishing.
+The SDK also carries experimental `osx-x64` and `osx-arm64` candidates; those targets remain
+uncertified until their native CI and Apple distribution gates run.
+
+```powershell
+sharpts new avalonia -n CounterApp
+cd CounterApp
+sharpts app run
+sharpts app run --mode compiled
+sharpts app publish --rid win-x64 --self-contained true --single-file true
+```
+
+These commands materialize an internal `SharpTS.Gui.Sdk` project; the application contains only
+TypeScript/TSX, assets, `tsconfig.json`, and `sharpts.json`. The equivalent explicit SDK workflow is:
+
+```powershell
+dotnet new install SharpTS.Gui.Sdk::0.3.0-preview.1
+dotnet new sharpts-gui -n CounterApp
+cd CounterApp
+dotnet run -- --mode interpreted
+```
+
+The compressed multi-platform SDK package is approximately 38 MiB and a minimal framework-dependent Windows x64
+directory is approximately 47 MB before application assets. Current limits are one root element
+per window, built-in and statically registered controls only, Windows support only, and no cross-architecture Native
+AOT certification. Warning-clean x64 Native AOT publish/run is available with
+`dotnet publish -r win-x64 -p:PublishAot=true`. See the [GUI SDK workflow](docs/gui/sdk-development.md) and
+[TSX API reference](docs/gui/tsx-api.md). Signed MSIX packaging, updates, SBOM/provenance, enterprise
+deployment, and support bundles are covered by the [Windows distribution guide](docs/gui/windows-distribution.md)
+and [GUI support policy](docs/gui/support-policy.md).
+The [macOS distribution guide](docs/gui/macos-distribution.md) documents the experimental payload,
+bundle, native-execution, signing, and notarization gates.
+
 ### .NET Interop
 
 - **Use .NET types from TypeScript** via `dotnet:` imports (or the `@DotNetType` decorator)

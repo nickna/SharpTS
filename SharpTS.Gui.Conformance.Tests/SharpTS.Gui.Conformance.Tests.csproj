@@ -1,0 +1,56 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <GuiConformanceHostDir>$(MSBuildThisFileDirectory)..\SharpTS.Gui.ConformanceHost\bin\$(Configuration)\net10.0\</GuiConformanceHostDir>
+    <GuiConformanceCompiler>$(MSBuildThisFileDirectory)..\bin\$(Configuration)\net10.0\SharpTS.dll</GuiConformanceCompiler>
+    <GuiConformanceBridge>$(MSBuildThisFileDirectory)..\SharpTS.Gui\bin\$(Configuration)\net10.0\SharpTS.Gui.dll</GuiConformanceBridge>
+    <GuiConformanceSupport>$(MSBuildThisFileDirectory)..\SharpTS.Gui.ConformanceSupport\bin\$(Configuration)\net10.0\SharpTS.Gui.ConformanceSupport.dll</GuiConformanceSupport>
+    <GuiConformanceRoot>$(MSBuildProjectDirectory)\obj\$(Configuration)\net10.0\.sharpts-gui-conformance\</GuiConformanceRoot>
+    <GuiConformancePackage>$(GuiConformanceRoot)node_modules\@sharpts\gui\</GuiConformancePackage>
+    <GuiConformanceConfig>$(GuiConformanceRoot)tsconfig.json</GuiConformanceConfig>
+    <GuiConformanceGuest>$(GuiConformanceRoot)SharpTS.Gui.Guest.dll</GuiConformanceGuest>
+    <CalculatorHeadlessGuest>$(GuiConformanceRoot)Calculator.Headless.Guest.dll</CalculatorHeadlessGuest>
+    <MultiWindowGuest>$(GuiConformanceRoot)MultiWindow.Guest.dll</MultiWindowGuest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="Avalonia.Skia" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpTS.Gui\SharpTS.Gui.csproj" />
+    <ProjectReference Include="..\SharpTS.Gui.ConformanceSupport\SharpTS.Gui.ConformanceSupport.csproj" />
+    <ProjectReference Include="..\SharpTS.Gui.ConformanceHost\SharpTS.Gui.ConformanceHost.csproj" />
+    <ProjectReference Include="..\SharpTS.Gui.Host\SharpTS.Gui.Host.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <GuiConformancePackageSource Include="..\SharpTS.Gui.Sdk\GuiPackage\index.ts;..\SharpTS.Gui.Sdk\GuiPackage\devtools.ts;..\SharpTS.Gui.Sdk\GuiPackage\testing.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-dev-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime-types.ts;..\SharpTS.Gui.Sdk\GuiPackage\control-surface.generated.ts;..\SharpTS.Gui.Sdk\GuiPackage\control-docs.generated.json;..\SharpTS.Gui.Sdk\GuiPackage\package.json;Fixtures\conformance.ts" />
+  </ItemGroup>
+
+  <Target Name="PrepareGuiConformanceHost" AfterTargets="Build">
+    <Error Condition="!Exists('$(GuiConformanceHostDir)SharpTS.Gui.ConformanceHost.dll')" Text="GUI conformance host is missing." />
+    <Error Condition="!Exists('$(GuiConformanceCompiler)')" Text="GUI conformance compiler is missing." />
+    <Error Condition="!Exists('$(GuiConformanceSupport)')" Text="GUI conformance support is missing." />
+    <MakeDir Directories="$(GuiConformancePackage);$(GuiConformanceHostDir)Guest;$(GuiConformanceHostDir).sharpts\node_modules\@sharpts\gui" />
+    <Copy SourceFiles="@(GuiConformancePackageSource)" DestinationFolder="$(GuiConformancePackage)" />
+    <Copy SourceFiles="..\SharpTS.Gui.Sdk\GuiPackage\tsconfig.overlay.json" DestinationFiles="$(GuiConformanceConfig)" />
+    <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -r &quot;$(GuiConformanceSupport)&quot; -c &quot;$(MSBuildThisFileDirectory)Fixtures\RetainedRenderer\main.tsx&quot; --target dll --hosted --quiet -o &quot;$(GuiConformanceGuest)&quot;" />
+    <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -c &quot;$(MSBuildThisFileDirectory)..\Examples\Calculator\headless.tests.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(CalculatorHeadlessGuest)&quot;" />
+    <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -r &quot;$(GuiConformanceSupport)&quot; -c &quot;$(MSBuildThisFileDirectory)Fixtures\MultiWindow\main.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(MultiWindowGuest)&quot;" />
+    <Copy SourceFiles="$(GuiConformanceGuest)" DestinationFolder="$(GuiConformanceHostDir)" />
+    <Copy SourceFiles="$(GuiConformanceSupport)" DestinationFolder="$(GuiConformanceHostDir)" />
+    <Copy SourceFiles="Fixtures\RetainedRenderer\main.tsx" DestinationFolder="$(GuiConformanceHostDir)Guest" />
+    <Copy SourceFiles="$(GuiConformanceConfig)" DestinationFolder="$(GuiConformanceHostDir).sharpts" />
+    <Copy SourceFiles="GuiConformanceApp.json" DestinationFiles="$(GuiConformanceHostDir).sharpts\app.json" />
+    <Copy SourceFiles="@(GuiConformancePackageSource)" DestinationFolder="$(GuiConformanceHostDir).sharpts\node_modules\@sharpts\gui" />
+  </Target>
+</Project>

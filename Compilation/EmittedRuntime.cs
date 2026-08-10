@@ -963,6 +963,7 @@ public class EmittedRuntime
     // Microtask support
     public MethodBuilder QueueMicrotask { get; set; } = null!;
     public MethodBuilder ProcessMicrotasks { get; set; } = null!;
+    public MethodBuilder HasMicrotasks { get; set; } = null!;
 
     // Virtual timer infrastructure (for single-threaded timer semantics)
     public Type VirtualTimerType { get; set; } = null!;
@@ -977,6 +978,9 @@ public class EmittedRuntime
     public MethodBuilder EnsureTimerInitialized { get; set; } = null!;
     public MethodBuilder GetCurrentTimeMs { get; set; } = null!;
     public MethodBuilder ProcessPendingTimers { get; set; } = null!;
+    public MethodBuilder ProcessOnePendingTimer { get; set; } = null!;
+    public MethodBuilder GetNextTimerDelay { get; set; } = null!;
+    public MethodBuilder CancelAllTimers { get; set; } = null!;
     public MethodBuilder AddVirtualTimer { get; set; } = null!;
 
     // Number methods
@@ -1742,6 +1746,8 @@ public class EmittedRuntime
     public MethodBuilder ProcessKill { get; set; } = null!;
     public MethodBuilder ProcessEmitWarning { get; set; } = null!;
     public MethodBuilder ProcessRunLifecycle { get; set; } = null!;
+    public MethodBuilder ProcessEmitHostedBeforeExit { get; set; } = null!;
+    public MethodBuilder ProcessEmitHostedExit { get; set; } = null!;
     public MethodBuilder ProcessRegisterSignal { get; set; } = null!;
     public MethodBuilder ProcessDispatchSignal { get; set; } = null!;
     public MethodBuilder ProcessEmitClosureInvoke { get; set; } = null!;
@@ -2618,6 +2624,13 @@ public class EmittedRuntime
     public MethodBuilder EventLoopRef { get; set; } = null!;
     public MethodBuilder EventLoopUnref { get; set; } = null!;
     public MethodBuilder EventLoopSchedule { get; set; } = null!;
+    public MethodBuilder EventLoopConfigureHosted { get; set; } = null!;
+    public MethodBuilder EventLoopGetHostedRuntime { get; set; } = null!;
+    public MethodBuilder EventLoopPrepareHostedAwait { get; set; } = null!;
+    public MethodBuilder EventLoopTryRunOne { get; set; } = null!;
+    public MethodBuilder EventLoopHasQueuedCallbacks { get; set; } = null!;
+    public MethodBuilder EventLoopRejectHosted { get; set; } = null!;
+    public MethodBuilder EventLoopClearHosted { get; set; } = null!;
     public MethodBuilder EventLoopRun { get; set; } = null!;
     public MethodBuilder EventLoopWake { get; set; } = null!;
     public MethodBuilder EventLoopWaitForTask { get; set; } = null!;
