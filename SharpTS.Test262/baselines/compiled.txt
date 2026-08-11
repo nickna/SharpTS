@@ -2819,7 +2819,7 @@ test/built-ins/Array/prototype/sort/S15.4.4.11_A5_T1.js Pass
 test/built-ins/Array/prototype/sort/S15.4.4.11_A6_T2.js Fail
 test/built-ins/Array/prototype/sort/S15.4.4.11_A8.js Fail
 test/built-ins/Array/prototype/sort/bug_596_1.js Pass
-test/built-ins/Array/prototype/sort/bug_596_2.js Fail
+test/built-ins/Array/prototype/sort/bug_596_2.js Pass
 test/built-ins/Array/prototype/sort/call-with-primitive.js Fail
 test/built-ins/Array/prototype/sort/comparefn-grow.js RuntimeError
 test/built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js Fail
@@ -2830,15 +2830,15 @@ test/built-ins/Array/prototype/sort/name.js Pass
 test/built-ins/Array/prototype/sort/not-a-constructor.js Pass
 test/built-ins/Array/prototype/sort/precise-comparefn-throws.js Fail
 test/built-ins/Array/prototype/sort/precise-getter-appends-elements.js Fail
-test/built-ins/Array/prototype/sort/precise-getter-decreases-length.js Fail
+test/built-ins/Array/prototype/sort/precise-getter-decreases-length.js Pass
 test/built-ins/Array/prototype/sort/precise-getter-deletes-predecessor.js Fail
 test/built-ins/Array/prototype/sort/precise-getter-deletes-successor.js Fail
 test/built-ins/Array/prototype/sort/precise-getter-increases-length.js Fail
-test/built-ins/Array/prototype/sort/precise-getter-pops-elements.js Fail
+test/built-ins/Array/prototype/sort/precise-getter-pops-elements.js Pass
 test/built-ins/Array/prototype/sort/precise-getter-sets-predecessor.js Fail
 test/built-ins/Array/prototype/sort/precise-getter-sets-successor.js Fail
 test/built-ins/Array/prototype/sort/precise-prototype-accessors.js Fail
-test/built-ins/Array/prototype/sort/precise-prototype-element.js Fail
+test/built-ins/Array/prototype/sort/precise-prototype-element.js Pass
 test/built-ins/Array/prototype/sort/precise-setter-appends-elements.js Fail
 test/built-ins/Array/prototype/sort/precise-setter-decreases-length.js Fail
 test/built-ins/Array/prototype/sort/precise-setter-deletes-predecessor.js Fail

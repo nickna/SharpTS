@@ -1630,7 +1630,7 @@ public partial class RuntimeEmitter
 
         // Now sort the copy using the same logic as EmitArraySort
         // We need to emit sort body but use copyLocal instead of arg0
-        EmitSortBodyOnLocal(il, runtime, copyLocal);
+        EmitSortBodyOnLocal(il, runtime, copyLocal, observeProperties: false);
     }
 
     /// <summary>
@@ -1643,14 +1643,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, listLocal);
 
-        EmitSortBodyOnLocal(il, runtime, listLocal);
+        EmitSortBodyOnLocal(il, runtime, listLocal, observeProperties: mutateInPlace);
     }
 
     /// <summary>
     /// Emits the sort body operating on a local variable (for toSorted which creates a copy).
     /// JavaScript spec: undefined values are always moved to end, never passed to compareFn.
     /// </summary>
-    private void EmitSortBodyOnLocal(ILGenerator il, EmittedRuntime runtime, LocalBuilder listLocal)
+    private void EmitSortBodyOnLocal(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder listLocal,
+        bool observeProperties)
     {
         // JavaScript sort algorithm:
         // 1. Partition: separate defined values from undefined values
@@ -1659,12 +1663,17 @@ public partial class RuntimeEmitter
 
         var definedLocal = il.DeclareLocal(_types.ListOfObject);      // List of defined elements
         var undefinedCountLocal = il.DeclareLocal(_types.Int32);       // Count of undefined elements
+        var holeCountLocal = il.DeclareLocal(_types.Int32);
+        var sortLengthLocal = il.DeclareLocal(_types.Int32);
         var iLocal = il.DeclareLocal(_types.Int32);
         var jLocal = il.DeclareLocal(_types.Int32);
         var compareResultLocal = il.DeclareLocal(_types.Int32);
         var str1Local = il.DeclareLocal(_types.String);
         var str2Local = il.DeclareLocal(_types.String);
         var elementLocal = il.DeclareLocal(_types.Object);
+        LocalBuilder? isLazyLocal = null;
+        if (observeProperties)
+            EmitHoistedLazyCheck(il, runtime, out isLazyLocal, out _);
 
         // === Phase 1: Partition defined vs undefined ===
         // defined = new List<object>()
@@ -1674,6 +1683,13 @@ public partial class RuntimeEmitter
         // undefinedCount = 0
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, undefinedCountLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, holeCountLocal);
+
+        // SortIndexedProperties snapshots len before any indexed getter runs.
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, sortLengthLocal);
 
         // for (i = 0; i < list.Count; i++)
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1682,15 +1698,21 @@ public partial class RuntimeEmitter
         var partitionLoopStart = il.DefineLabel();
         var partitionLoopCondition = il.DefineLabel();
         var isUndefinedLabel = il.DefineLabel();
+        var isHoleLabel = il.DefineLabel();
         var partitionNext = il.DefineLabel();
 
         il.Emit(OpCodes.Br, partitionLoopCondition);
 
         il.MarkLabel(partitionLoopStart);
-        // element = list[i]
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        // element = Get(O, i), preserving live accessor/prototype reads for sort.
+        if (observeProperties)
+            EmitElementLoad(il, iLocal, runtime, isLazyLocal!);
+        else
+        {
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        }
         il.Emit(OpCodes.Stloc, elementLocal);
 
         // if (element is $Undefined || element is $ArrayHole) undefinedCount++ else defined.Add(element)
@@ -1705,7 +1727,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
-        il.Emit(OpCodes.Brtrue, isUndefinedLabel);
+        il.Emit(OpCodes.Brtrue, observeProperties ? isHoleLabel : isUndefinedLabel);
 
         // Not undefined or hole: defined.Add(element)
         il.Emit(OpCodes.Ldloc, definedLocal);
@@ -1719,6 +1741,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, undefinedCountLocal);
+        il.Emit(OpCodes.Br, partitionNext);
+
+        // Sort preserves holes as absent properties at the tail. Copying
+        // toSorted deliberately stays dense, so only the mutating path uses
+        // this separate counter.
+        il.MarkLabel(isHoleLabel);
+        il.Emit(OpCodes.Ldloc, holeCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, holeCountLocal);
 
         il.MarkLabel(partitionNext);
         // i++
@@ -1729,8 +1761,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(partitionLoopCondition);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, sortLengthLocal);
         il.Emit(OpCodes.Blt, partitionLoopStart);
 
         // === Phase 2: Sort defined elements — stable bottom-up merge sort (Θ(n log n), #877) ===
@@ -2108,6 +2139,88 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, wbBody);
 
         // === Phase 3: Rebuild original list with sorted defined + undefined at end ===
+        if (observeProperties)
+        {
+            // Sort writes through ordinary Set/Delete operations so indexed
+            // setters, non-writable descriptors, and prototype properties are
+            // observed in order. The merge-sort above remains a pure snapshot.
+            var writeIndexLocal = il.DeclareLocal(_types.Int32);
+            var writeDefined = il.DefineLabel();
+            var writeDefinedDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, writeIndexLocal);
+            il.MarkLabel(writeDefined);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Bge, writeDefinedDone);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ldloc, definedLocal);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, runtime.SetIndexStrict);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, writeIndexLocal);
+            il.Emit(OpCodes.Br, writeDefined);
+            il.MarkLabel(writeDefinedDone);
+
+            var undefinedWrittenLocal = il.DeclareLocal(_types.Int32);
+            var writeUndefined = il.DefineLabel();
+            var writeUndefinedDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, undefinedWrittenLocal);
+            il.MarkLabel(writeUndefined);
+            il.Emit(OpCodes.Ldloc, undefinedWrittenLocal);
+            il.Emit(OpCodes.Ldloc, undefinedCountLocal);
+            il.Emit(OpCodes.Bge, writeUndefinedDone);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, runtime.SetIndexStrict);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, writeIndexLocal);
+            il.Emit(OpCodes.Ldloc, undefinedWrittenLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, undefinedWrittenLocal);
+            il.Emit(OpCodes.Br, writeUndefined);
+            il.MarkLabel(writeUndefinedDone);
+
+            var deleteTail = il.DefineLabel();
+            var deleteTailDone = il.DefineLabel();
+            il.MarkLabel(deleteTail);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Ldloc, sortLengthLocal);
+            il.Emit(OpCodes.Bge, deleteTailDone);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, runtime.DeleteIndexStrict);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldloc, writeIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, writeIndexLocal);
+            il.Emit(OpCodes.Br, deleteTail);
+            il.MarkLabel(deleteTailDone);
+
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ret);
+            return;
+        }
+
         // list.Clear()
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear"));
