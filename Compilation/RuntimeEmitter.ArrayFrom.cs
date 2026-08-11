@@ -29,6 +29,7 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.ListOfObject);     // The result list from IterateToList or the mapped result
         var indexLocal = il.DeclareLocal(_types.Int32);             // Loop counter
         var mappedResultLocal = il.DeclareLocal(_types.ListOfObject); // Mapped result when mapFn is provided
+        var iteratorFnLocal = il.DeclareLocal(_types.Object);
 
         // Labels
         var noMapFnLabel = il.DefineLabel();
@@ -77,15 +78,23 @@ public partial class RuntimeEmitter
         // through ArrayLikeMaterialize, which handles length+indexed reads
         // and preserves holes.
         var notArrayLikeDictLabel = il.DefineLabel();
+        var afterIteratorCheckLabel = il.DefineLabel();
         var afterListInit = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, notArrayLikeDictLabel);
-        // GetIteratorFunction(iterable, iteratorSymbol) — null means array-like
+        // GetMethod normalizes both null and undefined to "no method" for
+        // Array.from, so either value selects its array-like path.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
-        il.Emit(OpCodes.Brtrue, notArrayLikeDictLabel);
+        il.Emit(OpCodes.Stloc, iteratorFnLocal);
+        il.Emit(OpCodes.Ldloc, iteratorFnLocal);
+        il.Emit(OpCodes.Brfalse, afterIteratorCheckLabel);
+        il.Emit(OpCodes.Ldloc, iteratorFnLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, notArrayLikeDictLabel);
+        il.MarkLabel(afterIteratorCheckLabel);
         // dict has no @@iterator → ArrayLikeMaterialize
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);

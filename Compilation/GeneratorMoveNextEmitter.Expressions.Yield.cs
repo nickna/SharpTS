@@ -195,9 +195,11 @@ public partial class GeneratorMoveNextEmitter
         _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
         _il.Emit(OpCodes.Stloc, iterFnLocal);
 
-        // If iterFn != null, use iterator protocol
+        // If @@iterator is present, use the iterator protocol. Explicit null
+        // is present-but-non-callable and must not take the CLR fallback.
         _il.Emit(OpCodes.Ldloc, iterFnLocal);
-        _il.Emit(OpCodes.Brtrue, hasIteratorLabel);
+        _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);
+        _il.Emit(OpCodes.Brfalse, hasIteratorLabel);
 
         // No Symbol.iterator - fall back to IEnumerable cast
         _il.Emit(OpCodes.Ldloc, iterableLocal);

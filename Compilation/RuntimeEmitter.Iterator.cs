@@ -356,7 +356,11 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits GetIteratorFunction: looks up Symbol.iterator (or asyncIterator) on an object.
-    /// Returns the iterator function if found, null otherwise.
+    /// Returns the iterator function if found, or the emitted undefined
+    /// singleton when the property is absent. An explicit null value must stay
+    /// distinguishable from absence: GetMethod treats only null/undefined as
+    /// missing, while GetIterator must throw when @@iterator is present but
+    /// non-callable.
     /// Signature: object GetIteratorFunction(object obj, $TSSymbol symbol)
     /// </summary>
     private void EmitGetIteratorFunction(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -432,9 +436,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, returnLabel2);
         il.Emit(OpCodes.Pop);
 
-        // return null;
+        // return undefined;
         il.MarkLabel(returnNullLabel);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // return value;  (per-object dict hit)
@@ -701,9 +705,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iterFnLocal);
 
-        // If no iterator function found, try IEnumerable fallback
+        // If no iterator function was found, try the CLR enumerable fallback.
+        // Explicit null is not absence and flows to InvokeMethodValue, which
+        // raises the required guest TypeError for a non-callable method.
         il.Emit(OpCodes.Ldloc, iterFnLocal);
-        il.Emit(OpCodes.Brfalse, tryIEnumerableLabel);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, tryIEnumerableLabel);
 
         // Call the iterator function: iterator = InvokeMethodValue(obj, iterFn, new object[0])
         il.Emit(OpCodes.Ldarg_0);          // receiver (this)
@@ -712,6 +719,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);  // empty args
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, iteratorLocal);
+
+        // GetIterator requires the iterator method to return an Object.
+        // Reject null/undefined and primitive results before the wrapper turns
+        // them into an implementation-level "missing next" exception.
+        var iteratorObjectOkLabel = il.DefineLabel();
+        var iteratorTypeErrorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Brfalse, iteratorTypeErrorLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, iteratorTypeErrorLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, iteratorTypeErrorLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, iteratorTypeErrorLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, iteratorObjectOkLabel);
+        il.MarkLabel(iteratorTypeErrorLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Iterator method must return an object");
+        il.MarkLabel(iteratorObjectOkLabel);
 
         // Create $IteratorWrapper: wrapper = new $IteratorWrapper(iterator, runtimeType)
         il.Emit(OpCodes.Ldloc, iteratorLocal);

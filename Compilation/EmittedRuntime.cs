@@ -1416,7 +1416,7 @@ public class EmittedRuntime
     public ConstructorBuilder IteratorWrapperCtor { get; set; } = null!;
 
     // Iterator protocol helper methods
-    public MethodBuilder GetIteratorFunction { get; set; } = null!;              // Returns iterator function or null
+    public MethodBuilder GetIteratorFunction { get; set; } = null!;              // Returns iterator function or $Undefined when absent
     public MethodBuilder InvokeIteratorNext { get; set; } = null!;              // Calls next() on iterator (no sent value)
     public MethodBuilder InvokeIteratorNextWithSent { get; set; } = null!;      // Calls next(sent) forwarding resume value (#503)
     public MethodBuilder GetIteratorDone { get; set; } = null!;                 // Extracts done from result

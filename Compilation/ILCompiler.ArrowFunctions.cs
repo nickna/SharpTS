@@ -774,6 +774,7 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(a.Value);
                 break;
             case Expr.New n:
+                CollectArrowsFromExpr(n.Callee);
                 foreach (var arg in n.Arguments)
                     CollectArrowsFromExpr(arg);
                 break;

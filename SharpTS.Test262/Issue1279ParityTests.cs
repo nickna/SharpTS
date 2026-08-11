@@ -957,6 +957,19 @@ public sealed class Issue1279ParityTests
     }
 
     [Theory]
+    [InlineData("language/expressions/new/spread-mult-empty.js")]
+    [InlineData("language/expressions/new/spread-err-mult-err-iter-get-value.js")]
+    [InlineData("language/expressions/new/spread-err-sngl-err-itr-get-value.js")]
+    public void New_function_expression_spreads_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/dotall/with-dotall.js")]
+    [InlineData("built-ins/RegExp/CharacterClassEscapes/character-class-digit-class-escape-positive-cases.js")]
+    public void Iterator_protocol_changes_preserve_regexp_cases(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/String/prototype/trim/15.5.4.20-2-51.js")]
     [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-2.js")]
     [InlineData("built-ins/String/prototype/trim/15.5.4.20-3-3.js")]

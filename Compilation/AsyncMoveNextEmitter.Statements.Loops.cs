@@ -83,12 +83,17 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Stloc, asyncIterFnLocal);
 
             var customSetup = _il.DefineLabel();
+            var adaptSyncIteratorLabel = _il.DefineLabel();
             var afterSetup = _il.DefineLabel();
             _il.Emit(OpCodes.Ldloc, asyncIterFnLocal);
-            _il.Emit(OpCodes.Brtrue, customSetup);
+            _il.Emit(OpCodes.Brfalse, adaptSyncIteratorLabel);
+            _il.Emit(OpCodes.Ldloc, asyncIterFnLocal);
+            _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);
+            _il.Emit(OpCodes.Brfalse, customSetup);
 
             // No async iterator: adapt any synchronous iterable per
             // CreateAsyncFromSyncIterator semantics (#1287).
+            _il.MarkLabel(adaptSyncIteratorLabel);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, iterableLocal);
             _il.Emit(OpCodes.Call, _ctx.Runtime.AdaptSyncIterableToAsyncGenerator);

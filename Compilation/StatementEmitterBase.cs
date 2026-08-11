@@ -717,9 +717,13 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, asyncIteratorFnLocal);
 
-        // If async iterator function is null, fall back to $IAsyncGenerator
+        // GetMethod treats null and undefined as an absent async method, so
+        // either value falls back to the synchronous/async-generator adapter.
         il.Emit(OpCodes.Ldloc, asyncIteratorFnLocal);
         il.Emit(OpCodes.Brfalse, asyncGenLabel);
+        il.Emit(OpCodes.Ldloc, asyncIteratorFnLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, asyncGenLabel);
 
         // ===== Custom async iterator protocol path =====
         {

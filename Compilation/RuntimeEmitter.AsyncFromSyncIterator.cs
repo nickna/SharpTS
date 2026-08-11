@@ -554,7 +554,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        il.Emit(OpCodes.Brfalse, tryClrIterator);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, tryClrIterator);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldc_I4_0);

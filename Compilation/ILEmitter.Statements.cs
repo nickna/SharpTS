@@ -951,9 +951,11 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorFunction);
         IL.Emit(OpCodes.Stloc, iteratorFnLocal);
 
-        // If iterator function is null, fall back to index-based iteration
+        // If the iterator property is absent, fall back to index-based iteration.
+        // Explicit null remains present and fails as non-callable below.
         IL.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        builder.Emit_Brfalse(indexBasedLabel);
+        IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+        builder.Emit_Brtrue(indexBasedLabel);
 
         // ===== Iterator protocol path =====
         {
