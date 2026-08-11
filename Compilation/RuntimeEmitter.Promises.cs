@@ -148,6 +148,15 @@ public partial class RuntimeEmitter
         var taskType = _types.TaskOfObject;
         var moduleBuilder = (ModuleBuilder)typeBuilder.Module;
 
+        // Static value-form methods need NewPromiseCapability before the
+        // executor-support bodies are filled at the end of this emitter.
+        // Predeclare the shared helper so those wrappers can reference it.
+        runtime.NewPromiseCapabilityResultMethod ??= typeBuilder.DefineMethod(
+            "NewPromiseCapabilityResult",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.TaskOfObject]);
+
         // Promise.resolve(value?) - wraps value in completed Task, flattening if already a Task
         // IL equivalent:
         //   if (value is Task<object?> task) return task;
@@ -213,7 +222,7 @@ public partial class RuntimeEmitter
         var resolveStatic = typeBuilder.DefineMethod(
             "PromiseResolveStatic",
             MethodAttributes.Public | MethodAttributes.Static,
-            taskType,
+            _types.Object,
             [_types.Object, _types.Object]);
         resolveStatic.DefineParameter(1, ParameterAttributes.None, "__this");
         resolveStatic.DefineParameter(2, ParameterAttributes.None, "value");
@@ -222,15 +231,13 @@ public partial class RuntimeEmitter
             var il = resolveStatic.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
                 "Promise.resolve called on non-Object");
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, resolve);
-            il.Emit(OpCodes.Ret);
+            EmitPromiseStaticCapabilityResult(il, runtime, resolve);
         }
 
         var rejectStatic = typeBuilder.DefineMethod(
             "PromiseRejectStatic",
             MethodAttributes.Public | MethodAttributes.Static,
-            taskType,
+            _types.Object,
             [_types.Object, _types.Object]);
         rejectStatic.DefineParameter(1, ParameterAttributes.None, "__this");
         rejectStatic.DefineParameter(2, ParameterAttributes.None, "reason");
@@ -239,9 +246,7 @@ public partial class RuntimeEmitter
             var il = rejectStatic.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
                 "Promise.reject called on non-Object");
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, reject);
-            il.Emit(OpCodes.Ret);
+            EmitPromiseStaticCapabilityResult(il, runtime, reject);
         }
 
         // Promise.withResolvers() - returns object? ($Object with {promise, resolve, reject})
@@ -515,7 +520,7 @@ public partial class RuntimeEmitter
             var sw = typeBuilder.DefineMethod(
                 name,
                 MethodAttributes.Public | MethodAttributes.Static,
-                taskType,
+                _types.Object,
                 [_types.Object, _types.Object]);
             sw.DefineParameter(1, ParameterAttributes.None, "__this");
             sw.DefineParameter(2, ParameterAttributes.None, "iterable");
@@ -523,9 +528,7 @@ public partial class RuntimeEmitter
             var il = sw.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
                 $"Promise.{jsName} called on non-Object");
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, target);
-            il.Emit(OpCodes.Ret);
+            EmitPromiseStaticCapabilityResult(il, runtime, target);
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseRaceStatic", "race", race, m => runtime.PromiseRaceStatic = m);
@@ -620,6 +623,37 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, message);
         GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
         il.MarkLabel(okLabel);
+    }
+
+    /// <summary>
+    /// Emits the common tail for a value-form Promise static. The intrinsic
+    /// Promise constructor returns the raw task; another constructor is routed
+    /// through NewPromiseCapability so the observable result is an instance of
+    /// that constructor rather than the compiler's Task representation.
+    /// </summary>
+    private void EmitPromiseStaticCapabilityResult(
+        ILGenerator il, EmittedRuntime runtime, MethodInfo intrinsic)
+    {
+        var taskLocal = il.DeclareLocal(_types.TaskOfObject);
+        var customConstructorLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, intrinsic);
+        il.Emit(OpCodes.Stloc, taskLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Bne_Un, customConstructorLabel);
+        il.Emit(OpCodes.Ldloc, taskLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(customConstructorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, taskLocal);
+        il.Emit(OpCodes.Call, runtime.NewPromiseCapabilityResultMethod);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

@@ -38,7 +38,7 @@ public partial class RuntimeEmitter
         // token, but a function-valued species or a non-constructor arrives as its
         // raw value, and ConstructDynamicValue dispatches all three (Type →
         // Activator, function → NewOnFunction, non-constructor → TypeError, #390).
-        runtime.NewPromiseCapabilityResultMethod = runtimeType.DefineMethod(
+        runtime.NewPromiseCapabilityResultMethod ??= runtimeType.DefineMethod(
             "NewPromiseCapabilityResult",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
@@ -521,6 +521,8 @@ public partial class RuntimeEmitter
         var tcsField = typeBuilder.DefineField("_tcs", typeof(TaskCompletionSource<object?>), FieldAttributes.Private);
         var lockField = typeBuilder.DefineField("_lock", _types.Object, FieldAttributes.Private);
         var settledField = typeBuilder.DefineField("_settled", typeof(bool), FieldAttributes.Private);
+        var sharedSettledType = typeof(System.Runtime.CompilerServices.StrongBox<bool>);
+        var sharedSettledValue = sharedSettledType.GetField("Value")!;
 
         // Constructor: (TaskCompletionSource<object?> tcs, object lockObj)
         var ctor = typeBuilder.DefineConstructor(
@@ -564,7 +566,6 @@ public partial class RuntimeEmitter
 
             var valueLocal = il.DeclareLocal(_types.Object);
             var tcsLocal = il.DeclareLocal(typeof(TaskCompletionSource<object?>));
-            var innerTaskLocal = il.DeclareLocal(_types.TaskOfObject);
 
             // value = args.Length > 0 ? args[0] : null
             il.Emit(OpCodes.Ldarg_1);
@@ -596,11 +597,15 @@ public partial class RuntimeEmitter
             // try { if (_settled) goto alreadySettled; _settled = true; } finally { Monitor.Exit(_lock); }
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, settledField);
+            il.Emit(OpCodes.Ldfld, lockField);
+            il.Emit(OpCodes.Castclass, sharedSettledType);
+            il.Emit(OpCodes.Ldfld, sharedSettledValue);
             il.Emit(OpCodes.Brtrue, alreadySettledLabel);
             il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, lockField);
+            il.Emit(OpCodes.Castclass, sharedSettledType);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, settledField);
+            il.Emit(OpCodes.Stfld, sharedSettledValue);
             il.Emit(OpCodes.Leave, endLockLabel);
 
             il.MarkLabel(alreadySettledLabel);
@@ -614,15 +619,16 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(endLockLabel);
 
-            // Just call TrySetResult(value) - no flattening for now (simplification)
             il.Emit(OpCodes.Ldloc, tcsLocal);
             il.Emit(OpCodes.Ldloc, valueLocal);
-            var trySetResult = typeof(TaskCompletionSource<object?>).GetMethod("TrySetResult")!;
-            il.Emit(OpCodes.Callvirt, trySetResult);
+            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod("TrySetResult")!);
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(endLabel);
-            il.Emit(OpCodes.Ldnull);
+            // Promise resolving functions are ECMAScript built-ins. Their
+            // return value is always undefined, including repeated calls after
+            // the promise has already settled (§27.2.1.3.2/.1).
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 
@@ -648,6 +654,8 @@ public partial class RuntimeEmitter
         var tcsField = typeBuilder.DefineField("_tcs", typeof(TaskCompletionSource<object?>), FieldAttributes.Private);
         var lockField = typeBuilder.DefineField("_lock", _types.Object, FieldAttributes.Private);
         var settledField = typeBuilder.DefineField("_settled", typeof(bool), FieldAttributes.Private);
+        var sharedSettledType = typeof(System.Runtime.CompilerServices.StrongBox<bool>);
+        var sharedSettledValue = sharedSettledType.GetField("Value")!;
 
         // Constructor
         var ctor = typeBuilder.DefineConstructor(
@@ -716,11 +724,15 @@ public partial class RuntimeEmitter
 
             il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, settledField);
+            il.Emit(OpCodes.Ldfld, lockField);
+            il.Emit(OpCodes.Castclass, sharedSettledType);
+            il.Emit(OpCodes.Ldfld, sharedSettledValue);
             il.Emit(OpCodes.Brtrue, alreadySettledLabel);
             il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, lockField);
+            il.Emit(OpCodes.Castclass, sharedSettledType);
             il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Stfld, settledField);
+            il.Emit(OpCodes.Stfld, sharedSettledValue);
             il.Emit(OpCodes.Leave, endLockLabel);
 
             il.MarkLabel(alreadySettledLabel);
@@ -747,7 +759,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(endLabel);
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
 
@@ -805,7 +817,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, tcsLocal);
 
         // object lockObj = new object();
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, typeof(System.Runtime.CompilerServices.StrongBox<bool>).GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, lockLocal);
 
         // var resolveCallback = new $PromiseResolveCallback(tcs, lockObj);

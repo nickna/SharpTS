@@ -593,6 +593,10 @@ public partial class RuntimeEmitter
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
         EmitIsTruthy(typeBuilder, runtime);
+        // Promise resolving callbacks are callable built-ins. Define their
+        // representation before TypeOf so it can classify them as functions;
+        // InvokeValue consumes the same types later in this method.
+        EmitPromiseCallbackTypes(moduleBuilder, runtime);
         EmitTypeOf(typeBuilder, runtime);
         EmitAdd(typeBuilder, runtime);
         // Equals body needs runtime.ToJsString for the ECMA-262 7.2.14
@@ -646,8 +650,6 @@ public partial class RuntimeEmitter
         EmitInstanceOf(typeBuilder, runtime);
         EmitToPascalCase(typeBuilder, runtime);  // Must be emitted before GetFieldsProperty/SetFieldsProperty
         EmitSafeGetMethod(typeBuilder, runtime); // Must be emitted before GetFieldsProperty/SetFieldsProperty
-        // Promise callback types must be created before InvokeValue (which dispatches to them)
-        EmitPromiseCallbackTypes(moduleBuilder, runtime);
         // ArrayConstructor (#61) must come before InvokeValue since InvokeValue's
         // Type-callee dispatch branch emits a direct call to it for `Array(n)`
         // patterns where Array was stored as a value.

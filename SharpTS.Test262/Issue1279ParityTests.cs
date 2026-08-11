@@ -5103,6 +5103,15 @@ public sealed class Issue1279ParityTests
     public void Array_sort_observes_index_descriptors_in_compiled_mode(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/Promise/resolve-non-obj-immed.js")]
+    [InlineData("built-ins/Promise/resolve-function-prototype.js")]
+    [InlineData("built-ins/Promise/executor-function-prototype.js")]
+    [InlineData("built-ins/Promise/resolve/ctx-ctor.js")]
+    [InlineData("built-ins/Promise/all/ctx-ctor.js")]
+    public void Promise_capabilities_follow_builtin_and_constructor_contracts(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

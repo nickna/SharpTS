@@ -75,7 +75,7 @@ public partial class RuntimeEmitter
         // var tcs = new TaskCompletionSource<object?>(); var lockObj = new object();
         il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, tcsLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, typeof(System.Runtime.CompilerServices.StrongBox<bool>).GetConstructor(Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, lockLocal);
 
         // try { InvokeMethodValue(value, then,
