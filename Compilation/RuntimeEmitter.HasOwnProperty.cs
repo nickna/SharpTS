@@ -190,6 +190,7 @@ public partial class RuntimeEmitter
             "atanh", "cbrt", "ceil", "clz32", "cos", "cosh", "exp", "expm1", "floor",
             "fround", "hypot", "imul", "log", "log10", "log1p", "log2", "max", "min",
             "pow", "random", "round", "sign", "sin", "sinh", "sqrt", "tan", "tanh", "trunc",
+            "f16round", "sumPrecise",
             "E", "LN10", "LN2", "LOG10E", "LOG2E", "PI", "SQRT1_2", "SQRT2" })
             DictNameEq(m);
         il.MarkLabel(notMathForHasOwnLabel);
@@ -382,6 +383,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bne_Un, notArrayConsLabel);
         NameEq("from"); NameEq("fromAsync"); NameEq("isArray"); NameEq("of");
         il.MarkLabel(notArrayConsLabel);
+
+        // Promise and Error statics are runtime-emitted helpers rather than
+        // reflection-visible members on Task<object> / $Error.
+        var notPromiseConsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Bne_Un, notPromiseConsLabel);
+        NameEq("resolve"); NameEq("reject"); NameEq("all"); NameEq("race");
+        NameEq("allSettled"); NameEq("any"); NameEq("withResolvers");
+        il.MarkLabel(notPromiseConsLabel);
+
+        var notErrorConsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Bne_Un, notErrorConsLabel);
+        NameEq("isError");
+        il.MarkLabel(notErrorConsLabel);
 
         // Reflection: type.GetField(name, Public|Static) ?? type.GetMethod(name, Public|Static)
         const System.Reflection.BindingFlags staticPub = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;

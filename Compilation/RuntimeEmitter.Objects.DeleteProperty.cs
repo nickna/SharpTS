@@ -219,6 +219,28 @@ public partial class RuntimeEmitter
             EmitObjectMethodDelCheck("setPrototypeOf"); EmitObjectMethodDelCheck("values");
             il.MarkLabel(objTypeDelLabel);
 
+            // Runtime-backed Promise/Error statics are configurable built-in
+            // own properties, but are not discoverable through reflection on
+            // their constructor Type tokens. Record deletion explicitly.
+            var promiseTypeDelLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+            il.Emit(OpCodes.Bne_Un, promiseTypeDelLabel);
+            EmitObjectMethodDelCheck("resolve"); EmitObjectMethodDelCheck("reject");
+            EmitObjectMethodDelCheck("all"); EmitObjectMethodDelCheck("race");
+            EmitObjectMethodDelCheck("allSettled"); EmitObjectMethodDelCheck("any");
+            EmitObjectMethodDelCheck("withResolvers");
+            il.MarkLabel(promiseTypeDelLabel);
+
+            var errorTypeDelLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+            il.Emit(OpCodes.Bne_Un, errorTypeDelLabel);
+            EmitObjectMethodDelCheck("isError");
+            il.MarkLabel(errorTypeDelLabel);
+
             // Reflection: any static field/property on the Type → built-in own.
             const System.Reflection.BindingFlags typeDelStaticPub =
                 System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;

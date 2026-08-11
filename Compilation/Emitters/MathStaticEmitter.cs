@@ -530,6 +530,8 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         yield return ("log1p",  runtime.MathLog1pAdapter, 1);
         yield return ("expm1",  runtime.MathExpm1Adapter, 1);
         yield return ("fround", runtime.MathFroundAdapter, 1);
+        yield return ("f16round", runtime.MathF16RoundAdapter, 1);
+        yield return ("sumPrecise", runtime.MathSumPrecise, 1);
         yield return ("clz32",  runtime.MathClz32Adapter, 1);
         yield return ("imul",   runtime.MathImulAdapter, 2);
         yield return ("hypot",  runtime.MathHypotAdapter, 2);

@@ -69,14 +69,29 @@ public partial class RuntimeEmitter
 
         void WireSymbol(FieldBuilder symbolField, MethodBuilder helper, string jsName, int jsLength)
         {
-            // GetSymbolDict(proto)[symbolField] = new $TSFunction(null, helper-as-MethodInfo, jsName, jsLength);
-            il.Emit(OpCodes.Ldloc, symbolDictLocal);
-            il.Emit(OpCodes.Ldsfld, symbolField);
-            il.Emit(OpCodes.Ldnull);                                // target
+            // Store a real descriptor so gOPD/propertyIsEnumerable observe the
+            // ECMA-262 §17 attributes. Symbol-index Get unwraps descriptor.Value.
+            var fnLocal = il.DeclareLocal(_types.Object);
+            var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldnull);
             _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
             il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Stloc, fnLocal);
+
+            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Stloc, descLocal);
+            il.Emit(OpCodes.Ldloc, descLocal);
+            il.Emit(OpCodes.Ldloc, fnLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, descLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+
+            il.Emit(OpCodes.Ldloc, symbolDictLocal);
+            il.Emit(OpCodes.Ldsfld, symbolField);
+            il.Emit(OpCodes.Ldloc, descLocal);
             il.Emit(OpCodes.Callvirt, symbolSetItem);
         }
 

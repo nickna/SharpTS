@@ -55,6 +55,7 @@ public partial class RuntimeEmitter
         runtime.MathLog1pAdapter = EmitMathLog1pAdapter(typeBuilder, runtime);
         runtime.MathExpm1Adapter = EmitMathExpm1Adapter(typeBuilder, runtime);
         runtime.MathFroundAdapter = EmitMathFroundAdapter(typeBuilder, runtime);
+        runtime.MathF16RoundAdapter = EmitMathF16RoundAdapter(typeBuilder, runtime);
         runtime.MathClz32Adapter = EmitMathClz32Adapter(typeBuilder, runtime);
         runtime.MathImulAdapter = EmitMathImulAdapter(typeBuilder, runtime);
         runtime.MathHypotAdapter = EmitMathHypotAdapter(typeBuilder, runtime);
@@ -124,6 +125,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Conv_R4);
         il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    /// <summary>Math.f16round(x) — round to binary16 then back to double.</summary>
+    private MethodBuilder EmitMathF16RoundAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod("MathF16RoundAdapter",
+            MethodAttributes.Public | MethodAttributes.Static, _types.Object, [_types.Object]);
+        var il = method.GetILGenerator();
+        var halfFromDouble = typeof(Half).GetMethods()
+            .First(m => m.Name == "op_Explicit" && m.ReturnType == typeof(Half)
+                && m.GetParameters().Length == 1
+                && m.GetParameters()[0].ParameterType == typeof(double));
+        var doubleFromHalf = typeof(Half).GetMethods()
+            .First(m => m.Name == "op_Explicit" && m.ReturnType == typeof(double)
+                && m.GetParameters().Length == 1
+                && m.GetParameters()[0].ParameterType == typeof(Half));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, halfFromDouble);
+        il.Emit(OpCodes.Call, doubleFromHalf);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         return method;

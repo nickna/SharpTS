@@ -173,6 +173,18 @@ public partial class RuntimeEmitter
         EmitLookup(runtime.TSSymbolType, "for", runtime.SymbolFor, 1);
         EmitLookup(runtime.TSSymbolType, "keyFor", runtime.SymbolKeyFor, 1);
 
+        // Promise.* and Error.isError are emitted on $Runtime rather than as
+        // CLR statics on their constructor Type tokens. Route value-form and
+        // descriptor reads through the same identity-cached wrappers used by
+        // their compile-time static emitters.
+        EmitLookup(_types.TaskOfObject, "resolve", runtime.PromiseResolveStatic, 1);
+        EmitLookup(_types.TaskOfObject, "reject", runtime.PromiseRejectStatic, 1);
+        EmitLookup(_types.TaskOfObject, "all", runtime.PromiseAllStatic, 1);
+        EmitLookup(_types.TaskOfObject, "race", runtime.PromiseRaceStatic, 1);
+        EmitLookup(_types.TaskOfObject, "allSettled", runtime.PromiseAllSettledStatic, 1);
+        EmitLookup(_types.TaskOfObject, "any", runtime.PromiseAnyStatic, 1);
+        EmitLookup(runtime.TSErrorType, "isError", runtime.ErrorIsError, 1);
+
         // Date.* — bare `Date` resolves to the $TSDate Type token. The static
         // is .NET-cased ("Now"), so the case-sensitive static-method probe in
         // GetProperty misses it; route through $Runtime.DateNow so value-form

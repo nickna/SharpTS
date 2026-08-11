@@ -9,6 +9,23 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private void EmitErrorIsError(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ErrorIsError",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.ErrorIsError = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitErrorMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         EmitErrorGetters(typeBuilder, runtime);

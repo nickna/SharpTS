@@ -795,6 +795,9 @@ public partial class RuntimeEmitter
         // original site at the end of the runtime emit. Dep: runtime.ToNumber
         // (emitted at line 580, before this site).
         EmitMathAdapters(typeBuilder, runtime);
+        // Error.isError is a small standalone type-brand helper. Emit it before
+        // gOPD so built-in static descriptor synthesis can reference it.
+        EmitErrorIsError(typeBuilder, runtime);
         // EmitRandom moved here from the original late-site so gOPD's Math
         // singleton synth can reach runtime.Random and produce an identity-
         // stable `desc.value === Math.random` descriptor. The Random method

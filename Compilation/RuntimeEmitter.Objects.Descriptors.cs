@@ -2096,6 +2096,7 @@ public partial class RuntimeEmitter
             ("expm1",  runtime.MathExpm1Adapter,  1),
             ("floor",  runtime.MathFloorAdapter,  1),
             ("fround", runtime.MathFroundAdapter, 1),
+            ("f16round", runtime.MathF16RoundAdapter, 1),
             ("hypot",  runtime.MathHypotAdapter,  2),
             ("imul",   runtime.MathImulAdapter,   2),
             ("log",    runtime.MathLogAdapter,    1),
@@ -2117,6 +2118,7 @@ public partial class RuntimeEmitter
             ("tan",    runtime.MathTanAdapter,    1),
             ("tanh",   runtime.MathTanhAdapter,   1),
             ("trunc",  runtime.MathTruncAdapter,  1),
+            ("sumPrecise", runtime.MathSumPrecise, 1),
         };
         foreach (var (mn, mb, ml) in mathMethods)
             EmitMathNameDesc(mn, isMethod: true, methodTarget: mb, methodArity: ml);

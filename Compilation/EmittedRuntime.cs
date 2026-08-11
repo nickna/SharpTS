@@ -814,6 +814,7 @@ public class EmittedRuntime
     public MethodBuilder MathLog1pAdapter { get; set; } = null!;
     public MethodBuilder MathExpm1Adapter { get; set; } = null!;
     public MethodBuilder MathFroundAdapter { get; set; } = null!;
+    public MethodBuilder MathF16RoundAdapter { get; set; } = null!;
     public MethodBuilder MathClz32Adapter { get; set; } = null!;
     public MethodBuilder MathImulAdapter { get; set; } = null!;
     public MethodBuilder MathHypotAdapter { get; set; } = null!;
@@ -1310,6 +1311,7 @@ public class EmittedRuntime
     public MethodBuilder ErrorGetCause { get; set; } = null!;
     public MethodBuilder ErrorSetCause { get; set; } = null!;
     public MethodBuilder ErrorToString { get; set; } = null!;
+    public MethodBuilder ErrorIsError { get; set; } = null!;
     public MethodBuilder AggregateErrorGetErrors { get; set; } = null!;
 
     // Promise type - emitted for standalone assemblies
