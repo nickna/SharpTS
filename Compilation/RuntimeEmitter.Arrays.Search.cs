@@ -1771,11 +1771,26 @@ public partial class RuntimeEmitter
         var returnHoleLabel = il.DefineLabel();
         var loadArrayPropertyLabel = il.DefineLabel();
 
-        // listVal = list[idx]
+        // listVal = idx < list.Count ? list[idx] : $ArrayHole. A getter at an
+        // earlier index may shrink the backing list while the algorithm keeps
+        // iterating to its snapshotted length; the now-missing own slot must
+        // become a hole (and may still resolve through the prototype), not a
+        // CLR ArgumentOutOfRangeException.
+        var loadListValue = il.DefineLabel();
+        var listValueReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, loadListValue);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Stloc, listValLocal);
+        il.Emit(OpCodes.Br, listValueReady);
+        il.MarkLabel(loadListValue);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, listValLocal);
+        il.MarkLabel(listValueReady);
 
         // var rcvr = _currentArrayLikeReceiver ?? list. Direct array method
         // calls bypass the generic dispatcher that initializes the field, but

@@ -447,6 +447,15 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-a-17.js")]
+    [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-a-18.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-17.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-18.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-b-i-31.js")]
+    public void Array_index_searches_preserve_live_receiver_reads(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-2-4.js")]
     [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-4.js")]
     [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-5-12.js")]

@@ -1652,8 +1652,8 @@ public partial class RuntimeEmitter
         // EmitterArgumentHelpers.EmitBoxedArgumentOrNull for these methods, so
         // dynamic bound dispatch matches the direct-call path.
         // indexOf/lastIndexOf take searchElement + optional fromIndex.
-        EmitSearchCase("indexOf", runtime.ArrayIndexOf);
-        EmitSearchCase("lastIndexOf", runtime.ArrayLastIndexOf);
+        EmitSearchCase("indexOf", runtime.ArrayIndexOf, missingSearchIsUndefined: true);
+        EmitSearchCase("lastIndexOf", runtime.ArrayLastIndexOf, missingSearchIsUndefined: true);
         EmitSearchCase("includes", runtime.ArrayIncludes, missingSearchIsUndefined: true);
         EmitArgsArrayCase("concat", runtime.ArrayConcat);
         EmitSingleArgCase("join", runtime.ArrayJoin);

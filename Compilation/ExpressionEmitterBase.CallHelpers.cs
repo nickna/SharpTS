@@ -2063,7 +2063,10 @@ public abstract partial class ExpressionEmitterBase
                 break;
             case "indexOf":
             case "lastIndexOf":
-                EmitBoxedArgOrNull(arguments, 0);
+                if (arguments.Count == 0)
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                else
+                    EmitBoxedArgOrNull(arguments, 0);
                 EmitBoxedArgOrNull(arguments, 1);
                 IL.Emit(OpCodes.Call, methodName == "indexOf" ? Ctx.Runtime!.ArrayIndexOf : Ctx.Runtime!.ArrayLastIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));

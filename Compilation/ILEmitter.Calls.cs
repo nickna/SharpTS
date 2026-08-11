@@ -497,7 +497,8 @@ public partial class ILEmitter
         // on the stack.
         bool useLazyMaterializer = methodName is "every" or "some" or "filter"
             or "map" or "forEach" or "find" or "findIndex" or "findLast"
-            or "findLastIndex" or "flatMap" or "reduce" or "reduceRight" or "includes";
+            or "findLastIndex" or "flatMap" or "reduce" or "reduceRight"
+            or "includes" or "indexOf" or "lastIndexOf";
         IL.Emit(OpCodes.Call, useLazyMaterializer
             ? runtime.ArrayLikeMaterializeForIteration
             : runtime.ArrayLikeMaterialize);
@@ -549,7 +550,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    if (methodName == "includes")
+                    if (methodName is "includes" or "indexOf" or "lastIndexOf")
                         IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
                     else
                         IL.Emit(OpCodes.Ldnull);

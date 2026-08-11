@@ -285,7 +285,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             case "indexOf":
             case "lastIndexOf":
                 // searchElement (arg 0) + optional fromIndex (arg 1).
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                if (arguments.Count == 0)
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                else
+                    EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 if (arguments.Count >= 2)
                 {
                     if (argLocals != null)

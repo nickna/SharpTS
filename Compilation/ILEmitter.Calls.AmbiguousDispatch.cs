@@ -288,7 +288,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldnull);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
                 if (arguments.Count > 1)
                 {
