@@ -325,6 +325,25 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-278.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-314.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-315.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-324.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-354-3.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-538-2.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-540-5.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-547-3.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-13.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-267.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-304.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-313.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-7.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-property-of-an-arguments-object-which-implements-its-own-get-own-property.js")]
+    public void Arguments_named_accessors_preserve_descriptor_kind_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-9.js")]
     [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-11.js")]
     [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-12.js")]

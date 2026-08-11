@@ -1184,10 +1184,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brtrue, nullLabel); // Frozen — silently return
 
+        var tsArraySetKeyLocal = il.DeclareLocal(_types.String);
         var idxLong = il.DeclareLocal(_types.Int64);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
-        il.Emit(OpCodes.Stloc, idxLong);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, tsArraySetKeyLocal);
+
+        var routeAsNamedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
+        il.Emit(OpCodes.Ldloca, idxLong);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, routeAsNamedLabel);
 
         // Non-extensible check: spec ECMA-262 §10.4.2 Array exotic [[Set]]
         // delegates to OrdinarySet which rejects new-property additions on
@@ -1207,7 +1215,6 @@ public partial class RuntimeEmitter
 
         // If idx < 0 OR idx >= 2^32-1, route to SetProperty (named property).
         var doArraySetLabel = il.DefineLabel();
-        var routeAsNamedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, idxLong);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Conv_I8);
@@ -1219,8 +1226,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(routeAsNamedLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetProperty);
         il.Emit(OpCodes.Ret);
@@ -1228,10 +1234,6 @@ public partial class RuntimeEmitter
         il.MarkLabel(doArraySetLabel);
 
         // Indexed descriptors participate in [[Set]] before array storage.
-        var tsArraySetKeyLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, tsArraySetKeyLocal);
         var tsArraySetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var tsArraySetRawStorage = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -1675,6 +1677,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.ToJsString);
             il.Emit(OpCodes.Stloc, listDeleteKeyLocal);
+
+            // SetIntegrityLevel marks the List-backed receiver frozen/sealed
+            // in PDS state. Deletion must fail even when an older descriptor
+            // object still carries configurable=true.
+            var listDeleteNotFrozen = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+            il.Emit(OpCodes.Brfalse, listDeleteNotFrozen);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listDeleteNotFrozen);
+            var listDeleteNotSealed = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+            il.Emit(OpCodes.Brfalse, listDeleteNotSealed);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listDeleteNotSealed);
+
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
             il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
@@ -1720,9 +1741,30 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(listDeleteNotNumeric);
+            // Named properties on List-backed arguments live entirely in PDS.
+            // Delete them here instead of delegating to DeleteProperty, whose
+            // receiver table intentionally has no raw-List branch.
+            var listNamedDeleteDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
-            il.Emit(OpCodes.Call, runtime.DeleteProperty);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, listNamedDeleteDescriptor);
+            var listNamedDeleteDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, listNamedDeleteDescriptor);
+            il.Emit(OpCodes.Brfalse, listNamedDeleteDone);
+            il.Emit(OpCodes.Ldloc, listNamedDeleteDescriptor);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+            var listNamedDeleteConfigurable = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, listNamedDeleteConfigurable);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listNamedDeleteConfigurable);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(listNamedDeleteDone);
+            il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
         }
 

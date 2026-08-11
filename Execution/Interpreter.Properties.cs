@@ -608,7 +608,7 @@ public partial class Interpreter
                     return GetArrayIndexValue(array, index).ToObject();
                 }
                 if (array.HasNamedProperty(name))
-                    return array.GetNamedProperty(name);
+                    return GetArrayNamedProperty(array, name, receiver);
                 if (array.HasExplicitPrototype)
                 {
                     current = array.ExplicitPrototype;
@@ -1338,7 +1338,8 @@ public partial class Interpreter
 
         // Named properties from Object.defineProperty
         if (obj is SharpTSArray array && array.HasNamedProperty(memberName))
-            return RuntimeValue.FromBoxed(array.GetNamedProperty(memberName));
+            return RuntimeValue.FromBoxed(
+                GetArrayNamedProperty(array, memberName, array));
 
         // Array subclass instances (#233): class getters and methods resolve
         // before built-in Array members so user overrides win; declared fields
@@ -2048,9 +2049,7 @@ public partial class Interpreter
 
         // Handle named properties on arrays (added via Object.defineProperty)
         if (obj is SharpTSArray array && array.HasNamedProperty(memberName))
-        {
-            return array.GetNamedProperty(memberName);
-        }
+            return GetArrayNamedProperty(array, memberName, array);
 
         // Array subclass instances (#233): class getters and methods resolve
         // before the built-in Array members so user overrides win; fields were
@@ -2500,12 +2499,54 @@ public partial class Interpreter
                     array.SetStrict(arrayIndex, value, strictMode);
                     return value;
                 }
-                array.SetNamedProperty(memberName, value);
+                SetArrayNamedProperty(array, memberName, value, strictMode);
                 return value;
 
             default:
                 return EvaluateSetFallback(obj, memberName, value);
         }
+    }
+
+    private object? GetArrayNamedProperty(
+        SharpTSArray array, string name, object? receiver)
+    {
+        if (!array.TryGetNamedAccessor(name, out var getter, out _))
+            return array.GetNamedProperty(name);
+        return getter is null
+            ? SharpTSUndefined.Instance
+            : BindAccessorToObject(getter, receiver ?? array)
+                .CallBoxed(this, []);
+    }
+
+    private void SetArrayNamedProperty(
+        SharpTSArray array, string name, object? value, bool strictMode)
+    {
+        if (array.TryGetNamedAccessor(name, out _, out var setter))
+        {
+            if (setter is not null)
+            {
+                BindAccessorToObject(setter, array).CallBoxed(this, [value]);
+                return;
+            }
+            if (strictMode)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot set property '{name}' which has only a getter."));
+            }
+            return;
+        }
+
+        if (array.GetOwnPropertyDescriptor(name) is { Writable: false })
+        {
+            if (strictMode)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to read only property '{name}' of array"));
+            }
+            return;
+        }
+
+        array.SetNamedProperty(name, value);
     }
 
     /// <summary>

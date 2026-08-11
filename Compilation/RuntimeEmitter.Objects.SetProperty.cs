@@ -612,6 +612,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, listSetNotFrozenLabel);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(listSetNotFrozenLabel);
+            // Accessor descriptors keep their setter semantics on List-backed
+            // arrays/arguments. A present setter handles the write; getter-only
+            // descriptors fall through to the non-writable no-op below.
+            var listSetPdsSetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, listSetPdsSetterLocal);
+            il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+            var listSetNoPdsSetterLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, listSetNoPdsSetterLabel);
+            EmitInvokePdsSetterWithValueAndReturn(il, runtime, listSetPdsSetterLocal);
+            il.MarkLabel(listSetNoPdsSetterLabel);
             // Existing-descriptor writable=false guard.
             var listSetExistingDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             il.Emit(OpCodes.Ldarg_0);
@@ -875,6 +887,19 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brfalse, arrFrozenLabel);
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(arrFrozenLabel);
+
+                // A named accessor installed through defineProperty retains
+                // its setter. Invoke it with the array as `this` before the
+                // data-descriptor writable check.
+                var arrPdsSetterLocal = il.DeclareLocal(_types.Object);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldloca, arrPdsSetterLocal);
+                il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+                var arrNoPdsSetterLabel = il.DefineLabel();
+                il.Emit(OpCodes.Brfalse, arrNoPdsSetterLabel);
+                EmitInvokePdsSetterWithValueAndReturn(il, runtime, arrPdsSetterLocal);
+                il.MarkLabel(arrNoPdsSetterLabel);
 
                 // Honor existing-descriptor writable=false: if there's a PDS
                 // data descriptor for this key with writable=false, silently

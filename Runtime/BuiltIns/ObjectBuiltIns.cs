@@ -107,12 +107,7 @@ public static partial class ObjectBuiltIns
                 yield break;
             case SharpTSArray arr:
                 foreach (var key in arr.OwnEnumerableKeys())
-                {
-                    object? value = uint.TryParse(key, out uint index)
-                        ? interpreter.GetProperty(arr, key)
-                        : arr.GetNamedProperty(key);
-                    yield return new(key, value);
-                }
+                    yield return new(key, interpreter.GetProperty(arr, key));
                 yield break;
             case SharpTSInstance inst:
                 foreach (var n in inst.GetFieldNames())

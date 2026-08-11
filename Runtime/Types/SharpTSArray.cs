@@ -885,6 +885,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     // -----------------------------------------------------------------------
 
     private Dictionary<string, object?>? _namedProperties;
+    private Dictionary<string, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _namedAccessors;
     private Dictionary<string, PropertyDescriptorFlags>? _descriptors;
     private Dictionary<uint, (ISharpTSCallable? Get, ISharpTSCallable? Set)>? _indexAccessors;
     private SharpTSObject? _symbolProperties;
@@ -969,14 +970,39 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         return null;
     }
 
+    internal bool TryGetNamedAccessor(
+        string name, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+    {
+        if (_namedAccessors?.TryGetValue(name, out var pair) == true)
+        {
+            getter = pair.Get;
+            setter = pair.Set;
+            return true;
+        }
+        getter = null;
+        setter = null;
+        return false;
+    }
+
     /// <summary>
     /// Checks if a named property exists on the array.
     /// </summary>
     public bool HasNamedProperty(string name)
-        => _namedProperties?.ContainsKey(name) ?? false;
+        => (_namedProperties?.ContainsKey(name) ?? false)
+            || (_namedAccessors?.ContainsKey(name) ?? false);
 
     internal IEnumerable<string> NamedPropertyNames
-        => _namedProperties?.Keys ?? Enumerable.Empty<string>();
+    {
+        get
+        {
+            if (_namedProperties is not null)
+                foreach (string key in _namedProperties.Keys)
+                    yield return key;
+            if (_namedAccessors is not null)
+                foreach (string key in _namedAccessors.Keys)
+                    yield return key;
+        }
+    }
 
     /// <summary>
     /// Checks the array's own properties, including its non-enumerable length
@@ -1042,8 +1068,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         yield return "length";
-        if (_namedProperties is null) yield break;
-        foreach (string key in _namedProperties.Keys)
+        foreach (string key in NamedPropertyNames)
             yield return key;
     }
 
@@ -1090,6 +1115,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         else
         {
             _namedProperties?.Remove(name);
+            _namedAccessors?.Remove(name);
         }
         _descriptors?.Remove(name);
         return true;
@@ -1101,9 +1127,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </summary>
     private void SetNamedPropertyIntegrityLevel(bool frozen)
     {
-        if (_namedProperties is null) return;
+        if (_namedProperties is null && _namedAccessors is null) return;
         _descriptors ??= [];
-        foreach (var name in _namedProperties.Keys)
+        foreach (var name in NamedPropertyNames)
         {
             PropertyDescriptorFlags current = PropertyDescriptorFlags.Default;
             if (_descriptors.TryGetValue(name, out var stored))
@@ -1270,28 +1296,45 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         // Named-property path
-        bool hasNamedProperty = _namedProperties?.ContainsKey(name) ?? false;
+        bool hasNamedData = _namedProperties?.ContainsKey(name) ?? false;
+        bool hasNamedAccessor = _namedAccessors?.ContainsKey(name) ?? false;
+        bool hasNamedProperty = hasNamedData || hasNamedAccessor;
+        (ISharpTSCallable? Get, ISharpTSCallable? Set) existingNamedAccessor = default;
+        _namedAccessors?.TryGetValue(name, out existingNamedAccessor);
+        bool namedDescriptorIsAccessor = descriptor.HasGet || descriptor.HasSet;
+        bool namedDescriptorIsData = descriptor.HasValue || descriptor.HasWritable;
         PropertyDescriptorFlags namedFlags = PropertyDescriptorFlags.Default;
         if (hasNamedProperty && _descriptors?.TryGetValue(name, out namedFlags) != true)
             namedFlags = PropertyDescriptorFlags.Default;
 
-        // Named properties use ordinary descriptor validation. This storage
-        // currently represents data properties, so a non-configurable named
-        // data property cannot be converted to an accessor.
+        // Named properties use ordinary descriptor validation, including
+        // preserving accessor kind and getter/setter identity on arrays and
+        // arguments objects.
         if (hasNamedProperty && namedFlags.HasExplicitDescriptor && !namedFlags.Configurable)
         {
             if ((descriptor.HasConfigurable && descriptor.Configurable)
                 || (descriptor.HasEnumerable
-                    && descriptor.Enumerable != namedFlags.Enumerable)
-                || descriptor.HasGet
-                || descriptor.HasSet)
+                    && descriptor.Enumerable != namedFlags.Enumerable))
             {
                 return false;
             }
-            if (!namedFlags.Writable
-                && ((descriptor.HasWritable && descriptor.Writable)
-                    || (descriptor.HasValue
-                        && !SameValue(descriptor.Value, _namedProperties![name]))))
+
+            if (hasNamedAccessor)
+            {
+                if (namedDescriptorIsData
+                    || (descriptor.HasGet
+                        && !SameValue(descriptor.Get, existingNamedAccessor.Get))
+                    || (descriptor.HasSet
+                        && !SameValue(descriptor.Set, existingNamedAccessor.Set)))
+                {
+                    return false;
+                }
+            }
+            else if (namedDescriptorIsAccessor
+                || (!namedFlags.Writable
+                    && ((descriptor.HasWritable && descriptor.Writable)
+                        || (descriptor.HasValue
+                            && !SameValue(descriptor.Value, _namedProperties![name])))))
             {
                 return false;
             }
@@ -1300,15 +1343,35 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         if (!IsExtensible && !hasNamedProperty)
             return false;
 
-        _namedProperties ??= new Dictionary<string, object?>();
-        if (descriptor.HasValue)
-            _namedProperties[name] = descriptor.Value;
-        else if (!hasNamedProperty)
-            _namedProperties[name] = SharpTSUndefined.Instance;
+        bool preservesNamedKind = hasNamedProperty
+            && (!namedDescriptorIsAccessor && !namedDescriptorIsData
+                || namedDescriptorIsAccessor == hasNamedAccessor);
+        bool becomesNamedAccessor = namedDescriptorIsAccessor
+            || (!namedDescriptorIsData && hasNamedAccessor);
+
+        if (becomesNamedAccessor)
+        {
+            _namedAccessors ??= [];
+            _namedAccessors[name] = (
+                descriptor.HasGet ? descriptor.Get : hasNamedAccessor ? existingNamedAccessor.Get : null,
+                descriptor.HasSet ? descriptor.Set : hasNamedAccessor ? existingNamedAccessor.Set : null);
+            _namedProperties?.Remove(name);
+        }
+        else
+        {
+            _namedAccessors?.Remove(name);
+            _namedProperties ??= [];
+            if (descriptor.HasValue)
+                _namedProperties[name] = descriptor.Value;
+            else if (!hasNamedData || hasNamedAccessor)
+                _namedProperties[name] = SharpTSUndefined.Instance;
+        }
 
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
         _descriptors[name] = PropertyDescriptorFlags.ForDefineProperty(
-            descriptor.HasWritable ? descriptor.Writable : hasNamedProperty && namedFlags.Writable,
+            descriptor.HasWritable
+                ? descriptor.Writable
+                : preservesNamedKind && !becomesNamedAccessor && namedFlags.Writable,
             descriptor.HasEnumerable ? descriptor.Enumerable : hasNamedProperty && namedFlags.Enumerable,
             descriptor.HasConfigurable ? descriptor.Configurable : hasNamedProperty && namedFlags.Configurable);
         return true;
@@ -1370,6 +1433,25 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 HasValue = true,
                 Writable = flags.Writable,
                 HasWritable = true,
+                Enumerable = flags.Enumerable,
+                HasEnumerable = true,
+                Configurable = flags.Configurable,
+                HasConfigurable = true,
+            };
+        }
+
+        if (_namedAccessors?.TryGetValue(name, out var accessor) == true)
+        {
+            PropertyDescriptorFlags flags = default;
+            if (_descriptors?.TryGetValue(name, out flags) != true)
+                flags = PropertyDescriptorFlags.Default;
+
+            return new SharpTSPropertyDescriptor
+            {
+                Get = accessor.Get,
+                Set = accessor.Set,
+                HasGet = true,
+                HasSet = true,
                 Enumerable = flags.Enumerable,
                 HasEnumerable = true,
                 Configurable = flags.Configurable,

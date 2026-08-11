@@ -1223,7 +1223,7 @@ public partial class Interpreter
         {
             IndexTarget.Array t => GetArrayIndexValue(t.Target, t.Index),
             IndexTarget.ArrayString t => t.Target.HasNamedProperty(t.Key)
-                ? t.Target.GetNamedProperty(t.Key)
+                ? GetArrayNamedProperty(t.Target, t.Key, t.Target)
                 : SharpTSUndefined.Instance,
             IndexTarget.ArraySymbol t => t.Target.GetBySymbol(t.Key)
                 ?? SharpTSUndefined.Instance,
@@ -1604,7 +1604,7 @@ public partial class Interpreter
                 break;
 
             case IndexTarget.ArrayString t:
-                t.Target.SetNamedProperty(t.Key, value);
+                SetArrayNamedProperty(t.Target, t.Key, value, strictMode);
                 break;
 
             case IndexTarget.ArraySymbol t:
