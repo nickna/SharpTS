@@ -941,9 +941,21 @@ public partial class RuntimeEmitter
         var skipGetCheck = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, skipGetCheck);
         // SameValue(new.get, existing.get); throw if false.
-        il.Emit(OpCodes.Ldloc, accessorGetKeyLocal);
+        var existingGetterForCompare = il.DeclareLocal(_types.Object);
+        var haveExistingGetter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, existingGetterForCompare);
+        il.Emit(OpCodes.Ldloc, existingGetterForCompare);
+        il.Emit(OpCodes.Brtrue, haveExistingGetter);
+        // An omitted getter in a completed accessor descriptor has the
+        // ECMAScript value undefined. Normalize the CLR null representation
+        // before SameValue so `{ get: undefined }` is an allowed no-op.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, existingGetterForCompare);
+        il.MarkLabel(haveExistingGetter);
+        il.Emit(OpCodes.Ldloc, accessorGetKeyLocal);
+        il.Emit(OpCodes.Ldloc, existingGetterForCompare);
         il.Emit(OpCodes.Call, runtime.ObjectIs);
         il.Emit(OpCodes.Brfalse, throwRedefineLabel);
         il.MarkLabel(skipGetCheck);
@@ -954,9 +966,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, dictTryGetValue);
         var skipSetCheck = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, skipSetCheck);
-        il.Emit(OpCodes.Ldloc, accessorSetKeyLocal);
+        var existingSetterForCompare = il.DeclareLocal(_types.Object);
+        var haveExistingSetter = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, existingSetterForCompare);
+        il.Emit(OpCodes.Ldloc, existingSetterForCompare);
+        il.Emit(OpCodes.Brtrue, haveExistingSetter);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, existingSetterForCompare);
+        il.MarkLabel(haveExistingSetter);
+        il.Emit(OpCodes.Ldloc, accessorSetKeyLocal);
+        il.Emit(OpCodes.Ldloc, existingSetterForCompare);
         il.Emit(OpCodes.Call, runtime.ObjectIs);
         il.Emit(OpCodes.Brfalse, throwRedefineLabel);
         il.MarkLabel(skipSetCheck);

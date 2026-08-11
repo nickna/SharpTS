@@ -5253,6 +5253,14 @@ public sealed class Issue1279ParityTests
     public void String_iterator_is_a_symbol_keyed_unicode_iterator(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-19.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-21.js")]
+    [InlineData("built-ins/Object/defineProperty/8.12.9-9-c-i_1.js")]
+    [InlineData("built-ins/Object/defineProperty/8.12.9-9-c-i_2.js")]
+    public void Object_descriptors_preserve_omitted_fields_during_redefinition(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
 
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)

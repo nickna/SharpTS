@@ -521,7 +521,6 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var stateLocal = il.DeclareLocal(runtime.FrozenSealedStateType);
         var returnTrueLabel = il.DefineLabel();
-        var checkDictLabel = il.DefineLabel();
         var checkListLabel = il.DefineLabel();
         var checkDescriptorsLabel = il.DefineLabel();
         var returnFalseLabel = il.DefineLabel();
@@ -539,7 +538,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, returnTrueLabel);
 
         // Not extensible - check if property already exists
-        // if (obj is Dictionary<string, object?> dict) return dict.ContainsKey(propertyKey)
+        // If the backing dictionary contains the key, the property exists.
+        // Accessor-only properties deliberately have no backing entry, though,
+        // so a miss must still consult the descriptor store below.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, checkListLabel);
@@ -548,7 +549,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Brtrue, returnTrueLabel);
+        il.Emit(OpCodes.Br, checkDescriptorsLabel);
 
         // if (obj is List<object?> list)
         il.MarkLabel(checkListLabel);
@@ -563,18 +565,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, indexLocal);
         il.Emit(OpCodes.Call, typeof(int).GetMethod("TryParse", [typeof(string), typeof(int).MakeByRefType()])!);
-        il.Emit(OpCodes.Brfalse, returnFalseLabel);
+        il.Emit(OpCodes.Brfalse, checkDescriptorsLabel);
 
         // index >= 0 && index < list.Count
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, returnFalseLabel);
+        il.Emit(OpCodes.Blt, checkDescriptorsLabel);
 
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count"));
-        il.Emit(OpCodes.Bge, returnFalseLabel);
+        il.Emit(OpCodes.Bge, checkDescriptorsLabel);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
