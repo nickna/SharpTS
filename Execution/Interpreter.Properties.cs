@@ -2011,6 +2011,11 @@ public partial class Interpreter
             // BuiltInMethod wrapper and identity with the direct form breaks.
             if (ctorMember is BuiltInMethod { IsConstant: true } ctorConstant)
                 return ctorConstant.CallBoxed(this, []);
+            var functionPrototype = GetFunctionPrototype();
+            if (functionPrototype.GetExtraGetter(memberName) is { } inheritedGetter)
+                return BindAccessorToObject(inheritedGetter, ctor).CallBoxed(this, []);
+            if (functionPrototype.HasExtra(memberName))
+                return functionPrototype.TryGetExtra(memberName);
             return ctorMember
                 ?? FunctionBuiltIns.GetMember(ctor, memberName)
                 ?? SharpTSUndefined.Instance;
@@ -2521,6 +2526,21 @@ public partial class Interpreter
     private void SetArrayNamedProperty(
         SharpTSArray array, string name, object? value, bool strictMode)
     {
+        // Bracket assignment (`array["length"] = value`) reaches the named-key
+        // path, but length is still the array exotic's special own data
+        // property. Keep it on the same ArraySetLength path as dot assignment.
+        if (name == "length")
+        {
+            if (strictMode && (array.IsFrozen || !array.IsLengthWritable))
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    "Cannot assign to read only property 'length' of array"));
+            }
+            double newLength = ArrayBuiltIns.CoerceArrayLength(this, value);
+            array.SetLength((long)newLength);
+            return;
+        }
+
         if (array.TryGetNamedAccessor(name, out _, out var setter))
         {
             if (setter is not null)

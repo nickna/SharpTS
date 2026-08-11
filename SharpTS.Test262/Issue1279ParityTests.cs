@@ -46,6 +46,34 @@ public sealed class Issue1279ParityTests
     public void Built_in_object_descriptors_match_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-163.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-165.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-166.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-167.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-212.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-213.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-214.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-215.js")]
+    [InlineData("built-ins/RegExp/prototype/dotAll/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/flags/prop-desc.js")]
+    [InlineData("built-ins/RegExp/prototype/global/15.10.7.2-2.js")]
+    [InlineData("built-ins/RegExp/prototype/global/S15.10.7.2_A9.js")]
+    [InlineData("built-ins/RegExp/prototype/ignoreCase/15.10.7.3-2.js")]
+    [InlineData("built-ins/RegExp/prototype/ignoreCase/S15.10.7.3_A9.js")]
+    [InlineData("built-ins/RegExp/prototype/multiline/15.10.7.4-2.js")]
+    [InlineData("built-ins/RegExp/prototype/multiline/S15.10.7.4_A9.js")]
+    [InlineData("built-ins/RegExp/prototype/source/prop-desc.js")]
+    public void RegExp_prototype_descriptors_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-114.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-114-b.js")]
+    [InlineData("built-ins/RegExp/S15.10.5_A2_T2.js")]
+    public void Intrinsic_objects_observe_ordinary_inherited_and_exotic_properties(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     public static TheoryData<string> ObjectDescriptorValidationCases => new()
     {
         "built-ins/Object/defineProperty/15.2.3.6-3-1.js",

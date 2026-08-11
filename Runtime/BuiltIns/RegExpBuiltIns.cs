@@ -334,8 +334,11 @@ public static class RegExpBuiltIns
                 Value = value,
                 HasValue = true,
                 Writable = true,
+                HasWritable = true,
                 Enumerable = false,
+                HasEnumerable = true,
                 Configurable = true,
+                HasConfigurable = true,
             });
         DefineMethod("exec", RealmLocal(_protoExec));
         DefineMethod("test", RealmLocal(_protoTest));
@@ -358,9 +361,13 @@ public static class RegExpBuiltIns
             proto.DefineProperty(name, new SharpTSPropertyDescriptor
             {
                 Get = getter,
+                HasGet = true,
+                HasSet = true,
                 Set = null,
                 Enumerable = false,
+                HasEnumerable = true,
                 Configurable = true,
+                HasConfigurable = true,
             });
         DefineAccessor("flags", RealmLocal(_protoFlagsGetter));
         DefineAccessor("source", RealmLocal(_protoSourceGetter));
