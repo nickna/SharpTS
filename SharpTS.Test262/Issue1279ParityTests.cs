@@ -5128,6 +5128,37 @@ public sealed class Issue1279ParityTests
     public void Error_instances_expose_spec_own_descriptors(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T5.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T6.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T7.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T8.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T9.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/S15.5.4.5_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/charCodeAt/pos-coerce-string.js")]
+    [InlineData("built-ins/String/prototype/at/index-argument-tointeger.js")]
+    [InlineData("built-ins/String/prototype/at/index-non-numeric-argument-tointeger-invalid.js")]
+    [InlineData("built-ins/String/prototype/at/index-non-numeric-argument-tointeger.js")]
+    public void String_position_arguments_use_ecmascript_number_coercion(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A1_T6.js")]
+    [InlineData("built-ins/String/prototype/concat/S15.5.4.6_A4_T1.js")]
+    public void String_concat_applies_observable_to_string_coercion(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/push/throws-with-string-receiver.js")]
+    [InlineData("built-ins/Array/prototype/pop/throws-with-string-receiver.js")]
+    [InlineData("built-ins/Array/prototype/unshift/throws-with-string-receiver.js")]
+    [InlineData("built-ins/Array/prototype/fill/fill-values.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-this-length.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-this-length.js")]
+    public void Array_mutators_called_generically_update_the_original_receiver(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

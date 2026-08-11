@@ -335,6 +335,17 @@ public partial class ILEmitter
             "toSorted"      => (runtime.ArrayToSorted,   "single",    _ctx.Types.Object),
             "toSpliced"     => (runtime.ArrayToSpliced,  "argsArray", _ctx.Types.Object),
             "with"          => (runtime.ArrayWith,       "argsArray", _ctx.Types.Object),
+            // These prototype-specific helpers implement the generic
+            // array-like algorithms directly against the original receiver
+            // (Get/Set/Delete + LengthOfArrayLike). They must not go through
+            // ArrayLikeMaterialize, which would mutate only a detached list.
+            "push"           => (runtime.ArrayPushProto,  "argsArray", _ctx.Types.Double),
+            "pop"            => (runtime.ArrayPopProto,   "noArg",     _ctx.Types.Object),
+            "shift"          => (runtime.ArrayShiftProto, "noArg",     _ctx.Types.Object),
+            "unshift"        => (runtime.ArrayUnshiftProto,"argsArray",_ctx.Types.Double),
+            "reverse"        => (runtime.ArrayReverseProto,"noArg",    _ctx.Types.Object),
+            "fill"           => (runtime.ArrayFillProto,  "argsArray", _ctx.Types.Object),
+            "copyWithin"     => (runtime.ArrayCopyWithinProto,"argsArray",_ctx.Types.Object),
             _ => null,
         };
         if (sig is null)
@@ -363,6 +374,21 @@ public partial class ILEmitter
         EmitBoxIfNeeded(c.Arguments[0]);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Stloc, receiverLocal);
+
+        // The length-changing mutators always perform Set(O, "length", ...,
+        // true). String exotic objects expose a non-writable length, including
+        // the empty string, so the operation must throw instead of silently
+        // falling through the runtime's CLR-string property setter.
+        if (methodName is "push" or "pop" or "shift" or "unshift")
+        {
+            var receiverIsNotString = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Isinst, _ctx.Types.String);
+            IL.Emit(OpCodes.Brfalse, receiverIsNotString);
+            IL.Emit(OpCodes.Pop); // duplicated receiver consumed by direct helper otherwise
+            GuestErrorEmitter.ThrowTypeError(IL, runtime, "Cannot assign to read only property 'length' of string");
+            IL.MarkLabel(receiverIsNotString);
+        }
 
         // ECMA-262: methods that allocate a new array via ArraySpeciesCreate(O, len)
         // must throw RangeError if len > 2^32 - 1 (ArrayCreate length check).
@@ -502,7 +528,9 @@ public partial class ILEmitter
         // concat itself performs IsConcatSpreadable before consulting length;
         // pre-materializing here would erase the receiver's identity and read
         // length even when @@isConcatSpreadable is false.
-        if (methodName != "concat")
+        bool usesOriginalReceiver = methodName is "push" or "pop" or "shift"
+            or "unshift" or "reverse" or "fill" or "copyWithin";
+        if (methodName != "concat" && !usesOriginalReceiver)
         {
             IL.Emit(OpCodes.Call, useLazyMaterializer
                 ? runtime.ArrayLikeMaterializeForIteration

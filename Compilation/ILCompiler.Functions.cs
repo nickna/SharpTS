@@ -1004,6 +1004,8 @@ public partial class ILCompiler
             ctx.EntryPointDisplayClassLocal = displayLocal;
         }
 
+        EmitInitializeHoistedVars(il, ctx, statements);
+
         // Initialize namespace static fields before any code that might reference them
         InitializeNamespaceFields(il);
 
@@ -1084,6 +1086,52 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Initializes script-level <c>var</c> bindings to the JavaScript undefined
+    /// sentinel before executing any statement. CLR fields otherwise start as
+    /// null, which is observably different for reads before the declaration.
+    /// </summary>
+    private void EmitInitializeHoistedVars(
+        ILGenerator il,
+        CompilationContext ctx,
+        IEnumerable<Stmt> statements)
+    {
+        static IEnumerable<Stmt.Var> HoistedVars(Stmt statement)
+        {
+            switch (statement)
+            {
+                case Stmt.Var { IsVar: true } variable:
+                    yield return variable;
+                    break;
+                case Stmt.Sequence sequence:
+                    foreach (var nested in sequence.Statements)
+                        foreach (var variable in HoistedVars(nested))
+                            yield return variable;
+                    break;
+                case Stmt.Export { Declaration: { } declaration }:
+                    foreach (var variable in HoistedVars(declaration))
+                        yield return variable;
+                    break;
+            }
+        }
+
+        foreach (var variable in statements.SelectMany(HoistedVars).DistinctBy(v => v.Name.Lexeme))
+        {
+            if (ctx.EntryPointDisplayClassLocal != null &&
+                ctx.EntryPointDisplayClassFields?.TryGetValue(variable.Name.Lexeme, out var displayField) == true)
+            {
+                il.Emit(OpCodes.Ldloc, ctx.EntryPointDisplayClassLocal);
+                il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+                il.Emit(OpCodes.Stfld, displayField);
+            }
+            else if (ctx.TopLevelStaticVars?.TryGetValue(variable.Name.Lexeme, out var staticField) == true)
+            {
+                il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+                il.Emit(OpCodes.Stsfld, staticField);
+            }
+        }
+    }
+
+    /// <summary>
     /// Emits an entry point that calls the user's main(args) function.
     /// Used for EXE target when a valid main() function is defined.
     /// </summary>
@@ -1122,6 +1170,8 @@ public partial class ILCompiler
             }
             ctx.EntryPointDisplayClassLocal = displayLocal;
         }
+
+        EmitInitializeHoistedVars(il, ctx, statements);
 
         // Initialize namespace static fields before any code
         InitializeNamespaceFields(il);

@@ -3147,7 +3147,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notEmpty);
 
-        // value = args.Length > 0 ? args[0] : null
+        // value = args.Length > 0 ? args[0] : undefined
         var hasValue = il.DefineLabel();
         var valueDone = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
@@ -3155,7 +3155,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, hasValue);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.Emit(OpCodes.Br, valueDone);
         il.MarkLabel(hasValue);

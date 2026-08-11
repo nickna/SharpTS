@@ -245,7 +245,10 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+                    // ECMA-262 ToIntegerOrInfinity starts with ToNumber. Raw
+                    // unboxing rejects null, strings, booleans and coercible
+                    // objects even though all are valid position arguments.
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
                 }
                 else
                 {
@@ -260,7 +263,7 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
                 }
                 else
                 {

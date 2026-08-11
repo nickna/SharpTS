@@ -1183,12 +1183,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // result += Stringify(args[i])  (handles null->"null", bool->"true"/"false")
+        // result += ToString(args[i]). ToJsString performs the observable
+        // @@toPrimitive/toString protocol for objects and preserves the JS
+        // spellings of null/undefined/booleans.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Stloc, resultLocal);
 

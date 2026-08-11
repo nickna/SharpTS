@@ -624,7 +624,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
+            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
         }
         else
         {
@@ -721,7 +721,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            il.Emit(OpCodes.Unbox_Any, ctx.Types.Double);
+            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
         }
         else
         {

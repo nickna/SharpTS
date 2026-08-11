@@ -72,7 +72,24 @@ public partial class ILEmitter
             EmitExpression(methodGet.Object);
             EmitBoxIfNeeded(methodGet.Object);
             IL.Emit(OpCodes.Castclass, _ctx.Types.String);
-            if (arguments.Count > 0) EmitExpressionAsDouble(arguments[0]);
+            if (arguments.Count > 0)
+            {
+                // Preserve the unboxed hot path for statically numeric
+                // positions. An any/unknown slot can contain a string, null,
+                // boolean or coercible object and must go through ToNumber;
+                // treating its inferred stack state as double can emit an
+                // invalid unbox for a perfectly valid JS argument.
+                if (IsNumericType(_ctx.TypeMap?.Get(arguments[0])))
+                {
+                    EmitExpressionAsDouble(arguments[0]);
+                }
+                else
+                {
+                    EmitExpression(arguments[0]);
+                    EmitBoxIfNeeded(arguments[0]);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                }
+            }
             else IL.Emit(OpCodes.Ldc_R8, 0.0);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.StringCharCodeAt);
             SetStackType(StackType.Double);
