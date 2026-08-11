@@ -78,11 +78,29 @@ public partial class RuntimeEmitter
             "StringSubstring",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.String, _types.ObjectArray]
+            [_types.Object, _types.ObjectArray]
         );
         runtime.StringSubstring = method;
 
         var il = method.GetILGenerator();
+
+        // String prototype methods are generic: RequireObjectCoercible(this),
+        // then ToString(this). Keeping the receiver object-typed also prevents
+        // reflection dispatch from applying CLR string conversion first.
+        var substringReceiverOkLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, substringReceiverOkLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var substringReceiverCoerceLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, substringReceiverCoerceLabel);
+        il.MarkLabel(substringReceiverOkLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.substring called on null or undefined");
+        il.MarkLabel(substringReceiverCoerceLabel);
+        var substringStringLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, substringStringLocal);
 
         // ECMA-262 22.1.3.22: ToIntegerOrInfinity on each arg (NaN → 0,
         // ±Infinity → ±IntMax). Without this, Conv_I4 on NaN/Infinity is
@@ -90,9 +108,19 @@ public partial class RuntimeEmitter
         // instead of the full string per spec.
         var startLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldc_I4_0);
+        var substringHasStartLabel = il.DefineLabel();
+        var substringStartReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Brtrue, substringHasStartLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Br, substringStartReadyLabel);
+        il.MarkLabel(substringHasStartLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
+        il.MarkLabel(substringStartReadyLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
@@ -110,11 +138,13 @@ public partial class RuntimeEmitter
         var afterEnd = il.DefineLabel();
         il.Emit(OpCodes.Bgt, hasEnd);
         il.MarkLabel(defaultEnd);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, substringStringLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Br, afterEnd);
         il.MarkLabel(hasEnd);
-        // If args[1] is null or $Undefined, use str.Length per spec.
+        // Reflection dispatch represents a missing/undefined trailing argument
+        // as null in this packed object[] path, so preserve the default-end
+        // sentinel before checking the explicit $Undefined representation.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
@@ -134,7 +164,7 @@ public partial class RuntimeEmitter
 
         // Clamp start to [0, len] and end to [0, len]
         il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, substringStringLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, startLocal);
@@ -145,7 +175,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, endLocal);
         il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, substringStringLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, endLocal);
@@ -163,7 +193,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, toLocal);
 
         // return str.Substring(from, to - from)
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, substringStringLocal);
         il.Emit(OpCodes.Ldloc, fromLocal);
         il.Emit(OpCodes.Ldloc, toLocal);
         il.Emit(OpCodes.Ldloc, fromLocal);
@@ -277,7 +307,7 @@ public partial class RuntimeEmitter
             "StringIndexOf",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
-            [_types.String, _types.String]
+            [_types.String, _types.Object]
         );
         runtime.StringIndexOf = method;
 
@@ -286,6 +316,7 @@ public partial class RuntimeEmitter
         // return (double)str.IndexOf(search)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", _types.String));
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
@@ -301,7 +332,7 @@ public partial class RuntimeEmitter
             "StringIndexOfFrom",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
-            [_types.String, _types.String, _types.Double]
+            [_types.String, _types.Object, _types.Object]
         );
         runtime.StringIndexOfFrom = method;
 
@@ -310,52 +341,25 @@ public partial class RuntimeEmitter
         var lenLocal = il.DeclareLocal(_types.Int32);
         var notFoundLabel = il.DefineLabel();
         var clampMaxLabel = il.DefineLabel();
+        var indexOfSearchLocal = il.DeclareLocal(_types.String);
 
         // int len = str.Length
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "get_Length"));
         il.Emit(OpCodes.Stloc, lenLocal);
 
-        // int idx = IsFinite(fromIndex) ? (int)fromIndex : 0.
-        // ECMA-262 ToIntegerOrInfinity(NaN) = +0; ToIntegerOrInfinity(±Infinity)
-        // is left as ±Infinity but our `int idx` slot can't hold ±Infinity, so
-        // map +Infinity to int.MaxValue (clamped to len below → returns -1)
-        // and -Infinity to 0 (clamped via the `idx < 0` branch below).
-        // Pre-fix this used a bare Conv_I4 of the double, which is undefined
-        // behavior in ECMA-335 for NaN/±Infinity inputs; in practice .NET on
-        // x64 returned 0 for NaN, but is not guaranteed cross-platform.
-        var nanLabel = il.DefineLabel();
-        var idxLoadedLabel = il.DefineLabel();
+        // Search-string coercion precedes position coercion (§22.1.3.8).
+        // Both are observable and may throw.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, indexOfSearchLocal);
+
+        // ToIntegerOrInfinity performs observable object coercion and maps the
+        // infinities to sentinel int extrema suitable for the clamps below.
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
-        il.Emit(OpCodes.Brfalse, nanLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, idxLocal);
-        il.Emit(OpCodes.Br, idxLoadedLabel);
-        il.MarkLabel(nanLabel);
-        // Non-finite: NaN → 0, +Infinity → int.MaxValue, -Infinity → int.MinValue.
-        var posInfLabel = il.DefineLabel();
-        var negInfLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", [_types.Double])!);
-        il.Emit(OpCodes.Brfalse, posInfLabel);
         il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, idxLocal);
-        il.Emit(OpCodes.Br, idxLoadedLabel);
-        il.MarkLabel(posInfLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Bgt, negInfLabel);
-        // -Infinity → int.MinValue (clamped to 0 by the `idx < 0` branch below).
-        il.Emit(OpCodes.Ldc_I4, int.MinValue);
-        il.Emit(OpCodes.Stloc, idxLocal);
-        il.Emit(OpCodes.Br, idxLoadedLabel);
-        il.MarkLabel(negInfLabel);
-        // +Infinity → int.MaxValue (clamped past end below → -1).
-        il.Emit(OpCodes.Ldc_I4, int.MaxValue);
-        il.Emit(OpCodes.Stloc, idxLocal);
-        il.MarkLabel(idxLoadedLabel);
 
         // if (idx < 0) idx = 0
         il.Emit(OpCodes.Ldloc, idxLocal);
@@ -372,7 +376,7 @@ public partial class RuntimeEmitter
 
         // return (double)str.IndexOf(search, idx)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, indexOfSearchLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", _types.String, _types.Int32));
         il.Emit(OpCodes.Conv_R8);
@@ -627,7 +631,7 @@ public partial class RuntimeEmitter
 
     private void EmitStringSlice(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // StringSlice(string str, object[] args) -> string
+        // StringSlice(object receiver, object[] args) -> string
         // Handles negative indices and optional end parameter.
         // argCount derived from args.Length so the helper is borrowable via
         // \$TSFunction reflection without a metadata mismatch — the explicit
@@ -636,7 +640,7 @@ public partial class RuntimeEmitter
             "StringSlice",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.String, _types.ObjectArray]
+            [_types.Object, _types.ObjectArray]
         );
         runtime.StringSlice = method;
 
@@ -644,18 +648,42 @@ public partial class RuntimeEmitter
         var startLocal = il.DeclareLocal(_types.Int32);
         var endLocal = il.DeclareLocal(_types.Int32);
         var lengthLocal = il.DeclareLocal(_types.Int32);
+        var sliceReceiverThrowLabel = il.DefineLabel();
+        var sliceReceiverReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, sliceReceiverThrowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, sliceReceiverReadyLabel);
+        il.MarkLabel(sliceReceiverThrowLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.slice called on null or undefined");
+        il.MarkLabel(sliceReceiverReadyLabel);
+        var sliceStringLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, sliceStringLocal);
 
         // lengthLocal = str.Length
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, sliceStringLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, lengthLocal);
 
         // start = ToIntegerOrInfinity(args[0], 0). Handles NaN/±Infinity per spec
         // (NaN→0, +Inf→intMax, -Inf→intMin). Conv_I4 alone is undefined behavior
         // for those values.
+        var sliceHasStartLabel = il.DefineLabel();
+        var sliceStartReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Brtrue, sliceHasStartLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Br, sliceStartReadyLabel);
+        il.MarkLabel(sliceHasStartLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
+        il.MarkLabel(sliceStartReadyLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, startLocal);
@@ -668,7 +696,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ble, noEndArg);
-        // null/undefined → use length per ECMA-262 22.1.3.20.
+        // Missing/undefined is represented as null or $Undefined by the
+        // borrowed-method argument packer.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
@@ -741,7 +770,7 @@ public partial class RuntimeEmitter
 
         // return str.Substring(start, end - start)
         il.MarkLabel(returnSubstring);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, sliceStringLocal);
         il.Emit(OpCodes.Ldloc, startLocal);
         il.Emit(OpCodes.Ldloc, endLocal);
         il.Emit(OpCodes.Ldloc, startLocal);

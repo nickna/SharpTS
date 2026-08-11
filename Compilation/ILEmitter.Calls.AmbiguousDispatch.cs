@@ -108,7 +108,6 @@ public partial class ILEmitter
                 {
                     EmitExpression(arguments[1]);
                     EmitBoxIfNeeded(arguments[1]);
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Convert, "ToDouble", _ctx.Types.Object));
                     IL.Emit(OpCodes.Call, _ctx.Runtime!.StringIndexOfFrom);
                 }
                 else

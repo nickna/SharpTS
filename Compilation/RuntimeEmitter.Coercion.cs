@@ -921,23 +921,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterToPrimSymLabel);
 
-        // Accessor descriptor: $CompiledPropertyDescriptor with a Getter field.
-        // Object literals with `get [Symbol.toPrimitive]() {...}` store the descriptor
-        // here via $Runtime.DefineSymbolAccessor. Invoke the getter to materialize
-        // the actual @@toPrimitive function. If the descriptor's Getter is null, the
-        // accessor is set-only — fall through to OrdinaryToPrimitive (treat as if
-        // @@toPrimitive is undefined).
+        // Symbol storage may contain either a data or accessor descriptor.
+        // Materialize the property value using ordinary [[Get]] semantics.
         var notDescriptorLabel = il.DefineLabel();
+        var descriptorValueReadyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, toPrimFnLocal);
         il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
         il.Emit(OpCodes.Brfalse, notDescriptorLabel);
+        var toPrimDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var descGetterLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, toPrimFnLocal);
         il.Emit(OpCodes.Castclass, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, toPrimDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, toPrimDescriptorLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, descGetterLocal);
         il.Emit(OpCodes.Ldloc, descGetterLocal);
-        il.Emit(OpCodes.Brfalse, afterToPrimSymLabel);
+        var descriptorHasGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, descriptorHasGetterLabel);
+        il.Emit(OpCodes.Ldloc, toPrimDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, afterToPrimSymLabel);
+        il.Emit(OpCodes.Ldloc, toPrimDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, toPrimFnLocal);
+        il.Emit(OpCodes.Br, descriptorValueReadyLabel);
+        il.MarkLabel(descriptorHasGetterLabel);
+        il.Emit(OpCodes.Ldloc, descGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, afterToPrimSymLabel);
         // result = InvokeMethodValue(receiver, getter, [])
         var emptyArgsForGetterStr = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -948,6 +960,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, emptyArgsForGetterStr);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, toPrimFnLocal);
+        il.MarkLabel(descriptorValueReadyLabel);
         // Re-check that the materialized value is non-null/non-undefined.
         il.Emit(OpCodes.Ldloc, toPrimFnLocal);
         il.Emit(OpCodes.Brfalse, afterToPrimSymLabel);
@@ -955,6 +968,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterToPrimSymLabel);
         il.MarkLabel(notDescriptorLabel);
+
+        // GetMethod(@@toPrimitive) throws a guest TypeError when the property
+        // is present but not callable. Do this before InvokeMethodValue so a
+        // CLR dispatch error cannot escape JavaScript catch/assert.throws.
+        var toPrimStringCallableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, toPrimFnLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, toPrimStringCallableLabel);
+        il.Emit(OpCodes.Ldloc, toPrimFnLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, toPrimStringCallableLabel);
+        il.Emit(OpCodes.Ldloc, toPrimFnLocal);
+        il.Emit(OpCodes.Isinst, _types.MethodInfo);
+        il.Emit(OpCodes.Brtrue, toPrimStringCallableLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive is not callable");
+        il.MarkLabel(toPrimStringCallableLabel);
 
         // Build args array ["string"] and invoke.
         var hintArgsStrLocal = il.DeclareLocal(_types.ObjectArray);
@@ -1155,18 +1184,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterToPrimSymN);
 
-        // Accessor descriptor unwrap (mirrors EmitToJsString — see notes there).
+        // Apply ordinary [[Get]] semantics to data/accessor descriptors stored
+        // in the symbol dictionary.
         var notDescLabelN = il.DefineLabel();
+        var descValueReadyLabelN = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
         il.Emit(OpCodes.Brfalse, notDescLabelN);
+        var toPrimDescLocalN = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var descGetterLocalN = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Castclass, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, toPrimDescLocalN);
+        il.Emit(OpCodes.Ldloc, toPrimDescLocalN);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, descGetterLocalN);
         il.Emit(OpCodes.Ldloc, descGetterLocalN);
-        il.Emit(OpCodes.Brfalse, afterToPrimSymN);
+        var descHasGetterLabelN = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, descHasGetterLabelN);
+        il.Emit(OpCodes.Ldloc, toPrimDescLocalN);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, afterToPrimSymN);
+        il.Emit(OpCodes.Ldloc, toPrimDescLocalN);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, toPrimFnLocalN);
+        il.Emit(OpCodes.Br, descValueReadyLabelN);
+        il.MarkLabel(descHasGetterLabelN);
+        il.Emit(OpCodes.Ldloc, descGetterLocalN);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, afterToPrimSymN);
         var emptyArgsForGetterNum = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -1176,12 +1222,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, emptyArgsForGetterNum);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, toPrimFnLocalN);
+        il.MarkLabel(descValueReadyLabelN);
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Brfalse, afterToPrimSymN);
         il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterToPrimSymN);
         il.MarkLabel(notDescLabelN);
+
+        var toPrimNumberCallableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, toPrimNumberCallableLabel);
+        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, toPrimNumberCallableLabel);
+        il.Emit(OpCodes.Ldloc, toPrimFnLocalN);
+        il.Emit(OpCodes.Isinst, _types.MethodInfo);
+        il.Emit(OpCodes.Brtrue, toPrimNumberCallableLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive is not callable");
+        il.MarkLabel(toPrimNumberCallableLabel);
 
         var hintArgsNumLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_1);

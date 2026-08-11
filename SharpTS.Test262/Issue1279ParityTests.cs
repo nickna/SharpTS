@@ -3605,6 +3605,23 @@ public sealed class Issue1279ParityTests
             "built-ins/String/prototype/indexOf/searchstring-tostring-errors.js");
 
     [Theory]
+    [InlineData("built-ins/String/prototype/indexOf/position-tointeger.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A1_T10.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A4_T1.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A4_T2.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A4_T3.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A4_T4.js")]
+    [InlineData("built-ins/String/prototype/indexOf/S15.5.4.7_A4_T5.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A1_T15.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A2_T1.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A1_T2.js")]
+    [InlineData("built-ins/String/prototype/slice/S15.5.4.13_A1_T15.js")]
+    [InlineData("built-ins/String/prototype/slice/S15.5.4.13_A2_T1.js")]
+    [InlineData("built-ins/String/prototype/slice/S15.5.4.13_A1_T2.js")]
+    public void Compiled_string_search_and_substring_use_Javascript_coercion(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T6.js")]
     [InlineData("built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T7.js")]
     [InlineData("built-ins/String/prototype/toLowerCase/S15.5.4.16_A1_T8.js")]

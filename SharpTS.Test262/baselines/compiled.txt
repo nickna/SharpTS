@@ -10282,7 +10282,7 @@ test/built-ins/String/prototype/includes/this-is-undefined-throws.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A10.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A11.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T1.js Pass
-test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T10.js RuntimeError
+test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T10.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T12.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T2.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A1_T4.js Pass
@@ -10298,9 +10298,9 @@ test/built-ins/String/prototype/indexOf/S15.5.4.7_A2_T4.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A3_T1.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A3_T2.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A3_T3.js Pass
-test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T1.js Fail
-test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T2.js Fail
-test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T3.js RuntimeError
+test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T1.js Pass
+test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T2.js Pass
+test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T3.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T4.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A4_T5.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A5_T1.js Pass
@@ -10317,9 +10317,9 @@ test/built-ins/String/prototype/indexOf/name.js Pass
 test/built-ins/String/prototype/indexOf/not-a-constructor.js Pass
 test/built-ins/String/prototype/indexOf/position-tointeger-bigint.js Fail
 test/built-ins/String/prototype/indexOf/position-tointeger-errors.js Fail
-test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js RuntimeError
-test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js RuntimeError
-test/built-ins/String/prototype/indexOf/position-tointeger.js RuntimeError
+test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js Fail
+test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js Fail
+test/built-ins/String/prototype/indexOf/position-tointeger.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-bigint.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-errors.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-toprimitive.js RuntimeError
@@ -10655,7 +10655,7 @@ test/built-ins/String/prototype/slice/S15.5.4.13_A1_T11.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T12.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T13.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T14.js Pass
-test/built-ins/String/prototype/slice/S15.5.4.13_A1_T15.js RuntimeError
+test/built-ins/String/prototype/slice/S15.5.4.13_A1_T15.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T2.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T4.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js RuntimeError
@@ -10663,7 +10663,7 @@ test/built-ins/String/prototype/slice/S15.5.4.13_A1_T6.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T7.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T8.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A1_T9.js Pass
-test/built-ins/String/prototype/slice/S15.5.4.13_A2_T1.js RuntimeError
+test/built-ins/String/prototype/slice/S15.5.4.13_A2_T1.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A2_T2.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A2_T3.js Pass
 test/built-ins/String/prototype/slice/S15.5.4.13_A2_T4.js Pass
@@ -10834,7 +10834,7 @@ test/built-ins/String/prototype/substring/S15.5.4.15_A1_T11.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T12.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T13.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T14.js Pass
-test/built-ins/String/prototype/substring/S15.5.4.15_A1_T15.js RuntimeError
+test/built-ins/String/prototype/substring/S15.5.4.15_A1_T15.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T2.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T4.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T5.js Fail
@@ -10842,7 +10842,7 @@ test/built-ins/String/prototype/substring/S15.5.4.15_A1_T6.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T7.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T8.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T9.js Pass
-test/built-ins/String/prototype/substring/S15.5.4.15_A2_T1.js RuntimeError
+test/built-ins/String/prototype/substring/S15.5.4.15_A2_T1.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A2_T10.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A2_T2.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A2_T3.js Pass
