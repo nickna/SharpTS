@@ -174,4 +174,22 @@ public sealed class Issue1279ParityRuntimeTests
 
         Assert.Equal("1 3\n", TestHarness.RunCompiled(source));
     }
+
+    [Fact]
+    public void String_symbol_iterator_yields_unicode_code_points()
+    {
+        const string source = """
+            var text: any = "A\uD83D\uDE00";
+            var iteratorMethod: any = text[Symbol.iterator];
+            var iterator: any = iteratorMethod.call(text);
+            var first: any = iterator.next();
+            var second: any = iterator.next();
+            var done: any = iterator.next();
+            console.log(first.value, first.done);
+            console.log(second.value.length, second.done);
+            console.log(done.value, done.done);
+            """;
+
+        Assert.Equal("A false\n2 false\nundefined true\n", TestHarness.RunCompiled(source));
+    }
 }

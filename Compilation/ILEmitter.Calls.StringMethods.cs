@@ -107,19 +107,23 @@ public partial class ILEmitter
                 break;
 
             case "replace":
-                if (arguments.Count >= 2)
+                if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);
                     EmitBoxIfNeeded(arguments[0]);
-                    EmitExpression(arguments[1]);
-                    EmitBoxIfNeeded(arguments[1]);
-                    // Pass both args as-is. Helper ToJsString-coerces in spec
-                    // order (search first, then replacement).
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldstr, "");
-                    IL.Emit(OpCodes.Ldnull);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                }
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplaceRegExp);
                 break;
@@ -132,13 +136,12 @@ public partial class ILEmitter
                     // Don't cast — the regex-aware helper accepts object.
                     EmitExpression(arguments[1]);
                     EmitBoxIfNeeded(arguments[1]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.Stringify);
                 }
                 else
                 {
                     IL.Emit(OpCodes.Ldstr, "");
                     IL.Emit(OpCodes.Ldnull);
-                    IL.Emit(OpCodes.Ldstr, "");
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringReplaceAllRegExp);
                 break;
@@ -222,7 +225,6 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldstr, "");
                 }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSearchRegExp);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
 
             case "repeat":

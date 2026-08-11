@@ -359,6 +359,7 @@ public class EmittedRuntime
     public MethodBuilder StringCodePointAt { get; set; } = null!;
     public MethodBuilder StringIsWellFormed { get; set; } = null!;
     public MethodBuilder StringToWellFormed { get; set; } = null!;
+    public MethodBuilder StringIterator { get; set; } = null!;
     public MethodBuilder StringFromCodePoint { get; set; } = null!;
     public MethodBuilder StringNormalize { get; set; } = null!;
     public MethodBuilder StringLocaleCompare { get; set; } = null!;
@@ -1190,6 +1191,7 @@ public class EmittedRuntime
     public MethodBuilder RegExpGetLastIndex { get; set; } = null!;
     public MethodBuilder RegExpSetLastIndex { get; set; } = null!;
     public MethodBuilder StringMatchRegExp { get; set; } = null!;
+    public MethodBuilder StringTryInvokeSymbolMethod { get; set; } = null!;
     public MethodBuilder StringReplaceRegExp { get; set; } = null!;
     public MethodBuilder StringReplaceAllRegExp { get; set; } = null!;
     public MethodBuilder StringSearchRegExp { get; set; } = null!;

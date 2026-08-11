@@ -1850,6 +1850,107 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitStringIterator(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "StringIterator",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        method.DefineParameter(1, ParameterAttributes.None, "__this");
+        runtime.StringIterator = method;
+
+        var il = method.GetILGenerator();
+        var receiverOkLabel = il.DefineLabel();
+        var strLocal = il.DeclareLocal(_types.String);
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var charLocal = il.DeclareLocal(_types.Char);
+        var segmentLocal = il.DeclareLocal(_types.String);
+        var loopStartLabel = il.DefineLabel();
+        var loopEndLabel = il.DefineLabel();
+        var singleCodeUnitLabel = il.DefineLabel();
+        var segmentReadyLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, receiverOkLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, singleCodeUnitLabel);
+        il.MarkLabel(receiverOkLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype[Symbol.iterator] called on null or undefined");
+
+        // Reuse the label after the receiver guard as the normal entry point.
+        il.MarkLabel(singleCodeUnitLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, strLocal);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes));
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(loopStartLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.String, "Length"));
+        il.Emit(OpCodes.Bge, loopEndLabel);
+
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Stloc, charLocal);
+
+        // A valid surrogate pair is yielded as one two-code-unit string.
+        var useSingleCodeUnitLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsHighSurrogate", _types.Char));
+        il.Emit(OpCodes.Brfalse, useSingleCodeUnitLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.String, "Length"));
+        il.Emit(OpCodes.Bge, useSingleCodeUnitLabel);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsLowSurrogate", _types.Char));
+        il.Emit(OpCodes.Brfalse, useSingleCodeUnitLabel);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, segmentLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, segmentReadyLabel);
+
+        il.MarkLabel(useSingleCodeUnitLabel);
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "ToString", _types.Char));
+        il.Emit(OpCodes.Stloc, segmentLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(segmentReadyLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, segmentLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Br, loopStartLabel);
+
+        il.MarkLabel(loopEndLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitStringNormalize(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringNormalize(string str, int argCount, object[] args) -> string
@@ -1880,12 +1981,20 @@ public partial class RuntimeEmitter
         var afterFormLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterFormLabel);
 
-        // else form = (string)args[0]
+        // Explicit undefined has the same default as an omitted argument.
         il.MarkLabel(hasArgLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nfcLabel);
+
+        // Otherwise form = ToString(args[0]). This preserves user coercion and
+        // guest TypeError propagation for Symbol values.
         il.Emit(OpCodes.Ldarg_2); // args
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, formLocal);
 
         il.MarkLabel(afterFormLabel);

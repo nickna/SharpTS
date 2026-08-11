@@ -964,9 +964,11 @@ public partial class RuntimeEmitter
         EmitStringFromCharCode(typeBuilder, runtime);
         EmitStringCodePointAt(typeBuilder, runtime);
         EmitStringWellFormedMethods(typeBuilder, runtime);
+        EmitStringIterator(typeBuilder, runtime);
         EmitStringFromCodePoint(typeBuilder, runtime);
         EmitStringNormalize(typeBuilder, runtime);
         EmitStringLocaleCompare(typeBuilder, runtime);
+        EmitStringTryInvokeSymbolMethod(typeBuilder, runtime);
         // RegExp methods emitted before String.prototype populate so the
         // spec-correct match/matchAll/search/split slots can reference the
         // regex-aware helpers (Stage 1 of issue #91 follow-up). Moved up

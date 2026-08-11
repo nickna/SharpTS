@@ -5191,6 +5191,44 @@ public sealed class Issue1279ParityTests
     public void String_construction_observes_primitive_conversion(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-get-err.js")]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-invocation.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-get-matchAll-throws.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-matchAll-invocation.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-matchAll-throws.js")]
+    [InlineData("built-ins/String/prototype/search/cstm-search-get-err.js")]
+    [InlineData("built-ins/String/prototype/search/cstm-search-invocation.js")]
+    public void String_symbol_protocol_methods_dispatch_object_overrides(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-get-err.js")]
+    [InlineData("built-ins/String/prototype/replace/cstm-replace-invocation.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-matching-empty.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-tostring-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-value-tostring.js")]
+    public void String_replace_protocol_preserves_custom_dispatch_and_replacement_values(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/normalize/return-abrupt-from-form-as-symbol.js")]
+    [InlineData("built-ins/String/prototype/normalize/return-abrupt-from-form.js")]
+    [InlineData("built-ins/String/prototype/normalize/return-normalized-string-from-coerced-form.js")]
+    [InlineData("built-ins/String/prototype/normalize/return-normalized-string-using-default-parameter.js")]
+    public void String_normalize_coerces_the_form_after_applying_the_default(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/length.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/name.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/not-a-constructor.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/prop-desc.js")]
+    [InlineData("built-ins/String/prototype/Symbol.iterator/this-val-to-str-err.js")]
+    public void String_iterator_is_a_symbol_keyed_unicode_iterator(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
 
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)

@@ -237,6 +237,20 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpForSymbolLabel);
         }
 
+        // String primitives inherit @@iterator from String.prototype. Re-enter
+        // GetIndex on the prototype dictionary so descriptor unwrapping follows
+        // the same ordinary [[Get]] path as a direct prototype access.
+        var notStringForSymbolLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, notStringForSymbolLabel);
+        il.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notStringForSymbolLabel);
+
         // Array-receiver symbol-key walk: when the per-object symbol dict
         // doesn't carry the key, walk up to Array.prototype's symbol dict.
         // Required for `arr[Symbol.iterator]` to resolve to Array.prototype.

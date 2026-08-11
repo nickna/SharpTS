@@ -129,6 +129,30 @@ public partial class RuntimeEmitter
         Wire("isWellFormed",         runtime.StringIsWellFormed,           0);
         Wire("toWellFormed",         runtime.StringToWellFormed,           0);
 
+        // ECMA-262 §22.1.3.28: String.prototype[@@iterator] is a real
+        // symbol-keyed built-in function named "[Symbol.iterator]".
+        var iteratorFnLocal = il.DeclareLocal(_types.Object);
+        var iteratorDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldnull);
+        _types.EmitLoadMethodInfo(il, runtime.StringIterator);
+        il.Emit(OpCodes.Ldstr, "[Symbol.iterator]");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Stloc, iteratorFnLocal);
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Stloc, iteratorDescLocal);
+        il.Emit(OpCodes.Ldloc, iteratorDescLocal);
+        il.Emit(OpCodes.Ldloc, iteratorFnLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, iteratorDescLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldloc, iteratorDescLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+
         // Per ECMA-262 §22.1.3 String.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);

@@ -292,63 +292,29 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        if (arguments.Count >= 2)
+        if (arguments.Count > 0)
         {
-            // Save str (already on stack from receiver) → strLocal so we can
-            // re-push it for either branch.
-            var strLocal = il.DeclareLocal(ctx.Types.String);
-            il.Emit(OpCodes.Stloc, strLocal);
-
-            // Eval pattern + replacement, save to locals.
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            var patternLocal = il.DeclareLocal(ctx.Types.Object);
-            il.Emit(OpCodes.Stloc, patternLocal);
-
-            emitter.EmitExpression(arguments[1]);
-            emitter.EmitBoxIfNeeded(arguments[1]);
-            var replacementLocal = il.DeclareLocal(ctx.Types.Object);
-            il.Emit(OpCodes.Stloc, replacementLocal);
-
-            // ECMA-262 22.1.3.18 step 3: if replaceValue is callable, invoke it
-            // per-match with [matched, p1, p2, ..., position, str]. Otherwise
-            // ToString-coerce and use as substitution template. Branch at
-            // runtime — $TSFunction / $BoundTSFunction → function path.
-            var isFunctionLabel = il.DefineLabel();
-            var stringPathLabel = il.DefineLabel();
-            var doneLabel = il.DefineLabel();
-
-            il.Emit(OpCodes.Ldloc, replacementLocal);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.TSFunctionType);
-            il.Emit(OpCodes.Brtrue, isFunctionLabel);
-            il.Emit(OpCodes.Ldloc, replacementLocal);
-            il.Emit(OpCodes.Isinst, ctx.Runtime!.BoundTSFunctionType);
-            il.Emit(OpCodes.Brfalse, stringPathLabel);
-
-            // Function path: StringReplaceWithFunction(str, pattern, fn)
-            il.MarkLabel(isFunctionLabel);
-            il.Emit(OpCodes.Ldloc, strLocal);
-            il.Emit(OpCodes.Ldloc, patternLocal);
-            il.Emit(OpCodes.Ldloc, replacementLocal);
-            il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceWithFunction);
-            il.Emit(OpCodes.Br, doneLabel);
-
-            // String path: StringReplaceRegExp(str, pattern, replacement-as-object)
-            il.MarkLabel(stringPathLabel);
-            il.Emit(OpCodes.Ldloc, strLocal);
-            il.Emit(OpCodes.Ldloc, patternLocal);
-            il.Emit(OpCodes.Ldloc, replacementLocal);
-            il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
-
-            il.MarkLabel(doneLabel);
         }
         else
         {
-            // No-arg / single-arg form: empty pattern + null replacement.
-            il.Emit(OpCodes.Ldstr, "");
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
+
+        if (arguments.Count > 1)
+        {
+            emitter.EmitExpression(arguments[1]);
+            emitter.EmitBoxIfNeeded(arguments[1]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        }
+
+        // The helper performs @@replace dispatch before deciding whether the
+        // original replacement is callable or needs ToString coercion.
+        il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
     }
 
     private static void EmitSplit(IEmitterContext emitter, List<Expr> arguments)
@@ -470,7 +436,6 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             il.Emit(OpCodes.Ldstr, "");
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.StringSearchRegExp);
-        il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
     private static void EmitIncludes(IEmitterContext emitter, List<Expr> arguments)
@@ -710,13 +675,12 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // Don't cast — the regex-aware helper accepts object and branches.
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.Stringify); // replacement is always string
         }
         else
         {
             il.Emit(OpCodes.Ldstr, "");
             il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ldstr, "");
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceAllRegExp);
     }
