@@ -1033,6 +1033,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
         il.Emit(OpCodes.Pop);  // Discard bool result
 
+        // ArrayDefineOwnProperty updates [[ArrayLength]] for every newly
+        // defined numeric index, including accessor descriptors that have no
+        // value to write into dense storage. Grow the observable length before
+        // the accessor path skips the data-value write below.
+        var skipArrayIndexLengthGrowth = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, skipArrayIndexLengthGrowth);
+        var definedArrayIndexLocal = il.DeclareLocal(_types.UInt32);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, definedArrayIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, skipArrayIndexLengthGrowth);
+        il.Emit(OpCodes.Ldloc, definedArrayIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, skipArrayIndexLengthGrowth); // 2^32-1 is not an array index
+        var arrayLengthAlreadyCoversIndex = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Ldloc, definedArrayIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Bgt_Un, arrayLengthAlreadyCoversIndex);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, definedArrayIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+        il.MarkLabel(arrayLengthAlreadyCoversIndex);
+        il.MarkLabel(skipArrayIndexLengthGrowth);
+
 
         // Also set the value on the object if it's a data/generic property (no
         // accessor). ECMA-262 §6.2.5.6 CompletePropertyDescriptor: a generic
@@ -1143,31 +1179,44 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notListForLengthLabel);
 
-        // $TSArray + numeric index property name: store value at the index,
-        // extending the list as needed. Required for
-        // `Object.defineProperty(arr, "5", {value:3})` to set arr[5] and
-        // update arr.length. Spec ECMA-262 §10.4.2.1 ArrayDefineOwnProperty.
-        // Skip when the descriptor had no value slot (wasGeneric=true) —
-        // e.g. `defineProperty(arr, "0", {configurable:false})` mutates
-        // attributes without overwriting the existing element.
+        // $TSArray + numeric index property name: initialize the backing slot
+        // directly, bypassing ordinary [[Set]]. PDS already contains the new
+        // descriptor here, so routing through SetIndex would incorrectly let
+        // its (usually false) Writable bit block the define operation itself.
+        // A generic descriptor preserves an existing own element, but creates
+        // an undefined element when the index was previously absent; an
+        // inherited index does not count as an own element for that decision.
         var notArrayIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brfalse, notArrayIdxLabel);
-        il.Emit(OpCodes.Ldloc, wasGenericLocal);
-        il.Emit(OpCodes.Brtrue, notArrayIdxLabel);
         var arrIdxLocal = il.DeclareLocal(_types.UInt32);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldloca, arrIdxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, notArrayIdxLabel);
-        // SetIndex(obj, idx, value) auto-extends. SetIndex is void so the
-        // expression isn't on the stack after the call — just continue to end.
-        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, arrIdxLocal);
-        il.Emit(OpCodes.Box, _types.UInt32);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, notArrayIdxLabel); // 2^32-1 is an ordinary property name
+
+        var writeArrayIdxLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, wasGenericLocal);
+        il.Emit(OpCodes.Brfalse, writeArrayIdxLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, arrIdxLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brtrue, endLabel);
+        il.MarkLabel(writeArrayIdxLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, arrIdxLocal);
+        il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Ldloc, valueToWriteLocal);
-        il.Emit(OpCodes.Call, runtime.SetIndex);
+        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLong);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notArrayIdxLabel);
 

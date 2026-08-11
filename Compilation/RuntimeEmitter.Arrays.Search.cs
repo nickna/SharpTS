@@ -1477,6 +1477,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, delegateLabel);
 
+        // Array/List receivers can carry index accessors installed by
+        // defineProperty and inherited indexed properties. Snapshot their raw
+        // storage to preserve the iteration length while LoadArrayLikeElement re-reads observable
+        // slots from the original receiver on each iteration.
+        var notListReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brtrue, delegateLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, notListReceiver);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.IEnumerableOfObject);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notListReceiver);
+
         // Lazy-eligible: Dictionary<string, object> — pre-detect holes via
         // ContainsKey (cheap, no getter fire) so EmitSkipIfHole's direct
         // list[i] check works while values are still re-read at iteration.
@@ -1692,21 +1709,19 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits <c>$Runtime.LoadArrayLikeElement(List&lt;object&gt; list, int idx) -&gt; object</c>.
     /// Replaces the direct <c>list[idx]</c> callvirt in iterator-helper IL.
-    /// Reads the dispatch-site-set <c>_currentArrayLikeReceiver</c>; if it's
-    /// a <c>Dictionary&lt;string,object&gt;</c> or <c>$Object</c>, re-reads
-    /// the slot via <c>$Runtime.GetProperty(receiver, idx.ToString())</c> for
-    /// per-iteration descriptor side effects (issue #90); otherwise (or when
-    /// the field is null) returns <c>list[idx]</c> directly.
+    /// Uses the dispatch-site-set <c>_currentArrayLikeReceiver</c>, or the list
+    /// argument for a direct array-method call. Descriptor-capable receivers
+    /// re-read the observable slot through <c>$Runtime.GetProperty</c> for
+    /// per-iteration accessor and prototype side effects (issue #90).
     /// </summary>
     /// <remarks>
     /// The type check disambiguates the two roles of
     /// <c>_currentArrayLikeReceiver</c>: it's also read by
     /// <see cref="EmitCallbackArgsAndInvoke"/> as the callback's array-slot
     /// arg. We can't tell from the field alone whether dispatch chose the
-    /// lazy or the eager materializer, but for non-lazy-eligible types
-    /// (List, $Array, string, $Arguments, primitives) the eager materializer
-    /// fully populates the list — so falling through to <c>list[idx]</c> is
-    /// correct in either case.
+    /// lazy or the eager materializer. Strings, <c>$Arguments</c>, and other
+    /// non-lazy receivers are fully populated by the eager materializer, so
+    /// falling through to <c>list[idx]</c> remains correct for them.
     /// </remarks>
     internal void DeclareLoadArrayLikeElement(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -1731,6 +1746,7 @@ public partial class RuntimeEmitter
         var pdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var returnListValLabel = il.DefineLabel();
         var returnHoleLabel = il.DefineLabel();
+        var loadArrayPropertyLabel = il.DefineLabel();
 
         // listVal = list[idx]
         il.Emit(OpCodes.Ldarg_0);
@@ -1738,11 +1754,68 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, listValLocal);
 
-        // var rcvr = _currentArrayLikeReceiver; if null → eager — return listVal.
+        // var rcvr = _currentArrayLikeReceiver ?? list. Direct array method
+        // calls bypass the generic dispatcher that initializes the field, but
+        // arg0 is still their original observable receiver.
         il.Emit(OpCodes.Ldsfld, runtime.LazyArrayLikeReceiverField);
         il.Emit(OpCodes.Stloc, rcvrLocal);
+        var haveReceiverLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Brtrue, haveReceiverLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, rcvrLocal);
+        il.MarkLabel(haveReceiverLabel);
+
+        // $Array path: own descriptor accessors override the raw dense/sparse
+        // slot. A raw hole is absent, so consult the prototype chain before
+        // deciding whether iteration skips the index.
+        var notTSArrayReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, notTSArrayReceiver);
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, keyStrLocal);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, keyStrLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, loadArrayPropertyLabel);
+        il.Emit(OpCodes.Ldloc, listValLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brfalse, returnListValLabel);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, keyStrLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, returnHoleLabel);
+        il.MarkLabel(loadArrayPropertyLabel);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, keyStrLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notTSArrayReceiver);
+
+        // Plain compiled arrays are List<object>. They use the same observable
+        // descriptor/prototype path as $Array above.
+        var notListReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, notListReceiver);
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, keyStrLocal);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, keyStrLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, loadArrayPropertyLabel);
+        il.Emit(OpCodes.Ldloc, listValLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, returnListValLabel);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, keyStrLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, returnHoleLabel);
+        il.Emit(OpCodes.Br, loadArrayPropertyLabel);
+        il.MarkLabel(notListReceiver);
 
         // Dict path: per-iteration HasProperty check via TryGetValue + PDS.
         // - dict._fields hit: return value directly (fast path for plain
@@ -1936,26 +2009,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notTSObjectLabel);
 
-        // List<object> / $Array branch: when the prototype chain walks into
+        // $Array branch: check a real (non-hole) own index, then continue via
+        // its intrinsic/custom prototype when absent.
+        var notTSArrayLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, notTSArrayLabel);
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        var tsArrayIdxLocal = il.DeclareLocal(_types.Int64);
+        var tsArrayWalkPrototype = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, tsArrayIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "TryParse", [_types.String, _types.Int64.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, tsArrayWalkPrototype);
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, tsArrayIdxLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.MarkLabel(tsArrayWalkPrototype);
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(notTSArrayLabel);
+
+        // List<object> branch: when the prototype chain walks into
         // an array (e.g., `foo.prototype = new Array(1,2,3); var f = new foo();
         // f.forEach(cb)` — `f`'s prototype IS the array, and array indices
         // count as inherited "own" properties). Numeric key + in-range index
         // → HasProperty true.
         var notListLabel = il.DefineLabel();
+        var walkListPrototypeLabel = il.DefineLabel();
         var listForCheckLocal = il.DeclareLocal(_types.ListOfObject);
-        // $Array first (subclass of List<object?>) — unwrap to Elements.
-        il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        var notTSArrayLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notTSArrayLabel);
-        il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
-        il.Emit(OpCodes.Stloc, listForCheckLocal);
-        var checkListIndex = il.DefineLabel();
-        il.Emit(OpCodes.Br, checkListIndex);
-        il.MarkLabel(notTSArrayLabel);
-        // Plain List<object?>
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notListLabel);
@@ -1963,6 +2052,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, listForCheckLocal);
 
+        var checkListIndex = il.DefineLabel();
         il.MarkLabel(checkListIndex);
         // Try parsing key as int. If it parses to a non-negative idx < count,
         // HasProperty true.
@@ -1970,15 +2060,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listIdxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", [_types.String, _types.Int32.MakeByRefType()])!);
-        il.Emit(OpCodes.Brfalse, notListLabel);
+        il.Emit(OpCodes.Brfalse, walkListPrototypeLabel);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, notListLabel);
+        il.Emit(OpCodes.Blt, walkListPrototypeLabel);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldloc, listForCheckLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, notListLabel);
+        il.Emit(OpCodes.Bge, walkListPrototypeLabel);
+        il.Emit(OpCodes.Ldloc, listForCheckLocal);
+        il.Emit(OpCodes.Ldloc, listIdxLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brtrue, walkListPrototypeLabel);
         il.Emit(OpCodes.Br, trueLabel);
+
+        il.MarkLabel(walkListPrototypeLabel);
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(notListLabel);
         // Other types in the chain (primitives, etc.): bail out.

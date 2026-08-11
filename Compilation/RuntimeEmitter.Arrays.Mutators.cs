@@ -1994,8 +1994,21 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, withI);
             il.Emit(OpCodes.Ldloc, lenLocal);
             il.Emit(OpCodes.Bge, withEnd);
+            var addReplacement = il.DefineLabel();
+            var addValue = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, withI);
+            il.Emit(OpCodes.Ldloc, actualIndexLocal);
+            il.Emit(OpCodes.Beq, addReplacement);
             EmitLoadElementUnholed(il, withI, runtime, isLazyLocal);
+            il.Emit(OpCodes.Br, addValue);
+            il.MarkLabel(addReplacement);
+            // The replacement index is never read from the source (spec step
+            // 8.c); an accessor there must not run.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.MarkLabel(addValue);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
             il.Emit(OpCodes.Ldloc, withI);
             il.Emit(OpCodes.Ldc_I4_1);
@@ -2004,14 +2017,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, withStart);
             il.MarkLabel(withEnd);
         }
-
-        // result[actualIndex] = args[1]
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, actualIndexLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
 
         // return result
         il.Emit(OpCodes.Ldloc, resultLocal);

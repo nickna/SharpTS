@@ -964,6 +964,33 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-146-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-148-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-172-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-174-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-225-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-227-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-255-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-257-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-40-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-42-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-93-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-3-95-1.js")]
+    public void Descriptor_objects_read_inherited_intrinsic_properties_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-8-b-iii-1-10.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-8-b-iii-1-6.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-8-b-iii-1-19.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-8-b-iii-1-6.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-24.js")]
+    [InlineData("built-ins/Array/prototype/every/15.4.4.16-2-17.js")]
+    [InlineData("built-ins/Array/prototype/some/15.4.4.17-2-17.js")]
+    public void Array_iteration_observes_index_descriptors_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/RegExp/dotall/with-dotall.js")]
     [InlineData("built-ins/RegExp/CharacterClassEscapes/character-class-digit-class-escape-positive-cases.js")]
     public void Iterator_protocol_changes_preserve_regexp_cases(string relativePath)

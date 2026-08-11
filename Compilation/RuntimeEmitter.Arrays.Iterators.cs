@@ -9,7 +9,7 @@ public partial class RuntimeEmitter
     /// Emits the hoisted lazy-mode preamble at the top of an iterator helper.
     /// Reads <c>_currentArrayLikeReceiver</c> once into a local and computes
     /// a <c>bool isLazyLocal</c> indicating whether per-iteration descriptor
-    /// reads are needed (receiver is Dict or $Object). Per-element loads
+    /// reads are needed (receiver is Dict, $Object, or an array/list). Per-element loads
     /// then branch on <c>isLazyLocal</c> — a stack-resident bool the JIT can
     /// hoist with branch prediction — rather than re-reading the
     /// thread-static slot and re-dispatching on type N times.
@@ -29,14 +29,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.LazyArrayLikeReceiverField);
         il.Emit(OpCodes.Stloc, rcvrLocal);
 
+        // Direct `array.map/reduce/...` calls do not pass through the generic
+        // Array.prototype.call dispatcher that populates the thread-static
+        // receiver slot. The helper's first argument is the original array in
+        // that case, so use it as the observable receiver.
+        var haveReceiver = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Brtrue, haveReceiver);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, rcvrLocal);
+        il.MarkLabel(haveReceiver);
+
         var isLazyTrue = il.DefineLabel();
+        var isLazyFalse = il.DefineLabel();
         var doneLabel = il.DefineLabel();
+        // $Arguments inherits List<object>, but its observable `length` is an
+        // independent internal slot. The eager materializer already honors
+        // that slot; treating it as a raw List would visit appended indices.
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brtrue, isLazyFalse);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brtrue, isLazyTrue);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, isLazyTrue);
+        il.MarkLabel(isLazyFalse);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, isLazyLocal);
         il.Emit(OpCodes.Br, doneLabel);

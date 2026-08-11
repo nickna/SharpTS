@@ -192,6 +192,81 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brfalse, notMatch);
 
+        // Object.defineProperty stores array index accessors in the shared
+        // descriptor store. They must win over raw list slots for ordinary
+        // Get operations and array-iteration element reads.
+        var tsArrayDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var noTSArrayDescriptor = il.DefineLabel();
+        // `length` is an Array exotic internal slot whose live value changes
+        // with mutations; a PDS entry only records its attributes and must not
+        // shadow the sparse-aware LongLength getter below.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, noTSArrayDescriptor);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noTSArrayDescriptor);
+        var tsArrayDataDescriptor = il.DefineLabel();
+        var tsArrayGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, tsArrayGetterLocal);
+        il.Emit(OpCodes.Ldloc, tsArrayGetterLocal);
+        il.Emit(OpCodes.Brfalse, tsArrayDataDescriptor);
+        il.Emit(OpCodes.Ldloc, tsArrayGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var tsArrayInvokeGetter = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, tsArrayInvokeGetter);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayInvokeGetter);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, tsArrayGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayDataDescriptor);
+        il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        var tsArrayDataHasNoSetter = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, tsArrayDataHasNoSetter);
+        // Setter-only accessor: own property shadows storage/prototype but Get
+        // returns undefined.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayDataHasNoSetter);
+
+        // Valid array-index data properties mirror their live value into the
+        // array backing store. Other descriptor-backed expandos (including
+        // 2^32-1, which is explicitly not an array index) keep their value in
+        // PDS and must return it directly.
+        var tsArrayPropertyIndexLocal = il.DeclareLocal(_types.UInt32);
+        var returnTSArrayDescriptorValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, tsArrayPropertyIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, returnTSArrayDescriptorValue);
+        il.Emit(OpCodes.Ldloc, tsArrayPropertyIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Bne_Un, noTSArrayDescriptor);
+        il.MarkLabel(returnTSArrayDescriptorValue);
+        il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        var returnTSArrayDescriptorValuePresent = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, returnTSArrayDescriptorValuePresent);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.MarkLabel(returnTSArrayDescriptorValuePresent);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noTSArrayDescriptor);
+
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
@@ -238,6 +313,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        var tsArrayIndexPresent = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, tsArrayIndexPresent);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayIndexPresent);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrNotIndexLabel);
         // For other properties on $Array (method names like push/pop/sort/etc.),
@@ -260,6 +346,48 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notMatch);
+
+        // Descriptor-backed expandos/accessors win over raw list slots, with
+        // the live exotic length slot as the sole exception.
+        var listNoDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, listNoDescriptorLabel);
+        var listOwnDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, listOwnDescriptor);
+        il.Emit(OpCodes.Ldloc, listOwnDescriptor);
+        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
+        var listDataDescriptorLabel = il.DefineLabel();
+        var listGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, listOwnDescriptor);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, listGetterLocal);
+        il.Emit(OpCodes.Ldloc, listGetterLocal);
+        il.Emit(OpCodes.Brfalse, listDataDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, listGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var listInvokeGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, listInvokeGetterLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(listInvokeGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, listGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(listDataDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, listOwnDescriptor);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(listNoDescriptorLabel);
 
         // Check for "length"
         il.Emit(OpCodes.Ldarg_1);
@@ -307,6 +435,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        var listIndexPresentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, listIndexPresentLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(listIndexPresentLabel);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listNotIndexLabel);
         // PDS-stored own descriptor (e.g., RegExp.exec result has `index` /
@@ -822,7 +961,7 @@ public partial class RuntimeEmitter
             FlagCharBranch("unicodeSets", 'v');
 
             // Other property names fall through to GetFieldsProperty so
-            // user-set data (`r.foo = 1`) and prototype walks still resolve.
+            // user-set data and the shared intrinsic-prototype fallback resolve.
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
@@ -890,6 +1029,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noGetterLabel);
+
+        // A descriptor without an invokable getter still shadows both the
+        // dictionary's ordinary storage and its prototype. This includes
+        // setter-only accessors, whose [[Get]] result is undefined, and data
+        // descriptors stored only in the PDS.
+        var ownDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var noOwnDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, ownDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
+        var returnDescriptorValueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, returnDescriptorValueLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnDescriptorValueLabel);
+        // With no accessor slots this is a data descriptor. Its value is
+        // mirrored into the dictionary so ordinary writable assignments keep
+        // that canonical storage current; continue to the TryGetValue path.
+        il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noOwnDescriptorLabel);
 
         // dict.TryGetValue(name, out value) ? value : check prototype chain
         var valueLocal = il.DeclareLocal(_types.Object);

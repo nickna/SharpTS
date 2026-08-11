@@ -78,6 +78,7 @@ public sealed class RuntimeFeatureDetector
             UsesWeakSet = false,
             UsesMap = false,
             UsesSet = false,
+            UsesDynamicPropertyDescriptors = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
         };
     }
@@ -697,7 +698,18 @@ public sealed class RuntimeFeatureDetector
 
             case Expr.Get g:
                 if (g.Object is Expr.Variable ov)
+                {
                     HandleMemberAccess(ov.Name.Lexeme, g.Name.Lexeme);
+                    if ((ov.Name.Lexeme == "Object"
+                            && g.Name.Lexeme is "defineProperty" or "defineProperties" or "create")
+                        || (ov.Name.Lexeme == "Reflect" && g.Name.Lexeme == "defineProperty"))
+                    {
+                        // Detect the member read, not only an immediate call:
+                        // `const define = Object.defineProperty; define(a, ...)`
+                        // has the same ability to invalidate array fast paths.
+                        _set.UsesDynamicPropertyDescriptors = true;
+                    }
+                }
                 // String methods that StringEmitter routes through RegExp
                 // helpers (split/replace/replaceAll/match/matchAll/search) need
                 // $RegExp helpers emitted even when no /literal/ or `new RegExp`
@@ -745,6 +757,12 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                if (gi.Object is Expr.Variable indexedDescriptorOwner
+                    && indexedDescriptorOwner.Name.Lexeme is "Object" or "Reflect")
+                {
+                    // Computed access may resolve to defineProperty at runtime.
+                    _set.UsesDynamicPropertyDescriptors = true;
+                }
                 VisitExpr(gi.Object);
                 VisitExpr(gi.Index);
                 break;

@@ -81,6 +81,9 @@ public partial class CompilationContext
     // Emitted runtime types and methods (for standalone DLLs)
     public EmittedRuntime? Runtime { get; set; }
 
+    // Whole-program feature analysis used by semantic optimization guards.
+    public RuntimeFeatureSet? RuntimeFeatures { get; set; }
+
     // Type emitter registry for type-first method dispatch
     public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
 

@@ -508,6 +508,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoIdxGetterLabel);
 
+        // Setter-only/data descriptors also shadow the backing element.
+        var tsArrayIdxDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var tsArrayNoIdxDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, tsArrayIdxDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, tsArrayIdxDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, tsArrayNoIdxDescriptorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayNoIdxDescriptorLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
@@ -564,6 +581,42 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt32", _types.Object));
             il.Emit(OpCodes.Stloc, idxLocal);
+
+            // Array literals use the object-list backing type. Indexed
+            // accessors installed through Object.defineProperty live in PDS,
+            // so consult them before the raw CLR list slot just as the
+            // dedicated $Array arm does above.
+            var noListIndexGetterLabel = il.DefineLabel();
+            var listIndexGetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Ldloca, listIndexGetterLocal);
+            il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+            il.Emit(OpCodes.Brfalse, noListIndexGetterLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listIndexGetterLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noListIndexGetterLabel);
+
+            var listIndexDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var noListIndexDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, listIndexDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, listIndexDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, noListIndexDescriptorLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noListIndexDescriptorLabel);
 
             // if (idx < 0) goto oob;
             il.Emit(OpCodes.Ldloc, idxLocal);
@@ -1159,6 +1212,49 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(doArraySetLabel);
+
+        // Indexed descriptors participate in [[Set]] before array storage.
+        var tsArraySetKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, tsArraySetKeyLocal);
+        var tsArraySetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var tsArraySetRawStorage = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, tsArraySetKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, tsArraySetDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, tsArraySetRawStorage);
+        var tsArraySetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, tsArraySetterLocal);
+        var tsArrayNoSetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
+        il.Emit(OpCodes.Brfalse, tsArrayNoSetter);
+        il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nullLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, tsArraySetterLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayNoSetter);
+        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, nullLabel); // getter-only accessor
+        il.Emit(OpCodes.Ldloc, tsArraySetDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+        il.MarkLabel(tsArraySetRawStorage);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, idxLong);
@@ -1171,6 +1267,48 @@ public partial class RuntimeEmitter
         {
             var listType = desc.GetListType(_types);
             il.MarkLabel(label);
+
+            var listSetKeyLocal = il.DeclareLocal(_types.String);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Stloc, listSetKeyLocal);
+            var listSetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var listSetRawStorage = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listSetKeyLocal);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, listSetDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, listSetRawStorage);
+            var listSetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, listSetterLocal);
+            var listNoSetter = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, listSetterLocal);
+            il.Emit(OpCodes.Brfalse, listNoSetter);
+            il.Emit(OpCodes.Ldloc, listSetterLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, nullLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listSetterLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listNoSetter);
+            il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, nullLabel);
+            il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            il.MarkLabel(listSetRawStorage);
 
             if (desc.Kind == ArrayElementsKind.Object)
             {
@@ -1466,10 +1604,41 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(tsArrDelProceedLabel);
         }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
+        var tsArrayDeleteIndexLocal = il.DeclareLocal(_types.Int64);
+        il.Emit(OpCodes.Stloc, tsArrayDeleteIndexLocal);
+        var tsArrayDeleteKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, tsArrayDeleteKeyLocal);
+
+        // An indexed descriptor governs configurability even though the array
+        // element itself is backed by dense/sparse storage.
+        var tsArrayDeleteDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var tsArrayDeleteStorage = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, tsArrayDeleteKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, tsArrayDeleteDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, tsArrayDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, tsArrayDeleteStorage);
+        il.Emit(OpCodes.Ldloc, tsArrayDeleteDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        var tsArrayDeleteConfigurable = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, tsArrayDeleteConfigurable);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayDeleteConfigurable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, tsArrayDeleteKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(tsArrayDeleteStorage);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, tsArrayDeleteIndexLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);

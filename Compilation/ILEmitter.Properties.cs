@@ -902,7 +902,10 @@ public partial class ILEmitter
         // emit direct List<T> access — skips runtime type dispatch,
         // index boxing, and Convert.ToInt32(object) overhead.
         var desc = ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object));
-        if (desc != null)
+        // Object/Reflect descriptor APIs can install indexed accessors on a
+        // statically typed array. In those programs, route reads through the
+        // descriptor-aware runtime instead of reading the backing list.
+        if (desc != null && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true)
         {
             // Hoisted path: if the array's isinst was hoisted out of a loop,
             // use the cached typed local — no isinst/castclass per access.
@@ -1149,7 +1152,8 @@ public partial class ILEmitter
         // emit direct List<T> access with auto-extension — skips runtime type dispatch,
         // index boxing, and Convert.ToInt32(object) overhead.
         // Try hoisted path first — works even when TypeMap doesn't have the receiver type
-        if (si.Object is Expr.Variable arrVarSiEarly)
+        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true
+            && si.Object is Expr.Variable arrVarSiEarly)
         {
             var hoistedEarly = _ctx.TryGetHoistedArray(arrVarSiEarly.Name.Lexeme);
             if (hoistedEarly.HasValue)
@@ -1221,7 +1225,7 @@ public partial class ILEmitter
         var siTypeInfo = _ctx.TypeMap?.Get(si.Object);
         var desc = ArrayElements.Resolve(siTypeInfo);
 
-        if (desc != null)
+        if (desc != null && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true)
         {
             // Non-hoisted path: per-access isinst guard
             var fallbackLabelNH = IL.DefineLabel();

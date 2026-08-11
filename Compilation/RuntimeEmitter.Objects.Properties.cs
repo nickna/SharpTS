@@ -652,9 +652,40 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(getMemberNullLabel);
 
-        il.MarkLabel(noGetMemberLabel);
-        il.MarkLabel(nullLabel);
         il.MarkLabel(skipTypeReflectionLabel);
+        il.MarkLabel(noGetMemberLabel);
+
+        // Ordinary [[Get]] continues on the receiver's [[Prototype]] after
+        // all own-property mechanisms miss. Specialized GetProperty arms for
+        // intrinsic CLR-backed objects delegate here, but this helper used to
+        // return undefined immediately; arbitrary inherited properties on
+        // RegExp.prototype, Error.prototype, Promise.prototype, and explicit
+        // Object.setPrototypeOf targets were consequently invisible.
+        var noPrototypeLabel = il.DefineLabel();
+        var prototypeLocal = il.DeclareLocal(_types.Object);
+        // Internal runtime probes historically use GetProperty(undefined, k)
+        // as a non-throwing "not present" check (notably awaitable coercion).
+        // Preserve that contract rather than passing the sentinel to the
+        // public Object.getPrototypeOf semantics, which correctly throw.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, noPrototypeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, prototypeLocal);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Brfalse, noPrototypeLabel);
+        // Guard malformed host/custom prototype cycles from recursing forever.
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Beq, noPrototypeLabel);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noPrototypeLabel);
+        il.MarkLabel(nullLabel);
         // Return $Undefined.Instance for non-existent properties (JavaScript semantics)
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);

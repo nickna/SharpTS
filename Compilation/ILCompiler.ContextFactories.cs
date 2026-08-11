@@ -60,6 +60,7 @@ public partial class ILCompiler
             EnumKinds = _enums.Kinds,
             // Compilation-wide services
             Runtime = _runtime,
+            RuntimeFeatures = _features,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             TypeEmitterRegistry = _typeEmitterRegistry,
@@ -202,6 +203,7 @@ public partial class ILCompiler
         return new CompilationContext(il, parentCtx.TypeMapper, parentCtx.Functions, parentCtx.Classes, parentCtx.NamespaceFields, parentCtx.NamespaceVarFields, parentCtx.Types)
         {
             Runtime = parentCtx.Runtime,
+            RuntimeFeatures = parentCtx.RuntimeFeatures,
             ClosureAnalyzer = parentCtx.ClosureAnalyzer,
             ArrowMethods = parentCtx.ArrowMethods,
             ConstArrowBindings = parentCtx.ConstArrowBindings,
@@ -263,6 +265,7 @@ public partial class ILCompiler
         {
             ClassRegistry = GetClassRegistry(),
             Runtime = _runtime,
+            RuntimeFeatures = _features,
             TypeMap = _typeMap,
             IsStrictMode = isStrict
         };

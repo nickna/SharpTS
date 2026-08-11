@@ -16,4 +16,20 @@ public class RuntimeFeatureDetectorTests
 
         Assert.Equal(expected, features.UsesForAwaitOf);
     }
+
+    [Theory]
+    [InlineData("Object.defineProperty([], '0', { get() { return 1; } });", true)]
+    [InlineData("Object.defineProperties([], {});", true)]
+    [InlineData("Object.create(null, {});", true)]
+    [InlineData("Reflect.defineProperty([], '0', { value: 1 });", true)]
+    [InlineData("const define = Object.defineProperty; define([], '0', { value: 1 });", true)]
+    [InlineData("Object['defineProperty']([], '0', { value: 1 });", true)]
+    [InlineData("Object.keys([]);", false)]
+    public void DetectsDynamicPropertyDescriptorUsage(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.Equal(expected, features.UsesDynamicPropertyDescriptors);
+    }
 }

@@ -70,6 +70,11 @@ public sealed class RuntimeFeatureSet
     public bool UsesMap { get; set; } = true;               // `new Map(...)` / `Map.groupBy` — bare or `new`
     public bool UsesSet { get; set; } = true;               // `new Set(...)` — bare or `new`
 
+    // ── Semantic optimization guards ────────────────────────────────────────────────
+    // Object/Reflect descriptor APIs can install indexed accessors on arrays.
+    // Such programs must not use backing-list-only indexed-read fast paths.
+    public bool UsesDynamicPropertyDescriptors { get; set; } = true;
+
     // ── Typed arrays ──────────────────────────────────────────────────────
     /// <summary>
     /// Bitset of typed-array kinds the program references. A test using only
