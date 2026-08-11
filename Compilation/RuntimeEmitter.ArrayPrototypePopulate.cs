@@ -104,7 +104,7 @@ public partial class RuntimeEmitter
         Wire("lastIndexOf",    runtime.ArrayLastIndexOf,    1);
         Wire("join",           runtime.ArrayJoin,           1);
         Wire("concat",         runtime.ArrayConcat,         1);
-        Wire("reverse",        runtime.ArrayReverse,        0);
+        Wire("reverse",        runtime.ArrayReverseProto,   0);
         Wire("flat",           runtime.ArrayFlat,           0);
         Wire("flatMap",        runtime.ArrayFlatMap,        1);
         Wire("sort",           runtime.ArraySort,           1);
@@ -114,8 +114,8 @@ public partial class RuntimeEmitter
         Wire("toReversed",     runtime.ArrayToReversed,     0);
         Wire("with",           runtime.ArrayWith,           2);
         Wire("at",             runtime.ArrayAt,             1);
-        Wire("fill",           runtime.ArrayFill,           1);
-        Wire("copyWithin",     runtime.ArrayCopyWithin,     2);
+        Wire("fill",           runtime.ArrayFillProto,      1);
+        Wire("copyWithin",     runtime.ArrayCopyWithinProto, 2);
         Wire("entries",        runtime.ArrayEntries,        0);
         Wire("keys",           runtime.ArrayKeys,           0);
         Wire("values",         runtime.ArrayValues,         0);

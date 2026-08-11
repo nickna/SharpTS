@@ -262,6 +262,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayJoin { get; set; } = null!;
     public MethodBuilder ArrayConcat { get; set; } = null!;
     public MethodBuilder ArrayReverse { get; set; } = null!;
+    public MethodBuilder ArrayReverseProto { get; set; } = null!;
     public MethodBuilder ArrayFlat { get; set; } = null!;
     public MethodBuilder ArrayFlatMap { get; set; } = null!;
     public MethodBuilder ArrayFlatHelper { get; set; } = null!;
@@ -276,7 +277,9 @@ public class EmittedRuntime
     public MethodBuilder ArrayWith { get; set; } = null!;
     public MethodBuilder ArrayAt { get; set; } = null!;
     public MethodBuilder ArrayFill { get; set; } = null!;
+    public MethodBuilder ArrayFillProto { get; set; } = null!;
     public MethodBuilder ArrayCopyWithin { get; set; } = null!;
+    public MethodBuilder ArrayCopyWithinProto { get; set; } = null!;
     public MethodBuilder ArrayEntries { get; set; } = null!;
     public MethodBuilder ArrayKeys { get; set; } = null!;
     public MethodBuilder ArrayValues { get; set; } = null!;

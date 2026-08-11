@@ -1962,6 +1962,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, currentLocal);
         il.Emit(OpCodes.Brfalse, checkObjectPrototypeLabel);
 
+        // Proxy [[HasProperty]] is observable and must dispatch the `has`
+        // trap. This also applies when a proxy appears later in the receiver's
+        // prototype chain.
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyHasCheck(
+            il,
+            () => il.Emit(OpCodes.Ldloc, currentLocal),
+            () => il.Emit(OpCodes.Ldarg_1),
+            notProxyLabel,
+            runtime);
+        il.MarkLabel(notProxyLabel);
+
         // Dict branch: ContainsKey OR PDS
         var notDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);

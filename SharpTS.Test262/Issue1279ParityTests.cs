@@ -4894,6 +4894,26 @@ public sealed class Issue1279ParityTests
     public void Array_copyWithin_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/reverse/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/reverse/length-exceeding-integer-limit-with-object.js")]
+    [InlineData("built-ins/Array/prototype/fill/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/fill/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-setting-property-value.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-proxy-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-delete-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-set-target-value.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-this.js")]
+    public void Generic_reverse_fill_and_copyWithin_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

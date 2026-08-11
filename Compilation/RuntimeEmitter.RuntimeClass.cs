@@ -894,6 +894,7 @@ public partial class RuntimeEmitter
         EmitArrayJoin(typeBuilder, runtime);
         EmitArrayConcat(typeBuilder, runtime);
         EmitArrayReverse(typeBuilder, runtime);
+        EmitArrayReverseProto(typeBuilder, runtime);
         EmitArrayFlatHelper(typeBuilder, runtime); // Must be before EmitArrayFlat
         EmitArrayFlat(typeBuilder, runtime);
         EmitArrayFlatMap(typeBuilder, runtime);
@@ -911,7 +912,9 @@ public partial class RuntimeEmitter
         EmitArrayWith(typeBuilder, runtime);
         EmitArrayAt(typeBuilder, runtime);
         EmitArrayFill(typeBuilder, runtime);
+        EmitArrayFillProto(typeBuilder, runtime);
         EmitArrayCopyWithin(typeBuilder, runtime);
+        EmitArrayCopyWithinProto(typeBuilder, runtime);
         EmitArrayEntries(typeBuilder, runtime);
         EmitArrayKeys(typeBuilder, runtime);
         EmitArrayValues(typeBuilder, runtime);

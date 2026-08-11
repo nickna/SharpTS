@@ -164,6 +164,75 @@ public partial class RuntimeEmitter
         return (receiver, length);
     }
 
+    /// <summary>
+    /// Emits the relative-index normalization shared by generic Array
+    /// prototype algorithms. The result is clamped to [0, length] while
+    /// retaining the full Number safe-integer range.
+    /// </summary>
+    private void EmitGenericRelativeArrayIndex(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        Action emitArgument,
+        LocalBuilder length,
+        LocalBuilder destination)
+    {
+        var number = il.DeclareLocal(_types.Double);
+        emitArgument();
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, number);
+
+        var useZero = il.DefineLabel();
+        var finite = il.DefineLabel();
+        var nonNegative = il.DefineLabel();
+        var done = il.DefineLabel();
+
+        // NaN becomes +0.
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, useZero);
+
+        // -Infinity and all finite negative values share the lower-clamp path.
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Ldc_R8, double.NegativeInfinity);
+        il.Emit(OpCodes.Beq, useZero);
+
+        // +Infinity becomes length.
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Ldc_R8, double.PositiveInfinity);
+        il.Emit(OpCodes.Bne_Un, finite);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, destination);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(finite);
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Truncate", [typeof(double)])!);
+        il.Emit(OpCodes.Stloc, number);
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bge, nonNegative);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Double, _types.Double));
+        il.Emit(OpCodes.Stloc, destination);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(nonNegative);
+        il.Emit(OpCodes.Ldloc, number);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Double, _types.Double));
+        il.Emit(OpCodes.Stloc, destination);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(useZero);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, destination);
+        il.MarkLabel(done);
+    }
+
     private void EmitArrayPop(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -1055,6 +1124,146 @@ public partial class RuntimeEmitter
         // Frozen return path - return unchanged list
         il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayReverseProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayReverseProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]
+        );
+        runtime.ArrayReverseProto = method;
+
+        var il = method.GetILGenerator();
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var middle = il.DeclareLocal(_types.Double);
+        var lower = il.DeclareLocal(_types.Double);
+        var upper = il.DeclareLocal(_types.Double);
+        var lowerKey = il.DeclareLocal(_types.String);
+        var upperKey = il.DeclareLocal(_types.String);
+        var lowerExists = il.DeclareLocal(_types.Boolean);
+        var upperExists = il.DeclareLocal(_types.Boolean);
+        var lowerValue = il.DeclareLocal(_types.Object);
+        var upperValue = il.DeclareLocal(_types.Object);
+
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 2.0);
+        il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Floor", [typeof(double)])!);
+        il.Emit(OpCodes.Stloc, middle);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, lower);
+
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, lower);
+        il.Emit(OpCodes.Ldloc, middle);
+        il.Emit(OpCodes.Bge, done);
+
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, lower);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, upper);
+        il.Emit(OpCodes.Ldloc, lower);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, lowerKey);
+        il.Emit(OpCodes.Ldloc, upper);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, upperKey);
+
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, lowerKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Stloc, lowerExists);
+        var noLowerValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lowerExists);
+        il.Emit(OpCodes.Brfalse, noLowerValue);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, lowerKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, lowerValue);
+        il.MarkLabel(noLowerValue);
+
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, upperKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Stloc, upperExists);
+        var noUpperValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, upperExists);
+        il.Emit(OpCodes.Brfalse, noUpperValue);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, upperKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, upperValue);
+        il.MarkLabel(noUpperValue);
+
+        var lowerMissing = il.DefineLabel();
+        var upperMissingWithLower = il.DefineLabel();
+        var bothMissing = il.DefineLabel();
+        var next = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, lowerExists);
+        il.Emit(OpCodes.Brfalse, lowerMissing);
+        il.Emit(OpCodes.Ldloc, upperExists);
+        il.Emit(OpCodes.Brfalse, upperMissingWithLower);
+        // Both exist: exchange the values.
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, lowerKey);
+        il.Emit(OpCodes.Ldloc, upperValue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, upperKey);
+        il.Emit(OpCodes.Ldloc, lowerValue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, next);
+
+        il.MarkLabel(upperMissingWithLower);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, lowerKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, upperKey);
+        il.Emit(OpCodes.Ldloc, lowerValue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, next);
+
+        il.MarkLabel(lowerMissing);
+        il.Emit(OpCodes.Ldloc, upperExists);
+        il.Emit(OpCodes.Brfalse, bothMissing);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, lowerKey);
+        il.Emit(OpCodes.Ldloc, upperValue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, upperKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, next);
+
+        il.MarkLabel(bothMissing);
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, lower);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, lower);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2971,6 +3180,106 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitArrayFillProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayFillProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ObjectArray]
+        );
+        var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
+        method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "args")
+            .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
+        runtime.ArrayFillProto = method;
+
+        var il = method.GetILGenerator();
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var value = il.DeclareLocal(_types.Object);
+        var start = il.DeclareLocal(_types.Double);
+        var end = il.DeclareLocal(_types.Double);
+        var k = il.DeclareLocal(_types.Double);
+
+        var hasValue = il.DefineLabel();
+        var valueDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Brtrue, hasValue);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Br, valueDone);
+        il.MarkLabel(hasValue);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, value);
+        il.MarkLabel(valueDone);
+
+        var hasStart = il.DefineLabel();
+        var startDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bgt, hasStart);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, start);
+        il.Emit(OpCodes.Br, startDone);
+        il.MarkLabel(hasStart);
+        EmitGenericRelativeArrayIndex(il, runtime, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+        }, length, start);
+        il.MarkLabel(startDone);
+
+        var hasEnd = il.DefineLabel();
+        var endDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Bgt, hasEnd);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, end);
+        il.Emit(OpCodes.Br, endDone);
+        il.MarkLabel(hasEnd);
+        EmitGenericRelativeArrayIndex(il, runtime, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Ldelem_Ref);
+        }, length, end);
+        il.MarkLabel(endDone);
+
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Stloc, k);
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayCopyWithin(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ArrayCopyWithin(List<object> list, object[] args) -> List<object>
@@ -3266,6 +3575,184 @@ public partial class RuntimeEmitter
         // Frozen return path - return unchanged list
         il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayCopyWithinProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayCopyWithinProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ObjectArray]
+        );
+        var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
+        method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "args")
+            .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
+        runtime.ArrayCopyWithinProto = method;
+
+        var il = method.GetILGenerator();
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var to = il.DeclareLocal(_types.Double);
+        var from = il.DeclareLocal(_types.Double);
+        var final = il.DeclareLocal(_types.Double);
+        var count = il.DeclareLocal(_types.Double);
+        var direction = il.DeclareLocal(_types.Double);
+        var fromKey = il.DeclareLocal(_types.String);
+        var toKey = il.DeclareLocal(_types.String);
+        var value = il.DeclareLocal(_types.Object);
+
+        var hasTarget = il.DefineLabel();
+        var targetDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Brtrue, hasTarget);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, to);
+        il.Emit(OpCodes.Br, targetDone);
+        il.MarkLabel(hasTarget);
+        EmitGenericRelativeArrayIndex(il, runtime, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+        }, length, to);
+        il.MarkLabel(targetDone);
+
+        var hasStart = il.DefineLabel();
+        var startDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bgt, hasStart);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, from);
+        il.Emit(OpCodes.Br, startDone);
+        il.MarkLabel(hasStart);
+        EmitGenericRelativeArrayIndex(il, runtime, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+        }, length, from);
+        il.MarkLabel(startDone);
+
+        var hasEnd = il.DefineLabel();
+        var endDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Bgt, hasEnd);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, final);
+        il.Emit(OpCodes.Br, endDone);
+        il.MarkLabel(hasEnd);
+        EmitGenericRelativeArrayIndex(il, runtime, () =>
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Ldelem_Ref);
+        }, length, final);
+        il.MarkLabel(endDone);
+
+        // count = min(final - from, length - to)
+        il.Emit(OpCodes.Ldloc, final);
+        il.Emit(OpCodes.Ldloc, from);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, to);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Double, _types.Double));
+        il.Emit(OpCodes.Stloc, count);
+
+        // Overlapping ranges copy backward; all other ranges copy forward.
+        var forward = il.DefineLabel();
+        var directionDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, from);
+        il.Emit(OpCodes.Ldloc, to);
+        il.Emit(OpCodes.Bge, forward);
+        il.Emit(OpCodes.Ldloc, to);
+        il.Emit(OpCodes.Ldloc, from);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Bge, forward);
+        il.Emit(OpCodes.Ldloc, from);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, from);
+        il.Emit(OpCodes.Ldloc, to);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, to);
+        il.Emit(OpCodes.Ldc_R8, -1.0);
+        il.Emit(OpCodes.Stloc, direction);
+        il.Emit(OpCodes.Br, directionDone);
+        il.MarkLabel(forward);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Stloc, direction);
+        il.MarkLabel(directionDone);
+
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ble, done);
+        il.Emit(OpCodes.Ldloc, from);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKey);
+        il.Emit(OpCodes.Ldloc, to);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKey);
+
+        var deleteTarget = il.DefineLabel();
+        var next = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, deleteTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, next);
+        il.MarkLabel(deleteTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, from);
+        il.Emit(OpCodes.Ldloc, direction);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, from);
+        il.Emit(OpCodes.Ldloc, to);
+        il.Emit(OpCodes.Ldloc, direction);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, to);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, count);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ret);
     }
 }
