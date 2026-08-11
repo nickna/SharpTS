@@ -256,9 +256,8 @@ public partial class RuntimeEmitter
         => EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
             () =>
             {
-                // sm.iterable = NormalizePromiseList(arg0) — see PromiseAll wrapper.
+                // Normalize inside MoveNext's try block; see PromiseAll.
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
             });
 
     /// <summary>
@@ -288,6 +287,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, state0Label);
 
         // ========== STATE -1: Initial execution ==========
+
+        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField);
 
         // ECMA-262 §27.2.4.2 Promise.any: non-iterable → reject with TypeError.
         var listLocal = EmitCombinatorIterableGuard(il, runtime, sm.IterableField, "any");

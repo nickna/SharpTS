@@ -130,6 +130,23 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Normalizes the combinator input inside the async state machine's outer
+    /// try block. Besides adapting $Promise wrappers, normalization performs
+    /// the observable calls to an overridden Promise.resolve; keeping it here
+    /// ensures an abrupt call rejects the returned promise instead of escaping
+    /// synchronously from the static method.
+    /// </summary>
+    private static void EmitNormalizeCombinatorIterable(ILGenerator il, EmittedRuntime runtime,
+        FieldBuilder iterableField)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, iterableField);
+        il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
+        il.Emit(OpCodes.Stfld, iterableField);
+    }
+
+    /// <summary>
     /// Emits the iterable brand check + cast: if the (normalized) iterable
     /// field is not a <c>List&lt;object?&gt;</c>, throw a guest TypeError
     /// (ECMA-262 §27.2.4 — the outer catch turns it into a rejection);

@@ -49,11 +49,12 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits NormalizePromiseList(object iterable) -> object: when the arg is
-    /// a List&lt;object?&gt;, returns a copy with $Promise elements (incl. #242
-    /// Promise subclasses) replaced by their wrapped Task — the combinator
-    /// state machines only test elements for Task&lt;object?&gt;, so without
-    /// this a subclass promise element would be treated as an already-resolved
-    /// plain value. Non-list args pass through unchanged.
+    /// a List&lt;object?&gt;, returns a copy normalized through the base Promise
+    /// constructor's current <c>resolve</c> method. The built-in path unwraps
+    /// $Promise elements (including #242 subclasses) to their backing Task;
+    /// when user code has replaced <c>Promise.resolve</c>, that callable is
+    /// invoked once for each value with Promise as its receiver, as required by
+    /// PerformPromiseAll/Race/AllSettled/Any. Non-list args pass through.
     /// </summary>
     internal void EmitNormalizePromiseList(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
@@ -73,6 +74,9 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(listType);
         var indexLocal = il.DeclareLocal(_types.Int32);
         var elementLocal = il.DeclareLocal(_types.Object);
+        var resolvedElementLocal = il.DeclareLocal(_types.Object);
+        var resolveDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var resolveFunctionLocal = il.DeclareLocal(runtime.TSFunctionType);
 
         // if (iterable is not List<object?>) return iterable;
         il.Emit(OpCodes.Ldarg_0);
@@ -80,6 +84,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, listLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Brfalse, passThroughLabel);
+
+        // Capture Promise.resolve once before iteration. Direct assignments to
+        // a compiled built-in constructor are represented by an own descriptor
+        // in PDS. With no override, keep the existing built-in fast path below.
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldstr, "resolve");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, resolveDescriptorLocal);
+        var noResolveOverrideLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noResolveOverrideLabel);
+        il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Stloc, resolveFunctionLocal);
+        il.MarkLabel(noResolveOverrideLabel);
 
         // var result = new List<object?>(); for each element: $Promise → .Task
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, _types.EmptyTypes));
@@ -103,22 +124,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, elementLocal);
 
+        // A user-installed Promise.resolve is observable and must be called
+        // for every iterated value, with the constructor as `this`.
+        var useBuiltInResolveLabel = il.DefineLabel();
+        var haveResolvedElementLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
+        il.Emit(OpCodes.Brfalse, useBuiltInResolveLabel);
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+        il.Emit(OpCodes.Br, haveResolvedElementLabel);
+
+        il.MarkLabel(useBuiltInResolveLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+        il.MarkLabel(haveResolvedElementLabel);
+
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
         il.Emit(OpCodes.Brfalse, addRawLabel);
 
         // result.Add(((​$Promise)element).Task)
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
         il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
         il.Emit(OpCodes.Br, nextLabel);
 
-        // result.Add(element)
+        // result.Add(resolvedElement)
         il.MarkLabel(addRawLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
 
         il.MarkLabel(nextLabel);

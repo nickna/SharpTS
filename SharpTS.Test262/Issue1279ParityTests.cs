@@ -4017,6 +4017,13 @@ public sealed class Issue1279ParityTests
     public void Legacy_global_descriptors_remain_supported(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/invoke-resolve-error-reject.js")]
+    [InlineData("built-ins/Promise/allSettled/invoke-resolve-error-reject.js")]
+    [InlineData("built-ins/Promise/any/invoke-resolve-error-reject.js")]
+    public void Promise_combinators_reject_when_resolve_throws(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Promise_race_rejects_when_resolve_throws()
         => AssertPass(
@@ -4066,7 +4073,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Promise/allSettled/invoke-resolve.js")]
     [InlineData("built-ins/Promise/race/invoke-resolve.js")]
     public void Promise_combinators_invoke_constructor_resolve(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
 
     [Fact]
     public void Promise_any_invokes_constructor_resolve()

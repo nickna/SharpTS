@@ -44,9 +44,8 @@ public partial class RuntimeEmitter
         => EmitCombinatorWrapper(il, sm.Type, sm.StateField, sm.IterableField, sm.BuilderField, sm.BuilderType,
             () =>
             {
-                // sm.iterable = NormalizePromiseList(arg0); — see PromiseAll wrapper.
+                // Normalize inside MoveNext's try block; see PromiseAll.
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
             });
 
     /// <summary>
@@ -86,6 +85,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Beq, state1Label);  // state == 1
 
         // ========== STATE -1: Initial execution ==========
+
+        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField);
 
         // ECMA-262 §27.2.4.5 Promise.race: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws
