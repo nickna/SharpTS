@@ -5097,6 +5097,12 @@ public sealed class Issue1279ParityTests
     public void Generic_reverse_fill_and_copyWithin_match_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/precise-getter-appends-elements.js")]
+    [InlineData("built-ins/Array/prototype/sort/precise-setter-deletes-successor.js")]
+    public void Array_sort_observes_index_descriptors_in_compiled_mode(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

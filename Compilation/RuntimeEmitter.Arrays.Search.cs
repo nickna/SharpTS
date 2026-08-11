@@ -2290,6 +2290,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Brtrue, trueLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
         il.Emit(OpCodes.Br, falseLabel);
 
         il.MarkLabel(trueLabel);

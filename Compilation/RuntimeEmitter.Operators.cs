@@ -646,6 +646,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
+        // Use the shared HasProperty walk first for every ordinary property
+        // key.  It covers own PDS-only accessors and prototype-chain entries
+        // on dictionaries, $Object, arrays, and list-backed arguments.  The
+        // type-specific code below remains as the fallback for emitted class
+        // fields and CLR-reflected methods.
+        var continueSpecializedHasIn = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, continueSpecializedHasIn);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(continueSpecializedHasIn);
+
         // String key path
         // Check if obj is $TSObject
         il.Emit(OpCodes.Ldarg_1);
@@ -791,6 +806,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
             il.Emit(OpCodes.Stloc, tsArrKeyStrLocal);
+
+            // Array exotic objects still have ordinary own properties in the
+            // descriptor store.  An accessor over a hole (for example index 2
+            // installed with Object.defineProperty) is present for `in` even
+            // though dense storage reports no element at that index.
+            var tsArrNoOwnDescriptor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, tsArrKeyStrLocal);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Brfalse, tsArrNoOwnDescriptor);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(tsArrNoOwnDescriptor);
 
             // if (key == "length") return true
             var tsArrNotLength = il.DefineLabel();

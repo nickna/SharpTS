@@ -1668,11 +1668,75 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
         il.Emit(OpCodes.Ret);
 
-        // $Array - call SetStrict with index and strictMode via the long API.
-        // Stage E.2 M6: widened from TSArraySetStrict (int) to TSArraySetStrictLong
-        // so `"use strict"; arr[2147483648] = v` doesn't truncate to int.MinValue.
-        // Parallel to the M3 GetIndex/SetIndex widening.
+        // $Array indexed writes must perform OrdinarySet's descriptor step
+        // before touching dense storage.  Array mutators use SetIndexStrict for
+        // their spec-mandated Set(..., Throw=true) operations, so bypassing the
+        // PDS here skipped indexed accessors installed by defineProperty and
+        // silently overwrote getter-only/non-writable elements.  The non-strict
+        // SetIndex path already observes these descriptors; mirror that contract
+        // here while retaining strict-mode rejection semantics.
         il.MarkLabel(sharpTSArrayLabel);
+        var strictArrayKeyLocal = il.DeclareLocal(_types.String);
+        var strictArrayDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var strictArraySetterLocal = il.DeclareLocal(_types.Object);
+        var strictArrayRawStoreLabel = il.DefineLabel();
+        var strictArrayRejectLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, strictArrayKeyLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, strictArrayDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, strictArrayDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, strictArrayRawStoreLabel);
+
+        // A callable setter handles the write with the array as receiver.
+        il.Emit(OpCodes.Ldloc, strictArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, strictArraySetterLocal);
+        il.Emit(OpCodes.Ldloc, strictArraySetterLocal);
+        var strictArrayNoSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictArrayNoSetterLabel);
+        il.Emit(OpCodes.Ldloc, strictArraySetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, strictArrayRejectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictArraySetterLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictArrayNoSetterLabel);
+        // Getter-only accessors and non-writable data descriptors reject a
+        // Throw=true write.  In the (rare) sloppy call to this helper, retain
+        // the normal silent failure behavior.
+        il.Emit(OpCodes.Ldloc, strictArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, strictArrayRejectLabel);
+        il.Emit(OpCodes.Ldloc, strictArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, strictArrayRejectLabel);
+        il.Emit(OpCodes.Br, strictArrayRawStoreLabel);
+
+        il.MarkLabel(strictArrayRejectLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        var strictArraySloppyReturnLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictArraySloppyReturnLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot assign to read only array element");
+        il.MarkLabel(strictArraySloppyReturnLabel);
+        il.Emit(OpCodes.Ret);
+
+        // Stage E.2 M6: widened from TSArraySetStrict (int) to
+        // TSArraySetStrictLong so large indexes do not truncate.
+        il.MarkLabel(strictArrayRawStoreLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldarg_1);
