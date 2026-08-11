@@ -1471,7 +1471,10 @@ public partial class RuntimeEmitter
 
         // Case: runtime.Method(_list, args[0], args[1]?) — indexOf/lastIndexOf.
         // Second slot is fromIndex; null if args.Length < 2.
-        void EmitSearchCase(string methodName, MethodBuilder runtimeMethod)
+        void EmitSearchCase(
+            string methodName,
+            MethodBuilder runtimeMethod,
+            bool missingSearchIsUndefined = false)
         {
             var skipLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1482,7 +1485,25 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
-            EmitArgZeroOrNull();
+            if (missingSearchIsUndefined)
+            {
+                var haveSearch = il.DefineLabel();
+                var afterSearch = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldlen);
+                il.Emit(OpCodes.Brtrue, haveSearch);
+                il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                il.Emit(OpCodes.Br, afterSearch);
+                il.MarkLabel(haveSearch);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+                il.MarkLabel(afterSearch);
+            }
+            else
+            {
+                EmitArgZeroOrNull();
+            }
 
             // args[1] if args.Length >= 2, else null
             var noSecond = il.DefineLabel();
@@ -1633,7 +1654,7 @@ public partial class RuntimeEmitter
         // indexOf/lastIndexOf take searchElement + optional fromIndex.
         EmitSearchCase("indexOf", runtime.ArrayIndexOf);
         EmitSearchCase("lastIndexOf", runtime.ArrayLastIndexOf);
-        EmitSingleArgCase("includes", runtime.ArrayIncludes);
+        EmitSearchCase("includes", runtime.ArrayIncludes, missingSearchIsUndefined: true);
         EmitArgsArrayCase("concat", runtime.ArrayConcat);
         EmitSingleArgCase("join", runtime.ArrayJoin);
         // Callback methods accept (callback, thisArg). thisArg is plumbed via

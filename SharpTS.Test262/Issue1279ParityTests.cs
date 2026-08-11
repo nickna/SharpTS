@@ -1363,8 +1363,17 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Array/prototype/includes/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/includes/fromIndex-equal-or-greater-length-returns-false.js")]
+    [InlineData("built-ins/Array/prototype/includes/fromIndex-infinity.js")]
     [InlineData("built-ins/Array/prototype/includes/fromIndex-minus-zero.js")]
     [InlineData("built-ins/Array/prototype/includes/length-zero-returns-false.js")]
+    [InlineData("built-ins/Array/prototype/includes/no-arg.js")]
+    [InlineData("built-ins/Array/prototype/includes/return-abrupt-tointeger-fromindex-symbol.js")]
+    [InlineData("built-ins/Array/prototype/includes/return-abrupt-tointeger-fromindex.js")]
+    [InlineData("built-ins/Array/prototype/includes/samevaluezero.js")]
+    [InlineData("built-ins/Array/prototype/includes/sparse.js")]
+    [InlineData("built-ins/Array/prototype/includes/tointeger-fromindex.js")]
+    [InlineData("built-ins/Array/prototype/includes/using-fromindex.js")]
     public void Array_includes_accepts_optional_arguments_and_generic_receivers(string relativePath)
         => AssertPassInBothModes(relativePath);
 

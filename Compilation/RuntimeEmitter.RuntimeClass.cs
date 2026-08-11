@@ -873,9 +873,9 @@ public partial class RuntimeEmitter
         EmitArrayReduceDirect(typeBuilder, runtime);
         EmitArrayReduceDouble(typeBuilder, runtime);
         EmitArrayReduceRight(typeBuilder, runtime);
-        EmitArrayIncludes(typeBuilder, runtime);
-        // indexOf/lastIndexOf use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
+        // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime);
+        EmitArrayIncludes(typeBuilder, runtime);
         EmitArrayIndexOf(typeBuilder, runtime);
         EmitArrayLastIndexOf(typeBuilder, runtime);
         // ECMA-262 Array.prototype.* accepts any array-like (length + indexed

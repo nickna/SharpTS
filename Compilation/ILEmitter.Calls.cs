@@ -317,7 +317,7 @@ public partial class ILEmitter
             "findIndex"     => (runtime.ArrayFindIndex,  "single",    _ctx.Types.Double),
             "findLast"      => (runtime.ArrayFindLast,   "single",    _ctx.Types.Object),
             "findLastIndex" => (runtime.ArrayFindLastIndex,"single",  _ctx.Types.Double),
-            "includes"      => (runtime.ArrayIncludes,   "single",    _ctx.Types.Boolean),
+            "includes"      => (runtime.ArrayIncludes,   "search",    _ctx.Types.Boolean),
             "join"          => (runtime.ArrayJoin,       "single",    _ctx.Types.Object),
             "concat"        => (runtime.ArrayConcat,     "argsArray", _ctx.Types.Object),
             "flat"          => (runtime.ArrayFlat,       "single",    _ctx.Types.Object),
@@ -497,7 +497,7 @@ public partial class ILEmitter
         // on the stack.
         bool useLazyMaterializer = methodName is "every" or "some" or "filter"
             or "map" or "forEach" or "find" or "findIndex" or "findLast"
-            or "findLastIndex" or "flatMap" or "reduce" or "reduceRight";
+            or "findLastIndex" or "flatMap" or "reduce" or "reduceRight" or "includes";
         IL.Emit(OpCodes.Call, useLazyMaterializer
             ? runtime.ArrayLikeMaterializeForIteration
             : runtime.ArrayLikeMaterialize);
@@ -549,7 +549,10 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldnull);
+                    if (methodName == "includes")
+                        IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                    else
+                        IL.Emit(OpCodes.Ldnull);
                 }
                 if (methodArgs.Count > 1)
                 {

@@ -12,52 +12,75 @@ public partial class RuntimeEmitter
             "ArrayIncludes",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,  // Return boxed bool to match ILEmitter expectations
-            [_types.ListOfObject, _types.Object]
+            [_types.ListOfObject, _types.Object, _types.Object]
         );
         runtime.ArrayIncludes = method;
 
         var il = method.GetILGenerator();
 
+        EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
+
+        var lenLocal = il.DeclareLocal(_types.Int32);
         var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
+        var returnFalse = il.DefineLabel();
+        // Step 3 returns before fromIndex coercion when len is zero.
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Brfalse, returnFalse);
+
+        // includes shares indexOf's ToIntegerOrInfinity clamping, but unlike
+        // indexOf it observes holes as undefined instead of skipping them.
+        var startLocal = il.DeclareLocal(_types.Int32);
+        EmitComputeIndexOfStart(il, runtime, lenLocal, startLocal);
+        il.Emit(OpCodes.Ldloc, startLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Beq, returnFalse);
+        il.Emit(OpCodes.Ldloc, startLocal);
         il.Emit(OpCodes.Stloc, indexLocal);
 
         var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, returnFalse);
 
         // ECMA-262 23.1.3.13 Array.prototype.includes: DOES NOT skip holes.
         // A hole reads as undefined, so `[,].includes(undefined) === true`.
-        // The unhole happens at the boundary — without it, the raw
-        // $ArrayHole sentinel would compare unequal to SharpTSUndefined.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        var holeCheckDone = il.DefineLabel();
-        var notHole = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
-        il.Emit(OpCodes.Brfalse, notHole);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Br, holeCheckDone);
-        il.MarkLabel(notHole);
-        il.MarkLabel(holeCheckDone);
+        // Lazy loads preserve Proxy/accessor order for borrowed calls.
+        var elementLocal = il.DeclareLocal(_types.Object);
+        EmitLoadElementUnholed(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Stloc, elementLocal);
 
-        // ECMA-262 SameValueZero: like StrictEquals but treats NaN === NaN.
-        // We approximate via StrictEquals (which already routes through
-        // Object.Equals → IEEE compare for doubles). Object.Equals(NaN, NaN)
-        // returns true in CLR, so SameValueZero parity is preserved.
+        // ECMA-262 SameValueZero: StrictEquals plus NaN equal to NaN.
+        var ordinaryCompare = il.DefineLabel();
+        var matched = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, ordinaryCompare);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, ordinaryCompare);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
+        il.Emit(OpCodes.Brfalse, ordinaryCompare);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
+        il.Emit(OpCodes.Brtrue, matched);
+
+        il.MarkLabel(ordinaryCompare);
+        il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.StrictEquals);
 
         var notMatch = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notMatch);
+        il.MarkLabel(matched);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
@@ -69,7 +92,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Br, loopStart);
 
-        il.MarkLabel(loopEnd);
+        il.MarkLabel(returnFalse);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);

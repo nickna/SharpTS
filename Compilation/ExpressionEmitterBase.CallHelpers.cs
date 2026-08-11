@@ -2052,7 +2052,11 @@ public abstract partial class ExpressionEmitterBase
         switch (methodName)
         {
             case "includes":
-                EmitBoxedArgOrNull(arguments, 0);
+                if (arguments.Count == 0)
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                else
+                    EmitBoxedArgOrNull(arguments, 0);
+                EmitBoxedArgOrNull(arguments, 1);
                 // ArrayIncludes already returns a boxed bool — do not re-box
                 // (double-boxing reinterprets the object reference as a bool).
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayIncludes);

@@ -274,7 +274,11 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "includes":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                if (arguments.Count == 0)
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                else
+                    EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 1, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayIncludes);
                 break;
 

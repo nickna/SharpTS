@@ -259,6 +259,15 @@ public partial class ILEmitter
                 }
                 else
                 {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                }
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
                     IL.Emit(OpCodes.Ldnull);
                 }
                 // ArrayIncludes already returns a boxed bool (object). The
