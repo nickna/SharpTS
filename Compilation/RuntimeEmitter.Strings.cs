@@ -1558,6 +1558,163 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitStringWellFormedMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        // The $TSFunction wrapper coerces the borrowed receiver to string before
+        // entering these helpers, preserving RequireObjectCoercible/ToString
+        // ordering and observable user coercion.
+        var isWellFormed = typeBuilder.DefineMethod(
+            "StringIsWellFormed",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.String]);
+        runtime.StringIsWellFormed = isWellFormed;
+        {
+            var il = isWellFormed.GetILGenerator();
+            var index = il.DeclareLocal(_types.Int32);
+            var codeUnit = il.DeclareLocal(_types.Char);
+            var loop = il.DefineLabel();
+            var checkLow = il.DefineLabel();
+            var advanceOne = il.DefineLabel();
+            var invalid = il.DefineLabel();
+            var valid = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+            il.Emit(OpCodes.Bge, valid);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+            il.Emit(OpCodes.Stloc, codeUnit);
+            il.Emit(OpCodes.Ldloc, codeUnit);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsHighSurrogate", _types.Char));
+            il.Emit(OpCodes.Brfalse, checkLow);
+
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+            il.Emit(OpCodes.Bge, invalid);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsLowSurrogate", _types.Char));
+            il.Emit(OpCodes.Brfalse, invalid);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+
+            il.MarkLabel(checkLow);
+            il.Emit(OpCodes.Ldloc, codeUnit);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsLowSurrogate", _types.Char));
+            il.Emit(OpCodes.Brtrue, invalid);
+            il.MarkLabel(advanceOne);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+
+            il.MarkLabel(invalid);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(valid);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var toWellFormed = typeBuilder.DefineMethod(
+            "StringToWellFormed",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String]);
+        runtime.StringToWellFormed = toWellFormed;
+        {
+            var il = toWellFormed.GetILGenerator();
+            var chars = il.DeclareLocal(_types.CharArray);
+            var index = il.DeclareLocal(_types.Int32);
+            var codeUnit = il.DeclareLocal(_types.Char);
+            var loop = il.DefineLabel();
+            var checkLow = il.DefineLabel();
+            var advanceOne = il.DefineLabel();
+            var replace = il.DefineLabel();
+            var done = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "ToCharArray"));
+            il.Emit(OpCodes.Stloc, chars);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, chars);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Bge, done);
+
+            il.Emit(OpCodes.Ldloc, chars);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldelem_U2);
+            il.Emit(OpCodes.Stloc, codeUnit);
+            il.Emit(OpCodes.Ldloc, codeUnit);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsHighSurrogate", _types.Char));
+            il.Emit(OpCodes.Brfalse, checkLow);
+
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldloc, chars);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Bge, replace);
+            il.Emit(OpCodes.Ldloc, chars);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldelem_U2);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsLowSurrogate", _types.Char));
+            il.Emit(OpCodes.Brfalse, replace);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+
+            il.MarkLabel(checkLow);
+            il.Emit(OpCodes.Ldloc, codeUnit);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsLowSurrogate", _types.Char));
+            il.Emit(OpCodes.Brtrue, replace);
+            il.MarkLabel(advanceOne);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+
+            il.MarkLabel(replace);
+            il.Emit(OpCodes.Ldloc, chars);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4, 0xFFFD);
+            il.Emit(OpCodes.Stelem_I2);
+            il.Emit(OpCodes.Br, advanceOne);
+
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ldloc, chars);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.String, [_types.CharArray]));
+            il.Emit(OpCodes.Ret);
+        }
+    }
+
     private void EmitStringFromCodePoint(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // StringFromCodePoint(object[] args) -> string

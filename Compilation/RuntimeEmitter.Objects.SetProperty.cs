@@ -1031,6 +1031,15 @@ public partial class RuntimeEmitter
             // Invoke PDS setter.
             EmitInvokePdsSetterWithValueAndReturn(il, runtime, tsObjPdsSetterLocal);
             il.MarkLabel(tsObjNoPdsSetterLabel);
+
+            // A $Object's dictionary fast path must still honor an own PDS
+            // data descriptor. Boxed String exotic indices/length and
+            // Object.defineProperty-created read-only slots live in PDS even
+            // though TSObject.SetProperty itself only sees the dictionary.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSIsWritable);
+            il.Emit(OpCodes.Brfalse, nullLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
@@ -1434,8 +1443,28 @@ public partial class RuntimeEmitter
         EmitDefineDataDescriptorFromValue(il, runtime);
         il.Emit(OpCodes.Ret);
 
-        // $Object - call SetPropertyStrict
+        // $Object - honor PDS accessors/read-only data properties before the
+        // TSObject dictionary fast path.
         il.MarkLabel(sharpTSObjectLabel);
+        var sharpSetterLocal = il.DeclareLocal(_types.Object);
+        var sharpNoSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, sharpSetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+        il.Emit(OpCodes.Brfalse, sharpNoSetterLabel);
+        EmitInvokePdsSetterWithValueAndReturn(il, runtime, sharpSetterLocal);
+        il.MarkLabel(sharpNoSetterLabel);
+
+        var sharpWritableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSIsWritable);
+        il.Emit(OpCodes.Brtrue, sharpWritableLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        il.MarkLabel(sharpWritableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldarg_1);

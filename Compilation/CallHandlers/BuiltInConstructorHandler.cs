@@ -47,8 +47,21 @@ public class BuiltInConstructorHandler : ICallHandler
         {
             // Symbol(description) - emit the description argument
             emitter.EmitExpression(call.Arguments[0]);
-            // Convert to string if needed
-            il.Emit(OpCodes.Call, ctx.Runtime!.Stringify);
+            emitter.EmitBoxIfNeeded(call.Arguments[0]);
+            var description = il.DeclareLocal(ctx.Types.Object);
+            var stringify = il.DefineLabel();
+            var ready = il.DefineLabel();
+            il.Emit(OpCodes.Stloc, description);
+            il.Emit(OpCodes.Ldloc, description);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.UndefinedType);
+            il.Emit(OpCodes.Brfalse, stringify);
+            // Explicit undefined is the same as an omitted description.
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Br, ready);
+            il.MarkLabel(stringify);
+            il.Emit(OpCodes.Ldloc, description);
+            il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+            il.MarkLabel(ready);
         }
         // Create new $TSSymbol instance
         il.Emit(OpCodes.Newobj, ctx.Runtime!.TSSymbolCtor);

@@ -126,8 +126,8 @@ public partial class RuntimeEmitter
         // standalone DLL), so toLocaleX === toX is acceptable per spec note.
         Wire("toLocaleLowerCase",    runtime.StringToLowerCase,            0);
         Wire("toLocaleUpperCase",    runtime.StringToUpperCase,            0);
-        Wire("isWellFormed",         runtime.StringPrototypeGenericStub,   0);
-        Wire("toWellFormed",         runtime.StringPrototypeGenericStub,   0);
+        Wire("isWellFormed",         runtime.StringIsWellFormed,           0);
+        Wire("toWellFormed",         runtime.StringToWellFormed,           0);
 
         // Per ECMA-262 §22.1.3 String.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);

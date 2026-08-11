@@ -142,4 +142,36 @@ public sealed class Issue1279ParityRuntimeTests
 
         Assert.Equal("undefined undefined xundefined\n", TestHarness.RunCompiled(source));
     }
+
+    [Fact]
+    public void String_well_formed_methods_replace_only_unpaired_surrogates()
+    {
+        const string source = """
+            console.log("\uD800\uDC00".isWellFormed());
+            console.log("x\uD800y".isWellFormed(), "x\uDC00y".isWellFormed());
+            var repaired = "\uD800A\uDC00".toWellFormed();
+            console.log(repaired.charCodeAt(0), repaired.charCodeAt(1), repaired.charCodeAt(2));
+            var receiver: any = { toString: function() { return "ok"; } };
+            console.log(String.prototype.isWellFormed.call(receiver));
+            """;
+
+        Assert.Equal("true\nfalse false\n65533 65 65533\ntrue\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Property_descriptors_control_assignment_on_dynamic_objects()
+    {
+        const string source = """
+            var value: any = { fixed: 1, observed: 0 };
+            Object.defineProperty(value, "fixed", { value: 1, writable: false, configurable: true });
+            Object.defineProperty(value, "sink", {
+                set: function(next: any) { this.observed = next; }
+            });
+            value.fixed = 2;
+            value.sink = 3;
+            console.log(value.fixed, value.observed);
+            """;
+
+        Assert.Equal("1 3\n", TestHarness.RunCompiled(source));
+    }
 }

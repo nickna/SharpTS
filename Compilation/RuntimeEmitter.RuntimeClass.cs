@@ -963,6 +963,7 @@ public partial class RuntimeEmitter
         EmitStringAt(typeBuilder, runtime);
         EmitStringFromCharCode(typeBuilder, runtime);
         EmitStringCodePointAt(typeBuilder, runtime);
+        EmitStringWellFormedMethods(typeBuilder, runtime);
         EmitStringFromCodePoint(typeBuilder, runtime);
         EmitStringNormalize(typeBuilder, runtime);
         EmitStringLocaleCompare(typeBuilder, runtime);

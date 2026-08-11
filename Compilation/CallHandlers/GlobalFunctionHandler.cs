@@ -66,6 +66,16 @@ public class GlobalFunctionHandler : ICallHandler
     /// </summary>
     private static bool EmitEval(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
+        // ECMA-262 PerformEval: an omitted source argument evaluates to
+        // undefined. Handle it locally so the compiled boundary does not turn
+        // the absence into CLR null (and so no interpreter bridge is needed).
+        if (call.Arguments.Count == 0)
+        {
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            emitter.SetStackUnknown();
+            return true;
+        }
+
         // eval always routes through EvalBridge in the SharpTS runtime — record the soft
         // dependency so the build co-locates SharpTS.dll with the output.
         ctx.Runtime?.RequireSharpTSRuntime("eval()");

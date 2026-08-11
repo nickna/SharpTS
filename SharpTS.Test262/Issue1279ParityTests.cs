@@ -5159,6 +5159,40 @@ public sealed class Issue1279ParityTests
     public void Array_mutators_called_generically_update_the_original_receiver(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/String/prototype/isWellFormed/return-abrupt-from-this.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/returns-boolean.js")]
+    [InlineData("built-ins/String/prototype/isWellFormed/to-string.js")]
+    [InlineData("built-ins/String/prototype/toWellFormed/return-abrupt-from-this.js")]
+    [InlineData("built-ins/String/prototype/toWellFormed/returns-well-formed-string.js")]
+    [InlineData("built-ins/String/prototype/toWellFormed/to-string.js")]
+    public void String_well_formed_methods_scan_utf16_code_units(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/String/S15.5.5.1_A2.js")]
+    [InlineData("built-ins/String/S15.5.5.1_A3.js")]
+    [InlineData("built-ins/String/S15.5.5.1_A4_T2.js")]
+    [InlineData("built-ins/String/length.js")]
+    [InlineData("built-ins/String/numeric-properties.js")]
+    public void Boxed_strings_expose_exotic_length_and_index_descriptors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Fact]
+    public void String_exotic_indices_reject_non_integral_numeric_keys()
+        => AssertPass("built-ins/String/15.5.5.5.2-3-6.js", Test262ExecutionMode.Compiled);
+
+    [Fact]
+    public void String_call_form_uses_symbol_descriptive_string()
+        => AssertPass("built-ins/String/symbol-string-coercion.js", Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/String/S15.5.1.1_A1_T6.js")]
+    public void String_construction_observes_primitive_conversion(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -90,6 +90,8 @@ public static class BuiltInTypes
             // replaceAll accepts string | RegExp for the pattern.
             "replaceAll" => new TypeInfo.Function([AnyType, AnyType], StringType),
             "at" => new TypeInfo.Function([NumberType], StringType), // returns string | undefined in TS
+            "isWellFormed" => new TypeInfo.Function([], BooleanType),
+            "toWellFormed" => new TypeInfo.Function([], StringType),
             "normalize" => new TypeInfo.Function([StringType], StringType, RequiredParams: 0),
             // localeCompare(that, locales?, options?) — ECMA-402 adds the optional
             // locales/options args on top of ECMA-262's single `that` param.
@@ -1219,6 +1221,7 @@ public static class BuiltInTypes
         "length", "charAt", "substring", "indexOf", "toUpperCase", "toLowerCase", "trim", "replace",
         "split", "includes", "startsWith", "endsWith", "slice", "substr", "repeat", "padStart",
         "padEnd", "charCodeAt", "codePointAt", "concat", "lastIndexOf", "trimStart", "trimEnd",
+        "isWellFormed", "toWellFormed",
         "replaceAll", "at", "normalize", "localeCompare", "toLocaleLowerCase", "toLocaleUpperCase",
         "toString", "match", "matchAll", "search",
     ];

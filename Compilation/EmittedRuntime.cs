@@ -357,6 +357,8 @@ public class EmittedRuntime
     public MethodBuilder StringAt { get; set; } = null!;
     public MethodBuilder StringFromCharCode { get; set; } = null!;
     public MethodBuilder StringCodePointAt { get; set; } = null!;
+    public MethodBuilder StringIsWellFormed { get; set; } = null!;
+    public MethodBuilder StringToWellFormed { get; set; } = null!;
     public MethodBuilder StringFromCodePoint { get; set; } = null!;
     public MethodBuilder StringNormalize { get; set; } = null!;
     public MethodBuilder StringLocaleCompare { get; set; } = null!;

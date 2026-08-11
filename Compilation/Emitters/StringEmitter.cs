@@ -141,6 +141,15 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 EmitAt(emitter, arguments);
                 return true;
 
+            case "isWellFormed":
+                il.Emit(OpCodes.Call, ctx.Runtime!.StringIsWellFormed);
+                il.Emit(OpCodes.Box, ctx.Types.Boolean);
+                return true;
+
+            case "toWellFormed":
+                il.Emit(OpCodes.Call, ctx.Runtime!.StringToWellFormed);
+                return true;
+
             case "normalize":
                 EmitNormalize(emitter, arguments);
                 return true;

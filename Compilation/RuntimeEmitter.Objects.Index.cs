@@ -759,6 +759,7 @@ public partial class RuntimeEmitter
         var charLocal = il.DeclareLocal(_types.Char);
         var strLocal = il.DeclareLocal(_types.String);
         var intIdxLocal = il.DeclareLocal(_types.Int32);
+        var doubleIdxLocal = il.DeclareLocal(_types.Double);
         var strOobLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
@@ -782,8 +783,22 @@ public partial class RuntimeEmitter
         il.MarkLabel(idxFromDoubleLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, doubleIdxLocal);
+        // String exotic indices must be integral finite numeric property
+        // keys. Conv_I4 alone maps NaN and fractions to plausible indices
+        // (typically 0 / truncation), making s[NaN] or s[1.5] read a real
+        // character instead of undefined.
+        il.Emit(OpCodes.Ldloc, doubleIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Brfalse, strOobLabel);
+        il.Emit(OpCodes.Ldloc, doubleIdxLocal);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Stloc, intIdxLocal);
+        il.Emit(OpCodes.Ldloc, doubleIdxLocal);
+        il.Emit(OpCodes.Ldloc, intIdxLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, strOobLabel);
         il.Emit(OpCodes.Br, idxParseDoneLabel);
 
         il.MarkLabel(idxFromStringLabel);
