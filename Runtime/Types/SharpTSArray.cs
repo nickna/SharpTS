@@ -587,16 +587,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// <see cref="SparseThreshold"/> slots.
     /// </summary>
     public void Set(long index, object? value)
-    {
-        if (IsFrozen) return;  // Frozen arrays silently ignore writes
-        if (index < 0) throw new Exception("RangeError: Index out of bounds.");
-        if (index > MaxWriteIndex)
-            throw new Exception($"RangeError: Array index {index} exceeds ECMA-262 uint32 maximum.");
-
-        if (index >= _length && !IsExtensible) return;
-
-        SetCoreWithExtend(index, value);
-    }
+        => SetStrict(index, value, strictMode: false);
 
     /// <summary>int-indexed Set — widens to long.</summary>
     public void Set(int index, object? value) => Set((long)index, value);
@@ -995,7 +986,9 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     {
         if (name == "length") return true;
         if (uint.TryParse(name, out uint index) && index < uint.MaxValue)
-            return HasIndex(index) || HasNamedProperty(name);
+            return HasIndex(index)
+                || (_indexAccessors?.ContainsKey(index) ?? false)
+                || HasNamedProperty(name);
         return HasNamedProperty(name);
     }
 
@@ -1022,17 +1015,30 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         int denseLimit = (int)Math.Min(_length, _dense.Count);
         for (int index = 0; index < denseLimit; index++)
         {
-            if (_dense[index] is not ArrayHole)
+            if (_dense[index] is not ArrayHole
+                || (_indexAccessors?.ContainsKey((uint)index) ?? false))
                 yield return index.ToString(
                     System.Globalization.CultureInfo.InvariantCulture);
         }
 
-        if (_sparse is not null)
+        if (_sparse is not null || _indexAccessors is not null)
         {
-            foreach (uint index in _sparse.Keys.OrderBy(static index => index))
-                if (index >= _dense.Count && index < _length)
-                    yield return index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture);
+            var remainingIndices = new SortedSet<uint>();
+            if (_sparse is not null)
+            {
+                foreach (uint index in _sparse.Keys)
+                    if (index >= denseLimit && index < _length)
+                        remainingIndices.Add(index);
+            }
+            if (_indexAccessors is not null)
+            {
+                foreach (uint index in _indexAccessors.Keys)
+                    if (index >= denseLimit && index < _length)
+                        remainingIndices.Add(index);
+            }
+            foreach (uint index in remainingIndices)
+                yield return index.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
         }
 
         yield return "length";
