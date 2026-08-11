@@ -105,6 +105,39 @@ foreach ($requiredText in @('./scripts/sync-gui-version.ps1 -Version','./scripts
 foreach ($forbiddenText in @('SharpTSGuiSkipPack','Invoke-WebRequest','gui_package_filename','PACKAGE_FILE_NAME','sync-gui-preview-version','secrets.NUGET_API_KEY')) {
     if ($publish.Contains($forbiddenText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml retains fixed or obsolete GUI publication logic: $forbiddenText") }
 }
+$wingetRequiredText = @(
+    'is_stable: ${{ steps.version.outputs.IS_STABLE }}',
+    'IS_STABLE=false',
+    'IS_STABLE=$IS_STABLE',
+    "^v[0-9]+\.[0-9]+\.[0-9]+$",
+    "needs: [build, release]",
+    "needs.build.outputs.is_stable == 'true' && vars.WINGET_AUTOMATION_ENABLED == 'true'",
+    'environment: winget-release',
+    'WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}',
+    'SharpTS.SharpTS',
+    'SharpTS.SharpTS.NativeAOT',
+    'https://github.com/microsoft/winget-create/releases/download/v1.12.13.0/wingetcreate.exe',
+    '24042bd37915805615e6cf969ac57c6439124c3fe85823327f5f3fb24bd9ffea',
+    '--submit',
+    '--no-open',
+    'win-x64.zip|x64',
+    'win-arm64.zip|arm64'
+)
+foreach ($requiredText in $wingetRequiredText) {
+    if (-not $publish.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("publish.yml is missing WinGet release contract text: $requiredText")
+    }
+}
+$wingetJobStart = $publish.IndexOf("`n  winget:", [StringComparison]::Ordinal)
+if ($wingetJobStart -lt 0) {
+    $errors.Add('publish.yml is missing the downstream WinGet job.')
+}
+else {
+    $wingetJob = $publish.Substring($wingetJobStart)
+    if ($wingetJob -match '(?m)^\s*(?:--token|-t)\s') {
+        $errors.Add('publish.yml must provide the WinGetCreate token only through WINGET_CREATE_GITHUB_TOKEN.')
+    }
+}
 $releaseCommand = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\nuget-release.ps1') -Raw
 if ($releaseCommand -notmatch '\$VerificationAttempts\s*=\s*30' -or $releaseCommand -notmatch '\$VerificationDelaySeconds\s*=\s*20') { $errors.Add('nuget-release.ps1 must poll NuGet 30 times at 20-second intervals by default.') }
 

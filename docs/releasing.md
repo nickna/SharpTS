@@ -54,6 +54,53 @@ different commit to complete a partial tag.
 User-facing documentation uses versionless commands or `<version>` placeholders. Publication does
 not require a follow-up documentation-version advance.
 
+## WinGet publication
+
+SharpTS uses two WinGet package identities because the managed and Native AOT archives have the
+same architecture and command name. `SharpTS.SharpTS` is the default, full-featured distribution;
+`SharpTS.SharpTS.NativeAOT` is the closed-world native distribution documented in
+[Native AOT](native-aot.md). Both expose `sharpts` and are mutually exclusive. Switching requires
+uninstalling the current identity before installing the other one. The Windows executables are not
+currently Authenticode-signed.
+
+The initial manifests must be submitted manually, one pull request per identity, after a successful
+stable release contains all four required assets:
+
+- `sharpts-<version>-win-x64.zip`
+- `sharpts-<version>-win-arm64.zip`
+- `sharpts-native-<version>-win-x64.zip`
+- `sharpts-native-<version>-win-arm64.zip`
+
+Use the schema requested by the current `microsoft/winget-pkgs` pull request template. Each package
+uses a version manifest, an `en-US` locale manifest, and a ZIP/portable installer manifest with x64
+and ARM64 nodes. The nested file is the root-level `sharpts.exe`, the portable alias and command are
+`sharpts`, and `ArchiveBinariesDependOnPath` remains unset. The archives are self-contained and do
+not declare a .NET package dependency. Validate and install each local manifest, test it with
+`Tools/SandboxTest.ps1`, and verify architecture selection, fresh-terminal command discovery,
+`sharpts --version`, interpretation, compilation, uninstall cleanup, and both switching directions
+on native x64 and ARM64 Windows systems.
+
+Only enable automated updates after both initial identities are visible in the public WinGet
+catalog:
+
+1. Create a protected `winget-release` environment.
+2. Create a classic GitHub PAT with only `public_repo`; fine-grained PATs are not supported by
+   WinGetCreate. Store it as the environment secret `WINGET_CREATE_GITHUB_TOKEN`. Do not grant the
+   optional `delete_repo` scope and do not pass the token as a command-line argument.
+3. Set the repository variable `WINGET_AUTOMATION_ENABLED` to `true`.
+
+For an exact stable tag (`v<major>.<minor>.<patch>`), the downstream Windows matrix downloads the
+pinned WinGetCreate executable, verifies its SHA-256, and submits separate managed and Native AOT
+update pull requests using the published x64 and ARM64 release URLs. Prerelease tags and manual
+workflow dry runs never submit WinGet changes. If only one matrix entry fails, inspect the upstream
+pull requests and rerun only failed jobs; before rerunning the entire workflow, close or reconcile
+any already-open pull request for the same identity and version to avoid a duplicate submission.
+After the first automated update is published, verify upgrading each identity from the preceding
+catalog version.
+
+Add the final `winget install --id ... -e` commands to the root README only after both initial
+packages are searchable in the public catalog.
+
 ## Recovering a partial publish
 
 1. Record the tag, workflow run, expected IDs, successful pushes, artifact checksums, and exact

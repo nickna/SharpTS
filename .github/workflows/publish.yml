@@ -30,6 +30,7 @@ jobs:
 
     outputs:
       version: ${{ steps.version.outputs.VERSION }}
+      is_stable: ${{ steps.version.outputs.IS_STABLE }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,8 +45,12 @@ jobs:
       - name: Determine version
         id: version
         run: |
+          IS_STABLE=false
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             VERSION=${GITHUB_REF_NAME#v}
+            if [[ "$GITHUB_REF_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              IS_STABLE=true
+            fi
           else
             VERSION=0.0.0-dryrun.${GITHUB_RUN_NUMBER}
           fi
@@ -54,6 +59,7 @@ jobs:
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "IS_STABLE=$IS_STABLE" >> "$GITHUB_OUTPUT"
           echo "MinVerVersionOverride=$VERSION" >> "$GITHUB_ENV"
 
       - name: Stage release version into GUI artifacts
@@ -589,3 +595,70 @@ jobs:
             ./nupkg/SharpTS.Sdk.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg
             ./assets/*
+
+  # Initial manifests for both package IDs must be accepted by winget-pkgs
+  # before WINGET_AUTOMATION_ENABLED is set. Keeping this as a separate
+  # downstream job prevents the cross-repository PAT from entering the NuGet
+  # release boundary and ensures only already-published stable assets are used.
+  winget:
+    name: WinGet (${{ matrix.package_id }})
+    needs: [build, release]
+    if: needs.build.outputs.is_stable == 'true' && vars.WINGET_AUTOMATION_ENABLED == 'true'
+    permissions:
+      contents: read
+    runs-on: windows-2025
+    timeout-minutes: 15
+    environment: winget-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - package_id: SharpTS.SharpTS
+            asset_prefix: sharpts
+          - package_id: SharpTS.SharpTS.NativeAOT
+            asset_prefix: sharpts-native
+    env:
+      WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_CREATE_GITHUB_TOKEN }}
+
+    steps:
+      - name: Download pinned WinGetCreate
+        shell: pwsh
+        run: |
+          $toolPath = Join-Path $env:RUNNER_TEMP 'wingetcreate.exe'
+          $toolUrl = 'https://github.com/microsoft/winget-create/releases/download/v1.12.13.0/wingetcreate.exe'
+          $expectedHash = '24042bd37915805615e6cf969ac57c6439124c3fe85823327f5f3fb24bd9ffea'
+
+          curl.exe --fail --location --silent --show-error --output $toolPath $toolUrl
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to download WinGetCreate (curl exit code $LASTEXITCODE)."
+          }
+
+          $actualHash = (Get-FileHash -LiteralPath $toolPath -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) {
+            throw "WinGetCreate SHA-256 mismatch: expected $expectedHash, got $actualHash."
+          }
+
+          "WINGETCREATE_PATH=$toolPath" >> $env:GITHUB_ENV
+
+      - name: Submit WinGet update
+        shell: pwsh
+        run: |
+          if ([string]::IsNullOrWhiteSpace($env:WINGET_CREATE_GITHUB_TOKEN)) {
+            throw 'The winget-release environment must provide WINGET_CREATE_GITHUB_TOKEN.'
+          }
+
+          $version = '${{ needs.build.outputs.version }}'
+          $releaseBase = "https://github.com/nickna/SharpTS/releases/download/v$version"
+          $x64Url = "$releaseBase/${{ matrix.asset_prefix }}-$version-win-x64.zip|x64"
+          $arm64Url = "$releaseBase/${{ matrix.asset_prefix }}-$version-win-arm64.zip|arm64"
+          $releaseNotesUrl = "https://github.com/nickna/SharpTS/releases/tag/v$version"
+
+          & $env:WINGETCREATE_PATH update '${{ matrix.package_id }}' `
+            --submit `
+            --no-open `
+            --version $version `
+            --urls $x64Url $arm64Url `
+            --release-notes-url $releaseNotesUrl
+          if ($LASTEXITCODE -ne 0) {
+            throw "WinGetCreate update failed for ${{ matrix.package_id }} (exit code $LASTEXITCODE)."
+          }
