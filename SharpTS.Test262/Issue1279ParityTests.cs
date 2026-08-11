@@ -5122,6 +5122,12 @@ public sealed class Issue1279ParityTests
     public void Native_error_constructor_prototype_chain_matches_error(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/Error/cause_property.js")]
+    [InlineData("built-ins/Error/message_property.js")]
+    public void Error_instances_expose_spec_own_descriptors(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

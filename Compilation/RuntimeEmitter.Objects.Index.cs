@@ -1652,8 +1652,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brtrue, typeDelIdxLabel);
 
-        // Other types (arrays, strings, etc.) - cannot delete, return true
-        il.Emit(OpCodes.Br, trueLabel);
+        // Remaining runtime-backed objects use the named-property delete path
+        // after ToPropertyKey coercion. This is essential for PDS-only own
+        // properties on Error/Date/RegExp/Promise instances; returning true
+        // without deleting made configurable descriptors remain observable.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        if (strict)
+        {
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        }
+        else
+        {
+            il.Emit(OpCodes.Call, runtime.DeleteProperty);
+        }
+        il.Emit(OpCodes.Ret);
 
         // Type delete handler — coerce key via Stringify and call DeleteProperty.
         il.MarkLabel(typeDelIdxLabel);

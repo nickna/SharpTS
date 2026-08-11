@@ -54,6 +54,7 @@ public partial class RuntimeEmitter
 
         // Get message from args[0] if provided
         var messageLocal = il.DeclareLocal(_types.String);
+        var hasMessageLocal = il.DeclareLocal(_types.Boolean);
         var noArgsLabel = il.DefineLabel();
         var afterMessageLabel = il.DefineLabel();
 
@@ -66,7 +67,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ble, noArgsLabel);
 
-        // message = (args[0] === undefined or null) ? null : ? ToString(args[0])
+        // message = args[0] === undefined ? absent : ToString(args[0])
         // ECMA-262 §20.5.1.1 Error step 3: only ToString when message is not
         // undefined. ToJsString throws TypeError on Symbol per §7.1.17 step 2
         // — required by Error/error-message-tostring-symbol.js +
@@ -78,21 +79,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, arg0Local);
 
-        var argNullLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, arg0Local);
-        il.Emit(OpCodes.Brfalse, argNullLabel);
+        var argUndefinedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, arg0Local);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, argNullLabel);
-        // Non-null, non-undefined: ToJsString (throws TypeError for Symbol).
+        il.Emit(OpCodes.Brtrue, argUndefinedLabel);
+        // Any non-undefined value, including JS null, is converted. ToJsString
+        // maps CLR null to "null" and throws TypeError for Symbol.
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, hasMessageLocal);
         il.Emit(OpCodes.Ldloc, arg0Local);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Br, afterMessageLabel);
-        il.MarkLabel(argNullLabel);
+        il.MarkLabel(argUndefinedLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hasMessageLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Br, afterMessageLabel);
 
         il.MarkLabel(noArgsLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hasMessageLocal);
         il.Emit(OpCodes.Ldnull);
 
         il.MarkLabel(afterMessageLabel);
@@ -205,6 +211,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(aggregateErrorLabel);
         var aggregateErrorsLocal = il.DeclareLocal(_types.Object);
         var aggregateMessageLocal = il.DeclareLocal(_types.String);
+        var hasAggregateMessageLocal = il.DeclareLocal(_types.Boolean);
         var noAggErrorsArgLabel = il.DefineLabel();
         var afterAggErrorsLabel = il.DefineLabel();
         var noAggMessageArgLabel = il.DefineLabel();
@@ -240,21 +247,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Blt, noAggMessageArgLabel);
 
-        // message = args[1]?.ToString()
+        // message = args[1] === undefined ? absent : ToString(args[1])
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        var aggArgNotNull = il.DefineLabel();
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, aggArgNotNull);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Br, afterAggMessageLabel);
-        il.MarkLabel(aggArgNotNull);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        var aggregateMessageArgLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, aggregateMessageArgLocal);
+        il.Emit(OpCodes.Ldloc, aggregateMessageArgLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, noAggMessageArgLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, hasAggregateMessageLocal);
+        il.Emit(OpCodes.Ldloc, aggregateMessageArgLocal);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Br, afterAggMessageLabel);
 
         il.MarkLabel(noAggMessageArgLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hasAggregateMessageLocal);
         il.Emit(OpCodes.Ldnull);
 
         il.MarkLabel(afterAggMessageLabel);
@@ -276,15 +286,59 @@ public partial class RuntimeEmitter
 
         // Apply options for non-AggregateError types: options is args[1]
         il.MarkLabel(applyOptionsLabel);
+        EmitDefineErrorDataPropertyIfPresent(il, runtime, errorLocal, "message", messageLocal, hasMessageLocal);
         EmitApplyErrorOptions(il, runtime, errorLocal, 1);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ret);
 
         // Apply options for AggregateError: options is args[2]
         il.MarkLabel(applyAggOptionsLabel);
+        EmitDefineErrorDataPropertyIfPresent(il, runtime, errorLocal, "message", aggregateMessageLocal, hasAggregateMessageLocal);
         EmitApplyErrorOptions(il, runtime, errorLocal, 2);
         il.Emit(OpCodes.Ldloc, errorLocal);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Installs one of the Error constructor's spec-created own data properties.
+    /// Both message and cause use writable:true, enumerable:false,
+    /// configurable:true; the presence flag distinguishes an omitted/undefined
+    /// message from values such as null that stringify to a real message.
+    /// </summary>
+    private static void EmitDefineErrorDataPropertyIfPresent(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder errorLocal,
+        string propertyName,
+        LocalBuilder valueLocal,
+        LocalBuilder presentLocal)
+    {
+        var skipLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, presentLocal);
+        il.Emit(OpCodes.Brfalse, skipLabel);
+
+        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, errorLocal);
+        il.Emit(OpCodes.Ldstr, propertyName);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(skipLabel);
     }
 
     /// <summary>

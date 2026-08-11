@@ -142,6 +142,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorMessageLabel);
+        // Constructor-created message is a PDS data property. Keep its stored
+        // value synchronized with the CLR backing slot so bracket assignment
+        // observes ordinary writable-data-property semantics.
+        var errorMessageDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, errorMessageDescriptorLocal);
+        var noErrorMessageDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, errorMessageDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noErrorMessageDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, errorMessageDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, endLabel);
+        il.Emit(OpCodes.Ldloc, errorMessageDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        // The ECMAScript message slot accepts any value after construction;
+        // do not flow through the string-typed CLR compatibility property.
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noErrorMessageDescriptorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSErrorType);
         il.Emit(OpCodes.Ldarg_2);
@@ -391,6 +412,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "message");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorMessageLabel);
+        var strictErrorMessageDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, strictErrorMessageDescriptorLocal);
+        var noStrictErrorMessageDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, strictErrorMessageDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noStrictErrorMessageDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, strictErrorMessageDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        var strictErrorMessageWritableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, strictErrorMessageWritableLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        var strictErrorMessageSilentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictErrorMessageSilentLabel);
+        EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
+        il.MarkLabel(strictErrorMessageSilentLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(strictErrorMessageWritableLabel);
+        il.Emit(OpCodes.Ldloc, strictErrorMessageDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noStrictErrorMessageDescriptorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSErrorType);
         il.Emit(OpCodes.Ldarg_2);

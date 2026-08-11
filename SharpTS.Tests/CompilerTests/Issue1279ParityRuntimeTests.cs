@@ -74,4 +74,27 @@ public sealed class Issue1279ParityRuntimeTests
 
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunCompiled(source));
     }
+
+    [Fact]
+    public void Error_instances_preserve_own_message_and_cause_descriptors()
+    {
+        const string source = """
+            var error: any = new Error("boom", { cause: 42 });
+            var message = Object.getOwnPropertyDescriptor(error, "message");
+            var cause = Object.getOwnPropertyDescriptor(error, "cause");
+            console.log(message.value, message.writable, message.enumerable, message.configurable);
+            console.log(cause.value, cause.writable, cause.enumerable, cause.configurable);
+            error["message"] = "changed";
+            console.log(error.message, Object.getOwnPropertyDescriptor(error, "message").value);
+            console.log(delete error["cause"], Object.hasOwn(error, "cause"));
+            console.log(Object.hasOwn(new Error(), "message"));
+            var nullValue: any = null;
+            var nullMessage: any = new Error(nullValue);
+            console.log(nullMessage.message, Object.hasOwn(nullMessage, "message"));
+            """;
+
+        Assert.Equal(
+            "boom true false true\n42 true false true\nchanged changed\ntrue false\nfalse\nnull true\n",
+            TestHarness.RunCompiled(source));
+    }
 }

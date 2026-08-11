@@ -267,7 +267,38 @@ public partial class RuntimeEmitter
             il.MarkLabel(notTypeForDelLabel);
         }
 
-        // Other types - cannot delete properties, return true (JS behavior for non-configurable)
+        // Remaining runtime-backed objects (notably Error instances) can own
+        // properties represented solely in the descriptor store. Honor the
+        // descriptor's configurability and remove it on successful deletion.
+        // Previously these objects fell straight through to true without
+        // changing observable state, so verifyProperty incorrectly classified
+        // configurable Error cause/message slots as non-configurable.
+        var fallbackDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, fallbackDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, fallbackDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, trueLabel);
+        // Sealing/freezing makes every existing own property
+        // non-configurable even though the stable stored descriptor retains
+        // its original bit. Match gOPD's effective-configurability view.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        var fallbackNotSealedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, fallbackNotSealedLabel);
+        EmitDeleteFail("' of a sealed object");
+        il.MarkLabel(fallbackNotSealedLabel);
+        il.Emit(OpCodes.Ldloc, fallbackDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        var fallbackConfigurableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, fallbackConfigurableLabel);
+        EmitDeleteFail("' of object");
+        il.MarkLabel(fallbackConfigurableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, trueLabel);
 
         // $TSFunction delete handler.

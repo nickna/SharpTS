@@ -3132,7 +3132,7 @@ test/built-ins/Boolean/prototype/valueOf/name.js Pass
 test/built-ins/Boolean/prototype/valueOf/not-a-constructor.js Pass
 test/built-ins/Boolean/symbol-coercion.js Pass
 test/built-ins/Error/cause_abrupt.js Fail
-test/built-ins/Error/cause_property.js Fail
+test/built-ins/Error/cause_property.js Pass
 test/built-ins/Error/constructor.js Pass
 test/built-ins/Error/error-message-tostring-symbol.js Pass
 test/built-ins/Error/error-message-tostring-toprimitive.js Fail
@@ -3152,7 +3152,7 @@ test/built-ins/Error/isError/primitives.js Pass
 test/built-ins/Error/isError/prop-desc.js Pass
 test/built-ins/Error/isError/symbols.js Pass
 test/built-ins/Error/length.js Fail
-test/built-ins/Error/message_property.js Fail
+test/built-ins/Error/message_property.js Pass
 test/built-ins/Error/name.js Pass
 test/built-ins/Error/prop-desc.js Fail
 test/built-ins/Error/proto-from-ctor-realm.js RuntimeError
@@ -8108,7 +8108,7 @@ test/built-ins/Promise/withResolvers/ctx-non-ctor.js Fail
 test/built-ins/Promise/withResolvers/ctx-non-object.js Fail
 test/built-ins/Promise/withResolvers/promise.js Pass
 test/built-ins/Promise/withResolvers/resolvers.js Fail
-test/built-ins/Promise/withResolvers/result.js Fail
+test/built-ins/Promise/withResolvers/result.js Pass
 test/built-ins/RegExp/15.10.2.15-6-1.js Pass
 test/built-ins/RegExp/15.10.2.5-3-1.js Pass
 test/built-ins/RegExp/15.10.4.1-1.js Pass
