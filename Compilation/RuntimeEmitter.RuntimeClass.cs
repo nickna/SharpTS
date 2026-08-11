@@ -835,7 +835,9 @@ public partial class RuntimeEmitter
         EmitConcatArrays(typeBuilder, runtime);
         EmitExpandCallArgs(typeBuilder, runtime);
         EmitArrayPop(typeBuilder, runtime);
+        EmitArrayPopProto(typeBuilder, runtime);
         EmitArrayShift(typeBuilder, runtime);
+        EmitArrayShiftProto(typeBuilder, runtime);
         EmitArrayUnshift(typeBuilder, runtime);
         EmitArrayUnshiftProto(typeBuilder, runtime);
         EmitArraySlice(typeBuilder, runtime);

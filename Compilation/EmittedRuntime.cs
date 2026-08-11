@@ -221,7 +221,9 @@ public class EmittedRuntime
     public MethodBuilder ConcatArrays { get; set; } = null!;
     public MethodBuilder ExpandCallArgs { get; set; } = null!;
     public MethodBuilder ArrayPop { get; set; } = null!;
+    public MethodBuilder ArrayPopProto { get; set; } = null!;
     public MethodBuilder ArrayShift { get; set; } = null!;
+    public MethodBuilder ArrayShiftProto { get; set; } = null!;
     public MethodBuilder ArrayUnshift { get; set; } = null!;
     public MethodBuilder ArraySlice { get; set; } = null!;
     public MethodBuilder ArrayMap { get; set; } = null!;

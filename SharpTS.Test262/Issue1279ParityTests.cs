@@ -166,6 +166,23 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-304.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-305.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-306.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-307.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-308.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-333-8.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-333-10.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-339-4.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-354-16.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-294.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-295.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-296.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-297.js")]
+    public void Compiled_arguments_index_descriptors_remain_observable(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-463.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-481.js")]
     [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-498.js")]
@@ -4755,7 +4772,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/pop/set-length-zero-array-is-frozen.js")]
     [InlineData("built-ins/Array/prototype/pop/set-length-zero-array-length-is-non-writable.js")]
     public void Array_pop_mutates_generic_receivers(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T1.js")]
@@ -4804,6 +4821,34 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-length-is-non-writable.js")]
     public void Array_unshift_mutates_generic_receivers(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A4_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A4_T2.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A4_T3.js")]
+    [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A5_T1.js")]
+    [InlineData("built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js")]
+    [InlineData("built-ins/Array/prototype/push/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/push/clamps-to-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/push/throws-if-integer-limit-exceeded.js")]
+    [InlineData("built-ins/Array/prototype/shift/call-with-boolean.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T3.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T4.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A2_T5.js")]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A3_T3.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T1.js")]
+    [InlineData("built-ins/Array/prototype/unshift/S15.4.4.13_A2_T2.js")]
+    [InlineData("built-ins/Array/prototype/unshift/length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/unshift/clamps-to-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/unshift/read-only-property.js")]
+    [InlineData("built-ins/Array/prototype/unshift/throws-if-integer-limit-exceeded.js")]
+    public void Array_mutators_preserve_generic_receivers_in_compiled_mode(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/reverse/S15.4.4.8_A2_T1.js")]

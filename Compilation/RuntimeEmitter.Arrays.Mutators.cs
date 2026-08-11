@@ -95,6 +95,75 @@ public partial class RuntimeEmitter
         }
     }
 
+    /// <summary>
+    /// Emits ToObject(receiver) and LengthOfArrayLike using the full safe-integer
+    /// range. Mutating prototype methods keep this original object rather than
+    /// materializing a detached List, because their indexed writes and deletes
+    /// are observable on generic receivers.
+    /// </summary>
+    private (LocalBuilder Receiver, LocalBuilder Length) EmitGenericArrayReceiverAndLength(
+        ILGenerator il, EmittedRuntime runtime)
+    {
+        var receiver = il.DeclareLocal(_types.Object);
+        var length = il.DeclareLocal(_types.Double);
+
+        var receiverPresent = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brtrue, receiverPresent);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array method called on null or undefined");
+        il.MarkLabel(receiverPresent);
+        var receiverDefined = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, receiverDefined);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array method called on null or undefined");
+        il.MarkLabel(receiverDefined);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Stloc, receiver);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, length);
+
+        var useZero = il.DefineLabel();
+        var finitePositive = il.DefineLabel();
+        var done = il.DefineLabel();
+        // NaN and non-positive values become zero.
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, useZero);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bgt, finitePositive);
+        il.Emit(OpCodes.Br, useZero);
+
+        il.MarkLabel(finitePositive);
+        // +Infinity and larger finite values clamp to 2^53 - 1.
+        var truncate = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Blt, truncate);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(truncate);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Truncate", [typeof(double)])!);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Br, done);
+
+        il.MarkLabel(useZero);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, length);
+        il.MarkLabel(done);
+        return (receiver, length);
+    }
+
     private void EmitArrayPop(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -118,37 +187,154 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Beq, emptyLabel);
 
-        // var last = list[list.Count - 1]
+        // Read the observable final property (including inherited getters),
+        // then perform DeletePropertyOrThrow before shortening length.
         var lastLocal = il.DeclareLocal(_types.Object);
+        var lastIndexLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lastIndexLocal);
+        il.Emit(OpCodes.Ldloc, lastIndexLocal);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, lastLocal);
 
-        // list.RemoveAt(list.Count - 1)
+        // The getter above may freeze or seal the receiver. Re-check before
+        // DeletePropertyOrThrow; non-extensibility alone does not prevent pop.
+        EmitArrayFrozenSealedCheck(il, runtime, frozenLabel,
+            checkSealed: true, checkExtensible: false);
+
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, lastIndexLocal);
+        il.Emit(OpCodes.Box, _types.Int32);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, runtime.DeleteIndexStrict);
+        il.Emit(OpCodes.Brfalse, frozenLabel);
+
+        // A non-writable length rejects the final Set even when deletion of the
+        // element succeeded.
+        var lengthDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var lengthWritable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, lengthDescriptor);
+        il.Emit(OpCodes.Ldloc, lengthDescriptor);
+        il.Emit(OpCodes.Brfalse, lengthWritable);
+        il.Emit(OpCodes.Ldloc, lengthDescriptor);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, frozenLabel);
+        il.MarkLabel(lengthWritable);
+
+        var plainList = il.DefineLabel();
+        var shortened = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, plainList);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, lastIndexLocal);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArraySetLength);
+        il.Emit(OpCodes.Br, shortened);
+        il.MarkLabel(plainList);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, lastIndexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "RemoveAt", _types.Int32));
+        il.MarkLabel(shortened);
 
         // return last
         il.Emit(OpCodes.Ldloc, lastLocal);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(emptyLabel);
+        var emptyLengthDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var emptyLengthWritable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, emptyLengthDescriptor);
+        il.Emit(OpCodes.Ldloc, emptyLengthDescriptor);
+        il.Emit(OpCodes.Brfalse, emptyLengthWritable);
+        il.Emit(OpCodes.Ldloc, emptyLengthDescriptor);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, frozenLabel);
+        il.MarkLabel(emptyLengthWritable);
         // ECMA-262 23.1.3.20 Array.prototype.pop: returns undefined for empty
         // arrays (was null → broke `arr.pop() === undefined` checks).
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
-        // Frozen/sealed return path - return undefined without removing
+        // Array mutator algorithms use Delete/Set with Throw=true, so an
+        // integrity-level failure throws even when the caller is non-strict.
         il.MarkLabel(frozenLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
+    }
+
+    private void EmitArrayPopProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayPopProto", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        runtime.ArrayPopProto = method;
+        var il = method.GetILGenerator();
+
+        var generic = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, generic);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Call, runtime.ArrayPop);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(generic);
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var nonEmpty = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bgt, nonEmpty);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nonEmpty);
+        var newLength = il.DeclareLocal(_types.Double);
+        var key = il.DeclareLocal(_types.String);
+        var element = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, newLength);
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, element);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, element);
         il.Emit(OpCodes.Ret);
     }
 
@@ -196,9 +382,121 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
-        // Frozen/sealed return path - return undefined without removing
         il.MarkLabel(frozenLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
+    }
+
+    private void EmitArrayShiftProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayShiftProto", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        runtime.ArrayShiftProto = method;
+        var il = method.GetILGenerator();
+
+        var generic = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, generic);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Call, runtime.ArrayShift);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(generic);
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var nonEmpty = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bgt, nonEmpty);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nonEmpty);
+        var first = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "0");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, first);
+
+        var k = il.DeclareLocal(_types.Double);
+        var fromKey = il.DeclareLocal(_types.String);
+        var toKey = il.DeclareLocal(_types.String);
+        var value = il.DeclareLocal(_types.Object);
+        var loop = il.DefineLabel();
+        var loopDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Bge, loopDone);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKey);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKey);
+
+        var deleteTarget = il.DefineLabel();
+        var next = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, deleteTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, next);
+        il.MarkLabel(deleteTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(loopDone);
+        var newLength = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, newLength);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, first);
         il.Emit(OpCodes.Ret);
     }
 
@@ -230,12 +528,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
-        // Frozen/sealed return path - return current count without inserting
         il.MarkLabel(frozenLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Ret);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
     }
 
     // Typed push for promoted number[]/boolean[] locals (#857/#860): appends an
@@ -294,12 +588,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
-        // Frozen/sealed return path - return current count without adding
         il.MarkLabel(frozenLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Ret);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
     }
 
     // Variadic ArrayPush wired into Array.prototype as a $TSFunction. Inline
@@ -314,7 +604,7 @@ public partial class RuntimeEmitter
             "ArrayPushProto",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
-            [_types.ListOfObject, _types.ObjectArray]
+            [_types.Object, _types.ObjectArray]
         );
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
@@ -322,11 +612,13 @@ public partial class RuntimeEmitter
         runtime.ArrayPushProto = method;
 
         var il = method.GetILGenerator();
+        var generic = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, generic);
+
         var frozenLabel = il.DefineLabel();
-
         EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
-
-        // for (i = 0; i < items.Length; i++) list.Add(items[i]);
         var idx = il.DeclareLocal(_types.Int32);
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -341,6 +633,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, loopEnd);
 
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, idx);
         il.Emit(OpCodes.Ldelem_Ref);
@@ -354,14 +647,72 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(frozenLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
+
+        il.MarkLabel(generic);
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var itemCount = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Stloc, itemCount);
+        var withinLimit = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Ble, withinLimit);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.push exceeded the safe integer limit");
+        il.MarkLabel(withinLimit);
+
+        var genericIdx = il.DeclareLocal(_types.Int32);
+        var genericLoop = il.DefineLabel();
+        var genericDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, genericIdx);
+        il.MarkLabel(genericLoop);
+        il.Emit(OpCodes.Ldloc, genericIdx);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, genericDone);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, genericIdx);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, genericIdx);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, genericIdx);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, genericIdx);
+        il.Emit(OpCodes.Br, genericLoop);
+
+        il.MarkLabel(genericDone);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        var finalLength = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Stloc, finalLength);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, finalLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, finalLength);
         il.Emit(OpCodes.Ret);
     }
 
@@ -375,7 +726,7 @@ public partial class RuntimeEmitter
             "ArrayUnshiftProto",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
-            [_types.ListOfObject, _types.ObjectArray]
+            [_types.Object, _types.ObjectArray]
         );
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
@@ -383,11 +734,13 @@ public partial class RuntimeEmitter
         runtime.ArrayUnshiftProto = method;
 
         var il = method.GetILGenerator();
+        var generic = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, generic);
+
         var frozenLabel = il.DefineLabel();
-
         EmitArrayFrozenSealedCheck(il, runtime, frozenLabel, checkSealed: true);
-
-        // for (i = 0; i < items.Length; i++) list.Insert(i, items[i]);
         var idx = il.DeclareLocal(_types.Int32);
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -402,6 +755,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Bge, loopEnd);
 
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, idx);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, idx);
@@ -416,14 +770,130 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(frozenLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
+
+        il.MarkLabel(generic);
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var itemCount = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Stloc, itemCount);
+        var withinLimit = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Ble, withinLimit);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.unshift exceeded the safe integer limit");
+        il.MarkLabel(withinLimit);
+
+        var itemDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Beq, itemDone);
+
+        var k = il.DeclareLocal(_types.Double);
+        var fromKey = il.DeclareLocal(_types.String);
+        var toKey = il.DeclareLocal(_types.String);
+        var value = il.DeclareLocal(_types.Object);
+        var shiftLoop = il.DefineLabel();
+        var shiftDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(shiftLoop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ble, shiftDone);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKey);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKey);
+
+        var deleteTarget = il.DefineLabel();
+        var shiftNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, deleteTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, shiftNext);
+        il.MarkLabel(deleteTarget);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(shiftNext);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, shiftLoop);
+
+        il.MarkLabel(shiftDone);
+        var itemIdx = il.DeclareLocal(_types.Int32);
+        var itemLoop = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, itemIdx);
+        il.MarkLabel(itemLoop);
+        il.Emit(OpCodes.Ldloc, itemIdx);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, itemDone);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, itemIdx);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, itemIdx);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, itemIdx);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, itemIdx);
+        il.Emit(OpCodes.Br, itemLoop);
+
+        il.MarkLabel(itemDone);
+        var finalLength = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, finalLength);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, finalLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, finalLength);
         il.Emit(OpCodes.Ret);
     }
 

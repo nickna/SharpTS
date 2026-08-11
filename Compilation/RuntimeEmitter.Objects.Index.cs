@@ -525,6 +525,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsArrayNoIdxDescriptorLabel);
 
+        var tsArrayOwnIndex = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brtrue, tsArrayOwnIndex);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayOwnIndex);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
@@ -780,8 +792,8 @@ public partial class RuntimeEmitter
         //      bypassed Object.defineProperty(obj, k, {get: ...}) accessors and
         //      returned null instead of invoking the getter (companion to the
         //      SetIndex fix that routes writes through SetProperty for setters).
-        //   3. Else return null — preserves the legacy "no prototype-chain walk"
-        //      behavior for missing keys (changing that is a separate refactor).
+        //   3. Else use ordinary Get so the prototype chain is consulted and a
+        //      final miss produces the JavaScript undefined sentinel.
         void EmitDictLookup(Action emitDict, Action emitKey)
         {
             var foundFieldsLabel = il.DefineLabel();
@@ -811,7 +823,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notFoundLabel);
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldarg_0);
+            emitKey();
+            il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(foundFieldsLabel);

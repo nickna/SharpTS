@@ -296,6 +296,7 @@ public partial class RuntimeEmitter
         // when the prototype is a $Array. Without this, GetListProperty returns
         // null for any digit-string name and the array element is invisible.
         var tsArrIdxLocal = il.DeclareLocal(_types.Int32);
+        var tsArrayPrototypeFallback = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, tsArrIdxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
@@ -308,7 +309,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, tsArrNotIndexLabel);
+        il.Emit(OpCodes.Bge, tsArrayPrototypeFallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, tsArrIdxLocal);
@@ -318,8 +319,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brfalse, tsArrayIndexPresent);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Br, tsArrayPrototypeFallback);
+        il.MarkLabel(tsArrayPrototypeFallback);
+        var tsArrayNoDescriptorFallback = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, tsArrayNoDescriptorFallback);
+        il.Emit(OpCodes.Ldloc, tsArrayDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayNoDescriptorFallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
@@ -418,6 +428,7 @@ public partial class RuntimeEmitter
         // and finds the array element. Without this branch the proto-chain walk
         // bottoms out in GetListProperty's null fallback.
         var listIdxLocal = il.DeclareLocal(_types.Int32);
+        var listPrototypeFallback = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, listIdxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
@@ -430,7 +441,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, listNotIndexLabel);
+        il.Emit(OpCodes.Bge, listPrototypeFallback);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
@@ -440,8 +451,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brfalse, listIndexPresentLabel);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
-        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Br, listPrototypeFallback);
+        il.MarkLabel(listPrototypeFallback);
+        var listNoDescriptorFallback = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, listOwnDescriptor);
+        il.Emit(OpCodes.Brfalse, listNoDescriptorFallback);
+        il.Emit(OpCodes.Ldloc, listOwnDescriptor);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(listNoDescriptorFallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);

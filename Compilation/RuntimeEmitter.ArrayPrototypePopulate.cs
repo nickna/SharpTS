@@ -125,8 +125,8 @@ public partial class RuntimeEmitter
         // Inline `arr.push(x)` continues to call the single-element ArrayPush
         // helper directly via the inline emitter / $BoundArrayMethod paths.
         Wire("push",           runtime.ArrayPushProto,      1);
-        Wire("pop",            runtime.ArrayPop,            0);
-        Wire("shift",          runtime.ArrayShift,          0);
+        Wire("pop",            runtime.ArrayPopProto,       0);
+        Wire("shift",          runtime.ArrayShiftProto,     0);
         Wire("unshift",        runtime.ArrayUnshiftProto,   1);
 
         // ECMA-262 23.1.3.32 Array.prototype.toString — returns the join with

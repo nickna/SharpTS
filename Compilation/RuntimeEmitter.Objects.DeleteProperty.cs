@@ -392,6 +392,25 @@ public partial class RuntimeEmitter
 
         // $TSObject - call the DeleteProperty / DeletePropertyStrict instance method
         il.MarkLabel(sharpTSObjectLabel);
+        if (strict)
+        {
+            // Indexed/named writes on $Object may have both a live _fields entry
+            // and descriptor metadata. DeletePropertyStrict must remove both;
+            // otherwise the stale PDS entry remains observable as a null value.
+            var tsObjectDeleteDesc = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var tsObjectDescriptorConfigurable = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsObjectDeleteDesc);
+            il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
+            il.Emit(OpCodes.Brfalse, tsObjectDescriptorConfigurable);
+            il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, tsObjectDescriptorConfigurable);
+            EmitDeleteFail("' of object");
+            il.MarkLabel(tsObjectDescriptorConfigurable);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldarg_1);
@@ -399,6 +418,12 @@ public partial class RuntimeEmitter
         {
             il.Emit(OpCodes.Ldarg_2); // strictMode
             il.Emit(OpCodes.Callvirt, runtime.TSObjectDeletePropertyStrict);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldc_I4_1);
         }
         else
         {
