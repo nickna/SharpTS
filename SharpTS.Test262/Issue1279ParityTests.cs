@@ -4567,6 +4567,27 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-118.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-119.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-120.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-121.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-122.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-124.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-167.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-181.js")]
+    [InlineData("built-ins/Object/defineProperty/redefine-length-with-various-values-and-configurable-true.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-115.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-116.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-117.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-118.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-120.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-163.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-177.js")]
+    [InlineData("built-ins/Array/length/define-own-prop-length-no-value-order.js")]
+    public void Array_length_uses_its_intrinsic_descriptor_during_redefinition(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-161.js")]
     [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-162.js")]
     public void Date_prototype_methods_retain_data_descriptors(string relativePath)

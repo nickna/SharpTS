@@ -820,6 +820,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notLengthLabel);
 
+            // A writable:false array-length descriptor blocks assignment.
+            // In sloppy code the failed Set is silent; SetPropertyStrict has
+            // already performed the same check and throws before delegating.
+            var lengthWritableLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, runtime.PDSIsWritable);
+            il.Emit(OpCodes.Brtrue, lengthWritableLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(lengthWritableLabel);
+
             // Coerce value through ToNumber (handles strings, booleans, etc.)
             // then enforce ToUint32 round-trip. The .NET `Convert.ToInt64` path
             // truncates fractional parts; we need to flag fractional / NaN /

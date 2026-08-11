@@ -141,13 +141,13 @@ public partial class RuntimeEmitter
         // object never reaches the PDS — re-coercing a stored object value
         // on a later redefine is what produced the unbounded
         // ObjectDefineProperty ⇄ ToNumber recursion of issue #180.
-        // Only fires for List<object> receivers (compiled-mode arrays) with
+        // Only fires for $Array receivers with
         // propName == "length" and a value-typed descriptor.
         var skipArrayLenCheck = il.DefineLabel();
         var lenWasCoercedLocal = il.DeclareLocal(_types.Boolean);
         var coercedLenLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldstr, "length");
@@ -656,6 +656,37 @@ public partial class RuntimeEmitter
         var skipSynthExistingLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
         il.Emit(OpCodes.Brtrue, skipSynthExistingLabel);
+        // Arrays always have an own, non-configurable length data property,
+        // even before any descriptor has been installed in the side store.
+        // Feed that intrinsic descriptor through the ordinary validation and
+        // merge path so omitted fields preserve writable=true and attempts to
+        // make length configurable/enumerable/accessor-shaped are rejected.
+        var notIntrinsicArrayLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, notIntrinsicArrayLengthLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notIntrinsicArrayLengthLabel);
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Stloc, existingDescLocal);
+        il.Emit(OpCodes.Br, skipSynthExistingLabel);
+        il.MarkLabel(notIntrinsicArrayLengthLabel);
+
         var receiverIsSynthableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -985,8 +1016,8 @@ public partial class RuntimeEmitter
         // Array \`length\` special case: read list.Count for compare.
         var afterArrayLenOverride = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        var arrayLenLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        var arrayLenLocal = il.DeclareLocal(runtime.TSArrayType);
         il.Emit(OpCodes.Stloc, arrayLenLocal);
         il.Emit(OpCodes.Ldloc, arrayLenLocal);
         il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
@@ -994,9 +1025,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, afterArrayLenOverride);
-        // existingValueForCompare = (double)list.Count
+        // existingValueForCompare = (double)array.[[ArrayLength]]
         il.Emit(OpCodes.Ldloc, arrayLenLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stloc, existingValueForCompare);
@@ -1398,6 +1429,42 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
+
+        // Array length is an intrinsic data property whose value lives on the
+        // array, while a writable=false transition is recorded in the PDS.
+        // Report the live value and the effective writable bit together;
+        // reading descriptor.Value directly would become stale after a later
+        // successful `arr.length = n` assignment.
+        var notArrayLengthDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, notArrayLengthDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notArrayLengthDescriptorLabel);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, resultDictLocal);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.PDSIsWritable);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
+        EmitDescriptorBoolField(il, resultDictLocal, "configurable", false);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notArrayLengthDescriptorLabel);
 
         // Try to get descriptor from $PropertyDescriptorStore
         il.Emit(OpCodes.Ldarg_0);
