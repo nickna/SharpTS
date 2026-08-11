@@ -369,7 +369,7 @@ public partial class ILEmitter
         // Done BEFORE stashing thread-statics so a throw doesn't leak state.
         // NaN comparisons via Ble_Un fall through (no throw) for non-coercible
         // lengths — those get clamped to 0 / 1M by the materializer below.
-        bool createsNewArrayPre = methodGet.Name.Lexeme is "map" or "filter" or "slice" or "concat"
+        bool createsNewArrayPre = methodGet.Name.Lexeme is "map" or "filter" or "slice"
             or "splice" or "toSpliced" or "with" or "flat" or "flatMap"
             or "toReversed" or "toSorted";
         if (createsNewArrayPre)
@@ -499,9 +499,15 @@ public partial class ILEmitter
             or "map" or "forEach" or "find" or "findIndex" or "findLast"
             or "findLastIndex" or "flatMap" or "reduce" or "reduceRight"
             or "includes" or "indexOf" or "lastIndexOf";
-        IL.Emit(OpCodes.Call, useLazyMaterializer
-            ? runtime.ArrayLikeMaterializeForIteration
-            : runtime.ArrayLikeMaterialize);
+        // concat itself performs IsConcatSpreadable before consulting length;
+        // pre-materializing here would erase the receiver's identity and read
+        // length even when @@isConcatSpreadable is false.
+        if (methodName != "concat")
+        {
+            IL.Emit(OpCodes.Call, useLazyMaterializer
+                ? runtime.ArrayLikeMaterializeForIteration
+                : runtime.ArrayLikeMaterialize);
+        }
 
         // For iterator methods that accept thisArg (callbackfn, thisArg) per
         // ECMA-262, save the previous _currentCallbackThisArg, stash methodArgs[1]

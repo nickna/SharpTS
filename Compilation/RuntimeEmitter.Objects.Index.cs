@@ -337,6 +337,51 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symbolFoundLabel);
+        // Object.defineProperty and computed accessors store a full descriptor
+        // in the symbol dictionary. Apply ordinary [[Get]] semantics here.
+        var symbolDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var symbolRawValueLabel = il.DefineLabel();
+        var symbolDataValueLabel = il.DefineLabel();
+        var symbolUndefinedValueLabel = il.DefineLabel();
+        var symbolDescriptorHasGetterLabel = il.DefineLabel();
+        var symbolGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, symbolValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, symbolRawValueLabel);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, symbolGetterLocal);
+        il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+        il.Emit(OpCodes.Brtrue, symbolDescriptorHasGetterLabel);
+        // No getter plus a setter is an accessor whose read value is undefined.
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, symbolUndefinedValueLabel);
+        il.Emit(OpCodes.Br, symbolDataValueLabel);
+
+        il.MarkLabel(symbolDescriptorHasGetterLabel);
+        il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, symbolUndefinedValueLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(symbolUndefinedValueLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(symbolDataValueLabel);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(symbolRawValueLabel);
         il.Emit(OpCodes.Ldloc, symbolValueLocal);
         il.Emit(OpCodes.Ret);
 
@@ -1048,19 +1093,74 @@ public partial class RuntimeEmitter
             il.MarkLabel(noSymSetterLabel);
 
             var symDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+            var symExistingValueLocal = il.DeclareLocal(_types.Object);
+            var symExistingDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
             il.Emit(OpCodes.Stloc, symDictLocal);
 
-            // If already present, allow update (writable check would also
-            // apply per spec but we don't track per-symbol PDS yet).
+            // Existing descriptor entries apply ordinary setter/writable
+            // semantics while preserving their attributes.
             var symDoSetLabel = il.DefineLabel();
+            var symCheckExtensibilityLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symDictLocal);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
-            il.Emit(OpCodes.Brtrue, symDoSetLabel);
+            il.Emit(OpCodes.Ldloca, symExistingValueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+            il.Emit(OpCodes.Brfalse, symCheckExtensibilityLabel);
+            il.Emit(OpCodes.Ldloc, symExistingValueLocal);
+            il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Stloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, symDoSetLabel);
+
+            var symNoSetterLabel = il.DefineLabel();
+            var symSetterValueLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, symSetterValueLocal);
+            il.Emit(OpCodes.Ldloc, symSetterValueLocal);
+            il.Emit(OpCodes.Brfalse, symNoSetterLabel);
+            il.Emit(OpCodes.Ldloc, symSetterValueLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, symNoSetterLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, symSetterValueLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(symNoSetterLabel);
+            // Any accessor descriptor without a callable setter ignores a
+            // non-strict write.
+            var symDataDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, symDataDescriptorLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(symDataDescriptorLabel);
+            var symReturnWithoutSetLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, symReturnWithoutSetLabel);
+            il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, symReturnWithoutSetLabel);
+            il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(symReturnWithoutSetLabel);
+            il.Emit(OpCodes.Ret);
 
             // Check extensibility (frozen/sealed/preventExt). On hit, no-op.
+            il.MarkLabel(symCheckExtensibilityLabel);
             var symExtTmp = il.DeclareLocal(_types.Object);
             var symNotNonExtLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldsfld, runtime.NonExtensibleObjectsField);
@@ -1803,8 +1903,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         var symDelNotFrozenLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, symDelNotFrozenLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
+        EmitDeleteIndexFail("Cannot delete a non-configurable symbol property");
         il.MarkLabel(symDelNotFrozenLabel);
         il.Emit(OpCodes.Ldsfld, runtime.SealedObjectsField);
         il.Emit(OpCodes.Ldarg_0);
@@ -1812,11 +1911,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         var symDelNotSealedLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, symDelNotSealedLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
+        EmitDeleteIndexFail("Cannot delete a non-configurable symbol property");
         il.MarkLabel(symDelNotSealedLabel);
+        // A symbol descriptor can itself be non-configurable even when the
+        // containing object is not sealed or frozen.
+        var symDeleteDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        var symDeleteValueLocal = il.DeclareLocal(_types.Object);
+        var symDeleteDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var symDeleteAllowedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, symDeleteDictLocal);
+        il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, symDeleteValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brfalse, symDeleteAllowedLabel);
+        il.Emit(OpCodes.Ldloc, symDeleteValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, symDeleteDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, symDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, symDeleteAllowedLabel);
+        il.Emit(OpCodes.Ldloc, symDeleteDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, symDeleteAllowedLabel);
+        EmitDeleteIndexFail("Cannot delete a non-configurable symbol property");
+        il.MarkLabel(symDeleteAllowedLabel);
+        il.Emit(OpCodes.Ldloc, symDeleteDictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "Remove", _types.Object));
         il.Emit(OpCodes.Ret);

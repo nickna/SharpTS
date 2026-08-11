@@ -1550,8 +1550,49 @@ public partial class RuntimeEmitter
 
         var symThrowLabel = il.DefineLabel();
         var symRouteLabel = il.DefineLabel();
+        var symCheckObjectStateLabel = il.DefineLabel();
         var symStateTmp = il.DeclareLocal(_types.Object);
         var cwtTryGetValue = _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType());
+
+        // Existing symbol descriptors can reject strict writes independently
+        // of the receiver's extensibility state.
+        var strictSymDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        var strictSymValueLocal = il.DeclareLocal(_types.Object);
+        var strictSymDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var strictSymSetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, strictSymDictLocal);
+        il.Emit(OpCodes.Ldloc, strictSymDictLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, strictSymValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel);
+        il.Emit(OpCodes.Ldloc, strictSymValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, strictSymDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel);
+        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, strictSymSetterLocal);
+        il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
+        var strictSymNoSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictSymNoSetterLabel);
+        il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel); // callable setter
+        il.MarkLabel(strictSymNoSetterLabel);
+        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, symThrowLabel);
+        il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
+        il.Emit(OpCodes.Brtrue, symThrowLabel); // explicit undefined setter
+        il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, symThrowLabel);
+
+        il.MarkLabel(symCheckObjectStateLabel);
 
         // frozen → throw.
         il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);

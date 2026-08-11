@@ -78,41 +78,34 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.defineProperty called on non-object");
         il.MarkLabel(skipTypeThrowLabel);
 
-        // Symbol-keyed path: Object.defineProperty(obj, symbol, {value:X}) must store X
-        // in the object's symbol dict so `obj[symbol]` can retrieve it. Without this,
-        // a later `obj[symbol]` read routes through EmitGetIndex's symbol-key handler
-        // which only consults the symbol dict (not the string-keyed PDS), and the
-        // value is silently invisible. yaml's Schema constructor depends on this for
-        // schema[SCALAR] = strTag.
+        // Symbol-keyed properties live in the object's symbol dictionary. Normalize
+        // the supplied descriptor through this same method using an ephemeral
+        // string-keyed holder, then store the resulting compiled descriptor. This
+        // keeps the symbol path aligned with the ordinary ToPropertyDescriptor
+        // validation/defaulting rules without maintaining a second parser.
         var notSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
 
-        // Extract value from descriptor dictionary (if it's a dict)
-        var symbolValueLocal = il.DeclareLocal(_types.Object);
-        var symbolDescDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var symbolDictWriteLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Stloc, symbolValueLocal);
-
+        var symbolDescriptorHolderLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Stloc, symbolDescDictLocal);
-        il.Emit(OpCodes.Ldloc, symbolDescDictLocal);
-        il.Emit(OpCodes.Brfalse, symbolDictWriteLabel);
-        il.Emit(OpCodes.Ldloc, symbolDescDictLocal);
-        il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloca, symbolValueLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorHolderLocal);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
 
-        il.MarkLabel(symbolDictWriteLabel);
-        // GetSymbolDict(obj)[symbol] = value
+        // GetSymbolDict(obj)[symbol] = normalizedDescriptor
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, symbolValueLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
         // Return the target object
         il.Emit(OpCodes.Ldarg_0);
@@ -1420,7 +1413,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
         il.Emit(OpCodes.Brfalse, notSymbolKeyLabel);
-        EmitSymbolKeyDescriptorLookup(il, runtime);
+        EmitSymbolKeyDescriptorLookup(il, runtime, descriptorLocal, hasDescriptorLabel);
         il.MarkLabel(notSymbolKeyLabel);
 
         // propName = $Runtime.ToJsString(prop) — spec ECMA-262 ToString. Honors
@@ -2486,7 +2479,11 @@ public partial class RuntimeEmitter
     /// undefined if the symbol isn't present in the dict — same semantics
     /// as the string-keyed PDS miss path below the call site.
     /// </summary>
-    private void EmitSymbolKeyDescriptorLookup(ILGenerator il, EmittedRuntime runtime)
+    private void EmitSymbolKeyDescriptorLookup(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder descriptorLocal,
+        Label hasDescriptorLabel)
     {
         var symDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
         var valueLocal = il.DeclareLocal(_types.Object);
@@ -2537,6 +2534,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(foundLabel);
+        // User-defined symbol properties may carry a full descriptor. Reuse the
+        // ordinary descriptor-to-object builder in the enclosing method.
+        var rawSymbolValueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, rawSymbolValueLabel);
+        il.Emit(OpCodes.Br, hasDescriptorLabel);
+        il.MarkLabel(rawSymbolValueLabel);
+
         // Build descriptor dict — attributes for symbol-keyed entries match
         // the spec-standard built-in default {writable:true,
         // enumerable:false, configurable:true} (ECMA-262 §17). Exception:

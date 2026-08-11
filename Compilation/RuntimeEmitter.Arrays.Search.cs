@@ -1372,15 +1372,16 @@ public partial class RuntimeEmitter
 
     private void EmitArrayConcat(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // ECMA-262 23.1.3.1: concat takes ...items (variadic). Signature widened
-        // to accept object[] so `arr.concat(a, b, c)` spreads each argument.
+        // ECMA-262 23.1.3.1: concat is generic and takes ...items (variadic).
+        // Keep the receiver as object so borrowed calls can observe
+        // @@isConcatSpreadable, length and indexed properties on any object.
         // The trailing object[] is marked params via ParamArrayAttribute so
         // reflection-via-$TSFunction auto-packs trailing args into the array.
         var method = typeBuilder.DefineMethod(
             "ArrayConcat",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.ListOfObject, _types.ObjectArray]
+            [_types.Object, _types.ObjectArray]
         );
         var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
         method.DefineParameter(2, System.Reflection.ParameterAttributes.None, "items")
@@ -1389,16 +1390,28 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // result = new List<object>(list)
-        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        // RequireObjectCoercible(this).
+        var receiverOkLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.IEnumerableOfObject));
+        il.Emit(OpCodes.Brfalse, receiverOkLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var receiverNotUndefinedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, receiverNotUndefinedLabel);
+        il.MarkLabel(receiverOkLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        il.MarkLabel(receiverNotUndefinedLabel);
+
+        // A = ArraySpeciesCreate(O, 0) currently lowers to the runtime's fresh
+        // dense carrier. Holes are represented by the shared sentinel.
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // for each arg in args[]: spread (if Array/List) or append.
+        // Iterate the receiver followed by each supplied item.
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         var idxLocal = il.DeclareLocal(_types.Int32);
-        var argLocal = il.DeclareLocal(_types.Object);
+        var elementLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Stloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1407,49 +1420,179 @@ public partial class RuntimeEmitter
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
         var advance = il.DefineLabel();
-        var notTSArray = il.DefineLabel();
-        var notList = il.DefineLabel();
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // arg = args[i]
+        // E = idx == 0 ? receiver : items[idx - 1].
+        var loadArgumentLabel = il.DefineLabel();
+        var elementLoadedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, idxLocal);
+        il.Emit(OpCodes.Brtrue, loadArgumentLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, elementLocal);
+        il.Emit(OpCodes.Br, elementLoadedLabel);
+        il.MarkLabel(loadArgumentLabel);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldloc, idxLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stloc, argLocal);
+        il.Emit(OpCodes.Stloc, elementLocal);
+        il.MarkLabel(elementLoadedLabel);
 
-        // if (arg is $Array) AddRange(elements)
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        il.Emit(OpCodes.Brfalse, notTSArray);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", _types.IEnumerableOfObject));
-        il.Emit(OpCodes.Br, advance);
+        // spreadable = Get(E, @@isConcatSpreadable). When absent, fall back
+        // to IsArray(E); $Arguments deliberately fails that brand check.
+        var spreadValueLocal = il.DeclareLocal(_types.Object);
+        var spreadableLocal = il.DeclareLocal(_types.Boolean);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIsConcatSpreadable);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, spreadValueLocal);
 
-        il.MarkLabel(notTSArray);
-        // if (arg is List<object>) AddRange
-        il.Emit(OpCodes.Ldloc, argLocal);
+        var defaultSpreadabilityLabel = il.DefineLabel();
+        var spreadabilityKnownLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, spreadValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, defaultSpreadabilityLabel);
+        il.Emit(OpCodes.Ldloc, spreadValueLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Stloc, spreadableLocal);
+        il.Emit(OpCodes.Br, spreadabilityKnownLabel);
+
+        il.MarkLabel(defaultSpreadabilityLabel);
+        // Default IsArray: $Array/List are arrays except the arguments marker.
+        var defaultNotArgumentsLabel = il.DefineLabel();
+        var defaultDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brfalse, defaultNotArgumentsLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, spreadableLocal);
+        il.Emit(OpCodes.Br, defaultDoneLabel);
+        il.MarkLabel(defaultNotArgumentsLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Brfalse, notList);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un);
+        il.Emit(OpCodes.Stloc, spreadableLocal);
+        il.MarkLabel(defaultDoneLabel);
+        il.MarkLabel(spreadabilityKnownLabel);
+
+        var spreadElementLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, spreadableLocal);
+        il.Emit(OpCodes.Brtrue, spreadElementLabel);
+        // Non-spreadable E is appended as one value.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, argLocal);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", _types.IEnumerableOfObject));
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, advance);
 
-        il.MarkLabel(notList);
-        // else: append the arg as a single element
+        il.MarkLabel(spreadElementLabel);
+        // len = ToLength(Get(E, "length")). Keep it as double so the
+        // 2^53-1 limit is checked before any bounded CLR allocation.
+        var lengthLocal = il.DeclareLocal(_types.Double);
+        var rawLengthLocal = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, rawLengthLocal);
+
+        var lengthZeroLabel = il.DefineLabel();
+        var lengthPositiveLabel = il.DefineLabel();
+        var lengthReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rawLengthLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brtrue, lengthZeroLabel);
+        il.Emit(OpCodes.Ldloc, rawLengthLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bgt, lengthPositiveLabel);
+        il.MarkLabel(lengthZeroLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.Emit(OpCodes.Br, lengthReadyLabel);
+
+        il.MarkLabel(lengthPositiveLabel);
+        var lengthFiniteLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rawLengthLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", _types.Double));
+        il.Emit(OpCodes.Brfalse, lengthFiniteLabel);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.Emit(OpCodes.Br, lengthReadyLabel);
+        il.MarkLabel(lengthFiniteLabel);
+        il.Emit(OpCodes.Ldloc, rawLengthLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", _types.Double));
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        var lengthBelowMaxLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ble_Un, lengthBelowMaxLabel);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.Emit(OpCodes.Br, lengthReadyLabel);
+        il.MarkLabel(lengthBelowMaxLabel);
+        il.Emit(OpCodes.Ldloc, rawLengthLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", _types.Double));
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.MarkLabel(lengthReadyLabel);
+
+        // If n + len exceeds max-safe-integer, concat throws TypeError.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        var lengthWithinLimitLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ble_Un, lengthWithinLimitLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.concat result exceeds maximum safe integer");
+        il.MarkLabel(lengthWithinLimitLabel);
+
+        // Copy present properties and advance across absent ones as holes.
+        var copyIndexLocal = il.DeclareLocal(_types.Int32);
+        var copyKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, copyIndexLocal);
+        var copyLoopLabel = il.DefineLabel();
+        var copyDoneLabel = il.DefineLabel();
+        il.MarkLabel(copyLoopLabel);
+        il.Emit(OpCodes.Ldloc, copyIndexLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Bge_Un, copyDoneLabel);
+        il.Emit(OpCodes.Ldloca, copyIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Stloc, copyKeyLocal);
+
+        var copyHoleLabel = il.DefineLabel();
+        var copyAddedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, copyKeyLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, copyHoleLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, copyKeyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Br, copyAddedLabel);
+        il.MarkLabel(copyHoleLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.MarkLabel(copyAddedLabel);
+        il.Emit(OpCodes.Ldloc, copyIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, copyIndexLocal);
+        il.Emit(OpCodes.Br, copyLoopLabel);
+        il.MarkLabel(copyDoneLabel);
 
         il.MarkLabel(advance);
         il.Emit(OpCodes.Ldloc, idxLocal);

@@ -479,21 +479,36 @@ public partial class RuntimeEmitter
         // Symbol-keyed lookup. PDSGetPropertyDescriptor's name parameter is
         // string-typed, so symbol keys can't live there — defineProperty with
         // a symbol key writes to the per-receiver symbol dict (GetSymbolDict).
-        // Presence in that dict is the spec-default enumerable=true for plain
-        // `obj[sym] = v` assignments; an earlier attempt to honor PDS-installed
-        // descriptors here passed the symbol as the string `name`, which IL-
-        // Verify flagged (StackUnexpected) and would have thrown at runtime if
-        // the path ever ran with a defineProperty-installed symbol descriptor.
-        // ECMA-262 §17 specifies enumerable=true as the default for own data
-        // properties of ordinary objects.
+        // Plain values use enumerable=true (ordinary assignment), while
+        // defineProperty entries carry a CompiledPropertyDescriptor whose
+        // Enumerable bit must be observed directly.
         var pieNotSymbolLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brfalse, pieNotSymbolLabel);
+        var pieSymbolValueLocal = il.DeclareLocal(_types.Object);
+        var pieSymbolDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var pieSymbolPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
+        il.Emit(OpCodes.Ldloca, pieSymbolValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brtrue, pieSymbolPresentLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(pieSymbolPresentLabel);
+        il.Emit(OpCodes.Ldloc, pieSymbolValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, pieSymbolDescriptorLocal);
+        var piePlainSymbolLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, pieSymbolDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, piePlainSymbolLabel);
+        il.Emit(OpCodes.Ldloc, pieSymbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(piePlainSymbolLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(pieNotSymbolLabel);
 

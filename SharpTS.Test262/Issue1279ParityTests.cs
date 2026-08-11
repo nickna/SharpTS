@@ -3667,6 +3667,14 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Object/defineProperty/symbol-data-property-default-non-strict.js")]
+    [InlineData("built-ins/Object/defineProperty/symbol-data-property-default-strict.js")]
+    [InlineData("built-ins/Object/defineProperty/symbol-data-property-writable.js")]
+    [InlineData("built-ins/Array/prototype/concat/is-concat-spreadable-get-err.js")]
+    public void Compiled_symbol_descriptors_preserve_property_semantics(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Symbol/prototype/toString/length.js")]
     [InlineData("built-ins/Symbol/prototype/toString/name.js")]
     [InlineData("built-ins/Symbol/prototype/toString/not-a-constructor.js")]
