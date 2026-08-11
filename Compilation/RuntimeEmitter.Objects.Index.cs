@@ -1288,6 +1288,26 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.ToJsString);
             il.Emit(OpCodes.Stloc, listSetKeyLocal);
+
+            // Lists (including $Arguments) can carry ordinary named
+            // properties in the descriptor store. Only canonical integer
+            // keys belong in the indexed storage path; route every other key
+            // through SetProperty so writable/accessor semantics are shared
+            // with dot-property writes instead of Convert.ToInt32 throwing.
+            var listSetNumericKeyLabel = il.DefineLabel();
+            var listSetParsedIndexLocal = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Ldloc, listSetKeyLocal);
+            il.Emit(OpCodes.Ldloca, listSetParsedIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+            il.Emit(OpCodes.Brtrue, listSetNumericKeyLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listSetKeyLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, runtime.SetProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listSetNumericKeyLabel);
+
             var listSetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             var listSetRawStorage = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);

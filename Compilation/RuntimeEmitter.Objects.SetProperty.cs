@@ -630,15 +630,23 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, listSetExistingDescLocal);
-            var listSetWritableLabel = il.DefineLabel();
+            var listSetDefineNewLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, listSetExistingDescLocal);
-            il.Emit(OpCodes.Brfalse, listSetWritableLabel);
+            il.Emit(OpCodes.Brfalse, listSetDefineNewLabel);
             il.Emit(OpCodes.Ldloc, listSetExistingDescLocal);
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
-            il.Emit(OpCodes.Brtrue, listSetWritableLabel);
+            var listSetUpdateExistingLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, listSetUpdateExistingLabel);
             il.Emit(OpCodes.Ret);
-            il.MarkLabel(listSetWritableLabel);
-            // Install fresh data descriptor with the value.
+            // Ordinary Set updates only [[Value]] on an existing writable data
+            // descriptor; enumerable/configurable/writable remain unchanged.
+            il.MarkLabel(listSetUpdateExistingLabel);
+            il.Emit(OpCodes.Ldloc, listSetExistingDescLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listSetDefineNewLabel);
+            // A new named property gets the ordinary assignment defaults.
             EmitDefineDataDescriptorFromValue(il, runtime);
             il.MarkLabel(listSetIsLengthLabel);
             il.Emit(OpCodes.Ret);
@@ -916,21 +924,28 @@ public partial class RuntimeEmitter
                 // data descriptor for this key with writable=false, silently
                 // no-op. Accessor descriptors fall through (defining a value
                 // over an accessor is handled by PDSDefineProperty).
-                var arrNotWritableLabel = il.DefineLabel();
+                var arrDefineNewLabel = il.DefineLabel();
                 var arrExistingDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldarg_1);
                 il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
                 il.Emit(OpCodes.Stloc, arrExistingDescLocal);
                 il.Emit(OpCodes.Ldloc, arrExistingDescLocal);
-                il.Emit(OpCodes.Brfalse, arrNotWritableLabel);
+                il.Emit(OpCodes.Brfalse, arrDefineNewLabel);
                 // Has descriptor; check writable.
                 il.Emit(OpCodes.Ldloc, arrExistingDescLocal);
                 il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
-                il.Emit(OpCodes.Brtrue, arrNotWritableLabel);
+                var arrUpdateExistingLabel = il.DefineLabel();
+                il.Emit(OpCodes.Brtrue, arrUpdateExistingLabel);
                 // Not writable — silent no-op.
                 il.Emit(OpCodes.Ret);
-                il.MarkLabel(arrNotWritableLabel);
+                // Preserve descriptor attributes on an ordinary value update.
+                il.MarkLabel(arrUpdateExistingLabel);
+                il.Emit(OpCodes.Ldloc, arrExistingDescLocal);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(arrDefineNewLabel);
 
                 EmitDefineDataDescriptorFromValue(il, runtime);
             }
