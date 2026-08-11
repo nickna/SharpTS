@@ -43,6 +43,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Private | FieldAttributes.Static);
 
+        EmitIndirectEval(typeBuilder, runtime);
         EmitGlobalThisGetProperty(typeBuilder, runtime);
         EmitGlobalThisSetProperty(typeBuilder, runtime);
     }
@@ -71,6 +72,7 @@ public partial class RuntimeEmitter
         var parseFloatLabel = il.DefineLabel();
         var isNaNLabel = il.DefineLabel();
         var isFiniteLabel = il.DefineLabel();
+        var evalLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
         var checkBuiltInsLabel = il.DefineLabel();
 
@@ -153,6 +155,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "isFinite");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, isFiniteLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "eval");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, evalLabel);
 
         // Built-in class constructors — return the actual .NET Type (Ldtoken +
         // GetTypeFromHandle) so `typeof globalThis.Array === "function"` and
@@ -358,7 +365,62 @@ public partial class RuntimeEmitter
         EmitGetOrCreateTSFn(runtime.NumberIsFinite, "isFinite", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
+        il.MarkLabel(evalLabel);
+        EmitGetOrCreateTSFn(runtime.EvalIndirect, "eval", 1);
+        il.Emit(OpCodes.Br, returnLabel);
+
         il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Indirect/value-form eval bridge. Non-string input is returned unchanged;
+    /// string input uses the optional SharpTS interpreter bridge without adding
+    /// a hard assembly reference to standalone output.
+    /// </summary>
+    private void EmitIndirectEval(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "EvalIndirect", MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object, [_types.Object]);
+        runtime.EvalIndirect = method;
+        var il = method.GetILGenerator();
+        var stringInput = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, stringInput);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(stringInput);
+
+        var bridgeType = il.DeclareLocal(_types.Type);
+        // Build the optional bridge name at runtime so standalone late-binding
+        // audits keep the single established call site in GlobalFunctionHandler.
+        il.Emit(OpCodes.Ldstr, "SharpTS.Execution.EvalBridge");
+        il.Emit(OpCodes.Ldstr, ", SharpTS");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
+        il.Emit(OpCodes.Stloc, bridgeType);
+        var bridgePresent = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, bridgeType);
+        il.Emit(OpCodes.Brtrue, bridgePresent);
+        il.Emit(OpCodes.Ldstr, "eval is not supported in standalone compiled output (SharpTS runtime not present).");
+        il.Emit(OpCodes.Newobj, _types.ExceptionCtorString);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(bridgePresent);
+        il.Emit(OpCodes.Ldloc, bridgeType);
+        il.Emit(OpCodes.Ldstr, "Eval");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
     }
 

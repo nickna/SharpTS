@@ -1165,7 +1165,8 @@ public abstract partial class ExpressionEmitterBase
         // stack), then construct the subclass around it via its executor
         // constructor — PromiseFromExecutor adopts a raw task, so the
         // result is a subclass-typed promise (NewPromiseCapability-lite).
-        if (methodGet.Name.Lexeme is "resolve" or "reject" or "all" or "race" or "allSettled" or "any" or "withResolvers"
+        if (methodGet.Name.Lexeme is "resolve" or "reject" or "all" or "allKeyed"
+            or "race" or "allSettled" or "allSettledKeyed" or "any" or "withResolvers"
             && Ctx.ClassRegistry.IsPromiseSubclass(resolvedClassName)
             && TryEmitDerivedPromiseStatic(resolvedClassName, classBuilder, methodGet.Name.Lexeme, c.Arguments))
         {

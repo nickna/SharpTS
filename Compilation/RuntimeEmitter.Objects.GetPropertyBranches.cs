@@ -1018,6 +1018,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, skip);
+            // A dictionary with an explicit prototype (including null) must
+            // resolve through that chain. Only ordinary dictionary literals,
+            // which have no PDS prototype entry, get the implicit
+            // Object.prototype fast path.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+            il.Emit(OpCodes.Brtrue, skip);
             il.Emit(OpCodes.Ldnull);
             _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
@@ -1215,6 +1222,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnUndefinedLabel);
+        // PDSGetPrototype returns null both for "no explicit entry" and for
+        // an explicit null prototype. The latter must not fall through to the
+        // implicit Object.prototype behavior below.
+        var useImplicitObjectPrototype = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Brfalse, useImplicitObjectPrototype);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(useImplicitObjectPrototype);
         // ECMA-262: `({}).constructor === Object`. If user hasn't set a custom
         // constructor and no prototype overrides it, return typeof(object) which
         // matches what compiled-mode `Object` resolves to via globalThis.

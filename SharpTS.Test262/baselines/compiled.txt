@@ -502,7 +502,7 @@ test/built-ins/Array/prototype/every/15.4.4.16-5-3.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-5-4.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-5-5.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-5-6.js Pass
-test/built-ins/Array/prototype/every/15.4.4.16-5-7.js RuntimeError
+test/built-ins/Array/prototype/every/15.4.4.16-5-7.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-5-9.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-1.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-2.js Pass
@@ -749,7 +749,7 @@ test/built-ins/Array/prototype/filter/15.4.4.20-5-30.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-5-4.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-5-5.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-5-6.js Pass
-test/built-ins/Array/prototype/filter/15.4.4.20-5-7.js RuntimeError
+test/built-ins/Array/prototype/filter/15.4.4.20-5-7.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-5-9.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-6-1.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-6-2.js Pass
@@ -1121,7 +1121,7 @@ test/built-ins/Array/prototype/forEach/15.4.4.18-5-3.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-5-4.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-5-5.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-5-6.js Pass
-test/built-ins/Array/prototype/forEach/15.4.4.18-5-7.js RuntimeError
+test/built-ins/Array/prototype/forEach/15.4.4.18-5-7.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-5-9.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-1.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-2.js Pass
@@ -1516,7 +1516,7 @@ test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-4.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-5.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-6.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-7.js Pass
-test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-8.js RuntimeError
+test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-8.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-2-9.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-3-1.js Pass
 test/built-ins/Array/prototype/lastIndexOf/15.4.4.15-3-10.js Pass
@@ -1778,7 +1778,7 @@ test/built-ins/Array/prototype/map/15.4.4.19-5-3.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-5-4.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-5-5.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-5-6.js Pass
-test/built-ins/Array/prototype/map/15.4.4.19-5-7.js RuntimeError
+test/built-ins/Array/prototype/map/15.4.4.19-5-7.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-5-9.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-6-1.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-6-2.js Pass
@@ -2674,7 +2674,7 @@ test/built-ins/Array/prototype/some/15.4.4.17-5-3.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-5-4.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-5-5.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-5-6.js Pass
-test/built-ins/Array/prototype/some/15.4.4.17-5-7.js RuntimeError
+test/built-ins/Array/prototype/some/15.4.4.17-5-7.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-5-9.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-1.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-2.js Pass
@@ -7462,7 +7462,7 @@ test/built-ins/Promise/all/capability-resolve-throws-no-close.js RuntimeError
 test/built-ins/Promise/all/capability-resolve-throws-reject.js Fail
 test/built-ins/Promise/all/ctx-ctor-throws.js Pass
 test/built-ins/Promise/all/ctx-ctor.js Pass
-test/built-ins/Promise/all/ctx-non-ctor.js Fail
+test/built-ins/Promise/all/ctx-non-ctor.js Pass
 test/built-ins/Promise/all/ctx-non-object.js Pass
 test/built-ins/Promise/all/does-not-invoke-array-setters.js Pass
 test/built-ins/Promise/all/invoke-resolve-error-close.js RuntimeError
@@ -7540,13 +7540,13 @@ test/built-ins/Promise/allKeyed/arg-not-object-reject-bigint.js Fail
 test/built-ins/Promise/allKeyed/arg-not-object-reject.js Fail
 test/built-ins/Promise/allKeyed/ctx-non-ctor.js Pass
 test/built-ins/Promise/allKeyed/extensible.js Pass
-test/built-ins/Promise/allKeyed/key-order-preserved.js RuntimeError
-test/built-ins/Promise/allKeyed/length.js Fail
-test/built-ins/Promise/allKeyed/name.js Fail
+test/built-ins/Promise/allKeyed/key-order-preserved.js Fail
+test/built-ins/Promise/allKeyed/length.js Pass
+test/built-ins/Promise/allKeyed/name.js Pass
 test/built-ins/Promise/allKeyed/non-enumerable-properties-ignored.js Fail
-test/built-ins/Promise/allKeyed/not-a-constructor.js Fail
-test/built-ins/Promise/allKeyed/prop-desc.js Fail
-test/built-ins/Promise/allKeyed/proto.js RuntimeError
+test/built-ins/Promise/allKeyed/not-a-constructor.js Pass
+test/built-ins/Promise/allKeyed/prop-desc.js Pass
+test/built-ins/Promise/allKeyed/proto.js Pass
 test/built-ins/Promise/allKeyed/prototype-keys-ignored.js Fail
 test/built-ins/Promise/allKeyed/reject-deferred.js Fail
 test/built-ins/Promise/allKeyed/reject-immed.js Fail
@@ -7562,7 +7562,7 @@ test/built-ins/Promise/allSettled/capability-resolve-throws-no-close.js RuntimeE
 test/built-ins/Promise/allSettled/capability-resolve-throws-reject.js Fail
 test/built-ins/Promise/allSettled/ctx-ctor-throws.js Pass
 test/built-ins/Promise/allSettled/ctx-ctor.js Pass
-test/built-ins/Promise/allSettled/ctx-non-ctor.js Fail
+test/built-ins/Promise/allSettled/ctx-non-ctor.js Pass
 test/built-ins/Promise/allSettled/ctx-non-object.js Pass
 test/built-ins/Promise/allSettled/does-not-invoke-array-setters.js Pass
 test/built-ins/Promise/allSettled/invoke-resolve-error-close.js RuntimeError
@@ -7662,13 +7662,13 @@ test/built-ins/Promise/allSettledKeyed/arg-not-object-reject-bigint.js Fail
 test/built-ins/Promise/allSettledKeyed/arg-not-object-reject.js Fail
 test/built-ins/Promise/allSettledKeyed/ctx-non-ctor.js Pass
 test/built-ins/Promise/allSettledKeyed/extensible.js Pass
-test/built-ins/Promise/allSettledKeyed/key-order-preserved.js RuntimeError
-test/built-ins/Promise/allSettledKeyed/length.js Fail
-test/built-ins/Promise/allSettledKeyed/name.js Fail
+test/built-ins/Promise/allSettledKeyed/key-order-preserved.js Fail
+test/built-ins/Promise/allSettledKeyed/length.js Pass
+test/built-ins/Promise/allSettledKeyed/name.js Pass
 test/built-ins/Promise/allSettledKeyed/non-enumerable-properties-ignored.js Fail
-test/built-ins/Promise/allSettledKeyed/not-a-constructor.js Fail
-test/built-ins/Promise/allSettledKeyed/prop-desc.js Fail
-test/built-ins/Promise/allSettledKeyed/proto.js RuntimeError
+test/built-ins/Promise/allSettledKeyed/not-a-constructor.js Pass
+test/built-ins/Promise/allSettledKeyed/prop-desc.js Pass
+test/built-ins/Promise/allSettledKeyed/proto.js Pass
 test/built-ins/Promise/allSettledKeyed/prototype-keys-ignored.js Fail
 test/built-ins/Promise/allSettledKeyed/resolve-not-callable-reject-with-typeerror.js Fail
 test/built-ins/Promise/allSettledKeyed/resolved-all-fulfilled.js Fail
@@ -7685,7 +7685,7 @@ test/built-ins/Promise/any/capability-resolve-throws-no-close.js Fail
 test/built-ins/Promise/any/capability-resolve-throws-reject.js Fail
 test/built-ins/Promise/any/ctx-ctor-throws.js Pass
 test/built-ins/Promise/any/ctx-ctor.js Pass
-test/built-ins/Promise/any/ctx-non-ctor.js Fail
+test/built-ins/Promise/any/ctx-non-ctor.js Pass
 test/built-ins/Promise/any/ctx-non-object.js Pass
 test/built-ins/Promise/any/invoke-resolve-error-close.js Fail
 test/built-ins/Promise/any/invoke-resolve-error-reject.js Pass
@@ -7939,7 +7939,7 @@ test/built-ins/Promise/race/capability-executor-called-twice.js Fail
 test/built-ins/Promise/race/capability-executor-not-callable.js Fail
 test/built-ins/Promise/race/ctx-ctor-throws.js Pass
 test/built-ins/Promise/race/ctx-ctor.js Pass
-test/built-ins/Promise/race/ctx-non-ctor.js Fail
+test/built-ins/Promise/race/ctx-non-ctor.js Pass
 test/built-ins/Promise/race/ctx-non-object.js Pass
 test/built-ins/Promise/race/invoke-resolve-error-close.js RuntimeError
 test/built-ins/Promise/race/invoke-resolve-error-reject.js Fail
@@ -8035,7 +8035,7 @@ test/built-ins/Promise/reject/capability-invocation-error.js Fail
 test/built-ins/Promise/reject/capability-invocation.js Pass
 test/built-ins/Promise/reject/ctx-ctor-throws.js Pass
 test/built-ins/Promise/reject/ctx-ctor.js Pass
-test/built-ins/Promise/reject/ctx-non-ctor.js Fail
+test/built-ins/Promise/reject/ctx-non-ctor.js Pass
 test/built-ins/Promise/reject/ctx-non-object.js Pass
 test/built-ins/Promise/reject/length.js Pass
 test/built-ins/Promise/reject/name.js Pass
@@ -8077,7 +8077,7 @@ test/built-ins/Promise/resolve/capability-invocation-error.js Fail
 test/built-ins/Promise/resolve/context-non-object-with-promise.js Pass
 test/built-ins/Promise/resolve/ctx-ctor-throws.js Pass
 test/built-ins/Promise/resolve/ctx-ctor.js Pass
-test/built-ins/Promise/resolve/ctx-non-ctor.js Fail
+test/built-ins/Promise/resolve/ctx-non-ctor.js Pass
 test/built-ins/Promise/resolve/ctx-non-object.js Pass
 test/built-ins/Promise/resolve/length.js Pass
 test/built-ins/Promise/resolve/name.js Pass
@@ -10156,7 +10156,7 @@ test/built-ins/String/prototype/charAt/S9.4_A1.js Pass
 test/built-ins/String/prototype/charAt/S9.4_A2.js Pass
 test/built-ins/String/prototype/charAt/name.js Pass
 test/built-ins/String/prototype/charAt/not-a-constructor.js Pass
-test/built-ins/String/prototype/charAt/pos-coerce-err.js Fail
+test/built-ins/String/prototype/charAt/pos-coerce-err.js Pass
 test/built-ins/String/prototype/charAt/pos-coerce-string.js Pass
 test/built-ins/String/prototype/charAt/pos-rounding.js Pass
 test/built-ins/String/prototype/charAt/this-value-not-obj-coercible.js Pass
@@ -10181,7 +10181,7 @@ test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A8.js Pass
 test/built-ins/String/prototype/charCodeAt/S15.5.4.5_A9.js Pass
 test/built-ins/String/prototype/charCodeAt/name.js Pass
 test/built-ins/String/prototype/charCodeAt/not-a-constructor.js Pass
-test/built-ins/String/prototype/charCodeAt/pos-coerce-err.js Fail
+test/built-ins/String/prototype/charCodeAt/pos-coerce-err.js Pass
 test/built-ins/String/prototype/charCodeAt/pos-coerce-string.js Pass
 test/built-ins/String/prototype/charCodeAt/pos-rounding.js Pass
 test/built-ins/String/prototype/charCodeAt/this-value-not-obj-coercible.js Pass

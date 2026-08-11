@@ -392,7 +392,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notPromiseConsLabel);
         NameEq("resolve"); NameEq("reject"); NameEq("all"); NameEq("race");
-        NameEq("allSettled"); NameEq("any"); NameEq("withResolvers");
+        NameEq("allKeyed"); NameEq("allSettled"); NameEq("allSettledKeyed");
+        NameEq("any"); NameEq("withResolvers");
         il.MarkLabel(notPromiseConsLabel);
 
         var notErrorConsLabel = il.DefineLabel();

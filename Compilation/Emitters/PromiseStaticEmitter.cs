@@ -63,6 +63,11 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAll);
                 return true;
 
+            case "allKeyed":
+                EmitSingleArgument(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllKeyed);
+                return true;
+
             case "race":
                 // Promise.race(iterable) - returns Task<object?> directly
                 if (arguments.Count > 0)
@@ -89,6 +94,11 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllSettled);
+                return true;
+
+            case "allSettledKeyed":
+                EmitSingleArgument(emitter, arguments);
+                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllSettledKeyed);
                 return true;
 
             case "any":
@@ -133,8 +143,10 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
             "resolve"        => runtime.PromiseResolveStatic,
             "reject"         => runtime.PromiseRejectStatic,
             "all"            => runtime.PromiseAllStatic,
+            "allKeyed"       => runtime.PromiseAllKeyedStatic,
             "race"           => runtime.PromiseRaceStatic,
             "allSettled"     => runtime.PromiseAllSettledStatic,
+            "allSettledKeyed" => runtime.PromiseAllSettledKeyedStatic,
             "any"            => runtime.PromiseAnyStatic,
             "withResolvers"  => runtime.PromiseWithResolvers,
             _ => null
@@ -154,5 +166,19 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
 
     public bool HasStaticProperty(string memberName) =>
         memberName is "resolve" or "reject" or "all" or "race"
-            or "allSettled" or "any" or "withResolvers";
+            or "allKeyed" or "allSettled" or "allSettledKeyed"
+            or "any" or "withResolvers";
+
+    private static void EmitSingleArgument(IEmitterContext emitter, List<Expr> arguments)
+    {
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            emitter.Context.IL.Emit(OpCodes.Ldnull);
+        }
+    }
 }

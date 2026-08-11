@@ -180,8 +180,10 @@ public partial class RuntimeEmitter
         EmitLookup(_types.TaskOfObject, "resolve", runtime.PromiseResolveStatic, 1);
         EmitLookup(_types.TaskOfObject, "reject", runtime.PromiseRejectStatic, 1);
         EmitLookup(_types.TaskOfObject, "all", runtime.PromiseAllStatic, 1);
+        EmitLookup(_types.TaskOfObject, "allKeyed", runtime.PromiseAllKeyedStatic, 1);
         EmitLookup(_types.TaskOfObject, "race", runtime.PromiseRaceStatic, 1);
         EmitLookup(_types.TaskOfObject, "allSettled", runtime.PromiseAllSettledStatic, 1);
+        EmitLookup(_types.TaskOfObject, "allSettledKeyed", runtime.PromiseAllSettledKeyedStatic, 1);
         EmitLookup(_types.TaskOfObject, "any", runtime.PromiseAnyStatic, 1);
         EmitLookup(runtime.TSErrorType, "isError", runtime.ErrorIsError, 1);
 

@@ -903,15 +903,20 @@ public class EmittedRuntime
     // Same pattern for all/race/allSettled/any — value-form invocation must
     // validate `this` is Object before delegating to the iteration helper.
     public MethodBuilder PromiseAllStatic { get; set; } = null!;
+    public MethodBuilder PromiseAllKeyedStatic { get; set; } = null!;
     public MethodBuilder PromiseRaceStatic { get; set; } = null!;
     public MethodBuilder PromiseAllSettledStatic { get; set; } = null!;
+    public MethodBuilder PromiseAllSettledKeyedStatic { get; set; } = null!;
     public MethodBuilder PromiseAnyStatic { get; set; } = null!;
     public MethodBuilder PromiseAll { get; set; } = null!;
+    public MethodBuilder PromiseAllKeyed { get; set; } = null!;
     public MethodBuilder PromiseRace { get; set; } = null!;
     public MethodBuilder PromiseThen { get; set; } = null!;
     public MethodBuilder PromiseCatch { get; set; } = null!;
     public MethodBuilder PromiseFinally { get; set; } = null!;
     public MethodBuilder PromiseAllSettled { get; set; } = null!;
+    public MethodBuilder PromiseAllSettledKeyed { get; set; } = null!;
+    public MethodBuilder PromiseKeyedMapResult { get; set; } = null!;
     public MethodBuilder PromiseAny { get; set; } = null!;
     public MethodBuilder PromiseFromExecutor { get; set; } = null!;
     public MethodBuilder PromiseWithResolvers { get; set; } = null!;
@@ -1801,6 +1806,7 @@ public class EmittedRuntime
     // globalThis methods (ES2020)
     public MethodBuilder GlobalThisGetProperty { get; set; } = null!;
     public MethodBuilder GlobalThisSetProperty { get; set; } = null!;
+    public MethodBuilder EvalIndirect { get; set; } = null!;
 
     // Symbol-keyed class accessor registry (#266, #647). The field holds
     // Dictionary<Type, Dictionary<object, object[]>>; each object[6] slot is

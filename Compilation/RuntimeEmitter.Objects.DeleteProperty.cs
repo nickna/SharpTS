@@ -229,7 +229,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Bne_Un, promiseTypeDelLabel);
             EmitObjectMethodDelCheck("resolve"); EmitObjectMethodDelCheck("reject");
             EmitObjectMethodDelCheck("all"); EmitObjectMethodDelCheck("race");
-            EmitObjectMethodDelCheck("allSettled"); EmitObjectMethodDelCheck("any");
+            EmitObjectMethodDelCheck("allKeyed"); EmitObjectMethodDelCheck("allSettled");
+            EmitObjectMethodDelCheck("allSettledKeyed"); EmitObjectMethodDelCheck("any");
             EmitObjectMethodDelCheck("withResolvers");
             il.MarkLabel(promiseTypeDelLabel);
 

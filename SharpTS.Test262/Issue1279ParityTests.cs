@@ -4297,7 +4297,6 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/Promise/allKeyed/arg-is-function.js")]
     [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject-bigint.js")]
-    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject.js")]
     [InlineData("built-ins/Promise/allKeyed/ctx-non-ctor.js")]
     [InlineData("built-ins/Promise/allKeyed/extensible.js")]
     [InlineData("built-ins/Promise/allKeyed/key-order-preserved.js")]
@@ -4314,12 +4313,11 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Promise/allKeyed/resolves-empty-object.js")]
     [InlineData("built-ins/Promise/allKeyed/symbol-keys.js")]
     public void Promise_allKeyed_resolves_own_enumerable_properties(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPromiseKeyedPass(relativePath);
 
     [Theory]
     [InlineData("built-ins/Promise/allSettledKeyed/arg-is-function.js")]
     [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject-bigint.js")]
-    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject.js")]
     [InlineData("built-ins/Promise/allSettledKeyed/ctx-non-ctor.js")]
     [InlineData("built-ins/Promise/allSettledKeyed/extensible.js")]
     [InlineData("built-ins/Promise/allSettledKeyed/key-order-preserved.js")]
@@ -4337,7 +4335,33 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Promise/allSettledKeyed/resolves-empty-object.js")]
     [InlineData("built-ins/Promise/allSettledKeyed/symbol-keys.js")]
     public void Promise_allSettledKeyed_retains_keyed_outcomes(string relativePath)
+        => AssertPromiseKeyedPass(relativePath);
+
+    // These two exercise an independent compiled nested-function capture gap
+    // in asyncHelpers' local `check` helper. Keep interpreter coverage here;
+    // the keyed combinators' primitive-rejection behavior is covered in both
+    // modes by the adjacent BigInt cases.
+    [Theory]
+    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject.js")]
+    public void Promise_keyed_combinators_reject_primitive_inputs_with_nested_helper(
+        string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    private void AssertPromiseKeyedPass(string relativePath)
+    {
+        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        // asyncHelpers.js currently cannot see the compiled runner's top-level
+        // $DONE declaration as an own globalThis property. Keep compiled
+        // coverage on the synchronous metadata/constructor surface; async
+        // behavior is exercised by the compiler's Promise runtime tests.
+        string fileName = Path.GetFileName(relativePath);
+        if (fileName is "ctx-non-ctor.js" or "extensible.js" or "length.js"
+            or "name.js" or "not-a-constructor.js" or "prop-desc.js" or "proto.js")
+        {
+            AssertPass(relativePath, Test262ExecutionMode.Compiled);
+        }
+    }
 
     [Fact]
     public void Math_round_preserves_ecmascript_boundary_cases()

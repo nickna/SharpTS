@@ -472,6 +472,19 @@ public partial class RuntimeEmitter
         EmitPromiseAllSettledMoveNext(promiseAllSettledSM, processElementSettled, runtime);
         promiseAllSettledSM.Type.CreateType();
 
+        // Await Dictionary proposal combinators. Their shells are declared
+        // here with the other Promise statics; bodies are emitted later, once
+        // own-key, descriptor, symbol, and prototype helpers are available.
+        runtime.PromiseAllKeyed = typeBuilder.DefineMethod(
+            "PromiseAllKeyed", MethodAttributes.Public | MethodAttributes.Static,
+            taskType, [_types.Object]);
+        runtime.PromiseAllSettledKeyed = typeBuilder.DefineMethod(
+            "PromiseAllSettledKeyed", MethodAttributes.Public | MethodAttributes.Static,
+            taskType, [_types.Object]);
+        runtime.PromiseKeyedMapResult = typeBuilder.DefineMethod(
+            "PromiseKeyedMapResult", MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object, [taskType, _types.Object]);
+
         // Promise.any(iterable) - pure IL implementation with state machine
         // Define the $AnyState class and helper methods
         var anyState = DefineAnyStateClass(moduleBuilder);
@@ -531,8 +544,10 @@ public partial class RuntimeEmitter
             EmitPromiseStaticCapabilityResult(il, runtime, target);
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.PromiseAllKeyed, m => runtime.PromiseAllKeyedStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseRaceStatic", "race", race, m => runtime.PromiseRaceStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseAllSettledStatic", "allSettled", allSettled, m => runtime.PromiseAllSettledStatic = m);
+        EmitAllRaceVariantStaticWrapper("PromiseAllSettledKeyedStatic", "allSettledKeyed", runtime.PromiseAllSettledKeyed, m => runtime.PromiseAllSettledKeyedStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseAnyStatic", "any", any, m => runtime.PromiseAnyStatic = m);
 
         // Callback invocation helpers must be emitted first (used by then/finally)
@@ -617,6 +632,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, typeof(System.Numerics.BigInteger));
         il.Emit(OpCodes.Brtrue, throwLabel);
+        // Promise static methods create a promise capability from C. Objects
+        // that are callable but not constructable (notably eval and built-in
+        // method wrappers) must fail synchronously at that step.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
+        il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(OpCodes.Br, okLabel);
 
         il.MarkLabel(throwLabel);

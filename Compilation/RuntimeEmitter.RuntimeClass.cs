@@ -688,6 +688,10 @@ public partial class RuntimeEmitter
         // must resolve to a non-null MethodBuilder.
         EmitSetFieldsProperty(typeBuilder, runtime);
         EmitSetFieldsPropertyStrict(typeBuilder, runtime);
+        // Promise static wrappers validate their `this` value with the shared
+        // constructor predicate. Emit it before Promise methods; Reflect also
+        // consumes the same helper later.
+        EmitIsConstructor(typeBuilder, runtime);
         // Promise methods must come before GetProperty (which needs PromiseThen for typeof p.then)
         EmitPromiseMethods(typeBuilder, runtime);
         // TypedArray detection helpers must come before GetProperty (which uses IsTypedArrayMethod)
@@ -813,6 +817,9 @@ public partial class RuntimeEmitter
         EmitGetOwnPropertySymbols(typeBuilder, runtime);
         EmitObjectGetOwnPropertyDescriptors(typeBuilder, runtime);
         EmitObjectCreate(typeBuilder, runtime, prototypeStoreField);
+        // Promise keyed-combinator shells are declared with Promise methods,
+        // but their implementation needs all of the object-model helpers above.
+        EmitPromiseKeyedMethodBodies(runtime);
         EmitObjectPreventExtensions(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
         EmitObjectIsExtensible(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
         EmitObjectGetPrototypeOf(typeBuilder, runtime, prototypeStoreField);
@@ -825,8 +832,8 @@ public partial class RuntimeEmitter
         // Reflect.set / setPrototypeOf / defineProperty / ownKeys / apply /
         // construct — gated on UsesReflect. (Reflect.metadata uses
         // UsesReflectMetadata, gated separately at line 848.)
-        // EmitIsConstructor is shared infrastructure so stays unconditional.
-        EmitIsConstructor(typeBuilder, runtime);
+        // IsConstructor is emitted before Promise methods above; Reflect uses
+        // the already-defined shared helper here.
         if (_features.UsesReflect)
         {
             EmitReflectSet(typeBuilder, runtime);
