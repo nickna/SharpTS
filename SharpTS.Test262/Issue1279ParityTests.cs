@@ -312,6 +312,19 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-205.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-216.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-235.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-242.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-261.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-290.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-293-1.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-354-2.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-538-1.js")]
+    public void Configurable_array_and_arguments_descriptors_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-9.js")]
     [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-11.js")]
     [InlineData("built-ins/Array/prototype/map/15.4.4.19-1-12.js")]

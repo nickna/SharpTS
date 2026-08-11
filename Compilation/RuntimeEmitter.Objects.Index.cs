@@ -1507,6 +1507,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brtrue, tsArrayDeleteIdxLabel);
 
+        // $Arguments / legacy List<object> array carriers use ArrayHole for
+        // deleted indexed properties, while retaining their stable backing
+        // Count and (for arguments) separate visible length.
+        var listDeleteIdxLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, listDeleteIdxLabel);
+
         // Dict<string, object>
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -1656,6 +1664,67 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
+
+        // List<object> handler: honor an indexed PDS descriptor, then replace
+        // an in-range live slot with the shared hole sentinel.
+        il.MarkLabel(listDeleteIdxLabel);
+        {
+            var listDeleteKeyLocal = il.DeclareLocal(_types.String);
+            var listDeleteIndexLocal = il.DeclareLocal(_types.Int32);
+            var listDeleteNotNumeric = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Stloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Ldloca, listDeleteIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, listDeleteNotNumeric);
+
+            var listDeleteDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var listDeleteStorage = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, listDeleteDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, listDeleteDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, listDeleteStorage);
+            il.Emit(OpCodes.Ldloc, listDeleteDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+            var listDeleteConfigurable = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, listDeleteConfigurable);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(listDeleteConfigurable);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+            il.Emit(OpCodes.Pop);
+
+            il.MarkLabel(listDeleteStorage);
+            var listDeleteDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Blt, listDeleteDone);
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Bge, listDeleteDone);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(OpCodes.Ldloc, listDeleteIndexLocal);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", [_types.Int32, _types.Object]));
+            il.MarkLabel(listDeleteDone);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(listDeleteNotNumeric);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
+            il.Emit(OpCodes.Call, runtime.DeleteProperty);
+            il.Emit(OpCodes.Ret);
+        }
 
         // Symbol key handler: honor frozen/sealed (same rationale as the
         // string-key dict path) before falling through to GetSymbolDict.Remove.

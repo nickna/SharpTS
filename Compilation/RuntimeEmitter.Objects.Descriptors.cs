@@ -647,10 +647,12 @@ public partial class RuntimeEmitter
         // defaulted unspecified fields to false, regressing the
         // writable/enumerable/configurable bits for redefined plain-set
         // properties (test262 15.2.3.6-4-100..).
-        // Restrict synth to plain Dictionary or $TSObject receivers only.
-        // Array.length, Function.name/length, Type.prototype etc. have spec-
-        // specific descriptors (often configurable:false) that this synth
-        // would falsify, mis-permitting forbidden redefines.
+        // Restrict synth to plain Dictionary / $TSObject receivers and own
+        // indexed elements of $TSArray (including arguments). Array indices
+        // created by literals/assignment live only in backing storage and have
+        // the same W/E/C=true defaults. Array.length, Function.name/length,
+        // Type.prototype etc. have spec-specific descriptors and must not be
+        // synthesized here.
         var skipSynthExistingLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, existingDescLocal);
         il.Emit(OpCodes.Brtrue, skipSynthExistingLabel);
@@ -660,7 +662,49 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
+        var checkSynthListLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, checkSynthListLabel);
+        var synthArrayIndexLocal = il.DeclareLocal(_types.UInt32);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, synthArrayIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldloc, synthArrayIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, synthArrayIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
+        il.Emit(OpCodes.Br, receiverIsSynthableLabel);
+
+        // $Arguments and legacy array carriers inherit List<object>. Their
+        // in-range indexed elements are ordinary W/E/C=true data properties.
+        il.MarkLabel(checkSynthListLabel);
+        var synthListLocal = il.DeclareLocal(_types.ListOfObject);
+        var synthListIndexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Stloc, synthListLocal);
+        il.Emit(OpCodes.Ldloc, synthListLocal);
+        il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, synthListIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldloc, synthListIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldloc, synthListIndexLocal);
+        il.Emit(OpCodes.Ldloc, synthListLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, skipSynthExistingLabel);
         il.MarkLabel(receiverIsSynthableLabel);
         // Existence check via HasOwnPropertyHelper.
         il.Emit(OpCodes.Ldarg_0);
@@ -1088,9 +1132,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, skipValueSetLabel);
 
-        // valueToWrite = descriptor.Value ?? $Undefined.Instance.
-        // Track wasGenericLocal: true when the descriptor had no explicit
-        // Value (slot was null). Used below to skip overwriting a live dict
+        // valueToWrite = descriptor.Value, defaulting to $Undefined only when
+        // the INPUT descriptor omitted "value". Presence, rather than the
+        // CLR slot's nullness, matters: `{value:null}` is an explicit data
+        // value and must survive identical redefinition.
+        // Track wasGenericLocal for descriptors with no explicit Value. Used
+        // below to skip overwriting a live dict
         // entry — RegExp's Symbol.search sets lastIndex=0 internally and then
         // user code does defineProperty(obj, 'lastIndex', {writable:false}),
         // which must not clobber the 0.
@@ -1100,6 +1147,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, valueToWriteLocal);
         var haveValueLabel = il.DefineLabel();
+        var explicitValuePresenceLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloca, explicitValuePresenceLocal);
+        il.Emit(OpCodes.Callvirt, dictTryGetValue);
+        il.Emit(OpCodes.Brtrue, haveValueLabel);
         il.Emit(OpCodes.Ldloc, valueToWriteLocal);
         il.Emit(OpCodes.Brtrue, haveValueLabel);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1219,6 +1272,44 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSArraySetLong);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notArrayIdxLabel);
+
+        // $Arguments and legacy List<object> carriers: indexed data
+        // descriptors must update the live backing slot too. PDS owns the
+        // attributes, while List storage owns ordinary reads.
+        var notListIdxLabel = il.DefineLabel();
+        var listIdxReceiverLocal = il.DeclareLocal(_types.ListOfObject);
+        var listIdxWriteLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Stloc, listIdxReceiverLocal);
+        il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);
+        il.Emit(OpCodes.Brfalse, notListIdxLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, listIdxWriteLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, notListIdxLabel);
+        il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, notListIdxLabel);
+        il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
+        il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, notListIdxLabel);
+        var writeListIdxLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, wasGenericLocal);
+        il.Emit(OpCodes.Brfalse, writeListIdxLabel);
+        il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);
+        il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, endLabel);
+        il.MarkLabel(writeListIdxLabel);
+        il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);
+        il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
+        il.Emit(OpCodes.Ldloc, valueToWriteLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", _types.Int32, _types.Object));
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notListIdxLabel);
 
         // Also write the value to $Object._fields when target is $Object.
         // Same generic-skip semantics as the dict path.
@@ -1716,6 +1807,7 @@ public partial class RuntimeEmitter
         var handleArrayLabel = il.DefineLabel();
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         var indexLocal = il.DeclareLocal(_types.Int32);
+        var descriptorReceiverIsTSArray = il.DeclareLocal(_types.Boolean);
 
         // Check for List<object?>
         il.Emit(OpCodes.Ldarg_0);
@@ -1734,6 +1826,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
         il.Emit(OpCodes.Stloc, listLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, descriptorReceiverIsTSArray);
         il.Emit(OpCodes.Br, handleArrayLabel);
 
         il.MarkLabel(isListLabel);
@@ -1798,10 +1892,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, returnNullLabel);
+
+        // $TSArray length can include holes. A deleted index is not an own
+        // property even though it remains below Elements.Count; raw List
+        // receivers retain their dense in-bounds semantics.
+        var descriptorArrayIndexPresent = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorReceiverIsTSArray);
+        il.Emit(OpCodes.Brfalse, descriptorArrayIndexPresent);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brfalse, returnNullLabel);
+        il.MarkLabel(descriptorArrayIndexPresent);
+
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, returnNullLabel);
+
+        // Arguments/legacy List carriers use the shared hole sentinel for a
+        // deleted index. In-range holes are absent own properties.
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
 
         // Return element descriptor: { value: element, writable: true, enumerable: true, configurable: true }
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);

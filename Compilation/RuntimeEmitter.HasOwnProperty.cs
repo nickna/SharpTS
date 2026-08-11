@@ -269,11 +269,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, listNotIndexLabel);
+        // $TSArray inherits List<object>, but its logical length may contain
+        // holes. Consult HasIndex before the dense List range check; if the
+        // slot is an accessor-only index, the PDS fallback below still reports
+        // it as own.
+        var listReceiverIsPlain = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, listReceiverIsPlain);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, listIdxLocal);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.Emit(OpCodes.Br, listNotIndexLabel);
+        il.MarkLabel(listReceiverIsPlain);
         il.Emit(OpCodes.Ldloc, listIdxLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, listNotIndexLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldloc, listIdxLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brtrue, listNotIndexLabel);
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(listNotIndexLabel);
         // PDS fallback for named properties stored via the $TSArray set path.
