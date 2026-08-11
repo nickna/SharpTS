@@ -76,7 +76,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         return true;
     }
 
-    /// <summary>Emits: RuntimeTypes.DnsPromisesXxx(hostname) → Task → WrapTaskAsPromise</summary>
+    /// <summary>Emits a call to the pure-IL $Runtime DNS promise wrapper.</summary>
     private static bool EmitSingleArg(IEmitterContext emitter, List<Expr> arguments, string runtimeMethod)
     {
         var ctx = emitter.Context;
@@ -95,7 +95,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         return true;
     }
 
-    /// <summary>Emits: RuntimeTypes.DnsPromisesLookup(hostname, options) → Task → WrapTaskAsPromise</summary>
+    /// <summary>Emits a call to the pure-IL $Runtime lookup promise wrapper.</summary>
     private static bool EmitLookup(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
@@ -124,7 +124,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         return true;
     }
 
-    /// <summary>Emits: RuntimeTypes.DnsPromisesResolve(hostname, rrtype) → Task → WrapTaskAsPromise</summary>
+    /// <summary>Emits a call to the pure-IL $Runtime resolve promise wrapper.</summary>
     private static bool EmitResolve(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;

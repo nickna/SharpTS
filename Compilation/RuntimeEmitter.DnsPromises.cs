@@ -8,7 +8,7 @@ namespace SharpTS.Compilation;
 /// <summary>
 /// Emits dns/promises support methods into the $Runtime class.
 /// Pure IL — calls existing emitted DNS sync methods (DnsLookup, DnsResolveRecord)
-/// wrapped in Task.Run via display classes to run on a thread pool thread (non-blocking).
+/// through a shared event-loop-aware Task.Run helper (non-blocking).
 /// No reflection back to SharpTS.dll.
 /// </summary>
 public partial class RuntimeEmitter
@@ -27,6 +27,12 @@ public partial class RuntimeEmitter
     private ConstructorBuilder _dnsDisplay2Ctor = null!;
     private MethodBuilder _dnsDisplay2Invoke = null!;
 
+    // Shared promise runner infrastructure. The completion closure transfers the
+    // pool task's terminal state to a facade task on the event-loop thread.
+    private ConstructorBuilder _dnsAsyncCompletionCtor = null!;
+    private MethodBuilder _dnsAsyncCompletionSchedule = null!;
+    private MethodBuilder _dnsRunAsync = null!;
+
     private void EmitDnsPromisesMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         runtime.DnsPromisesWrapperMethods = new Dictionary<string, MethodBuilder>();
@@ -34,6 +40,7 @@ public partial class RuntimeEmitter
         // Emit display classes for closures
         EmitDnsDisplayClass1(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
         EmitDnsDisplayClass2(typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder"));
+        EmitDnsAsyncRunner(typeBuilder, runtime);
 
         // Single-arg record type resolvers: hostname → DnsResolveRecord(hostname, rrtype)
         var rrtypes = new (string MethodName, string Rrtype)[]
@@ -128,7 +135,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // Invoke() → calls _method.Invoke(null, new object[] { _hostname })
+        // Invoke() → calls _method.Invoke(null, new object[] { _hostname }),
+        // preserving the sync helper's original exception as the Task fault.
         _dnsDisplay1Invoke = _dnsDisplayClass1.DefineMethod(
             "Invoke",
             MethodAttributes.Public,
@@ -136,6 +144,8 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
         {
             var il = _dnsDisplay1Invoke.GetILGenerator();
+            var resultLocal = il.DeclareLocal(_types.Object);
+            il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _dnsDisplay1Method);
             il.Emit(OpCodes.Ldnull); // target (static)
@@ -147,6 +157,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, _dnsDisplay1Hostname);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            EmitDnsRethrowInnerException(il);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ret);
         }
 
@@ -182,6 +196,8 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
         {
             var il = _dnsDisplay2Invoke.GetILGenerator();
+            var resultLocal = il.DeclareLocal(_types.Object);
+            il.BeginExceptionBlock();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _dnsDisplay2Method);
             il.Emit(OpCodes.Ldnull);
@@ -198,10 +214,203 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, _dnsDisplay2Arg1);
             il.Emit(OpCodes.Stelem_Ref);
             il.Emit(OpCodes.Callvirt, typeof(MethodBase).GetMethod("Invoke", [typeof(object), typeof(object[])])!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            EmitDnsRethrowInnerException(il);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ret);
         }
 
         _dnsDisplayClass2.CreateType();
+    }
+
+    /// <summary>
+    /// Emits a catch block for reflection-based DNS workers that rethrows the
+    /// helper's exception instead of exposing TargetInvocationException.
+    /// </summary>
+    private void EmitDnsRethrowInnerException(ILGenerator il)
+    {
+        il.BeginCatchBlock(typeof(TargetInvocationException));
+        var exceptionLocal = il.DeclareLocal(typeof(TargetInvocationException));
+        var hasInner = il.DefineLabel();
+        il.Emit(OpCodes.Stloc, exceptionLocal);
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Exception).GetProperty("InnerException")!.GetGetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, hasInner);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
+        il.MarkLabel(hasInner);
+        il.Emit(OpCodes.Throw);
+    }
+
+    /// <summary>
+    /// Emits the shared DNS promise runner. Each worker owns one event-loop ref.
+    /// Its facade task is settled on the loop thread before that ref is released,
+    /// ensuring guest await continuations become visible while the loop is live.
+    /// </summary>
+    private void EmitDnsAsyncRunner(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var moduleBuilder = typeBuilder.Module as ModuleBuilder ?? throw new Exception("need ModuleBuilder");
+        var completionType = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$DnsAsyncCompletion",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var taskField = completionType.DefineField("_task", _types.TaskOfObject, FieldAttributes.Private);
+        var tcsField = completionType.DefineField(
+            "_completion", _types.TaskCompletionSourceOfObject, FieldAttributes.Private);
+
+        _dnsAsyncCompletionCtor = completionType.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.TaskCompletionSourceOfObject]);
+        {
+            var il = _dnsAsyncCompletionCtor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, tcsField);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var complete = completionType.DefineMethod(
+            "Complete", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        {
+            var il = complete.GetILGenerator();
+            var canceled = il.DefineLabel();
+            var faulted = il.DefineLabel();
+            var settled = il.DefineLabel();
+
+            il.BeginExceptionBlock();
+
+            // Cancellation retains its task state rather than becoming a fault.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, taskField);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCanceled").GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, canceled);
+
+            // Fault with the worker's exception, not Task.Exception's AggregateException.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, taskField);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsFaulted").GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, faulted);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, tcsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, taskField);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskCompletionSourceOfObject, "SetResult", [_types.Object])!);
+            il.Emit(OpCodes.Br, settled);
+
+            il.MarkLabel(canceled);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, tcsField);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(
+                _types.TaskCompletionSourceOfObject, "SetCanceled"));
+            il.Emit(OpCodes.Br, settled);
+
+            il.MarkLabel(faulted);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, tcsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, taskField);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "Exception").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "InnerException").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskCompletionSourceOfObject, "SetException", [_types.Exception])!);
+
+            // The finally begins only after the facade task has been settled.
+            il.MarkLabel(settled);
+            il.BeginFinallyBlock();
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+            il.EndExceptionBlock();
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Pool continuation: retain the terminal worker task, then enqueue the
+        // settlement action. It never settles or Unrefs from the pool thread.
+        _dnsAsyncCompletionSchedule = completionType.DefineMethod(
+            "Schedule", MethodAttributes.Public, _types.Void, [_types.TaskOfObject]);
+        {
+            var il = _dnsAsyncCompletionSchedule.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, taskField);
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldftn, complete);
+            il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            il.Emit(OpCodes.Ret);
+        }
+
+        completionType.CreateType();
+
+        var taskRunOpen = typeof(Task).GetMethods(BindingFlags.Public | BindingFlags.Static)
+            .First(method => method.Name == "Run" && method.IsGenericMethodDefinition
+                && method.GetParameters().Length == 1
+                && method.GetParameters()[0].ParameterType.IsGenericType
+                && method.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == typeof(Func<>));
+        var taskRun = EmitGenerics.MakeGenericMethod(taskRunOpen, _types.Object);
+        var funcType = _types.MakeGenericType(typeof(Func<>), _types.Object);
+        var continuationType = _types.MakeGenericType(typeof(Action<>), _types.TaskOfObject);
+
+        _dnsRunAsync = typeBuilder.DefineMethod(
+            "DnsRunAsync",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [funcType]);
+        {
+            var il = _dnsRunAsync.GetILGenerator();
+            var tcsLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
+            var completionLocal = il.DeclareLocal(completionType);
+            var taskLocal = il.DeclareLocal(_types.TaskOfObject);
+            var exceptionLocal = il.DeclareLocal(_types.Exception);
+
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.TaskCompletionSourceOfObject));
+            il.Emit(OpCodes.Stloc, tcsLocal);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Newobj, _dnsAsyncCompletionCtor);
+            il.Emit(OpCodes.Stloc, completionLocal);
+
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+
+            // Balance the ref if Task.Run or continuation registration throws
+            // synchronously. Once registered, the completion closure owns it.
+            il.BeginExceptionBlock();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, taskRun);
+            il.Emit(OpCodes.Stloc, taskLocal);
+            il.Emit(OpCodes.Ldloc, taskLocal);
+            il.Emit(OpCodes.Ldloc, completionLocal);
+            il.Emit(OpCodes.Ldftn, _dnsAsyncCompletionSchedule);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                continuationType, [_types.Object, typeof(IntPtr)])!);
+            il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskOfObject,
+                "ContinueWith",
+                [continuationType, typeof(TaskContinuationOptions)])!);
+            il.Emit(OpCodes.Pop);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Stloc, exceptionLocal);
+            il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            il.Emit(OpCodes.Callvirt, runtime.EventLoopUnref);
+            il.Emit(OpCodes.Ldloc, exceptionLocal);
+            il.Emit(OpCodes.Throw);
+            il.EndExceptionBlock();
+
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>
@@ -241,7 +450,8 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits 1-arg async wrapper: creates display class, calls Task.Run(() => syncHelper(hostname)) → WrapTaskAsPromise.
+    /// Emits 1-arg async wrapper: creates the worker closure, then calls the
+    /// shared event-loop-aware runner and WrapTaskAsPromise.
     /// </summary>
     private void EmitDnsAsyncWrapper1(TypeBuilder typeBuilder, EmittedRuntime runtime,
         string methodName, MethodBuilder syncHelper)
@@ -271,11 +481,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         il.Emit(OpCodes.Stfld, _dnsDisplay1Method);
 
-        // Task.Run<object?>(new Func<object?>(dc.Invoke))
+        // DnsRunAsync(new Func<object?>(dc.Invoke))
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldftn, _dnsDisplay1Invoke);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
+        il.Emit(OpCodes.Call, _dnsRunAsync);
 
         // WrapTaskAsPromise
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);
@@ -285,7 +495,8 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits 2-arg async wrapper: similar but packs 2 args into display class.
+    /// Emits 2-arg async wrapper: packs both arguments into the worker closure,
+    /// then uses the same event-loop-aware runner as the 1-arg path.
     /// </summary>
     private void EmitDnsAsyncWrapper2(TypeBuilder typeBuilder, EmittedRuntime runtime,
         string methodName, MethodBuilder syncHelper)
@@ -329,11 +540,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, typeof(MethodInfo));
         il.Emit(OpCodes.Stfld, _dnsDisplay2Method);
 
-        // Task.Run<object?>(new Func<object?>(dc.Invoke))
+        // DnsRunAsync(new Func<object?>(dc.Invoke))
         il.Emit(OpCodes.Ldloc, dcLocal);
         il.Emit(OpCodes.Ldftn, _dnsDisplay2Invoke);
         il.Emit(OpCodes.Newobj, typeof(Func<object?>).GetConstructors()[0]);
-        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("Run", 1, [_types.MakeGenericType(typeof(Func<>), Type.MakeGenericMethodParameter(0))])!, typeof(object)));
+        il.Emit(OpCodes.Call, _dnsRunAsync);
 
         // WrapTaskAsPromise
         il.Emit(OpCodes.Call, runtime.WrapTaskAsPromise);

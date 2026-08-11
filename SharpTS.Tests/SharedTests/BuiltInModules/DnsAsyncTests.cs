@@ -33,13 +33,14 @@ public class DnsAsyncTests
     });
 
     /// <summary>Runs main.ts with SHARPTS_DNS_SERVER pointed at the fake server.</summary>
-    private static string RunWithFakeDns(FakeDnsServer server, string source, ExecutionMode mode)
+    private static string RunWithFakeDns(
+        FakeDnsServer server, string source, ExecutionMode mode, TimeSpan? timeout = null)
     {
         Environment.SetEnvironmentVariable("SHARPTS_DNS_SERVER", server.Address);
         try
         {
             return TestHarness.RunModules(
-                new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode);
+                new Dictionary<string, string> { ["main.ts"] = source }, "main.ts", mode, timeout);
         }
         finally
         {
@@ -226,5 +227,56 @@ public class DnsAsyncTests
             """, mode);
 
         Assert.Equal("true\n127.0.0.1\n", output);
+    }
+
+    [Fact]
+    public void DnsPromises_UnawaitedMain_DelayedOneAndTwoArgumentCalls_StayAlive_Compiled()
+    {
+        using var server = new FakeDnsServer((request, _) =>
+        {
+            Thread.Sleep(600); // longer than the compiled loop's quiescence window
+            return DnsPackets.Response(request, 0,
+                DnsPackets.Record(DnsWireProtocol.TypeA, DnsPackets.A("127.0.0.1")));
+        });
+
+        var output = RunWithFakeDns(server, """
+            import dns from 'dns/promises';
+            async function main() {
+                const resolve4Result = await dns.resolve4('one.fake.test');
+                console.log('resolve4 ' + resolve4Result[0]);
+                const resolveResult = await dns.resolve('two.fake.test', 'A');
+                console.log('resolve ' + resolveResult[0]);
+            }
+            main();
+            """, ExecutionMode.Compiled, TimeSpan.FromSeconds(5));
+
+        Assert.Equal("resolve4 127.0.0.1\nresolve 127.0.0.1\n", output);
+        Assert.Equal(2, server.QueryCount);
+    }
+
+    [Fact]
+    public void DnsPromises_UnawaitedMain_DelayedNxdomain_RejectsAndReleasesLoopRef_Compiled()
+    {
+        using var server = new FakeDnsServer((request, _) =>
+        {
+            Thread.Sleep(600); // prove the DNS operation is the only keep-alive work
+            return DnsPackets.Response(request, 3);
+        });
+
+        var output = RunWithFakeDns(server, """
+            import dns from 'dns/promises';
+            async function main() {
+                try {
+                    await dns.resolve4('missing.fake.test');
+                    console.log('no error');
+                } catch (e) {
+                    console.log('error caught');
+                }
+            }
+            main();
+            """, ExecutionMode.Compiled, TimeSpan.FromSeconds(5));
+
+        Assert.Equal("error caught\n", output);
+        Assert.Equal(1, server.QueryCount);
     }
 }
