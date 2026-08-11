@@ -616,6 +616,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDelegateForProtoLabel);
+
+        // Native error constructors form an actual constructor inheritance
+        // chain: TypeError/RangeError/etc. have Error as [[Prototype]]. Their
+        // compiled identities are CLR Type objects whose BaseType mirrors that
+        // hierarchy, so preserve it before the generic Type →
+        // Function.prototype fallback below.
+        var notDerivedErrorCtorForProtoLabel = il.DefineLabel();
+        var errorCtorTypeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Stloc, errorCtorTypeLocal);
+        il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
+        il.Emit(OpCodes.Brfalse, notDerivedErrorCtorForProtoLabel);
+        il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brfalse, notDerivedErrorCtorForProtoLabel);
+        il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
+        il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Beq, notDerivedErrorCtorForProtoLabel);
+        il.Emit(OpCodes.Ldloc, errorCtorTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notDerivedErrorCtorForProtoLabel);
+
         var notTypeForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Type);

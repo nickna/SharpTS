@@ -5112,6 +5112,16 @@ public sealed class Issue1279ParityTests
     public void Promise_capabilities_follow_builtin_and_constructor_contracts(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-12.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-13.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-14.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-15.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-16.js")]
+    [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-17.js")]
+    public void Native_error_constructor_prototype_chain_matches_error(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

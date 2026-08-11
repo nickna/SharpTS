@@ -62,4 +62,16 @@ public sealed class Issue1279ParityRuntimeTests
 
         Assert.Equal("true\ntrue\n2\n", TestHarness.RunCompiled(source));
     }
+
+    [Fact]
+    public void Native_error_constructors_inherit_from_error_constructor()
+    {
+        const string source = """
+            console.log(Object.getPrototypeOf(TypeError) === Error);
+            console.log(Object.getPrototypeOf(RangeError) === Error);
+            console.log(Object.getPrototypeOf(Error) === Function.prototype);
+            """;
+
+        Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunCompiled(source));
+    }
 }
