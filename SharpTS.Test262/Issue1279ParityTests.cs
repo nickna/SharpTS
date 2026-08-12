@@ -3928,6 +3928,36 @@ public sealed class Issue1279ParityTests
     public void RegExp_replace_observes_flag_access(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    public static TheoryData<string> CompiledRegExpReplaceProtocolCases => new()
+    {
+        "built-ins/RegExp/prototype/Symbol.replace/coerce-global.js",
+        "built-ins/RegExp/prototype/Symbol.replace/coerce-lastindex-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/coerce-unicode.js",
+        "built-ins/RegExp/prototype/Symbol.replace/fn-invoke-args-empty-result.js",
+        "built-ins/RegExp/prototype/Symbol.replace/g-init-lastindex-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/g-pos-decrement.js",
+        "built-ins/RegExp/prototype/Symbol.replace/g-pos-increment.js",
+        "built-ins/RegExp/prototype/Symbol.replace/get-exec-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-capture-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-capture.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-index-undefined.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-index.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-length-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-length.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-matched-global.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-coerce-matched.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-get-capture-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/result-get-length-err.js",
+        "built-ins/RegExp/prototype/Symbol.replace/u-advance-after-empty.js",
+        "built-ins/RegExp/prototype/Symbol.replace/y-fail-global-return.js",
+        "built-ins/RegExp/prototype/Symbol.replace/subst-capture-idx-2.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(CompiledRegExpReplaceProtocolCases))]
+    public void RegExp_replace_follows_exec_result_protocol_when_compiled(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     [Theory]
     [InlineData("built-ins/BigInt/asIntN/arithmetic.js")]
     [InlineData("built-ins/BigInt/asIntN/length.js")]

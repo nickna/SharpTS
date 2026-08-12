@@ -31,6 +31,8 @@ public partial class RuntimeEmitter
     private MethodBuilder _tsRegExpMatchAllMethod = null!;
     private MethodBuilder _tsRegExpReplaceMethod = null!;
     private MethodBuilder _tsRegExpReplaceWithFnMethod = null!;
+    private MethodBuilder _tsRegExpExpandReplacementSpecMethod = null!;
+    private MethodBuilder _tsRegExpAdvanceStringIndexSpecMethod = null!;
     private MethodBuilder _tsRegExpSearchMethod = null!;
     private MethodBuilder _tsRegExpSplitMethod = null!;
     private MethodBuilder _tsRegExpHasNamedGroupsMethod = null!;
@@ -135,6 +137,8 @@ public partial class RuntimeEmitter
         EmitTSRegExpMatchAll(typeBuilder, runtime);
         EmitTSRegExpReplace(typeBuilder, runtime);
         EmitTSRegExpReplaceWithFn(typeBuilder, runtime);
+        EmitTSRegExpExpandReplacementSpec(typeBuilder, runtime);
+        EmitTSRegExpAdvanceStringIndexSpec(typeBuilder);
         EmitTSRegExpSearch(typeBuilder, runtime);
         EmitTSRegExpSplit(typeBuilder, runtime);
 
@@ -3414,6 +3418,305 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitTSRegExpAdvanceStringIndexSpec(TypeBuilder typeBuilder)
+    {
+        var method = typeBuilder.DefineMethod(
+            "AdvanceStringIndexSpec",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Int32,
+            [_types.String, _types.Int32, _types.Boolean]);
+        _tsRegExpAdvanceStringIndexSpecMethod = method;
+        var il = method.GetILGenerator();
+        var one = il.DefineLabel();
+        var length = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
+        var chars = _types.GetMethod(_types.String, "get_Chars", _types.Int32);
+
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, one);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, length);
+        il.Emit(OpCodes.Bge, one);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, chars);
+        il.Emit(OpCodes.Ldc_I4, 0xD800);
+        il.Emit(OpCodes.Blt, one);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, chars);
+        il.Emit(OpCodes.Ldc_I4, 0xDBFF);
+        il.Emit(OpCodes.Bgt, one);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, chars);
+        il.Emit(OpCodes.Ldc_I4, 0xDC00);
+        il.Emit(OpCodes.Blt, one);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, chars);
+        il.Emit(OpCodes.Ldc_I4, 0xDFFF);
+        il.Emit(OpCodes.Bgt, one);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(one);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the GetSubstitution string-token expansion used by the generic
+    /// RegExp @@replace path. Captures are already ToString-coerced, with the
+    /// emitted undefined singleton preserving unmatched captures.
+    /// </summary>
+    private void EmitTSRegExpExpandReplacementSpec(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ExpandReplacementSpec",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.String,
+            [_types.String, _types.String, _types.String, _types.Int32, _types.ListOfObject]);
+        _tsRegExpExpandReplacementSpecMethod = method;
+
+        var il = method.GetILGenerator();
+        var sb = il.DeclareLocal(_types.StringBuilder);
+        var i = il.DeclareLocal(_types.Int32);
+        var next = il.DeclareLocal(_types.Char);
+        var captureNumber = il.DeclareLocal(_types.Int32);
+        var consumed = il.DeclareLocal(_types.Int32);
+        var capture = il.DeclareLocal(_types.Object);
+        var tailStart = il.DeclareLocal(_types.Int32);
+
+        var stringLength = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
+        var stringChars = _types.GetMethod(_types.String, "get_Chars", _types.Int32);
+        var appendChar = _types.GetMethod(_types.StringBuilder, "Append", _types.Char);
+        var appendString = _types.GetMethod(_types.StringBuilder, "Append", _types.String);
+        var listCount = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
+        var listItem = _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!;
+
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.StringBuilder));
+        il.Emit(OpCodes.Stloc, sb);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, i);
+
+        var loop = il.DefineLabel();
+        var loopTest = il.DefineLabel();
+        var ordinary = il.DefineLabel();
+        var tokenDone = il.DefineLabel();
+        var notDollar = il.DefineLabel();
+        var notMatch = il.DefineLabel();
+        var notPrefix = il.DefineLabel();
+        var notSuffix = il.DefineLabel();
+        var digit = il.DefineLabel();
+        var appendCapture = il.DefineLabel();
+        var captureDone = il.DefineLabel();
+
+        il.Emit(OpCodes.Br, loopTest);
+        il.MarkLabel(loop);
+        // A '$' without a following code unit is ordinary text.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Callvirt, stringChars);
+        il.Emit(OpCodes.Ldc_I4, (int)'$');
+        il.Emit(OpCodes.Bne_Un, ordinary);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Bge, ordinary);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, stringChars);
+        il.Emit(OpCodes.Stloc, next);
+
+        // $$
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'$');
+        il.Emit(OpCodes.Bne_Un, notDollar);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldc_I4, (int)'$');
+        il.Emit(OpCodes.Callvirt, appendChar);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, tokenDone);
+
+        // $&
+        il.MarkLabel(notDollar);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'&');
+        il.Emit(OpCodes.Bne_Un, notMatch);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, tokenDone);
+
+        // $`
+        il.MarkLabel(notMatch);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'`');
+        il.Emit(OpCodes.Bne_Un, notPrefix);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, tokenDone);
+
+        // $'
+        il.MarkLabel(notPrefix);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'\'');
+        il.Emit(OpCodes.Bne_Un, notSuffix);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, tailStart);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, tailStart);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, tokenDone);
+
+        // $n / $nn. A nonexistent capture leaves '$' literal and lets the
+        // following digit(s) be processed normally on subsequent iterations.
+        il.MarkLabel(notSuffix);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'0');
+        il.Emit(OpCodes.Blt, ordinary);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'9');
+        il.Emit(OpCodes.Bgt, ordinary);
+        il.MarkLabel(digit);
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'0');
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, captureNumber);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, consumed);
+
+        var noSecondDigit = il.DefineLabel();
+        var rejectSecondDigit = il.DefineLabel();
+        var twoDigit = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Bge, noSecondDigit);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, stringChars);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4, (int)'0');
+        il.Emit(OpCodes.Blt, rejectSecondDigit);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4, (int)'9');
+        il.Emit(OpCodes.Bgt, rejectSecondDigit);
+        il.Emit(OpCodes.Ldc_I4, (int)'0');
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldloc, captureNumber);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, twoDigit);
+        il.Emit(OpCodes.Ldloc, twoDigit);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Callvirt, listCount);
+        il.Emit(OpCodes.Bgt, noSecondDigit);
+        il.Emit(OpCodes.Ldloc, twoDigit);
+        il.Emit(OpCodes.Stloc, captureNumber);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Stloc, consumed);
+        il.Emit(OpCodes.Br, noSecondDigit);
+        il.MarkLabel(rejectSecondDigit);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(noSecondDigit);
+
+        il.Emit(OpCodes.Ldloc, captureNumber);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ldloc, captureNumber);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Callvirt, listCount);
+        il.Emit(OpCodes.Bgt, ordinary);
+        il.Emit(OpCodes.Ldarg_S, (byte)4);
+        il.Emit(OpCodes.Ldloc, captureNumber);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, listItem);
+        il.Emit(OpCodes.Stloc, capture);
+        il.Emit(OpCodes.Ldloc, capture);
+        il.Emit(OpCodes.Brfalse, captureDone);
+        il.Emit(OpCodes.Ldloc, capture);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, appendCapture);
+        il.Emit(OpCodes.Br, captureDone);
+        il.MarkLabel(appendCapture);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldloc, capture);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(captureDone);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldloc, consumed);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, i);
+        var increment = il.DefineLabel();
+        il.Emit(OpCodes.Br, increment);
+
+        il.MarkLabel(ordinary);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Callvirt, stringChars);
+        il.Emit(OpCodes.Callvirt, appendChar);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, increment);
+
+        il.MarkLabel(tokenDone);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, i);
+        il.Emit(OpCodes.Br, loopTest);
+        il.MarkLabel(increment);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, i);
+
+        il.MarkLabel(loopTest);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Blt, loop);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits SymReplace(object rx, object str, object replacement) -> string.
     /// </summary>
@@ -3428,7 +3731,6 @@ public partial class RuntimeEmitter
         runtime.TSRegExpSymReplaceHelper = method;
 
         var il = method.GetILGenerator();
-        var rxLocal = il.DeclareLocal(typeBuilder);
         var sLocal = il.DeclareLocal(_types.String);
         var rLocal = il.DeclareLocal(_types.String);
 
@@ -3441,13 +3743,12 @@ public partial class RuntimeEmitter
         //   step 6: If !functionalReplace, replaceValue = ToString(replaceValue).
         //   step 7: flags = ToString(Get(rx, "flags")).
         // The ToString side effects (Symbol → TypeError, throwing toString,
-        // throwing flags-getter) all surface before the brand-narrow so non-
-        // \$RegExp `this` with poisoned getters propagates the user's error.
+        // throwing flags-getter) all surface before RegExpExec dispatch.
         EmitArgToJsString(il, runtime, argIndex: 1, sLocal);
 
         // Check if replaceValue is callable BEFORE coercing to string. A
-        // $TSFunction goes to the functional path; anything else gets
-        // ToString'd into rLocal for the existing string-replace fast path.
+        // $TSFunction goes to the functional path; anything else is eagerly
+        // ToString'd as required before any regexp flag access.
         var fnReplaceLocal = il.DeclareLocal(runtime.TSFunctionType);
         var notFunctionalLabel = il.DefineLabel();
         var afterReplaceCoerceLabel = il.DefineLabel();
@@ -3468,148 +3769,344 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, replaceFlagsLocal);
 
-        // Narrow to $RegExp after side effects observed. Non-$RegExp `this`
-        // throws TypeError instead of InvalidCastException.
+        // From this point onward use one RegExpExec-driven algorithm for both
+        // built-in regexes and overridden `exec` methods. The old typed
+        // Replace/ReplaceWithFn forks skipped result coercion, global match
+        // collection, and observable lastIndex operations.
+        EmitSymReplaceSpecPath(il, runtime, sLocal, rLocal, fnReplaceLocal);
+    }
+
+    private void EmitSymReplaceSpecPath(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder sLocal,
+        LocalBuilder replacementStringLocal,
+        LocalBuilder replacementFunctionLocal)
+    {
+        var rx = il.DeclareLocal(_types.Object);
+        var global = il.DeclareLocal(_types.Boolean);
+        var unicode = il.DeclareLocal(_types.Boolean);
+        var matches = il.DeclareLocal(_types.ListOfObject);
+        var execResult = il.DeclareLocal(_types.Object);
+        var matched = il.DeclareLocal(_types.String);
+        var i = il.DeclareLocal(_types.Int32);
+        var matchCount = il.DeclareLocal(_types.Int32);
+        var sb = il.DeclareLocal(_types.StringBuilder);
+        var nextSource = il.DeclareLocal(_types.Int32);
+        var position = il.DeclareLocal(_types.Int32);
+        var length = il.DeclareLocal(_types.Int32);
+        var captures = il.DeclareLocal(_types.ListOfObject);
+        var captureIndex = il.DeclareLocal(_types.Int32);
+        var captureValue = il.DeclareLocal(_types.Object);
+        var replacement = il.DeclareLocal(_types.String);
+        var currentIndex = il.DeclareLocal(_types.Int32);
+
+        var listAdd = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
+        var listCountGet = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
+        var listItemGet = _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!;
+        var stringLength = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
+        var appendString = _types.GetMethod(_types.StringBuilder, "Append", _types.String);
+
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeBuilder);
-        il.Emit(OpCodes.Stloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        var rxOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, rxOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype[Symbol.replace] requires a RegExp receiver");
-        il.MarkLabel(rxOkLabel);
+        il.Emit(OpCodes.Stloc, rx);
 
-        // Spec-aligned global: assembled-flags-string controls looping per
-        // ECMA-262 §22.2.5.10 step 8 (`global = ToBoolean(Get(rx, "global"))`).
-        // Bool persists across both functional and string-replace dispatch.
-        var isGlobalLocal = il.DeclareLocal(_types.Boolean);
-        il.Emit(OpCodes.Ldloc, replaceFlagsLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)'g');
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
-        il.Emit(OpCodes.Stloc, isGlobalLocal);
+        // global = ToBoolean(Get(rx, "global")); the earlier flags read is
+        // retained because RegExp.prototype.flags has separately observable
+        // getter/coercion side effects.
+        il.Emit(OpCodes.Ldloc, rx);
+        il.Emit(OpCodes.Ldstr, "global");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Stloc, global);
 
-        var stringReplaceLabel = il.DefineLabel();
-        var fallbackReplaceLabel = il.DefineLabel();
+        var afterUnicode = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, global);
+        il.Emit(OpCodes.Brfalse, afterUnicode);
+        il.Emit(OpCodes.Ldloc, rx);
+        il.Emit(OpCodes.Ldstr, "unicode");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Stloc, unicode);
+        EmitStrictWritableCheck(il, runtime, rx, "lastIndex");
+        il.Emit(OpCodes.Ldloc, rx);
+        il.Emit(OpCodes.Ldstr, "lastIndex");
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.MarkLabel(afterUnicode);
 
-        // ECMA-262 §22.2.5.10 step 12 — spec-aligned RegExpExec dispatch
-        // (which honors `r.exec` overrides). For the non-functional +
-        // non-global path with a literal replacement (no '$' substitution
-        // syntax), do a single RegExpExec + substring concat here so
-        // test262 `exec-invocation` etc. see the user `r.exec` call.
-        // Functional, global, or `$`-bearing replacements fall through
-        // to the typed Replace path (which doesn't dispatch user exec —
-        // separate architectural blocker — but does honor .NET's ECMAScript
-        // substitution syntax for subst-* tests on default regexes).
-        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
-        il.Emit(OpCodes.Brtrue, fallbackReplaceLabel);
-        il.Emit(OpCodes.Ldloc, isGlobalLocal);
-        il.Emit(OpCodes.Brtrue, fallbackReplaceLabel);
-        // If replaceValue contains '$', defer to .NET's substitution
-        // machinery (typed Replace).
-        il.Emit(OpCodes.Ldloc, rLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)'$');
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
-        il.Emit(OpCodes.Brtrue, fallbackReplaceLabel);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, matches);
 
-        // Single-match path: call RegExpExec(rx, S). If null → return S.
-        // Else extract matched + index and build S[0..index] + r + S[index+matched.Length..].
-        var rxObjLocal = il.DeclareLocal(_types.Object);
-        var execResultLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stloc, rxObjLocal);
-        EmitRegExpExecSlow(il, runtime, rxObjLocal, sLocal, execResultLocal);
+        var collect = il.DefineLabel();
+        var collected = il.DefineLabel();
+        var nonEmptyMatch = il.DefineLabel();
+        il.MarkLabel(collect);
+        EmitRegExpExecSlow(il, runtime, rx, sLocal, execResult);
+        il.Emit(OpCodes.Ldloc, execResult);
+        il.Emit(OpCodes.Brfalse, collected);
+        il.Emit(OpCodes.Ldloc, matches);
+        il.Emit(OpCodes.Ldloc, execResult);
+        il.Emit(OpCodes.Callvirt, listAdd);
+        il.Emit(OpCodes.Ldloc, global);
+        il.Emit(OpCodes.Brfalse, collected);
 
-        var nonNullResultLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, execResultLocal);
-        il.Emit(OpCodes.Brtrue, nonNullResultLabel);
-        // result == null → return S unchanged.
-        il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(nonNullResultLabel);
-        // matched = ToJsString(Get(result, "0"))
-        var matchedLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, execResultLocal);
+        // Empty global matches must advance lastIndex to guarantee progress.
+        il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "0");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, matchedLocal);
+        il.Emit(OpCodes.Stloc, matched);
+        il.Emit(OpCodes.Ldloc, matched);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Brtrue, nonEmptyMatch);
+        EmitStrictWritableCheck(il, runtime, rx, "lastIndex");
+        il.Emit(OpCodes.Ldloc, rx);
+        il.Emit(OpCodes.Ldstr, "lastIndex");
+        il.Emit(OpCodes.Ldloc, rx);
+        il.Emit(OpCodes.Ldstr, "lastIndex");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Stloc, currentIndex);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Ldloc, currentIndex);
+        il.Emit(OpCodes.Ldloc, unicode);
+        il.Emit(OpCodes.Call, _tsRegExpAdvanceStringIndexSpecMethod);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.SetProperty);
+        il.MarkLabel(nonEmptyMatch);
+        il.Emit(OpCodes.Br, collect);
 
-        // position = JsToInt32(Get(result, "index"))
-        var positionLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldloc, execResultLocal);
+        il.MarkLabel(collected);
+        il.Emit(OpCodes.Ldloc, matches);
+        il.Emit(OpCodes.Callvirt, listCountGet);
+        il.Emit(OpCodes.Stloc, matchCount);
+        var haveMatches = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, matchCount);
+        il.Emit(OpCodes.Brtrue, haveMatches);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(haveMatches);
+
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.StringBuilder));
+        il.Emit(OpCodes.Stloc, sb);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, nextSource);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, i);
+
+        var process = il.DefineLabel();
+        var processTest = il.DefineLabel();
+        var positionNonNegative = il.DefineLabel();
+        var positionClamped = il.DefineLabel();
+        var lengthNonNegative = il.DefineLabel();
+        var captureLoop = il.DefineLabel();
+        var capturesDone = il.DefineLabel();
+        var captureUndefined = il.DefineLabel();
+        var captureStored = il.DefineLabel();
+        var stringReplacement = il.DefineLabel();
+        var haveReplacement = il.DefineLabel();
+        var skipOverlapping = il.DefineLabel();
+
+        il.Emit(OpCodes.Br, processTest);
+        il.MarkLabel(process);
+        il.Emit(OpCodes.Ldloc, matches);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Callvirt, listItemGet);
+        il.Emit(OpCodes.Stloc, execResult);
+
+        il.Emit(OpCodes.Ldloc, execResult);
+        il.Emit(OpCodes.Ldstr, "0");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, matched);
+
+        il.Emit(OpCodes.Ldloc, execResult);
         il.Emit(OpCodes.Ldstr, "index");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.JsToInt32);
-        il.Emit(OpCodes.Stloc, positionLocal);
-
-        // sLen = S.Length
-        var sLenLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Stloc, position);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, positionNonNegative);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, position);
+        il.MarkLabel(positionNonNegative);
+        il.Emit(OpCodes.Ldloc, position);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, sLenLocal);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Ble, positionClamped);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Stloc, position);
+        il.MarkLabel(positionClamped);
 
-        // Clamp position to [0, sLen].
-        var posPosLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, positionLocal);
+        il.Emit(OpCodes.Ldloc, execResult);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Ldloc, length);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, posPosLabel);
+        il.Emit(OpCodes.Bge, lengthNonNegative);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, positionLocal);
-        il.MarkLabel(posPosLabel);
-        var posClampedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, positionLocal);
-        il.Emit(OpCodes.Ldloc, sLenLocal);
-        il.Emit(OpCodes.Ble, posClampedLabel);
-        il.Emit(OpCodes.Ldloc, sLenLocal);
-        il.Emit(OpCodes.Stloc, positionLocal);
-        il.MarkLabel(posClampedLabel);
+        il.Emit(OpCodes.Stloc, length);
+        il.MarkLabel(lengthNonNegative);
 
-        // matchedEnd = min(position + matched.Length, sLen).
-        var matchedEndLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldloc, positionLocal);
-        il.Emit(OpCodes.Ldloc, matchedLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, captures);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, captureIndex);
+        il.Emit(OpCodes.Br, capturesDone);
+        il.MarkLabel(captureLoop);
+        il.Emit(OpCodes.Ldloc, execResult);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, captureValue);
+        il.Emit(OpCodes.Ldloc, captureValue);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, captureUndefined);
+        il.Emit(OpCodes.Ldloc, captureValue);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, captureValue);
+        il.Emit(OpCodes.Br, captureStored);
+        il.MarkLabel(captureUndefined);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, captureValue);
+        il.MarkLabel(captureStored);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Ldloc, captureValue);
+        il.Emit(OpCodes.Callvirt, listAdd);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, matchedEndLocal);
-        var endClampedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, matchedEndLocal);
-        il.Emit(OpCodes.Ldloc, sLenLocal);
-        il.Emit(OpCodes.Ble, endClampedLabel);
-        il.Emit(OpCodes.Ldloc, sLenLocal);
-        il.Emit(OpCodes.Stloc, matchedEndLocal);
-        il.MarkLabel(endClampedLabel);
+        il.Emit(OpCodes.Stloc, captureIndex);
+        il.MarkLabel(capturesDone);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Blt, captureLoop);
 
-        // return Concat(S.Substring(0, position), rLocal, S.Substring(matchedEnd)).
-        il.Emit(OpCodes.Ldloc, sLocal);
+        // Functional replacement: [matched, ...captures, position, S].
+        il.Emit(OpCodes.Ldloc, replacementFunctionLocal);
+        il.Emit(OpCodes.Brfalse, stringReplacement);
+        var callArgs = il.DeclareLocal(_types.ObjectArray);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Callvirt, listCountGet);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, callArgs);
+        il.Emit(OpCodes.Ldloc, callArgs);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, positionLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!);
-        il.Emit(OpCodes.Ldloc, rLocal);
+        il.Emit(OpCodes.Ldloc, matched);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, captureIndex);
+        var copyCaptures = il.DefineLabel();
+        var copiedCaptures = il.DefineLabel();
+        il.Emit(OpCodes.Br, copiedCaptures);
+        il.MarkLabel(copyCaptures);
+        il.Emit(OpCodes.Ldloc, callArgs);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Callvirt, listItemGet);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, captureIndex);
+        il.MarkLabel(copiedCaptures);
+        il.Emit(OpCodes.Ldloc, captureIndex);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Callvirt, listCountGet);
+        il.Emit(OpCodes.Blt, copyCaptures);
+        il.Emit(OpCodes.Ldloc, callArgs);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Callvirt, listCountGet);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, callArgs);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Callvirt, listCountGet);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Ldloc, matchedEndLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", [_types.Int32])!);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, replacementFunctionLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ldloc, callArgs);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, replacement);
+        il.Emit(OpCodes.Br, haveReplacement);
 
-        // If functional, dispatch to ReplaceWithFn. Else use string Replace.
-        il.MarkLabel(fallbackReplaceLabel);
-        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
-        il.Emit(OpCodes.Brfalse, stringReplaceLabel);
-        il.Emit(OpCodes.Ldloc, rxLocal);
+        il.MarkLabel(stringReplacement);
+        il.Emit(OpCodes.Ldloc, replacementStringLocal);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
-        il.Emit(OpCodes.Ldloc, isGlobalLocal);
-        il.Emit(OpCodes.Call, _tsRegExpReplaceWithFnMethod);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Ldloc, matched);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Call, _tsRegExpExpandReplacementSpecMethod);
+        il.Emit(OpCodes.Stloc, replacement);
+        il.MarkLabel(haveReplacement);
 
-        // return rx.Replace(s, r, isGlobal);
-        il.MarkLabel(stringReplaceLabel);
-        il.Emit(OpCodes.Ldloc, rxLocal);
+        // Ignore ill-behaved overlapping/backwards matches.
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldloc, nextSource);
+        il.Emit(OpCodes.Blt, skipOverlapping);
+        il.Emit(OpCodes.Ldloc, sb);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Ldloc, rLocal);
-        il.Emit(OpCodes.Ldloc, isGlobalLocal);
-        il.Emit(OpCodes.Call, _tsRegExpReplaceMethod);
+        il.Emit(OpCodes.Ldloc, nextSource);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldloc, nextSource);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldloc, replacement);
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, position);
+        il.Emit(OpCodes.Ldloc, matched);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, nextSource);
+        il.MarkLabel(skipOverlapping);
+
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, i);
+        il.MarkLabel(processTest);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldloc, matchCount);
+        il.Emit(OpCodes.Blt, process);
+
+        il.Emit(OpCodes.Ldloc, nextSource);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Callvirt, stringLength);
+        var noTail = il.DefineLabel();
+        il.Emit(OpCodes.Bge, noTail);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Ldloc, nextSource);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(noTail);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Ret);
     }
 
