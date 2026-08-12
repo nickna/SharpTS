@@ -4040,12 +4040,33 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/replaceAll/cstm-replaceall-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-before-tostring.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-call-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-replacer-method-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-tostring-regexp.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-flags-no-g-throws.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/searchValue-tostring-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/replaceValue-tostring-abrupt.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024-0x003C.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024N.js")]
+    [InlineData("built-ins/String/prototype/replaceAll/getSubstitution-0x0024NN.js")]
+    public void String_replaceAll_preserves_symbol_dispatch_before_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/String/prototype/match/cstm-matcher-invocation.js")]
     [InlineData("built-ins/String/prototype/match/cstm-matcher-is-null.js")]
     [InlineData("built-ins/String/prototype/match/invoke-builtin-match.js")]
     [InlineData("built-ins/String/prototype/match/cstm-matcher-get-err.js")]
     public void String_match_invokes_symbol_protocol(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/match/cstm-matcher-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/match/S15.5.4.10_A1_T11.js")]
+    public void String_match_preserves_primitive_fallback_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/String/prototype/match/cstm-matcher-on-bigint-primitive.js")]

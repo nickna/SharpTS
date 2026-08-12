@@ -10,13 +10,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
-    private void EmitStringSymbolDispatchPreamble(
+    private LocalBuilder EmitStringSymbolDispatchPreamble(
         ILGenerator il,
         EmittedRuntime runtime,
         FieldBuilder symbol,
         params int[] argumentIndexes)
     {
         var invokedLocal = il.DeclareLocal(_types.Boolean);
+        var hasOwnNativeSymbolLocal = il.DeclareLocal(_types.Boolean);
         var resultLocal = il.DeclareLocal(_types.Object);
         var continueLabel = il.DefineLabel();
 
@@ -32,6 +33,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stelem_Ref);
         }
         il.Emit(OpCodes.Ldloca, invokedLocal);
+        il.Emit(OpCodes.Ldloca, hasOwnNativeSymbolLocal);
         il.Emit(OpCodes.Call, runtime.StringTryInvokeSymbolMethod);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldloc, invokedLocal);
@@ -39,6 +41,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(continueLabel);
+        return hasOwnNativeSymbolLocal;
     }
 
     private void EmitRegExpMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -123,7 +126,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Runtime helper for String.prototype.replaceAll with optional RegExp pattern.
-    /// Compiled signature: (string str, object pattern, object replacement) -> object.
+    /// Compiled signature: (object receiver, object pattern, object replacement) -> object.
     /// Dispatches to $RegExp.Replace for global-regex patterns, otherwise falls
     /// back to C#'s String.Replace (full-string all-occurrences semantics).
     /// </summary>
@@ -133,18 +136,34 @@ public partial class RuntimeEmitter
             "StringReplaceAllRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.StringReplaceAllRegExp = method;
 
         var il = method.GetILGenerator();
         var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var stringLocal = il.DeclareLocal(_types.String);
         var replacementLocal = il.DeclareLocal(_types.String);
         var searchLocal = il.DeclareLocal(_types.String);
+        var effectivePatternLocal = il.DeclareLocal(_types.Object);
+        var stringCoercionLabel = il.DefineLabel();
         var stringPathLabel = il.DefineLabel();
-        var patternNullLabel = il.DefineLabel();
-        var afterSearchLabel = il.DefineLabel();
         var returnOriginalLabel = il.DefineLabel();
+
+        // RequireObjectCoercible(this) precedes every other observable step,
+        // but ToString(this) occurs only after a custom @@replace method has
+        // had the opportunity to run with the original receiver value.
+        var receiverPresentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brtrue, receiverPresentLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.replaceAll called on null or undefined");
+        il.MarkLabel(receiverPresentLabel);
+        var receiverDefinedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, receiverDefinedLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.replaceAll called on null or undefined");
+        il.MarkLabel(receiverDefinedLabel);
 
         // IsRegExp(searchValue) requires a global RegExp before @@replace is
         // retrieved. Preserve that observable ordering for native RegExp
@@ -161,7 +180,43 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.replaceAll called with a non-global RegExp argument");
         il.MarkLabel(symbolDispatchLabel);
 
-        EmitStringSymbolDispatchPreamble(il, runtime, runtime.SymbolReplace, 0, 2);
+        var hasOwnNativeReplaceLocal = EmitStringSymbolDispatchPreamble(il, runtime, runtime.SymbolReplace, 0, 2);
+
+        // No custom @@replace method handled the operation. Only now perform
+        // the spec's ToString(O), retaining its abrupt-completion ordering
+        // relative to replaceValue coercion.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
+
+        // For the ordinary string-search fallback, ToString(searchValue)
+        // precedes both IsCallable(replaceValue) and ToString(replaceValue).
+        // Preserve the already-coerced search string for the functional path
+        // as well, so observable coercion occurs exactly once.
+        var nativePatternLabel = il.DefineLabel();
+        var patternReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Brfalse, stringCoercionLabel);
+        il.Emit(OpCodes.Ldloc, hasOwnNativeReplaceLocal);
+        il.Emit(OpCodes.Brfalse, nativePatternLabel);
+        il.Emit(OpCodes.Br, stringCoercionLabel);
+
+        il.MarkLabel(stringCoercionLabel);
+        // From this point the operation is ordinary string search, even when
+        // the original value was a RegExp with an own nullish @@replace.
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stloc, regexpLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, searchLocal);
+        il.Emit(OpCodes.Ldloc, searchLocal);
+        il.Emit(OpCodes.Stloc, effectivePatternLocal);
+        il.Emit(OpCodes.Br, patternReadyLabel);
+
+        il.MarkLabel(nativePatternLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, effectivePatternLocal);
+        il.MarkLabel(patternReadyLabel);
 
         // Only the built-in fallback decides whether replaceValue is callable;
         // custom @@replace methods above receive the original value unchanged.
@@ -171,8 +226,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, nonCallableReplacementLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stringLocal);
+        il.Emit(OpCodes.Ldloc, effectivePatternLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.StringReplaceWithFunction);
         il.Emit(OpCodes.Ret);
@@ -182,10 +237,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, replacementLocal);
 
-        // var regexp = pattern as $RegExp
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
-        il.Emit(OpCodes.Stloc, regexpLocal);
+        // Native patterns retain the RegExp path; string fallback patterns
+        // were already coerced above and have a null regexpLocal.
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, stringPathLabel);
 
@@ -195,24 +248,30 @@ public partial class RuntimeEmitter
         // pass the typed `_global` field directly (no user PDS override
         // expected through this path).
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldloc, replacementLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
         il.Emit(OpCodes.Call, _tsRegExpReplaceMethod);
         il.Emit(OpCodes.Ret);
 
-        // String pattern path: search = pattern?.ToString() ?? ""
+        // String pattern path: search = ToString(pattern). Route values
+        // through the full JavaScript
+        // coercion protocol so valueOf/toString side effects and abrupt
+        // completions are observable.
+        // The string-coercion path above performed ToString(searchValue) before
+        // replacement coercion. Arrive here with searchLocal ready.
         il.MarkLabel(stringPathLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, patternNullLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString")!);
-        il.Emit(OpCodes.Br, afterSearchLabel);
-        il.MarkLabel(patternNullLabel);
-        il.Emit(OpCodes.Ldstr, "");
-        il.MarkLabel(afterSearchLabel);
-        il.Emit(OpCodes.Stloc, searchLocal);
+        // String-search replacement has no capture list or namedCaptures.
+        // .NET Regex.Replace would otherwise consume $1..$99 and $<...>
+        // tokens using its own capture syntax. Escape just those dollar
+        // prefixes while retaining the four substitutions shared with
+        // GetSubstitution ($$, $&, $`, $').
+        il.Emit(OpCodes.Ldloc, replacementLocal);
+        il.Emit(OpCodes.Ldstr, @"\$(?=[0-9<])");
+        il.Emit(OpCodes.Ldstr, "$$$$");
+        il.Emit(OpCodes.Call, typeof(System.Text.RegularExpressions.Regex).GetMethod("Replace", [_types.String, _types.String, _types.String])!);
+        il.Emit(OpCodes.Stloc, replacementLocal);
 
         // ECMA-262 22.1.3.20: empty search string inserts replacement at
         // every position 0..length (one between each char + start + end).
@@ -228,7 +287,7 @@ public partial class RuntimeEmitter
         // $` → pre-match, $' → post-match) are honoured. .NET's static
         // Regex.Replace evaluates these in the replacement string for any
         // regex match (including a literal-string-escaped pattern).
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldloc, searchLocal);
         il.Emit(OpCodes.Call, typeof(System.Text.RegularExpressions.Regex).GetMethod("Escape", [_types.String])!);
         il.Emit(OpCodes.Ldloc, replacementLocal);
@@ -248,7 +307,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopStartRA);
         il.Emit(OpCodes.Ldloc, iLocalRA);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Bgt, loopEndRA);
         il.Emit(OpCodes.Ldloc, sbLocalRA);
@@ -257,11 +316,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         var skipCharRA = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, iLocalRA);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Bge, skipCharRA);
         il.Emit(OpCodes.Ldloc, sbLocalRA);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldloc, iLocalRA);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.Char));
@@ -278,7 +337,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnOriginalLabel);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ret);
     }
 

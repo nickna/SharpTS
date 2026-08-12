@@ -17,7 +17,7 @@ public partial class RuntimeEmitter
             "StringTryInvokeSymbolMethod",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, runtime.TSSymbolType, _types.ObjectArray, _types.Boolean.MakeByRefType()]);
+            [_types.Object, runtime.TSSymbolType, _types.ObjectArray, _types.Boolean.MakeByRefType(), _types.Boolean.MakeByRefType()]);
         runtime.StringTryInvokeSymbolMethod = method;
 
         var il = method.GetILGenerator();
@@ -29,6 +29,11 @@ public partial class RuntimeEmitter
 
         // invoked = false
         il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stind_I1);
+        // hasOwnNativeSymbol = false. Callers use this to distinguish an
+        // inherited native RegExp protocol from an own nullish override.
+        il.Emit(OpCodes.Ldarg, 4);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stind_I1);
 
@@ -75,6 +80,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, ownRegExpSymbolLabel);
             il.Emit(OpCodes.Br, noMethodLabel);
             il.MarkLabel(ownRegExpSymbolLabel);
+            il.Emit(OpCodes.Ldarg, 4);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stind_I1);
             il.MarkLabel(notNativeRegExpLabel);
         }
 

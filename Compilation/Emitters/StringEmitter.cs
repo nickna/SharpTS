@@ -668,18 +668,23 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        if (arguments.Count >= 2)
+        if (arguments.Count > 0)
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            // Don't cast — the regex-aware helper accepts object and branches.
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        }
+
+        if (arguments.Count > 1)
+        {
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
         }
         else
         {
-            il.Emit(OpCodes.Ldstr, "");
-            il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceAllRegExp);

@@ -82,7 +82,10 @@ public partial class RuntimeEmitter
         Wire("trimStart",      runtime.StringTrimStart,      0);
         Wire("trimEnd",        runtime.StringTrimEnd,        0);
         Wire("replace",        runtime.StringReplace,        2);
-        Wire("replaceAll",     runtime.StringReplaceAll,     2);
+        // Use the regex-aware entry point here as well as at direct string
+        // call sites. It preserves borrowed primitive receivers until after
+        // @@replace dispatch and implements the RegExp/global checks.
+        Wire("replaceAll",     runtime.StringReplaceAllRegExp, 2);
         // split slot uses the regex-aware + limit-aware proto helper. The basic
         // StringSplit (string,string → list, no limit, no regex) is no longer
         // wired since wrapper / any-typed receivers reach the prototype slot
