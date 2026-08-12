@@ -3318,7 +3318,15 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2.2_T5.js")]
     [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2_T6.js")]
     public void Array_slice_coerces_bounds_and_preserves_generic_values(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A2.1_T5.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A3_T1.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A3_T2.js")]
+    [InlineData("built-ins/Array/prototype/slice/S15.4.4.10_A4_T1.js")]
+    public void Array_slice_uses_generic_safe_integer_indexing(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/slice/15.4.4.10-10-c-ii-1.js")]

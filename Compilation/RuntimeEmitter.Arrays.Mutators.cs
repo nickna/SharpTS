@@ -972,128 +972,127 @@ public partial class RuntimeEmitter
             "ArraySlice",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.ListOfObject,
-            [_types.ListOfObject, _types.ObjectArray]
+            [_types.Object, _types.ObjectArray]
         );
         runtime.ArraySlice = method;
 
         var il = method.GetILGenerator();
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var start = il.DeclareLocal(_types.Double);
+        var end = il.DeclareLocal(_types.Double);
 
-        // For simplicity, call the static helper method in RuntimeTypes
-        // This would require the RuntimeTypes class to be available, so instead
-        // we'll emit inline IL for a basic implementation
-
-        var startLocal = il.DeclareLocal(_types.Int32);
-        var endLocal = il.DeclareLocal(_types.Int32);
-        var countLocal = il.DeclareLocal(_types.Int32);
-
-        // count = list.Count
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, countLocal);
-
-        // start = args.Length > 0 ? (int)(double)args[0] : 0
-        var noStartArg = il.DefineLabel();
+        var defaultStart = il.DefineLabel();
         var startDone = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ble, noStartArg);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, startLocal);
+        il.Emit(OpCodes.Brfalse, defaultStart);
+        EmitGenericRelativeArrayIndex(
+            il,
+            runtime,
+            () =>
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+            },
+            length,
+            start);
         il.Emit(OpCodes.Br, startDone);
-        il.MarkLabel(noStartArg);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, startLocal);
+        il.MarkLabel(defaultStart);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, start);
         il.MarkLabel(startDone);
 
-        // end = args.Length > 1 ? (int)(double)args[1] : count
-        var noEndArg = il.DefineLabel();
+        // An omitted or explicitly undefined end means len. Null remains an
+        // explicit bound and therefore coerces to zero.
+        var parseEnd = il.DefineLabel();
+        var defaultEnd = il.DefineLabel();
         var endDone = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ble, noEndArg);
+        il.Emit(OpCodes.Ble, defaultEnd);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, endLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, parseEnd);
+        il.Emit(OpCodes.Br, defaultEnd);
+        il.MarkLabel(parseEnd);
+        EmitGenericRelativeArrayIndex(
+            il,
+            runtime,
+            () =>
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldelem_Ref);
+            },
+            length,
+            end);
         il.Emit(OpCodes.Br, endDone);
-        il.MarkLabel(noEndArg);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Stloc, endLocal);
+        il.MarkLabel(defaultEnd);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, end);
         il.MarkLabel(endDone);
 
-        // Clamp start and end, handle negatives
-        // For simplicity, we'll just call GetRange with clamped values
-        // if (start < 0) start = max(0, count + start)
-        var startNotNeg = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, startNotNeg);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.MarkLabel(startNotNeg);
-
-        // if (end < 0) end = max(0, count + end)
-        var endNotNeg = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, endNotNeg);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
-        il.Emit(OpCodes.Stloc, endLocal);
-        il.MarkLabel(endNotNeg);
-
-        // Clamp to count
-        // if (start > count) start = count
-        var startNotOver = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Ble, startNotOver);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.MarkLabel(startNotOver);
-
-        // if (end > count) end = count
-        var endNotOver = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Ble, endNotOver);
-        il.Emit(OpCodes.Ldloc, countLocal);
-        il.Emit(OpCodes.Stloc, endLocal);
-        il.MarkLabel(endNotOver);
-
-        // if (end <= start) return new List<object>()
-        var rangeValid = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Bgt, rangeValid);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(rangeValid);
-        // return list.GetRange(start, end - start)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Ldloc, endLocal);
-        il.Emit(OpCodes.Ldloc, startLocal);
+        var count = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Ldloc, start);
         il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "GetRange", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Double, _types.Double));
+        il.Emit(OpCodes.Stloc, count);
+        var countValid = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Ldc_R8, 4294967295.0);
+        il.Emit(OpCodes.Ble, countValid);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+        il.MarkLabel(countValid);
+
+        var result = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, result);
+        var k = il.DeclareLocal(_types.Double);
+        var key = il.DeclareLocal(_types.String);
+        var loop = il.DefineLabel();
+        var hole = il.DefineLabel();
+        var next = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, hole);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Br, next);
+        il.MarkLabel(hole);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
     }
 
