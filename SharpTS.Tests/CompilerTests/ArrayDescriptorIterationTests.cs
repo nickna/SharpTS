@@ -74,4 +74,34 @@ public sealed class ArrayDescriptorIterationTests
 
         Assert.Equal("undefined\n1\n", TestHarness.RunCompiled(source));
     }
+
+    [Fact]
+    public void Accessor_redefinition_removes_stale_dictionary_storage()
+    {
+        const string source = """
+            var objectValue: any = { 0: 11 };
+            Object.defineProperty(objectValue, "0", {
+              get: function() { return 7; },
+              configurable: true
+            });
+            console.log(objectValue[0]);
+            """;
+
+        Assert.Equal("7\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Arguments_length_does_not_follow_out_of_range_backing_writes()
+    {
+        const string source = """
+            function readLength(a: any, b: any) {
+              arguments[2] = 9;
+              var receiver: any = arguments;
+              console.log(receiver.length);
+            }
+            readLength(1, 2);
+            """;
+
+        Assert.Equal("2\n", TestHarness.RunCompiled(source));
+    }
 }

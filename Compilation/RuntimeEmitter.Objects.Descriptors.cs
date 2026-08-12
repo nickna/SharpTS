@@ -1158,6 +1158,102 @@ public partial class RuntimeEmitter
         il.MarkLabel(arrayLengthAlreadyCoversIndex);
         il.MarkLabel(skipArrayIndexLengthGrowth);
 
+        // Accessor descriptors replace any previous data property's backing
+        // storage. PDS is the source of truth for the accessor itself, but
+        // ordinary reads probe the receiver's fast storage before PDS on a
+        // few hot paths. Leaving the old value there makes a redefinition
+        // such as { 0: 1 } -> get 0() permanently return 1 and prevents the
+        // getter's side effects from running. Clear only storage; keep the
+        // newly-installed descriptor and (for arrays) the existing length.
+        var notAccessorDescriptorLabel = il.DefineLabel();
+        var cleanupAccessorStorageLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, cleanupAccessorStorageLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, notAccessorDescriptorLabel);
+
+        il.MarkLabel(cleanupAccessorStorageLabel);
+        var accessorCleanupNotDict = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, accessorCleanupNotDict);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(accessorCleanupNotDict);
+
+        var accessorCleanupNotTSObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, accessorCleanupNotTSObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(accessorCleanupNotTSObject);
+
+        var accessorCleanupNotArrayIndex = il.DefineLabel();
+        var accessorArrayIndexLocal = il.DeclareLocal(_types.UInt32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, accessorCleanupNotArrayIndex);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, accessorArrayIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, accessorCleanupNotArrayIndex);
+        il.Emit(OpCodes.Ldloc, accessorArrayIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, accessorCleanupNotArrayIndex);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldloc, accessorArrayIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(accessorCleanupNotArrayIndex);
+
+        var accessorCleanupReturn = il.DefineLabel();
+        var accessorListLocal = il.DeclareLocal(_types.ListOfObject);
+        var accessorListIndexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Stloc, accessorListLocal);
+        il.Emit(OpCodes.Ldloc, accessorListLocal);
+        il.Emit(OpCodes.Brfalse, accessorCleanupReturn);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, accessorListIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, accessorCleanupReturn);
+        il.Emit(OpCodes.Ldloc, accessorListIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, accessorCleanupReturn);
+        il.Emit(OpCodes.Ldloc, accessorListIndexLocal);
+        il.Emit(OpCodes.Ldloc, accessorListLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, accessorCleanupReturn);
+        il.Emit(OpCodes.Ldloc, accessorListLocal);
+        il.Emit(OpCodes.Ldloc, accessorListIndexLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", _types.Int32, _types.Object));
+        il.MarkLabel(accessorCleanupReturn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notAccessorDescriptorLabel);
+
 
         // Also set the value on the object if it's a data/generic property (no
         // accessor). ECMA-262 §6.2.5.6 CompletePropertyDescriptor: a generic

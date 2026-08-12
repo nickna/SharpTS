@@ -5464,6 +5464,20 @@ public sealed class Issue1279ParityTests
     public void Object_descriptors_preserve_omitted_fields_during_redefinition(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-2-17.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-8-b-3.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-1.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-10.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-12.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-15.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-25.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-28.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-8-b-3.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-25.js")]
+    public void Array_reduce_snapshots_length_and_observes_dynamic_properties(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
 
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)

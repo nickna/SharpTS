@@ -2092,10 +2092,19 @@ public partial class RuntimeEmitter
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
 
+        // LengthOfArrayLike is evaluated once before iteration. The backing
+        // list may grow or shrink from an indexed getter/callback, but reduce
+        // keeps iterating over the original [0, len) range.
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
         // args[0] = callback, args[1] = initial value (optional)
         var accLocal = il.DeclareLocal(_types.Object);
         var indexLocal = il.DeclareLocal(_types.Int32);
         var callbackLocal = il.DeclareLocal(_types.Object);
+        var elementLocal = il.DeclareLocal(_types.Object);
 
         // ECMA-262 23.1.3.21: throw TypeError if callback is missing or not callable.
         // Check args.Length > 0 FIRST — otherwise Ldelem_Ref throws IndexOutOfRange
@@ -2167,16 +2176,18 @@ public partial class RuntimeEmitter
         var scanStart = il.DefineLabel();
         var scanEnd = il.DefineLabel();
         var scanFound = il.DefineLabel();
+        var scanValueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, scanLocal);
         il.MarkLabel(scanStart);
         il.Emit(OpCodes.Ldloc, scanLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Bge, scanEnd);
-        // if (!(LoadArrayLikeElement(list, scan) is ArrayHole)) goto found
-        // (lazy-aware, issue #90)
+        // Load exactly once. Re-loading at scanFound invoked an indexed getter
+        // twice before the first callback.
         EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Stloc, scanValueLocal);
+        il.Emit(OpCodes.Ldloc, scanValueLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brfalse, scanFound);
         il.Emit(OpCodes.Ldloc, scanLocal);
@@ -2192,8 +2203,8 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Reduce of empty array with no initial value");
 
         il.MarkLabel(scanFound);
-        // acc = LoadArrayLikeElement(list, scan); i = scan + 1; (lazy-aware)
-        EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
+        // acc = the already-observed first present value; i = scan + 1.
+        il.Emit(OpCodes.Ldloc, scanValueLocal);
         il.Emit(OpCodes.Stloc, accLocal);
         il.Emit(OpCodes.Ldloc, scanLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -2214,12 +2225,16 @@ public partial class RuntimeEmitter
         var reduceAdvance = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // Skip holes per spec.
-        EmitSkipIfHole(il, indexLocal, reduceAdvance, runtime, isLazyLocal);
+        // Resolve presence and value once. The hole sentinel represents
+        // HasProperty=false; a present accessor must execute exactly one Get.
+        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Stloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brtrue, reduceAdvance);
 
         // Per-iter: write into the pre-allocated args[4]. args[3] is constant
         // (receiver), already pre-filled by EmitInitReduceArgs.
@@ -2232,7 +2247,7 @@ public partial class RuntimeEmitter
         // args[1] = element
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Stelem_Ref);
 
         // args[2] = (double)i
@@ -2243,9 +2258,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
 
+        // Reduce has no thisArg parameter. Invoke through the receiver-aware
+        // path with undefined (represented by null here), matching the other
+        // array iterator callbacks and preserving strict callback `this`.
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, accLocal);
 
         il.MarkLabel(reduceAdvance);
@@ -2274,10 +2293,17 @@ public partial class RuntimeEmitter
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
 
+        // Snapshot LengthOfArrayLike once, symmetrically with reduce.
+        var lenLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+
         // args[0] = callback, args[1] = initial value (optional)
         var accLocal = il.DeclareLocal(_types.Object);
         var indexLocal = il.DeclareLocal(_types.Int32);
         var callbackLocal = il.DeclareLocal(_types.Object);
+        var elementLocal = il.DeclareLocal(_types.Object);
 
         // ECMA-262 23.1.3.22: throw TypeError if callback is missing or not callable.
         var reduceRCallableOk = il.DefineLabel();
@@ -2341,9 +2367,9 @@ public partial class RuntimeEmitter
         var scanStart = il.DefineLabel();
         var scanEnd = il.DefineLabel();
         var scanFound = il.DefineLabel();
+        var scanValueLocal = il.DeclareLocal(_types.Object);
         // scan = list.Count - 1
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, scanLocal);
@@ -2353,6 +2379,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, scanEnd);
         // if (!(LoadArrayLikeElement(list, scan) is ArrayHole)) goto found (lazy-aware)
         EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Stloc, scanValueLocal);
+        il.Emit(OpCodes.Ldloc, scanValueLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brfalse, scanFound);
         il.Emit(OpCodes.Ldloc, scanLocal);
@@ -2367,8 +2395,8 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Reduce of empty array with no initial value");
 
         il.MarkLabel(scanFound);
-        // acc = LoadArrayLikeElement(list, scan); i = scan - 1; (lazy-aware)
-        EmitElementLoad(il, scanLocal, runtime, isLazyLocal);
+        // Reuse the already-observed last present value; do not fire a getter twice.
+        il.Emit(OpCodes.Ldloc, scanValueLocal);
         il.Emit(OpCodes.Stloc, accLocal);
         il.Emit(OpCodes.Ldloc, scanLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -2382,8 +2410,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stloc, accLocal);
         // startIndex = list.Count - 1
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -2397,8 +2424,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, loopEnd);
 
-        // Skip holes per spec (symmetric to reduce).
-        EmitSkipIfHole(il, indexLocal, reduceRightAdvance, runtime, isLazyLocal);
+        // Resolve presence and value once (symmetric to reduce).
+        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Stloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brtrue, reduceRightAdvance);
 
         // Per-iter: write into the pre-allocated args[4]. args[3] is constant
         // (receiver), already pre-filled by EmitInitReduceArgs.
@@ -2411,7 +2442,7 @@ public partial class RuntimeEmitter
         // args[1] = element
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Ldc_I4_1);
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Stelem_Ref);
 
         // args[2] = (double)i
@@ -2422,9 +2453,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
 
+        // Symmetric with reduce: callback thisValue is undefined.
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Stloc, accLocal);
 
         il.MarkLabel(reduceRightAdvance);
