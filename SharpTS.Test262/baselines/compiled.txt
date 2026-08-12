@@ -516,7 +516,7 @@ test/built-ins/Array/prototype/every/15.4.4.16-7-9.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-1.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-10.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-11.js Pass
-test/built-ins/Array/prototype/every/15.4.4.16-7-b-12.js Fail
+test/built-ins/Array/prototype/every/15.4.4.16-7-b-12.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-13.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-14.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-15.js Fail
@@ -771,7 +771,7 @@ test/built-ins/Array/prototype/filter/15.4.4.20-9-9.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-1.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-10.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-11.js Pass
-test/built-ins/Array/prototype/filter/15.4.4.20-9-b-12.js Fail
+test/built-ins/Array/prototype/filter/15.4.4.20-9-b-12.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-13.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-14.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-15.js Fail
@@ -1051,7 +1051,7 @@ test/built-ins/Array/prototype/forEach/15.4.4.18-2-11.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-2-12.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-2-13.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-2-14.js Pass
-test/built-ins/Array/prototype/forEach/15.4.4.18-2-17.js Fail
+test/built-ins/Array/prototype/forEach/15.4.4.18-2-17.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-2-18.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-2-19.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-2-2.js Pass
@@ -1134,7 +1134,7 @@ test/built-ins/Array/prototype/forEach/15.4.4.18-7-9.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-1.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-10.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-11.js Pass
-test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-12.js Fail
+test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-12.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-13.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-14.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-15.js Fail
@@ -1382,7 +1382,7 @@ test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-11.js Pass
 test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-12.js Pass
 test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-13.js Pass
 test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-14.js Pass
-test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-15.js Fail
+test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-15.js Pass
 test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-16.js Pass
 test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-17.js Pass
 test/built-ins/Array/prototype/indexOf/15.4.4.14-9-a-18.js Pass
@@ -1794,7 +1794,7 @@ test/built-ins/Array/prototype/map/15.4.4.19-8-9.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-1.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-10.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-11.js Pass
-test/built-ins/Array/prototype/map/15.4.4.19-8-b-12.js Fail
+test/built-ins/Array/prototype/map/15.4.4.19-8-b-12.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-13.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-14.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-15.js Fail
@@ -2113,7 +2113,7 @@ test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-12.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-13.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-14.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-15.js Pass
-test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-16.js Fail
+test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-16.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-17.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-18.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-19.js Fail
@@ -2127,7 +2127,7 @@ test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-25.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-26.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-27.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-28.js Pass
-test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-29.js Fail
+test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-29.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-3.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-4.js Pass
 test/built-ins/Array/prototype/reduce/15.4.4.21-9-b-5.js Pass
@@ -2687,7 +2687,7 @@ test/built-ins/Array/prototype/some/15.4.4.17-7-9.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-1.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-10.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-11.js Pass
-test/built-ins/Array/prototype/some/15.4.4.17-7-b-12.js Fail
+test/built-ins/Array/prototype/some/15.4.4.17-7-b-12.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-13.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-14.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-15.js Fail

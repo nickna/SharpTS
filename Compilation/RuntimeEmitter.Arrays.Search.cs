@@ -2245,6 +2245,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfObject);
         il.Emit(OpCodes.Stloc, listForCheckLocal);
 
+        // Indexed accessors installed on arrays/arguments are own properties
+        // even though their fast backing slot is a hole. Check PDS before the
+        // dense-storage probe so generic algorithms such as concat observe
+        // accessor getters instead of treating the index as absent.
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
         var checkListIndex = il.DefineLabel();
         il.MarkLabel(checkListIndex);
         // Try parsing key as int. If it parses to a non-negative idx < count,

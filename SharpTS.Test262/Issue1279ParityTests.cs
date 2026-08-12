@@ -5119,6 +5119,12 @@ public sealed class Issue1279ParityTests
     public void Array_concat_honors_generic_and_spreadable_values(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
+    [Fact]
+    public void Array_concat_observes_arguments_index_accessors_in_compiled_mode()
+        => AssertPass(
+            "built-ins/Array/prototype/concat/Array.prototype.concat_sloppy-arguments-throws.js",
+            Test262ExecutionMode.Compiled);
+
     [Theory]
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T1.js")]
     [InlineData("built-ins/Array/prototype/pop/S15.4.4.6_A2_T2.js")]

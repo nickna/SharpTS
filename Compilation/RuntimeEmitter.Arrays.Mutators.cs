@@ -1619,13 +1619,38 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Create a copy of the list first
-        var copyLocal = il.DeclareLocal(_types.ListOfObject);
-
-        // var copy = new List<object>(list)
+        // Snapshot the source length before any indexed getter runs, then
+        // create the dense copy through observable property reads. A getter
+        // may grow the source, but toSorted only reads the original range.
+        EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
+        var sourceLengthLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.ListObjectFromEnumerableCtor);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, sourceLengthLocal);
+
+        var copyLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Ldloc, sourceLengthLocal);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.Int32));
         il.Emit(OpCodes.Stloc, copyLocal);
+
+        var copyIndexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, copyIndexLocal);
+        var copyLoopLabel = il.DefineLabel();
+        var copyDoneLabel = il.DefineLabel();
+        il.MarkLabel(copyLoopLabel);
+        il.Emit(OpCodes.Ldloc, copyIndexLocal);
+        il.Emit(OpCodes.Ldloc, sourceLengthLocal);
+        il.Emit(OpCodes.Bge, copyDoneLabel);
+        il.Emit(OpCodes.Ldloc, copyLocal);
+        EmitLoadElementUnholed(il, copyIndexLocal, runtime, isLazyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, copyIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, copyIndexLocal);
+        il.Emit(OpCodes.Br, copyLoopLabel);
+        il.MarkLabel(copyDoneLabel);
 
         // Now sort the copy using the same logic as EmitArraySort
         // We need to emit sort body but use copyLocal instead of arg0
