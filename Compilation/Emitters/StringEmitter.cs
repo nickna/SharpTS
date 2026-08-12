@@ -335,56 +335,16 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             // the $Undefined singleton.
             il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
-        il.Emit(OpCodes.Call, ctx.Runtime!.StringSplitRegExp);
-
-        // ECMA-262 22.1.3.21 step 6: optional `limit` argument truncates the
-        // result list. Post-process: if list.Count > limit, GetRange(0, limit).
-        // Pre-fix the limit was silently ignored.
         if (arguments.Count >= 2)
         {
-            var listLocal = il.DeclareLocal(ctx.Types.ListOfObject);
-            il.Emit(OpCodes.Stloc, listLocal);
-
-            // limitInt = (int)$Runtime.ToNumber(limitArg)
-            var limitLocal = il.DeclareLocal(ctx.Types.Int32);
             emitter.EmitExpression(arguments[1]);
             emitter.EmitBoxIfNeeded(arguments[1]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
-            // Clamp NaN → 0, Infinity → MaxValue. Conv_I4 of NaN is undefined
-            // behavior, so clamp via IsFinite + sign check. For typical
-            // 0 ≤ limit ≤ str.Length cases this just truncates a finite int.
-            var limitDouble = il.DeclareLocal(ctx.Types.Double);
-            il.Emit(OpCodes.Stloc, limitDouble);
-            // if (!IsFinite(limit)) → use MaxValue (effectively no clamp)
-            var clampDoneLabel = il.DefineLabel();
-            var notInfLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, limitDouble);
-            il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Double, "IsFinite", [ctx.Types.Double])!);
-            il.Emit(OpCodes.Brtrue, notInfLabel);
-            il.Emit(OpCodes.Ldc_I4, int.MaxValue);
-            il.Emit(OpCodes.Stloc, limitLocal);
-            il.Emit(OpCodes.Br, clampDoneLabel);
-            il.MarkLabel(notInfLabel);
-            il.Emit(OpCodes.Ldloc, limitDouble);
-            il.Emit(OpCodes.Conv_I4);
-            il.Emit(OpCodes.Stloc, limitLocal);
-            il.MarkLabel(clampDoneLabel);
-
-            // if (limit < list.Count) result = list.GetRange(0, limit); else result = list;
-            var skipTrimLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, limitLocal);
-            il.Emit(OpCodes.Ldloc, listLocal);
-            il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(ctx.Types.ListOfObject, "Count").GetGetMethod()!);
-            il.Emit(OpCodes.Bge, skipTrimLabel);
-            // limit < count → trim
-            il.Emit(OpCodes.Ldloc, listLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldloc, limitLocal);
-            il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.ListOfObject, "GetRange", [ctx.Types.Int32, ctx.Types.Int32])!);
-            il.Emit(OpCodes.Stloc, listLocal);
-            il.MarkLabel(skipTrimLabel);
-            il.Emit(OpCodes.Ldloc, listLocal);
         }
+        else
+        {
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        }
+        il.Emit(OpCodes.Call, ctx.Runtime!.StringSplitProto);
     }
 
     private static void EmitMatch(IEmitterContext emitter, List<Expr> arguments)

@@ -163,46 +163,16 @@ public partial class ILEmitter
                     // the helper's undefined-arm returns [str].
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSplitRegExp);
-                // ECMA-262 22.1.3.21 step 6: optional `limit` argument truncates
-                // the result list. Post-process — if list.Count > limit, take
-                // GetRange(0, limit). Pre-fix the limit was silently ignored.
                 if (arguments.Count >= 2)
                 {
-                    var listLocal = IL.DeclareLocal(_ctx.Types.ListOfObject);
-                    IL.Emit(OpCodes.Stloc, listLocal);
-                    var limitLocal = IL.DeclareLocal(_ctx.Types.Int32);
                     EmitExpression(arguments[1]);
                     EmitBoxIfNeeded(arguments[1]);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
-                    var limitDouble = IL.DeclareLocal(_ctx.Types.Double);
-                    IL.Emit(OpCodes.Stloc, limitDouble);
-                    var clampDoneLabel = IL.DefineLabel();
-                    var notInfLabel = IL.DefineLabel();
-                    IL.Emit(OpCodes.Ldloc, limitDouble);
-                    IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Double, "IsFinite", [_ctx.Types.Double])!);
-                    IL.Emit(OpCodes.Brtrue, notInfLabel);
-                    IL.Emit(OpCodes.Ldc_I4, int.MaxValue);
-                    IL.Emit(OpCodes.Stloc, limitLocal);
-                    IL.Emit(OpCodes.Br, clampDoneLabel);
-                    IL.MarkLabel(notInfLabel);
-                    IL.Emit(OpCodes.Ldloc, limitDouble);
-                    IL.Emit(OpCodes.Conv_I4);
-                    IL.Emit(OpCodes.Stloc, limitLocal);
-                    IL.MarkLabel(clampDoneLabel);
-                    var skipTrimLabel = IL.DefineLabel();
-                    IL.Emit(OpCodes.Ldloc, limitLocal);
-                    IL.Emit(OpCodes.Ldloc, listLocal);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(_ctx.Types.ListOfObject, "Count").GetGetMethod()!);
-                    IL.Emit(OpCodes.Bge, skipTrimLabel);
-                    IL.Emit(OpCodes.Ldloc, listLocal);
-                    IL.Emit(OpCodes.Ldc_I4_0);
-                    IL.Emit(OpCodes.Ldloc, limitLocal);
-                    IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.ListOfObject, "GetRange", [_ctx.Types.Int32, _ctx.Types.Int32])!);
-                    IL.Emit(OpCodes.Stloc, listLocal);
-                    IL.MarkLabel(skipTrimLabel);
-                    IL.Emit(OpCodes.Ldloc, listLocal);
                 }
+                else
+                {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                }
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.StringSplitProto);
                 break;
 
             case "match":

@@ -10704,7 +10704,7 @@ test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-1-and-instan
 test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-2-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-3-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-4-and-instance-is-string-hello.js Pass
-test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-hi-and-instance-is-string-hello.js Fail
+test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-hi-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-undefined-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-new-reg-exp-and-void-0-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-regexp-l-and-0-and-instance-is-string-hello.js Pass
@@ -10712,7 +10712,7 @@ test/built-ins/String/prototype/split/arguments-are-regexp-l-and-1-and-instance-
 test/built-ins/String/prototype/split/arguments-are-regexp-l-and-2-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-regexp-l-and-3-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-regexp-l-and-4-and-instance-is-string-hello.js Pass
-test/built-ins/String/prototype/split/arguments-are-regexp-l-and-hi-and-instance-is-string-hello.js Fail
+test/built-ins/String/prototype/split/arguments-are-regexp-l-and-hi-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-regexp-l-and-undefined-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-regexp-l-and-void-0-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/arguments-are-regexp-s-and-3-and-instance-is-string-a-b-c-de-f.js Pass
@@ -10720,9 +10720,9 @@ test/built-ins/String/prototype/split/call-split-1-0-instance-is-number.js Pass
 test/built-ins/String/prototype/split/call-split-1-1-instance-is-number.js Pass
 test/built-ins/String/prototype/split/call-split-1-100-instance-is-number.js Pass
 test/built-ins/String/prototype/split/call-split-1-2-instance-is-number.js Pass
-test/built-ins/String/prototype/split/call-split-1-boo-instance-is-number.js Fail
+test/built-ins/String/prototype/split/call-split-1-boo-instance-is-number.js Pass
 test/built-ins/String/prototype/split/call-split-1-instance-is-number.js Pass
-test/built-ins/String/prototype/split/call-split-1-math-pow-2-32-1-instance-is-number.js Fail
+test/built-ins/String/prototype/split/call-split-1-math-pow-2-32-1-instance-is-number.js Pass
 test/built-ins/String/prototype/split/call-split-1-void-0-instance-is-number.js Pass
 test/built-ins/String/prototype/split/call-split-123-instance-is-this123is123a123string123object.js Pass
 test/built-ins/String/prototype/split/call-split-2-instance-is-string-one-two-three-four-five.js Pass
@@ -10741,7 +10741,7 @@ test/built-ins/String/prototype/split/call-split-l-2-instance-is-string-hello.js
 test/built-ins/String/prototype/split/call-split-l-3-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/call-split-l-4-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/call-split-l-instance-is-string-hello.js Pass
-test/built-ins/String/prototype/split/call-split-l-na-n-instance-is-string-hello.js Fail
+test/built-ins/String/prototype/split/call-split-l-na-n-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/call-split-ll-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/call-split-new-reg-exp.js Pass
 test/built-ins/String/prototype/split/call-split-null-instance-is-thisnullisnullanullstringnullobject.js Pass
@@ -10761,8 +10761,8 @@ test/built-ins/String/prototype/split/checking-if-enumerating-the-string-prototy
 test/built-ins/String/prototype/split/checking-if-varying-the-string-prototype-split-length-property-fails.js Pass
 test/built-ins/String/prototype/split/checking-string-prototype-split-length.js Pass
 test/built-ins/String/prototype/split/checking-string-prototype-split-prototype.js Pass
-test/built-ins/String/prototype/split/cstm-split-get-err.js Fail
-test/built-ins/String/prototype/split/cstm-split-invocation.js Fail
+test/built-ins/String/prototype/split/cstm-split-get-err.js Pass
+test/built-ins/String/prototype/split/cstm-split-invocation.js Pass
 test/built-ins/String/prototype/split/cstm-split-is-null.js Pass
 test/built-ins/String/prototype/split/cstm-split-on-bigint-primitive.js RuntimeError
 test/built-ins/String/prototype/split/cstm-split-on-boolean-primitive.js Pass
@@ -10779,7 +10779,7 @@ test/built-ins/String/prototype/split/instance-is-number-na-n.js Pass
 test/built-ins/String/prototype/split/instance-is-object.js Pass
 test/built-ins/String/prototype/split/instance-is-string-one-two-three-four-five.js Pass
 test/built-ins/String/prototype/split/instance-is-string.js Pass
-test/built-ins/String/prototype/split/limit-touint32-error.js Fail
+test/built-ins/String/prototype/split/limit-touint32-error.js Pass
 test/built-ins/String/prototype/split/name.js Pass
 test/built-ins/String/prototype/split/not-a-constructor.js Pass
 test/built-ins/String/prototype/split/separator-colon-instance-is-string-one-1-two-2-four-4.js Pass
@@ -10790,7 +10790,7 @@ test/built-ins/String/prototype/split/separator-override-tostring-limit-override
 test/built-ins/String/prototype/split/separator-override-tostring-limit-override-valueof-tostring-throws.js Pass
 test/built-ins/String/prototype/split/separator-override-tostring-limit-override-valueof-tostring.js Pass
 test/built-ins/String/prototype/split/separator-override-tostring-limit-override-valueof.js Pass
-test/built-ins/String/prototype/split/separator-override-tostring-throws-limit-override-valueof-throws.js Fail
+test/built-ins/String/prototype/split/separator-override-tostring-throws-limit-override-valueof-throws.js Pass
 test/built-ins/String/prototype/split/separator-override-valueof.js Pass
 test/built-ins/String/prototype/split/separator-regexp-comma-instance-is-string-one-1-two-2-four-4.js Pass
 test/built-ins/String/prototype/split/separator-regexp-limit-string-via-eval.js Pass
@@ -10798,10 +10798,10 @@ test/built-ins/String/prototype/split/separator-regexp.js RuntimeError
 test/built-ins/String/prototype/split/separator-string-instance-is-empty-string-object.js Pass
 test/built-ins/String/prototype/split/separator-tostring-error.js Pass
 test/built-ins/String/prototype/split/separator-undef-limit-custom.js Pass
-test/built-ins/String/prototype/split/separator-undef-limit-zero.js Fail
+test/built-ins/String/prototype/split/separator-undef-limit-zero.js Pass
 test/built-ins/String/prototype/split/separator-undef.js Pass
 test/built-ins/String/prototype/split/this-value-not-obj-coercible.js Pass
-test/built-ins/String/prototype/split/this-value-tostring-error.js Fail
+test/built-ins/String/prototype/split/this-value-tostring-error.js Pass
 test/built-ins/String/prototype/split/transferred-to-custom.js Pass
 test/built-ins/String/prototype/split/transferred-to-number-separator-override-tostring-returns-regexp.js Pass
 test/built-ins/String/prototype/split/valueOf-is-called-for-limit-argument.js Pass

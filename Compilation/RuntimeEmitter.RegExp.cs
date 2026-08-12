@@ -1815,8 +1815,8 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// String.prototype.split slot helper: <c>(string str, object separator,
-    /// object limit) -&gt; List&lt;object&gt;</c>. Wraps <c>StringSplitRegExp</c>
-    /// with the ECMA-262 22.1.3.21 step 6 limit truncation. Receiver coercion
+    /// object limit) -&gt; object</c>. Implements the observable @@split dispatch
+    /// and ECMA-262 22.1.3.21 limit coercion order. Receiver coercion
     /// (wrapper → primitive) is handled upstream by <c>$TSFunction.CoercePrimitiveArgs</c>
     /// via the <c>__this</c> param-name convention. Mirrors the inline trim
     /// logic in <c>StringEmitter.EmitSplit</c> so prototype-slot dispatch (used
@@ -1827,68 +1827,151 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "StringSplitProto",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
-            [_types.String, _types.Object, _types.Object]);
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]);
+        // Unlike most built-ins, split must distinguish an omitted limit from
+        // explicit null. Reuse the JS undefined-padding marker so reflective
+        // prototype calls retain that distinction.
+        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.StringSplitProto = method;
 
         var il = method.GetILGenerator();
 
-        // result = StringSplitRegExp(str, separator)
-        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        // RequireObjectCoercible(this) precedes even @@split lookup.
+        var receiverOkLabel = il.DefineLabel();
+        var receiverThrowLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, receiverThrowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, receiverOkLabel);
+        il.MarkLabel(receiverThrowLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.split called on null or undefined");
+        il.MarkLabel(receiverOkLabel);
+
+        // GetMethod(separator, @@split) precedes ToString(this) and limit
+        // coercion. A custom method receives the original string and limit and
+        // may return any value.
+        EmitStringSymbolDispatchPreamble(il, runtime, runtime.SymbolSplit, 0, 2);
+
+        var stringLocal = il.DeclareLocal(_types.String);
+        var separatorLocal = il.DeclareLocal(_types.Object);
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        var limitDouble = il.DeclareLocal(_types.Double);
+        var numberLocal = il.DeclareLocal(_types.Double);
+        var defaultLimitLabel = il.DefineLabel();
+        var coerceLimitLabel = il.DefineLabel();
+        var zeroLimitLabel = il.DefineLabel();
+        var normalizeModuloLabel = il.DefineLabel();
+        var limitReadyLabel = il.DefineLabel();
+        var nonNegativeLabel = il.DefineLabel();
+        var returnResultLabel = il.DefineLabel();
+
+        // Only the built-in fallback coerces the receiver. A custom @@split
+        // above receives the original value and can return without observing
+        // receiver.toString.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
+
+        // The inherited native RegExp @@split is intentionally skipped by the
+        // generic dispatch preamble; route it into the full protocol helper
+        // now, preserving the original limit value and its observable order.
+        var nonRegExpSeparatorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Brfalse, nonRegExpSeparatorLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stringLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.TSRegExpSymSplitHelper);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nonRegExpSeparatorLabel);
+
+        // lim = limit === undefined ? 2^32-1 : ToUint32(limit).
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, coerceLimitLabel);
+
+        il.MarkLabel(defaultLimitLabel);
+        il.Emit(OpCodes.Ldc_R8, 4294967295.0);
+        il.Emit(OpCodes.Stloc, limitDouble);
+        il.Emit(OpCodes.Br, limitReadyLabel);
+
+        il.MarkLabel(coerceLimitLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, numberLocal);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Brfalse, zeroLimitLabel);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Beq, zeroLimitLabel);
+        il.MarkLabel(normalizeModuloLabel);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(Math), "Truncate", _types.Double));
+        il.Emit(OpCodes.Ldc_R8, 4294967296.0);
+        il.Emit(OpCodes.Rem);
+        il.Emit(OpCodes.Stloc, limitDouble);
+        il.Emit(OpCodes.Ldloc, limitDouble);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bge, nonNegativeLabel);
+        il.Emit(OpCodes.Ldloc, limitDouble);
+        il.Emit(OpCodes.Ldc_R8, 4294967296.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, limitDouble);
+        il.Emit(OpCodes.Br, nonNegativeLabel);
+
+        il.MarkLabel(zeroLimitLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, limitDouble);
+        il.MarkLabel(nonNegativeLabel);
+        il.MarkLabel(limitReadyLabel);
+
+        // For the built-in string algorithm, ToString(separator) precedes the
+        // lim==0 bailout. Undefined remains the sentinel handled by
+        // StringSplitRegExp's [S] arm.
+        var separatorReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var coerceSeparatorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, coerceSeparatorLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, separatorLocal);
+        il.Emit(OpCodes.Br, separatorReadyLabel);
+        il.MarkLabel(coerceSeparatorLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, separatorLocal);
+        il.MarkLabel(separatorReadyLabel);
+
+        // A zero limit bails out before separator ToString, but only after a
+        // custom @@split had its chance above.
+        var performSplitLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, limitDouble);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bne_Un, performSplitLabel);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(performSplitLabel);
+        il.Emit(OpCodes.Ldloc, stringLocal);
+        il.Emit(OpCodes.Ldloc, separatorLocal);
         il.Emit(OpCodes.Call, runtime.StringSplitRegExp);
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // If limit is null or $Undefined, return result as-is.
-        var coerceLimitLabel = il.DefineLabel();
-        var returnResultLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brfalse, returnResultLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, returnResultLabel);
-
-        il.MarkLabel(coerceLimitLabel);
-        // limitDouble = ToNumber(limit)
-        var limitDouble = il.DeclareLocal(_types.Double);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Stloc, limitDouble);
-
-        // if (!IsFinite(limit)) limitInt = int.MaxValue
-        var limitInt = il.DeclareLocal(_types.Int32);
-        var notInfLabel = il.DefineLabel();
-        var clampDoneLabel = il.DefineLabel();
+        // The list count is bounded by Int32, while lim retains the full
+        // uint32 range, so compare as doubles and convert only when trimming.
         il.Emit(OpCodes.Ldloc, limitDouble);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
-        il.Emit(OpCodes.Brtrue, notInfLabel);
-        il.Emit(OpCodes.Ldc_I4, int.MaxValue);
-        il.Emit(OpCodes.Stloc, limitInt);
-        il.Emit(OpCodes.Br, clampDoneLabel);
-        il.MarkLabel(notInfLabel);
-        il.Emit(OpCodes.Ldloc, limitDouble);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, limitInt);
-        il.MarkLabel(clampDoneLabel);
-
-        // if (limitInt < 0) limitInt = 0
-        var nonNegLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, limitInt);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bge, nonNegLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, limitInt);
-        il.MarkLabel(nonNegLabel);
-
-        // if (limitInt < result.Count) result = result.GetRange(0, limitInt)
-        il.Emit(OpCodes.Ldloc, limitInt);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Bge, returnResultLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, limitInt);
+        il.Emit(OpCodes.Ldloc, limitDouble);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "GetRange", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 

@@ -4961,6 +4961,25 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/split/arguments-are-new-reg-exp-and-hi-and-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/arguments-are-regexp-l-and-hi-and-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/argument-is-regexp-and-instance-is-number.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-1-boo-instance-is-number.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-1-math-pow-2-32-1-instance-is-number.js")]
+    [InlineData("built-ins/String/prototype/split/call-split-l-na-n-instance-is-string-hello.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-get-err.js")]
+    [InlineData("built-ins/String/prototype/split/cstm-split-invocation.js")]
+    [InlineData("built-ins/String/prototype/split/limit-touint32-error.js")]
+    [InlineData("built-ins/String/prototype/split/separator-override-tostring-throws-limit-override-valueof-throws.js")]
+    [InlineData("built-ins/String/prototype/split/separator-tostring-error.js")]
+    [InlineData("built-ins/String/prototype/split/separator-undef-limit-zero.js")]
+    [InlineData("built-ins/String/prototype/split/this-value-tostring-error.js")]
+    [InlineData("built-ins/String/prototype/split/this-value-not-obj-coercible.js")]
+    [InlineData("built-ins/String/prototype/split/transferred-to-custom.js")]
+    public void String_split_observes_symbol_dispatch_and_ToUint32(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/coerce-global.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/exec-return-type-invalid.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/g-match-empty-coerce-lastindex-err.js")]
