@@ -4943,6 +4943,24 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-flags.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/limit-0-bail.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/species-ctor-ctor-get-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/species-ctor-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/species-ctor-species-get-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/species-ctor-y.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/species-ctor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-empty-match-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-get-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-match-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-set-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-set-lastindex-match.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-set-lastindex-no-match.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/u-lastindex-adv-thru-failure.js")]
+    public void RegExp_split_observes_species_exec_and_lastIndex(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/coerce-global.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/exec-return-type-invalid.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/g-match-empty-coerce-lastindex-err.js")]

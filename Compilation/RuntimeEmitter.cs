@@ -409,6 +409,11 @@ public partial class RuntimeEmitter
         // Must follow EmitNewOnFunction — it calls through runtime.NewOnFunction.
         EmitConstructDynamicValue(_runtimeTypeBuilder!, runtime);
 
+        // RegExp @@split needs ConstructDynamicValue for SpeciesConstructor;
+        // its signature was reserved before $RegExp emitted its public wrapper.
+        if (features.UsesRegExp)
+            EmitRegExpSymbolSplitProtocol(runtime);
+
         // General NewPromiseCapability (#349): the $PromiseCapability holder type
         // and the body of the pre-declared NewPromiseCapabilityResult helper.
         // Must follow EmitConstructDynamicValue (it calls through that helper) and

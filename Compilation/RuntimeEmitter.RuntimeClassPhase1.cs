@@ -129,6 +129,19 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.Object]);
 
+        // Reserve the full RegExp.prototype[@@split] protocol. $RegExp is
+        // emitted before the runtime helpers it needs (dynamic construction,
+        // generic Get/Set, and RegExpExec), so its public symbol wrapper calls
+        // this forward declaration; the body is filled after those helpers.
+        if (_features.UsesRegExp)
+        {
+            runtime.RegExpSymbolSplitProtocol = typeBuilder.DefineMethod(
+                "RegExpSymbolSplitProtocol",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object, _types.Object, _types.Object]);
+        }
+
         // Reserve StringifyCoerce(object) → string — Stringify plus the
         // ECMA-262 §7.1.17 Symbol guard (implicit ToString coercion throws
         // TypeError for Symbol values). Reserved here because $Runtime.Add's

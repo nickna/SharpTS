@@ -3422,7 +3422,7 @@ public partial class RuntimeEmitter
     {
         var method = typeBuilder.DefineMethod(
             "AdvanceStringIndexSpec",
-            MethodAttributes.Private | MethodAttributes.Static,
+            MethodAttributes.Public | MethodAttributes.Static,
             _types.Int32,
             [_types.String, _types.Int32, _types.Boolean]);
         _tsRegExpAdvanceStringIndexSpecMethod = method;
@@ -4430,134 +4430,18 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object]
         );
         runtime.TSRegExpSymSplitHelper = method;
+        runtime.TSRegExpAdvanceStringIndexSpec = _tsRegExpAdvanceStringIndexSpecMethod;
 
+        // The observable algorithm lives late on $Runtime because it needs
+        // ConstructDynamicValue (SpeciesConstructor), generic Get/Set, and
+        // RegExpExec. This early-emitted $RegExp method remains the public
+        // well-known-symbol wrapper used by RegExp.prototype.
         var il = method.GetILGenerator();
-        var rxLocal = il.DeclareLocal(typeBuilder);
-        var sLocal = il.DeclareLocal(_types.String);
-        var partsLocal = il.DeclareLocal(typeof(string[]));
-        var resultLocal = il.DeclareLocal(_types.ListOfObject);
-        var nLocal = il.DeclareLocal(_types.Int32);
-        var iLocal = il.DeclareLocal(_types.Int32);
-
-        var noLimitLabel = il.DefineLabel();
-        var loopStartLabel = il.DefineLabel();
-        var loopEndLabel = il.DefineLabel();
-
-        // ECMA-262 §22.2.5.13 step 2: throw TypeError if `this` is not an Object.
         EmitRequireObjectArg(il, runtime, method, argIndex: 0, "RegExp.prototype[Symbol.split]");
-
-        // Spec-aligned: read S = ToString(string), then flags = ToString(Get(rx, "flags")).
-        // Errors propagate naturally (user toString throws, Symbol → TypeError via
-        // EmitArgToJsString's Symbol-brand-check + Stringify chain). Run these before
-        // the Castclass so non-$RegExp `this` with poisoned flags/string getters
-        // surfaces the user's error instead of an InvalidCastException. Tests in scope:
-        //   Symbol.split/{coerce-string,coerce-flags,get-flags,coerce-limit}-err.js
-        EmitArgToJsString(il, runtime, argIndex: 1, sLocal);
-        var sideEffectsFlagsLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, sideEffectsFlagsLocal);
-
-        // Coerce `limit` via ToNumber when not undefined. Symbol → TypeError,
-        // object → ToPrimitive(valueOf) which can throw. Spec §22.2.5.13 step 7.
-        // Result re-stored over Ldarg_2 (as boxed Double) so the later Isinst
-        // Double branch picks up the coerced value.
-        var limitCoerceSkipLabel = il.DefineLabel();
-        var limitCoerced = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brfalse, limitCoerceSkipLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, limitCoerceSkipLabel);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Stloc, limitCoerced);
-        il.Emit(OpCodes.Ldloc, limitCoerced);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Starg_S, (byte)2);
-        il.MarkLabel(limitCoerceSkipLabel);
-
-        // Once side effects are observed, narrow to $RegExp. Non-$RegExp instances
-        // still need to throw TypeError per spec (we'd need SpeciesConstructor +
-        // a synthesized regex from the user-provided flags to do the fully spec-
-        // aligned split; defer that). The Isinst-then-throw replaces a Castclass
-        // InvalidCastException with a clean TypeError bucket.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeBuilder);
-        il.Emit(OpCodes.Stloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        var rxOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, rxOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype[Symbol.split] requires a RegExp receiver");
-        il.MarkLabel(rxOkLabel);
-
-        // var parts = rx.Split(s);
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Call, _tsRegExpSplitMethod);
-        il.Emit(OpCodes.Stloc, partsLocal);
-
-        // n = parts.Length;
-        il.Emit(OpCodes.Ldloc, partsLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, nLocal);
-
-        // if (limit is double d && d >= 0 && (int)d < n) n = (int)d;
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brfalse, noLimitLabel);
-
-        var limTmp = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Stloc, limTmp);
-        // if (lim < 0) skip
-        il.Emit(OpCodes.Ldloc, limTmp);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, noLimitLabel);
-        // if (lim < n) n = lim;
-        il.Emit(OpCodes.Ldloc, limTmp);
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Bge, noLimitLabel);
-        il.Emit(OpCodes.Ldloc, limTmp);
-        il.Emit(OpCodes.Stloc, nLocal);
-
-        il.MarkLabel(noLimitLabel);
-
-        // var result = new List<object?>(n);
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.Int32));
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        // for (int i = 0; i < n; i++) result.Add(parts[i]);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, iLocal);
-        il.Emit(OpCodes.Br, loopEndLabel);
-
-        il.MarkLabel(loopStartLabel);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, partsLocal);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, iLocal);
-
-        il.MarkLabel(loopEndLabel);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Blt, loopStartLabel);
-
-        // return new $Array(result);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Call, runtime.RegExpSymbolSplitProtocol);
         il.Emit(OpCodes.Ret);
     }
 

@@ -536,13 +536,24 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var notRegExpLabel = il.DefineLabel();
         var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var receiverLocal = il.DeclareLocal(_types.Object);
+        var inputLocal = il.DeclareLocal(_types.String);
+        var resultLocal = il.DeclareLocal(_types.Object);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, receiverLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, inputLocal);
 
         // var regexp = regex as $RegExp
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
-        // if (regexp == null) return null
+        // A non-$RegExp receiver still participates in the abstract
+        // RegExpExec operation: Get(exec), call it with the receiver as this,
+        // and validate the returned value. RegExp symbol protocols species-
+        // construct precisely these ordinary splitter objects.
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
@@ -553,7 +564,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);
-        il.Emit(OpCodes.Ldnull);
+        EmitRegExpExecSlow(il, runtime, receiverLocal, inputLocal, resultLocal);
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }
 

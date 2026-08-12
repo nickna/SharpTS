@@ -1184,6 +1184,8 @@ public class EmittedRuntime
     public MethodBuilder RegExpFromArgs { get; set; } = null!;
     public MethodBuilder RegExpTest { get; set; } = null!;
     public MethodBuilder RegExpExec { get; set; } = null!;
+    /// <summary>$Runtime.RegExpSymbolSplitProtocol(rx, string, limit) -> $Array — late-emitted ECMA-262 RegExp.prototype[@@split] protocol, including SpeciesConstructor and custom RegExpExec dispatch.</summary>
+    public MethodBuilder RegExpSymbolSplitProtocol { get; set; } = null!;
     public MethodBuilder RegExpGetSource { get; set; } = null!;
     public MethodBuilder RegExpGetFlags { get; set; } = null!;
     public MethodBuilder RegExpGetGlobal { get; set; } = null!;
@@ -1254,6 +1256,7 @@ public class EmittedRuntime
     public MethodBuilder TSRegExpSymReplaceHelper { get; set; } = null!;
     public MethodBuilder TSRegExpSymSearchHelper { get; set; } = null!;
     public MethodBuilder TSRegExpSymSplitHelper { get; set; } = null!;
+    public MethodBuilder TSRegExpAdvanceStringIndexSpec { get; set; } = null!;
 
     // groupBy support
     public MethodBuilder ObjectGroupBy { get; set; } = null!;
