@@ -2259,9 +2259,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
 
         // Reduce has no thisArg parameter. Invoke through the receiver-aware
-        // path with undefined (represented by null here), matching the other
-        // array iterator callbacks and preserving strict callback `this`.
-        il.Emit(OpCodes.Ldnull);
+        // path with the JS undefined sentinel. Function-body `this` loading
+        // preserves it for strict callbacks and coerces it to globalThis for
+        // sloppy callbacks.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
@@ -2453,8 +2454,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Stelem_Ref);
 
-        // Symmetric with reduce: callback thisValue is undefined.
-        il.Emit(OpCodes.Ldnull);
+        // Symmetric with reduce: callback thisValue is JS undefined.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);

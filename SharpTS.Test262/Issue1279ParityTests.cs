@@ -5477,10 +5477,16 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-10.js")]
     [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-12.js")]
     [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-15.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-16.js")]
     [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-25.js")]
     [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-28.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-b-29.js")]
+    [InlineData("built-ins/Array/prototype/reduce/15.4.4.21-9-c-ii-4-s.js")]
     [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-8-b-3.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-16.js")]
     [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-25.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-29.js")]
+    [InlineData("built-ins/Array/prototype/reduceRight/15.4.4.22-9-c-ii-4-s.js")]
     public void Array_reduce_snapshots_length_and_observes_dynamic_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 

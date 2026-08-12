@@ -696,13 +696,39 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
 
         if (newLength < _length)
         {
-            // Truncate: drop entries at indices >= newLength.
+            // ArraySetLength deletes own indices from oldLen-1 downward. A
+            // non-configurable index blocks further truncation and leaves the
+            // final length at index+1, while already-deleted higher entries
+            // stay deleted (ECMA-262 10.4.2.4 steps 16-17).
+            long effectiveLength = newLength;
+            if (_descriptors != null)
+            {
+                foreach (var pair in _descriptors)
+                {
+                    if (!pair.Value.HasExplicitDescriptor || pair.Value.Configurable)
+                        continue;
+                    if (!uint.TryParse(pair.Key,
+                            System.Globalization.NumberStyles.None,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out uint index)
+                        || index == uint.MaxValue
+                        || index < newLength
+                        || !HasIndex(index))
+                    {
+                        continue;
+                    }
+                    effectiveLength = Math.Max(effectiveLength, (long)index + 1);
+                }
+            }
+
+            // Drop entries at indices >= the length that the descending
+            // deletion process was able to reach.
             if (_sparse != null)
             {
                 List<uint>? toRemove = null;
                 foreach (var key in _sparse.Keys)
                 {
-                    if ((long)key >= newLength)
+                    if ((long)key >= effectiveLength)
                     {
                         toRemove ??= [];
                         toRemove.Add(key);
@@ -716,12 +742,27 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             if (_indexAccessors != null)
             {
                 foreach (var key in _indexAccessors.Keys.Where(
-                    key => key >= newLength).ToArray())
+                    key => key >= effectiveLength).ToArray())
                     _indexAccessors.Remove(key);
             }
-            while (_dense.Count > newLength)
+            if (_descriptors != null)
+            {
+                foreach (var key in _descriptors.Keys.Where(key =>
+                {
+                    return uint.TryParse(key,
+                            System.Globalization.NumberStyles.None,
+                            System.Globalization.CultureInfo.InvariantCulture,
+                            out uint index)
+                        && index != uint.MaxValue
+                        && index >= effectiveLength;
+                }).ToArray())
+                {
+                    _descriptors.Remove(key);
+                }
+            }
+            while (_dense.Count > effectiveLength)
                 _dense.RemoveAt(_dense.Count - 1);
-            _length = newLength;
+            _length = effectiveLength;
             TryCollapseSparse();
             return;
         }
