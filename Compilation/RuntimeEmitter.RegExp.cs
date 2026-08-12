@@ -966,70 +966,427 @@ public partial class RuntimeEmitter
 
     private void EmitStringMatchAllRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // StringMatchAll(string str, object? pattern) -> object?
+        // StringMatchAll(object receiver, object? pattern) -> object?
         // Builds $Object match results directly, accessing $RegExp._regex field.
         // Uses index-based iteration (MatchCollection[i]) to avoid try/finally complexity.
         var method = typeBuilder.DefineMethod(
             "StringMatchAllRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Object]
+            [_types.Object, _types.Object]
         );
+        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.StringMatchAllRegExp = method;
 
         var il = method.GetILGenerator();
-        EmitStringSymbolDispatchPreamble(il, runtime, runtime.SymbolMatchAll, 0);
         var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
-        var isStringPatternLabel = il.DefineLabel();
         var regexLocal = il.DeclareLocal(typeof(Regex));
+        var stringLocal = il.DeclareLocal(_types.String);
+        var matcherLocal = il.DeclareLocal(_types.Object);
+        var matcherFunctionLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var matcherArgsLocal = il.DeclareLocal(_types.ObjectArray);
+        var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        var symbolRawLocal = il.DeclareLocal(_types.Object);
+        var symbolDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var symbolGetterLocal = il.DeclareLocal(_types.Object);
+        var sourceLocal = il.DeclareLocal(_types.String);
+        var flagsLocal = il.DeclareLocal(_types.String);
+        var flagsValueLocal = il.DeclareLocal(_types.Object);
+        var patternTypeLocal = il.DeclareLocal(_types.String);
+        var patternIsObjectLocal = il.DeclareLocal(_types.Boolean);
+        var patternIsRegExpLocal = il.DeclareLocal(_types.Boolean);
+        var buildResultLabel = il.DefineLabel();
+        var fallbackCreateLabel = il.DefineLabel();
 
-        // var regexp = pattern as $RegExp
+        // RequireObjectCoercible(this).
+        var receiverOkLabel = il.DefineLabel();
+        var receiverThrowLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, receiverThrowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, receiverOkLabel);
+        il.MarkLabel(receiverThrowLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.matchAll called on null or undefined");
+        il.MarkLabel(receiverOkLabel);
+
+        // Preserve the native brand when present. RegExpCreate below replaces
+        // this local with the newly-created guest RegExp on the fallback path.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
-        // if (regexp == null) goto stringPattern
-        il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Brfalse, isStringPatternLabel);
+        // ES2026 String.prototype.matchAll only performs IsRegExp/GetMethod
+        // when regexp is an Object. In particular, primitive Boolean/Number/
+        // String/BigInt values must not consult their prototypes' symbol keys.
+        var patternClassificationDone = il.DefineLabel();
+        var patternIsObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, patternClassificationDone);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, patternClassificationDone);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Stloc, patternTypeLocal);
+        il.Emit(OpCodes.Ldloc, patternTypeLocal);
+        il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, patternIsObject);
+        il.Emit(OpCodes.Ldloc, patternTypeLocal);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, patternClassificationDone);
+        il.MarkLabel(patternIsObject);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, patternIsObjectLocal);
+        il.MarkLabel(patternClassificationDone);
 
-        // if (!regexp.Global) throw TypeError
-        var isGlobalLabel = il.DefineLabel();
+        // IsRegExp(pattern): an explicit @@match value controls the result;
+        // otherwise the internal $RegExp brand does. Only regexp-like Objects
+        // participate in the mandatory observable global-flags validation.
+        var isRegExpReady = il.DefineLabel();
+        var useNativeBrand = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, patternIsObjectLocal);
+        il.Emit(OpCodes.Brfalse, isRegExpReady);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, matcherLocal);
+        EmitObserveRegExpPrototypeOverride(runtime.SymbolMatch, runtime.TSRegExpSymMatchHelper,
+            loadReceiver: () => il.Emit(OpCodes.Ldarg_1));
+        il.Emit(OpCodes.Ldloc, matcherLocal);
+        il.Emit(OpCodes.Brfalse, useNativeBrand);
+        il.Emit(OpCodes.Ldloc, matcherLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, useNativeBrand);
+        il.Emit(OpCodes.Ldloc, matcherLocal);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Stloc, patternIsRegExpLocal);
+        il.Emit(OpCodes.Br, isRegExpReady);
+        il.MarkLabel(useNativeBrand);
         il.Emit(OpCodes.Ldloc, regexpLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
-        il.Emit(OpCodes.Brtrue, isGlobalLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un);
+        il.Emit(OpCodes.Stloc, patternIsRegExpLocal);
+        il.MarkLabel(isRegExpReady);
+
+        var flagsValidated = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, patternIsRegExpLocal);
+        il.Emit(OpCodes.Brfalse, flagsValidated);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "flags");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, flagsValueLocal);
+
+        // The compiled RegExp property fast path intentionally handles its
+        // intrinsic accessors directly. String#matchAll additionally needs to
+        // observe a user replacement of RegExp.prototype.flags, without
+        // perturbing the other RegExp algorithms that depend on that proven
+        // fast path. An own flags descriptor already won in GetProperty above.
+        var flagsOverrideDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Brfalse, flagsOverrideDone);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "flags");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, flagsOverrideDone);
+
+        il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+        il.Emit(OpCodes.Ldstr, "flags");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, flagsOverrideDone);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, symbolGetterLocal);
+        var flagsDataDescriptor = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+        il.Emit(OpCodes.Brfalse, flagsDataDescriptor);
+
+        // Leave the intrinsic getter on the existing fast path; only invoke a
+        // genuinely replaced accessor with the original RegExp as `this`.
+        var invokeFlagsGetter = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Stloc, matcherFunctionLocal);
+        il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
+        il.Emit(OpCodes.Brfalse, invokeFlagsGetter);
+        il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+        _types.EmitLoadMethodInfo(il, runtime.TSRegExpProtoGetFlags);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+        il.Emit(OpCodes.Brtrue, flagsOverrideDone);
+        il.MarkLabel(invokeFlagsGetter);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, flagsValueLocal);
+        il.Emit(OpCodes.Br, flagsOverrideDone);
+
+        il.MarkLabel(flagsDataDescriptor);
+        var flagsDataValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, flagsDataValue);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Stloc, flagsValueLocal);
+        il.Emit(OpCodes.Br, flagsOverrideDone);
+        il.MarkLabel(flagsDataValue);
+        il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, flagsValueLocal);
+        il.MarkLabel(flagsOverrideDone);
+
+        il.Emit(OpCodes.Ldloc, flagsValueLocal);
+        il.Emit(OpCodes.Dup);
+        var flagsPresent = il.DefineLabel();
+        var flagsThrow = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, flagsThrow);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, flagsPresent);
+        il.MarkLabel(flagsThrow);
+        il.Emit(OpCodes.Pop);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp flags are null or undefined");
+        il.MarkLabel(flagsPresent);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, flagsLocal);
+        il.Emit(OpCodes.Ldloc, flagsLocal);
+        il.Emit(OpCodes.Ldstr, "g");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
+        var isGlobal = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, isGlobal);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "String.prototype.matchAll called with a non-global RegExp argument");
+        il.MarkLabel(isGlobal);
+        il.MarkLabel(flagsValidated);
 
-        il.MarkLabel(isGlobalLabel);
+        // GetMethod(pattern, @@matchAll). A missing method falls through to
+        // RegExpCreate. The intrinsic helper is retained on the rich-result
+        // fast path; every user override is invoked with the original receiver
+        // value (before ToString(this), as required by the observable order).
+        il.Emit(OpCodes.Ldloc, patternIsObjectLocal);
+        il.Emit(OpCodes.Brfalse, fallbackCreateLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolMatchAll);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, matcherLocal);
+        EmitObserveRegExpPrototypeOverride(runtime.SymbolMatchAll, runtime.TSRegExpSymMatchAllHelper,
+            loadReceiver: () => il.Emit(OpCodes.Ldarg_1));
+        il.Emit(OpCodes.Ldloc, matcherLocal);
+        il.Emit(OpCodes.Brfalse, fallbackCreateLabel);
+        il.Emit(OpCodes.Ldloc, matcherLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, fallbackCreateLabel);
+        var standardOriginalMatcher = il.DefineLabel();
+        EmitInvokeMatchAllUnlessStandard(standardOriginalMatcher, loadReceiver: () => il.Emit(OpCodes.Ldarg_1),
+            loadArgument: () => il.Emit(OpCodes.Ldarg_0));
+        il.MarkLabel(standardOriginalMatcher);
 
-        // regexLocal = regexp._regex
+        // The standard intrinsic can only take this fast path for a genuinely
+        // native receiver. Assigning it to an ordinary object must still call
+        // it and let the RegExp receiver guard throw.
+        var standardReceiverOk = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Brtrue, standardReceiverOk);
+        EmitInvokeCurrentMatcher(loadReceiver: () => il.Emit(OpCodes.Ldarg_1),
+            loadArgument: () => il.Emit(OpCodes.Ldarg_0));
+        il.MarkLabel(standardReceiverOk);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
+        il.Emit(OpCodes.Stloc, regexLocal);
+        il.Emit(OpCodes.Br, buildResultLabel);
+
+        // S = ToString(O), then rx = RegExpCreate(pattern, "g"). Undefined is
+        // the empty pattern; a native RegExp contributes its source; every
+        // other value follows ToString. Construct a real guest $RegExp so an
+        // overridden RegExp.prototype[@@matchAll] observes the correct `this`.
+        il.MarkLabel(fallbackCreateLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, stringLocal);
+        var sourceReadyLabel = il.DefineLabel();
+        var sourceCoerceLabel = il.DefineLabel();
+        var sourceUndefinedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Brfalse, sourceUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+        il.Emit(OpCodes.Stloc, sourceLocal);
+        il.Emit(OpCodes.Br, sourceReadyLabel);
+        il.MarkLabel(sourceUndefinedLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, sourceCoerceLabel);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Stloc, sourceLocal);
+        il.Emit(OpCodes.Br, sourceReadyLabel);
+        il.MarkLabel(sourceCoerceLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, sourceLocal);
+        il.MarkLabel(sourceReadyLabel);
+        il.Emit(OpCodes.Ldloc, sourceLocal);
+        il.Emit(OpCodes.Ldstr, "g");
+        il.Emit(OpCodes.Newobj, runtime.TSRegExpCtorPatternFlags);
+        il.Emit(OpCodes.Stloc, regexpLocal);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldfld, _tsRegExpRegexField);
         il.Emit(OpCodes.Stloc, regexLocal);
 
-        var buildResultLabel = il.DefineLabel();
-        il.Emit(OpCodes.Br, buildResultLabel);
-
-        // String pattern fallback
-        il.MarkLabel(isStringPatternLabel);
-
-        var escapedLocal = il.DeclareLocal(_types.String);
-        // ECMA-262 ToString protocol — handles objects with custom toString.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Call, typeof(Regex).GetMethod("Escape", [_types.String])!);
-        il.Emit(OpCodes.Stloc, escapedLocal);
-
-        il.Emit(OpCodes.Ldloc, escapedLocal);
-        il.Emit(OpCodes.Newobj, typeof(Regex).GetConstructor([_types.String])!);
-        il.Emit(OpCodes.Stloc, regexLocal);
+        // Invoke(rx, @@matchAll, « S »). GetIndex now walks the actual
+        // RegExp.prototype symbol dictionary, so prototype overrides win while
+        // the intrinsic helper remains eligible for the rich-result fast path.
+        EmitResolveRegExpPrototypeSymbol(runtime.SymbolMatchAll,
+            loadReceiver: () => il.Emit(OpCodes.Ldloc, regexpLocal));
+        EmitInvokeMatchAllUnlessStandard(buildResultLabel,
+            loadReceiver: () => il.Emit(OpCodes.Ldloc, regexpLocal),
+            loadArgument: () => il.Emit(OpCodes.Ldloc, stringLocal));
 
         // Common path: use index-based iteration over MatchCollection
         il.MarkLabel(buildResultLabel);
 
+        void EmitInvokeMatchAllUnlessStandard(
+            Label standardLabel,
+            Action loadReceiver,
+            Action loadArgument)
+        {
+            var invokeLabel = il.DefineLabel();
+            EmitBranchIfMatcherWraps(runtime.TSRegExpSymMatchAllHelper, standardLabel);
+            il.Emit(OpCodes.Br, invokeLabel);
+            il.MarkLabel(invokeLabel);
+            EmitInvokeCurrentMatcher(loadReceiver, loadArgument);
+        }
+
+        void EmitBranchIfMatcherWraps(MethodBuilder helper, Label matchLabel)
+        {
+            var notFunctionLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, matcherLocal);
+            il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+            il.Emit(OpCodes.Stloc, matcherFunctionLocal);
+            il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
+            il.Emit(OpCodes.Brfalse, notFunctionLabel);
+            il.Emit(OpCodes.Ldloc, matcherFunctionLocal);
+            il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+            _types.EmitLoadMethodInfo(il, helper);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+            il.Emit(OpCodes.Brtrue, matchLabel);
+            il.MarkLabel(notFunctionLabel);
+        }
+
+        void EmitObserveRegExpPrototypeOverride(
+            FieldBuilder symbol,
+            MethodBuilder intrinsic,
+            Action loadReceiver)
+        {
+            var doneLabel = il.DefineLabel();
+            var intrinsicLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, regexpLocal);
+            il.Emit(OpCodes.Brfalse, doneLabel);
+            EmitBranchIfMatcherWraps(intrinsic, intrinsicLabel);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(intrinsicLabel);
+            // An own symbol value wins even when it happens to be the intrinsic
+            // function itself. Only an inherited synthesized intrinsic should
+            // be replaced by the current RegExp.prototype descriptor.
+            loadReceiver();
+            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Stloc, symbolDictLocal);
+            il.Emit(OpCodes.Ldloc, symbolDictLocal);
+            il.Emit(OpCodes.Ldsfld, symbol);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
+            il.Emit(OpCodes.Brtrue, doneLabel);
+            EmitResolveRegExpPrototypeSymbol(symbol, loadReceiver);
+            il.MarkLabel(doneLabel);
+        }
+
+        void EmitResolveRegExpPrototypeSymbol(FieldBuilder symbol, Action loadReceiver)
+        {
+            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Stloc, symbolDictLocal);
+            il.Emit(OpCodes.Ldloc, symbolDictLocal);
+            il.Emit(OpCodes.Ldsfld, symbol);
+            il.Emit(OpCodes.Ldloca, symbolRawLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+            var foundLabel = il.DefineLabel();
+            var doneLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, foundLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Stloc, matcherLocal);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(foundLabel);
+            il.Emit(OpCodes.Ldloc, symbolRawLocal);
+            il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Stloc, symbolDescriptorLocal);
+            var rawValueLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, rawValueLabel);
+            il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, symbolGetterLocal);
+            var dataDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+            il.Emit(OpCodes.Brfalse, dataDescriptorLabel);
+            loadReceiver();
+            il.Emit(OpCodes.Ldloc, symbolGetterLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Stloc, matcherLocal);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(dataDescriptorLabel);
+            var descriptorValueLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, descriptorValueLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Stloc, matcherLocal);
+            il.Emit(OpCodes.Br, doneLabel);
+            il.MarkLabel(descriptorValueLabel);
+            il.Emit(OpCodes.Ldloc, symbolDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, matcherLocal);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(rawValueLabel);
+            il.Emit(OpCodes.Ldloc, symbolRawLocal);
+            il.Emit(OpCodes.Stloc, matcherLocal);
+            il.MarkLabel(doneLabel);
+        }
+
+        void EmitInvokeCurrentMatcher(Action loadReceiver, Action loadArgument)
+        {
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            loadArgument();
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Stloc, matcherArgsLocal);
+            loadReceiver();
+            il.Emit(OpCodes.Ldloc, matcherLocal);
+            il.Emit(OpCodes.Ldloc, matcherArgsLocal);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ret);
+        }
+
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
         var matchCollLocal = il.DeclareLocal(typeof(MatchCollection));
         var matchLocal = il.DeclareLocal(typeof(Match));
-        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var matchElementsLocal = il.DeclareLocal(_types.ListOfObject);
+        var matchArrayLocal = il.DeclareLocal(runtime.TSArrayType);
         var iLocal = il.DeclareLocal(_types.Int32);
         var countLocal = il.DeclareLocal(_types.Int32);
         var groupIndexLocal = il.DeclareLocal(_types.Int32);
@@ -1046,7 +1403,7 @@ public partial class RuntimeEmitter
 
         // var matchColl = regex.Matches(str)
         il.Emit(OpCodes.Ldloc, regexLocal);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Matches", [_types.String])!);
         il.Emit(OpCodes.Stloc, matchCollLocal);
 
@@ -1070,42 +1427,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(MatchCollection).GetMethod("get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, matchLocal);
 
-        // var fields = new Dictionary<string, object?>()
-        var dictSetItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!;
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
-        il.Emit(OpCodes.Stloc, fieldsLocal);
+        // A RegExp match result is an Array exotic object, not a plain object.
+        // Populate elements 0..n from the CLR GroupCollection, then attach the
+        // non-index `index`, `input`, and `groups` properties through ordinary
+        // Set so Array.prototype methods and Test262's compareArray both work.
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, matchElementsLocal);
 
-        // fields["0"] = match.Value
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Ldstr, "0");
-        il.Emit(OpCodes.Ldloc, matchLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Capture).GetProperty("Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, dictSetItem);
-
-        // fields["index"] = (double)match.Index
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Ldstr, "index");
-        il.Emit(OpCodes.Ldloc, matchLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Capture).GetProperty("Index")!.GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, dictSetItem);
-
-        // fields["input"] = str (arg_0)
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Ldstr, "input");
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, dictSetItem);
-
-        // fields["groups"] = BuildNamedGroups(match)
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Ldstr, "groups");
-        il.Emit(OpCodes.Ldloc, matchLocal);
-        il.Emit(OpCodes.Call, runtime.BuildNamedGroups);
-        il.Emit(OpCodes.Callvirt, dictSetItem);
-
-        // for (int gi = 1; gi < match.Groups.Count; gi++)
-        il.Emit(OpCodes.Ldc_I4_1);
+        // for (int gi = 0; gi < match.Groups.Count; gi++)
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, groupIndexLocal);
 
         il.MarkLabel(groupLoopStartLabel);
@@ -1122,27 +1452,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(GroupCollection).GetMethod("get_Item", [_types.Int32])!);
         il.Emit(OpCodes.Stloc, groupLocal);
 
-        // fields[gi.ToString()] = group.Success ? group.Value : null
-        var groupSuccessLabel = il.DefineLabel();
+        // matchElements.Add(group.Success ? group.Value : undefined)
+        var groupMissingLabel = il.DefineLabel();
         var groupDoneLabel = il.DefineLabel();
 
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Ldloca, groupIndexLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
-
+        il.Emit(OpCodes.Ldloc, matchElementsLocal);
         il.Emit(OpCodes.Ldloc, groupLocal);
         il.Emit(OpCodes.Callvirt, typeof(Group).GetProperty("Success")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, groupSuccessLabel);
+        il.Emit(OpCodes.Brfalse, groupMissingLabel);
 
         il.Emit(OpCodes.Ldloc, groupLocal);
         il.Emit(OpCodes.Callvirt, typeof(Capture).GetProperty("Value")!.GetGetMethod()!);
         il.Emit(OpCodes.Br, groupDoneLabel);
 
-        il.MarkLabel(groupSuccessLabel);
-        il.Emit(OpCodes.Ldnull);
+        il.MarkLabel(groupMissingLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
 
         il.MarkLabel(groupDoneLabel);
-        il.Emit(OpCodes.Callvirt, dictSetItem);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         il.Emit(OpCodes.Ldloc, groupIndexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1152,10 +1479,32 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(groupLoopEndLabel);
 
-        // result.Add(new $Object(fields))
+        il.Emit(OpCodes.Ldloc, matchElementsLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Stloc, matchArrayLocal);
+
+        il.Emit(OpCodes.Ldloc, matchArrayLocal);
+        il.Emit(OpCodes.Ldstr, "index");
+        il.Emit(OpCodes.Ldloc, matchLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Capture).GetProperty("Index")!.GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.SetProperty);
+
+        il.Emit(OpCodes.Ldloc, matchArrayLocal);
+        il.Emit(OpCodes.Ldstr, "input");
+        il.Emit(OpCodes.Ldloc, stringLocal);
+        il.Emit(OpCodes.Call, runtime.SetProperty);
+
+        il.Emit(OpCodes.Ldloc, matchArrayLocal);
+        il.Emit(OpCodes.Ldstr, "groups");
+        il.Emit(OpCodes.Ldloc, matchLocal);
+        il.Emit(OpCodes.Call, runtime.BuildNamedGroups);
+        il.Emit(OpCodes.Call, runtime.SetProperty);
+
+        // result.Add(matchArray)
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Ldloc, matchArrayLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
 
         // i++
@@ -1167,9 +1516,11 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEndLabel);
 
-        // return new $Array(result)
+        // %RegExpStringIteratorPrototype% is represented by the runtime's
+        // stateful IEnumerator<object> bridge. It supports next(), for-of,
+        // spread, and Array.from without exposing Array-only properties.
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
         il.Emit(OpCodes.Ret);
     }
 

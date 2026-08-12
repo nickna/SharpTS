@@ -5391,6 +5391,32 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/matchAll/cstm-matchall-on-boolean-primitive.js")]
+    [InlineData("built-ins/String/prototype/matchAll/cstm-matchall-on-number-primitive.js")]
+    [InlineData("built-ins/String/prototype/matchAll/cstm-matchall-on-string-primitive.js")]
+    [InlineData("built-ins/String/prototype/matchAll/flags-undefined-throws.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-is-null.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-is-undefined.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-is-undefined-or-null-invokes-matchAll.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-matchAll-is-undefined-or-null.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-prototype-get-matchAll-throws.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-prototype-has-no-matchAll.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-prototype-matchAll-invocation.js")]
+    [InlineData("built-ins/String/prototype/matchAll/regexp-prototype-matchAll-throws.js")]
+    [InlineData("built-ins/String/prototype/matchAll/toString-this-val.js")]
+    public void String_matchAll_follows_the_ES2026_symbol_protocol(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/builtin-success-g-set-lastindex.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/coerce-global.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/get-global-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/get-unicode-error.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/get-unicode-error.js")]
+    public void RegExp_intrinsic_accessors_keep_the_internal_slot_fast_path(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/String/prototype/replace/cstm-replace-get-err.js")]
     [InlineData("built-ins/String/prototype/replace/cstm-replace-invocation.js")]
     [InlineData("built-ins/String/prototype/replaceAll/replaceValue-call-abrupt.js")]
