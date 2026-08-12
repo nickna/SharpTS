@@ -419,6 +419,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
+        // Predeclare the promise/thenable adoption helper. Its body is emitted
+        // later with the capability support, but combinator normalization must
+        // be able to reference it now.
+        runtime.CoerceAwaitableToTaskMethod ??= typeBuilder.DefineMethod(
+            "CoerceAwaitableToTask",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [_types.Object]);
+
         // NormalizePromiseList — replaces $Promise elements (#242 Promise
         // subclasses) with their wrapped Task so the combinator state machines
         // (which only test elements for Task<object?>) await them. Emitted

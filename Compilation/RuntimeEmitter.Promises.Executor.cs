@@ -95,6 +95,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resolveFunctionLocal);
         il.MarkLabel(noResolveOverrideLabel);
 
+        // GetPromiseResolve requires the captured resolve value to be
+        // callable before iterator acquisition. InvokeMethodValue's permissive
+        // fallback is used by other dynamic call sites, so enforce the Promise
+        // combinator contract here and let the outer state-machine catch turn
+        // the guest TypeError into a rejection.
+        var resolveCallableLabel = il.DefineLabel();
+        var resolveCheckedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, resolveCheckedLabel);
+        il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, resolveCallableLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Promise constructor resolve is not callable");
+        il.MarkLabel(resolveCallableLabel);
+        il.MarkLabel(resolveCheckedLabel);
+
         // Arrays use the existing dense-list path and strings are safely finite
         // built-in iterables. General custom iterators cannot be eagerly
         // materialized here: Promise combinators must interleave each next(),
@@ -130,8 +150,6 @@ public partial class RuntimeEmitter
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
-        var addRawLabel = il.DefineLabel();
-        var nextLabel = il.DefineLabel();
 
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -167,25 +185,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
         il.MarkLabel(haveResolvedElementLabel);
 
-        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brfalse, addRawLabel);
-
-        // result.Add(((​$Promise)element).Task)
+        // PerformPromiseAll/Race/AllSettled/Any invokes `then` for every
+        // resolved element. Route through the shared PromiseResolve-style
+        // adoption helper rather than treating a non-Task result as an
+        // already-fulfilled plain value. This preserves observable overridden
+        // `then` methods and adopts ordinary thenables consistently with await.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
-        il.Emit(OpCodes.Br, nextLabel);
-
-        // result.Add(resolvedElement)
-        il.MarkLabel(addRawLabel);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
 
-        il.MarkLabel(nextLabel);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);

@@ -40,12 +40,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCoerceAwaitableToTask(EmittedRuntime runtime)
     {
-        var method = _runtimeTypeBuilder!.DefineMethod(
-            "CoerceAwaitableToTask",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.TaskOfObject,
-            [_types.Object]);
-        runtime.CoerceAwaitableToTaskMethod = method;
+        var method = runtime.CoerceAwaitableToTaskMethod;
 
         var il = method.GetILGenerator();
         var wrapLabel = il.DefineLabel();
@@ -54,6 +49,28 @@ public partial class RuntimeEmitter
         var thenLocal = il.DeclareLocal(_types.Object);
         var tcsLocal = il.DeclareLocal(tcsType);
         var lockLocal = il.DeclareLocal(_types.Object);
+
+        // Normalization may already have exposed the underlying task of a
+        // native promise. Preserve it instead of wrapping it as a fulfilled
+        // value (which would turn Task<T> into Task<object>(Task<T>)).
+        var notTaskLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Brfalse, notTaskLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notTaskLabel);
+
+        var notPromiseLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Brfalse, notPromiseLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
+        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notPromiseLabel);
 
         // if (value == null) goto wrap;
         il.Emit(OpCodes.Ldarg_0);

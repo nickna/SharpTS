@@ -94,19 +94,28 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "shift":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayShift);
+                // Mutators must perform the observable Set/Delete/Set-length
+                // sequence on the array object. The List fast path bypasses
+                // indexed prototype accessors and length descriptors.
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldloc, receiverLocal);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayShiftProto);
                 break;
 
             case "unshift":
-                // JS `arr.unshift(a, b, c)` prepends all args in order: [a,b,c,...orig].
-                // ArrayUnshift(list, el) inserts one element at the start, so iterate
-                // in reverse to preserve the final order.
-                EmitVariadicListMutation(emitter, arguments, ctx.Runtime!.ArrayUnshift, reverse: true, argLocals);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldloc, receiverLocal);
+                emitter.EmitArgsArray(arguments, argLocals);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayUnshiftProto);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "push":
-                // JS `arr.push(a, b, c)` appends all args. Iterate forward.
-                EmitVariadicListMutation(emitter, arguments, ctx.Runtime!.ArrayPush, reverse: false, argLocals);
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldloc, receiverLocal);
+                emitter.EmitArgsArray(arguments, argLocals);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayPushProto);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
                 break;
 
             case "slice":
@@ -1058,64 +1067,6 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var il = ctx.IL;
         il.Emit(OpCodes.Ldloc, savedLocal);
         il.Emit(OpCodes.Stsfld, ctx.Runtime!.CurrentCallbackThisArgField);
-    }
-
-    /// <summary>
-    /// Emits a loop calling a single-element list-mutation helper (e.g. ArrayPush /
-    /// ArrayUnshift) once per argument, then leaves the boxed final <c>list.Count</c>
-    /// on the stack as the method's return value (matches JS's `arr.push(...)` /
-    /// `arr.unshift(...)` semantics which return the new length).
-    ///
-    /// Stack on entry: <c>[list]</c>. Stack on exit: <c>[boxed-double(count)]</c>.
-    ///
-    /// When <paramref name="reverse"/> is true, arguments are iterated last-to-first
-    /// (needed for unshift so the final order matches JS: `unshift(a,b,c)` yields
-    /// <c>[a,b,c,...orig]</c>).
-    /// </summary>
-    private static void EmitVariadicListMutation(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder runtimeMethod, bool reverse, LocalBuilder[]? argLocals = null)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        // Stash the list in a local so we can reuse it across iterations and then
-        // read its Count at the end. (When an argument suspends the list has already been
-        // moved to an await-safe local by the caller and the args pre-spilled into argLocals,
-        // so no suspension occurs in the loop below and this plain local never crosses one — #850.)
-        var listLocal = il.DeclareLocal(ctx.Types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-
-        if (arguments.Count == 0)
-        {
-            // No args: per JS, `arr.push()` returns the current length unchanged.
-            il.Emit(OpCodes.Ldloc, listLocal);
-            il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(ctx.Types.ListOfObject, "Count").GetGetMethod()!);
-            il.Emit(OpCodes.Conv_R8);
-            il.Emit(OpCodes.Box, ctx.Types.Double);
-            return;
-        }
-
-        for (int step = 0; step < arguments.Count; step++)
-        {
-            int i = reverse ? arguments.Count - 1 - step : step;
-            il.Emit(OpCodes.Ldloc, listLocal);
-            if (argLocals != null)
-            {
-                il.Emit(OpCodes.Ldloc, argLocals[i]);
-            }
-            else
-            {
-                emitter.EmitExpression(arguments[i]);
-                emitter.EmitBoxIfNeeded(arguments[i]);
-            }
-            il.Emit(OpCodes.Call, runtimeMethod);
-            il.Emit(OpCodes.Pop); // discard the per-element count return
-        }
-
-        // Final return value: (double)list.Count, boxed.
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Callvirt, ctx.Types.GetProperty(ctx.Types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, ctx.Types.Double);
     }
 
     #endregion

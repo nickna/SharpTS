@@ -1397,6 +1397,69 @@ public partial class RuntimeEmitter
         {
             var arrayDoStoreLabel = il.DefineLabel();
 
+            // String-keyed writes to canonical array indexes must use the
+            // indexed OrdinarySet path.  Array mutators spell their target
+            // indexes as strings, and routing those writes through the named
+            // property store skipped inherited Array.prototype accessors.
+            var arrayNamedPropertyLabel = il.DefineLabel();
+            var arrayPropertyIndexLocal = il.DeclareLocal(_types.UInt32);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+            il.Emit(OpCodes.Brfalse, arrayNamedPropertyLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, arrayPropertyIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, arrayNamedPropertyLabel);
+            il.Emit(OpCodes.Ldloc, arrayPropertyIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_M1);
+            il.Emit(OpCodes.Conv_U4);
+            il.Emit(OpCodes.Beq, arrayNamedPropertyLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, arrayPropertyIndexLocal);
+            il.Emit(OpCodes.Box, _types.UInt32);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, arrayNamedPropertyLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Brtrue, arrayNamedPropertyLabel);
+            var arrayIndexedRawStoreLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Ldloc, arrayPropertyIndexLocal);
+            il.Emit(OpCodes.Conv_U8);
+            il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+            il.Emit(OpCodes.Brtrue, arrayIndexedRawStoreLabel);
+            var arrayInheritedSetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, arrayInheritedSetterLocal);
+            il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+            il.Emit(OpCodes.Brfalse, arrayIndexedRawStoreLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, arrayInheritedSetterLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(arrayIndexedRawStoreLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Ldloc, arrayPropertyIndexLocal);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Callvirt, runtime.TSArraySetStrictLong);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(arrayNamedPropertyLabel);
+
             // Frozen array → throw "Cannot assign to read only property 'name'".
             var arrayNotFrozenLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1811,6 +1874,37 @@ public partial class RuntimeEmitter
         // Stage E.2 M6: widened from TSArraySetStrict (int) to
         // TSArraySetStrictLong so large indexes do not truncate.
         il.MarkLabel(strictArrayRawStoreLabel);
+        var strictArrayNoInheritedSetterLabel = il.DefineLabel();
+        var strictArrayInheritedSetterLocal = il.DeclareLocal(_types.Object);
+
+        // An existing dense own element shadows Array.prototype.  For a hole,
+        // however, OrdinarySet must consult an inherited indexed accessor
+        // before creating a new own element.  This is observable when push or
+        // unshift targets an accessor installed on Array.prototype.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+        il.Emit(OpCodes.Brtrue, strictArrayNoInheritedSetterLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
+        il.Emit(OpCodes.Ldloca, strictArrayInheritedSetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+        il.Emit(OpCodes.Brfalse, strictArrayNoInheritedSetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictArrayInheritedSetterLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictArrayNoInheritedSetterLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldarg_1);

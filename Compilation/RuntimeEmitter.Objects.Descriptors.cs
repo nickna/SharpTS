@@ -1520,6 +1520,23 @@ public partial class RuntimeEmitter
         var hasDescriptorLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
+        void EmitBuiltinDataDescriptor(
+            Action emitValue, bool writable, bool configurable)
+        {
+            il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+            il.Emit(OpCodes.Stloc, resultDictLocal);
+            il.Emit(OpCodes.Ldloc, resultDictLocal);
+            il.Emit(OpCodes.Ldstr, "value");
+            emitValue();
+            il.Emit(OpCodes.Callvirt,
+                _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+            EmitDescriptorBoolField(il, resultDictLocal, "writable", writable);
+            EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
+            EmitDescriptorBoolField(il, resultDictLocal, "configurable", configurable);
+            il.Emit(OpCodes.Ldloc, resultDictLocal);
+            il.Emit(OpCodes.Br, endLabel);
+        }
+
         // ECMA-262 §7.3.5 + §19.1.2.4: when the property key is a Symbol,
         // look it up in the per-object symbol dict (same one that handles
         // `obj[Symbol.x]` index access). Required for prop-desc.js tests
@@ -1539,6 +1556,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
+
+        // The global object exposes its standard functions and constants as
+        // own properties. Route descriptor values through the same global
+        // lookup used by ordinary reads so cached function identity is
+        // preserved (`desc.value === global.parseInt`).
+        var notGlobalObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Bne_Un, notGlobalObjectLabel);
+        void EmitGlobalDescriptorCheck(
+            string name, bool writable, bool configurable)
+        {
+            var next = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, next);
+            EmitBuiltinDataDescriptor(() =>
+            {
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, runtime.GlobalThisGetProperty);
+            }, writable, configurable);
+            il.MarkLabel(next);
+        }
+        EmitGlobalDescriptorCheck("parseInt", true, true);
+        EmitGlobalDescriptorCheck("parseFloat", true, true);
+        EmitGlobalDescriptorCheck("isNaN", true, true);
+        EmitGlobalDescriptorCheck("isFinite", true, true);
+        EmitGlobalDescriptorCheck("NaN", false, false);
+        EmitGlobalDescriptorCheck("Infinity", false, false);
+        il.Emit(OpCodes.Br, returnNullLabel);
+        il.MarkLabel(notGlobalObjectLabel);
 
         // Array length is an intrinsic data property whose value lives on the
         // array, while a writable=false transition is recorded in the PDS.

@@ -5,6 +5,26 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitRequireWritableArrayLength(
+        ILGenerator il, EmittedRuntime runtime, LocalBuilder receiver)
+    {
+        var descriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var writable = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, writable);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, writable);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Cannot assign to read only array length");
+        il.MarkLabel(writable);
+    }
+
     /// <summary>
     /// Emits frozen/sealed/extensibility check for array mutation methods.
     /// If frozen (or sealed when checkSealed=true, or non-extensible when checkExtensible=true), branches to returnLabel.
@@ -464,6 +484,12 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var generic = il.DefineLabel();
+        var fastList = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, fastList);
+        il.Emit(OpCodes.Br, generic);
+        il.MarkLabel(fastList);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, generic);
@@ -559,6 +585,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
         il.Emit(OpCodes.Pop);
+        EmitRequireWritableArrayLength(il, runtime, receiver);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Ldloc, newLength);
@@ -682,6 +709,12 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var generic = il.DefineLabel();
+        var fastList = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, fastList);
+        il.Emit(OpCodes.Br, generic);
+        il.MarkLabel(fastList);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, generic);
@@ -775,6 +808,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         var finalLength = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Stloc, finalLength);
+        EmitRequireWritableArrayLength(il, runtime, receiver);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Ldloc, finalLength);
@@ -804,6 +838,12 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var generic = il.DefineLabel();
+        var fastList = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brfalse, fastList);
+        il.Emit(OpCodes.Br, generic);
+        il.MarkLabel(fastList);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, generic);
@@ -956,6 +996,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, itemCount);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, finalLength);
+        EmitRequireWritableArrayLength(il, runtime, receiver);
         il.Emit(OpCodes.Ldloc, receiver);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Ldloc, finalLength);

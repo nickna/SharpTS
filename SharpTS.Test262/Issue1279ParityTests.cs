@@ -5517,6 +5517,63 @@ public sealed class Issue1279ParityTests
     public void String_positions_use_ToIntegerOrInfinity(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/invoke-resolve-return.js")]
+    [InlineData("built-ins/Promise/all/new-resolve-function.js")]
+    [InlineData("built-ins/Promise/all/resolve-element-function-prototype.js")]
+    [InlineData("built-ins/Promise/all/same-reject-function.js")]
+    [InlineData("built-ins/Promise/allSettled/invoke-resolve-return.js")]
+    [InlineData("built-ins/Promise/allSettled/new-reject-function.js")]
+    [InlineData("built-ins/Promise/allSettled/new-resolve-function.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-element-function-prototype.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-element-function-prototype.js")]
+    [InlineData("built-ins/Promise/any/invoke-resolve-return.js")]
+    [InlineData("built-ins/Promise/any/new-reject-function.js")]
+    [InlineData("built-ins/Promise/any/reject-element-function-prototype.js")]
+    [InlineData("built-ins/Promise/race/invoke-resolve-return.js")]
+    [InlineData("built-ins/Promise/race/same-reject-function.js")]
+    [InlineData("built-ins/Promise/race/same-resolve-function.js")]
+    public void Promise_combinators_adopt_resolved_thenables(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/resolve-not-callable-reject-with-typeerror.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-not-callable-reject-with-typeerror.js")]
+    [InlineData("built-ins/Promise/any/resolve-not-callable-reject-with-typeerror.js")]
+    public void Promise_combinators_reject_non_callable_resolve(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/push/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/push/set-length-zero-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/shift/set-length-zero-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-array-length-is-non-writable.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-is-frozen.js")]
+    [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-length-is-non-writable.js")]
+    public void Array_mutators_observe_index_accessors_and_length_integrity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-178.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-179.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-5.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-6.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-7.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-8.js")]
+    public void Global_builtin_descriptors_match_standard_attributes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-a-19.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-19.js")]
+    public void Array_search_preserves_nonconfigurable_tail_elements(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
 
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
