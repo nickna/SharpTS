@@ -3135,7 +3135,7 @@ test/built-ins/Error/cause_abrupt.js Fail
 test/built-ins/Error/cause_property.js Pass
 test/built-ins/Error/constructor.js Pass
 test/built-ins/Error/error-message-tostring-symbol.js Pass
-test/built-ins/Error/error-message-tostring-toprimitive.js Fail
+test/built-ins/Error/error-message-tostring-toprimitive.js Pass
 test/built-ins/Error/instance-prototype.js Pass
 test/built-ins/Error/internal-prototype.js Pass
 test/built-ins/Error/is-a-constructor.js Pass
@@ -3184,7 +3184,7 @@ test/built-ins/Error/prototype/toString/not-a-constructor.js Pass
 test/built-ins/Error/prototype/toString/prop-desc.js Pass
 test/built-ins/Error/prototype/toString/tostring-get-throws.js Pass
 test/built-ins/Error/prototype/toString/tostring-message-throws-symbol.js Pass
-test/built-ins/Error/prototype/toString/tostring-message-throws-toprimitive.js Fail
+test/built-ins/Error/prototype/toString/tostring-message-throws-toprimitive.js Pass
 test/built-ins/Error/prototype/toString/undefined-props.js Pass
 test/built-ins/Error/the-initial-value-of-errorprototypemessage-is-the-empty-string.js Pass
 test/built-ins/Error/tostring-1.js Fail
@@ -10558,7 +10558,7 @@ test/built-ins/String/prototype/replace/replaceValue-evaluation-order-regexp-obj
 test/built-ins/String/prototype/replace/replaceValue-evaluation-order.js Pass
 test/built-ins/String/prototype/replace/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/replace/tostring-this-throws-symbol.js Pass
-test/built-ins/String/prototype/replace/tostring-this-throws-toprimitive.js Fail
+test/built-ins/String/prototype/replace/tostring-this-throws-toprimitive.js Pass
 test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-bigint-primitive.js RuntimeError
 test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-boolean-primitive.js Pass
 test/built-ins/String/prototype/replaceAll/cstm-replaceall-on-number-primitive.js Pass
@@ -10684,7 +10684,7 @@ test/built-ins/String/prototype/slice/name.js Pass
 test/built-ins/String/prototype/slice/not-a-constructor.js Pass
 test/built-ins/String/prototype/slice/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/slice/this-value-tostring-throws-symbol.js Pass
-test/built-ins/String/prototype/slice/this-value-tostring-throws-toprimitive.js Fail
+test/built-ins/String/prototype/slice/this-value-tostring-throws-toprimitive.js Pass
 test/built-ins/String/prototype/split/argument-is-new-reg-exp-and-instance-is-string-hello.js Pass
 test/built-ins/String/prototype/split/argument-is-null-and-instance-is-function-call-that-returned-string.js Pass
 test/built-ins/String/prototype/split/argument-is-reg-exp-a-z-and-instance-is-string-abc.js Pass
@@ -10837,7 +10837,7 @@ test/built-ins/String/prototype/substring/S15.5.4.15_A1_T14.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T15.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T2.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T4.js Pass
-test/built-ins/String/prototype/substring/S15.5.4.15_A1_T5.js Fail
+test/built-ins/String/prototype/substring/S15.5.4.15_A1_T5.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T6.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T7.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A1_T8.js Pass
@@ -10852,12 +10852,12 @@ test/built-ins/String/prototype/substring/S15.5.4.15_A2_T6.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A2_T7.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A2_T8.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A2_T9.js Pass
-test/built-ins/String/prototype/substring/S15.5.4.15_A3_T1.js Fail
+test/built-ins/String/prototype/substring/S15.5.4.15_A3_T1.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A3_T10.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A3_T11.js Pass
-test/built-ins/String/prototype/substring/S15.5.4.15_A3_T2.js Fail
-test/built-ins/String/prototype/substring/S15.5.4.15_A3_T3.js Fail
-test/built-ins/String/prototype/substring/S15.5.4.15_A3_T4.js Fail
+test/built-ins/String/prototype/substring/S15.5.4.15_A3_T2.js Pass
+test/built-ins/String/prototype/substring/S15.5.4.15_A3_T3.js Pass
+test/built-ins/String/prototype/substring/S15.5.4.15_A3_T4.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A3_T5.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A3_T6.js Pass
 test/built-ins/String/prototype/substring/S15.5.4.15_A3_T7.js Pass
@@ -10871,7 +10871,7 @@ test/built-ins/String/prototype/substring/name.js Pass
 test/built-ins/String/prototype/substring/not-a-constructor.js Pass
 test/built-ins/String/prototype/substring/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/substring/this-value-tostring-throws-symbol.js Pass
-test/built-ins/String/prototype/substring/this-value-tostring-throws-toprimitive.js Fail
+test/built-ins/String/prototype/substring/this-value-tostring-throws-toprimitive.js Pass
 test/built-ins/String/prototype/toLocaleLowerCase/Final_Sigma_U180E.js Fail
 test/built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A10.js Pass
 test/built-ins/String/prototype/toLocaleLowerCase/S15.5.4.17_A11.js Pass
@@ -10955,7 +10955,7 @@ test/built-ins/String/prototype/toLowerCase/special_casing_conditional.js Fail
 test/built-ins/String/prototype/toLowerCase/supplementary_plane.js Pass
 test/built-ins/String/prototype/toLowerCase/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/toLowerCase/this-value-tostring-throws-symbol.js Pass
-test/built-ins/String/prototype/toLowerCase/this-value-tostring-throws-toprimitive.js Fail
+test/built-ins/String/prototype/toLowerCase/this-value-tostring-throws-toprimitive.js Pass
 test/built-ins/String/prototype/toString/length.js Pass
 test/built-ins/String/prototype/toString/name.js Pass
 test/built-ins/String/prototype/toString/non-generic-realm.js RuntimeError
@@ -11134,7 +11134,7 @@ test/built-ins/String/prototype/trimEnd/this-value-boolean.js Pass
 test/built-ins/String/prototype/trimEnd/this-value-line-terminator.js Pass
 test/built-ins/String/prototype/trimEnd/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/trimEnd/this-value-number.js Pass
-test/built-ins/String/prototype/trimEnd/this-value-object-cannot-convert-to-primitive-err.js Fail
+test/built-ins/String/prototype/trimEnd/this-value-object-cannot-convert-to-primitive-err.js Pass
 test/built-ins/String/prototype/trimEnd/this-value-object-toprimitive-call-err.js Pass
 test/built-ins/String/prototype/trimEnd/this-value-object-toprimitive-meth-err.js Pass
 test/built-ins/String/prototype/trimEnd/this-value-object-toprimitive-meth-priority.js Pass
@@ -11157,7 +11157,7 @@ test/built-ins/String/prototype/trimStart/this-value-boolean.js Pass
 test/built-ins/String/prototype/trimStart/this-value-line-terminator.js Pass
 test/built-ins/String/prototype/trimStart/this-value-not-obj-coercible.js Pass
 test/built-ins/String/prototype/trimStart/this-value-number.js Pass
-test/built-ins/String/prototype/trimStart/this-value-object-cannot-convert-to-primitive-err.js Fail
+test/built-ins/String/prototype/trimStart/this-value-object-cannot-convert-to-primitive-err.js Pass
 test/built-ins/String/prototype/trimStart/this-value-object-toprimitive-call-err.js Pass
 test/built-ins/String/prototype/trimStart/this-value-object-toprimitive-meth-err.js Pass
 test/built-ins/String/prototype/trimStart/this-value-object-toprimitive-meth-priority.js Pass

@@ -142,13 +142,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Br, afterEnd);
         il.MarkLabel(hasEnd);
-        // Reflection dispatch represents a missing/undefined trailing argument
-        // as null in this packed object[] path, so preserve the default-end
-        // sentinel before checking the explicit $Undefined representation.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Brfalse, defaultEnd);
+        // args.Length already distinguishes an omitted end argument. CLR null
+        // is the compiled representation of an explicitly supplied JavaScript
+        // null and must therefore flow through ToIntegerOrInfinity as +0.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ldelem_Ref);

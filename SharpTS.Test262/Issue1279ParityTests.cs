@@ -3641,6 +3641,27 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A1_T5.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A3_T1.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A3_T2.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A3_T3.js")]
+    [InlineData("built-ins/String/prototype/substring/S15.5.4.15_A3_T4.js")]
+    [InlineData("built-ins/String/prototype/substring/this-value-tostring-throws-toprimitive.js")]
+    public void String_substring_preserves_generic_receiver_coercion(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Error/error-message-tostring-toprimitive.js")]
+    [InlineData("built-ins/Error/prototype/toString/tostring-message-throws-toprimitive.js")]
+    [InlineData("built-ins/String/prototype/replace/tostring-this-throws-toprimitive.js")]
+    [InlineData("built-ins/String/prototype/slice/this-value-tostring-throws-toprimitive.js")]
+    [InlineData("built-ins/String/prototype/toLowerCase/this-value-tostring-throws-toprimitive.js")]
+    [InlineData("built-ins/String/prototype/trimEnd/this-value-object-cannot-convert-to-primitive-err.js")]
+    [InlineData("built-ins/String/prototype/trimStart/this-value-object-cannot-convert-to-primitive-err.js")]
+    public void String_coercion_rejects_explicitly_unusable_primitive_methods(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Promise/all/prop-desc.js")]
     [InlineData("built-ins/Promise/allSettled/prop-desc.js")]
     [InlineData("built-ins/Promise/any/prop-desc.js")]

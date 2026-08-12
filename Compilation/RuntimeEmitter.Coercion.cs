@@ -1113,6 +1113,26 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(noThrowLabel);
 
+        // An own nullish toString/valueOf shadows the inherited ordinary
+        // coercion method. If no other candidate produced a primitive, that
+        // shadow makes OrdinaryToPrimitive fail rather than licensing the
+        // compatibility fallback below. This preserves the fallback only for
+        // receiver shapes whose implicit Object.prototype is not yet surfaced
+        // by GetProperty; explicit user state always follows ECMA-262.
+        var noExplicitCoercionShadowLabel = il.DefineLabel();
+        var explicitCoercionShadowLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brtrue, explicitCoercionShadowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "valueOf");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brfalse, noExplicitCoercionShadowLabel);
+        il.MarkLabel(explicitCoercionShadowLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        il.MarkLabel(noExplicitCoercionShadowLabel);
+
         // No usable toString/valueOf on this object — fall back to "[object Object]"
         // per ECMA-262 19.1.3.6 (Object.prototype.toString returns this for plain objects).
         // Lenient: spec strictly throws TypeError when both are unusable, but the

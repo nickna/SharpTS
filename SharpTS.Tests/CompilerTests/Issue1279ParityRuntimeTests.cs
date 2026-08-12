@@ -115,6 +115,38 @@ public sealed class Issue1279ParityRuntimeTests
     }
 
     [Fact]
+    public void Borrowed_string_substring_coerces_receiver_and_forwards_arguments()
+    {
+        const string source = """
+            var value: any = [1, 2, 3, 4, 5];
+            var substring: any = String.prototype.substring;
+            var called: any = substring.call(value, true, false);
+            value.substring = substring;
+            console.log(typeof value.substring, value.substring === substring, value.substring === value);
+            var borrowed: any = value.substring("4", "5");
+            console.log(typeof called, called, called === value);
+            console.log(typeof borrowed, borrowed, borrowed === value);
+            """;
+
+        Assert.Equal("function true false\nstring 1 false\nstring 3 false\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Function_prototype_borrowed_substring_forwards_arguments()
+    {
+        const string source = """
+            function value() {}
+            var substring: any = String.prototype.substring;
+            Function.prototype.substring = substring;
+            console.log(typeof value.substring, value.substring === substring);
+            var result: any = value.substring(null, Function());
+            console.log(typeof result, result, result === value);
+            """;
+
+        Assert.Equal("function true\nstring  false\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void Generic_array_mutators_operate_on_the_original_array_like()
     {
         const string source = """

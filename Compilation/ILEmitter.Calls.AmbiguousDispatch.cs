@@ -245,6 +245,19 @@ public partial class ILEmitter
 
         // List path
         builder.MarkLabel(isListLabel);
+
+        // A List receiver only gets the array fast path for methods that are
+        // actually provided by Array.prototype. String-only names can still
+        // be installed as own/prototype properties (for example,
+        // `array.substring = String.prototype.substring`) and must use
+        // ordinary Get + Call dispatch so the borrowed function receives the
+        // original array as `this`. The old fall-through left the List itself
+        // on the evaluation stack and returned it as the call result.
+        if (methodName is "substring" or "charAt" or "startsWith" or "endsWith")
+        {
+            builder.Emit_Br(dynamicDispatchLabel);
+        }
+
         IL.Emit(OpCodes.Ldloc, objLocal);
         IL.Emit(OpCodes.Castclass, _ctx.Types.ListOfObject);
 
@@ -323,13 +336,6 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayConcat);
                 break;
 
-            case "startsWith":
-            case "endsWith":
-                // Arrays don't have startsWith/endsWith - pop the list and return false
-                IL.Emit(OpCodes.Pop);
-                IL.Emit(OpCodes.Ldc_I4_0);
-                IL.Emit(OpCodes.Box, _ctx.Types.Boolean);
-                break;
         }
         builder.Emit_Br(doneLabel);
 
