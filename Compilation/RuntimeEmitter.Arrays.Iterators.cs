@@ -147,6 +147,11 @@ public partial class RuntimeEmitter
         il.Emit(loadOp);
         il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
         il.Emit(OpCodes.Brtrue, okLabel);
+        // Built-in constructors are represented by System.Type and InvokeValue
+        // supports their call form (String, Number, Object, Array, ...).
+        il.Emit(loadOp);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brtrue, okLabel);
         // Default: not a recognized function-like → throw.
         il.Emit(OpCodes.Br, throwLabel);
 
@@ -2156,6 +2161,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
         il.Emit(OpCodes.Brtrue, reduceCallableOk);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brtrue, reduceCallableOk);
         il.Emit(OpCodes.Br, reduceCallableThrow);
         il.MarkLabel(reduceCallableThrow);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.reduce callback is not callable");
@@ -2349,6 +2357,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, reduceRCallableOk);
         il.Emit(OpCodes.Ldloc, callbackLocal);
         il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Brtrue, reduceRCallableOk);
+        il.Emit(OpCodes.Ldloc, callbackLocal);
+        il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brtrue, reduceRCallableOk);
         il.Emit(OpCodes.Br, reduceRCallableThrow);
         il.MarkLabel(reduceRCallableThrow);

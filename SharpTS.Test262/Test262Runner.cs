@@ -916,6 +916,15 @@ function $DONE(err) {
   }
   console.log('$$T262DONE_ERR$$:' + n + ':' + m);
 }
+// Compiled top-level declarations live in static fields rather than the
+// global-object property store. asyncHelpers.js feature-detects the async
+// harness with hasOwnProperty(globalThis, ""$DONE""). Define an own global
+// descriptor explicitly so the host hook has the same shape in both modes.
+Object.defineProperty(globalThis, '$DONE', {
+  value: $DONE,
+  writable: true,
+  configurable: true
+});
 ";
 
     /// <summary>

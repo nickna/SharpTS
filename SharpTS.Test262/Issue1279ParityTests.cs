@@ -4470,19 +4470,7 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     private void AssertPromiseKeyedPass(string relativePath)
-    {
-        AssertPass(relativePath, Test262ExecutionMode.Interpreted);
-        // asyncHelpers.js currently cannot see the compiled runner's top-level
-        // $DONE declaration as an own globalThis property. Keep compiled
-        // coverage on the synchronous metadata/constructor surface; async
-        // behavior is exercised by the compiler's Promise runtime tests.
-        string fileName = Path.GetFileName(relativePath);
-        if (fileName is "ctx-non-ctor.js" or "extensible.js" or "length.js"
-            or "name.js" or "not-a-constructor.js" or "prop-desc.js" or "proto.js")
-        {
-            AssertPass(relativePath, Test262ExecutionMode.Compiled);
-        }
-    }
+        => AssertPassInBothModes(relativePath);
 
     [Fact]
     public void Math_round_preserves_ecmascript_boundary_cases()
@@ -4522,10 +4510,14 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Boolean/prop-desc.js")]
+    [InlineData("built-ins/Array/prop-desc.js")]
+    [InlineData("built-ins/Error/prop-desc.js")]
     [InlineData("built-ins/Math/prop-desc.js")]
     [InlineData("built-ins/Number/prop-desc.js")]
+    [InlineData("built-ins/Object/prop-desc.js")]
+    [InlineData("built-ins/String/prop-desc.js")]
     public void Built_in_global_bindings_have_standard_descriptors(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
 
     [Fact]
     public void Number_explicitly_converts_BigInt_values()
@@ -5556,6 +5548,13 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-is-frozen.js")]
     [InlineData("built-ins/Array/prototype/unshift/set-length-zero-array-length-is-non-writable.js")]
     public void Array_mutators_observe_index_accessors_and_length_integrity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/shift/S15.4.4.9_A1.2_T1.js")]
+    [InlineData("built-ins/Array/prototype/toSorted/holes-not-preserved.js")]
+    [InlineData("built-ins/Array/prototype/toSorted/length-decreased-while-iterating.js")]
+    public void Array_mutators_and_copying_sort_preserve_sparse_semantics(string relativePath)
         => AssertPassInBothModes(relativePath);
 
     [Theory]

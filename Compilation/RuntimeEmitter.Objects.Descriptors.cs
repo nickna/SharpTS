@@ -1565,6 +1565,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
         il.Emit(OpCodes.Bne_Un, notGlobalObjectLabel);
+
+        // User-defined global descriptors (including the Test262 $DONE hook)
+        // take precedence over the synthesized intrinsic descriptors below.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brtrue, hasDescriptorLabel);
+
+        // Configurable standard globals can be deleted. The intrinsic lookup
+        // remains available internally, so hide it through the deletion ledger
+        // before synthesizing the public own-property descriptor.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
+
         void EmitGlobalDescriptorCheck(
             string name, bool writable, bool configurable)
         {
@@ -1585,8 +1603,21 @@ public partial class RuntimeEmitter
         EmitGlobalDescriptorCheck("parseFloat", true, true);
         EmitGlobalDescriptorCheck("isNaN", true, true);
         EmitGlobalDescriptorCheck("isFinite", true, true);
+        EmitGlobalDescriptorCheck("eval", true, true);
         EmitGlobalDescriptorCheck("NaN", false, false);
         EmitGlobalDescriptorCheck("Infinity", false, false);
+        EmitGlobalDescriptorCheck("undefined", false, false);
+        EmitGlobalDescriptorCheck("globalThis", true, true);
+        foreach (var globalName in new[]
+        {
+            "Array", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
+            "Promise", "Function", "Object", "Number", "String", "Boolean",
+            "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
+            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
+        })
+        {
+            EmitGlobalDescriptorCheck(globalName, true, true);
+        }
         il.Emit(OpCodes.Br, returnNullLabel);
         il.MarkLabel(notGlobalObjectLabel);
 

@@ -576,6 +576,18 @@ public class InnerFunctionTests
         Assert.Equal("function function function\nfunction function function\ntrue true true\n", output);
     }
 
+    [Theory, ModeData]
+    public void BuiltIn_String_Alias_IsCallableAsArrayCallback(ExecutionMode mode)
+    {
+        var source = """
+            const stringify: any = String;
+            console.log([1, true, null].map(stringify).join("|"));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1|true|null\n", output);
+    }
+
     [Theory, CompiledOnlyData]
     public void BuiltIn_StoredTypeToken_StaticMemberDispatch(ExecutionMode mode)
     {

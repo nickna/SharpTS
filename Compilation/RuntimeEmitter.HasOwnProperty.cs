@@ -77,6 +77,40 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, nameLocal);
 
+        // The standard globals are own properties of the global object even
+        // though compiled mode resolves them through emitted helpers rather
+        // than storing every intrinsic in the user-property dictionary.
+        var notGlobalObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Bne_Un, notGlobalObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Brtrue, falseLabel);
+        foreach (var globalName in new[]
+        {
+            "globalThis", "undefined", "NaN", "Infinity", "parseInt",
+            "parseFloat", "isNaN", "isFinite", "eval", "Array", "Date",
+            "RegExp", "Map", "Set", "WeakMap", "WeakSet", "Promise",
+            "Function", "Object", "Number", "String", "Boolean", "Symbol",
+            "Error", "TypeError", "RangeError", "ReferenceError", "SyntaxError",
+            "URIError", "EvalError", "AggregateError", "Math", "JSON"
+        })
+        {
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldstr, globalName);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality",
+                _types.String, _types.String));
+            il.Emit(OpCodes.Brtrue, trueLabel);
+        }
+        il.Emit(OpCodes.Br, falseLabel);
+        il.MarkLabel(notGlobalObject);
+
         // $TSFunction branch
         var notTSFunction = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

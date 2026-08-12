@@ -71,6 +71,59 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notProxyLabel);
 
+        // Standard global bindings are synthesized rather than stored in the
+        // mutable global dictionary. Preserve their deletion state in the
+        // same per-object ledger used by configurable built-ins.
+        var notGlobalObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Bne_Un, notGlobalObjectLabel);
+
+        // undefined, NaN, and Infinity are non-configurable.
+        foreach (var nonConfigurableName in new[] { "undefined", "NaN", "Infinity" })
+        {
+            var nextName = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, nonConfigurableName);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality",
+                _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, nextName);
+            EmitDeleteFail(" from global object");
+            il.MarkLabel(nextName);
+        }
+
+        var configurableGlobalLabel = il.DefineLabel();
+        foreach (var configurableName in new[]
+        {
+            "globalThis", "parseInt", "parseFloat", "isNaN", "isFinite", "eval",
+            "Array", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
+            "Promise", "Function", "Object", "Number", "String", "Boolean",
+            "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
+            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
+        })
+        {
+            var nextName = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, configurableName);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality",
+                _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, nextName);
+            il.Emit(OpCodes.Br, configurableGlobalLabel);
+            il.MarkLabel(nextName);
+        }
+        // Unknown globals retain the existing permissive delete behavior.
+        il.Emit(OpCodes.Br, trueLabel);
+        il.MarkLabel(configurableGlobalLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+        il.Emit(OpCodes.Br, trueLabel);
+        il.MarkLabel(notGlobalObjectLabel);
+
         // Check if $TSObject
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

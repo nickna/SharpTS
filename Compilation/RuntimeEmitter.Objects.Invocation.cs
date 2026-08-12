@@ -351,6 +351,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notObjectTypeLabel);
 
+        // String call form (`Array.prototype.map.call(values, String)`). Bare
+        // String is represented by the System.String Type token, so dynamic
+        // invocation must perform §22.1.1.1 String(value), including the empty
+        // string default and Symbol's descriptive-string exception.
+        var notStringTypeLabel = il.DefineLabel();
+        var stringNoArgLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.String);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
+            [_types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality",
+            [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Brfalse, notStringTypeLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brfalse, stringNoArgLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(stringNoArgLabel);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notStringTypeLabel);
+
         // A built-in constructor Type without a call-form helper. These ARE
         // callable in JS, so the #260 throwing fallback must not fire here;
         // unwired ones keep returning null until their call forms are wired
