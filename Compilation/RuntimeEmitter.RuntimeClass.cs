@@ -919,6 +919,7 @@ public partial class RuntimeEmitter
         EmitArrayToSorted(typeBuilder, runtime);
         // ToIntegerOrInfinity now emitted earlier (before EmitArrayIndexOf).
         EmitArraySplice(typeBuilder, runtime);
+        EmitArraySpliceProto(typeBuilder, runtime);
         EmitArrayToSpliced(typeBuilder, runtime);
         EmitArrayToReversed(typeBuilder, runtime);
         EmitArrayWith(typeBuilder, runtime);

@@ -109,7 +109,7 @@ public partial class RuntimeEmitter
         Wire("flatMap",        runtime.ArrayFlatMap,        1);
         Wire("sort",           runtime.ArraySort,           1);
         Wire("toSorted",       runtime.ArrayToSorted,       1);
-        Wire("splice",         runtime.ArraySplice,         2);
+        Wire("splice",         runtime.ArraySpliceProto,    2);
         Wire("toSpliced",      runtime.ArrayToSpliced,      2);
         Wire("toReversed",     runtime.ArrayToReversed,     0);
         Wire("with",           runtime.ArrayWith,           2);

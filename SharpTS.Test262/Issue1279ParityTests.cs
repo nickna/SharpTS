@@ -3460,17 +3460,21 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A2_T4.js")]
     [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A3_T1.js")]
     [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A3_T3.js")]
+    public void Array_splice_mutates_generic_receivers(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T1.js")]
     [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T2.js")]
     [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A4_T3.js")]
-    public void Array_splice_mutates_generic_receivers(string relativePath)
+    public void Array_splice_observes_inherited_array_indices(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/splice/length-and-deleteCount-exceeding-integer-limit.js")]
     [InlineData("built-ins/Array/prototype/splice/length-exceeding-integer-limit-shrink-array.js")]
     public void Array_splice_supports_max_safe_generic_lengths(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/splice/call-with-boolean.js")]
@@ -3479,7 +3483,14 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Array/prototype/splice/set_length_no_args.js")]
     [InlineData("built-ins/Array/prototype/splice/throws-if-integer-limit-exceeded.js")]
     public void Array_splice_handles_generic_length_edges(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/splice/S15.4.4.12_A6.1_T3.js")]
+    [InlineData("built-ins/Array/prototype/splice/create-non-array-invalid-len.js")]
+    [InlineData("built-ins/Array/prototype/splice/create-species-undef-invalid-len.js")]
+    public void Array_splice_propagates_generic_creation_and_length_errors(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/sort/S15.4.4.11_A3_T1.js")]

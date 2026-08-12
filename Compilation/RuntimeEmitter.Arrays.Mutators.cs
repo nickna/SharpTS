@@ -2617,6 +2617,386 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Prototype entry point for Array.prototype.splice. Real arrays retain the
+    /// compact List fast path above; all other receivers follow the generic
+    /// ECMA-262 algorithm with observable Has/Get/Set/Delete operations.
+    /// </summary>
+    private void EmitArraySpliceProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArraySpliceProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.Object, _types.ObjectArray]);
+        runtime.ArraySpliceProto = method;
+
+        var il = method.GetILGenerator();
+        var generic = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, generic);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ArraySplice);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(generic);
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var argCount = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, argCount);
+
+        // actualStart = clamp(ToIntegerOrInfinity(start), 0, len).
+        var actualStart = il.DeclareLocal(_types.Double);
+        var haveStart = il.DefineLabel();
+        var startDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, haveStart);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, actualStart);
+        il.Emit(OpCodes.Br, startDone);
+        il.MarkLabel(haveStart);
+        EmitGenericRelativeArrayIndex(
+            il,
+            runtime,
+            () =>
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+            },
+            length,
+            actualStart);
+        il.MarkLabel(startDone);
+
+        // actualDeleteCount: zero with no args, the tail with only start, or
+        // clamp(ToIntegerOrInfinity(deleteCount), 0, len - actualStart).
+        var actualDeleteCount = il.DeclareLocal(_types.Double);
+        var oneArg = il.DefineLabel();
+        var parseDeleteCount = il.DefineLabel();
+        var deleteCountDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Brtrue, oneArg);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, actualDeleteCount);
+        il.Emit(OpCodes.Br, deleteCountDone);
+        il.MarkLabel(oneArg);
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bgt, parseDeleteCount);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, actualDeleteCount);
+        il.Emit(OpCodes.Br, deleteCountDone);
+
+        il.MarkLabel(parseDeleteCount);
+        var deleteNumber = il.DeclareLocal(_types.Double);
+        var deleteNumberValid = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, deleteNumber);
+        // NaN becomes +0; Math.Max below handles negative values/infinity.
+        il.Emit(OpCodes.Ldloc, deleteNumber);
+        il.Emit(OpCodes.Ldloc, deleteNumber);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, deleteNumberValid);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, deleteNumber);
+        il.MarkLabel(deleteNumberValid);
+        il.Emit(OpCodes.Ldloc, deleteNumber);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Truncate", [typeof(double)])!);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Double, _types.Double));
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Double, _types.Double));
+        il.Emit(OpCodes.Stloc, actualDeleteCount);
+        il.MarkLabel(deleteCountDone);
+
+        // ArraySpeciesCreate receives actualDeleteCount as an Array length.
+        // Even for a non-array receiver, lengths above 2^32 - 1 must fail
+        // before any indexed mutation or final length setter is observed.
+        var deletedLengthValid = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Ldc_R8, 4294967295.0);
+        il.Emit(OpCodes.Ble, deletedLengthValid);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+        il.MarkLabel(deletedLengthValid);
+
+        var itemCount = il.DeclareLocal(_types.Double);
+        var noItems = il.DefineLabel();
+        var itemCountDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ble, noItems);
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Stloc, itemCount);
+        il.Emit(OpCodes.Br, itemCountDone);
+        il.MarkLabel(noItems);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, itemCount);
+        il.MarkLabel(itemCountDone);
+
+        var newLength = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, newLength);
+        var lengthWithinLimit = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Ble, lengthWithinLimit);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.splice exceeded the safe integer limit");
+        il.MarkLabel(lengthWithinLimit);
+
+        // Copy deleted properties into a fresh Array, preserving holes.
+        var deleted = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, deleted);
+        var k = il.DeclareLocal(_types.Double);
+        var fromKey = il.DeclareLocal(_types.String);
+        var toKey = il.DeclareLocal(_types.String);
+        var value = il.DeclareLocal(_types.Object);
+        var copyDeletedLoop = il.DefineLabel();
+        var copyDeletedDone = il.DefineLabel();
+        var deletedHole = il.DefineLabel();
+        var deletedNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(copyDeletedLoop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Bge, copyDeletedDone);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKey);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, deletedHole);
+        il.Emit(OpCodes.Ldloc, deleted);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Br, deletedNext);
+        il.MarkLabel(deletedHole);
+        il.Emit(OpCodes.Ldloc, deleted);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.MarkLabel(deletedNext);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, copyDeletedLoop);
+        il.MarkLabel(copyDeletedDone);
+
+        // Shift the surviving tail left or right according to the size delta.
+        var grow = il.DefineLabel();
+        var shifted = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Beq, shifted);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Bgt, grow);
+
+        var leftLoop = il.DefineLabel();
+        var leftDone = il.DefineLabel();
+        var leftDelete = il.DefineLabel();
+        var leftNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(leftLoop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Bge, leftDone);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKey);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKey);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, leftDelete);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, leftNext);
+        il.MarkLabel(leftDelete);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(leftNext);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, leftLoop);
+        il.MarkLabel(leftDone);
+
+        // Delete the now-unused high properties, from the old end downward.
+        var trimLoop = il.DefineLabel();
+        var trimDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(trimLoop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Ble, trimDone);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKey);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, trimLoop);
+        il.MarkLabel(trimDone);
+        il.Emit(OpCodes.Br, shifted);
+
+        il.MarkLabel(grow);
+        var rightLoop = il.DefineLabel();
+        var rightDone = il.DefineLabel();
+        var rightDelete = il.DefineLabel();
+        var rightNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, k);
+        il.MarkLabel(rightLoop);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Ble, rightDone);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, actualDeleteCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKey);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldloc, itemCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKey);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, rightDelete);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, fromKey);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, rightNext);
+        il.MarkLabel(rightDelete);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, toKey);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(rightNext);
+        il.Emit(OpCodes.Ldloc, k);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, k);
+        il.Emit(OpCodes.Br, rightLoop);
+        il.MarkLabel(rightDone);
+        il.MarkLabel(shifted);
+
+        // Install the new items, then commit the final length.
+        var itemIndex = il.DeclareLocal(_types.Int32);
+        var insertLoop = il.DefineLabel();
+        var insertDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, itemIndex);
+        il.MarkLabel(insertLoop);
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Bge, insertDone);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, itemIndex);
+        il.Emit(OpCodes.Br, insertLoop);
+        il.MarkLabel(insertDone);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ldloc, deleted);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayToReversed(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ArrayToReversed(List<object> list) -> List<object>
