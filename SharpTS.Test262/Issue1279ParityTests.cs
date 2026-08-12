@@ -4286,6 +4286,23 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes("built-ins/Promise/any/invoke-resolve.js");
 
     [Theory]
+    [InlineData("built-ins/Promise/all/iter-arg-is-string-resolve.js")]
+    [InlineData("built-ins/Promise/allSettled/iter-arg-is-string-resolve.js")]
+    [InlineData("built-ins/Promise/any/iter-arg-is-empty-string-reject.js")]
+    [InlineData("built-ins/Promise/race/invoke-resolve-error-reject.js")]
+    [InlineData("built-ins/Promise/race/iter-arg-is-string-resolve.js")]
+    public void Promise_combinators_consume_string_iterables_in_resolve_order(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/iter-assigned-undefined-reject.js")]
+    [InlineData("built-ins/Promise/allSettled/iter-assigned-undefined-reject.js")]
+    [InlineData("built-ins/Promise/any/iter-assigned-undefined-reject.js")]
+    [InlineData("built-ins/Promise/race/iter-assigned-undefined-reject.js")]
+    public void Promise_combinators_reject_objects_without_callable_iterators(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Promise/allSettled/returns-promise.js")]
     [InlineData("built-ins/Promise/any/returns-promise.js")]
     public void Promise_combinators_return_objects_with_the_Promise_prototype(string relativePath)

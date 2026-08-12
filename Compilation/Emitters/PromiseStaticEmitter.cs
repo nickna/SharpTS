@@ -60,6 +60,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
+                EmitBasePromiseConstructor(ctx);
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAll);
                 return true;
 
@@ -79,6 +80,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
+                EmitBasePromiseConstructor(ctx);
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseRace);
                 return true;
 
@@ -93,6 +95,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
+                EmitBasePromiseConstructor(ctx);
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAllSettled);
                 return true;
 
@@ -112,6 +115,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
+                EmitBasePromiseConstructor(ctx);
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAny);
                 return true;
 
@@ -180,5 +184,12 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
         {
             emitter.Context.IL.Emit(OpCodes.Ldnull);
         }
+    }
+
+    private static void EmitBasePromiseConstructor(CompilationContext ctx)
+    {
+        ctx.IL.Emit(OpCodes.Ldtoken, ctx.Types.TaskOfObject);
+        ctx.IL.Emit(OpCodes.Call,
+            ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
     }
 }

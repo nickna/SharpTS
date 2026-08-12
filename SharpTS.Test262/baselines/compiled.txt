@@ -7484,7 +7484,7 @@ test/built-ins/Promise/all/invoke-then.js Fail
 test/built-ins/Promise/all/iter-arg-is-false-reject.js Pass
 test/built-ins/Promise/all/iter-arg-is-null-reject.js Pass
 test/built-ins/Promise/all/iter-arg-is-number-reject.js Pass
-test/built-ins/Promise/all/iter-arg-is-string-resolve.js RuntimeError
+test/built-ins/Promise/all/iter-arg-is-string-resolve.js Pass
 test/built-ins/Promise/all/iter-arg-is-symbol-reject.js Pass
 test/built-ins/Promise/all/iter-arg-is-true-reject.js Pass
 test/built-ins/Promise/all/iter-arg-is-undefined-reject.js Pass
@@ -7586,7 +7586,7 @@ test/built-ins/Promise/allSettled/iter-arg-is-false-reject.js Pass
 test/built-ins/Promise/allSettled/iter-arg-is-null-reject.js Pass
 test/built-ins/Promise/allSettled/iter-arg-is-number-reject.js Pass
 test/built-ins/Promise/allSettled/iter-arg-is-poisoned.js RuntimeError
-test/built-ins/Promise/allSettled/iter-arg-is-string-resolve.js RuntimeError
+test/built-ins/Promise/allSettled/iter-arg-is-string-resolve.js Pass
 test/built-ins/Promise/allSettled/iter-arg-is-symbol-reject.js Pass
 test/built-ins/Promise/allSettled/iter-arg-is-true-reject.js Pass
 test/built-ins/Promise/allSettled/iter-arg-is-undefined-reject.js Pass
@@ -7707,13 +7707,13 @@ test/built-ins/Promise/any/invoke-then-on-promises-every-iteration.js Fail
 test/built-ins/Promise/any/invoke-then.js Fail
 test/built-ins/Promise/any/is-function.js Pass
 test/built-ins/Promise/any/iter-arg-is-empty-iterable-reject.js Pass
-test/built-ins/Promise/any/iter-arg-is-empty-string-reject.js Fail
+test/built-ins/Promise/any/iter-arg-is-empty-string-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-error-object-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-false-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-null-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-number-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-poisoned.js Fail
-test/built-ins/Promise/any/iter-arg-is-string-resolve.js RuntimeError
+test/built-ins/Promise/any/iter-arg-is-string-resolve.js Pass
 test/built-ins/Promise/any/iter-arg-is-symbol-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-true-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-undefined-reject.js Pass
@@ -7942,7 +7942,7 @@ test/built-ins/Promise/race/ctx-ctor.js Pass
 test/built-ins/Promise/race/ctx-non-ctor.js Pass
 test/built-ins/Promise/race/ctx-non-object.js Pass
 test/built-ins/Promise/race/invoke-resolve-error-close.js RuntimeError
-test/built-ins/Promise/race/invoke-resolve-error-reject.js Fail
+test/built-ins/Promise/race/invoke-resolve-error-reject.js Pass
 test/built-ins/Promise/race/invoke-resolve-get-error-reject.js Fail
 test/built-ins/Promise/race/invoke-resolve-get-error.js Fail
 test/built-ins/Promise/race/invoke-resolve-get-once-multiple-calls.js Fail
@@ -7960,7 +7960,7 @@ test/built-ins/Promise/race/invoke-then.js Fail
 test/built-ins/Promise/race/iter-arg-is-false-reject.js Pass
 test/built-ins/Promise/race/iter-arg-is-null-reject.js Pass
 test/built-ins/Promise/race/iter-arg-is-number-reject.js Pass
-test/built-ins/Promise/race/iter-arg-is-string-resolve.js RuntimeError
+test/built-ins/Promise/race/iter-arg-is-string-resolve.js Pass
 test/built-ins/Promise/race/iter-arg-is-symbol-reject.js Pass
 test/built-ins/Promise/race/iter-arg-is-true-reject.js Pass
 test/built-ins/Promise/race/iter-arg-is-undefined-reject.js Pass

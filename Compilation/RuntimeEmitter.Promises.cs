@@ -13,6 +13,7 @@ internal class EmittedStateMachine
     public required FieldBuilder StateField { get; init; }
     public required FieldBuilder BuilderField { get; init; }
     public required FieldBuilder IterableField { get; init; }
+    public required FieldBuilder ConstructorField { get; init; }
     public required FieldBuilder AwaiterField { get; init; }
     public required MethodBuilder MoveNextMethod { get; init; }
     public required Type BuilderType { get; init; }
@@ -28,6 +29,7 @@ internal class PromiseRaceStateMachine
     public required FieldBuilder StateField { get; init; }
     public required FieldBuilder BuilderField { get; init; }
     public required FieldBuilder IterableField { get; init; }
+    public required FieldBuilder ConstructorField { get; init; }
     public required FieldBuilder WhenAnyAwaiterField { get; init; }  // TaskAwaiter<Task<object?>>
     public required FieldBuilder ResultAwaiterField { get; init; }    // TaskAwaiter<object?>
     public required FieldBuilder WinningTaskField { get; init; }      // Task<object?> from WhenAny
@@ -98,6 +100,7 @@ internal class PromiseAllSettledStateMachine
     public required FieldBuilder StateField { get; init; }           // <>1__state
     public required FieldBuilder BuilderField { get; init; }         // <>t__builder
     public required FieldBuilder IterableField { get; init; }        // iterable parameter
+    public required FieldBuilder ConstructorField { get; init; }     // C parameter
     public required FieldBuilder AwaiterField { get; init; }         // TaskAwaiter<object?[]>
     public required MethodBuilder MoveNextMethod { get; init; }
     public required Type BuilderType { get; init; }
@@ -129,6 +132,7 @@ internal class PromiseAnyStateMachine
     public required FieldBuilder StateField { get; init; }           // <>1__state
     public required FieldBuilder BuilderField { get; init; }         // <>t__builder
     public required FieldBuilder IterableField { get; init; }        // iterable parameter
+    public required FieldBuilder ConstructorField { get; init; }     // C parameter
     public required FieldBuilder StateObjField { get; init; }        // $AnyState instance
     public required FieldBuilder AwaiterField { get; init; }         // TaskAwaiter<object?> for Tcs.Task
     public required MethodBuilder MoveNextMethod { get; init; }
@@ -427,7 +431,7 @@ public partial class RuntimeEmitter
             "PromiseAll",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
         runtime.PromiseAll = all;
         EmitPromiseAllWrapper(all.GetILGenerator(), promiseAllSM, runtime);
@@ -440,7 +444,7 @@ public partial class RuntimeEmitter
             "PromiseRace",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
         runtime.PromiseRace = race;
         EmitPromiseRaceWrapper(race.GetILGenerator(), promiseRaceSM, runtime);
@@ -465,7 +469,7 @@ public partial class RuntimeEmitter
             "PromiseAllSettled",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
         runtime.PromiseAllSettled = allSettled;
         EmitPromiseAllSettledWrapper(allSettled.GetILGenerator(), promiseAllSettledSM, processElementSettled, runtime);
@@ -518,7 +522,7 @@ public partial class RuntimeEmitter
             "PromiseAny",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
         runtime.PromiseAny = any;
         EmitPromiseAnyWrapper(any.GetILGenerator(), promiseAnySM, runtime);
@@ -541,7 +545,8 @@ public partial class RuntimeEmitter
             var il = sw.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
                 $"Promise.{jsName} called on non-Object");
-            EmitPromiseStaticCapabilityResult(il, runtime, target);
+            EmitPromiseStaticCapabilityResult(il, runtime, target,
+                jsName is "all" or "race" or "allSettled" or "any");
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.PromiseAllKeyed, m => runtime.PromiseAllKeyedStatic = m);
@@ -653,12 +658,15 @@ public partial class RuntimeEmitter
     /// that constructor rather than the compiler's Task representation.
     /// </summary>
     private void EmitPromiseStaticCapabilityResult(
-        ILGenerator il, EmittedRuntime runtime, MethodInfo intrinsic)
+        ILGenerator il, EmittedRuntime runtime, MethodInfo intrinsic,
+        bool passConstructorToIntrinsic = false)
     {
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var customConstructorLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
+        if (passConstructorToIntrinsic)
+            il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, intrinsic);
         il.Emit(OpCodes.Stloc, taskLocal);
 

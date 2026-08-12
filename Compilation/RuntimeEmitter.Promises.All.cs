@@ -23,6 +23,7 @@ public partial class RuntimeEmitter
             StateField = shell.StateField,
             BuilderField = shell.BuilderField,
             IterableField = shell.InputField,
+            ConstructorField = shell.ConstructorField,
             AwaiterField = awaiterField,
             MoveNextMethod = shell.MoveNextMethod,
             BuilderType = shell.BuilderType,
@@ -40,7 +41,7 @@ public partial class RuntimeEmitter
                 // Store the raw input. NormalizePromiseList runs inside
                 // MoveNext's try block so an abrupt Promise.resolve call rejects.
                 il.Emit(OpCodes.Ldarg_0);
-            });
+            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1));
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAll state machine.
@@ -72,7 +73,7 @@ public partial class RuntimeEmitter
 
         // ========== STATE -1: Initial execution ==========
 
-        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField);
+        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField);
 
         // ECMA-262 §27.2.4.1 Promise.all: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws

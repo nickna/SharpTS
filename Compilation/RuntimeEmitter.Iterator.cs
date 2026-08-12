@@ -210,6 +210,21 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Forward-declares IterateToList so earlier-emitted helpers (notably the
+    /// Promise combinators) can reference it. Its body is filled only after
+    /// the iterator wrapper type and protocol helpers are available.
+    /// </summary>
+    private void DeclareIterateToList(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        runtime.IterateToList = typeBuilder.DefineMethod(
+            "IterateToList",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.Object, runtime.TSSymbolType, _types.Type]
+        );
+    }
+
+    /// <summary>
     /// Emits GetIteratorDone: extracts the 'done' property from an iterator result and returns bool.
     /// Signature: bool GetIteratorDone(object result)
     /// </summary>
@@ -458,13 +473,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitIterateToList(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = typeBuilder.DefineMethod(
-            "IterateToList",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
-            [_types.Object, runtime.TSSymbolType, _types.Type]
-        );
-        runtime.IterateToList = method;
+        var method = runtime.IterateToList;
 
         var il = method.GetILGenerator();
 

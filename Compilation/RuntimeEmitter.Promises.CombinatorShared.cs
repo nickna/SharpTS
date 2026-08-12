@@ -15,6 +15,7 @@ internal sealed class CombinatorStateMachineShell
     public required FieldBuilder StateField { get; init; }
     public required FieldBuilder BuilderField { get; init; }
     public required FieldBuilder InputField { get; init; }
+    public required FieldBuilder ConstructorField { get; init; }
     public required MethodBuilder MoveNextMethod { get; init; }
     public required Type BuilderType { get; init; }
 }
@@ -53,6 +54,7 @@ public partial class RuntimeEmitter
         var stateField = smType.DefineField("<>1__state", _types.Int32, FieldAttributes.Public);
         var builderField = smType.DefineField("<>t__builder", builderType, FieldAttributes.Public);
         var inputField = smType.DefineField(inputFieldName, _types.Object, FieldAttributes.Public);
+        var constructorField = smType.DefineField("constructor", _types.Object, FieldAttributes.Public);
 
         var moveNext = smType.DefineMethod(
             "MoveNext",
@@ -77,6 +79,7 @@ public partial class RuntimeEmitter
             StateField = stateField,
             BuilderField = builderField,
             InputField = inputField,
+            ConstructorField = constructorField,
             MoveNextMethod = moveNext,
             BuilderType = builderType
         };
@@ -89,7 +92,8 @@ public partial class RuntimeEmitter
     /// return <c>builder.Task</c>.
     /// </summary>
     private void EmitCombinatorWrapper(ILGenerator il, TypeBuilder smType, FieldBuilder stateField,
-        FieldBuilder inputField, FieldBuilder builderField, Type builderType, System.Action emitInputValue)
+        FieldBuilder inputField, FieldBuilder builderField, Type builderType, System.Action emitInputValue,
+        FieldBuilder? constructorField = null, System.Action? emitConstructorValue = null)
     {
         var smLocal = il.DeclareLocal(smType);
 
@@ -106,6 +110,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, smLocal);
         emitInputValue();
         il.Emit(OpCodes.Stfld, inputField);
+
+        if (constructorField is not null && emitConstructorValue is not null)
+        {
+            il.Emit(OpCodes.Ldloca, smLocal);
+            emitConstructorValue();
+            il.Emit(OpCodes.Stfld, constructorField);
+        }
 
         // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create();
         il.Emit(OpCodes.Ldloca, smLocal);
@@ -137,11 +148,13 @@ public partial class RuntimeEmitter
     /// synchronously from the static method.
     /// </summary>
     private static void EmitNormalizeCombinatorIterable(ILGenerator il, EmittedRuntime runtime,
-        FieldBuilder iterableField)
+        FieldBuilder iterableField, FieldBuilder constructorField)
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iterableField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, constructorField);
         il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
         il.Emit(OpCodes.Stfld, iterableField);
     }

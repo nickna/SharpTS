@@ -671,6 +671,10 @@ public partial class RuntimeEmitter
         DeclareArrayLikeMaterializeForIteration(typeBuilder, runtime);
         DeclareLoadArrayLikeElement(typeBuilder, runtime);
         DeclareHasArrayLikeProperty(typeBuilder, runtime);
+        // Promise combinators are emitted before the iterator wrapper, but
+        // their normalization path consumes arbitrary iterables. Reserve the
+        // method token now and fill its body in EmitIteratorMethodsAdvanced.
+        DeclareIterateToList(typeBuilder, runtime);
         EmitInvokeValue(typeBuilder, runtime);
         EmitInvokeMethodValue(typeBuilder, runtime);
         EmitGetFieldsProperty(typeBuilder, runtime);

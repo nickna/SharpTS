@@ -48,13 +48,14 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits NormalizePromiseList(object iterable) -> object: when the arg is
-    /// a List&lt;object?&gt;, returns a copy normalized through the base Promise
-    /// constructor's current <c>resolve</c> method. The built-in path unwraps
+    /// Emits NormalizePromiseList(object iterable, object constructor) -> object:
+    /// materializes supported finite iterables and returns a list normalized through constructor C's
+    /// current <c>resolve</c> method. The built-in path unwraps
     /// $Promise elements (including #242 subclasses) to their backing Task;
     /// when user code has replaced <c>Promise.resolve</c>, that callable is
-    /// invoked once for each value with Promise as its receiver, as required by
-    /// PerformPromiseAll/Race/AllSettled/Any. Non-list args pass through.
+    /// invoked once for each value with C as its receiver, as required by
+    /// PerformPromiseAll/Race/AllSettled/Any. Resolve is captured before the
+    /// iterable is acquired, matching the observable spec ordering.
     /// </summary>
     internal void EmitNormalizePromiseList(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
@@ -62,45 +63,64 @@ public partial class RuntimeEmitter
             "NormalizePromiseList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
         runtime.NormalizePromiseListMethod = method;
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
-        var passThroughLabel = il.DefineLabel();
-
         var listLocal = il.DeclareLocal(listType);
         var resultLocal = il.DeclareLocal(listType);
         var indexLocal = il.DeclareLocal(_types.Int32);
         var elementLocal = il.DeclareLocal(_types.Object);
         var resolvedElementLocal = il.DeclareLocal(_types.Object);
+        var resolveFunctionLocal = il.DeclareLocal(_types.Object);
         var resolveDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        var resolveFunctionLocal = il.DeclareLocal(runtime.TSFunctionType);
 
-        // if (iterable is not List<object?>) return iterable;
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, listType);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Brfalse, passThroughLabel);
-
-        // Capture Promise.resolve once before iteration. Direct assignments to
-        // a compiled built-in constructor are represented by an own descriptor
-        // in PDS. With no override, keep the existing built-in fast path below.
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        // The compiler's intrinsic/inherited Promise.resolve path is represented
+        // by no own descriptor and is handled by the raw-value normalization
+        // loop below. Only an observable own override needs to be invoked while
+        // values are pulled. This avoids wrapping built-in async Tasks or an
+        // inherited Promise-subclass value in a second promise layer.
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "resolve");
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, resolveDescriptorLocal);
         var noResolveOverrideLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
         il.Emit(OpCodes.Brfalse, noResolveOverrideLabel);
-        il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "resolve");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, resolveFunctionLocal);
         il.MarkLabel(noResolveOverrideLabel);
+
+        // Arrays use the existing dense-list path and strings are safely finite
+        // built-in iterables. General custom iterators cannot be eagerly
+        // materialized here: Promise combinators must interleave each next(),
+        // C.resolve(), and then() call and perform IteratorClose on abrupt
+        // completion. Until that state-machine loop owns those steps, retain
+        // the established non-list rejection instead of risking an unbounded
+        // pre-materialization.
+        var materializeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, listType);
+        il.Emit(OpCodes.Brtrue, materializeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, materializeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(materializeLabel);
+
+        // Materialize through the shared iterator-protocol bridge. Lists retain
+        // their fast path and strings expand to their code-unit elements.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Stloc, listLocal);
 
         // var result = new List<object?>(); for each element: $Promise → .Task
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, _types.EmptyTypes));
@@ -124,14 +144,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, elementLocal);
 
-        // A user-installed Promise.resolve is observable and must be called
-        // for every iterated value, with the constructor as `this`.
+        // Mapper-free callers retain this fallback, though Promise combinators
+        // normally arrive here with resolution already applied during iteration.
         var useBuiltInResolveLabel = il.DefineLabel();
         var haveResolvedElementLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
         il.Emit(OpCodes.Brfalse, useBuiltInResolveLabel);
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -177,9 +196,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
 
-        il.MarkLabel(passThroughLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
