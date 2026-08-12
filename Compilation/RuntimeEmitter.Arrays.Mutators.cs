@@ -2275,18 +2275,16 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var valueIsNull = il.DefineLabel();
         var returnDefault = il.DefineLabel();
         var isDouble = il.DefineLabel();
         var notNaN = il.DefineLabel();
         var notPosInf = il.DefineLabel();
         var notNegInf = il.DefineLabel();
 
-        // if (value == null) return defaultValue
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, returnDefault);
-
-        // if (value is $Undefined) return defaultValue
+        // Only JavaScript undefined selects the caller-provided default. CLR
+        // null represents JavaScript null here and must flow through ToNumber
+        // (where it becomes +0), rather than being mistaken for an omitted
+        // argument.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, returnDefault);
@@ -3516,16 +3514,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, lenLocal);
 
-        // If empty array, return immediately
-        var notEmpty = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bgt, notEmpty);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notEmpty);
-
         // value = args.Length > 0 ? args[0] : undefined
         var hasValue = il.DefineLabel();
         var valueDone = il.DefineLabel();
@@ -3802,21 +3790,14 @@ public partial class RuntimeEmitter
         var finalLocal = il.DeclareLocal(_types.Int32);      // final (actual end)
         var countLocal = il.DeclareLocal(_types.Int32);      // count
         var iLocal = il.DeclareLocal(_types.Int32);          // loop counter
+        var fromKeyLocal = il.DeclareLocal(_types.String);
+        var toKeyLocal = il.DeclareLocal(_types.String);
+        var copiedValueLocal = il.DeclareLocal(_types.Object);
 
         // len = list.Count
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, lenLocal);
-
-        // If empty array, return immediately
-        var notEmpty = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bgt, notEmpty);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notEmpty);
 
         // Parse target: relTarget = args.Length > 0 ? ToIntegerOrInfinity(args[0], 0) : 0
         var hasTarget = il.DefineLabel();
@@ -3996,17 +3977,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, backwardLoopCondition);
 
         il.MarkLabel(backwardLoopStart);
-        // list[to + i] = list[from + i]
+        // Copy uses HasProperty/Get/Set/Delete rather than raw List indexing.
+        // Argument coercion is observable and may shrink the array after len
+        // was captured; property operations therefore must tolerate indexes
+        // outside the current dense storage and may grow it again.
+        il.Emit(OpCodes.Ldloc, fromLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKeyLocal);
+        il.Emit(OpCodes.Ldloc, toLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKeyLocal);
+
+        var backwardDeleteTarget = il.DefineLabel();
+        var backwardNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, fromKeyLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, backwardDeleteTarget);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, fromKeyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, copiedValueLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldloc, copiedValueLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetIndexStrict);
+        il.Emit(OpCodes.Br, backwardNext);
+        il.MarkLabel(backwardDeleteTarget);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, fromLocal);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, toKeyLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(backwardNext);
 
         // i--
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -4033,17 +4047,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, forwardLoopCondition);
 
         il.MarkLabel(forwardLoopStart);
-        // list[to + i] = list[from + i]
+        il.Emit(OpCodes.Ldloc, fromLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, fromKeyLocal);
+        il.Emit(OpCodes.Ldloc, toLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, toKeyLocal);
+
+        var forwardDeleteTarget = il.DefineLabel();
+        var forwardNext = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, fromKeyLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, forwardDeleteTarget);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, fromKeyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, copiedValueLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, toLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldloc, copiedValueLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetIndexStrict);
+        il.Emit(OpCodes.Br, forwardNext);
+        il.MarkLabel(forwardDeleteTarget);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, fromLocal);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, toKeyLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(forwardNext);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);

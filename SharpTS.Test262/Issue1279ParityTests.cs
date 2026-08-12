@@ -5141,6 +5141,25 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/fill/coerced-indexes.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-end.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-start-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-start.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-end.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-start.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/return-abrupt-from-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-end.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-start.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/coerced-values-start-change-target.js")]
+    [InlineData("built-ins/Array/prototype/copyWithin/fill-holes.js")]
+    public void Native_fill_and_copyWithin_coerce_indexes_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/sort/precise-getter-appends-elements.js")]
     [InlineData("built-ins/Array/prototype/sort/precise-setter-deletes-successor.js")]
     public void Array_sort_observes_index_descriptors_in_compiled_mode(string relativePath)

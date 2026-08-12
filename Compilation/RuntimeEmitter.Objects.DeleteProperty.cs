@@ -21,8 +21,8 @@ public partial class RuntimeEmitter
     /// On a failed delete (frozen/sealed object, non-configurable property)
     /// the non-strict variant returns false; the strict variant throws a
     /// TypeError when strictMode is set, else returns false.
-    /// The strict variant intentionally has NO $Array or System.Type receiver
-    /// branches, and its $TSFunction handler skips the frozen/sealed/PDS
+    /// The strict variant intentionally has no System.Type receiver branch,
+    /// and its $TSFunction handler skips the frozen/sealed/PDS
     /// configurability checks — preserved as-is from before the #1131 merge
     /// (behavior-preserving refactor; see the epic notes for the drift list).
     /// </summary>
@@ -89,14 +89,12 @@ public partial class RuntimeEmitter
         // $Array — `delete arr[i]` turns the slot into a hole. Must come
         // BEFORE the Dictionary check (not relevant here, just ordering)
         // and BEFORE the trueLabel fallthrough so actual deletions happen.
-        // (Non-strict only — the strict variant never had an $Array branch.)
+        // The strict variant delegates to the ordinary array deletion below
+        // and converts a false result into the required TypeError.
         var tsArrayDelLabel = il.DefineLabel();
-        if (!strict)
-        {
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-            il.Emit(OpCodes.Brtrue, tsArrayDelLabel);
-        }
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Brtrue, tsArrayDelLabel);
 
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
@@ -378,11 +376,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // $Array delete handler — if the key is a numeric index call
-        // DeleteAt; otherwise return true (JS non-configurable behavior).
-        if (!strict)
+        // $Array delete handler. The strict entry point reuses the ordinary
+        // array [[Delete]] implementation (which handles holes, integrity
+        // levels, and descriptor configurability) and throws when it reports
+        // failure. This is required by DeletePropertyOrThrow in mutators such
+        // as copyWithin.
+        il.MarkLabel(tsArrayDelLabel);
+        if (strict)
         {
-            il.MarkLabel(tsArrayDelLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.DeleteProperty);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            EmitDeleteFail("' of array");
+        }
+        else
+        {
             var tsArrDelIndexLocal = il.DeclareLocal(_types.Int64);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, tsArrDelIndexLocal);
