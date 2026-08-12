@@ -485,6 +485,8 @@ public class EmittedRuntime
     public FieldBuilder DatePrototypeField { get; set; } = null!;
     /// <summary>String.prototype singleton; mirror of <see cref="BooleanPrototypeField"/> for primitive strings.</summary>
     public FieldBuilder StringPrototypeField { get; set; } = null!;
+    /// <summary>BigInt.prototype singleton used by value-position BigInt and primitive BigInteger symbol lookup.</summary>
+    public FieldBuilder BigIntPrototypeField { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
     public FieldBuilder JsonSingletonField { get; set; } = null!;
     /// <summary>
@@ -540,6 +542,8 @@ public class EmittedRuntime
     public MethodBuilder PDSGetAllExtraKeys { get; set; } = null!;
     /// <summary>$Runtime.ArrayProtoToString(this) — ECMA-262 23.1.3.32. Returns join of elements with default separator (",").</summary>
     public MethodBuilder ArrayProtoToStringHelper { get; set; } = null!;
+    /// <summary>$Runtime.ArrayProtoToLocaleString(this) — ECMA-262 23.1.3.33. Invokes each present element's live toLocaleString method and joins the results with commas.</summary>
+    public MethodBuilder ArrayProtoToLocaleStringHelper { get; set; } = null!;
     /// <summary>Populates <see cref="BooleanPrototypeField"/> with $TSFunction wrappers for toString/valueOf; idempotent.</summary>
     public MethodBuilder BooleanPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="DatePrototypeField"/> with $TSFunction wrappers for the Date.prototype methods; idempotent.</summary>

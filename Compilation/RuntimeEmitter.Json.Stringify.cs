@@ -380,14 +380,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check for BigInt - get type name and check
-        EmitBigIntCheck(il, valueLocal, runtime);
-
         // Check for toJSON() method and call it if present. ECMA-262 25.5.2.3
         // step 2.b.i requires toJSON's first arg to be the property key — read
         // it from arg 3 (the helper's key parameter, threaded by all recursive
         // callers).
         EmitToJsonCheck(il, valueLocal, runtime, keyArgIndex: 3);
+
+        // BigInt throws only after its prototype toJSON hook has had a chance
+        // to replace the primitive (SerializeJSONProperty steps 2 then 10).
+        EmitBigIntCheck(il, valueLocal, runtime);
 
         // toJSON may have returned $Undefined — re-check and return C# null
         // so the caller treats it as JSON-undefined (root: returns undefined,
@@ -633,6 +634,53 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Stloc, argsLocal);
             }
         }
+
+        // BigInt is a primitive, but Get(value, "toJSON") boxes it and walks
+        // BigInt.prototype. The general IHasFields branch below only handles
+        // object receivers, so perform that prototype lookup explicitly while
+        // preserving the primitive as the call receiver.
+        var notBigIntLabel = il.DefineLabel();
+        var bigIntNotTsFunctionLabel = il.DefineLabel();
+        var bigIntNotBoundLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, notBigIntLabel);
+
+        il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Ldloca, toJsonFieldLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue",
+            _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, noToJsonLabel);
+
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, bigIntNotTsFunctionLabel);
+        BuildArgs();
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, noToJsonLabel);
+
+        il.MarkLabel(bigIntNotTsFunctionLabel);
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brfalse, bigIntNotBoundLabel);
+        BuildArgs();
+        il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, noToJsonLabel);
+
+        il.MarkLabel(bigIntNotBoundLabel);
+        il.Emit(OpCodes.Br, noToJsonLabel);
+        il.MarkLabel(notBigIntLabel);
 
         // if (value is Dictionary<string, object?>)
         il.Emit(OpCodes.Ldloc, valueLocal);

@@ -68,6 +68,7 @@ public partial class RuntimeEmitter
         // (System.Object[] for compiled List<object>) — broke any Test262
         // test that did `arr.toString()` directly.
         runtime.ArrayProtoToStringHelper = EmitArrayProtoToStringHelper(typeBuilder, runtime);
+        runtime.ArrayProtoToLocaleStringHelper = EmitArrayProtoToLocaleStringHelper(typeBuilder, runtime);
     }
 
     private MethodBuilder EmitArrayProtoToStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -108,6 +109,127 @@ public partial class RuntimeEmitter
         return method;
     }
 
+    private MethodBuilder EmitArrayProtoToLocaleStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayProtoToLocaleString",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Object]
+        );
+        method.DefineParameter(1, ParameterAttributes.None, "__this");
+
+        var il = method.GetILGenerator();
+        var listLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var resultLocal = il.DeclareLocal(_types.String);
+        var elementLocal = il.DeclareLocal(_types.Object);
+        var methodLocal = il.DeclareLocal(_types.Object);
+
+        // ToObject(this), followed by LengthOfArrayLike.
+        var receiverPresentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brtrue, receiverPresentLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toLocaleString called on null or undefined");
+        il.MarkLabel(receiverPresentLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var receiverDefinedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, receiverDefinedLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toLocaleString called on null or undefined");
+        il.MarkLabel(receiverDefinedLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+        il.Emit(OpCodes.Stloc, listLocal);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopLabel = il.DefineLabel();
+        var nextLabel = il.DefineLabel();
+        var invokeLabel = il.DefineLabel();
+        var doneLabel = il.DefineLabel();
+        il.MarkLabel(loopLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, doneLabel);
+
+        // Every element after the first is preceded by the locale separator.
+        var noSeparatorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Brfalse, noSeparatorLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldstr, ",");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.MarkLabel(noSeparatorLabel);
+
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Brtrue, invokeLabel);
+        il.Emit(OpCodes.Br, nextLabel);
+        il.MarkLabel(invokeLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nextLabel);
+        var elementReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, elementReadyLabel);
+        // A hole can still be present through Array.prototype. Re-read the
+        // original receiver with ordinary property lookup so inherited indexed
+        // values/accessors participate without densifying the array.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, indexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nextLabel);
+        il.MarkLabel(elementReadyLabel);
+
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldstr, "toLocaleString");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, methodLocal);
+        il.Emit(OpCodes.Ldloc, methodLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var callableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, callableLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array element toLocaleString is not callable");
+        il.MarkLabel(callableLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, methodLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        il.MarkLabel(nextLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopLabel);
+
+        il.MarkLabel(doneLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
     private MethodBuilder EmitObjectProtoToLocaleStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ECMA-262 §20.1.3.5: Object.prototype.toLocaleString does ? Invoke(O,
@@ -135,9 +257,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notUndefLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(notUndefLabel);
-        // Delegate to ObjectProtoToString for the actual conversion.
+        // Invoke the receiver's live `toString` property. This is observable:
+        // Object.prototype.toLocaleString.call(value) must respect an override
+        // on value's prototype, including accessor properties on primitive
+        // wrapper prototypes.
+        var toStringLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectProtoToStringHelper);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, toStringLocal);
+        il.Emit(OpCodes.Ldloc, toStringLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var callableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, callableLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.prototype.toLocaleString toString is not callable");
+        il.MarkLabel(callableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, toStringLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Ret);
         return method;
     }

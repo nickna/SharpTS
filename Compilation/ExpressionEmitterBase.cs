@@ -2298,7 +2298,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // Check resolver (parameters, locals, captured variables, state machine fields)
         if (Resolver.HasVariable(name)) return true;
         // Check pseudo-variables and global constants
-        if (name is "Math" or "process" or "globalThis" or "global" or "Symbol" or "NaN" or "Infinity"
+        if (name is "Math" or "process" or "globalThis" or "global" or "Symbol" or "BigInt" or "NaN" or "Infinity"
             or "undefined" or "fetch" or "crypto" or "__filename" or "__dirname"
             or "parseFloat" or "parseInt" or "isNaN" or "isFinite"
             or "encodeURIComponent" or "decodeURIComponent"

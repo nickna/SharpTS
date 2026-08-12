@@ -123,7 +123,10 @@ public partial class RuntimeEmitter
             _ => throw new InvalidOperationException("EmitThrowIfCallbackNotCallable: unsupported argIndex")
         };
         il.Emit(loadOp);
-        il.Emit(OpCodes.Brfalse, throwLabel);
+        // Optional callback slots such as Array.prototype.sort's comparator
+        // arrive as CLR null when omitted; treat that as undefined only at
+        // call sites which explicitly allow an absent callback.
+        il.Emit(OpCodes.Brfalse, allowUndefined ? okLabel : throwLabel);
         il.Emit(loadOp);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, allowUndefined ? okLabel : throwLabel);

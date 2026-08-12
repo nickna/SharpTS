@@ -2078,7 +2078,10 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
                 else
                     EmitBoxedArgOrNull(arguments, 0);
-                EmitBoxedArgOrNull(arguments, 1);
+                if (arguments.Count > 1)
+                    EmitBoxedArgOrNull(arguments, 1);
+                else
+                    IL.Emit(OpCodes.Ldnull);
                 // ArrayIncludes already returns a boxed bool — do not re-box
                 // (double-boxing reinterprets the object reference as a bool).
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayIncludes);
@@ -2089,7 +2092,10 @@ public abstract partial class ExpressionEmitterBase
                     IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
                 else
                     EmitBoxedArgOrNull(arguments, 0);
-                EmitBoxedArgOrNull(arguments, 1);
+                if (arguments.Count > 1)
+                    EmitBoxedArgOrNull(arguments, 1);
+                else
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.ArrayHoleInstance);
                 IL.Emit(OpCodes.Call, methodName == "indexOf" ? Ctx.Runtime!.ArrayIndexOf : Ctx.Runtime!.ArrayLastIndexOf);
                 IL.Emit(OpCodes.Box, typeof(double));
                 break;

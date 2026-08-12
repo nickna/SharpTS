@@ -249,6 +249,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(pdsStoreLabel);
         {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
+            il.Emit(OpCodes.Brfalse, endLabel);
             var fbDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
             il.Emit(OpCodes.Stloc, fbDescLocal);

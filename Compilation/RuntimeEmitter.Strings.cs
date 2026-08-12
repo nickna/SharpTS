@@ -473,16 +473,34 @@ public partial class RuntimeEmitter
         assign(method);
 
         var il = method.GetILGenerator();
-        // arg1 is object so the dynamic-dispatch path can pass a RegExp
-        // unchanged; check IsRegExp and throw before any coercion. Gated on
-        // UsesRegExp — when no RegExp is emitted (TSRegExpType=null), no value
-        // can be a RegExp at runtime so the check would be unreachable IL.
+        // IsRegExp first observes searchString[Symbol.match]. An explicit
+        // non-nullish value controls the answer (and its getter may throw);
+        // only when absent do native RegExp objects fall back to their brand.
+        // This check must precede ToString(searchString).
         if (runtime.TSRegExpType != null)
         {
+            var rejectRegExpLabel = il.DefineLabel();
+            var brandCheckLabel = il.DefineLabel();
             var notRegExpLabel = il.DefineLabel();
+            var matchValueLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);
+            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Stloc, matchValueLocal);
+            il.Emit(OpCodes.Ldloc, matchValueLocal);
+            il.Emit(OpCodes.Brfalse, brandCheckLabel);
+            il.Emit(OpCodes.Ldloc, matchValueLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, brandCheckLabel);
+            il.Emit(OpCodes.Ldloc, matchValueLocal);
+            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Brtrue, rejectRegExpLabel);
+            il.Emit(OpCodes.Br, notRegExpLabel);
+            il.MarkLabel(brandCheckLabel);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpLabel);
+            il.MarkLabel(rejectRegExpLabel);
             il.Emit(OpCodes.Ldstr, "First argument to String.prototype." + jsMethodName + " must not be a regular expression");
             GuestErrorEmitter.ThrowErrorFromStack(il, runtime, runtime.TSTypeErrorCtor);
             il.MarkLabel(notRegExpLabel);

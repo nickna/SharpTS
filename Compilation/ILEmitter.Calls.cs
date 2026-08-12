@@ -529,7 +529,8 @@ public partial class ILEmitter
         // pre-materializing here would erase the receiver's identity and read
         // length even when @@isConcatSpreadable is false.
         bool usesOriginalReceiver = methodName is "push" or "pop" or "shift"
-            or "unshift" or "reverse" or "fill" or "copyWithin";
+            or "unshift" or "reverse" or "fill" or "copyWithin"
+            or "indexOf" or "lastIndexOf";
         if (methodName != "concat" && !usesOriginalReceiver)
         {
             IL.Emit(OpCodes.Call, useLazyMaterializer
@@ -572,7 +573,10 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldnull);
+                    if (methodName is "indexOf" or "lastIndexOf")
+                        IL.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+                    else
+                        IL.Emit(OpCodes.Ldnull);
                 }
                 break;
             case "search":
@@ -596,7 +600,10 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldnull);
+                    if (methodName is "indexOf" or "lastIndexOf")
+                        IL.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+                    else
+                        IL.Emit(OpCodes.Ldnull);
                 }
                 break;
             case "argsArray":

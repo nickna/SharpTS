@@ -717,59 +717,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, notListLabel);
-        var joinedListLocal = il.DeclareLocal(_types.ListOfObject);
+
+        // Array.prototype.toString is writable. Resolve and invoke the live
+        // prototype slot before the intrinsic join fallback below so String
+        // coercion observes overrides (for example assigning
+        // Object.prototype.toString or a user function to that slot).
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        var arrayToStringMethodLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, arrayToStringMethodLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Stloc, joinedListLocal);
-        var sbJoinLocal = il.DeclareLocal(_types.StringBuilder);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, _types.EmptyTypes));
-        il.Emit(OpCodes.Stloc, sbJoinLocal);
-        var idxJoinLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldloc, arrayToStringMethodLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, idxJoinLocal);
-        var joinLoop = il.DefineLabel();
-        var joinEnd = il.DefineLabel();
-        il.MarkLabel(joinLoop);
-        il.Emit(OpCodes.Ldloc, idxJoinLocal);
-        il.Emit(OpCodes.Ldloc, joinedListLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, joinEnd);
-        // Append "," for index > 0
-        var skipJoinComma = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, idxJoinLocal);
-        il.Emit(OpCodes.Brfalse, skipJoinComma);
-        il.Emit(OpCodes.Ldloc, sbJoinLocal);
-        il.Emit(OpCodes.Ldstr, ",");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(skipJoinComma);
-        // val = list[index]; null/undefined → empty per spec join behavior; else recursive Stringify.
-        var valLocalJ = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldloc, joinedListLocal);
-        il.Emit(OpCodes.Ldloc, idxJoinLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, valLocalJ);
-        var skipAppend = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, valLocalJ);
-        il.Emit(OpCodes.Brfalse, skipAppend);
-        il.Emit(OpCodes.Ldloc, valLocalJ);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, skipAppend);
-        il.Emit(OpCodes.Ldloc, sbJoinLocal);
-        il.Emit(OpCodes.Ldloc, valLocalJ);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.String));
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(skipAppend);
-        il.Emit(OpCodes.Ldloc, idxJoinLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, idxJoinLocal);
-        il.Emit(OpCodes.Br, joinLoop);
-        il.MarkLabel(joinEnd);
-        il.Emit(OpCodes.Ldloc, sbJoinLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.StringBuilder, "ToString"));
         il.Emit(OpCodes.Ret);
+
         il.MarkLabel(notListLabel);
 
         // KeyValuePair<object, object> → treat as a 2-element [key, value] tuple for
@@ -1056,6 +1021,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, afterLabel);
+            // OrdinaryToPrimitive skips a present property that is not
+            // callable; it does not attempt to invoke it.
+            il.Emit(OpCodes.Ldloc, fnLocal);
+            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, afterLabel);
 
             // result = $Runtime.InvokeMethodValue(receiver, fn, emptyArgs)
             var resultLocal = il.DeclareLocal(_types.Object);
@@ -1291,6 +1263,30 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(afterToPrimSymN);
 
+        // A boxed primitive's inherited valueOf returns its internal
+        // [[PrimitiveValue]]. Use the shared wrapper-aware implementation
+        // (which still honors an own valueOf override), then stop the ordinary
+        // object-method walk once a primitive has been produced. The old path
+        // continued into toString for Object(Symbol()), turning it into text
+        // and silently yielding NaN instead of the required Symbol TypeError.
+        var notBoxedNumberLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, notBoxedNumberLabel);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Stloc, argLocal);
+        il.MarkLabel(notBoxedNumberLabel);
+
+        var continueOrdinaryNumberLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, continueOrdinaryNumberLabel);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, skipToPrimLabelTop);
+        il.MarkLabel(continueOrdinaryNumberLabel);
+
         var emptyArgsLocalT = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
@@ -1308,6 +1304,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, fnLocal);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, afterLabel);
+            // OrdinaryToPrimitive skips non-callable properties. InvokeValue's
+            // generic fallback intentionally throws for such values, so guard
+            // here before attempting valueOf/toString.
+            il.Emit(OpCodes.Ldloc, fnLocal);
+            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, afterLabel);
 
             var resLoc = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, argLocal);

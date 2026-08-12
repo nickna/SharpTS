@@ -936,98 +936,18 @@ public partial class RuntimeEmitter
 
     private void EmitArrayIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // ECMA-262 23.1.3.17 — fromIndex coerced via ToIntegerOrInfinity (spec).
-        // fromIndex=null means "not provided" → start from 0.
-        var method = typeBuilder.DefineMethod(
-            "ArrayIndexOf",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Double,
-            [_types.ListOfObject, _types.Object, _types.Object]
-        );
-        runtime.ArrayIndexOf = method;
-
-        var il = method.GetILGenerator();
-
-        EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-
-        var lenLocal = il.DeclareLocal(_types.Int32);
-        var indexLocal = il.DeclareLocal(_types.Int32);
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, lenLocal);
-
-        // If len == 0 return -1 early (spec step 3, and avoids edge cases).
-        var notEmpty = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Brtrue, notEmpty);
-        il.Emit(OpCodes.Ldc_R8, -1.0);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notEmpty);
-
-        // start = ComputeIndexOfStart(fromIndex, len). Returns -1 if search
-        // should be skipped entirely (+Inf or fromIndex >= len).
-        var startLocal = il.DeclareLocal(_types.Int32);
-        EmitComputeIndexOfStart(il, runtime, lenLocal, startLocal);
-
-        var returnMinusOne = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Beq, returnMinusOne);
-
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var advance = il.DefineLabel();
-
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // ECMA-262 23.1.3.14: indexOf SKIPS holes.
-        EmitSkipIfHole(il, indexLocal, advance, runtime, isLazyLocal);
-
-        // Spec uses StrictEqualityComparison — null and undefined are distinct.
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.StrictEquals);
-
-        var notMatch = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notMatch);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notMatch);
-        il.MarkLabel(advance);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-        il.MarkLabel(returnMinusOne);
-        il.Emit(OpCodes.Ldc_R8, -1.0);
-        il.Emit(OpCodes.Ret);
+        EmitArraySearch(typeBuilder, runtime, findLast: false);
     }
 
-    /// <summary>
-    /// Emits IL that reads arg2 (fromIndex, object?) and arg lenLocal (len) and
-    /// leaves the indexOf starting index in startLocal. -1 indicates "skip —
-    /// return -1" (fromIndex is +Infinity or >= len). Mirrors
-    /// <c>ArrayBuiltIns.IndexOfV2</c>'s spec clamping.
-    /// </summary>
+    // Int32 companion retained for Array.prototype.includes, whose current
+    // storage helper is still list-backed. indexOf/lastIndexOf use the generic
+    // safe-integer implementation below.
     private void EmitComputeIndexOfStart(ILGenerator il, EmittedRuntime runtime, LocalBuilder lenLocal, LocalBuilder startLocal)
     {
         var nLocal = il.DeclareLocal(_types.Int32);
         var hasFromIndex = il.DefineLabel();
         var done = il.DefineLabel();
 
-        // If fromIndex is null → start = 0
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Brtrue, hasFromIndex);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1035,13 +955,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(hasFromIndex);
-        // n = ToIntegerOrInfinity(fromIndex, 0)  — +Inf→MaxValue, -Inf→MinValue, NaN→0
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, nLocal);
 
-        // +Inf sentinel → return -1
         var notPosInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, nLocal);
         il.Emit(OpCodes.Ldc_I4, int.MaxValue);
@@ -1051,7 +969,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(notPosInf);
-        // -Inf sentinel → start = 0
         var notNegInf = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, nLocal);
         il.Emit(OpCodes.Ldc_I4, int.MinValue);
@@ -1061,7 +978,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(notNegInf);
-        // if n >= len → return -1
         var notTooBig = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, nLocal);
         il.Emit(OpCodes.Ldloc, lenLocal);
@@ -1071,7 +987,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(notTooBig);
-        // if n >= 0 → start = n
         var negFromIndex = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, nLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1081,7 +996,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, done);
 
         il.MarkLabel(negFromIndex);
-        // start = max(len + n, 0)
         il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Ldloc, nLocal);
         il.Emit(OpCodes.Add);
@@ -1097,164 +1011,285 @@ public partial class RuntimeEmitter
         il.MarkLabel(isNeg);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, startLocal);
-
         il.MarkLabel(done);
     }
 
     private void EmitArrayLastIndexOf(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // ECMA-262 23.1.3.18 Array.prototype.lastIndexOf — reverse scan; skips
-        // holes (strict equality, kPresent only). fromIndex coerced via
-        // ToIntegerOrInfinity: -Inf → return -1; +Inf → scan from len-1;
-        // fromIndex >= 0 → start = min(fromIndex, len-1); else → start = len + n
-        // (if still negative, spec says no iteration → return -1).
+        EmitArraySearch(typeBuilder, runtime, findLast: true);
+    }
+
+    /// <summary>
+    /// Emits the generic Array.prototype indexOf/lastIndexOf algorithm against
+    /// the original receiver. Indices and length remain doubles so sparse
+    /// array-likes retain the full ECMAScript safe-integer range; each visited
+    /// slot uses observable HasProperty/Get rather than a bounded CLR snapshot.
+    /// Arg2 uses the private ArrayHole singleton to mean "not supplied".
+    /// </summary>
+    private void EmitArraySearch(TypeBuilder typeBuilder, EmittedRuntime runtime, bool findLast)
+    {
         var method = typeBuilder.DefineMethod(
-            "ArrayLastIndexOf",
+            findLast ? "ArrayLastIndexOf" : "ArrayIndexOf",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Double,
-            [_types.ListOfObject, _types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
-        runtime.ArrayLastIndexOf = method;
+        if (findLast)
+            runtime.ArrayLastIndexOf = method;
+        else
+            runtime.ArrayIndexOf = method;
 
         var il = method.GetILGenerator();
+        var lenLocal = il.DeclareLocal(_types.Double);
+        var rawLenLocal = il.DeclareLocal(_types.Double);
+        var nLocal = il.DeclareLocal(_types.Double);
+        var indexLocal = il.DeclareLocal(_types.Double);
+        var keyLocal = il.DeclareLocal(_types.String);
 
-        EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
-
-        var lenLocal = il.DeclareLocal(_types.Int32);
+        // Array.prototype search methods begin with ToObject(this). The
+        // generic property path would otherwise turn null/undefined length
+        // into NaN and silently return -1 instead of throwing TypeError.
+        var receiverPresent = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, lenLocal);
+        il.Emit(OpCodes.Brtrue, receiverPresent);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        il.MarkLabel(receiverPresent);
+        var receiverDefined = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, receiverDefined);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        il.MarkLabel(receiverDefined);
 
-        // If len == 0 return -1 early.
-        var notEmpty = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Brtrue, notEmpty);
-        il.Emit(OpCodes.Ldc_R8, -1.0);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notEmpty);
+        // len = ToLength(Get(O, "length")), without narrowing to Int32.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, rawLenLocal);
 
-        var startLocal = il.DeclareLocal(_types.Int32);
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        EmitComputeLastIndexOfStart(il, runtime, lenLocal, startLocal);
-
+        var positiveLength = il.DefineLabel();
+        var finiteLength = il.DefineLabel();
+        var lengthReady = il.DefineLabel();
         var returnMinusOne = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, startLocal);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Beq, returnMinusOne);
+        il.Emit(OpCodes.Ldloc, rawLenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brtrue, returnMinusOne);
+        il.Emit(OpCodes.Ldloc, rawLenLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bgt, positiveLength);
+        il.Emit(OpCodes.Br, returnMinusOne);
+        il.MarkLabel(positiveLength);
+        il.Emit(OpCodes.Ldloc, rawLenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", _types.Double));
+        il.Emit(OpCodes.Brfalse, finiteLength);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Stloc, lenLocal);
+        il.Emit(OpCodes.Br, lengthReady);
+        il.MarkLabel(finiteLength);
+        il.Emit(OpCodes.Ldloc, rawLenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", _types.Double));
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        var lengthBelowMax = il.DefineLabel();
+        il.Emit(OpCodes.Ble, lengthBelowMax);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Stloc, lenLocal);
+        il.Emit(OpCodes.Br, lengthReady);
+        il.MarkLabel(lengthBelowMax);
+        il.Emit(OpCodes.Ldloc, rawLenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", _types.Double));
+        il.Emit(OpCodes.Stloc, lenLocal);
+        il.MarkLabel(lengthReady);
 
-        il.Emit(OpCodes.Ldloc, startLocal);
+        var suppliedFromIndex = il.DefineLabel();
+        var startReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, suppliedFromIndex);
+        if (findLast)
+        {
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Sub);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+        }
         il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, startReady);
+
+        il.MarkLabel(suppliedFromIndex);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, nLocal);
+
+        // ToIntegerOrInfinity: NaN => 0; finite values truncate toward zero.
+        var nNotNaN = il.DefineLabel();
+        var nIntegral = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, nLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brfalse, nNotNaN);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, nLocal);
+        il.Emit(OpCodes.Br, nIntegral);
+        il.MarkLabel(nNotNaN);
+        var nNonPositive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, nLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ble, nNonPositive);
+        il.Emit(OpCodes.Ldloc, nLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", _types.Double));
+        il.Emit(OpCodes.Stloc, nLocal);
+        il.Emit(OpCodes.Br, nIntegral);
+        il.MarkLabel(nNonPositive);
+        il.Emit(OpCodes.Ldloc, nLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Ceiling", _types.Double));
+        il.Emit(OpCodes.Stloc, nLocal);
+        il.MarkLabel(nIntegral);
+
+        if (findLast)
+        {
+            // n >= 0 ? min(n, len - 1) : len + n. This naturally handles
+            // both infinities: +Infinity clamps, -Infinity remains negative.
+            var negativeN = il.DefineLabel();
+            var useN = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Blt, negativeN);
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Blt, useN);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.Emit(OpCodes.Br, startReady);
+            il.MarkLabel(useN);
+            var lastNonZeroStart = il.DefineLabel();
+            var lastStoredStart = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Bne_Un, lastNonZeroStart);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.Emit(OpCodes.Br, lastStoredStart);
+            il.MarkLabel(lastNonZeroStart);
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.MarkLabel(lastStoredStart);
+            il.Emit(OpCodes.Br, startReady);
+            il.MarkLabel(negativeN);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, indexLocal);
+        }
+        else
+        {
+            // n >= len (including +Infinity) skips; negative starts at
+            // max(len+n, 0), with -Infinity clamping to zero.
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Bge, returnMinusOne);
+            var nonNegativeN = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Bge, nonNegativeN);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            var negativeSum = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Blt, negativeSum);
+            il.Emit(OpCodes.Br, startReady);
+            il.MarkLabel(negativeSum);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.Emit(OpCodes.Br, startReady);
+            il.MarkLabel(nonNegativeN);
+            // ToIntegerOrInfinity preserves -0, but the observable index
+            // returned for the first element must be +0.
+            var nonZeroStart = il.DefineLabel();
+            var storedStart = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Bne_Un, nonZeroStart);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.Emit(OpCodes.Br, storedStart);
+            il.MarkLabel(nonZeroStart);
+            il.Emit(OpCodes.Ldloc, nLocal);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.MarkLabel(storedStart);
+        }
+        il.MarkLabel(startReady);
 
         var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
         var advance = il.DefineLabel();
-
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, loopEnd);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Blt, returnMinusOne);
+        if (!findLast)
+        {
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldloc, lenLocal);
+            il.Emit(OpCodes.Bge, returnMinusOne);
+        }
 
-        EmitSkipIfHole(il, indexLocal, advance, runtime, isLazyLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, keyLocal);
 
-        // ECMA-262 23.1.3.18 lastIndexOf — StrictEqualityComparison (===).
-        EmitElementLoad(il, indexLocal, runtime, isLazyLocal);
+        // ECMA-262 requires HasProperty for every visited index, even when the
+        // search element is not undefined. Proxy `has` traps observe this, and
+        // may mutate the receiver (including zeroing its live length) while the
+        // loop must continue against the snapshotted len above.
+        var getElement = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, advance);
+        il.MarkLabel(getElement);
+
+        // $Array/List sparse tails are exposed by GetIndex. Ordinary objects
+        // need string-keyed Get so indices at/above 2^32 and descriptor-only
+        // setter properties retain their exact ordinary-object semantics.
+        var listElement = il.DefineLabel();
+        var elementReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, listElement);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Br, elementReady);
+        il.MarkLabel(listElement);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.MarkLabel(elementReady);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.StrictEquals);
-
-        var notMatch = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, notMatch);
+        il.Emit(OpCodes.Brfalse, advance);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notMatch);
         il.MarkLabel(advance);
         il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(findLast ? OpCodes.Sub : OpCodes.Add);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
         il.MarkLabel(returnMinusOne);
         il.Emit(OpCodes.Ldc_R8, -1.0);
         il.Emit(OpCodes.Ret);
-    }
-
-    private void EmitComputeLastIndexOfStart(ILGenerator il, EmittedRuntime runtime, LocalBuilder lenLocal, LocalBuilder startLocal)
-    {
-        var nLocal = il.DeclareLocal(_types.Int32);
-        var hasFromIndex = il.DefineLabel();
-        var done = il.DefineLabel();
-
-        // If fromIndex is null → start = len - 1
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brtrue, hasFromIndex);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.Emit(OpCodes.Br, done);
-
-        il.MarkLabel(hasFromIndex);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
-        il.Emit(OpCodes.Stloc, nLocal);
-
-        // -Inf sentinel → return -1 (no iteration)
-        var notNegInf = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Ldc_I4, int.MinValue);
-        il.Emit(OpCodes.Bne_Un, notNegInf);
-        il.Emit(OpCodes.Ldc_I4_M1);
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.Emit(OpCodes.Br, done);
-
-        il.MarkLabel(notNegInf);
-        // +Inf sentinel → start = len - 1
-        var notPosInf = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Ldc_I4, int.MaxValue);
-        il.Emit(OpCodes.Bne_Un, notPosInf);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.Emit(OpCodes.Br, done);
-
-        il.MarkLabel(notPosInf);
-        // If n >= 0 → start = min(n, len-1)
-        var negFromIndex = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, negFromIndex);
-
-        var useN = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Blt, useN);
-        // start = len - 1
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Sub);
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.Emit(OpCodes.Br, done);
-        il.MarkLabel(useN);
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Stloc, startLocal);
-        il.Emit(OpCodes.Br, done);
-
-        il.MarkLabel(negFromIndex);
-        // start = len + n; if still < 0 → -1 (no iteration)
-        il.Emit(OpCodes.Ldloc, lenLocal);
-        il.Emit(OpCodes.Ldloc, nLocal);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, startLocal);
-
-        il.MarkLabel(done);
     }
 
     private void EmitArrayJoin(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -1402,6 +1437,14 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(receiverNotUndefinedLabel);
 
+        // Concat starts from O = ToObject(this). Primitive items remain
+        // primitives, but a primitive receiver is appended as its wrapper
+        // object when it is not spreadable.
+        var receiverObjectLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Stloc, receiverObjectLocal);
+
         // A = ArraySpeciesCreate(O, 0) currently lowers to the runtime's fresh
         // dense carrier. Holes are represented by the shared sentinel.
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
@@ -1435,7 +1478,7 @@ public partial class RuntimeEmitter
         var elementLoadedLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Brtrue, loadArgumentLabel);
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, receiverObjectLocal);
         il.Emit(OpCodes.Stloc, elementLocal);
         il.Emit(OpCodes.Br, elementLoadedLabel);
         il.MarkLabel(loadArgumentLabel);
@@ -1577,9 +1620,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, copyHoleLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        var concatListElement = il.DefineLabel();
+        var concatElementReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, concatListElement);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldloc, copyKeyLocal);
         il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Br, concatElementReady);
+        il.MarkLabel(concatListElement);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldloc, copyIndexLocal);
+        il.Emit(OpCodes.Box, _types.Int32);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.MarkLabel(concatElementReady);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
         il.Emit(OpCodes.Br, copyAddedLabel);
         il.MarkLabel(copyHoleLabel);
@@ -2155,6 +2210,15 @@ public partial class RuntimeEmitter
             runtime);
         il.MarkLabel(notProxyLabel);
 
+        // Date/Error/function/built-in singleton receivers store expando
+        // properties in the shared descriptor store rather than a visible
+        // Dictionary or $Object field bag. HasProperty must inspect that
+        // store for every receiver shape before entering specialized storage.
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
         // Dict branch: ContainsKey OR PDS
         var notDictLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, currentLocal);
@@ -2284,8 +2348,59 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(notListLabel);
-        // Other types in the chain (primitives, etc.): bail out.
-        il.Emit(OpCodes.Br, falseLabel);
+
+        // Primitive wrappers expose indexed/string data through their
+        // intrinsic prototypes. Mirror GetProperty's boxing semantics so
+        // borrowed searches see Boolean.prototype / Number.prototype fields,
+        // and string character indices count as present own properties.
+        var notStringPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, notStringPrimitive);
+        var stringIndexLocal = il.DeclareLocal(_types.Int32);
+        var walkStringPrototype = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, stringIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", [_types.String, _types.Int32.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, walkStringPrototype);
+        il.Emit(OpCodes.Ldloc, stringIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, walkStringPrototype);
+        il.Emit(OpCodes.Ldloc, stringIndexLocal);
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, trueLabel);
+        il.MarkLabel(walkStringPrototype);
+        il.Emit(OpCodes.Ldsfld, runtime.StringPrototypeField);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(notStringPrimitive);
+
+        var notBooleanPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, notBooleanPrimitive);
+        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(notBooleanPrimitive);
+
+        var notNumberPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, notNumberPrimitive);
+        il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(notNumberPrimitive);
+
+        // Other object shapes can still carry an explicit PDS prototype.
+        // Continue that chain before falling back to Object.prototype.
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
 
         // Default-prototype fallback: when the explicit PDS prototype chain
         // is exhausted, mirror GetProperty's check of the lazily-populated

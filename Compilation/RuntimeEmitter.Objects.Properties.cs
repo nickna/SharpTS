@@ -1235,6 +1235,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brfalse, notBoolPrimLabel);
         il.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
+        // Preserve the original primitive as the receiver of an accessor
+        // installed on Boolean.prototype. Recursing through GetProperty on the
+        // prototype dictionary would invoke the getter with that dictionary as
+        // `this`, making strict getters observe typeof this === "object".
+        var boolProtoDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var boolProtoGetterLocal = il.DeclareLocal(_types.Object);
+        var boolProtoOrdinaryLookupLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, boolProtoDescLocal);
+        il.Emit(OpCodes.Ldloc, boolProtoDescLocal);
+        il.Emit(OpCodes.Brfalse, boolProtoOrdinaryLookupLabel);
+        il.Emit(OpCodes.Ldloc, boolProtoDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, boolProtoGetterLocal);
+        il.Emit(OpCodes.Ldloc, boolProtoGetterLocal);
+        il.Emit(OpCodes.Brfalse, boolProtoOrdinaryLookupLabel);
+        il.Emit(OpCodes.Ldloc, boolProtoGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, boolProtoOrdinaryLookupLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, boolProtoGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(boolProtoOrdinaryLookupLabel);
         il.Emit(OpCodes.Ldsfld, runtime.BooleanPrototypeField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, method);  // recursive GetProperty lookup on the dict
@@ -1353,6 +1381,14 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldsfld, runtime.NumberPrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notDoubleLabel);
+            var notBigIntLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.BigInteger);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notBigIntLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notBigIntLabel);
             var notStringLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldtoken, _types.String);

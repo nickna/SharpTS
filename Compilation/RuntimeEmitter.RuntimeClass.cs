@@ -135,6 +135,11 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.StringPrototypeField = stringPrototypeField;
+        var bigIntPrototypeField = typeBuilder.DefineField(
+            "_bigIntPrototype",
+            _types.DictionaryStringObject,
+            FieldAttributes.Public | FieldAttributes.Static);
+        runtime.BigIntPrototypeField = bigIntPrototypeField;
 
         // JSON / console / Error / Reflect singletons. Mirror of MathSingleton —
         // bare `var o = JSON` must yield an addressable object so
@@ -406,6 +411,8 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, numberPrototypeField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, stringPrototypeField);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        cctorIL.Emit(OpCodes.Stsfld, bigIntPrototypeField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, jsonSingletonField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));

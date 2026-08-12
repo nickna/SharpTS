@@ -280,7 +280,7 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    IL.Emit(OpCodes.Ldnull);
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.ArrayHoleInstance);
                 }
                 // ArrayIncludes already returns a boxed bool (object). The
                 // earlier `Box Boolean` here double-boxed it — reinterpreting

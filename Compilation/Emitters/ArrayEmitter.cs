@@ -312,7 +312,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayHoleInstance);
                 }
                 il.Emit(OpCodes.Call, methodName == "indexOf" ? ctx.Runtime!.ArrayIndexOf : ctx.Runtime!.ArrayLastIndexOf);
                 il.Emit(OpCodes.Box, ctx.Types.Double);
@@ -411,7 +411,21 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             // their args per spec).
             case "toString":
             case "toLocaleString":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayProtoToStringHelper);
+                // Prototype methods are writable. Resolve the live prototype
+                // slot instead of hard-wiring the intrinsic join helper so
+                // `Array.prototype.toString = Object.prototype.toString` is
+                // observed by subsequently-created and existing arrays.
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.ArrayPrototypeField);
+                il.Emit(OpCodes.Ldstr, methodName);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+                var toStringMethodLocal = il.DeclareLocal(ctx.Types.Object);
+                il.Emit(OpCodes.Stloc, toStringMethodLocal);
+                il.Emit(OpCodes.Ldloc, receiverLocal);
+                il.Emit(OpCodes.Ldloc, toStringMethodLocal);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Newarr, ctx.Types.Object);
+                il.Emit(OpCodes.Call, ctx.Runtime!.InvokeMethodValue);
                 break;
 
             default:

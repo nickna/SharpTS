@@ -135,6 +135,17 @@ public partial class ILEmitter
             return;
         }
 
+        if (name == "BigInt")
+        {
+            // BigInt is callable but not constructible. Its value-form Type
+            // token gives aliases normal function identity/property lookup;
+            // direct BigInt(x) calls still use BuiltInConstructorHandler.
+            IL.Emit(OpCodes.Ldtoken, _ctx.Types.BigInteger);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            SetStackUnknown();
+            return;
+        }
+
         // JavaScript global constants (NaN/Infinity/undefined)
         if (TryEmitJsGlobalConstant(name)) return;
 

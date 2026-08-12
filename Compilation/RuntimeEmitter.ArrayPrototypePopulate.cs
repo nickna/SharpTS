@@ -136,7 +136,7 @@ public partial class RuntimeEmitter
         // back to dynamic dispatch. The helper is `__this`-named so the
         // receiver flows through InvokeWithThis correctly.
         Wire("toString",       runtime.ArrayProtoToStringHelper, 0);
-        Wire("toLocaleString", runtime.ArrayProtoToStringHelper, 0);
+        Wire("toLocaleString", runtime.ArrayProtoToLocaleStringHelper, 0);
 
         // Per ECMA-262 §23.1.3 Array.prototype's [[Prototype]] is %Object.prototype%.
         il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);

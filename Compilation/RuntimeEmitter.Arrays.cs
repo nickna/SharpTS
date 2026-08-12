@@ -1508,7 +1508,8 @@ public partial class RuntimeEmitter
         }
 
         // Case: runtime.Method(_list, args[0], args[1]?) — indexOf/lastIndexOf.
-        // Second slot is fromIndex; null if args.Length < 2.
+        // The private ArrayHole singleton distinguishes an omitted fromIndex
+        // from explicit JavaScript null/undefined.
         void EmitSearchCase(
             string methodName,
             MethodBuilder runtimeMethod,
@@ -1555,7 +1556,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldelem_Ref);
             il.Emit(OpCodes.Br, afterSecond);
             il.MarkLabel(noSecond);
-            il.Emit(OpCodes.Ldnull);
+            if (methodName is "indexOf" or "lastIndexOf")
+                il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+            else
+                il.Emit(OpCodes.Ldnull);
             il.MarkLabel(afterSecond);
 
             il.Emit(OpCodes.Call, runtimeMethod);
@@ -1650,9 +1654,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.StringOpEquality);
             il.Emit(OpCodes.Brfalse, skipLabel);
 
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+            il.Emit(OpCodes.Ldstr, methodName);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            var liveMethodLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, liveMethodLocal);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
-            il.Emit(OpCodes.Call, runtime.ArrayProtoToStringHelper);
+            il.Emit(OpCodes.Ldloc, liveMethodLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             il.Emit(OpCodes.Br, endLabel);
 
             il.MarkLabel(skipLabel);

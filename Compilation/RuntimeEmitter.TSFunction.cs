@@ -299,6 +299,14 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Ldnull);
         ctorIL.Emit(OpCodes.Stfld, cachedNameField);
+        // The Function-family constructors are exposed as CLR Type tokens. A
+        // reflective `new Function()` has no emitted method body to wrap, so
+        // NewOnType supplies a null MethodInfo. Keep that callable shell valid
+        // for object operations (seal/freeze/prototype inspection); all of the
+        // metadata caches below require a real method.
+        var noMethodLabel = ctorIL.DefineLabel();
+        ctorIL.Emit(OpCodes.Ldarg_2);
+        ctorIL.Emit(OpCodes.Brfalse, noMethodLabel);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
         EmitComputeExpectsThis(ctorIL, expectsThisField, runtime, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
@@ -310,6 +318,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorIL, needsArgConversionField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)  [pseudocode]
         EmitLookupOrCreateInvoker(ctorIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
+        ctorIL.MarkLabel(noMethodLabel);
         ctorIL.Emit(OpCodes.Ret);
 
         // Alternative constructor with cached name/length: public $TSFunction(object target, MethodInfo method, string name, int length)
@@ -341,6 +350,9 @@ public partial class RuntimeEmitter
         ctorCacheIL.Emit(OpCodes.Ldarg_0);
         ctorCacheIL.Emit(OpCodes.Ldarg, 4);  // 4th argument (0-indexed: 0=this, 1=target, 2=method, 3=name, 4=length)
         ctorCacheIL.Emit(OpCodes.Stfld, cachedLengthField);
+        var noCachedMethodLabel = ctorCacheIL.DefineLabel();
+        ctorCacheIL.Emit(OpCodes.Ldarg_2);
+        ctorCacheIL.Emit(OpCodes.Brfalse, noCachedMethodLabel);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
         EmitComputeExpectsThis(ctorCacheIL, expectsThisField, runtime, methodArgIndex: 2);
         EmitComputeCapturesArguments(ctorCacheIL, capturesArgumentsField, runtime, methodArgIndex: 2);
@@ -349,6 +361,7 @@ public partial class RuntimeEmitter
         EmitComputeNeedsArgConversion(ctorCacheIL, needsArgConversionField, methodArgIndex: 2);
         // this._invoker = LookupOrAdd(_invokerCache, method)
         EmitLookupOrCreateInvoker(ctorCacheIL, invokerField, invokerCacheField, invokerCacheType, methodArgIndex: 2);
+        ctorCacheIL.MarkLabel(noCachedMethodLabel);
         ctorCacheIL.Emit(OpCodes.Ret);
 
         // Static factory: public static $TSFunction GetOrCreate(MethodInfo method, string name, int length).
