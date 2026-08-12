@@ -372,6 +372,11 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         return true;
     }
 
+    // Keep typeof's built-in-method shortcut from classifying Object's
+    // non-callable constructor metadata as functions.
+    public bool HasStaticProperty(string memberName) => memberName is
+        "prototype" or "length" or "name";
+
     /// <summary>
     /// Emits a TypeError throw if the value on top of stack is null or $Undefined.Instance.
     /// Mirrors ECMA-262 ToObject step 1. Stack is preserved (value remains on top).

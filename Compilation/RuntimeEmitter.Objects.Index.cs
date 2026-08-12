@@ -462,7 +462,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+        // GetIndex is ordinary [[Get]] after ToPropertyKey.  Re-enter the
+        // shared GetProperty pipeline so primitive receivers walk their
+        // Boolean/Number prototypes and arbitrary host/class receivers still
+        // reach GetFieldsProperty through GetProperty's final fallback.
+        // The old direct GetFieldsProperty call exposed CLR methods instead
+        // (false["toString"] returned "False", and numeric prototype methods
+        // received an unbound/wrong receiver).
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ret);
 
         // $Object indexed get: route through $Runtime.GetProperty(obj, Stringify(index)).
@@ -785,14 +792,16 @@ public partial class RuntimeEmitter
         var idxFromDoubleLabel = il.DefineLabel();
         var idxFromStringLabel = il.DefineLabel();
         var idxParseDoneLabel = il.DefineLabel();
+        var strNamedPropertyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brtrue, idxFromDoubleLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, idxFromStringLabel);
-        // Other type → out of bounds (return undefined)
-        il.Emit(OpCodes.Br, strOobLabel);
+        // Other property keys are ordinary named properties after
+        // ToPropertyKey, not character-index misses.
+        il.Emit(OpCodes.Br, strNamedPropertyLabel);
 
         il.MarkLabel(idxFromDoubleLabel);
         il.Emit(OpCodes.Ldarg_1);
@@ -820,8 +829,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloca, intIdxLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-        // If parse failed, return undefined.
-        il.Emit(OpCodes.Brfalse, strOobLabel);
+        // A non-canonical/non-integer string is a named property (for example
+        // "charAt"), so let String.prototype participate in the lookup.
+        il.Emit(OpCodes.Brfalse, strNamedPropertyLabel);
 
         il.MarkLabel(idxParseDoneLabel);
         // Bounds check: if idx < 0 || idx >= length, return undefined (JS semantics)
@@ -839,6 +849,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, charLocal);
         il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
         il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strNamedPropertyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+
         il.MarkLabel(strOobLabel);
         // JS: str[n] for out-of-bounds n returns undefined (not null). Returning null would
         // make `case undefined:` switches fall through to default, breaking loops that

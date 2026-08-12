@@ -135,6 +135,13 @@ public partial class ILEmitter
         var objLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, objLocal);
 
+        // This dispatcher also owns the any/unknown `toString` and `valueOf`
+        // spellings. Enforce the member-call RequireObjectCoercible step here
+        // before either lookup or argument evaluation; otherwise
+        // `undefined.toString()` falls through GetProperty and returns
+        // undefined instead of throwing TypeError.
+        EmitThrowIfReceiverUndefined(objLocal, methodName);
+
         var builder = _ctx.ILBuilder;
         var isDoubleLabel = builder.DefineLabel("number_method_double");
         var fallbackLabel = builder.DefineLabel("number_method_fallback");

@@ -1320,6 +1320,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "prototype");
             il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, notProtoNameLabel);
+            // typeof(object) is the value-form representation of the Object
+            // constructor.  Its prototype is the real Object.prototype
+            // singleton, not a reflected CLR member.
+            var notObjectLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.Object);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notObjectLabel);
+            il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notObjectLabel);
             // typeof Boolean
             var notBoolLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);

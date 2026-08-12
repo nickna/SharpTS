@@ -15,6 +15,19 @@ public sealed class Issue1279ParityTests
 
     public Issue1279ParityTests(ITestOutputHelper output) => _output = output;
 
+    [Theory]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T1.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T2.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T3.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A3_T4.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A4_T1.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A4_T2.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A4_T7.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A4_T8.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A4_T9.js")]
+    public void Computed_and_global_property_access_matches_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     public static TheoryData<string> ObjectPropertyKeyCases => new()
     {
         "built-ins/Object/defineProperty/15.2.3.6-2-39.js",

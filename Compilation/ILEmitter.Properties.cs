@@ -742,6 +742,24 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        // A literal string key on a built-in constructor/namespace is the
+        // computed-property spelling of the same ordinary property access:
+        // Number["MAX_VALUE"] === Number.MAX_VALUE, Math["PI"] === Math.PI,
+        // Date["prototype"] === Date.prototype, and so on.  The dot form is
+        // handled by the static-emitter registry near the top of EmitGet;
+        // route the bracket form through that same source of truth instead of
+        // evaluating the bare built-in token and hoping the generic runtime
+        // Type/namespace dispatch has duplicated every static property.
+        if (!gi.Optional
+            && gi.Object is Expr.Variable staticIndexVar
+            && gi.Index is Expr.Literal { Value: string staticIndexName }
+            && _ctx.TypeEmitterRegistry?.GetStaticStrategy(staticIndexVar.Name.Lexeme) is { } staticIndexStrategy
+            && staticIndexStrategy.TryEmitStaticPropertyGet(this, staticIndexName))
+        {
+            SetStackUnknown();
+            return;
+        }
+
         // A statically known external CLR instance can expose a real indexer. Emit its getter
         // directly so compiled output remains standalone and matches interpreter reflection.
         if (!gi.Optional &&

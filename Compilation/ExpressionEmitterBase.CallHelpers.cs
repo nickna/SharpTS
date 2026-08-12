@@ -1354,6 +1354,27 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
             calleeLocal = _helpers.SpillStoreObject();
         }
+        else if (c.Callee is Expr.GetIndex methodIndex && !HasOptionalLink(methodIndex))
+        {
+            // Computed member calls have the same Reference receiver semantics as
+            // dot-member calls: `obj[key]()` invokes the resolved function with
+            // `obj` as this.  The old generic value-call path evaluated GetIndex
+            // correctly but then passed a null receiver to InvokeMethodValue,
+            // breaking every prototype method reached through brackets (for
+            // example false["toString"]() and "x"["charAt"]()).
+            EmitExpression(methodIndex.Object);
+            EnsureBoxed();
+            receiverLocal = _helpers.SpillStoreObject();
+            EmitThrowIfReceiverUndefined(receiverLocal, "[]");
+
+            EmitExpression(methodIndex.Index);
+            EnsureBoxed();
+            var indexLocal = _helpers.SpillStoreObject();
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+            calleeLocal = _helpers.SpillStoreObject();
+        }
         else
         {
             // Store callee in temp (await-safe)

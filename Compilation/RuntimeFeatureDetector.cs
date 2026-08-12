@@ -717,6 +717,13 @@ public sealed class RuntimeFeatureDetector
                 // names regardless of receiver type. False positives just over-emit.
                 switch (g.Name.Lexeme)
                 {
+                    // A constructor reached through the global object (`this.Date`
+                    // or `globalThis.Date`) still requires the Date runtime even
+                    // though no bare Date identifier appears in the syntax.
+                    case "Date":
+                        _set.UsesDate = true;
+                        break;
+
                     case "split":
                     case "replace":
                     case "replaceAll":
@@ -757,6 +764,13 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                if (gi.Index is Expr.Literal { Value: string computedGlobalName })
+                {
+                    // Computed global-object constructor access, e.g.
+                    // `this["Date"]`, is semantically the same feature trigger
+                    // as the corresponding named member access.
+                    HandleIdentifier(computedGlobalName);
+                }
                 if (gi.Object is Expr.Variable indexedDescriptorOwner
                     && indexedDescriptorOwner.Name.Lexeme is "Object" or "Reflect")
                 {
