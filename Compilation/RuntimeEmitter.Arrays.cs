@@ -1363,6 +1363,25 @@ public partial class RuntimeEmitter
             il.MarkLabel(doneLabel);
         }
 
+        // Load args[0], or the JS undefined sentinel when omitted. Optional
+        // callable arguments such as sort's compareFn must distinguish an
+        // omitted argument from an explicit null value.
+        void EmitArgZeroOrUndefined()
+        {
+            var noArgsLabel = il.DefineLabel();
+            var doneLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Brfalse, noArgsLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Br, doneLabel);
+            il.MarkLabel(noArgsLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.MarkLabel(doneLabel);
+        }
+
         // Case: runtime.Method(_list) — no trailing args.
         void EmitNoArgCase(string methodName, MethodBuilder runtimeMethod)
         {
@@ -1398,6 +1417,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
             EmitArgZeroOrNull();
+            il.Emit(OpCodes.Call, runtimeMethod);
+            EmitReturnBoxing(runtimeMethod);
+
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(skipLabel);
+        }
+
+        void EmitOptionalCallableCase(string methodName, MethodBuilder runtimeMethod)
+        {
+            var skipLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, methodNameField);
+            il.Emit(OpCodes.Ldstr, methodName);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, skipLabel);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, listField);
+            EmitArgZeroOrUndefined();
             il.Emit(OpCodes.Call, runtimeMethod);
             EmitReturnBoxing(runtimeMethod);
 
@@ -1668,8 +1706,8 @@ public partial class RuntimeEmitter
         EmitCallbackCase("findLastIndex", runtime.ArrayFindLastIndex);
         EmitCallbackCase("some", runtime.ArraySome);
         EmitCallbackCase("every", runtime.ArrayEvery);
-        EmitSingleArgCase("sort", runtime.ArraySort);
-        EmitSingleArgCase("toSorted", runtime.ArrayToSorted);
+        EmitOptionalCallableCase("sort", runtime.ArraySort);
+        EmitOptionalCallableCase("toSorted", runtime.ArrayToSorted);
         EmitSingleArgCase("flat", runtime.ArrayFlat);
         EmitCallbackCase("flatMap", runtime.ArrayFlatMap);
         EmitSingleArgCase("at", runtime.ArrayAt);

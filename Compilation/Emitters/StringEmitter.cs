@@ -558,11 +558,10 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         {
             emitter.EmitExpression(arguments[0]);
             emitter.EmitBoxIfNeeded(arguments[0]);
-            il.Emit(OpCodes.Call, ctx.Runtime!.ToNumber);
         }
         else
         {
-            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         il.Emit(OpCodes.Call, ctx.Runtime!.StringCodePointAt);
         // Result is already boxed (returns object: double or null)

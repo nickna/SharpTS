@@ -903,7 +903,7 @@ test/built-ins/Array/prototype/find/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/find/predicate-call-this-non-strict.js Pass
 test/built-ins/Array/prototype/find/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/find/predicate-called-for-each-array-property.js Pass
-test/built-ins/Array/prototype/find/predicate-is-not-callable-throws.js Fail
+test/built-ins/Array/prototype/find/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/find/predicate-not-called-on-empty-array.js Pass
 test/built-ins/Array/prototype/find/prop-desc.js Pass
 test/built-ins/Array/prototype/find/resizable-buffer-grow-mid-iteration.js RuntimeError
@@ -926,7 +926,7 @@ test/built-ins/Array/prototype/findIndex/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-call-this-non-strict.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-called-for-each-array-property.js Pass
-test/built-ins/Array/prototype/findIndex/predicate-is-not-callable-throws.js Fail
+test/built-ins/Array/prototype/findIndex/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/findIndex/predicate-not-called-on-empty-array.js Pass
 test/built-ins/Array/prototype/findIndex/prop-desc.js Pass
 test/built-ins/Array/prototype/findIndex/resizable-buffer-grow-mid-iteration.js RuntimeError
@@ -950,7 +950,7 @@ test/built-ins/Array/prototype/findLast/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/findLast/predicate-call-this-non-strict.js Pass
 test/built-ins/Array/prototype/findLast/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/findLast/predicate-called-for-each-array-property.js Pass
-test/built-ins/Array/prototype/findLast/predicate-is-not-callable-throws.js Fail
+test/built-ins/Array/prototype/findLast/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/findLast/predicate-not-called-on-empty-array.js Pass
 test/built-ins/Array/prototype/findLast/prop-desc.js Pass
 test/built-ins/Array/prototype/findLast/resizable-buffer-grow-mid-iteration.js RuntimeError
@@ -974,7 +974,7 @@ test/built-ins/Array/prototype/findLastIndex/predicate-call-parameters.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-call-this-non-strict.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-call-this-strict.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-called-for-each-array-property.js Pass
-test/built-ins/Array/prototype/findLastIndex/predicate-is-not-callable-throws.js Fail
+test/built-ins/Array/prototype/findLastIndex/predicate-is-not-callable-throws.js Pass
 test/built-ins/Array/prototype/findLastIndex/predicate-not-called-on-empty-array.js Pass
 test/built-ins/Array/prototype/findLastIndex/prop-desc.js Pass
 test/built-ins/Array/prototype/findLastIndex/resizable-buffer-grow-mid-iteration.js RuntimeError
@@ -1016,7 +1016,7 @@ test/built-ins/Array/prototype/flatMap/depth-always-one.js Pass
 test/built-ins/Array/prototype/flatMap/length.js Pass
 test/built-ins/Array/prototype/flatMap/mapperfunction-throws.js Pass
 test/built-ins/Array/prototype/flatMap/name.js Pass
-test/built-ins/Array/prototype/flatMap/non-callable-argument-throws.js Fail
+test/built-ins/Array/prototype/flatMap/non-callable-argument-throws.js Pass
 test/built-ins/Array/prototype/flatMap/not-a-constructor.js Pass
 test/built-ins/Array/prototype/flatMap/prop-desc.js Pass
 test/built-ins/Array/prototype/flatMap/proxy-access-count.js RuntimeError
@@ -2822,7 +2822,7 @@ test/built-ins/Array/prototype/sort/bug_596_1.js Pass
 test/built-ins/Array/prototype/sort/bug_596_2.js Pass
 test/built-ins/Array/prototype/sort/call-with-primitive.js Fail
 test/built-ins/Array/prototype/sort/comparefn-grow.js RuntimeError
-test/built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js Fail
+test/built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js Pass
 test/built-ins/Array/prototype/sort/comparefn-resizable-buffer.js RuntimeError
 test/built-ins/Array/prototype/sort/comparefn-shrink.js RuntimeError
 test/built-ins/Array/prototype/sort/length.js Pass
@@ -7777,7 +7777,7 @@ test/built-ins/Promise/exception-after-resolve-in-executor.js RuntimeError
 test/built-ins/Promise/exception-after-resolve-in-thenable-job.js RuntimeError
 test/built-ins/Promise/exec-args.js Fail
 test/built-ins/Promise/executor-call-context-sloppy.js Pass
-test/built-ins/Promise/executor-call-context-strict.js Fail
+test/built-ins/Promise/executor-call-context-strict.js Pass
 test/built-ins/Promise/executor-function-extensible.js Pass
 test/built-ins/Promise/executor-function-length.js Fail
 test/built-ins/Promise/executor-function-name.js Fail
@@ -10193,7 +10193,7 @@ test/built-ins/String/prototype/codePointAt/return-abrupt-from-object-pos-to-int
 test/built-ins/String/prototype/codePointAt/return-abrupt-from-symbol-pos-to-integer.js Pass
 test/built-ins/String/prototype/codePointAt/return-abrupt-from-this-as-symbol.js Pass
 test/built-ins/String/prototype/codePointAt/return-abrupt-from-this.js Pass
-test/built-ins/String/prototype/codePointAt/return-code-unit-coerced-position.js Fail
+test/built-ins/String/prototype/codePointAt/return-code-unit-coerced-position.js Pass
 test/built-ins/String/prototype/codePointAt/return-first-code-unit.js Pass
 test/built-ins/String/prototype/codePointAt/return-single-code-unit.js Pass
 test/built-ins/String/prototype/codePointAt/return-utf16-decode.js Pass
@@ -10270,7 +10270,7 @@ test/built-ins/String/prototype/includes/return-abrupt-from-searchstring-regexp-
 test/built-ins/String/prototype/includes/return-abrupt-from-searchstring.js Pass
 test/built-ins/String/prototype/includes/return-abrupt-from-this-as-symbol.js Pass
 test/built-ins/String/prototype/includes/return-abrupt-from-this.js Pass
-test/built-ins/String/prototype/includes/return-false-with-out-of-bounds-position.js Fail
+test/built-ins/String/prototype/includes/return-false-with-out-of-bounds-position.js Pass
 test/built-ins/String/prototype/includes/return-true-if-searchstring-is-empty.js Pass
 test/built-ins/String/prototype/includes/searchstring-found-with-position.js Pass
 test/built-ins/String/prototype/includes/searchstring-found-without-position.js Pass
@@ -10315,10 +10315,10 @@ test/built-ins/String/prototype/indexOf/S15.5.4.7_A8.js Pass
 test/built-ins/String/prototype/indexOf/S15.5.4.7_A9.js Pass
 test/built-ins/String/prototype/indexOf/name.js Pass
 test/built-ins/String/prototype/indexOf/not-a-constructor.js Pass
-test/built-ins/String/prototype/indexOf/position-tointeger-bigint.js Fail
+test/built-ins/String/prototype/indexOf/position-tointeger-bigint.js Pass
 test/built-ins/String/prototype/indexOf/position-tointeger-errors.js Fail
 test/built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js Fail
-test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js Fail
+test/built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js Pass
 test/built-ins/String/prototype/indexOf/position-tointeger.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-bigint.js Pass
 test/built-ins/String/prototype/indexOf/searchstring-tostring-errors.js Pass

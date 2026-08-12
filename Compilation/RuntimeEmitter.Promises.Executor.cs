@@ -861,18 +861,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Stloc, argsLocal);
 
-        // try { InvokeValue(executor, args); }
+        // try { InvokeMethodValue(undefined, executor, args); }
         // catch (Exception ex) { tcs.TrySetException(ex); }
         var exLocal = il.DeclareLocal(_types.Exception);
         var endTryLabel = il.DefineLabel();
 
         il.BeginExceptionBlock();
 
-        // Call the executor: InvokeValue(executor, args)
-        // This invokes the executor function with (resolve, reject) arguments
+        // Promise executors are called with undefined as their thisArgument.
+        // Preserve the sentinel so strict functions observe undefined while
+        // sloppy functions still coerce it to globalThis in their body.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_0);  // executor
         il.Emit(OpCodes.Ldloc, argsLocal);  // args
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Pop);  // Discard executor return value
 
         il.Emit(OpCodes.Leave, endTryLabel);

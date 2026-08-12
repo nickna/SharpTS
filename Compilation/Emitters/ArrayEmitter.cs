@@ -310,12 +310,18 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "sort":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                if (arguments.Count == 0)
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                else
+                    EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArraySort);
                 break;
 
             case "toSorted":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                if (arguments.Count == 0)
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                else
+                    EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayToSorted);
                 break;
 

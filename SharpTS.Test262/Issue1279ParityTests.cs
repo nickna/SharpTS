@@ -5490,6 +5490,33 @@ public sealed class Issue1279ParityTests
     public void Array_reduce_snapshots_length_and_observes_dynamic_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/find/predicate-is-not-callable-throws.js")]
+    [InlineData("built-ins/Array/prototype/findIndex/predicate-is-not-callable-throws.js")]
+    [InlineData("built-ins/Array/prototype/findLast/predicate-is-not-callable-throws.js")]
+    [InlineData("built-ins/Array/prototype/findLastIndex/predicate-is-not-callable-throws.js")]
+    [InlineData("built-ins/Array/prototype/flatMap/non-callable-argument-throws.js")]
+    public void Array_predicate_methods_reject_non_callable_callbacks(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Array/prototype/sort/comparefn-nonfunction-call-throws.js")]
+    public void Array_sort_rejects_non_callable_comparators(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/executor-call-context-strict.js")]
+    public void Promise_jobs_invoke_guest_functions_with_undefined_this(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/String/prototype/indexOf/position-tointeger-bigint.js")]
+    [InlineData("built-ins/String/prototype/indexOf/position-tointeger-wrapped-values.js")]
+    [InlineData("built-ins/String/prototype/includes/return-false-with-out-of-bounds-position.js")]
+    [InlineData("built-ins/String/prototype/codePointAt/return-code-unit-coerced-position.js")]
+    public void String_positions_use_ToIntegerOrInfinity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
 
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)

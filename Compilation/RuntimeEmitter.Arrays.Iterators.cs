@@ -105,7 +105,12 @@ public partial class RuntimeEmitter
     /// throw NullReferenceException instead of TypeError. Caller passes the
     /// argument-index of the callback (most are arg1).
     /// </summary>
-    private void EmitThrowIfCallbackNotCallable(ILGenerator il, EmittedRuntime runtime, int argIndex, string methodName)
+    private void EmitThrowIfCallbackNotCallable(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        int argIndex,
+        string methodName,
+        bool allowUndefined = false)
     {
         var okLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
@@ -121,7 +126,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(loadOp);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, throwLabel);
+        il.Emit(OpCodes.Brtrue, allowUndefined ? okLabel : throwLabel);
 
         // Positive callable check: $TSFunction / $BoundTSFunction / Function*
         // wrappers pass; anything else (bool, double, string, dict, list, …)
@@ -1415,6 +1420,7 @@ public partial class RuntimeEmitter
         runtime.ArrayFind = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.find");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
         EmitInitCallbackArgs(il, runtime, out var argsLocal);
@@ -1496,6 +1502,7 @@ public partial class RuntimeEmitter
         runtime.ArrayFindIndex = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.findIndex");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
         EmitInitCallbackArgs(il, runtime, out var argsLocal);
@@ -1712,6 +1719,7 @@ public partial class RuntimeEmitter
         runtime.ArrayFindLast = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.findLast");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
         EmitInitCallbackArgs(il, runtime, out var argsLocal);
@@ -1768,6 +1776,7 @@ public partial class RuntimeEmitter
         runtime.ArrayFindLastIndex = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.findLastIndex");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
         EmitInitCallbackArgs(il, runtime, out var argsLocal);

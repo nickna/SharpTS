@@ -463,7 +463,7 @@ public partial class RuntimeEmitter
         // Signature: (string self, object searchString, object position) → bool.
         // The 3rd param is required so the call site can always push the
         // position (or null/undefined if not supplied). undefined → 0
-        // (or len for endsWith); Symbol throws via JsToInt32.
+        // (or len for endsWith); Symbol throws via ToIntegerOrInfinity.
         var method = typeBuilder.DefineMethod(
             methodName,
             MethodAttributes.Public | MethodAttributes.Static,
@@ -494,7 +494,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, searchStrLocal);
 
-        // Coerce position via JsToInt32 (throws TypeError on Symbol). null /
+        // Coerce position via ToIntegerOrInfinity (throws TypeError on Symbol
+        // and preserves ±Infinity for the clamps below). null /
         // undefined → 0 (startsWith/includes) or len (endsWith — caller treats
         // undef as "use length"). The helper materializes 0 here; endsWith
         // semantics are handled inside the per-method branch below.
@@ -507,7 +508,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, posUndefLabel);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, posLocal);
         il.Emit(OpCodes.Br, posDoneLabel);
         il.MarkLabel(posUndefLabel);
@@ -1469,12 +1471,12 @@ public partial class RuntimeEmitter
 
     private void EmitStringCodePointAt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // StringCodePointAt(string str, double index) -> object (double or null)
+        // StringCodePointAt(string str, object index) -> object (double or undefined)
         var method = typeBuilder.DefineMethod(
             "StringCodePointAt",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.String, _types.Double]
+            [_types.String, _types.Object]
         );
         runtime.StringCodePointAt = method;
 
@@ -1484,9 +1486,11 @@ public partial class RuntimeEmitter
         var noSurrogate = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
-        // index = (int)indexArg
+        // index = ToIntegerOrInfinity(indexArg). Keeping the argument boxed
+        // preserves object/array ToPrimitive semantics (e.g. [1] -> "1" -> 1).
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
         il.Emit(OpCodes.Stloc, indexLocal);
 
         // if (index < 0 || index >= str.Length) return null

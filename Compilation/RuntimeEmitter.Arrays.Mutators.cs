@@ -1432,6 +1432,7 @@ public partial class RuntimeEmitter
         runtime.ArrayFlatMap = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(il, runtime, 1, "Array.prototype.flatMap");
 
         EmitHoistedLazyCheck(il, runtime, out var isLazyLocal, out _);
 
@@ -1591,6 +1592,8 @@ public partial class RuntimeEmitter
         runtime.ArraySort = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(
+            il, runtime, 1, "Array.prototype.sort comparator", allowUndefined: true);
         var frozenLabel = il.DefineLabel();
 
         // Check frozen ONLY (sealed/non-extensible allows reordering, no length change)
@@ -1618,6 +1621,8 @@ public partial class RuntimeEmitter
         runtime.ArrayToSorted = method;
 
         var il = method.GetILGenerator();
+        EmitThrowIfCallbackNotCallable(
+            il, runtime, 1, "Array.prototype.toSorted comparator", allowUndefined: true);
 
         // Snapshot the source length before any indexed getter runs, then
         // create the dense copy through observable property reads. A getter
@@ -2341,6 +2346,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, notObjectLabel);
 
         il.MarkLabel(isObjectLikeLabel);
+
+        // The shared ToNumber helper owns the complete ToPrimitive(number)
+        // protocol, including Symbol.toPrimitive descriptors and boxed
+        // primitive unwrapping. Route those shapes directly to the shared
+        // coercion tail instead of partially duplicating the protocol below.
+        var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        var symbolMethodLocal = il.DeclareLocal(_types.Object);
+        var noSymbolPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, coercedLocal);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, symbolDictLocal);
+        il.Emit(OpCodes.Ldloc, symbolDictLocal);
+        il.Emit(OpCodes.Brfalse, noSymbolPrimitive);
+        il.Emit(OpCodes.Ldloc, symbolDictLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolToPrimitive);
+        il.Emit(OpCodes.Ldloca, symbolMethodLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+        il.Emit(OpCodes.Brtrue, notObjectLabel);
+        il.MarkLabel(noSymbolPrimitive);
+
+        foreach (var primitiveTag in new[] { "Boolean", "Number", "String", "Symbol", "BigInt" })
+        {
+            il.Emit(OpCodes.Ldloc, coercedLocal);
+            il.Emit(OpCodes.Ldstr, primitiveTag);
+            il.Emit(OpCodes.Call, runtime.IsBoxedPrimitiveOfTypeMethod);
+            il.Emit(OpCodes.Brtrue, notObjectLabel);
+        }
+
         var primEmptyArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Newarr, _types.Object);
