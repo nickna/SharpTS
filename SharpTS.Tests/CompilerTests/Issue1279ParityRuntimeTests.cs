@@ -130,6 +130,18 @@ public sealed class Issue1279ParityRuntimeTests
     }
 
     [Fact]
+    public void Error_and_function_constructors_report_length_one()
+    {
+        const string source = """
+            var error: any = Error("boom");
+            console.log(error.constructor.length);
+            console.log(Error.constructor.length);
+            """;
+
+        Assert.Equal("1\n1\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void String_positions_apply_to_number_before_integer_conversion()
     {
         const string source = """

@@ -1510,6 +1510,35 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noTypePdsLabel);
 
+            // Function.prototype.length for built-in constructor Type tokens.
+            // CLR constructor overload counts are not JS arities, so identify
+            // emitted intrinsics explicitly.  Error.constructor is Function,
+            // hence both $Error and $TSFunction report length 1.
+            var notTypeLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, notTypeLengthLabel);
+            var notErrorLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSErrorType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notErrorLengthLabel);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notErrorLengthLabel);
+            var notFunctionLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notFunctionLengthLabel);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notFunctionLengthLabel);
+            il.MarkLabel(notTypeLengthLabel);
+
             // hasOwnProperty — return a $TSFunction wrapping HasOwnPropertyHelper,
             // bound to this Type as the receiver. Test262 patterns like
             // `Number.hasOwnProperty("prototype")` must dispatch through this.

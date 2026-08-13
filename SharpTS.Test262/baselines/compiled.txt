@@ -3151,7 +3151,7 @@ test/built-ins/Error/isError/non-error-objects.js Pass
 test/built-ins/Error/isError/primitives.js Pass
 test/built-ins/Error/isError/prop-desc.js Pass
 test/built-ins/Error/isError/symbols.js Pass
-test/built-ins/Error/length.js Fail
+test/built-ins/Error/length.js Pass
 test/built-ins/Error/message_property.js Pass
 test/built-ins/Error/name.js Pass
 test/built-ins/Error/prop-desc.js Pass

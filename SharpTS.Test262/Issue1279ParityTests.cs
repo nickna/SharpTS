@@ -4567,9 +4567,7 @@ public sealed class Issue1279ParityTests
 
     [Fact]
     public void Error_and_Function_constructors_report_standard_length()
-        => AssertPass(
-            "built-ins/Error/length.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Error/length.js");
 
     [Fact]
     public void Error_omits_message_when_no_message_is_supplied()
