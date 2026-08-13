@@ -376,6 +376,25 @@ public partial class RuntimeEmitter
 
         var causeLocal = il.DeclareLocal(_types.Object);
 
+        // InstallErrorCause performs HasProperty before Get.  A Proxy's `has`
+        // trap is observable and may complete abruptly, so dispatch it before
+        // the ordinary dictionary/$Object storage paths.
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyHasResult(
+            il,
+            () => il.Emit(OpCodes.Ldloc, optionsLocal),
+            () => il.Emit(OpCodes.Ldstr, "cause"),
+            notProxyLabel,
+            runtime);
+        il.Emit(OpCodes.Brfalse, skipLabel);
+        il.Emit(OpCodes.Ldloc, optionsLocal);
+        il.Emit(OpCodes.Ldstr, "cause");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, causeLocal);
+        il.Emit(OpCodes.Br, setCauseLabel);
+
+        il.MarkLabel(notProxyLabel);
+
         // Try Dictionary<string, object?> first (compiled object literals)
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);

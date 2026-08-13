@@ -201,6 +201,16 @@ public partial class RuntimeEmitter
     /// </summary>
     internal void EmitProxyHasCheck(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, EmittedRuntime runtime)
     {
+        EmitProxyHasResult(il, emitLoadObj, emitLoadKey, notProxyLabel, runtime);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the Proxy [[HasProperty]] trap and leaves its boolean result on
+    /// the stack. Non-Proxy receivers branch to <paramref name="notProxyLabel"/>.
+    /// </summary>
+    private void EmitProxyHasResult(ILGenerator il, Action emitLoadObj, Action emitLoadKey, Label notProxyLabel, EmittedRuntime runtime)
+    {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
@@ -228,7 +238,6 @@ public partial class RuntimeEmitter
         });
         // TrapHas returns object — apply truthy coercion (JS `in` coerces to boolean)
         il.Emit(OpCodes.Call, runtime.IsTruthy);
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

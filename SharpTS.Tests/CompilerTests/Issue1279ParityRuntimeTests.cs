@@ -113,6 +113,23 @@ public sealed class Issue1279ParityRuntimeTests
     }
 
     [Fact]
+    public void Error_cause_observes_proxy_has_before_get()
+    {
+        const string source = """
+            var hasOptions: any = new Proxy({}, {
+              has: function() { throw new Error("has trap"); }
+            });
+            var getOptions: any = new Proxy({ cause: 1 }, {
+              get: function() { throw new Error("get trap"); }
+            });
+            try { new Error("boom", hasOptions); } catch (error) { console.log(error.message); }
+            try { new Error("boom", getOptions); } catch (error) { console.log(error.message); }
+            """;
+
+        Assert.Equal("has trap\nget trap\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void String_positions_apply_to_number_before_integer_conversion()
     {
         const string source = """

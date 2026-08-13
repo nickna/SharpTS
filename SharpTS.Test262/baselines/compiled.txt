@@ -3131,7 +3131,7 @@ test/built-ins/Boolean/prototype/valueOf/length.js Pass
 test/built-ins/Boolean/prototype/valueOf/name.js Pass
 test/built-ins/Boolean/prototype/valueOf/not-a-constructor.js Pass
 test/built-ins/Boolean/symbol-coercion.js Pass
-test/built-ins/Error/cause_abrupt.js Fail
+test/built-ins/Error/cause_abrupt.js Pass
 test/built-ins/Error/cause_property.js Pass
 test/built-ins/Error/constructor.js Pass
 test/built-ins/Error/error-message-tostring-symbol.js Pass

@@ -4590,9 +4590,7 @@ public sealed class Issue1279ParityTests
 
     [Fact]
     public void Error_cause_propagates_abrupt_has_and_get_operations()
-        => AssertPass(
-            "built-ins/Error/cause_abrupt.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Error/cause_abrupt.js");
 
     [Theory]
     [InlineData("built-ins/String/prototype/Symbol.iterator/length.js")]
