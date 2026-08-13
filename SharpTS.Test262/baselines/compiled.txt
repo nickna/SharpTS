@@ -3164,7 +3164,7 @@ test/built-ins/Error/prototype/S15.11.4_A1.js Pass
 test/built-ins/Error/prototype/S15.11.4_A2.js Pass
 test/built-ins/Error/prototype/S15.11.4_A3.js Pass
 test/built-ins/Error/prototype/S15.11.4_A4.js Pass
-test/built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js Fail
+test/built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js Pass
 test/built-ins/Error/prototype/constructor/prop-desc.js Pass
 test/built-ins/Error/prototype/message/prop-desc.js Pass
 test/built-ins/Error/prototype/name/prop-desc.js Pass
@@ -3172,7 +3172,7 @@ test/built-ins/Error/prototype/no-error-data.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-10-1.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-6-1.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-6-2.js Pass
-test/built-ins/Error/prototype/toString/15.11.4.4-8-1.js Fail
+test/built-ins/Error/prototype/toString/15.11.4.4-8-1.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-8-2.js Pass
 test/built-ins/Error/prototype/toString/15.11.4.4-9-1.js Pass
 test/built-ins/Error/prototype/toString/S15.11.4.4_A2.js Pass
@@ -3187,8 +3187,8 @@ test/built-ins/Error/prototype/toString/tostring-message-throws-symbol.js Pass
 test/built-ins/Error/prototype/toString/tostring-message-throws-toprimitive.js Pass
 test/built-ins/Error/prototype/toString/undefined-props.js Pass
 test/built-ins/Error/the-initial-value-of-errorprototypemessage-is-the-empty-string.js Pass
-test/built-ins/Error/tostring-1.js Fail
-test/built-ins/Error/tostring-2.js Fail
+test/built-ins/Error/tostring-1.js Pass
+test/built-ins/Error/tostring-2.js Pass
 test/built-ins/JSON/15.12-0-1.js Pass
 test/built-ins/JSON/15.12-0-2.js Pass
 test/built-ins/JSON/15.12-0-3.js Pass

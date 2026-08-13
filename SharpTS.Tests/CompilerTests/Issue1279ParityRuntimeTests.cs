@@ -99,6 +99,20 @@ public sealed class Issue1279ParityRuntimeTests
     }
 
     [Fact]
+    public void Error_toString_dispatches_through_mutable_prototype()
+    {
+        const string source = """
+            var error: any = new Error("boom");
+            error.name = "";
+            console.log(error.toString());
+            Error.prototype.toString = Object.prototype.toString;
+            console.log(error.toString());
+            """;
+
+        Assert.Equal("boom\n[object Error]\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void String_positions_apply_to_number_before_integer_conversion()
     {
         const string source = """

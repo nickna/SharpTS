@@ -16,22 +16,39 @@ public sealed class ErrorEmitter : ITypeEmitterStrategy
     /// </summary>
     public bool TryEmitMethodCall(IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
     {
+        if (methodName != "toString")
+            return false;
+
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // Emit the Error object
+        // Error.prototype is mutable, so even a statically-known Error receiver
+        // must resolve toString dynamically.  The previous direct CLR ToString
+        // call bypassed assignments such as
+        // `Error.prototype.toString = Object.prototype.toString` and also skipped
+        // Error.prototype.toString's empty-name formatting rules.
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
+        var receiverLocal = emitter.SpillStackToObjectLocal();
 
-        switch (methodName)
-        {
-            case "toString":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ErrorToString);
-                return true;
+        // Property lookup precedes argument evaluation.  Spill both the receiver
+        // and resolved function through the emitter abstraction so they survive
+        // an await/yield in an otherwise-ignored toString argument.
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        var functionLocal = emitter.SpillStackToObjectLocal();
 
-            default:
-                return false;
-        }
+        emitter.EmitArgsArrayWithSpread(arguments);
+        var argumentsLocal = il.DeclareLocal(ctx.Types.ObjectArray);
+        il.Emit(OpCodes.Stloc, argumentsLocal);
+
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldloc, functionLocal);
+        il.Emit(OpCodes.Ldloc, argumentsLocal);
+        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        emitter.SetStackUnknown();
+        return true;
     }
 
     /// <summary>

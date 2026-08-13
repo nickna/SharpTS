@@ -32,7 +32,6 @@ public partial class RuntimeEmitter
         EmitErrorSetters(typeBuilder, runtime);
         EmitErrorGetCause(typeBuilder, runtime);
         EmitErrorSetCause(typeBuilder, runtime);
-        EmitErrorToString(typeBuilder, runtime);
         EmitAggregateErrorGetErrors(typeBuilder, runtime);
         // CreateError must come last - it references ErrorSetCause and other helpers
         EmitCreateError(typeBuilder, runtime);
@@ -610,35 +609,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSErrorCauseSetter);
 
         il.MarkLabel(endLabel);
-        il.Emit(OpCodes.Ret);
-    }
-
-    private void EmitErrorToString(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "ErrorToString",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.String,
-            [_types.Object]
-        );
-        runtime.ErrorToString = method;
-
-        var il = method.GetILGenerator();
-        var nullLabel = il.DefineLabel();
-
-        // Check if arg is $Error
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSErrorType);
-        il.Emit(OpCodes.Brfalse, nullLabel);
-
-        // Call ToString()
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(nullLabel);
-        il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ret);
     }
 

@@ -1275,6 +1275,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Error/prototype/toString/tostring-get-throws.js")]
     [InlineData("built-ins/Error/prototype/toString/tostring-message-throws-symbol.js")]
     [InlineData("built-ins/Error/prototype/toString/undefined-props.js")]
+    [InlineData("built-ins/Error/prototype/toString/15.11.4.4-8-1.js")]
     public void Error_toString_uses_strict_generic_object_semantics(string relativePath)
         => AssertPassInBothModes(relativePath);
 
@@ -4580,13 +4581,12 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Error/tostring-1.js")]
     [InlineData("built-ins/Error/tostring-2.js")]
     public void Error_instances_honor_prototype_toString_replacement(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
 
     [Fact]
     public void Error_prototype_constructor_builds_branded_instances()
-        => AssertPass(
-            "built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(
+            "built-ins/Error/prototype/constructor/S15.11.4.1_A1_T2.js");
 
     [Fact]
     public void Error_cause_propagates_abrupt_has_and_get_operations()

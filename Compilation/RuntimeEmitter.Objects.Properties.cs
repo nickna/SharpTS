@@ -396,7 +396,11 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notHasFieldsLabel);
 
-        // Check $Error - handle name, message, stack properties
+        // Check $Error - handle native own properties.  Any remaining name
+        // must continue directly on the JavaScript prototype chain: exposing
+        // CLR methods here (notably $Error.ToString) would shadow mutable
+        // Error.prototype properties.
+        var errorPrototypeLookupLabel = il.DefineLabel();
         var notErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSErrorType);
@@ -471,6 +475,25 @@ public partial class RuntimeEmitter
         il.MarkLabel(syscallNullLabel);
         il.Emit(OpCodes.Pop); // discard null from Dup
         il.MarkLabel(notErrorSyscallNameLabel);
+
+        // AggregateError has one additional native own property.  Keep it in
+        // the explicit Error dispatch so bypassing CLR reflection does not hide
+        // the rejection list from dynamically-typed/caught values.
+        var notAggregateErrorsNameLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "errors");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notAggregateErrorsNameLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSAggregateErrorType);
+        il.Emit(OpCodes.Brfalse, notAggregateErrorsNameLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSAggregateErrorType);
+        il.Emit(OpCodes.Callvirt, runtime.TSAggregateErrorErrorsGetter);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notAggregateErrorsNameLabel);
+
+        il.Emit(OpCodes.Br, errorPrototypeLookupLabel);
 
         il.MarkLabel(notErrorLabel);
 
@@ -661,6 +684,7 @@ public partial class RuntimeEmitter
         // return undefined immediately; arbitrary inherited properties on
         // RegExp.prototype, Error.prototype, Promise.prototype, and explicit
         // Object.setPrototypeOf targets were consequently invisible.
+        il.MarkLabel(errorPrototypeLookupLabel);
         var noPrototypeLabel = il.DefineLabel();
         var prototypeLocal = il.DeclareLocal(_types.Object);
         // Internal runtime probes historically use GetProperty(undefined, k)
