@@ -140,6 +140,8 @@ internal static class GlobalFunctionHandlers
             return RuntimeValue.Undefined;
 
         var argRV = await evaluateArg(arguments[0]);
+        for (int i = 1; i < arguments.Count; i++)
+            await evaluateArg(arguments[i]);
 
         // Per ECMA-262 §19.2.1: if the argument is not a string, eval returns it unchanged.
         if (!argRV.IsString)

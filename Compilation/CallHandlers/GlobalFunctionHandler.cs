@@ -76,15 +76,32 @@ public class GlobalFunctionHandler : ICallHandler
             return true;
         }
 
-        // eval always routes through EvalBridge in the SharpTS runtime — record the soft
-        // dependency so the build co-locates SharpTS.dll with the output.
-        ctx.Runtime?.RequireSharpTSRuntime("eval()");
-
-        // object arg = <arg0 boxed> (or null when called with no arguments)
+        // Evaluate every argument before performing eval. Only arg0 supplies source,
+        // but ordinary ArgumentListEvaluation still observes side effects from extras.
         var argLocal = il.DeclareLocal(ctx.Types.Object);
-        if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); }
-        else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
+        emitter.EmitExpression(call.Arguments[0]);
+        emitter.EmitBoxIfNeeded(call.Arguments[0]);
         il.Emit(System.Reflection.Emit.OpCodes.Stloc, argLocal);
+        for (int i = 1; i < call.Arguments.Count; i++)
+        {
+            emitter.EmitExpression(call.Arguments[i]);
+            il.Emit(System.Reflection.Emit.OpCodes.Pop);
+        }
+
+        // A literal expression-only source can be lowered into the current sync
+        // emitter and therefore has genuine direct-eval access to caller bindings.
+        // Dynamic source and declaration-bearing programs retain the interpreter
+        // bridge below because they require runtime parsing/hoisting machinery.
+        if (call.Arguments[0] is Expr.Literal { Value: string source }
+            && emitter is ILEmitter syncEmitter
+            && syncEmitter.TryEmitStaticDirectEval(source))
+        {
+            return true;
+        }
+
+        // Dynamic eval routes through EvalBridge in the SharpTS runtime — record the
+        // soft dependency so the build co-locates SharpTS.dll with the output.
+        ctx.Runtime?.RequireSharpTSRuntime("eval()");
 
         // Type t = Type.GetType("SharpTS.Execution.EvalBridge, SharpTS");
         il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "SharpTS.Execution.EvalBridge, SharpTS");

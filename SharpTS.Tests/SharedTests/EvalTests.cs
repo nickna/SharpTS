@@ -6,10 +6,9 @@ namespace SharpTS.Tests.SharedTests;
 /// <summary>
 /// Tests for the global <c>eval()</c> function (issue #107).
 /// <para>
-/// Interpreter mode performs <b>direct eval</b> (the evaluated source runs against the caller's
-/// scope chain). Compiled mode performs <b>indirect eval</b> via the SharpTS runtime
-/// (<c>EvalBridge</c>): global builtins resolve, but compiled local variables are not visible —
-/// hence the local-capture test is interpreter-only.
+/// Interpreter mode performs <b>direct eval</b>. Compiled mode lowers statically known,
+/// expression-only source into the caller's scope and uses the indirect <c>EvalBridge</c>
+/// fallback for dynamic or declaration-bearing source.
 /// </para>
 /// </summary>
 public class EvalTests
@@ -85,11 +84,10 @@ public class EvalTests
         Assert.Equal("ABC\n7\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
-    public void Eval_DirectEval_SeesCallerLocals(ExecutionMode mode)
+    [Theory, ModeData]
+    public void Eval_StaticDirectEval_SeesCallerLocals(ExecutionMode mode)
     {
-        // Direct-eval semantics: the evaluated source resolves against the caller's scope.
-        // Interpreter-only — compiled output has no live interpreter/scope for direct eval.
+        // A literal expression source is compiled into the caller's lexical scope.
         var source = """
             function outer(): number {
                 const secret: number = 7;
@@ -100,5 +98,35 @@ public class EvalTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("8\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Eval_EvaluatesExtraArgumentsButUsesOnlyFirstSource(ExecutionMode mode)
+    {
+        var source = """
+            let x: number = 0;
+            let observed: number = 0;
+            eval("x = 1", observed = 2);
+            console.log(x);
+            console.log(observed);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n2\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Eval_EvaluatesCallArgumentsBeforeCallabilityCheck(ExecutionMode mode)
+    {
+        var source = """
+            let called: boolean = false;
+            function mark(): void { called = true; }
+            const target = {};
+            try { eval("target.missing(mark())"); } catch {}
+            console.log(called);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
     }
 }

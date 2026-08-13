@@ -12,6 +12,45 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    /// <summary>
+    /// Lowers a statically known, expression-only eval program into the current
+    /// lexical environment. Returns false for declarations/control flow so those
+    /// sources continue through the runtime eval bridge.
+    /// </summary>
+    internal bool TryEmitStaticDirectEval(string source)
+    {
+        List<Stmt> statements;
+        try
+        {
+            statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (statements.Any(statement => statement is not Stmt.Expression))
+            return false;
+
+        if (statements.Count == 0)
+        {
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            SetStackUnknown();
+            return true;
+        }
+
+        for (int i = 0; i < statements.Count - 1; i++)
+        {
+            EmitExpression(((Stmt.Expression)statements[i]).Expr);
+            IL.Emit(OpCodes.Pop);
+        }
+
+        EmitExpression(((Stmt.Expression)statements[^1]).Expr);
+        EnsureBoxed();
+        SetStackUnknown();
+        return true;
+    }
+
     protected override void EmitCall(Expr.Call c)
     {
         // CommonJS require() lowering is handled by ExpressionEmitterBase.EmitCall

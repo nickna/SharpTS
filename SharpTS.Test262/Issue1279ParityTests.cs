@@ -4392,6 +4392,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("language/expressions/call/11.2.3-3_5.js")]
+    [InlineData("language/expressions/call/eval-first-arg.js")]
+    public void Static_direct_eval_observes_caller_bindings_and_argument_order(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("language/expressions/new/ctorExpr-isCtor-after-args-eval-fn-wrapup.js")]
     [InlineData("language/expressions/new/ctorExpr-isCtor-after-args-eval.js")]
     public void New_evaluates_arguments_before_constructor_validation(string relativePath)

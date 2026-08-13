@@ -38,10 +38,20 @@ public class RuntimeDependencySignalTests
     }
 
     [Fact]
-    public void Eval_RequiresRuntime()
+    public void DynamicEval_RequiresRuntime()
+    {
+        var reasons = ReasonsFor("""
+            const source: string = "1 + 2";
+            console.log(eval(source));
+            """);
+        Assert.Contains("eval()", reasons);
+    }
+
+    [Fact]
+    public void StaticExpressionEval_RequiresNoRuntime()
     {
         var reasons = ReasonsFor("""console.log(eval("1 + 2"));""");
-        Assert.Contains("eval()", reasons);
+        Assert.Empty(reasons);
     }
 
     [Fact]

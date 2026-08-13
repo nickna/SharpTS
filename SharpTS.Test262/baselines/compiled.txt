@@ -11215,7 +11215,7 @@ test/language/expressions/call/11.2.3-3_1.js Pass
 test/language/expressions/call/11.2.3-3_2.js Pass
 test/language/expressions/call/11.2.3-3_3.js Pass
 test/language/expressions/call/11.2.3-3_4.js Pass
-test/language/expressions/call/11.2.3-3_5.js Fail
+test/language/expressions/call/11.2.3-3_5.js Pass
 test/language/expressions/call/11.2.3-3_6.js Pass
 test/language/expressions/call/11.2.3-3_7.js Pass
 test/language/expressions/call/11.2.3-3_8.js Pass
@@ -11241,7 +11241,7 @@ test/language/expressions/call/S11.2.4_A1.4_T2.js Pass
 test/language/expressions/call/S11.2.4_A1.4_T3.js RuntimeError
 test/language/expressions/call/S11.2.4_A1.4_T4.js Pass
 test/language/expressions/call/eval-err-args.js Pass
-test/language/expressions/call/eval-first-arg.js RuntimeError
+test/language/expressions/call/eval-first-arg.js Pass
 test/language/expressions/call/eval-no-args.js Pass
 test/language/expressions/call/eval-realm-indirect.js RuntimeError
 test/language/expressions/call/eval-spread-empty-leading.js Fail
