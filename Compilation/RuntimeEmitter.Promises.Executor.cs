@@ -44,7 +44,46 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
 
+        EmitObservePromiseConstructorMethod(runtimeType, runtime);
         EmitWrapDerivedPromiseResultMethod(runtimeType, runtime);
+    }
+
+    /// <summary>
+    /// Emits ObservePromiseConstructor(object receiver) -> void. The own
+    /// constructor getter is part of SpeciesConstructor and must run before
+    /// PerformPromiseThen schedules a reaction. Keeping this separate from
+    /// result wrapping preserves that ordering even though the result Task does
+    /// not exist until after PromiseThen/PromiseCatch/PromiseFinally starts.
+    /// </summary>
+    private void EmitObservePromiseConstructorMethod(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "ObservePromiseConstructor",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object]);
+        runtime.ObservePromiseConstructorMethod = method;
+
+        var il = method.GetILGenerator();
+        var getterLocal = il.DeclareLocal(_types.Object);
+        var doneLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, doneLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "constructor");
+        il.Emit(OpCodes.Ldloca, getterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+        il.Emit(OpCodes.Brfalse, doneLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(doneLabel);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -242,8 +281,9 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits WrapDerivedPromiseResult(Task&lt;object?&gt; result, object receiver) -> object:
-    /// the then/catch/finally result construction through
-    /// SpeciesConstructor(receiver, %Promise%) (ECMA-262 §27.2.5.4, §7.3.22).
+    /// the then/catch/finally result construction after
+    /// ObservePromiseConstructor has performed SpeciesConstructor's observable
+    /// own-constructor access (ECMA-262 §27.2.5.4, §7.3.22).
     /// When the receiver is a $Promise SUBCLASS instance (#242), reads
     /// <c>receiver.constructor[Symbol.species]</c> — the subclass's static
     /// <c>@@species</c> getter, or, absent that, the expando assigned via
@@ -293,35 +333,6 @@ public partial class RuntimeEmitter
         var getterLocal = il.DeclareLocal(_types.Object);
         var ctorLocal = il.DeclareLocal(typeof(ConstructorInfo));
         var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
-
-        // #350: SpeciesConstructor(promise, %Promise%) step 1 = Get(promise,
-        // "constructor"). An own `constructor` getter installed via
-        // Object.defineProperty (a poisoned getter, test262 then/ctor-poisoned)
-        // is stored in $PropertyDescriptorStore keyed on the receiver. Invoke it
-        // for its side effect FIRST — this runs synchronously right after the
-        // then/catch/finally state machine returns its task, so a throw
-        // propagates synchronously out of the `.then()` expression (a
-        // ReturnIfAbrupt before PerformPromiseThen) rather than rejecting the
-        // result. Applies to plain promises (raw Task / base $Promise) too, so
-        // it precedes the $Promise-subclass narrowing below. The getter's RETURN
-        // value does not redirect species (the receiver's own class still drives
-        // the result) — own-constructor-returns-a-value is the #349/#350 remainder.
-        var poisonGetterLocal = il.DeclareLocal(_types.Object);
-        var noPoisonGetterLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, noPoisonGetterLabel);   // null receiver → skip
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "constructor");
-        il.Emit(OpCodes.Ldloca, poisonGetterLocal);
-        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
-        il.Emit(OpCodes.Brfalse, noPoisonGetterLabel);
-        il.Emit(OpCodes.Ldarg_1);                        // receiver
-        il.Emit(OpCodes.Ldloc, poisonGetterLocal);       // getter
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);          // empty args
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Pop);                            // discard; only the throw matters
-        il.MarkLabel(noPoisonGetterLabel);
 
         // if (receiver is not $Promise) return result;
         il.Emit(OpCodes.Ldarg_1);

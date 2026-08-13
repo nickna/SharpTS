@@ -4832,6 +4832,13 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Promise/prototype/then/ctor-access-count.js")]
+    [InlineData("built-ins/Promise/prototype/then/rxn-handler-fulfilled-invoke-strict.js")]
+    [InlineData("built-ins/Promise/prototype/then/rxn-handler-rejected-invoke-strict.js")]
+    public void Promise_then_observes_species_and_strict_reaction_calls(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Promise/prototype/finally/rejection-reason-override-with-throw.js")]
     [InlineData("built-ins/Promise/prototype/finally/resolved-observable-then-calls.js")]
     public void Compiled_Promise_finally_preserves_completion_semantics(string relativePath)

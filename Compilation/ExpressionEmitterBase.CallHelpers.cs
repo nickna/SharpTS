@@ -1983,18 +1983,32 @@ public abstract partial class ExpressionEmitterBase
             return;
         }
 
-        IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.UnwrapPromiseReceiverMethod);
-
         switch (methodName)
         {
             case "then":
+                var onFulfilledLocal = IL.DeclareLocal(typeof(object));
                 EmitBoxedArgOrNull(arguments, 0);
+                IL.Emit(OpCodes.Stloc, onFulfilledLocal);
+                var onRejectedLocal = IL.DeclareLocal(typeof(object));
                 EmitBoxedArgOrNull(arguments, 1);
+                IL.Emit(OpCodes.Stloc, onRejectedLocal);
+                IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObservePromiseConstructorMethod);
+                IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.UnwrapPromiseReceiverMethod);
+                IL.Emit(OpCodes.Ldloc, onFulfilledLocal);
+                IL.Emit(OpCodes.Ldloc, onRejectedLocal);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
                 break;
             case "catch":
+                var catchHandlerLocal = IL.DeclareLocal(typeof(object));
                 EmitBoxedArgOrNull(arguments, 0);
+                IL.Emit(OpCodes.Stloc, catchHandlerLocal);
+                IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObservePromiseConstructorMethod);
+                IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.UnwrapPromiseReceiverMethod);
+                IL.Emit(OpCodes.Ldloc, catchHandlerLocal);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseCatch);
                 break;
         }

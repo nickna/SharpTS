@@ -53,6 +53,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, isPromiseOkLabel);
             GuestErrorEmitter.ThrowTypeError(il, runtime, "Promise.prototype.then called on non-Promise");
             il.MarkLabel(isPromiseOkLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.ObservePromiseConstructorMethod);
             var taskLocal = il.DeclareLocal(_types.TaskOfObject);
             EmitUnwrapToTask(il, runtime, taskLocal);
             il.Emit(OpCodes.Ldloc, taskLocal);
@@ -398,6 +400,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, fastPathLabel);
 
         il.MarkLabel(fastPathLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObservePromiseConstructorMethod);
         il.Emit(OpCodes.Ldloc, taskLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, isCatch ? runtime.PromiseCatch : runtime.PromiseFinally);

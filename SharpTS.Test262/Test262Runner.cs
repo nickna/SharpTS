@@ -447,7 +447,10 @@ public sealed class Test262Runner
         // the captured stdout after Main returns. See issue #79.
         if (isAsync)
         {
-            source = CompiledAsyncDoneShim + source;
+            const string strictPrefix = "\"use strict\";\n";
+            source = source.StartsWith(strictPrefix, StringComparison.Ordinal)
+                ? strictPrefix + CompiledAsyncDoneShim + source[strictPrefix.Length..]
+                : CompiledAsyncDoneShim + source;
             harnessLength += CompiledAsyncDoneShim.Length;
         }
 

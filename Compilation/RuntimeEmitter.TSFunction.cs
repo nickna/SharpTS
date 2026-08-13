@@ -685,7 +685,7 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Stloc, effectiveArgsIWT);
 
         // effectiveArgs[0] = thisArg, with a narrow fallback to _target when
-        // thisArg is null/undefined AND the method is static (a built-in
+        // thisArg is CLR null AND the method is static (a built-in
         // helper like the RegExp Symbol.* protocol methods, NOT a display-
         // class instance method). For static helpers, indexed-method dispatch
         // (`re[Symbol.X](arg)` compiled as InvokeMethodValue(receiver=null,
@@ -708,12 +708,12 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodInfo, "IsStatic")!.GetGetMethod()!);
         iwt.Emit(OpCodes.Brfalse, useThisArgDirectLabelDecl(out var useThisArgDirectLabel));
 
-        // Static method: probe thisArg → _target chain.
+        // Static method: CLR null means the generic value-call path lost an
+        // implicit method receiver, so probe the bound target. The explicit JS
+        // undefined sentinel is a real thisArgument (Promise reaction jobs,
+        // strict calls) and must never be replaced by _target.
         iwt.Emit(OpCodes.Ldarg_1);
         iwt.Emit(OpCodes.Brfalse, fallbackProbeLabel);
-        iwt.Emit(OpCodes.Ldarg_1);
-        iwt.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        iwt.Emit(OpCodes.Brtrue, fallbackProbeLabel);
         // thisArg is a real Object — use it.
         iwt.Emit(OpCodes.Ldarg_1);
         iwt.Emit(OpCodes.Br, afterFallbackLabel);
