@@ -32,6 +32,10 @@ public partial class ILCompiler
                 // Unwrap exported declarations (e.g., export class Foo { })
                 DefineAllClassMethods([exportStmt.Declaration]);
             }
+            else
+            {
+                DefineAllClassMethods(GetNonRepeatingTopLevelChildren(stmt));
+            }
         }
     }
 
@@ -49,7 +53,7 @@ public partial class ILCompiler
                     continue;
 
                 var ctx = GetDefinitionContext();
-                string qualifiedClassName = ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+                string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
                 // Skip external types
                 if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
@@ -68,6 +72,10 @@ public partial class ILCompiler
                 // Unwrap exported declarations (e.g., export class Foo { })
                 EmitAllHasFieldsInterfaceMethodBodies([exportStmt.Declaration]);
             }
+            else
+            {
+                EmitAllHasFieldsInterfaceMethodBodies(GetNonRepeatingTopLevelChildren(stmt));
+            }
         }
     }
 
@@ -82,7 +90,7 @@ public partial class ILCompiler
             return;
 
         var ctx = GetDefinitionContext();
-        string qualifiedClassName = ctx.ResolveClassName(classStmt.Name.Lexeme);
+        string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt, resolve: true);
 
         // Also skip if this is an external type (registered via @DotNetType decorator)
         if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
@@ -117,8 +125,11 @@ public partial class ILCompiler
                 }
                 else if (_classes.ErrorSubclasses.Contains(qualifiedClassName))
                 {
-                    // Error subclass with no constructor — accept a single message arg
-                    ctorParamTypes = [typeof(object)];
+                    // Direct AggregateError subclasses forward (errors, message);
+                    // the other native Error constructors accept message only.
+                    ctorParamTypes = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) == "AggregateError"
+                        ? [typeof(object), typeof(object)]
+                        : [typeof(object)];
                 }
                 else if (_classes.PromiseSubclasses.Contains(qualifiedClassName))
                 {
@@ -424,7 +435,7 @@ public partial class ILCompiler
             return;
 
         // Get qualified class name (must match what DefineClass used)
-        string qualifiedClassName = GetDefinitionContext().GetQualifiedClassName(classStmt.Name.Lexeme);
+        string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
         // Also skip if this is an external type (registered via @DotNetType decorator)
         if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||

@@ -55,6 +55,26 @@ public partial class ILEmitter
     {
         var name = v.Name.Lexeme;
 
+        // Block-scoped class locals start as undefined and are initialized at
+        // the declaration statement. Observe the class TDZ before ordinary
+        // local resolution.
+        if (_ctx.Locals.TryGetTag(name, out var classTag) && classTag is Stmt.Class)
+        {
+            var local = _ctx.Locals.GetLocal(name)!;
+            var initializedLabel = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, local);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.UndefinedType);
+            IL.Emit(OpCodes.Brfalse, initializedLabel);
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Ldnull);
+            IL.MarkLabel(initializedLabel);
+            SetStackUnknown();
+            return;
+        }
+
         // Try resolver first (user-defined variables: parameters, locals, captured)
         var stackType = _resolver.TryLoadVariable(name);
         if (stackType.HasValue)

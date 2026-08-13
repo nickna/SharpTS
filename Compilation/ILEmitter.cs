@@ -216,7 +216,9 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 _ctx.EmitBlockScopedInnerFunction?.Invoke(IL, _ctx, fn);
                 break;
 
-            case Stmt.Class:
+            case Stmt.Class classStmt:
+                EmitBlockScopedClassDeclaration(classStmt);
+                break;
             case Stmt.Interface:
             case Stmt.TypeAlias:
             case Stmt.Enum:

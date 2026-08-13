@@ -25,10 +25,10 @@ public partial class ILCompiler
         var ctx = GetDefinitionContext();
 
         // Get qualified class name (includes module prefix and .NET namespace if set)
-        string qualifiedClassName = ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+        string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
         // Track simple name -> module mapping for later lookups
-        if (_modules.CurrentPath != null)
+        if (_modules.CurrentPath != null && !_classes.BlockScopedNames.ContainsKey(classStmt))
         {
             _modules.ClassToModule[classStmt.Name.Lexeme] = _modules.CurrentPath;
         }
@@ -98,6 +98,8 @@ public partial class ILCompiler
             qualifiedClassName,
             typeAttrs
         );
+        if (_classes.BlockScopedNames.ContainsKey(classStmt))
+            _classes.BlockScopedBuilders[classStmt] = typeBuilder;
 
         // Track superclass for inheritance-aware method resolution
         _classes.Superclass[qualifiedClassName] = qualifiedSuperclassName;

@@ -20,6 +20,8 @@ public partial class ILCompiler
     private sealed class ClassCompilationState
     {
         public Dictionary<string, TypeBuilder> Builders { get; } = [];
+        public Dictionary<Stmt.Class, string> BlockScopedNames { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Stmt.Class, TypeBuilder> BlockScopedBuilders { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, Type> ExternalTypes { get; } = [];
         public Dictionary<string, string?> Superclass { get; } = [];
         /// <summary>

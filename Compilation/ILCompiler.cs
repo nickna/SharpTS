@@ -1349,11 +1349,16 @@ public partial class ILCompiler
     /// <summary>
     /// Defines a declaration from a statement (class, function, enum, namespace, or export).
     /// </summary>
-    private void DefineDeclarationFromStatement(Stmt stmt)
+    private void DefineDeclarationFromStatement(Stmt stmt, bool blockScoped = false)
     {
         switch (stmt)
         {
             case Stmt.Class classStmt:
+                if (blockScoped && !_classes.BlockScopedNames.ContainsKey(classStmt))
+                {
+                    string generated = $"$BlockClass_{_classes.BlockScopedNames.Count}_{classStmt.Name.Lexeme}";
+                    _classes.BlockScopedNames[classStmt] = GetDefinitionContext().GetQualifiedClassName(generated);
+                }
                 DefineClass(classStmt);
                 break;
             case Stmt.Function funcStmt when funcStmt.Body != null:
@@ -1366,7 +1371,47 @@ public partial class ILCompiler
                 DefineNamespaceFields(nsStmt);
                 break;
             case Stmt.Export { Declaration: not null } export:
-                DefineDeclarationFromStatement(export.Declaration);
+                DefineDeclarationFromStatement(export.Declaration, blockScoped);
+                break;
+            default:
+                foreach (var child in GetNonRepeatingTopLevelChildren(stmt))
+                    DefineDeclarationFromStatement(child, blockScoped: true);
+                break;
+        }
+    }
+
+    private string GetQualifiedClassDeclarationName(Stmt.Class classStmt, bool resolve = false)
+    {
+        if (_classes.BlockScopedNames.TryGetValue(classStmt, out var generated))
+            return generated;
+        var ctx = GetDefinitionContext();
+        return resolve
+            ? ctx.ResolveClassName(classStmt.Name.Lexeme)
+            : ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+    }
+
+    /// <summary>
+    /// Returns statements nested in top-level containers that execute at most
+    /// once during script initialization. Class declarations in these scopes
+    /// can use one emitted Type identity. Functions and loops are deliberate
+    /// barriers: their classes require invocation/per-iteration identities.
+    /// </summary>
+    private static IEnumerable<Stmt> GetNonRepeatingTopLevelChildren(Stmt stmt)
+    {
+        switch (stmt)
+        {
+            case Stmt.Block block:
+                foreach (var child in block.Statements) yield return child;
+                break;
+            case Stmt.Sequence sequence:
+                foreach (var child in sequence.Statements) yield return child;
+                break;
+            case Stmt.If conditional:
+                yield return conditional.ThenBranch;
+                if (conditional.ElseBranch != null) yield return conditional.ElseBranch;
+                break;
+            case Stmt.LabeledStatement labeled:
+                yield return labeled.Statement;
                 break;
         }
     }
@@ -1480,6 +1525,10 @@ public partial class ILCompiler
                 break;
             case Stmt.Export { Declaration: not null } export:
                 EmitMethodBodyFromStatement(export.Declaration);
+                break;
+            default:
+                foreach (var child in GetNonRepeatingTopLevelChildren(stmt))
+                    EmitMethodBodyFromStatement(child);
                 break;
         }
     }

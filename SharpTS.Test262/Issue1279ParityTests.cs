@@ -4550,7 +4550,6 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Error/isError/bigints.js")]
-    [InlineData("built-ins/Error/isError/error-subclass.js")]
     [InlineData("built-ins/Error/isError/fake-errors.js")]
     [InlineData("built-ins/Error/isError/non-error-objects.js")]
     [InlineData("built-ins/Error/isError/primitives.js")]
@@ -4589,6 +4588,10 @@ public sealed class Issue1279ParityTests
     [Fact]
     public void Error_cause_propagates_abrupt_has_and_get_operations()
         => AssertPassInBothModes("built-ins/Error/cause_abrupt.js");
+
+    [Fact]
+    public void Error_isError_recognizes_subclasses_declared_in_feature_blocks()
+        => AssertPassInBothModes("built-ins/Error/isError/error-subclass.js");
 
     [Theory]
     [InlineData("built-ins/String/prototype/Symbol.iterator/length.js")]

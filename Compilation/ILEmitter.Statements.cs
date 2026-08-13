@@ -1366,6 +1366,18 @@ public partial class ILEmitter
     {
         _ctx.Locals.EnterScope();
 
+        // Class declarations have lexical block bindings but their CLR Types
+        // are defined ahead of method emission. Predeclare an undefined local
+        // for TDZ behavior; the declaration statement installs its Type token.
+        foreach (var classStmt in b.Statements.OfType<Stmt.Class>())
+        {
+            if (_ctx.BlockScopedClassBuilders?.ContainsKey(classStmt) != true)
+                continue;
+            var local = _ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Stloc, local);
+        }
+
         // Check if block contains using declarations
         var usingResources = new List<LocalBuilder>();
         bool hasUsing = b.Statements.Any(s => s is Stmt.Using);
@@ -1385,6 +1397,19 @@ public partial class ILEmitter
         }
 
         _ctx.Locals.ExitScope();
+    }
+
+    private void EmitBlockScopedClassDeclaration(Stmt.Class classStmt)
+    {
+        var scopedClasses = _ctx.BlockScopedClassBuilders;
+        if (scopedClasses == null || !scopedClasses.TryGetValue(classStmt, out var builder))
+            return;
+        if (!_ctx.Locals.TryGetTag(classStmt.Name.Lexeme, out var tag) || !ReferenceEquals(tag, classStmt))
+            return;
+        var local = _ctx.Locals.GetLocal(classStmt.Name.Lexeme)!;
+        IL.Emit(OpCodes.Ldtoken, builder);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        IL.Emit(OpCodes.Stloc, local);
     }
 
     /// <summary>

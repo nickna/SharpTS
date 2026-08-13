@@ -17,6 +17,9 @@ public partial class CompilationContext
     /// </remarks>
     public Dictionary<string, TypeBuilder> Classes { get; }
 
+    /// <summary>Uniquely named emitted Types for class declarations whose value binding lives in a block local.</summary>
+    public IReadOnlyDictionary<Parsing.Stmt.Class, TypeBuilder>? BlockScopedClassBuilders { get; set; }
+
     // For instance methods
     public FieldInfo? FieldsField { get; set; }
     public bool IsInstanceMethod { get; set; }

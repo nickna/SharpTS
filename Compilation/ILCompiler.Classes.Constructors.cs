@@ -13,7 +13,7 @@ public partial class ILCompiler
     {
         var defCtx = GetDefinitionContext();
         // Use qualified class name to match DefineClass/EmitClassMethods
-        string className = defCtx.GetQualifiedClassName(classStmt.Name.Lexeme);
+        string className = GetQualifiedClassDeclarationName(classStmt);
 
         // Find constructor implementation (with body), not overload signatures
         var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
@@ -32,7 +32,9 @@ public partial class ILCompiler
             var paramTypes = constructor != null
                 ? ParameterTypeResolver.ResolveConstructorParameters(className, constructor.Parameters, _typeMapper, _typeMap)
                 : _classes.ErrorSubclasses.Contains(className)
-                    ? [typeof(object)]  // Accept any value; converted to string by base Error constructor
+                    ? Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) == "AggregateError"
+                        ? [typeof(object), typeof(object)]
+                        : [typeof(object)]  // Accept any value; converted to string by base Error constructor
                     : _classes.PromiseSubclasses.Contains(className)
                         ? [typeof(object)]  // Executor arg, forwarded to PromiseFromExecutor (#242)
                         : [];
@@ -121,6 +123,8 @@ public partial class ILCompiler
         string? qualifiedSuperclass = classStmt.SuperclassExpr != null ? defCtx.ResolveClassName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!) : null;
         bool isErrorSubclass = classStmt.SuperclassExpr != null
             && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
+        bool isDirectAggregateErrorSubclass = constructor == null
+            && Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) == "AggregateError";
         // Direct `extends Array` (#233): base is the emitted $Array, chained
         // via its ctor-args constructor.
         bool isDirectArraySubclass = classStmt.SuperclassExpr != null
@@ -153,19 +157,20 @@ public partial class ILCompiler
         }
         else if (constructor == null && qualifiedSuperclass != null && isErrorSubclass)
         {
-            // No explicit constructor, extends Error — the implicit derived
-            // constructor forwards its optional message. Omitted/undefined
-            // means no message; every other value uses ECMAScript ToString.
+            // No explicit constructor, extends a native Error — the implicit
+            // derived constructor forwards the native constructor's arguments.
             il.Emit(OpCodes.Ldarg_0);
+            if (isDirectAggregateErrorSubclass)
+                il.Emit(OpCodes.Ldarg_1); // errors
             var convertErrorMessageLabel = il.DefineLabel();
             var haveErrorMessageLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(isDirectAggregateErrorSubclass ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
             il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
             il.Emit(OpCodes.Brfalse, convertErrorMessageLabel);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Br, haveErrorMessageLabel);
             il.MarkLabel(convertErrorMessageLabel);
-            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(isDirectAggregateErrorSubclass ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _runtime.ToJsString);
             il.MarkLabel(haveErrorMessageLabel);
             var baseCtor = GetEmittedErrorConstructor(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);

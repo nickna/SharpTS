@@ -142,6 +142,38 @@ public sealed class Issue1279ParityRuntimeTests
     }
 
     [Fact]
+    public void Feature_guarded_error_subclass_is_emitted_and_recognized()
+    {
+        const string source = """
+            if (typeof AggregateError !== "undefined") {
+              class GuardedAggregateError extends AggregateError {}
+              console.log(Error.isError(new GuardedAggregateError([])));
+            }
+            """;
+
+        Assert.Equal("true\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Block_scoped_classes_have_distinct_shadowing_bindings()
+    {
+        const string source = """
+            class Scoped { value() { return 0; } }
+            if (true) {
+              class Scoped { value() { return 1; } }
+              console.log(new Scoped().value());
+            }
+            if (true) {
+              class Scoped { value() { return 2; } }
+              console.log(new Scoped().value());
+            }
+            console.log(new Scoped().value());
+            """;
+
+        Assert.Equal("1\n2\n0\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void String_positions_apply_to_number_before_integer_conversion()
     {
         const string source = """

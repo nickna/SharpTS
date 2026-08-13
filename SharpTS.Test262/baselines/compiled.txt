@@ -3140,7 +3140,7 @@ test/built-ins/Error/instance-prototype.js Pass
 test/built-ins/Error/internal-prototype.js Pass
 test/built-ins/Error/is-a-constructor.js Pass
 test/built-ins/Error/isError/bigints.js Pass
-test/built-ins/Error/isError/error-subclass.js RuntimeError
+test/built-ins/Error/isError/error-subclass.js Pass
 test/built-ins/Error/isError/errors-other-realm.js RuntimeError
 test/built-ins/Error/isError/errors.js Pass
 test/built-ins/Error/isError/fake-errors.js Pass

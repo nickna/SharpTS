@@ -25,6 +25,17 @@ public partial class ILEmitter
 
         var (namespaceParts, className) = ExtractQualifiedNameFromCallee(n.Callee);
 
+        // A block-scoped class is a runtime lexical binding to a pre-emitted
+        // Type token. Construct through the value path so TDZ and shadowing are
+        // respected instead of resolving the internal Type globally.
+        if (n.Callee is Expr.Variable classVariable
+            && _ctx.Locals.TryGetTag(classVariable.Name.Lexeme, out var classTag)
+            && classTag is Stmt.Class)
+        {
+            EmitCalleeExprConstruction(n);
+            return;
+        }
+
         // 1. Built-in constructors (Date, Map, Set, Promise, Headers, etc.) - handled by base
         if (namespaceParts.Count == 0 && n.Callee is Expr.Variable && TryEmitBuiltInConstructor(className, n.Arguments))
             return;

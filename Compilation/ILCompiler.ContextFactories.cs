@@ -69,6 +69,7 @@ public partial class ILCompiler
             BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
             ImportedNames = _importedNames,
             ClassExprBuilders = _classExprs.Builders,
+            BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
             DotNetNamespace = _modules.CurrentDotNetNamespace,
             // Ambient strict mode; bodies with their own "use strict" prologue override this.
@@ -231,6 +232,7 @@ public partial class ILCompiler
             EnumToModule = parentCtx.EnumToModule,
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
             ClassExprBuilders = parentCtx.ClassExprBuilders,
+            BlockScopedClassBuilders = parentCtx.BlockScopedClassBuilders,
             IsStrictMode = parentCtx.IsStrictMode,
             // ES2022 Private Class Elements support - inherit from parent context
             CurrentClassName = parentCtx.CurrentClassName,

@@ -365,6 +365,15 @@ public partial class ILEmitter
         string methodName, List<Expr> arguments, List<string>? genericTypeArguments,
         TypeSystem.TypeInfo? contextualResultType)
     {
+        // A same-named block class can shadow a top-level class. The type map's
+        // simple-name Instance may therefore describe the outer declaration;
+        // direct casting would target the wrong emitted Type. Keep calls on a
+        // value constructed from the active lexical class binding dynamic.
+        if (receiver is Expr.New { Callee: Expr.Variable blockClass }
+            && _ctx.Locals.TryGetTag(blockClass.Name.Lexeme, out var classTag)
+            && classTag is Stmt.Class)
+            return false;
+
         // Only handle Instance types (e.g., let p: Person = ...)
         if (receiverType is not TypeSystem.TypeInfo.Instance instance)
             return false;
