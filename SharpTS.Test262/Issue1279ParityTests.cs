@@ -5512,6 +5512,7 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/RegExp/prototype/Symbol.match/coerce-global.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/get-global-err.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.match/get-unicode-error.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.match/u-advance-after-empty.js")]
     [InlineData("built-ins/RegExp/prototype/Symbol.replace/get-unicode-error.js")]
     public void RegExp_intrinsic_accessors_keep_the_internal_slot_fast_path(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);

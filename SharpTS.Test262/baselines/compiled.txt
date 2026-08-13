@@ -9299,7 +9299,7 @@ test/built-ins/RegExp/prototype/Symbol.match/not-a-constructor.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/prop-desc.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/this-val-non-obj.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/this-val-non-regexp.js Pass
-test/built-ins/RegExp/prototype/Symbol.match/u-advance-after-empty.js Fail
+test/built-ins/RegExp/prototype/Symbol.match/u-advance-after-empty.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/y-fail-global-return.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/y-fail-lastindex-no-write.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/y-fail-lastindex.js Pass

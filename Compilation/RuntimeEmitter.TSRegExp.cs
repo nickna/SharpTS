@@ -3237,6 +3237,8 @@ public partial class RuntimeEmitter
         var matchStrLocal = il.DeclareLocal(_types.String);
         var arrLocal = il.DeclareLocal(_types.ListOfObject);
         var nLocal = il.DeclareLocal(_types.Int32);
+        var fullUnicodeLocal = il.DeclareLocal(_types.Boolean);
+        var currentIndexLocal = il.DeclareLocal(_types.Int32);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, rxObjLocal);
@@ -3250,6 +3252,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, flagsLocal);
+
+        // fullUnicode is true for either unicode mode. This is consumed only
+        // by the global empty-match advance below; computing it from the
+        // already-observed flags string avoids a second observable property
+        // access while covering both `u` and `v` patterns.
+        var unicodeTrueLabel = il.DefineLabel();
+        var unicodeDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, flagsLocal);
+        il.Emit(OpCodes.Ldstr, "u");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
+        il.Emit(OpCodes.Brtrue, unicodeTrueLabel);
+        il.Emit(OpCodes.Ldloc, flagsLocal);
+        il.Emit(OpCodes.Ldstr, "v");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
+        il.Emit(OpCodes.Brtrue, unicodeTrueLabel);
+        il.Emit(OpCodes.Br, unicodeDoneLabel);
+        il.MarkLabel(unicodeTrueLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, fullUnicodeLocal);
+        il.MarkLabel(unicodeDoneLabel);
 
         // if (!flags.Contains('g')) return RegExpExec(rx, S);
         var globalPathLabel = il.DefineLabel();
@@ -3324,7 +3346,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, afterEmptyAdvLabel);
 
-        // lastIndex = ToInt(Get(rx, "lastIndex")) + 1; SetProperty(rx, "lastIndex", lastIndex)
+        // lastIndex = AdvanceStringIndex(S, ToLength(Get(rx, "lastIndex")),
+        //                               fullUnicode)
         // Spec Throw=true — strict writability check via the helper.
         // ECMA-262 §22.2.5.6 step 11.d.iii: ? ToLength(? Get(rx, "lastIndex"))
         // — runtime.JsToInt32 invokes ToNumber → ToPrimitive → valueOf,
@@ -3337,8 +3360,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "lastIndex");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.JsToInt32);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, currentIndexLocal);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Ldloc, currentIndexLocal);
+        il.Emit(OpCodes.Ldloc, fullUnicodeLocal);
+        il.Emit(OpCodes.Call, _tsRegExpAdvanceStringIndexSpecMethod);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Call, runtime.SetProperty);
