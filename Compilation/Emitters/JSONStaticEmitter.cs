@@ -98,6 +98,22 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 return true;
 
+            case "rawJSON":
+            case "isRawJSON":
+                if (arguments.Count > 0)
+                {
+                    emitter.EmitExpression(arguments[0]);
+                    emitter.EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                }
+                il.Emit(OpCodes.Call, methodName == "rawJSON"
+                    ? ctx.Runtime!.JsonRawJson
+                    : ctx.Runtime!.JsonIsRawJson);
+                return true;
+
             default:
                 return false;
         }
@@ -116,12 +132,8 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
         {
             "parse"     => runtime.JsonParse,
             "stringify" => runtime.JsonStringify,
-            // Stage 4z11: stubs for json-parse-with-source proposal methods so
-            // typeof + isConstructor probes pass. Compiled mode doesn't
-            // implement the parsing semantics — actual invocations will fail
-            // — but the not-a-constructor.js tests only probe.
-            "rawJSON"   => runtime.StringPrototypeGenericStub,
-            "isRawJSON" => runtime.StringPrototypeGenericStub,
+            "rawJSON"   => runtime.JsonRawJson,
+            "isRawJSON" => runtime.JsonIsRawJson,
             _ => null
         };
         if (method == null) return false;
@@ -150,15 +162,17 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
     /// (<c>let p = JSON.parse</c>) and by the JSON singleton populate step that
     /// fills <c>_jsonSingleton</c> for value-form receivers
     /// (<c>const j = JSON; j.stringify(x)</c>, issue #276). The rawJSON/isRawJSON
-    /// proposal stubs are intentionally excluded — they exist only to satisfy
-    /// typeof/isConstructor probes, not to be invoked off a JSON value.
+    /// raw-value methods use the same path so aliases and singleton access are
+    /// fully callable rather than metadata-only stubs.
     /// </summary>
     internal static IEnumerable<(string Name, MethodInfo? Method, int Length)> EnumerateValueFormMethods(EmittedRuntime runtime)
     {
         yield return ("parse",     runtime.JsonParse, 2);
         yield return ("stringify", runtime.JsonStringify, 3);
+        yield return ("rawJSON",   runtime.JsonRawJson, 1);
+        yield return ("isRawJSON", runtime.JsonIsRawJson, 1);
     }
 
     public bool HasStaticProperty(string memberName) =>
-        memberName is "parse" or "stringify";
+        memberName is "parse" or "stringify" or "rawJSON" or "isRawJSON";
 }

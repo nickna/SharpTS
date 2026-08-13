@@ -1041,6 +1041,7 @@ public partial class RuntimeEmitter
             EmitJsonParseWithReviver(typeBuilder, runtime);
             EmitJsonStringify(typeBuilder, runtime);
             EmitJsonStringifyFull(typeBuilder, runtime);
+            EmitJsonRawJsonMethods(typeBuilder, runtime);
         }
         // Math / JSON value-form singleton populate bodies. Emitted here — after
         // EmitMathAdapters (Math.*Adapter) and the JSON methods above — so their

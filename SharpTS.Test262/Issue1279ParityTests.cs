@@ -5010,6 +5010,25 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/JSON/isRawJSON/basic.js")]
+    [InlineData("built-ins/JSON/isRawJSON/builtin.js")]
+    [InlineData("built-ins/JSON/isRawJSON/length.js")]
+    [InlineData("built-ins/JSON/isRawJSON/name.js")]
+    [InlineData("built-ins/JSON/isRawJSON/not-a-constructor.js")]
+    [InlineData("built-ins/JSON/isRawJSON/prop-desc.js")]
+    [InlineData("built-ins/JSON/rawJSON/basic.js")]
+    [InlineData("built-ins/JSON/rawJSON/builtin.js")]
+    [InlineData("built-ins/JSON/rawJSON/illegal-empty-and-start-end-chars.js")]
+    [InlineData("built-ins/JSON/rawJSON/invalid-JSON-text.js")]
+    [InlineData("built-ins/JSON/rawJSON/length.js")]
+    [InlineData("built-ins/JSON/rawJSON/name.js")]
+    [InlineData("built-ins/JSON/rawJSON/not-a-constructor.js")]
+    [InlineData("built-ins/JSON/rawJSON/prop-desc.js")]
+    [InlineData("built-ins/JSON/rawJSON/returns-expected-object.js")]
+    public void JSON_raw_value_track_b_cases_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/RegExp/S15.10.4.1_A8_T4.js")]
     [InlineData("built-ins/RegExp/S15.10.4.1_A8_T7.js")]
     [InlineData("built-ins/RegExp/S15.10.4.1_A8_T9.js")]

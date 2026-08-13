@@ -839,6 +839,11 @@ public class EmittedRuntime
     public MethodBuilder JsonParseWithReviver { get; set; } = null!;
     public MethodBuilder JsonStringify { get; set; } = null!;
     public MethodBuilder JsonStringifyFull { get; set; } = null!;
+    public TypeBuilder TSRawJsonType { get; set; } = null!;
+    public ConstructorBuilder TSRawJsonCtor { get; set; } = null!;
+    public MethodBuilder TSRawJsonTextGetter { get; set; } = null!;
+    public MethodBuilder JsonRawJson { get; set; } = null!;
+    public MethodBuilder JsonIsRawJson { get; set; } = null!;
 
     // Symbol support
     public TypeBuilder TSSymbolType { get; set; } = null!;

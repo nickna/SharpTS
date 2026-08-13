@@ -2399,7 +2399,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stloc, resultDictLocal);
             il.Emit(OpCodes.Ldloc, resultDictLocal);
             il.Emit(OpCodes.Ldstr, "value");
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
+            il.Emit(OpCodes.Ldstr, n);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "get_Item", _types.String));
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
             EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
             EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
@@ -2408,10 +2411,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, endLabel);
             il.MarkLabel(skipLabel);
         }
-        EmitJsonNameDesc("parse");
-        EmitJsonNameDesc("stringify");
-        EmitJsonNameDesc("isRawJSON");
-        EmitJsonNameDesc("rawJSON");
+        if (_features.UsesJSON)
+        {
+            EmitJsonNameDesc("parse");
+            EmitJsonNameDesc("stringify");
+            EmitJsonNameDesc("isRawJSON");
+            EmitJsonNameDesc("rawJSON");
+        }
         il.MarkLabel(notJsonSingletonLabel);
 
         // No descriptor - check if property exists on the object directly (Dictionary case)

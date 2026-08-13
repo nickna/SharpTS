@@ -403,6 +403,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterToJsonUndefLabel);
 
+        // JSON.rawJSON carries validated source text in an unforgeable emitted
+        // type. Serialize it verbatim after the toJSON step.
+        var notRawJsonLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSRawJsonType);
+        il.Emit(OpCodes.Brfalse, notRawJsonLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSRawJsonType);
+        il.Emit(OpCodes.Callvirt, runtime.TSRawJsonTextGetter);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notRawJsonLabel);
+
         // ECMA-262 25.5.2.3 step 9: skip callable values (return undefined).
         EmitFunctionSkipCheck(il, valueLocal, runtime);
 
