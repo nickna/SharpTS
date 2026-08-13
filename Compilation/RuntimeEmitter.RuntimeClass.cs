@@ -600,6 +600,13 @@ public partial class RuntimeEmitter
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
         EmitIsTruthy(typeBuilder, runtime);
+        // Promise resolving callbacks need the adoption helper token before
+        // EmitPromiseMethods fills in its body later in this method.
+        runtime.CoerceAwaitableToTaskMethod ??= typeBuilder.DefineMethod(
+            "CoerceAwaitableToTask",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [_types.Object]);
         // Promise resolving callbacks are callable built-ins. Define their
         // representation before TypeOf so it can classify them as functions;
         // InvokeValue consumes the same types later in this method.

@@ -4839,6 +4839,23 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Promise/resolve-thenable-immed.js")]
+    [InlineData("built-ins/Promise/resolve-thenable-deferred.js")]
+    public void Promise_executor_resolve_adopts_promises(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/exception-after-resolve-in-executor.js")]
+    [InlineData("built-ins/Promise/exception-after-resolve-in-thenable-job.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-settled-rejected-prms-cstm-then.js")]
+    [InlineData("built-ins/Promise/race/resolve-poisoned-then.js")]
+    [InlineData("built-ins/Promise/race/resolve-thenable.js")]
+    [InlineData("built-ins/Promise/resolve-self.js")]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A4.1_T1.js")]
+    public void Compiled_Promise_executor_resolve_adopts_promises(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/prototype/finally/rejection-reason-override-with-throw.js")]
     [InlineData("built-ins/Promise/prototype/finally/resolved-observable-then-calls.js")]
     public void Compiled_Promise_finally_preserves_completion_semantics(string relativePath)

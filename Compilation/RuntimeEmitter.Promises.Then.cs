@@ -245,6 +245,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
         il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
         il.Emit(OpCodes.Brtrue, onFulfilledCallableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, onFulfilledCallableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Brtrue, onFulfilledCallableLabel);
         il.Emit(OpCodes.Br, noCallbackLabel);
         il.MarkLabel(onFulfilledCallableLabel);
 
@@ -388,6 +396,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
         il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Brtrue, onRejectedCallableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, onRejectedCallableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnRejectedField);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
         il.Emit(OpCodes.Brtrue, onRejectedCallableLabel);
         il.Emit(OpCodes.Br, noRejectCallbackLabel);
         il.MarkLabel(onRejectedCallableLabel);

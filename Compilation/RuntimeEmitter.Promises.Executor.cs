@@ -557,8 +557,61 @@ public partial class RuntimeEmitter
         var tcsField = typeBuilder.DefineField("_tcs", typeof(TaskCompletionSource<object?>), FieldAttributes.Private);
         var lockField = typeBuilder.DefineField("_lock", _types.Object, FieldAttributes.Private);
         var settledField = typeBuilder.DefineField("_settled", typeof(bool), FieldAttributes.Private);
+        var adoptedTaskField = typeBuilder.DefineField(
+            "_adoptedTask", _types.TaskOfObject, FieldAttributes.Public);
+        runtime.PromiseResolveCallbackAdoptedTaskField = adoptedTaskField;
         var sharedSettledType = typeof(System.Runtime.CompilerServices.StrongBox<bool>);
         var sharedSettledValue = sharedSettledType.GetField("Value")!;
+
+        // Transfers an adopted Promise/thenable task's settlement to this
+        // resolving function's target capability.
+        var settleFromTaskMethod = typeBuilder.DefineMethod(
+            "SettleFromTask",
+            MethodAttributes.Private,
+            _types.Void,
+            [_types.TaskOfObject]);
+        {
+            var il = settleFromTaskMethod.GetILGenerator();
+            var faultedLabel = il.DefineLabel();
+            var canceledLabel = il.DefineLabel();
+            var doneLabel = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsFaulted").GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, faultedLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCanceled").GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, canceledLabel);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, tcsField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod("TrySetResult")!);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(faultedLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, tcsField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "Exception").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "InnerException").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod(
+                "TrySetException", [_types.Exception])!);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(canceledLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, tcsField);
+            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod(
+                "TrySetCanceled", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Pop);
+
+            il.MarkLabel(doneLabel);
+            il.Emit(OpCodes.Ret);
+        }
 
         // Constructor: (TaskCompletionSource<object?> tcs, object lockObj)
         var ctor = typeBuilder.DefineConstructor(
@@ -602,6 +655,7 @@ public partial class RuntimeEmitter
 
             var valueLocal = il.DeclareLocal(_types.Object);
             var tcsLocal = il.DeclareLocal(typeof(TaskCompletionSource<object?>));
+            var adoptedTaskLocal = il.DeclareLocal(_types.TaskOfObject);
 
             // value = args.Length > 0 ? args[0] : null
             il.Emit(OpCodes.Ldarg_1);
@@ -655,9 +709,58 @@ public partial class RuntimeEmitter
 
             il.MarkLabel(endLockLabel);
 
-            il.Emit(OpCodes.Ldloc, tcsLocal);
+            // Promise Resolve Functions adopt promises and thenables instead of
+            // fulfilling with their host Task representation as a plain value.
             il.Emit(OpCodes.Ldloc, valueLocal);
-            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod("TrySetResult")!);
+            il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            il.Emit(OpCodes.Stloc, adoptedTaskLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, adoptedTaskLocal);
+            il.Emit(OpCodes.Stfld, adoptedTaskField);
+
+            // Resolving a promise with itself rejects with TypeError rather than
+            // installing a continuation cycle that can never settle.
+            var notSelfResolutionLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, adoptedTaskLocal);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetProperty("Task")!.GetGetMethod()!);
+            il.Emit(OpCodes.Bne_Un, notSelfResolutionLabel);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Ldstr, "Chaining cycle detected for promise");
+            il.Emit(OpCodes.Newobj, runtime.TSTypeErrorCtor);
+            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Callvirt, typeof(TaskCompletionSource<object?>).GetMethod(
+                "TrySetException", [_types.Exception])!);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(notSelfResolutionLabel);
+
+            // Plain resolutions normalize to an already-completed task. Settle
+            // those immediately so short event-loop runs do not exit with a
+            // queued continuation still outstanding. Only genuinely pending
+            // Promise/thenable adoption needs scheduler handoff.
+            var schedulePendingLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, adoptedTaskLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompleted").GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, schedulePendingLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, adoptedTaskLocal);
+            il.Emit(OpCodes.Call, settleFromTaskMethod);
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(schedulePendingLabel);
+
+            // Settlement transfer runs no guest code; complete it atomically
+            // with the adopted task so the event-loop drain cannot finish in
+            // the gap before a separately queued scheduler callback. Promise
+            // reactions remain jobs owned by PromiseThen's state machine.
+            var continuationType = typeof(Action<Task<object?>>);
+            il.Emit(OpCodes.Ldloc, adoptedTaskLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldftn, settleFromTaskMethod);
+            il.Emit(OpCodes.Newobj, continuationType.GetConstructor([_types.Object, typeof(IntPtr)])!);
+            il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskOfObject, "ContinueWith", [continuationType, typeof(TaskContinuationOptions)])!);
             il.Emit(OpCodes.Pop);
 
             il.MarkLabel(endLabel);
@@ -914,6 +1017,19 @@ public partial class RuntimeEmitter
 
         il.EndExceptionBlock();
         il.MarkLabel(endTryLabel);
+
+        // When the executor synchronously resolved to a Promise/thenable, return
+        // the adopted task itself. This keeps the event loop attached to the
+        // actual async chain instead of an otherwise invisible host-continuation
+        // bridge. Deferred resolve calls still use tcs.Task below.
+        var returnBridgeTaskLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, resolveLocal);
+        il.Emit(OpCodes.Ldfld, runtime.PromiseResolveCallbackAdoptedTaskField);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, returnBridgeTaskLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnBridgeTaskLabel);
+        il.Emit(OpCodes.Pop);
 
         // return tcs.Task;
         il.Emit(OpCodes.Ldloc, tcsLocal);
