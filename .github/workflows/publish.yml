@@ -244,11 +244,15 @@ jobs:
           "$exe" --compile smoke.ts -o smoke-out.dll --verify
           actual=$(dotnet smoke-out.dll | tr -d '\r')
           [ "$actual" = "$expected" ] || { echo "compiled output mismatch:"; echo "$actual"; exit 1; }
-          # Soft-dep path: eval() makes the compiler co-locate SharpTS.dll from
-          # the single-file extraction cache; the output must find it at runtime.
-          echo 'console.log(eval("6 * 7"));' > softdep.ts
+          # Soft-dep path: dynamic eval makes the compiler co-locate SharpTS.dll
+          # from the single-file extraction cache; the output must find it at runtime.
+          echo 'const source: string = "6 * 7"; console.log(eval(source));' > softdep.ts
           mkdir softdep-out
           "$exe" --compile softdep.ts -o softdep-out/softdep.dll
+          test -f softdep-out/SharpTS.dll || {
+            echo "dynamic eval compile did not co-locate SharpTS.dll" >&2
+            exit 1
+          }
           actual=$(dotnet softdep-out/softdep.dll | tr -d '\r')
           [ "$actual" = "42" ] || { echo "soft-dep output mismatch:"; echo "$actual"; exit 1; }
           echo "✓ smoke passed (interpret + compile + --verify + soft-dep co-locate)"
@@ -399,7 +403,10 @@ jobs:
           mkdir "$scratch/softdep"
           "$native" --compile Examples/AotCompileGate/softdep.ts --ref-asm \
             -o "$scratch/softdep/softdep.dll"
-          test -f "$scratch/softdep/SharpTS.dll"
+          test -f "$scratch/softdep/SharpTS.dll" || {
+            echo "dynamic eval compile did not extract SharpTS.dll" >&2
+            exit 1
+          }
           dotnet "$scratch/softdep/softdep.dll" | tr -d '\r' > "$scratch/softdep.txt"
           grep -qx '42' "$scratch/softdep.txt"
 

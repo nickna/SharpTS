@@ -259,7 +259,10 @@ jobs:
           mkdir "$scratch/softdep"
           "$native" --compile Examples/AotCompileGate/softdep.ts --ref-asm \
             -o "$scratch/softdep/softdep.dll"
-          test -f "$scratch/softdep/SharpTS.dll"
+          test -f "$scratch/softdep/SharpTS.dll" || {
+            echo "dynamic eval compile did not extract SharpTS.dll" >&2
+            exit 1
+          }
           dotnet "$scratch/softdep/softdep.dll" > "$scratch/softdep.txt"
           grep -qx '42' "$scratch/softdep.txt"
 

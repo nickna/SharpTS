@@ -1,1 +1,2 @@
-console.log(eval("6 * 7"));
+const source: string = "6 * 7";
+console.log(eval(source));
