@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
+using System.Text;
 using System.Text.RegularExpressions;
 using SharpTS.Compilation;
 using SharpTS.Modules;
@@ -1279,8 +1280,13 @@ public class StandaloneDllTests
         var (tempDir, dllPath) = CompileStandalone(source);
         try
         {
+            // The 500 ms window tests termination of a child that is known to be running.
+            // CLR startup is a separate phase and must not race the output assertion.
             var ex = Assert.Throws<TimeoutException>(
-                () => ExecuteCompiledDllIsolated(dllPath, timeoutMs: 500));
+                () => ExecuteCompiledDllIsolated(
+                    dllPath,
+                    timeoutMs: 500,
+                    timeoutStartsAfterOutput: "probe-started"));
             Assert.Contains("timed out after 500 ms", ex.Message);
             Assert.Contains("probe-started", ex.Message);
         }
@@ -1388,7 +1394,11 @@ public class StandaloneDllTests
         return (tempDir, dllPath);
     }
 
-    private static string ExecuteCompiledDllIsolated(string dllPath, int timeoutMs)
+    private static string ExecuteCompiledDllIsolated(
+        string dllPath,
+        int timeoutMs,
+        string? timeoutStartsAfterOutput = null,
+        int readinessTimeoutMs = 15000)
     {
         var workingDir = Path.GetDirectoryName(dllPath)!;
         var psi = new ProcessStartInfo("dotnet", dllPath)
@@ -1400,19 +1410,40 @@ public class StandaloneDllTests
         };
 
         using var process = Process.Start(psi)!;
-        var outputTask = process.StandardOutput.ReadToEndAsync();
+        TaskCompletionSource<bool>? readiness = null;
+        Task<string> outputTask;
+        if (timeoutStartsAfterOutput is null)
+        {
+            outputTask = process.StandardOutput.ReadToEndAsync();
+        }
+        else
+        {
+            readiness = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            outputTask = ReadToEndAndSignalAsync(
+                process.StandardOutput,
+                timeoutStartsAfterOutput,
+                readiness);
+        }
+
         var errorTask = process.StandardError.ReadToEndAsync();
+
+        if (readiness is not null &&
+            (!readiness.Task.Wait(readinessTimeoutMs) || !readiness.Task.GetAwaiter().GetResult()))
+        {
+            TryTerminateProcessTree(process);
+            process.WaitForExit(5000);
+            Task.WaitAll([outputTask, errorTask], 5000);
+
+            var readinessOutput = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
+            var readinessError = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
+            throw new TimeoutException(
+                $"Compiled standalone probe did not emit '{timeoutStartsAfterOutput}' within " +
+                $"{readinessTimeoutMs} ms. Stdout: {readinessOutput} Stderr: {readinessError}");
+        }
 
         if (!process.WaitForExit(timeoutMs))
         {
-            try
-            {
-                process.Kill(entireProcessTree: true);
-            }
-            catch (InvalidOperationException)
-            {
-                // The process exited between the timeout and Kill().
-            }
+            TryTerminateProcessTree(process);
 
             if (!process.WaitForExit(5000))
             {
@@ -1446,6 +1477,44 @@ public class StandaloneDllTests
         }
 
         return output.Replace("\r\n", "\n");
+    }
+
+    private static async Task<string> ReadToEndAndSignalAsync(
+        StreamReader reader,
+        string readinessMarker,
+        TaskCompletionSource<bool> readiness)
+    {
+        var output = new StringBuilder();
+        var buffer = new char[1024];
+
+        while (true)
+        {
+            var charsRead = await reader.ReadAsync(buffer).ConfigureAwait(false);
+            if (charsRead == 0)
+                break;
+
+            output.Append(buffer, 0, charsRead);
+            if (!readiness.Task.IsCompleted &&
+                output.ToString().Contains(readinessMarker, StringComparison.Ordinal))
+            {
+                readiness.TrySetResult(true);
+            }
+        }
+
+        readiness.TrySetResult(false);
+        return output.ToString();
+    }
+
+    private static void TryTerminateProcessTree(Process process)
+    {
+        try
+        {
+            process.Kill(entireProcessTree: true);
+        }
+        catch (InvalidOperationException)
+        {
+            // The process exited between the timeout and Kill().
+        }
     }
 
     private static List<string> GetAssemblyReferences(string dllPath)
