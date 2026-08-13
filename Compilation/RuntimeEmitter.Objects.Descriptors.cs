@@ -2700,35 +2700,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
         il.Emit(OpCodes.Brtrue, foundLabel);
 
-        // Synth @@toStringTag for Math/JSON singletons — the singleton dicts
-        // don't carry a populated symbol entry (no populate hook for these
-        // ad-hoc dicts), but gOPD on them must still report the spec
-        // descriptor. Loads value into valueLocal then falls into the shared
-        // descriptor-builder below.
-        var notMathTagLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.MathSingletonField);
-        il.Emit(OpCodes.Bne_Un, notMathTagLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
-        il.Emit(OpCodes.Bne_Un, notMathTagLabel);
-        il.Emit(OpCodes.Ldstr, "Math");
-        il.Emit(OpCodes.Stloc, valueLocal);
-        il.Emit(OpCodes.Br, foundLabel);
-        il.MarkLabel(notMathTagLabel);
-
-        var notJsonTagLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
-        il.Emit(OpCodes.Bne_Un, notJsonTagLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
-        il.Emit(OpCodes.Bne_Un, notJsonTagLabel);
-        il.Emit(OpCodes.Ldstr, "JSON");
-        il.Emit(OpCodes.Stloc, valueLocal);
-        il.Emit(OpCodes.Br, foundLabel);
-        il.MarkLabel(notJsonTagLabel);
-
         // Not in user symbol-dict — return undefined.
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);

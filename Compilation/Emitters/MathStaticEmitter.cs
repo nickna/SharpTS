@@ -74,10 +74,25 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // throws TypeError on non-Number elements (incl. BigInt), and returns
         // the precise sum. Unlike other Math.* methods, the arg is an iterable
         // not a number, so it bypasses the ToNumber-coercion loop below.
-        if (methodName == "sumPrecise" && arguments.Count == 1)
+        if (methodName == "sumPrecise")
         {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EnsureBoxed();
+            var input = il.DeclareLocal(ctx.Types.Object);
+            if (arguments.Count == 0)
+            {
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+            }
+            else
+            {
+                emitter.EmitExpression(arguments[0]);
+                emitter.EnsureBoxed();
+            }
+            il.Emit(OpCodes.Stloc, input);
+            for (int i = 1; i < arguments.Count; i++)
+            {
+                emitter.EmitExpression(arguments[i]);
+                il.Emit(OpCodes.Pop);
+            }
+            il.Emit(OpCodes.Ldloc, input);
             il.Emit(OpCodes.Call, ctx.Runtime!.MathSumPrecise);
             return true;
         }
@@ -109,39 +124,8 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
 
         if (methodName == "round")
         {
-            // JavaScript rounds half-values toward +infinity: Math.Floor(x + 0.5).
-            // ECMA-262 21.3.2.28 zero-sign preservation: Math.round(-0) = -0,
-            // but naive Math.Floor(-0 + 0.5) = +0 loses the sign. Stash arg;
-            // special-case using double.IsNegative which distinguishes -0/+0
-            // by sign bit (regular IEEE comparisons treat them as equal).
-            // Branch:
-            //   if x is in (-0.5, 0]: return -0 if IsNegative(x), else +0
-            //   else: Floor(x + 0.5)
-            var argLocal = il.DeclareLocal(ctx.Types.Double);
-            il.Emit(OpCodes.Stloc, argLocal);
-            var endLabel = il.DefineLabel();
-            var doFloorLabel = il.DefineLabel();
-            // if (x <= -0.5) → Floor path
-            il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Ldc_R8, -0.5);
-            il.Emit(OpCodes.Ble, doFloorLabel);
-            // if (x > 0) → Floor path
-            il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Ldc_R8, 0.0);
-            il.Emit(OpCodes.Bgt, doFloorLabel);
-            // x in (-0.5, 0]: return x as-is (preserves -0 sign).
-            il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Br, endLabel);
-
-            il.MarkLabel(doFloorLabel);
-            il.Emit(OpCodes.Ldloc, argLocal);
-            il.Emit(OpCodes.Ldc_R8, 0.5);
-            il.Emit(OpCodes.Add);
-            var floorMethod = ctx.Types.GetMethod(ctx.Types.Math, "Floor", ctx.Types.Double);
-            il.Emit(OpCodes.Call, floorMethod);
-
-            il.MarkLabel(endLabel);
             il.Emit(OpCodes.Box, ctx.Types.Double);
+            il.Emit(OpCodes.Call, ctx.Runtime!.MathRoundAdapter);
             return true;
         }
 

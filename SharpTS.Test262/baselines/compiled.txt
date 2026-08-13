@@ -3193,7 +3193,7 @@ test/built-ins/JSON/15.12-0-1.js Pass
 test/built-ins/JSON/15.12-0-2.js Pass
 test/built-ins/JSON/15.12-0-3.js Pass
 test/built-ins/JSON/15.12-0-4.js Pass
-test/built-ins/JSON/Symbol.toStringTag.js Fail
+test/built-ins/JSON/Symbol.toStringTag.js Pass
 test/built-ins/JSON/isRawJSON/basic.js RuntimeError
 test/built-ins/JSON/isRawJSON/builtin.js Pass
 test/built-ins/JSON/isRawJSON/length.js Pass
@@ -3370,7 +3370,7 @@ test/built-ins/Math/SQRT1_2/prop-desc.js Pass
 test/built-ins/Math/SQRT1_2/value.js Pass
 test/built-ins/Math/SQRT2/prop-desc.js Pass
 test/built-ins/Math/SQRT2/value.js Pass
-test/built-ins/Math/Symbol.toStringTag.js Fail
+test/built-ins/Math/Symbol.toStringTag.js Pass
 test/built-ins/Math/abs/S15.8.2.1_A1.js Pass
 test/built-ins/Math/abs/S15.8.2.1_A2.js Pass
 test/built-ins/Math/abs/S15.8.2.1_A3.js Pass
@@ -3612,7 +3612,7 @@ test/built-ins/Math/round/S15.8.2.15_A3.js Pass
 test/built-ins/Math/round/S15.8.2.15_A4.js Pass
 test/built-ins/Math/round/S15.8.2.15_A5.js Pass
 test/built-ins/Math/round/S15.8.2.15_A6.js Pass
-test/built-ins/Math/round/S15.8.2.15_A7.js Fail
+test/built-ins/Math/round/S15.8.2.15_A7.js Pass
 test/built-ins/Math/round/length.js Pass
 test/built-ins/Math/round/name.js Pass
 test/built-ins/Math/round/not-a-constructor.js Pass
@@ -3652,9 +3652,9 @@ test/built-ins/Math/sumPrecise/prop-desc.js Pass
 test/built-ins/Math/sumPrecise/sum-is-NaN.js Pass
 test/built-ins/Math/sumPrecise/sum-is-infinite.js Pass
 test/built-ins/Math/sumPrecise/sum-is-minus-zero.js Pass
-test/built-ins/Math/sumPrecise/sum.js Fail
-test/built-ins/Math/sumPrecise/takes-iterable.js RuntimeError
-test/built-ins/Math/sumPrecise/throws-on-non-number.js Fail
+test/built-ins/Math/sumPrecise/sum.js Pass
+test/built-ins/Math/sumPrecise/takes-iterable.js Pass
+test/built-ins/Math/sumPrecise/throws-on-non-number.js Pass
 test/built-ins/Math/tan/S15.8.2.18_A1.js Pass
 test/built-ins/Math/tan/S15.8.2.18_A2.js Pass
 test/built-ins/Math/tan/S15.8.2.18_A3.js Pass

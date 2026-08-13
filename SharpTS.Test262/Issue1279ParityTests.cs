@@ -4490,27 +4490,29 @@ public sealed class Issue1279ParityTests
 
     [Fact]
     public void Math_round_preserves_ecmascript_boundary_cases()
-        => AssertPass(
-            "built-ins/Math/round/S15.8.2.15_A7.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Math/round/S15.8.2.15_A7.js");
 
     [Fact]
     public void Math_exposes_standard_toStringTag_metadata()
+        => AssertPassInBothModes("built-ins/Math/Symbol.toStringTag.js");
+
+    [Fact]
+    public void Compiled_JSON_exposes_standard_toStringTag_metadata()
         => AssertPass(
-            "built-ins/Math/Symbol.toStringTag.js",
-            Test262ExecutionMode.Interpreted);
+            "built-ins/JSON/Symbol.toStringTag.js",
+            Test262ExecutionMode.Compiled);
 
     [Fact]
     public void Math_sumPrecise_honors_array_iterator_overrides()
-        => AssertPass(
-            "built-ins/Math/sumPrecise/takes-iterable.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Math/sumPrecise/takes-iterable.js");
 
     [Fact]
     public void Math_sumPrecise_accumulates_binary64_values_exactly()
-        => AssertPass(
-            "built-ins/Math/sumPrecise/sum.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Math/sumPrecise/sum.js");
+
+    [Fact]
+    public void Math_sumPrecise_rejects_non_number_elements_without_coercion()
+        => AssertPassInBothModes("built-ins/Math/sumPrecise/throws-on-non-number.js");
 
     [Fact]
     public void Boolean_conversion_treats_objects_as_truthy()

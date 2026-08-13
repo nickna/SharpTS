@@ -110,6 +110,54 @@ public class MathBuiltInTests
     }
 
     [Theory, ModeData]
+    public void Math_Round_PreservesSignedZeroAndLargeIntegers(ExecutionMode mode)
+    {
+        var source = """
+            console.log(1 / Math.round(-0.5));
+            console.log(Math.round(9007199254740991));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("-Infinity\n9007199254740991\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Math_SumPrecise_UsesExactUnitsAndClosesAbruptIterators(ExecutionMode mode)
+    {
+        var source = """
+            console.log(Math.sumPrecise([1e30, 0.1, -1e30]));
+            let returns: number = 0;
+            const iterable = {
+                [Symbol.iterator]: function() {
+                    return {
+                        next: function() { return { done: false, value: {} }; },
+                        return: function() { returns++; return {}; }
+                    };
+                }
+            };
+            try { Math.sumPrecise(iterable); } catch {}
+            console.log(returns);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0.1\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Math_ToStringTag_IsAConfigurableReadOnlyOwnProperty(ExecutionMode mode)
+    {
+        var source = """
+            const desc = Object.getOwnPropertyDescriptor(Math, Symbol.toStringTag)!;
+            console.log(desc.value, desc.writable, desc.enumerable, desc.configurable);
+            delete (Math as any)[Symbol.toStringTag];
+            console.log(Object.prototype.hasOwnProperty.call(Math, Symbol.toStringTag));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("Math false false true\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void Math_Sqrt_ReturnsSquareRoot(ExecutionMode mode)
     {
         var source = """

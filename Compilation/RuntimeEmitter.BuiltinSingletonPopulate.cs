@@ -40,14 +40,16 @@ public partial class RuntimeEmitter
             runtime.MathSingletonPopulateMethod,
             runtime.MathSingletonField,
             runtime,
-            MathStaticEmitter.EnumerateValueFormMethods(runtime));
+            MathStaticEmitter.EnumerateValueFormMethods(runtime),
+            "Math");
 
     private void EmitJsonSingletonPopulate(EmittedRuntime runtime) =>
         EmitBuiltinSingletonPopulate(
             runtime.JsonSingletonPopulateMethod,
             runtime.JsonSingletonField,
             runtime,
-            JSONStaticEmitter.EnumerateValueFormMethods(runtime));
+            JSONStaticEmitter.EnumerateValueFormMethods(runtime),
+            "JSON");
 
     /// <summary>
     /// Fills a built-in singleton dictionary with identity-cached $TSFunction
@@ -61,7 +63,8 @@ public partial class RuntimeEmitter
         MethodBuilder method,
         FieldBuilder singletonField,
         EmittedRuntime runtime,
-        IEnumerable<(string Name, MethodInfo? Backing, int Length)> methods)
+        IEnumerable<(string Name, MethodInfo? Backing, int Length)> methods,
+        string toStringTag)
     {
         var il = method.GetILGenerator();
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item",
@@ -92,6 +95,26 @@ public partial class RuntimeEmitter
             EmitInstallNonEnumerable(il, runtime, singletonField, descLocal, jsName,
                 () => il.Emit(OpCodes.Ldloc, fnLocal));
         }
+
+        // Install the intrinsic @@toStringTag as a real symbol-keyed data
+        // descriptor so assignment and deletion observe W:F/E:F/C:T.
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Stloc, descLocal);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldstr, toStringTag);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, singletonField);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
 
         il.Emit(OpCodes.Ret);
     }

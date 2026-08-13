@@ -308,9 +308,8 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits Math.round adapter. JS rounds half-values toward +∞
-    /// (<c>Math.round(-0.5) === 0</c>, <c>Math.round(0.5) === 1</c>), which
-    /// matches <c>Math.Floor(x + 0.5)</c>.
+    /// Emits Math.round without adding 0.5 to the input. That shortcut loses
+    /// the sign of -0 and rounds already-integral large doubles incorrectly.
     /// </summary>
     private MethodBuilder EmitMathRoundAdapter(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -322,11 +321,89 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
+        var value = il.DeclareLocal(_types.Double);
+        var magnitude = il.DeclareLocal(_types.Double);
+        var integer = il.DeclareLocal(_types.Double);
+        var fraction = il.DeclareLocal(_types.Double);
+        var negative = il.DeclareLocal(_types.Boolean);
+        var finiteNonZero = il.DefineLabel();
+        var negativeHalfOrLess = il.DefineLabel();
+        var keepInteger = il.DefineLabel();
+        var applySign = il.DefineLabel();
+        var positiveResult = il.DefineLabel();
+        var unchangedResult = il.DefineLabel();
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ToNumber);
-        il.Emit(OpCodes.Ldc_R8, 0.5);
-        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, value);
+
+        // NaN, infinities, and signed zero return unchanged.
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", _types.Double));
+        il.Emit(OpCodes.Brfalse, unchangedResult);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bne_Un, finiteNonZero);
+        il.Emit(OpCodes.Br, unchangedResult);
+        il.MarkLabel(finiteNonZero);
+
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Clt);
+        il.Emit(OpCodes.Stloc, negative);
+
+        // [-0.5, 0) rounds to negative zero.
+        il.Emit(OpCodes.Ldloc, negative);
+        il.Emit(OpCodes.Brfalse, negativeHalfOrLess);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldc_R8, -0.5);
+        il.Emit(OpCodes.Blt, negativeHalfOrLess);
+        il.Emit(OpCodes.Ldc_R8, -0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(negativeHalfOrLess);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", _types.Double));
+        il.Emit(OpCodes.Stloc, magnitude);
+        il.Emit(OpCodes.Ldloc, magnitude);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Floor", _types.Double));
+        il.Emit(OpCodes.Stloc, integer);
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, fraction);
+
+        // Positive ties round up; negative ties stay at the smaller magnitude.
+        il.Emit(OpCodes.Ldloc, fraction);
+        il.Emit(OpCodes.Ldc_R8, 0.5);
+        il.Emit(OpCodes.Blt, keepInteger);
+        il.Emit(OpCodes.Ldloc, fraction);
+        il.Emit(OpCodes.Ldc_R8, 0.5);
+        il.Emit(OpCodes.Bgt, applySign);
+        il.Emit(OpCodes.Ldloc, negative);
+        il.Emit(OpCodes.Brtrue, keepInteger);
+        il.MarkLabel(applySign);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, integer);
+
+        il.MarkLabel(keepInteger);
+        il.Emit(OpCodes.Ldloc, negative);
+        il.Emit(OpCodes.Brfalse, positiveResult);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Neg);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(positiveResult);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(unchangedResult);
+        il.Emit(OpCodes.Ldloc, value);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
         return method;
