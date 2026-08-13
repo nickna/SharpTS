@@ -3249,7 +3249,7 @@ test/built-ins/JSON/parse/length.js Pass
 test/built-ins/JSON/parse/name.js Pass
 test/built-ins/JSON/parse/not-a-constructor.js Pass
 test/built-ins/JSON/parse/prop-desc.js Pass
-test/built-ins/JSON/parse/revived-proxy-revoked.js Fail
+test/built-ins/JSON/parse/revived-proxy-revoked.js Pass
 test/built-ins/JSON/parse/revived-proxy.js Pass
 test/built-ins/JSON/parse/reviver-array-define-prop-err.js Fail
 test/built-ins/JSON/parse/reviver-array-delete-err.js Pass
@@ -3277,7 +3277,7 @@ test/built-ins/JSON/parse/text-negative-zero.js Pass
 test/built-ins/JSON/parse/text-non-string-primitive.js Pass
 test/built-ins/JSON/parse/text-object-abrupt.js Pass
 test/built-ins/JSON/parse/text-object.js Pass
-test/built-ins/JSON/prop-desc.js Fail
+test/built-ins/JSON/prop-desc.js Pass
 test/built-ins/JSON/rawJSON/basic.js Pass
 test/built-ins/JSON/rawJSON/bigint-raw-json-can-be-stringified.js RuntimeError
 test/built-ins/JSON/rawJSON/builtin.js Pass
@@ -3326,7 +3326,7 @@ test/built-ins/JSON/stringify/space-string.js Pass
 test/built-ins/JSON/stringify/space-wrong-type.js Pass
 test/built-ins/JSON/stringify/value-array-abrupt.js Fail
 test/built-ins/JSON/stringify/value-array-circular.js Pass
-test/built-ins/JSON/stringify/value-array-proxy-revoked.js Fail
+test/built-ins/JSON/stringify/value-array-proxy-revoked.js Pass
 test/built-ins/JSON/stringify/value-array-proxy.js Fail
 test/built-ins/JSON/stringify/value-bigint-cross-realm.js RuntimeError
 test/built-ins/JSON/stringify/value-bigint-order.js Pass
@@ -3341,7 +3341,7 @@ test/built-ins/JSON/stringify/value-number-non-finite.js Pass
 test/built-ins/JSON/stringify/value-number-object.js Pass
 test/built-ins/JSON/stringify/value-object-abrupt.js Pass
 test/built-ins/JSON/stringify/value-object-circular.js Pass
-test/built-ins/JSON/stringify/value-object-proxy-revoked.js Fail
+test/built-ins/JSON/stringify/value-object-proxy-revoked.js Pass
 test/built-ins/JSON/stringify/value-object-proxy.js Pass
 test/built-ins/JSON/stringify/value-primitive-top-level.js Pass
 test/built-ins/JSON/stringify/value-string-escape-ascii.js Pass

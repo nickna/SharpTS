@@ -172,7 +172,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Castclass, _types.ListOfString);
         il.Emit(OpCodes.Stloc, keysLocal);
 
@@ -244,7 +244,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, newElemLocal);
         il.Emit(OpCodes.Stelem_Ref);
         // [2] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, endIfLabel);
 
@@ -259,7 +259,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Stelem_Ref);
         // [1] = null (Interpreter)
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(endIfLabel);
@@ -554,7 +554,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(keyStrEndLabel);
         il.Emit(OpCodes.Stelem_Ref);
         // [1] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, doneLabel);
 

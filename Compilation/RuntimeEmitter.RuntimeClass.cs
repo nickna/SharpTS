@@ -1037,6 +1037,7 @@ public partial class RuntimeEmitter
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (_features.UsesJSON)
         {
+            EmitInvokeMethodUnwrapped(typeBuilder, runtime);
             EmitJsonParse(typeBuilder, runtime);
             EmitJsonParseWithReviver(typeBuilder, runtime);
             EmitJsonStringify(typeBuilder, runtime);

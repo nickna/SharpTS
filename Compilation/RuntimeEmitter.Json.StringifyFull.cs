@@ -476,7 +476,7 @@ public partial class RuntimeEmitter
         // existing dict path serializes the proxied view. A revoked proxy throws
         // from TrapOwnKeys → naturally surfaces the spec-required TypeError.
         var notProxyLabelFull = il.DefineLabel();
-        EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelFull);
+        EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelFull, runtime);
         il.Emit(OpCodes.Br, dictLabel);
         il.MarkLabel(notProxyLabelFull);
 

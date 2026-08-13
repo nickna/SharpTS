@@ -431,7 +431,7 @@ public partial class RuntimeEmitter
         // [[OwnPropertyKeys]] / [[Get]] traps and substitute a Dictionary so the
         // existing dict path serializes the proxied view.
         var notProxyLabelSimple = il.DefineLabel();
-        EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelSimple);
+        EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelSimple, runtime);
         il.Emit(OpCodes.Br, dictLabel);
         il.MarkLabel(notProxyLabelSimple);
 

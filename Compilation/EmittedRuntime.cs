@@ -844,6 +844,7 @@ public class EmittedRuntime
     public MethodBuilder TSRawJsonTextGetter { get; set; } = null!;
     public MethodBuilder JsonRawJson { get; set; } = null!;
     public MethodBuilder JsonIsRawJson { get; set; } = null!;
+    public MethodBuilder InvokeMethodUnwrapped { get; set; } = null!;
 
     // Symbol support
     public TypeBuilder TSSymbolType { get; set; } = null!;

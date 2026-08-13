@@ -5028,6 +5028,17 @@ public sealed class Issue1279ParityTests
     public void JSON_raw_value_track_b_cases_pass_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Fact]
+    public void JSON_global_object_descriptor_passes_in_both_modes()
+        => AssertPassInBothModes("built-ins/JSON/prop-desc.js");
+
+    [Theory]
+    [InlineData("built-ins/JSON/parse/revived-proxy-revoked.js")]
+    [InlineData("built-ins/JSON/stringify/value-array-proxy-revoked.js")]
+    [InlineData("built-ins/JSON/stringify/value-object-proxy-revoked.js")]
+    public void JSON_revoked_proxy_errors_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Theory]
     [InlineData("built-ins/RegExp/S15.10.4.1_A8_T4.js")]
     [InlineData("built-ins/RegExp/S15.10.4.1_A8_T7.js")]
