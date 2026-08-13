@@ -378,7 +378,11 @@ public abstract partial class ExpressionEmitterBase
                 {
                     EmitExpression(arguments[0]);
                     EnsureBoxed();
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ToNumber);
+                    // Number is the one explicit numeric conversion that accepts
+                    // BigInt. Use the constructor-specific coercion helper rather
+                    // than abstract ToNumber, which must reject BigInt in unary
+                    // plus and other implicit-number contexts.
+                    IL.Emit(OpCodes.Call, Ctx.Runtime!.ConvertToNumber);
                     IL.Emit(OpCodes.Box, Ctx.Types.Double);
                 }
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.NewBoxedPrimitiveMethod);

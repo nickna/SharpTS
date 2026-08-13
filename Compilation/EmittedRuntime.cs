@@ -568,8 +568,8 @@ public class EmittedRuntime
     public MethodBuilder ToObjectMethod { get; set; } = null!;
     /// <summary>$Runtime.IsBoxedPrimitiveOfType(obj, typeTag) — true iff obj is a $Object with matching __primitiveType marker. Used by the instanceof emitter.</summary>
     public MethodBuilder IsBoxedPrimitiveOfTypeMethod { get; set; } = null!;
-    /// <summary>$Runtime.NormalizeForeignBoxedPrimitive(value) — converts a Number/Boolean/String boxed wrapper produced OUTSIDE the emitted runtime (an interpreter SharpTSObject returned across the eval() boundary) into the emitted $Object representation, so the compiled runtime's boxed-primitive handling (==, ToNumber, valueOf, …) recognizes it. Passes through everything else.</summary>
-    public MethodBuilder NormalizeForeignBoxedPrimitiveMethod { get; set; } = null!;
+    /// <summary>$Runtime.NormalizeForeignEvalValue(value) — converts interpreter-side undefined and boxed primitive values returned across the eval boundary into their emitted-runtime representations.</summary>
+    public MethodBuilder NormalizeForeignEvalValueMethod { get; set; } = null!;
 
     /// <summary>$Runtime.UnwrapIfBoxed(obj) — returns __primitiveValue when obj is a boxed-primitive wrapper, else obj. Used by abstract equality and string concat to ToPrimitive wrapper operands.</summary>
     public MethodBuilder UnwrapIfBoxedMethod { get; set; } = null!;
@@ -874,6 +874,8 @@ public class EmittedRuntime
 
     // BigInt support
     public MethodBuilder CreateBigInt { get; set; } = null!;
+    /// <summary>$Runtime.BigIntToNumber(BigInteger) -> double — ECMA-262 NumberFromBigInt with ties-to-even binary64 rounding.</summary>
+    public MethodBuilder BigIntToNumber { get; set; } = null!;
     public MethodBuilder BigIntAdd { get; set; } = null!;
     public MethodBuilder BigIntSubtract { get; set; } = null!;
     public MethodBuilder BigIntMultiply { get; set; } = null!;

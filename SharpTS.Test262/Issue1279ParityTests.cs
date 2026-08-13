@@ -4530,15 +4530,16 @@ public sealed class Issue1279ParityTests
 
     [Fact]
     public void Number_explicitly_converts_BigInt_values()
-        => AssertPass(
-            "built-ins/Number/bigint-conversion.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Number/bigint-conversion.js");
 
     [Fact]
     public void Number_toFixed_uses_standard_notation_threshold()
-        => AssertPass(
-            "built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(
+            "built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js");
+
+    [Fact]
+    public void Boolean_converts_eval_declaration_completion_to_false()
+        => AssertPassInBothModes("built-ins/Boolean/S9.2_A1_T1.js");
 
     [Fact]
     public void Error_isError_recognizes_intrinsic_error_instances()

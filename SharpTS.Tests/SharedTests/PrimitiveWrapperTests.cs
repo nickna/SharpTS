@@ -147,6 +147,20 @@ public class PrimitiveWrapperTests
     }
 
     [Theory, ModeData]
+    public void Number_CallForm_ExplicitlyConvertsBigInt(ExecutionMode mode)
+    {
+        var source = """
+            console.log(Number(9007199254740995n));
+            console.log(Number(-(2n ** 53n)));
+            console.log(Number(-(2n ** 53n + 1n)));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "9007199254740996\n-9007199254740992\n-9007199254740992\n",
+            output);
+    }
+
+    [Theory, ModeData]
     public void String_CallForm_ReturnsPrimitive(ExecutionMode mode)
     {
         var output = TestHarness.Run("console.log(typeof String(42));", mode);
@@ -167,6 +181,13 @@ public class PrimitiveWrapperTests
     {
         var output = TestHarness.Run("console.log(new Number() instanceof Number);", mode);
         Assert.Equal("true\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Number_NewWrapper_ExplicitlyConvertsBigInt(ExecutionMode mode)
+    {
+        var output = TestHarness.Run("console.log(+(new Number(0n)));", mode);
+        Assert.Equal("0\n", output);
     }
 
     [Theory, ModeData]

@@ -6,6 +6,157 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    /// <summary>
+    /// Emits ECMA-262 NumberFromBigInt. <see cref="BigInteger"/>'s direct
+    /// conversion to <see cref="double"/> truncates some halfway-adjacent
+    /// values (for example 2^53 + 3) instead of applying the spec's
+    /// round-to-nearest, ties-to-even rule, so the rounding is performed while
+    /// the integer is still exact and only the 53-bit significand is cast.
+    /// </summary>
+    private void EmitBigIntToNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "BigIntToNumber",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.BigInteger]);
+        runtime.BigIntToNumber = method;
+
+        var il = method.GetILGenerator();
+        var magnitude = il.DeclareLocal(_types.BigInteger);
+        var significand = il.DeclareLocal(_types.BigInteger);
+        var remainder = il.DeclareLocal(_types.BigInteger);
+        var halfway = il.DeclareLocal(_types.BigInteger);
+        var shift = il.DeclareLocal(_types.Int32);
+        var halfwayComparison = il.DeclareLocal(_types.Int32);
+        var negative = il.DeclareLocal(_types.Boolean);
+        var result = il.DeclareLocal(_types.Double);
+
+        var isZero = _types.GetProperty(_types.BigInteger, "IsZero")!.GetGetMethod()!;
+        var sign = _types.GetProperty(_types.BigInteger, "Sign")!.GetGetMethod()!;
+        var isEven = _types.GetProperty(_types.BigInteger, "IsEven")!.GetGetMethod()!;
+        var one = _types.GetProperty(_types.BigInteger, "One")!.GetGetMethod()!;
+        var abs = _types.GetMethod(_types.BigInteger, "Abs", _types.BigInteger);
+        var getBitLength = _types.GetMethodNoParams(_types.BigInteger, "GetBitLength");
+        var shiftRight = _types.GetMethod(_types.BigInteger, "op_RightShift", _types.BigInteger, _types.Int32);
+        var shiftLeft = _types.GetMethod(_types.BigInteger, "op_LeftShift", _types.BigInteger, _types.Int32);
+        var subtract = _types.GetMethod(_types.BigInteger, "op_Subtraction", _types.BigInteger, _types.BigInteger);
+        var increment = _types.GetMethod(_types.BigInteger, "op_Increment", _types.BigInteger);
+        var compare = _types.GetMethod(_types.BigInteger, "Compare", _types.BigInteger, _types.BigInteger);
+        var explicitToDouble = _types.GetMethods(_types.BigInteger,
+                BindingFlags.Public | BindingFlags.Static)
+            .Single(m => m.Name == "op_Explicit"
+                && m.ReturnType == _types.Double
+                && m.GetParameters() is [{ ParameterType: var p }] && p == _types.BigInteger);
+
+        // 0n converts exactly to +0.
+        var nonZero = il.DefineLabel();
+        il.Emit(OpCodes.Ldarga_S, 0);
+        il.Emit(OpCodes.Call, isZero);
+        il.Emit(OpCodes.Brfalse, nonZero);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nonZero);
+
+        // Record the sign and operate on the exact magnitude.
+        il.Emit(OpCodes.Ldarga_S, 0);
+        il.Emit(OpCodes.Call, sign);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Clt);
+        il.Emit(OpCodes.Stloc, negative);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, abs);
+        il.Emit(OpCodes.Stloc, magnitude);
+
+        // shift = max(0, bitLength - 53); significand = magnitude >> shift.
+        il.Emit(OpCodes.Ldloca, magnitude);
+        il.Emit(OpCodes.Call, getBitLength);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4, 53);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Stloc, shift);
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Call, shiftRight);
+        il.Emit(OpCodes.Stloc, significand);
+
+        var finish = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Brfalse, finish);
+
+        // Compare the discarded bits with the halfway point. Round up when
+        // above halfway, or exactly halfway with an odd significand.
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Ldloc, significand);
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Call, shiftLeft);
+        il.Emit(OpCodes.Call, subtract);
+        il.Emit(OpCodes.Stloc, remainder);
+        il.Emit(OpCodes.Call, one);
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, shiftLeft);
+        il.Emit(OpCodes.Stloc, halfway);
+        il.Emit(OpCodes.Ldloc, remainder);
+        il.Emit(OpCodes.Ldloc, halfway);
+        il.Emit(OpCodes.Call, compare);
+        il.Emit(OpCodes.Stloc, halfwayComparison);
+
+        var roundUp = il.DefineLabel();
+        var belowHalfway = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, halfwayComparison);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, roundUp);
+        il.Emit(OpCodes.Ldloc, halfwayComparison);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, belowHalfway);
+        il.Emit(OpCodes.Ldloca, significand);
+        il.Emit(OpCodes.Call, isEven);
+        il.Emit(OpCodes.Brtrue, finish);
+
+        il.MarkLabel(roundUp);
+        il.Emit(OpCodes.Ldloc, significand);
+        il.Emit(OpCodes.Call, increment);
+        il.Emit(OpCodes.Stloc, significand);
+
+        // Carry out of the 53-bit significand advances the exponent.
+        il.Emit(OpCodes.Ldloca, significand);
+        il.Emit(OpCodes.Call, getBitLength);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4, 53);
+        il.Emit(OpCodes.Ble, finish);
+        il.Emit(OpCodes.Ldloc, significand);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, shiftRight);
+        il.Emit(OpCodes.Stloc, significand);
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, shift);
+        il.Emit(OpCodes.Br, finish);
+
+        il.MarkLabel(belowHalfway);
+
+        il.MarkLabel(finish);
+        il.Emit(OpCodes.Ldloc, significand);
+        il.Emit(OpCodes.Call, explicitToDouble);
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "ScaleB", _types.Double, _types.Int32));
+        il.Emit(OpCodes.Stloc, result);
+        var positive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, negative);
+        il.Emit(OpCodes.Brfalse, positive);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Neg);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(positive);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitCreateBigInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // CreateBigInt: object -> BigInteger (boxed)

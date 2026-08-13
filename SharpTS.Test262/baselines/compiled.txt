@@ -3093,7 +3093,7 @@ test/built-ins/Boolean/S15.6.2.1_A4.js Pass
 test/built-ins/Boolean/S15.6.3_A1.js Pass
 test/built-ins/Boolean/S15.6.3_A2.js Pass
 test/built-ins/Boolean/S15.6.3_A3.js Pass
-test/built-ins/Boolean/S9.2_A1_T1.js Fail
+test/built-ins/Boolean/S9.2_A1_T1.js Pass
 test/built-ins/Boolean/S9.2_A2_T1.js Pass
 test/built-ins/Boolean/S9.2_A3_T1.js Pass
 test/built-ins/Boolean/S9.2_A4_T1.js Pass
@@ -3774,7 +3774,7 @@ test/built-ins/Number/S9.3_A3_T1.js Pass
 test/built-ins/Number/S9.3_A4.1_T1.js Pass
 test/built-ins/Number/S9.3_A4.2_T1.js Pass
 test/built-ins/Number/S9.3_A5_T1.js Pass
-test/built-ins/Number/bigint-conversion.js RuntimeError
+test/built-ins/Number/bigint-conversion.js Pass
 test/built-ins/Number/is-a-constructor.js Pass
 test/built-ins/Number/isFinite/arg-is-not-number.js Pass
 test/built-ins/Number/isFinite/finite-numbers.js Pass
@@ -3850,7 +3850,7 @@ test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.1_T01.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.1_T02.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T01.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.3_T02.js Pass
-test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js Fail
+test/built-ins/Number/prototype/toFixed/S15.7.4.5_A1.4_T01.js Pass
 test/built-ins/Number/prototype/toFixed/S15.7.4.5_A2_T01.js Pass
 test/built-ins/Number/prototype/toFixed/exactness.js Pass
 test/built-ins/Number/prototype/toFixed/length.js Pass

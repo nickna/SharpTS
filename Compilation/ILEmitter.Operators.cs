@@ -2527,28 +2527,38 @@ public partial class ILEmitter
 
     private bool IsBigIntOperation(Expr.Binary b)
     {
-        // Check if either operand has bigint type from the type map
-        if (_ctx.TypeMap == null) return false;
-
-        var leftType = _ctx.TypeMap.Get(b.Left);
-        var rightType = _ctx.TypeMap.Get(b.Right);
-
-        return leftType is TypeInfo.BigInt or TypeInfo.BigIntLiteral
-            || rightType is TypeInfo.BigInt or TypeInfo.BigIntLiteral;
+        return IsBigIntExpr(b.Left) || IsBigIntExpr(b.Right);
     }
 
     private bool IsBigIntExpr(Expr expr)
     {
-        if (_ctx.TypeMap == null) return false;
-        var type = _ctx.TypeMap.Get(expr);
-        return type is TypeInfo.BigInt or TypeInfo.BigIntLiteral;
+        if (_ctx.TypeMap?.Get(expr) is TypeInfo.BigInt or TypeInfo.BigIntLiteral)
+            return true;
+
+        // Test262 compilation intentionally skips the TypeScript type-checker,
+        // so its TypeMap may be absent or may not contain transparent grouping
+        // nodes. Preserve BigInt semantics from syntax for expressions whose
+        // result kind is unambiguous; otherwise unary minus falls through to
+        // Convert.ToDouble(object), which cannot consume BigInteger.
+        return expr switch
+        {
+            Expr.Literal { Value: System.Numerics.BigInteger } => true,
+            Expr.Grouping grouping => IsBigIntExpr(grouping.Expression),
+            Expr.Unary unary when unary.Operator.Type is TokenType.MINUS or TokenType.TILDE
+                => IsBigIntExpr(unary.Right),
+            Expr.Binary binary when binary.Operator.Type is
+                TokenType.PLUS or TokenType.MINUS or TokenType.STAR or
+                TokenType.SLASH or TokenType.PERCENT or TokenType.STAR_STAR or
+                TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or
+                TokenType.LESS_LESS or TokenType.GREATER_GREATER
+                => IsBigIntExpr(binary.Left) && IsBigIntExpr(binary.Right),
+            _ => false,
+        };
     }
 
     private bool IsBothBigInt(Expr.Binary b)
     {
-        if (_ctx.TypeMap == null) return false;
-        return _ctx.TypeMap.Get(b.Left) is TypeInfo.BigInt or TypeInfo.BigIntLiteral
-            && _ctx.TypeMap.Get(b.Right) is TypeInfo.BigInt or TypeInfo.BigIntLiteral;
+        return IsBigIntExpr(b.Left) && IsBigIntExpr(b.Right);
     }
 
     /// <summary>

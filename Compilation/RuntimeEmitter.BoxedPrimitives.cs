@@ -223,7 +223,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.NormalizeForeignBoxedPrimitive(object value) -&gt; object</c>.
+    /// Emits <c>$Runtime.NormalizeForeignEvalValue(object value) -&gt; object</c>.
     /// Boxed-primitive wrappers (<c>__primitiveType</c>/<c>__primitiveValue</c>) are
     /// recognized across the rest of the compiled runtime by an <c>Isinst $Object</c>
     /// type check (see <see cref="EmitNewBoxedPrimitive"/>, ToNumber, ToJsString, the
@@ -233,19 +233,22 @@ public partial class RuntimeEmitter
     /// misses and the wrapper neither coerces (<c>== 0</c>) nor dispatches
     /// <c>valueOf</c>. Re-wrap such a foreign Number/Boolean/String wrapper as a native
     /// <c>$Object</c> via <see cref="EmitNewBoxedPrimitive"/> so all downstream handling
-    /// works uniformly. Everything else — null, primitives, already-native
+    /// works uniformly. The interpreter's <c>SharpTSUndefined</c> singleton is likewise
+    /// translated to the emitted runtime's undefined singleton; leaving it foreign would
+    /// make ToBoolean treat an eval declaration completion as a truthy host object.
+    /// Everything else — null, primitives, already-native
     /// <c>$Object</c>/Dictionary objects, and non-wrapper foreign objects — passes
     /// through unchanged, keeping this off the hot path for compiled-origin values.
     /// (Test262 language/expressions/new/S11.2.2_A1.1 / A1.2.)
     /// </summary>
-    private void EmitNormalizeForeignBoxedPrimitive(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNormalizeForeignEvalValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
-            "NormalizeForeignBoxedPrimitive",
+            "NormalizeForeignEvalValue",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]);
-        runtime.NormalizeForeignBoxedPrimitiveMethod = method;
+        runtime.NormalizeForeignEvalValueMethod = method;
 
         var il = method.GetILGenerator();
         var passthrough = il.DefineLabel();
@@ -256,6 +259,21 @@ public partial class RuntimeEmitter
         // null → passthrough.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, passthrough);
+
+        // The eval bridge runs the source in SharpTS.dll's interpreter. Its
+        // SharpTSUndefined type is intentionally not referenced by the output
+        // assembly, so recognize it by stable full name and substitute the
+        // emitted runtime's own undefined singleton.
+        var notForeignUndefined = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "FullName")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.Types.SharpTSUndefined");
+        il.Emit(OpCodes.Call, strEq);
+        il.Emit(OpCodes.Brfalse, notForeignUndefined);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notForeignUndefined);
 
         // Already a native $Object (the common compiled-origin case) → passthrough.
         il.Emit(OpCodes.Ldarg_0);

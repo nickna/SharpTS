@@ -596,6 +596,9 @@ public partial class RuntimeEmitter
         // $RegExp's Symbol.split limit-coercion (which runs before $Runtime
         // body emit) can bind to it. Skip the duplicate-define here.
         DeclareConvertToNumber(typeBuilder, runtime);
+        // ConvertToNumber's explicit Number(BigInt) branch needs the exact
+        // binary64-rounding helper before its body is filled later below.
+        EmitBigIntToNumber(typeBuilder, runtime);
         EmitJsToInt32(typeBuilder, runtime);
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
@@ -963,7 +966,7 @@ public partial class RuntimeEmitter
         // Boxed primitive helpers — must come AFTER prototype populates so
         // BooleanPrototypePopulateMethod / Number / String / Object are non-null.
         EmitNewBoxedPrimitive(typeBuilder, runtime);
-        EmitNormalizeForeignBoxedPrimitive(typeBuilder, runtime);
+        EmitNormalizeForeignEvalValue(typeBuilder, runtime);
         EmitToObject(typeBuilder, runtime);
         EmitIsBoxedPrimitiveOfType(typeBuilder, runtime);
         EmitUnwrapStringReceiver(typeBuilder, runtime);

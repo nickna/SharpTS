@@ -1011,6 +1011,21 @@ public partial class RuntimeEmitter
         // return value.ToString($"F{digits}", CultureInfo.InvariantCulture).
         // ECMA-262: -0 formatted as "0" (no sign) — strip via abs on zero.
         il.MarkLabel(notTooLargeLabel);
+
+        // ECMA-262 21.1.3.3 step 10: values at or above 10^21 use the
+        // ordinary Number::toString representation, irrespective of the
+        // requested fraction digit count. The fixed-point formatter below
+        // would otherwise produce "1000000000000000000000" instead of
+        // "1e+21".
+        var fixedNotationLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double])!);
+        il.Emit(OpCodes.Ldc_R8, 1e21);
+        il.Emit(OpCodes.Blt_Un, fixedNotationLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Ret);
+
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         var nonZeroFLabel = il.DefineLabel();
@@ -1018,6 +1033,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Stloc, valueLocal);
         il.MarkLabel(nonZeroFLabel);
+        il.MarkLabel(fixedNotationLabel);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Ldstr, "F");
         il.Emit(OpCodes.Ldloc, digitsLocal);
