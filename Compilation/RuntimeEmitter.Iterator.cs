@@ -389,20 +389,11 @@ public partial class RuntimeEmitter
         runtime.GetIteratorFunction = method;
 
         var il = method.GetILGenerator();
-        var returnNullLabel = il.DefineLabel();
-        var tryGetValueLabel = il.DefineLabel();
-        var returnLabel = il.DefineLabel();
-        var returnLabel2 = il.DefineLabel();   // registry-hit return (#647)
+        var returnUndefinedLabel = il.DefineLabel();
 
-        // Locals
-        var dictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
-        var valueLocal = il.DeclareLocal(_types.Object);
-
-        var tryRegistryLabel = il.DefineLabel();
-
-        // if (obj == null) return null;
+        // if (obj == null) return undefined;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, returnNullLabel);
+        il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
         // #1024: node:stream $Readable exposes [Symbol.asyncIterator] via GetAsyncIterator().
         // It carries no per-object symbol dict and isn't a user class, so hook it here:
@@ -423,46 +414,58 @@ public partial class RuntimeEmitter
             il.MarkLabel(notReadableAsyncIter);
         }
 
-        // Get symbol dict: var dict = GetSymbolDict(obj);
+        var dictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var tryRegistryLabel = il.DefineLabel();
+        var rawValueLabel = il.DefineLabel();
+        var registryValueLabel = il.DefineLabel();
+
+        // Host-backed iterables can publish their intrinsic iterator directly
+        // through the runtime symbol dictionary, so retain that lookup before
+        // consulting the class-method registry.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Stloc, dictLocal);
-
-        // if (dict == null) goto tryRegistry;  (a class instance carries no per-object symbol dict)
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Brfalse, tryRegistryLabel);
-
-        // if (dict.TryGetValue(symbol, out value)) return value;
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
-        var tryGetValue = _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue", [_types.Object, _types.Object.MakeByRefType()])!;
-        il.Emit(OpCodes.Callvirt, tryGetValue);
-        il.Emit(OpCodes.Brtrue, returnLabel);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "TryGetValue",
+            [_types.Object, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, tryRegistryLabel);
 
-        // Per-object dict didn't have it — consult the symbol-method registry (#647): a computed
-        // [Symbol.iterator]()/[Symbol.asyncIterator]() declared on the class chain. The returned
-        // MethodInfo is invoked through InvokeMethodValue's MethodBase arm by the caller.
+        // Object.defineProperty stores a compiled descriptor in the symbol
+        // dictionary. Route only that shape through ordinary symbol [[Get]] so
+        // accessor getters are invoked (and abrupt completion is propagated).
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Brfalse, rawValueLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(rawValueLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
         il.MarkLabel(tryRegistryLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.FindSymbolMethod);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue, returnLabel2);
+        il.Emit(OpCodes.Brtrue, registryValueLabel);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, returnUndefinedLabel);
+
+        il.MarkLabel(registryValueLabel);
+        il.Emit(OpCodes.Ret);
 
         // return undefined;
-        il.MarkLabel(returnNullLabel);
+        il.MarkLabel(returnUndefinedLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-
-        // return value;  (per-object dict hit)
-        il.MarkLabel(returnLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ret);
-
-        // return registryMethod;  (registry hit — value already on stack)
-        il.MarkLabel(returnLabel2);
         il.Emit(OpCodes.Ret);
     }
 

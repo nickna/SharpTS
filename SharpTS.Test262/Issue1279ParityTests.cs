@@ -4403,6 +4403,14 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("language/expressions/call/spread-err-mult-err-itr-get-get.js")]
+    [InlineData("language/expressions/call/spread-err-sngl-err-itr-get-get.js")]
+    [InlineData("language/expressions/new/spread-err-mult-err-itr-get-get.js")]
+    [InlineData("language/expressions/new/spread-err-sngl-err-itr-get-get.js")]
+    public void Spread_observes_symbol_iterator_accessors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Promise/all/iter-assigned-null-reject.js")]
     [InlineData("built-ins/Promise/all/iter-returns-null-reject.js")]
     [InlineData("built-ins/Promise/all/S25.4.4.1_A3.1_T3.js")]
@@ -4728,9 +4736,7 @@ public sealed class Issue1279ParityTests
 
     [Fact]
     public void Array_from_propagates_iterator_getter_errors()
-        => AssertPass(
-            "built-ins/Array/from/get-iter-method-err.js",
-            Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes("built-ins/Array/from/get-iter-method-err.js");
 
     [Fact]
     public void Object_assign_reads_symbols_after_strings()
