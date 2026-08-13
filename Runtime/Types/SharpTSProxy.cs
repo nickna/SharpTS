@@ -129,6 +129,29 @@ public class SharpTSProxy : ISharpTSCallable
     public object? TrapGet(string prop, Interpreter? interp)
         => TrapGet(prop, interp, interp != null ? this : null);
 
+    /// <summary>
+    /// Compiled-runtime get dispatch. The emitted runtime owns ordinary
+    /// property lookup for compiler representations such as Task-backed
+    /// promises, so an absent proxy trap must delegate back to it instead of
+    /// BuiltInRegistry's interpreter-oriented fallback.
+    /// </summary>
+    public object? TrapGetCompiled(
+        string prop,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallable("get", null);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy targetProxy
+                ? targetProxy.TrapGetCompiled(prop, ordinaryGet)
+                : ordinaryGet(_target, prop);
+        }
+
+        object? result = InvokeTrap(trap, null, [_target, prop, this]);
+        ValidateGetTrapResult(prop, result, null);
+        return result;
+    }
+
     internal object? TrapGet(
         string prop, Interpreter? interp, object? receiver)
     {

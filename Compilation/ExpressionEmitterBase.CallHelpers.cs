@@ -1969,6 +1969,20 @@ public abstract partial class ExpressionEmitterBase
         EnsureBoxed();
         var promiseReceiverLocal = IL.DeclareLocal(typeof(object));
         IL.Emit(OpCodes.Stloc, promiseReceiverLocal);
+
+        // Promise.prototype.finally is specified in terms of an observable
+        // Get(promise, "then") followed by Invoke.  Keep compiled instance
+        // calls on the same helper path as Promise.prototype.finally.call(...)
+        // so own accessors/replacements are not bypassed by the Task fast path.
+        if (methodName == "finally")
+        {
+            IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
+            EmitBoxedArgOrNull(arguments, 0);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFinallyHelperMethod);
+            SetStackUnknown();
+            return;
+        }
+
         IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.UnwrapPromiseReceiverMethod);
 
@@ -1982,10 +1996,6 @@ public abstract partial class ExpressionEmitterBase
             case "catch":
                 EmitBoxedArgOrNull(arguments, 0);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseCatch);
-                break;
-            case "finally":
-                EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFinally);
                 break;
         }
 

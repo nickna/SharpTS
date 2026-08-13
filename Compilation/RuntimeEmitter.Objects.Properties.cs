@@ -1023,7 +1023,7 @@ public partial class RuntimeEmitter
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
-        EmitProxyGetPropertyCheck(il, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1), notProxyLabel);
+        EmitProxyGetPropertyCheck(il, runtime, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1), notProxyLabel);
 
         il.MarkLabel(notProxyLabel);
 
@@ -1855,6 +1855,39 @@ public partial class RuntimeEmitter
 
         // Promise (Task<object?> or $Promise) handler - return TSFunction wrappers for then/catch/finally
         il.MarkLabel(promiseLabel);
+
+        // Promise instances are ordinary extensible objects.  An own data or
+        // accessor descriptor must shadow Promise.prototype (notably `then`,
+        // whose lookup is observable from catch/finally).  Raw intrinsic
+        // promises are Task<object?> values, so they cannot expose expandos as
+        // CLR fields and use the descriptor store instead.
+        var promisePdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, promisePdsDescLocal);
+        var noPromisePdsDescLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, promisePdsDescLocal);
+        il.Emit(OpCodes.Brfalse, noPromisePdsDescLabel);
+        var promiseDataDescLabel = il.DefineLabel();
+        var promiseGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, promisePdsDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, promiseGetterLocal);
+        il.Emit(OpCodes.Ldloc, promiseGetterLocal);
+        il.Emit(OpCodes.Brfalse, promiseDataDescLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, promiseGetterLocal);
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+            _types.GetMethod(typeof(System.Array), "Empty"), _types.Object));
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(promiseDataDescLabel);
+        il.Emit(OpCodes.Ldloc, promisePdsDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noPromisePdsDescLabel);
+
         // First, extract the underlying Task if this is a $Promise object
         // Store the task in a local variable for use in creating TSFunction wrappers
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);

@@ -147,6 +147,7 @@ public partial class RuntimeEmitter
         var checkFlattenLabel = il.DefineLabel();
         var setResultLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
+        var rejectionFlattenLabel = il.DefineLabel();
         var handlerTryStartLabel = il.DefineLabel();  // First instruction of the onFulfilled guard try
 
         // Begin outer try block
@@ -163,6 +164,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.StateField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Beq, handlerTryStartLabel);  // state == 1
+        var notRejectionFlattenResumeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.StateField);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Bne_Un, notRejectionFlattenResumeLabel);
+        il.Emit(OpCodes.Leave, rejectionFlattenLabel); // state == 2
+        il.MarkLabel(notRejectionFlattenResumeLabel);
 
         // ========== STATE -1: Initial - await input promise ==========
 
@@ -415,6 +423,44 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
         il.MarkLabel(handlerInvokeDoneLabel);
 
+        // Promise resolution adopts a Task returned by onRejected just as it
+        // does for onFulfilled. Keep the awaiter in the state machine so a
+        // pending recovery promise resumes outside this catch handler; CLR IL
+        // does not permit branching back into a catch region on resume.
+        var rejectionTaskLocal = il.DeclareLocal(_types.TaskOfObject);
+        var rejectionHandlerNonTaskLabel = il.DefineLabel();
+        var rejectionTaskCompletedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, rejectionTaskLocal);
+        il.Emit(OpCodes.Ldloc, rejectionTaskLocal);
+        il.Emit(OpCodes.Brfalse, rejectionHandlerNonTaskLabel);
+        il.Emit(OpCodes.Ldloc, rejectionTaskLocal);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
+        var rejectionAwaiterLocal = il.DeclareLocal(awaiterType);
+        il.Emit(OpCodes.Stloc, rejectionAwaiterLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, rejectionAwaiterLocal);
+        il.Emit(OpCodes.Stfld, sm.FlattenAwaiterField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.FlattenAwaiterField);
+        il.Emit(OpCodes.Call, awaiterType.GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, rejectionTaskCompletedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.FlattenAwaiterField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, awaitMethod);
+        il.Emit(OpCodes.Leave, returnLabel);
+        il.MarkLabel(rejectionTaskCompletedLabel);
+        il.Emit(OpCodes.Leave, rejectionFlattenLabel);
+
+        il.MarkLabel(rejectionHandlerNonTaskLabel);
+
         // Set state to -2 (completed) on both outcomes
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4, -2);
@@ -451,6 +497,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Leave, returnLabel);
 
         il.EndExceptionBlock();
+
+        // Resume/complete adoption of the Task returned by onRejected. This is
+        // deliberately outside the outer source-promise catch so a rejection
+        // from the returned Task rejects the output promise instead of invoking
+        // the same onRejected callback a second time.
+        il.MarkLabel(rejectionFlattenLabel);
+        var rejectionFlattenExceptionLocal = il.DeclareLocal(_types.Exception);
+        var rejectionFlattenDoneLabel = il.DefineLabel();
+        // Publish completion before SetResult/SetException can run continuations
+        // synchronously and re-enter observable promise machinery.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, -2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.FlattenAwaiterField);
+        il.Emit(OpCodes.Call, awaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
+        il.Emit(OpCodes.Leave, rejectionFlattenDoneLabel);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Stloc, rejectionFlattenExceptionLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, rejectionFlattenExceptionLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException")!);
+        il.Emit(OpCodes.Leave, rejectionFlattenDoneLabel);
+        il.EndExceptionBlock();
+        il.MarkLabel(rejectionFlattenDoneLabel);
+        il.Emit(OpCodes.Br, returnLabel);
 
         // Return point
         il.MarkLabel(returnLabel);

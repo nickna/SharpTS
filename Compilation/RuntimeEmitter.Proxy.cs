@@ -58,23 +58,36 @@ public partial class RuntimeEmitter
     /// Emitted IL equivalent:
     ///   if (obj.GetType().FullName == ProxyTypeName) return obj.TrapGet(name, null);
     /// </summary>
-    internal void EmitProxyGetPropertyCheck(ILGenerator il, Action emitLoadObj, Action emitLoadName, Label notProxyLabel)
+    internal void EmitProxyGetPropertyCheck(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        Action emitLoadObj,
+        Action emitLoadName,
+        Label notProxyLabel)
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        // Call TrapGet(string prop, Interpreter? interp) via reflection on the proxy object
-        EmitProxyMethodCall(il, emitLoadObj, "TrapGet", () =>
+        // Call TrapGetCompiled(string prop, Func<object,string,object>) via
+        // reflection. The fallback delegate returns to this emitted runtime's
+        // ordinary Get implementation when the handler has no get trap.
+        EmitProxyMethodCall(il, emitLoadObj, "TrapGetCompiled", () =>
         {
-            // new object[] { name, null }
+            // new object[] { name, new Func<object,string,object>(GetProperty) }
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             emitLoadName();
             il.Emit(OpCodes.Stelem_Ref);
-            // [1] = null (Interpreter) - already null from Newarr
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
+            il.Emit(OpCodes.Stelem_Ref);
         });
         il.Emit(OpCodes.Ret);
     }

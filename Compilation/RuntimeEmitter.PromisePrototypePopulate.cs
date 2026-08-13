@@ -24,6 +24,9 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromisePrototypeHelpers(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var finallyFunctions = EmitPromiseFinallyFunctionTypes(
+            (ModuleBuilder)typeBuilder.Module, runtime);
+
         // PromiseThenHelper(object __this, object onFulfilled, object onRejected) -> Task<object>
         {
             var m = typeBuilder.DefineMethod(
@@ -97,18 +100,245 @@ public partial class RuntimeEmitter
 
             var il = m.GetILGenerator();
             EmitThrowIfNullOrUndefined(il, runtime, "Promise.prototype.finally called on null or undefined");
-            // Fast path or user-then-invoke shape. For finally, the spec
-            // (§27.2.5.3 step 7) does `Invoke(promise, "then", « thenFinally,
-            // catchFinally »)` where both args wrap onFinally so it runs on
-            // both fulfillment and rejection. The fast path's PromiseFinally
-            // builds those wrappers natively. For the user-then dispatch path
-            // we approximate with [onFinally, onFinally], which matches the
-            // arg-count and both-branches-fire shape that user-then probes
-            // expect — losing the wrapper's "preserve original value/reason"
-            // semantics until we can emit closures here.
-            EmitFastPathOrUserThenInvoke(il, runtime, isCatch: false, methodNameForError: "Promise.prototype.finally");
+            EmitDynamicPromiseFinallyInvoke(il, runtime, finallyFunctions);
             il.Emit(OpCodes.Ret);
         }
+    }
+
+    private sealed record PromiseFinallyFunctionBuilders(
+        ConstructorBuilder ClosureCtor,
+        MethodBuilder ThenMethod,
+        MethodBuilder CatchMethod);
+
+    /// <summary>
+    /// Emits the closure objects used by Promise.prototype.finally. The outer
+    /// pair capture onFinally and implement ThenFinally/CatchFinally; the inner
+    /// thunk captures the original fulfillment value or rejection reason for
+    /// the `promise.then(valueThunk/thrower)` continuation.
+    /// </summary>
+    private PromiseFinallyFunctionBuilders EmitPromiseFinallyFunctionTypes(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime)
+    {
+        var thunkType = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$PromiseFinallyValueThunk",
+            TypeAttributes.NotPublic | TypeAttributes.Sealed,
+            _types.Object);
+        var thunkValueField = thunkType.DefineField(
+            "Value", _types.Object, FieldAttributes.Private);
+        var thunkThrowsField = thunkType.DefineField(
+            "Throws", _types.Boolean, FieldAttributes.Private);
+        var thunkCtor = thunkType.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.Object, _types.Boolean]);
+        {
+            var il = thunkCtor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, thunkValueField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stfld, thunkThrowsField);
+            il.Emit(OpCodes.Ret);
+        }
+        var thunkInvoke = thunkType.DefineMethod(
+            "Invoke", MethodAttributes.Public, _types.Object, Type.EmptyTypes);
+        {
+            var il = thunkInvoke.GetILGenerator();
+            var returnValueLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, thunkThrowsField);
+            il.Emit(OpCodes.Brfalse, returnValueLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, thunkValueField);
+            il.Emit(OpCodes.Call, runtime.CreateException);
+            il.Emit(OpCodes.Throw);
+            il.MarkLabel(returnValueLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, thunkValueField);
+            il.Emit(OpCodes.Ret);
+        }
+        thunkType.CreateType();
+
+        var closureType = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$PromiseFinallyFunctions",
+            TypeAttributes.NotPublic | TypeAttributes.Sealed,
+            _types.Object);
+        var onFinallyField = closureType.DefineField(
+            "OnFinally", _types.Object, FieldAttributes.Private);
+        var closureCtor = closureType.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.Object]);
+        {
+            var il = closureCtor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, onFinallyField);
+            il.Emit(OpCodes.Ret);
+        }
+
+        MethodBuilder DefineContinuation(string name, bool throws)
+        {
+            var method = closureType.DefineMethod(
+                name, MethodAttributes.Public, _types.Object, [_types.Object]);
+            var il = method.GetILGenerator();
+            var resultLocal = il.DeclareLocal(_types.Object);
+            var promiseLocal = il.DeclareLocal(_types.TaskOfObject);
+            var thunkLocal = il.DeclareLocal(_types.Object);
+            var thunkFunctionLocal = il.DeclareLocal(_types.Object);
+            var thenLocal = il.DeclareLocal(_types.Object);
+
+            // result = Call(onFinally, undefined, « »)
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, onFinallyField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Call, runtime.InvokeValue);
+            il.Emit(OpCodes.Stloc, resultLocal);
+
+            // promise = PromiseResolve(%Promise%, result)
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            il.Emit(OpCodes.Stloc, promiseLocal);
+
+            // thunk = new ValueThunk(valueOrReason, throws)
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(throws ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newobj, thunkCtor);
+            il.Emit(OpCodes.Stloc, thunkLocal);
+
+            // thunkFunction = new $TSFunction(thunk, Invoke, "", 0)
+            il.Emit(OpCodes.Ldloc, thunkLocal);
+            il.Emit(OpCodes.Ldtoken, thunkInvoke);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Ldstr, string.Empty);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Stloc, thunkFunctionLocal);
+
+            // return Invoke(promise, "then", « thunkFunction »)
+            il.Emit(OpCodes.Ldloc, promiseLocal);
+            il.Emit(OpCodes.Ldstr, "then");
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Stloc, thenLocal);
+            il.Emit(OpCodes.Ldloc, promiseLocal);
+            il.Emit(OpCodes.Ldloc, thenLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, thunkFunctionLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ret);
+            return method;
+        }
+
+        var thenMethod = DefineContinuation("ThenFinally", throws: false);
+        var catchMethod = DefineContinuation("CatchFinally", throws: true);
+        closureType.CreateType();
+        return new PromiseFinallyFunctionBuilders(
+            closureCtor, thenMethod, catchMethod);
+    }
+
+    /// <summary>
+    /// Emits the exact §27.2.5.3 dynamic Invoke(promise, "then", …) operation.
+    /// Unlike the old Task fast path, this observes own/prototype/proxy `then`
+    /// replacements and supplies real ThenFinally/CatchFinally built-ins when
+    /// onFinally is callable.
+    /// </summary>
+    private void EmitDynamicPromiseFinallyInvoke(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        PromiseFinallyFunctionBuilders functions)
+    {
+        var onFinallyCallableLabel = il.DefineLabel();
+        var haveArgumentsLabel = il.DefineLabel();
+        var thenCallableLabel = il.DefineLabel();
+        var closureLocal = il.DeclareLocal(_types.Object);
+        var thenFinallyLocal = il.DeclareLocal(_types.Object);
+        var catchFinallyLocal = il.DeclareLocal(_types.Object);
+        var thenLocal = il.DeclareLocal(_types.Object);
+
+        // Non-callable onFinally values are forwarded unchanged in both slots.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, onFinallyCallableLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, thenFinallyLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, catchFinallyLocal);
+        il.Emit(OpCodes.Br, haveArgumentsLabel);
+
+        il.MarkLabel(onFinallyCallableLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Newobj, functions.ClosureCtor);
+        il.Emit(OpCodes.Stloc, closureLocal);
+        EmitPromiseFinallyFunctionWrapper(
+            il, runtime, closureLocal, functions.ThenMethod, length: 1);
+        il.Emit(OpCodes.Stloc, thenFinallyLocal);
+        EmitPromiseFinallyFunctionWrapper(
+            il, runtime, closureLocal, functions.CatchMethod, length: 1);
+        il.Emit(OpCodes.Stloc, catchFinallyLocal);
+
+        il.MarkLabel(haveArgumentsLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "then");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, thenLocal);
+        il.Emit(OpCodes.Ldloc, thenLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, thenCallableLabel);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "Promise.prototype.finally: this.then is not callable");
+        il.MarkLabel(thenCallableLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, thenLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, thenFinallyLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, catchFinallyLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+    }
+
+    private void EmitPromiseFinallyFunctionWrapper(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder closure,
+        MethodBuilder method,
+        int length)
+    {
+        il.Emit(OpCodes.Ldloc, closure);
+        il.Emit(OpCodes.Ldtoken, method);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.MethodBase, "GetMethodFromHandle", _types.RuntimeMethodHandle));
+        il.Emit(OpCodes.Castclass, _types.MethodInfo);
+        il.Emit(OpCodes.Ldstr, string.Empty);
+        il.Emit(OpCodes.Ldc_I4, length);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
     }
 
     /// <summary>

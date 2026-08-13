@@ -153,10 +153,21 @@ public partial class ILCompiler
         }
         else if (constructor == null && qualifiedSuperclass != null && isErrorSubclass)
         {
-            // No explicit constructor, extends Error — forward message arg to base Error constructor
+            // No explicit constructor, extends Error — the implicit derived
+            // constructor forwards its optional message. Omitted/undefined
+            // means no message; every other value uses ECMAScript ToString.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_1); // message parameter (object?)
-            il.Emit(OpCodes.Castclass, _types.String); // Cast object? → string? (null-safe)
+            var convertErrorMessageLabel = il.DefineLabel();
+            var haveErrorMessageLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+            il.Emit(OpCodes.Brfalse, convertErrorMessageLabel);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Br, haveErrorMessageLabel);
+            il.MarkLabel(convertErrorMessageLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, _runtime.ToJsString);
+            il.MarkLabel(haveErrorMessageLabel);
             var baseCtor = GetEmittedErrorConstructor(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
             il.Emit(OpCodes.Call, (System.Reflection.ConstructorInfo)baseCtor);
         }

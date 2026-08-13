@@ -473,6 +473,7 @@ public partial class RuntimeEmitter
             "$SyntaxError", "$URIError", "$EvalError", "$AggregateError",
             "$Buffer", "$Headers", "$Hash", "$Hmac", "$NodeError",
             "$FinalizationRegistry", "$DataView", "$ArrayBuffer",
+            "$PromiseFinallyFunctions", "$PromiseFinallyValueThunk",
         ];
         var declaringTypeIsRuntimeLabel = il.DefineLabel();
         foreach (var name in runtimeHelperClasses)

@@ -520,7 +520,7 @@ test/built-ins/Array/prototype/every/15.4.4.16-7-b-12.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-13.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-14.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-15.js Pass
-test/built-ins/Array/prototype/every/15.4.4.16-7-b-16.js Fail
+test/built-ins/Array/prototype/every/15.4.4.16-7-b-16.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-2.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-3.js Pass
 test/built-ins/Array/prototype/every/15.4.4.16-7-b-4.js Pass
@@ -775,7 +775,7 @@ test/built-ins/Array/prototype/filter/15.4.4.20-9-b-12.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-13.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-14.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-15.js Pass
-test/built-ins/Array/prototype/filter/15.4.4.20-9-b-16.js Fail
+test/built-ins/Array/prototype/filter/15.4.4.20-9-b-16.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-2.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-3.js Pass
 test/built-ins/Array/prototype/filter/15.4.4.20-9-b-4.js Pass
@@ -1138,7 +1138,7 @@ test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-12.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-13.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-14.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-15.js Pass
-test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-16.js Fail
+test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-16.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-2.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-3.js Pass
 test/built-ins/Array/prototype/forEach/15.4.4.18-7-b-4.js Pass
@@ -1798,7 +1798,7 @@ test/built-ins/Array/prototype/map/15.4.4.19-8-b-12.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-13.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-14.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-15.js Pass
-test/built-ins/Array/prototype/map/15.4.4.19-8-b-16.js Fail
+test/built-ins/Array/prototype/map/15.4.4.19-8-b-16.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-2.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-3.js Pass
 test/built-ins/Array/prototype/map/15.4.4.19-8-b-4.js Pass
@@ -2691,7 +2691,7 @@ test/built-ins/Array/prototype/some/15.4.4.17-7-b-12.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-13.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-14.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-15.js Pass
-test/built-ins/Array/prototype/some/15.4.4.17-7-b-16.js Fail
+test/built-ins/Array/prototype/some/15.4.4.17-7-b-16.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-2.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-3.js Pass
 test/built-ins/Array/prototype/some/15.4.4.17-7-b-4.js Pass

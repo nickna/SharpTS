@@ -4813,12 +4813,29 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/Promise/prototype/finally/invokes-then-with-function.js")]
     [InlineData("built-ins/Promise/prototype/finally/invokes-then-with-non-function.js")]
+    [InlineData("built-ins/Promise/prototype/finally/rejected-observable-then-calls-argument.js")]
+    [InlineData("built-ins/Promise/prototype/finally/rejection-reason-no-fulfill.js")]
     [InlineData("built-ins/Promise/prototype/finally/this-value-then-not-callable.js")]
     [InlineData("built-ins/Promise/prototype/finally/this-value-then-poisoned.js")]
     [InlineData("built-ins/Promise/prototype/finally/this-value-then-throws.js")]
     [InlineData("built-ins/Promise/prototype/finally/this-value-thenable.js")]
+    [InlineData("built-ins/Promise/prototype/finally/this-value-proxy.js")]
     public void Promise_finally_dynamically_invokes_then(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/allSettled/resolved-then-catch-finally.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-pending-rejected-thenable.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-settled-rejected-thenable.js")]
+    [InlineData("built-ins/Promise/resolve/resolve-prms-cstm-then.js")]
+    public void Promise_rejection_handlers_adopt_returned_promises(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/finally/rejection-reason-override-with-throw.js")]
+    [InlineData("built-ins/Promise/prototype/finally/resolved-observable-then-calls.js")]
+    public void Compiled_Promise_finally_preserves_completion_semantics(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
     [InlineData("built-ins/JSON/rawJSON/basic.js")]
