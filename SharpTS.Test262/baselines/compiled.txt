@@ -8070,7 +8070,7 @@ test/built-ins/Promise/resolve/S25.Promise_resolve_foreign_thenable_1.js Fail
 test/built-ins/Promise/resolve/S25.Promise_resolve_foreign_thenable_2.js Fail
 test/built-ins/Promise/resolve/arg-non-thenable.js Pass
 test/built-ins/Promise/resolve/arg-poisoned-then.js Fail
-test/built-ins/Promise/resolve/arg-uniq-ctor.js Fail
+test/built-ins/Promise/resolve/arg-uniq-ctor.js Pass
 test/built-ins/Promise/resolve/capability-executor-called-twice.js Pass
 test/built-ins/Promise/resolve/capability-executor-not-callable.js Pass
 test/built-ins/Promise/resolve/capability-invocation-error.js Fail

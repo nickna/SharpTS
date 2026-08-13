@@ -4293,6 +4293,7 @@ public sealed class Issue1279ParityTests
             Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/Promise/resolve/arg-uniq-ctor.js")]
     [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.1_T1.js")]
     [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.2_T1.js")]
     [InlineData("built-ins/Promise/resolve/S25.4.4.5_A2.3_T1.js")]

@@ -171,10 +171,9 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
 
-        // Promise.resolve(value?) - wraps value in completed Task, flattening if already a Task
-        // IL equivalent:
-        //   if (value is Task<object?> task) return task;
-        //   return Task.FromResult<object?>(value);
+        // Promise.resolve(value?) - returns an existing intrinsic Promise only
+        // when its observable constructor is %Promise%. An own constructor
+        // override requires a fresh promise capability that adopts the input.
         var resolve = typeBuilder.DefineMethod(
             "PromiseResolve",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -185,7 +184,11 @@ public partial class RuntimeEmitter
         {
             var il = resolve.GetILGenerator();
             var notTaskLabel = il.DefineLabel();
+            var wrapTaskLabel = il.DefineLabel();
             var taskLocal = il.DeclareLocal(taskType);
+            var tcsType = typeof(TaskCompletionSource<object?>);
+            var tcsLocal = il.DeclareLocal(tcsType);
+            var callbackLocal = il.DeclareLocal(runtime.PromiseResolveCallbackType);
 
             // Check if value is already a Task<object?>
             il.Emit(OpCodes.Ldarg_0);
@@ -194,8 +197,42 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, taskLocal);
             il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-            // It's a Task<object?>, return it directly (flattening)
+            // IsPromise(value) && value.constructor === %Promise%: preserve
+            // identity. GetProperty observes own data/accessor overrides before
+            // falling back to Promise.prototype.constructor.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "constructor");
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, wrapTaskLabel);
             il.Emit(OpCodes.Ldloc, taskLocal);
+            il.Emit(OpCodes.Ret);
+
+            // The constructor differs: create a distinct intrinsic promise and
+            // resolve it with the input promise. Reusing the resolving-function
+            // implementation preserves adoption, rejection, and single-settle
+            // behavior without introducing a second promise-resolution path.
+            il.MarkLabel(wrapTaskLabel);
+            il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, tcsLocal);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Newobj, typeof(System.Runtime.CompilerServices.StrongBox<bool>)
+                .GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            il.Emit(OpCodes.Stloc, callbackLocal);
+            il.Emit(OpCodes.Ldloc, callbackLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, taskLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, runtime.PromiseResolveCallbackInvoke);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
             il.Emit(OpCodes.Ret);
 
             // Not a Task, wrap in Task.FromResult
