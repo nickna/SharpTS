@@ -4738,6 +4738,19 @@ public sealed class Issue1279ParityTests
     public void Array_from_propagates_iterator_getter_errors()
         => AssertPassInBothModes("built-ins/Array/from/get-iter-method-err.js");
 
+    [Theory]
+    [InlineData("built-ins/Boolean/prototype/S15.6.3.1_A3.js")]
+    [InlineData("built-ins/Boolean/prototype/S15.6.3.1_A4.js")]
+    [InlineData("built-ins/Error/prototype/S15.11.3.1_A2_T1.js")]
+    [InlineData("built-ins/Number/MAX_VALUE/S15.7.3.2_A4.js")]
+    [InlineData("built-ins/Number/MIN_VALUE/S15.7.3.3_A4.js")]
+    [InlineData("built-ins/Object/prototype/S15.2.3.1_A2.js")]
+    [InlineData("built-ins/RegExp/prototype/S15.10.5.1_A2.js")]
+    [InlineData("built-ins/String/prototype/S15.5.3.1_A2.js")]
+    public void Built_in_constructor_properties_are_non_configurable_and_non_enumerable(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Object_assign_reads_symbols_after_strings()
         => AssertPass(

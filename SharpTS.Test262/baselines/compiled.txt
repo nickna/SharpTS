@@ -3106,8 +3106,8 @@ test/built-ins/Boolean/prop-desc.js Pass
 test/built-ins/Boolean/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Boolean/prototype/S15.6.3.1_A1.js Pass
 test/built-ins/Boolean/prototype/S15.6.3.1_A2.js Pass
-test/built-ins/Boolean/prototype/S15.6.3.1_A3.js Fail
-test/built-ins/Boolean/prototype/S15.6.3.1_A4.js Fail
+test/built-ins/Boolean/prototype/S15.6.3.1_A3.js Pass
+test/built-ins/Boolean/prototype/S15.6.3.1_A4.js Pass
 test/built-ins/Boolean/prototype/S15.6.4_A2.js Pass
 test/built-ins/Boolean/prototype/constructor/S15.6.4.1_A1.js Pass
 test/built-ins/Boolean/prototype/toString/S15.6.4.2_A1_T1.js Pass
@@ -3157,7 +3157,7 @@ test/built-ins/Error/name.js Pass
 test/built-ins/Error/prop-desc.js Pass
 test/built-ins/Error/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Error/prototype/S15.11.3.1_A1_T1.js Pass
-test/built-ins/Error/prototype/S15.11.3.1_A2_T1.js Fail
+test/built-ins/Error/prototype/S15.11.3.1_A2_T1.js Pass
 test/built-ins/Error/prototype/S15.11.3.1_A3_T1.js Pass
 test/built-ins/Error/prototype/S15.11.3.1_A4_T1.js Pass
 test/built-ins/Error/prototype/S15.11.4_A1.js Pass
@@ -3688,12 +3688,12 @@ test/built-ins/Number/EPSILON.js Pass
 test/built-ins/Number/MAX_SAFE_INTEGER.js Pass
 test/built-ins/Number/MAX_VALUE/S15.7.3.2_A2.js Pass
 test/built-ins/Number/MAX_VALUE/S15.7.3.2_A3.js Pass
-test/built-ins/Number/MAX_VALUE/S15.7.3.2_A4.js Fail
+test/built-ins/Number/MAX_VALUE/S15.7.3.2_A4.js Pass
 test/built-ins/Number/MAX_VALUE/value.js Pass
 test/built-ins/Number/MIN_SAFE_INTEGER.js Pass
 test/built-ins/Number/MIN_VALUE/S15.7.3.3_A2.js Pass
 test/built-ins/Number/MIN_VALUE/S15.7.3.3_A3.js Pass
-test/built-ins/Number/MIN_VALUE/S15.7.3.3_A4.js Fail
+test/built-ins/Number/MIN_VALUE/S15.7.3.3_A4.js Pass
 test/built-ins/Number/MIN_VALUE/value.js Pass
 test/built-ins/Number/NEGATIVE_INFINITY/S15.7.3.5_A1.js Pass
 test/built-ins/Number/NEGATIVE_INFINITY/S15.7.3.5_A2.js Pass
@@ -7058,7 +7058,7 @@ test/built-ins/Object/property-order.js Pass
 test/built-ins/Object/proto-from-ctor-realm.js RuntimeError
 test/built-ins/Object/prototype/15.2.3.1.js Pass
 test/built-ins/Object/prototype/S15.2.3.1_A1.js Pass
-test/built-ins/Object/prototype/S15.2.3.1_A2.js Fail
+test/built-ins/Object/prototype/S15.2.3.1_A2.js Pass
 test/built-ins/Object/prototype/S15.2.3.1_A3.js Pass
 test/built-ins/Object/prototype/S15.2.4_A1_T1.js Pass
 test/built-ins/Object/prototype/S15.2.4_A1_T2.js Pass
@@ -9246,7 +9246,7 @@ test/built-ins/RegExp/property-escapes/unsupported-property-Line_Break.js Skippe
 test/built-ins/RegExp/proto-from-ctor-realm.js RuntimeError
 test/built-ins/RegExp/prototype/15.10.6.js Pass
 test/built-ins/RegExp/prototype/S15.10.5.1_A1.js Pass
-test/built-ins/RegExp/prototype/S15.10.5.1_A2.js Fail
+test/built-ins/RegExp/prototype/S15.10.5.1_A2.js Pass
 test/built-ins/RegExp/prototype/S15.10.5.1_A3.js Pass
 test/built-ins/RegExp/prototype/S15.10.5.1_A4.js Pass
 test/built-ins/RegExp/prototype/S15.10.6.1_A1_T1.js Pass
@@ -10107,7 +10107,7 @@ test/built-ins/String/numeric-properties.js Pass
 test/built-ins/String/prop-desc.js Pass
 test/built-ins/String/proto-from-ctor-realm.js RuntimeError
 test/built-ins/String/prototype/S15.5.3.1_A1.js Pass
-test/built-ins/String/prototype/S15.5.3.1_A2.js Fail
+test/built-ins/String/prototype/S15.5.3.1_A2.js Pass
 test/built-ins/String/prototype/S15.5.3.1_A3.js Pass
 test/built-ins/String/prototype/S15.5.3.1_A4.js Pass
 test/built-ins/String/prototype/S15.5.4_A1.js Pass

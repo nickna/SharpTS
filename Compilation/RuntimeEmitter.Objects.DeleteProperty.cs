@@ -21,8 +21,7 @@ public partial class RuntimeEmitter
     /// On a failed delete (frozen/sealed object, non-configurable property)
     /// the non-strict variant returns false; the strict variant throws a
     /// TypeError when strictMode is set, else returns false.
-    /// The strict variant intentionally has no System.Type receiver branch,
-    /// and its $TSFunction handler skips the frozen/sealed/PDS
+    /// The strict variant's $TSFunction handler skips the frozen/sealed/PDS
     /// configurability checks — preserved as-is from before the #1131 merge
     /// (behavior-preserving refactor; see the epic notes for the drift list).
     /// </summary>
@@ -154,15 +153,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, dictLabel);
 
-        if (!strict)
+        // System.Type — `delete String.prototype` / `delete Number.MAX_VALUE`.
+        // Shared by sloppy and strict deletion: EmitDeleteFail returns false
+        // for the former and throws TypeError for the latter.
         {
-            // System.Type — `delete String.prototype` / `delete Number.MAX_VALUE`.
+            // `delete String.prototype` / `delete Number.MAX_VALUE`.
             // Per ECMA-262 §17 + §22.x: built-in constructor's "prototype" data
             // property is { writable:false, enumerable:false, configurable:false };
             // static constants likewise non-configurable. [[Delete]] returns false
             // on non-configurable. Test262 S15.5.3.1_A3 verifies. PDS check first
             // for user-installed override-descriptors with configurable=true.
-            // (Non-strict only — the strict variant never had a Type branch.)
             var notTypeForDelLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, _types.Type);
@@ -314,8 +314,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(typeBuiltinNameTrueLabel);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ret);
+            EmitDeleteFail("' of object");
             il.MarkLabel(notTypeForDelLabel);
         }
 

@@ -609,6 +609,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noPdsLabel);
 
+        // System.Type receivers represent built-in constructors. Their
+        // descriptor-less synthetic own properties (prototype, name, length,
+        // constants, and static methods) are all non-enumerable per ECMA-262
+        // §17. User-defined properties installed through defineProperty are
+        // represented in PDS and were handled above. Missing properties also
+        // correctly report false, so no synthetic-name inventory is needed.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Brtrue, falseLabel);
+
         // No PDS descriptor — fall back to HasOwnPropertyHelper. ECMA-262
         // says only "own" properties qualify; plain dict entries with no
         // explicit descriptor are spec-default enumerable=true, which is
