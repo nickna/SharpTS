@@ -933,11 +933,18 @@ public class EmittedRuntime
     public MethodBuilder WrapDerivedPromiseResultMethod { get; set; } = null!;
     /// <summary>$Runtime.NewPromiseCapabilityResult(object species, Task&lt;object?&gt; result) -> object — the general NewPromiseCapability (#349/#390): constructs <c>new species(executor)</c> through ConstructDynamicValue (a Type class species → Activator, a function-valued species → the JS new protocol, a non-constructor → TypeError per §7.3.22 step 5), capturing the resolve/reject the executor is handed via a <see cref="PromiseCapabilityType"/> holder, then adopts <c>result</c> into that capability (settlement scheduled on the event-loop SynchronizationContext) and returns the constructed (non-Promise) object. Body emitted late (after ConstructDynamicValue); the stub is pre-declared so WrapDerivedPromiseResult can call it.</summary>
     public MethodBuilder NewPromiseCapabilityResultMethod { get; set; } = null!;
+    /// <summary>$Runtime.PreparePromiseCapability(object constructor) -> object — synchronously performs NewPromiseCapability through construction and callable resolve/reject validation, returning the opaque capability holder. Promise static wrappers call this before starting their operation so constructor side effects and validation have spec order.</summary>
+    public MethodBuilder PreparePromiseCapabilityMethod { get; set; } = null!;
+    /// <summary>$Runtime.AdoptPromiseCapability(object capability, Task&lt;object?&gt; result) -> object — schedules settlement of a prepared capability from <c>result</c> and returns its constructed promise object.</summary>
+    public MethodBuilder AdoptPromiseCapabilityMethod { get; set; } = null!;
     /// <summary>$Runtime.CoerceAwaitableToTask(object value) -> Task&lt;object?&gt; — the await coercion for a value that is neither a $Promise nor a Task&lt;object?&gt;: an ordinary thenable (a value whose <c>then</c> member is callable) is adopted by invoking <c>then(resolve, reject)</c> into a fresh capability (#349); anything else becomes Task.FromResult(value). Called at every state-machine await's wrap-value site.</summary>
     public MethodBuilder CoerceAwaitableToTaskMethod { get; set; } = null!;
     /// <summary>$PromiseCapability — the host executor handed to a general (non-Promise) species constructor by NewPromiseCapabilityResult (#349): captures the resolve/reject functions (Capture, exposed as a Func&lt;object[],object&gt;) and drives them when the source task settles (Settle, an Action&lt;Task&lt;object&gt;&gt; continuation).</summary>
     public TypeBuilder PromiseCapabilityType { get; set; } = null!;
     public ConstructorBuilder PromiseCapabilityCtor { get; set; } = null!;
+    public FieldBuilder PromiseCapabilityResolveField { get; set; } = null!;
+    public FieldBuilder PromiseCapabilityRejectField { get; set; } = null!;
+    public FieldBuilder PromiseCapabilityInstanceField { get; set; } = null!;
     public MethodBuilder PromiseCapabilityCaptureMethod { get; set; } = null!;
     public MethodBuilder PromiseCapabilitySettleMethod { get; set; } = null!;
     public TypeBuilder PromiseResolveCallbackType { get; set; } = null!;

@@ -7456,7 +7456,7 @@ test/built-ins/Promise/all/S25.4.4.1_A8.2_T2.js Pass
 test/built-ins/Promise/all/call-resolve-element-after-return.js Pass
 test/built-ins/Promise/all/call-resolve-element-items.js Pass
 test/built-ins/Promise/all/call-resolve-element.js Pass
-test/built-ins/Promise/all/capability-executor-called-twice.js Fail
+test/built-ins/Promise/all/capability-executor-called-twice.js Pass
 test/built-ins/Promise/all/capability-executor-not-callable.js Pass
 test/built-ins/Promise/all/capability-resolve-throws-no-close.js Pass
 test/built-ins/Promise/all/capability-resolve-throws-reject.js Fail
@@ -7556,7 +7556,7 @@ test/built-ins/Promise/allKeyed/symbol-keys.js Pass
 test/built-ins/Promise/allSettled/call-resolve-element-after-return.js Pass
 test/built-ins/Promise/allSettled/call-resolve-element-items.js Pass
 test/built-ins/Promise/allSettled/call-resolve-element.js Pass
-test/built-ins/Promise/allSettled/capability-executor-called-twice.js Fail
+test/built-ins/Promise/allSettled/capability-executor-called-twice.js Pass
 test/built-ins/Promise/allSettled/capability-executor-not-callable.js Pass
 test/built-ins/Promise/allSettled/capability-resolve-throws-no-close.js Pass
 test/built-ins/Promise/allSettled/capability-resolve-throws-reject.js Fail
@@ -7678,7 +7678,7 @@ test/built-ins/Promise/allSettledKeyed/resolves-empty-object.js Pass
 test/built-ins/Promise/allSettledKeyed/symbol-keys.js Pass
 test/built-ins/Promise/any/call-reject-element-after-return.js Pass
 test/built-ins/Promise/any/call-reject-element-items.js Pass
-test/built-ins/Promise/any/capability-executor-called-twice.js Fail
+test/built-ins/Promise/any/capability-executor-called-twice.js Pass
 test/built-ins/Promise/any/capability-executor-not-callable.js Pass
 test/built-ins/Promise/any/capability-reject-throws-no-close.js Pass
 test/built-ins/Promise/any/capability-resolve-throws-no-close.js Pass
@@ -7935,7 +7935,7 @@ test/built-ins/Promise/race/S25.4.4.3_A7.1_T3.js Fail
 test/built-ins/Promise/race/S25.4.4.3_A7.2_T1.js Fail
 test/built-ins/Promise/race/S25.4.4.3_A7.3_T1.js Pass
 test/built-ins/Promise/race/S25.4.4.3_A7.3_T2.js Pass
-test/built-ins/Promise/race/capability-executor-called-twice.js Fail
+test/built-ins/Promise/race/capability-executor-called-twice.js Pass
 test/built-ins/Promise/race/capability-executor-not-callable.js Pass
 test/built-ins/Promise/race/ctx-ctor-throws.js Pass
 test/built-ins/Promise/race/ctx-ctor.js Pass
@@ -8029,7 +8029,7 @@ test/built-ins/Promise/reject-via-fn-immed.js Pass
 test/built-ins/Promise/reject/S25.4.4.4_A1.1_T1.js Pass
 test/built-ins/Promise/reject/S25.4.4.4_A2.1_T1.js Pass
 test/built-ins/Promise/reject/S25.4.4.4_A3.1_T1.js Pass
-test/built-ins/Promise/reject/capability-executor-called-twice.js Fail
+test/built-ins/Promise/reject/capability-executor-called-twice.js Pass
 test/built-ins/Promise/reject/capability-executor-not-callable.js Pass
 test/built-ins/Promise/reject/capability-invocation-error.js Fail
 test/built-ins/Promise/reject/capability-invocation.js Fail
@@ -8071,7 +8071,7 @@ test/built-ins/Promise/resolve/S25.Promise_resolve_foreign_thenable_2.js Fail
 test/built-ins/Promise/resolve/arg-non-thenable.js Pass
 test/built-ins/Promise/resolve/arg-poisoned-then.js Fail
 test/built-ins/Promise/resolve/arg-uniq-ctor.js Pass
-test/built-ins/Promise/resolve/capability-executor-called-twice.js Fail
+test/built-ins/Promise/resolve/capability-executor-called-twice.js Pass
 test/built-ins/Promise/resolve/capability-executor-not-callable.js Pass
 test/built-ins/Promise/resolve/capability-invocation-error.js Fail
 test/built-ins/Promise/resolve/context-non-object-with-promise.js Pass

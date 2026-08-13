@@ -160,6 +160,16 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
+        runtime.PreparePromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+            "PreparePromiseCapability",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.AdoptPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+            "AdoptPromiseCapability",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.TaskOfObject]);
 
         // Promise.resolve(value?) - wraps value in completed Task, flattening if already a Task
         // IL equivalent:
@@ -671,26 +681,44 @@ public partial class RuntimeEmitter
         bool passConstructorToIntrinsic = false)
     {
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
+        var capabilityLocal = il.DeclareLocal(_types.Object);
         var customConstructorLabel = il.DefineLabel();
+        var invokeIntrinsicLabel = il.DefineLabel();
 
+        // NewPromiseCapability(C) precedes the Promise operation. In
+        // particular, a custom constructor must receive and validate the
+        // capability executor before Promise.all/any/etc. reads C.resolve or
+        // begins iteration. The intrinsic %Promise% representation needs no
+        // materialized holder and keeps its direct Task fast path.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Bne_Un, customConstructorLabel);
+        il.Emit(OpCodes.Br, invokeIntrinsicLabel);
+
+        il.MarkLabel(customConstructorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PreparePromiseCapabilityMethod);
+        il.Emit(OpCodes.Stloc, capabilityLocal);
+
+        il.MarkLabel(invokeIntrinsicLabel);
         il.Emit(OpCodes.Ldarg_1);
         if (passConstructorToIntrinsic)
             il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, intrinsic);
         il.Emit(OpCodes.Stloc, taskLocal);
 
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Type);
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Bne_Un, customConstructorLabel);
+        var returnIntrinsicLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
+        il.Emit(OpCodes.Brfalse, returnIntrinsicLabel);
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, taskLocal);
+        il.Emit(OpCodes.Call, runtime.AdoptPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
 
-        il.MarkLabel(customConstructorLabel);
-        il.Emit(OpCodes.Ldarg_0);
+        il.MarkLabel(returnIntrinsicLabel);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Call, runtime.NewPromiseCapabilityResultMethod);
         il.Emit(OpCodes.Ret);
     }
 

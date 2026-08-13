@@ -513,15 +513,27 @@ public static class PromiseBuiltIns
     {
         public ISharpTSCallable? ResolveFn { get; private set; }
         public ISharpTSCallable? RejectFn { get; private set; }
+        private bool _resolveIsNonUndefined;
+        private bool _rejectIsNonUndefined;
 
         public int Arity() => 2;
 
         public object? Call(Interpreter interpreter, List<object?> arguments)
         {
-            if (ResolveFn != null || RejectFn != null)
-                throw new InterpreterException("Promise executor was already invoked");
-            ResolveFn = arguments.Count > 0 ? arguments[0] as ISharpTSCallable : null;
-            RejectFn = arguments.Count > 1 ? arguments[1] as ISharpTSCallable : null;
+            if (_resolveIsNonUndefined || _rejectIsNonUndefined)
+                throw new Exceptions.ThrowException(new SharpTSTypeError(
+                    "Promise capability executor was already invoked"));
+
+            object? resolve = arguments.Count > 0
+                ? arguments[0]
+                : SharpTSUndefined.Instance;
+            object? reject = arguments.Count > 1
+                ? arguments[1]
+                : SharpTSUndefined.Instance;
+            _resolveIsNonUndefined = resolve is not SharpTSUndefined;
+            _rejectIsNonUndefined = reject is not SharpTSUndefined;
+            ResolveFn = resolve as ISharpTSCallable;
+            RejectFn = reject as ISharpTSCallable;
             return SharpTSUndefined.Instance;
         }
     }

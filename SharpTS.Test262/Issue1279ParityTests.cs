@@ -5312,6 +5312,30 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/Promise/all/S25.4.4.1_A4.1_T1.js")]
+    [InlineData("built-ins/Promise/all/capability-executor-not-callable.js")]
+    [InlineData("built-ins/Promise/allSettled/capability-executor-not-callable.js")]
+    [InlineData("built-ins/Promise/any/capability-executor-not-callable.js")]
+    [InlineData("built-ins/Promise/race/S25.4.4.3_A3.1_T1.js")]
+    [InlineData("built-ins/Promise/race/S25.4.4.3_A3.1_T2.js")]
+    [InlineData("built-ins/Promise/race/capability-executor-not-callable.js")]
+    [InlineData("built-ins/Promise/reject/S25.4.4.4_A3.1_T1.js")]
+    [InlineData("built-ins/Promise/reject/capability-executor-not-callable.js")]
+    [InlineData("built-ins/Promise/resolve/capability-executor-not-callable.js")]
+    public void Promise_custom_capabilities_require_callable_callbacks(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/capability-executor-called-twice.js")]
+    [InlineData("built-ins/Promise/allSettled/capability-executor-called-twice.js")]
+    [InlineData("built-ins/Promise/any/capability-executor-called-twice.js")]
+    [InlineData("built-ins/Promise/race/capability-executor-called-twice.js")]
+    [InlineData("built-ins/Promise/reject/capability-executor-called-twice.js")]
+    [InlineData("built-ins/Promise/resolve/capability-executor-called-twice.js")]
+    public void Promise_capability_executor_rejects_repeated_non_undefined_slots(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-12.js")]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-13.js")]
     [InlineData("built-ins/Object/getPrototypeOf/15.2.3.2-2-14.js")]
