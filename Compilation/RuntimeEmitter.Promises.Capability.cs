@@ -27,6 +27,7 @@ public partial class RuntimeEmitter
         EmitPromiseCapabilityType(moduleBuilder, runtime);
         EmitPreparePromiseCapabilityBody(runtime);
         EmitAdoptPromiseCapabilityBody(runtime);
+        EmitAdoptCompletedPromiseCapabilityBody(runtime);
         EmitNewPromiseCapabilityResultBody(runtime);
         EmitCoerceAwaitableToTask(runtime);
     }
@@ -412,6 +413,35 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Settles an already-completed source inline, preserving the synchronous
+    /// observability of custom Promise capability callbacks. Pending sources
+    /// retain the normal event-loop continuation path.
+    /// </summary>
+    private void EmitAdoptCompletedPromiseCapabilityBody(EmittedRuntime runtime)
+    {
+        var il = runtime.AdoptCompletedPromiseCapabilityMethod.GetILGenerator();
+        var schedulePendingLabel = il.DefineLabel();
+        var capabilityType = runtime.PromiseCapabilityType;
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompleted").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, schedulePendingLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, capabilityType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PromiseCapabilitySettleMethod);
+        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(schedulePendingLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.AdoptPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
     }
 

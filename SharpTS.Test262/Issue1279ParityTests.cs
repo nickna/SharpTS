@@ -4857,6 +4857,23 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/Promise/allSettled/call-resolve-element-after-return.js")]
+    [InlineData("built-ins/Promise/allSettled/call-resolve-element-items.js")]
+    [InlineData("built-ins/Promise/allSettled/call-resolve-element.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-before-loop-exit.js")]
+    [InlineData("built-ins/Promise/any/call-reject-element-after-return.js")]
+    public void Promise_custom_capabilities_settle_synchronously(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/any/capability-resolve-throws-reject.js")]
+    [InlineData("built-ins/Promise/reject/capability-invocation-error.js")]
+    [InlineData("built-ins/Promise/resolve/capability-invocation-error.js")]
+    public void Compiled_Promise_custom_capability_invocation_errors_are_observed(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/prototype/finally/rejection-reason-override-with-throw.js")]
     [InlineData("built-ins/Promise/prototype/finally/resolved-observable-then-calls.js")]
     public void Compiled_Promise_finally_preserves_completion_semantics(string relativePath)

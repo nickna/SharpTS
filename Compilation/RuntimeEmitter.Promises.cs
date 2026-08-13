@@ -170,6 +170,11 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
+        runtime.AdoptCompletedPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+            "AdoptCompletedPromiseCapability",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.TaskOfObject]);
 
         // Promise.resolve(value?) - returns an existing intrinsic Promise only
         // when its observable constructor is %Promise%. An own constructor
@@ -602,7 +607,8 @@ public partial class RuntimeEmitter
             EmitPromiseStaticThisObjectCheck(il, runtime,
                 $"Promise.{jsName} called on non-Object");
             EmitPromiseStaticCapabilityResult(il, runtime, target,
-                jsName is "all" or "race" or "allSettled" or "any");
+                passConstructorToIntrinsic: jsName is "all" or "race" or "allSettled" or "any",
+                settleCompletedSynchronously: jsName != "race");
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.PromiseAllKeyed, m => runtime.PromiseAllKeyedStatic = m);
@@ -715,7 +721,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitPromiseStaticCapabilityResult(
         ILGenerator il, EmittedRuntime runtime, MethodInfo intrinsic,
-        bool passConstructorToIntrinsic = false)
+        bool passConstructorToIntrinsic = false,
+        bool settleCompletedSynchronously = true)
     {
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var capabilityLocal = il.DeclareLocal(_types.Object);
@@ -751,7 +758,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnIntrinsicLabel);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Call, runtime.AdoptPromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, settleCompletedSynchronously
+            ? runtime.AdoptCompletedPromiseCapabilityMethod
+            : runtime.AdoptPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnIntrinsicLabel);
