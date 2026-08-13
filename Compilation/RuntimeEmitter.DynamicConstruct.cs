@@ -41,6 +41,51 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, throwLabel);
 
+        // An aliased RegExp constructor is represented by the emitted $RegExp
+        // Type. Activator cannot supply its JavaScript optional arguments (and
+        // has no parameterless overload), so route it through RegExpFromArgs.
+        if (_features.UsesRegExp)
+        {
+            var notRegExpTypeLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notRegExpTypeLabel);
+            var regexpArgsPresent = il.DefineLabel();
+            var regexpFlagsPresent = il.DefineLabel();
+            var regexpPatternLocal = il.DeclareLocal(_types.Object);
+            var regexpFlagsLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Stloc, regexpPatternLocal);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Stloc, regexpFlagsLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Brtrue, regexpArgsPresent);
+            il.Emit(OpCodes.Br, regexpFlagsPresent);
+            il.MarkLabel(regexpArgsPresent);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Stloc, regexpPatternLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ble, regexpFlagsPresent);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Stloc, regexpFlagsLocal);
+            il.MarkLabel(regexpFlagsPresent);
+            il.Emit(OpCodes.Ldloc, regexpPatternLocal);
+            il.Emit(OpCodes.Ldloc, regexpFlagsLocal);
+            il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notRegExpTypeLabel);
+        }
+
         // System.Type (built-in or user class reference) → Activator.CreateInstance(type, args)
         var notTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

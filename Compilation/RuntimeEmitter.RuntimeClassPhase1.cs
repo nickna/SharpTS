@@ -140,6 +140,11 @@ public partial class RuntimeEmitter
                 MethodAttributes.Public | MethodAttributes.Static,
                 _types.Object,
                 [_types.Object, _types.Object, _types.Object]);
+            runtime.RegExpSymbolMatchAllProtocol = typeBuilder.DefineMethod(
+                "RegExpSymbolMatchAllProtocol",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object, _types.Object]);
         }
 
         // Reserve StringifyCoerce(object) → string — Stringify plus the

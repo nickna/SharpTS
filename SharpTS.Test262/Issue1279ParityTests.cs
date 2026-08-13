@@ -686,6 +686,22 @@ public sealed class Issue1279ParityTests
         => AssertPass("built-ins/RegExp/lastIndex.js", Test262ExecutionMode.Interpreted);
 
     [Theory]
+    [InlineData("built-ins/RegExp/escape/prop-desc.js")]
+    [InlineData("built-ins/RegExp/lastIndex.js")]
+    [InlineData("built-ins/RegExp/prototype/exec/S15.10.6.2_A1_T17.js")]
+    [InlineData("built-ins/RegExp/prototype/S15.10.6.1_A1_T2.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-is-undefined.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-species-is-null-or-undefined.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/string-tostring.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/this-tolength-lastindex-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/test/y-fail-lastindex-no-write.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A4_T1.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A4_T4.js")]
+    [InlineData("built-ins/RegExp/S15.10.4.1_A5_T6.js")]
+    public void RegExp_remaining_track_b_cases_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

@@ -78,7 +78,8 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Coerces a RegExp constructor argument to its spec-compliant string form.
     /// ECMA-262 22.2.3.1 RegExp(pattern, flags): if either argument is undefined,
-    /// substitute "" (the empty string); otherwise invoke the standard
+    /// substitute "" (the empty string); null remains the ordinary JS value
+    /// and therefore stringifies to "null"; otherwise invoke the standard
     /// ToString protocol. Without this, `new RegExp(undefined)` would compile
     /// the literal /undefined/ pattern instead of the empty pattern /(?:)/,
     /// failing String.prototype.match Sputnik tests.
@@ -95,15 +96,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var notNullLabel = il.DefineLabel();
         var notUndefLabel = il.DefineLabel();
-
-        // null → ""
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brtrue, notNullLabel);
-        il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notNullLabel);
 
         // $Undefined.Instance → ""
         il.Emit(OpCodes.Ldarg_0);
@@ -512,10 +505,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Brfalse, notRegExpLabel);
 
-        // return regexp.Test(input)
+        // RegExp.prototype.test delegates to RegExpBuiltinExec. Use the same
+        // strict lastIndex write path as exec so a failed global/sticky match
+        // throws when lastIndex was made non-writable.
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpTestMethod);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notRegExpLabel);

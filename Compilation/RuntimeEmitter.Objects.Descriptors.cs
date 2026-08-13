@@ -1667,6 +1667,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Brtrue, hasDescriptorLabel);
 
+        // RegExp instances expose an intrinsic own lastIndex data property.
+        // A user PDS descriptor won above; otherwise synthesize the live typed
+        // value and the immutable enumerable/configurable attributes.
+        if (_features.UsesRegExp)
+        {
+            var notRegExpLastIndexDescriptor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, notRegExpLastIndexDescriptor);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldstr, "lastIndex");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, notRegExpLastIndexDescriptor);
+            EmitBuiltinDataDescriptor(() =>
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldstr, "lastIndex");
+                il.Emit(OpCodes.Call, runtime.GetProperty);
+            }, writable: true, configurable: false);
+            il.MarkLabel(notRegExpLastIndexDescriptor);
+        }
+
         // ECMA-262 §17 — built-in functions expose `name` and `length` as
         // { writable: false, enumerable: false, configurable: true } own data
         // properties. Synthesize those descriptors when the receiver is a
@@ -1809,6 +1831,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(typeIsLengthLabel);
+
+        // RegExp.escape is emitted as $RegExp.Escape, whose CLR casing does
+        // not match the JavaScript key. Build the same cached function wrapper
+        // used by RegExpStaticEmitter so descriptor value identity is stable.
+        if (_features.UsesRegExp)
+        {
+            var notRegExpEscapeDescriptor = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+            il.Emit(OpCodes.Bne_Un, notRegExpEscapeDescriptor);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldstr, "escape");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, notRegExpEscapeDescriptor);
+            EmitBuiltinDataDescriptor(() =>
+            {
+                _types.EmitLoadMethodInfo(il, runtime.TSRegExpEscapeMethod);
+                il.Emit(OpCodes.Ldstr, "escape");
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+            }, writable: true, configurable: true);
+            il.MarkLabel(notRegExpEscapeDescriptor);
+        }
 
         // System.Object: explicit JS-spec static names list since static
         // dispatch is syntactic (compile-time) and runtime.GetProperty doesn't

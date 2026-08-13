@@ -3400,47 +3400,15 @@ public partial class RuntimeEmitter
             _types.Object,
             [_types.Object, _types.Object]
         );
+        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.TSRegExpSymMatchAllHelper = method;
 
         var il = method.GetILGenerator();
-        var rxLocal = il.DeclareLocal(typeBuilder);
-        var sLocal = il.DeclareLocal(_types.String);
-        var listLocal = il.DeclareLocal(_types.ListOfObject);
-
         // ECMA-262 §22.2.5.8 step 2: throw TypeError if `this` is not an Object.
         EmitRequireObjectArg(il, runtime, method, argIndex: 0, "RegExp.prototype[Symbol.matchAll]");
-
-        // Side effects before brand-narrow: ToString(string) + ToString(Get(rx,
-        // "flags")) — propagates user toString/getter throws (string-tostring.js,
-        // coerce-flags-err.js etc).
-        EmitArgToJsString(il, runtime, argIndex: 1, sLocal);
-        var matchAllFlagsLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "flags");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, matchAllFlagsLocal);
-
-        // Narrow to $RegExp; non-$RegExp throws TypeError.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, typeBuilder);
-        il.Emit(OpCodes.Stloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        var rxOkLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, rxOkLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype[Symbol.matchAll] requires a RegExp receiver");
-        il.MarkLabel(rxOkLabel);
-
-        // var list = rx.MatchAll(s);  // List<object?> of full-match substrings
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Call, _tsRegExpMatchAllMethod);
-        il.Emit(OpCodes.Stloc, listLocal);
-
-        // MatchAll already returns List<object?>, so wrap it directly — no copy.
-        // return new $Array(list)
-        il.Emit(OpCodes.Ldloc, listLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.RegExpSymbolMatchAllProtocol);
         il.Emit(OpCodes.Ret);
     }
 
@@ -4757,6 +4725,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
+        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         try { method.DefineParameter(1, ParameterAttributes.None, "__this"); }
         catch { /* already named — ignore */ }
 
@@ -4792,6 +4761,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
+        method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         try { method.DefineParameter(1, ParameterAttributes.None, "__this"); }
         catch { /* already named — ignore */ }
 
@@ -4810,10 +4780,14 @@ public partial class RuntimeEmitter
 
         EmitArgToJsString(il, runtime, argIndex: 1, sLocal);
 
-        // return rx.Test(s) boxed
+        // RegExp.prototype.test is specified in terms of RegExpExec. Reuse the
+        // strict exec implementation so writes to a non-writable lastIndex
+        // surface TypeError instead of being bypassed by the boolean fast path.
         il.Emit(OpCodes.Ldloc, rxLocal);
         il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpTestMethod);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Box, _types.Boolean);
         il.Emit(OpCodes.Ret);
         return method;
@@ -4865,39 +4839,13 @@ public partial class RuntimeEmitter
 
     private void EmitArgToJsString(ILGenerator il, EmittedRuntime runtime, int argIndex, LocalBuilder local)
     {
-        var nullLabel = il.DefineLabel();
-        var doneLabel = il.DefineLabel();
-
+        // Route through the forward-declared ToString protocol helper. This
+        // preserves Symbol errors and user-installed toString hooks while also
+        // unwrapping boxed String/Number/Boolean values. Stringify alone would
+        // turn those wrappers into "[object Object]", making exec return null.
         il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Brfalse, nullLabel);
-
-        // ECMA-262 7.1.17 ToString: Symbol primitives throw TypeError.
-        // Each Symbol.* protocol method begins with S = ? ToString(string);
-        // calls like `/./[Symbol.search](Symbol.iterator)` must surface
-        // that TypeError up. $RegExp emits before $Runtime so the global
-        // ToJsString helper isn't yet bound — inline the brand-check +
-        // TypeError throw with the forward-declared CreateException.
-        var notSymbolLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
-        il.Emit(OpCodes.Brfalse, notSymbolLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
-        il.MarkLabel(notSymbolLabel);
-
-        // Route through $Runtime.Stringify so user-installed toString
-        // (and dict literals' Number/Array/etc. cases) coerce per spec
-        // instead of returning the C# Object.ToString fallback. Forward-
-        // declared in DefineRuntimeClassPhase1 so we can call it here.
-        il.Emit(OpCodes.Ldarg, argIndex);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, local);
-        il.Emit(OpCodes.Br, doneLabel);
-
-        il.MarkLabel(nullLabel);
-        il.Emit(OpCodes.Ldstr, "undefined");
-        il.Emit(OpCodes.Stloc, local);
-
-        il.MarkLabel(doneLabel);
     }
 
     /// <summary>

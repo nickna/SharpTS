@@ -140,7 +140,8 @@ public class BuiltInConstructorHandler : ICallHandler
         var patternLocal = il.DeclareLocal(ctx.Types.Object);
         var flagsLocal = il.DeclareLocal(ctx.Types.Object);
 
-        // pattern → patternLocal (null when no arg)
+        // pattern → patternLocal (the undefined sentinel when omitted; CLR
+        // null is the distinct JavaScript null value and stringifies to "null")
         if (call.Arguments.Count >= 1)
         {
             emitter.EmitExpression(call.Arguments[0]);
@@ -148,10 +149,10 @@ public class BuiltInConstructorHandler : ICallHandler
         }
         else
         {
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         }
         il.Emit(OpCodes.Stloc, patternLocal);
-        // flags → flagsLocal (null when no arg → treated as undefined)
+        // flags → flagsLocal (undefined sentinel when omitted)
         if (call.Arguments.Count >= 2)
         {
             emitter.EmitExpression(call.Arguments[1]);
@@ -159,7 +160,7 @@ public class BuiltInConstructorHandler : ICallHandler
         }
         else
         {
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         }
         il.Emit(OpCodes.Stloc, flagsLocal);
 

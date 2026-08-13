@@ -1204,6 +1204,7 @@ public class EmittedRuntime
     public MethodBuilder RegExpExec { get; set; } = null!;
     /// <summary>$Runtime.RegExpSymbolSplitProtocol(rx, string, limit) -> $Array — late-emitted ECMA-262 RegExp.prototype[@@split] protocol, including SpeciesConstructor and custom RegExpExec dispatch.</summary>
     public MethodBuilder RegExpSymbolSplitProtocol { get; set; } = null!;
+    public MethodBuilder RegExpSymbolMatchAllProtocol { get; set; } = null!;
     public MethodBuilder RegExpGetSource { get; set; } = null!;
     public MethodBuilder RegExpGetFlags { get; set; } = null!;
     public MethodBuilder RegExpGetGlobal { get; set; } = null!;

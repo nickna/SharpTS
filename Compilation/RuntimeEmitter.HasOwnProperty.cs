@@ -160,6 +160,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notTSObject);
 
+        // RegExp instances have an intrinsic own lastIndex data property even
+        // though its live value is stored in typed fields rather than a user
+        // dictionary. Other own properties may still be installed through PDS.
+        if (_features.UsesRegExp)
+        {
+            var notRegExp = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, notRegExp);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldstr, "lastIndex");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            il.Emit(OpCodes.Br, falseLabel);
+            il.MarkLabel(notRegExp);
+        }
+
         // $IHasFields branch — user-defined class instances. Each compiled
         // class implements $IHasFields with a per-class HasProperty that
         // checks typed backing field names + the dynamic _fields dict
@@ -438,6 +459,17 @@ public partial class RuntimeEmitter
         NameEq("isError");
         il.MarkLabel(notErrorConsLabel);
 
+        if (_features.UsesRegExp)
+        {
+            var notRegExpConsLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSRegExpType);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+            il.Emit(OpCodes.Bne_Un, notRegExpConsLabel);
+            NameEq("escape");
+            il.MarkLabel(notRegExpConsLabel);
+        }
+
         // Reflection: type.GetField(name, Public|Static) ?? type.GetMethod(name, Public|Static)
         const System.Reflection.BindingFlags staticPub = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
         var typeLocal2 = il.DeclareLocal(_types.Type);
@@ -574,6 +606,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, nameLocal);
+
+        // RegExp lastIndex is an intrinsic own non-enumerable property. It is
+        // not placed in PDS until user code redefines its attributes.
+        if (_features.UsesRegExp)
+        {
+            var pieNotRegExpLastIndex = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, pieNotRegExpLastIndex);
+            il.Emit(OpCodes.Ldloc, nameLocal);
+            il.Emit(OpCodes.Ldstr, "lastIndex");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brtrue, falseLabel);
+            il.MarkLabel(pieNotRegExpLastIndex);
+        }
 
         // ECMA-262 §17: built-in function .name / .length are
         // { writable:false, enumerable:false, configurable:true } — return

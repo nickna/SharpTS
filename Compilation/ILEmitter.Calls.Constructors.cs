@@ -517,6 +517,33 @@ public partial class ILEmitter
             argTemps.Add(t);
         }
 
+        // An aliased RegExp constructor is the emitted $RegExp Type token,
+        // but its CLR constructors do not have a parameterless overload and
+        // cannot distinguish omitted arguments from JavaScript null. Route
+        // this one built-in through the same boxed-argument helper as a direct
+        // `new RegExp(...)` call.
+        var constructionDone = IL.DefineLabel();
+        var regExpType = _ctx.Runtime!.TSRegExpType;
+        if (regExpType is not null)
+        {
+            var notRegExpType = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, typeLocal);
+            IL.Emit(OpCodes.Ldtoken, regExpType);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            IL.Emit(OpCodes.Bne_Un, notRegExpType);
+            if (argTemps.Count > 0)
+                IL.Emit(OpCodes.Ldloc, argTemps[0]);
+            else
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+            if (argTemps.Count > 1)
+                IL.Emit(OpCodes.Ldloc, argTemps[1]);
+            else
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.RegExpFromArgs);
+            IL.Emit(OpCodes.Br, constructionDone);
+            IL.MarkLabel(notRegExpType);
+        }
+
         // ctor = type.GetConstructors()[0]
         var getConstructorsMethod = _ctx.Types.GetMethod(
             typeof(Type),
@@ -562,6 +589,8 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, ctorLocal);
         IL.Emit(OpCodes.Ldloc, argsArrayLocal);
         IL.Emit(OpCodes.Callvirt, invokeMethod);
+        if (regExpType is not null)
+            IL.MarkLabel(constructionDone);
     }
 
     /// <summary>

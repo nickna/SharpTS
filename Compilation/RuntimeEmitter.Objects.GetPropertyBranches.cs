@@ -994,6 +994,25 @@ public partial class RuntimeEmitter
             FlagCharBranch("dotAll", 's');
             FlagCharBranch("unicodeSets", 'v');
 
+            // String-keyed methods are inherited from RegExp.prototype, not
+            // reflected CLR instance methods. Returning the prototype's
+            // cached $TSFunction preserves JavaScript argument padding and
+            // routes test through RegExpExec's strict lastIndex semantics.
+            void PrototypeMethodBranch(string propName)
+            {
+                NameMatchBranch(propName, () =>
+                {
+                    il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+                    il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+                    il.Emit(OpCodes.Ldstr, propName);
+                    il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                        _types.DictionaryStringObject, "get_Item", _types.String));
+                });
+            }
+            PrototypeMethodBranch("exec");
+            PrototypeMethodBranch("test");
+            PrototypeMethodBranch("toString");
+
             // Other property names fall through to GetFieldsProperty so
             // user-set data and the shared intrinsic-prototype fallback resolve.
             il.Emit(OpCodes.Ldarg_0);

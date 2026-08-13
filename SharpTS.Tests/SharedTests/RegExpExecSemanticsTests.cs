@@ -65,4 +65,16 @@ public class RegExpExecSemanticsTests
             """;
         Assert.Equal("undefined\ntrue\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void Exec_CoercesExplicitNullAndReturnsAnArray(ExecutionMode mode)
+    {
+        var source = """
+            let regexp: any = /ll|l/;
+            let match: any = regexp.exec(null);
+            console.log(match instanceof Array);
+            console.log(match[0] + ":" + match.index + ":" + match.input);
+            """;
+        Assert.Equal("true\nll:2:null\n", TestHarness.Run(source, mode));
+    }
 }
