@@ -176,5 +176,28 @@ public class ArrayFlatTests
         Assert.Equal("0\n1\n", output);
     }
 
+    [Theory, ModeData]
+    public void FlatMap_ArrayLikeLengthGetter_IsReadOnce(ExecutionMode mode)
+    {
+        var source = """
+            let reads = 0;
+            let source: any = {
+                get length() {
+                    reads++;
+                    if (reads > 1) throw "length read twice";
+                    return 2;
+                },
+                0: 21,
+                1: 19.5
+            };
+            let result = Array.prototype.flatMap.call(source, (x: number): number[] => [39, x * 2]);
+            console.log(reads);
+            console.log(result.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n39,42,39,39\n", output);
+    }
+
     #endregion
 }
