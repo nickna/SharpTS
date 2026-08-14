@@ -1171,6 +1171,7 @@ public partial class RuntimeEmitter
         var paramsLocal = il.DeclareLocal(_types.MakeArrayType(_types.ParameterInfo));
         var paramCountLocal = il.DeclareLocal(_types.Int32);
         var lastTypeLocal = il.DeclareLocal(_types.Type);
+        var hasListRestLocal = il.DeclareLocal(_types.Boolean);
 
         // var ps = method.GetParameters();
         il.Emit(OpCodes.Ldarg, methodArgIndex);
@@ -1204,12 +1205,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "ParameterType")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, lastTypeLocal);
 
-        // this._hasListRest = (lastType == typeof(List<object>))
-        il.Emit(OpCodes.Ldarg_0);
+        // A final List<object> normally represents a rest parameter. The one
+        // exception is a sole synthetic `__this` slot on Array.prototype
+        // zero-argument helpers (entries/keys/values/toReversed): treating that
+        // receiver as rest would replace a missing receiver with an empty list.
         il.Emit(OpCodes.Ldloc, lastTypeLocal);
         il.Emit(OpCodes.Ldtoken, _types.ListOfObject);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality", [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Stloc, hasListRestLocal);
+        var storeHasListRestLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, hasListRestLocal);
+        il.Emit(OpCodes.Brfalse, storeHasListRestLabel);
+        il.Emit(OpCodes.Ldloc, paramCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bne_Un, storeHasListRestLabel);
+        il.Emit(OpCodes.Ldloc, paramsLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ParameterInfo, "Name")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "__this");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, storeHasListRestLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hasListRestLocal);
+        il.MarkLabel(storeHasListRestLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, hasListRestLocal);
         il.Emit(OpCodes.Stfld, hasListRestField);
 
         // this._hasArrayRest = (lastType == typeof(object[]))

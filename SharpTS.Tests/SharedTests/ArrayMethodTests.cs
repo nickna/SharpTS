@@ -217,6 +217,32 @@ public class ArrayMethodTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_DetachedZeroArgumentMethodsRejectMissingReceiver(ExecutionMode mode)
+    {
+        var source = """
+            const methods: any[] = [
+                Array.prototype.entries,
+                Array.prototype.keys,
+                Array.prototype.values,
+                Array.prototype.toReversed,
+                Array.prototype.toString,
+                Array.prototype.toLocaleString
+            ];
+            for (const method of methods) {
+                try {
+                    method();
+                    console.log(false);
+                } catch (error) {
+                    console.log(error instanceof TypeError);
+                }
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
     #endregion
 
     #region Reduce Tests

@@ -83,12 +83,17 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        var emptyLabel = il.DefineLabel();
+        var receiverPresentLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, emptyLabel);
+        il.Emit(OpCodes.Brtrue, receiverPresentLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toString called on null or undefined");
+        il.MarkLabel(receiverPresentLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, emptyLabel);
+        var receiverDefinedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, receiverDefinedLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.prototype.toString called on null or undefined");
+        il.MarkLabel(receiverDefinedLabel);
 
         // Pass `this` through ArrayLikeMaterialize so $Array, List<object>,
         // object[] (compiled arguments), and any-like receivers all reduce
@@ -98,12 +103,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Call, runtime.ArrayJoin);
-        il.Emit(OpCodes.Ret);
-
-        // null/undefined receiver → empty string. Defensive; the materializer
-        // would throw, but tolerance matches the generic-stub legacy.
-        il.MarkLabel(emptyLabel);
-        il.Emit(OpCodes.Ldstr, "");
         il.Emit(OpCodes.Ret);
 
         return method;
