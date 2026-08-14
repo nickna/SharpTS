@@ -137,6 +137,50 @@ public class ArrayMethodTests
         Assert.Equal("false\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Iteration_ResolvesTruncatedSlotsThroughDescriptorsAndPrototype(ExecutionMode mode)
+    {
+        var source = """
+            Object.defineProperty(Array.prototype, "2", {
+                get: function(): any { return "inherited"; },
+                configurable: true
+            });
+
+            let inherited: any[] = [0, 1, 2];
+            Object.defineProperty(inherited, "1", {
+                get: function(): any {
+                    inherited.length = 2;
+                    return 1;
+                },
+                configurable: true
+            });
+            console.log(inherited.every(function(value: any, index: any, array: any): any {
+                return index !== 2 || value !== "inherited";
+            }));
+
+            let own: any[] = [0, 1, 2];
+            Object.defineProperty(own, "2", {
+                get: function(): any { return "own"; },
+                configurable: false
+            });
+            Object.defineProperty(own, "1", {
+                get: function(): any {
+                    own.length = 2;
+                    return 1;
+                },
+                configurable: true
+            });
+            console.log(own.some(function(value: any, index: any, array: any): any {
+                return index === 2 && value === "own";
+            }));
+
+            delete Array.prototype[2];
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\ntrue\n", output);
+    }
+
     #endregion
 
     #region Reduce Tests
