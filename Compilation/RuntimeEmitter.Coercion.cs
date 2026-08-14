@@ -1145,6 +1145,22 @@ public partial class RuntimeEmitter
 
         var skipToPrimLabelTop = il.DefineLabel();
         var doToPrimLabelTop = il.DefineLabel();
+
+        // Array objects participate in ToPrimitive(number): their inherited
+        // valueOf returns the array itself, then Array.prototype.toString
+        // supplies the comma-joined primitive. Reuse ToJsString's live
+        // Array.prototype dispatch so ToNumber([1]) becomes 1 rather than
+        // falling through to Convert.ToDouble(List<object>) and NaN.
+        var notArrayToNumberLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, notArrayToNumberLabel);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, argLocal);
+        il.Emit(OpCodes.Br, skipToPrimLabelTop);
+        il.MarkLabel(notArrayToNumberLabel);
+
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, doToPrimLabelTop);
@@ -1686,6 +1702,19 @@ public partial class RuntimeEmitter
 
         var skipToPrimLabel = il.DefineLabel();
         var doToPrimLabel = il.DefineLabel();
+
+        // Number(array) uses the same Array-to-primitive conversion as the
+        // abstract ToNumber operation above.
+        var notArrayConvertLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brfalse, notArrayConvertLabel);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, argLocal);
+        il.Emit(OpCodes.Br, skipToPrimLabel);
+        il.MarkLabel(notArrayConvertLabel);
+
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, doToPrimLabel);

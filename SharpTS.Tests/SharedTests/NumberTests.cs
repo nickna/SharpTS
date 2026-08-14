@@ -11,6 +11,19 @@ public class NumberTests
     #region Static Properties
 
     [Theory, ModeData]
+    public void Number_ArrayUsesArrayToStringPrimitive(ExecutionMode mode)
+    {
+        var source = """
+            console.log(Number([1]));
+            const receiver: any = { 0: "found", length: [1] };
+            console.log(Array.prototype.includes.call(receiver, "found"));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Number_MAX_VALUE_ReturnsLargeNumber(ExecutionMode mode)
     {
         // Use a comparison that doesn't require scientific notation parsing
