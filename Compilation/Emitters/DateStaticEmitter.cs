@@ -46,10 +46,24 @@ public sealed class DateStaticEmitter : IStaticTypeEmitterStrategy
             il.Emit(OpCodes.Ldstr, "Date");
             return true;
         }
+        if (propertyName is "now" or "UTC" or "parse")
+        {
+            // Route value-form reads through the runtime Type-token path. It
+            // owns descriptor shadows and deletion tombstones, so assignments
+            // and `delete Date.now` remain observable instead of this static
+            // fast path permanently resurrecting the original function.
+            il.Emit(OpCodes.Ldtoken, runtime.TSDateType);
+            il.Emit(OpCodes.Call, ctx.Types.GetMethod(
+                ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Ldstr, propertyName);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            return true;
+        }
 
         return false;
     }
 
     public bool HasStaticProperty(string memberName)
-        => memberName is "length" or "name" or "prototype";
+        => memberName is "length" or "name" or "prototype"
+            or "now" or "UTC" or "parse";
 }

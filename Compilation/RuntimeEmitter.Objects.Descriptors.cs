@@ -2059,6 +2059,43 @@ public partial class RuntimeEmitter
         EmitObjectMethodNameCheck("values");
         il.MarkLabel(objTypeNotObjectLabel);
 
+        // Date static methods need the same adapter-backed cached wrappers as
+        // direct `Date.UTC`/`Date.parse`/`Date.now` reads. The generic Type
+        // probe can see the CLR UTC method first and wrap a different method
+        // identity, breaking descriptor.value identity.
+        if (runtime.TSDateUTCStatic is not null)
+        {
+            var notDateTypeLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, runtime.TSDateType);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle")!);
+            il.Emit(OpCodes.Bne_Un, notDateTypeLabel);
+            void EmitDateStaticDescriptor(
+                string name, MethodBuilder target, int length)
+            {
+                var next = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, propNameLocal);
+                il.Emit(OpCodes.Ldstr, name);
+                il.Emit(OpCodes.Call, _types.GetMethod(
+                    _types.String, "op_Equality", _types.String, _types.String));
+                il.Emit(OpCodes.Brfalse, next);
+                EmitBuiltinDataDescriptor(() =>
+                {
+                    _types.EmitLoadMethodInfo(il, target);
+                    il.Emit(OpCodes.Ldstr, name);
+                    il.Emit(OpCodes.Ldc_I4, length);
+                    il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+                }, writable: true, configurable: true);
+                il.MarkLabel(next);
+            }
+            EmitDateStaticDescriptor("UTC", runtime.TSDateUTCStatic, 7);
+            if (runtime.TSDateParseStatic is not null)
+                EmitDateStaticDescriptor(
+                    "parse", runtime.TSDateParseStatic, 1);
+            il.MarkLabel(notDateTypeLabel);
+        }
+
         // IList<object> → JS Array constructor. Same method-descriptor shape
         // as Object.
         var notArrayTypeLabel = il.DefineLabel();

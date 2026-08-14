@@ -103,6 +103,13 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.String, _types.Object]);
+        // Shared backing store for value-form global assignments. DeleteProperty
+        // is emitted before the GlobalThis helper bodies, so the field must be
+        // reserved in phase 1 alongside their method signatures.
+        runtime.GlobalThisProperties = typeBuilder.DefineField(
+            "_globalThisProperties",
+            _types.DictionaryStringObject,
+            FieldAttributes.Private | FieldAttributes.Static);
 
         // Symbol-keyed class accessor registry (#266). GetIndex/SetIndex (emitted
         // during EmitRuntimeClass) call FindSymbol{Getter,Setter}For, and class

@@ -885,7 +885,60 @@ public partial class RuntimeEmitter
             EmitTypeSetSkipName("EPSILON");
             il.MarkLabel(notNumberTypeForSetLabel);
 
-            EmitDefineDataDescriptorFromValue(il, runtime);
+            // Updating a previously defined static property preserves its
+            // attributes. A missing property created by assignment gets the
+            // ordinary assignment defaults; a synthesized built-in static is
+            // likewise writable/configurable and non-enumerable.
+            var existingTypeDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, existingTypeDescriptorLocal);
+            var newTypeDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, existingTypeDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, newTypeDescriptorLabel);
+            il.Emit(OpCodes.Ldloc, existingTypeDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, typeSetSkipLabel);
+            il.Emit(OpCodes.Ldloc, existingTypeDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(newTypeDescriptorLabel);
+            var newTypeDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var newTypeEnumerableLocal = il.DeclareLocal(_types.Boolean);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, newTypeEnumerableLocal);
+            var ordinaryTypeAssignmentLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
+            il.Emit(OpCodes.Brfalse, ordinaryTypeAssignmentLabel);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, newTypeEnumerableLocal);
+            il.MarkLabel(ordinaryTypeAssignmentLabel);
+            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Stloc, newTypeDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, newTypeDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, newTypeDescriptorLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, newTypeDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, newTypeEnumerableLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, newTypeDescriptorLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, newTypeDescriptorLocal);
+            il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(typeSetSkipLabel);
             il.Emit(OpCodes.Ret);
         }
 

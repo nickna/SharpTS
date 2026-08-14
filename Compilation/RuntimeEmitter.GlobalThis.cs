@@ -37,12 +37,6 @@ public partial class RuntimeEmitter
             _types.Object,
             FieldAttributes.Private | FieldAttributes.Static);
 
-        // Static dictionary for user-assigned globalThis properties
-        runtime.GlobalThisProperties = typeBuilder.DefineField(
-            "_globalThisProperties",
-            _types.DictionaryStringObject,
-            FieldAttributes.Private | FieldAttributes.Static);
-
         EmitIndirectEval(typeBuilder, runtime);
         EmitGlobalThisGetProperty(typeBuilder, runtime);
         EmitGlobalThisSetProperty(typeBuilder, runtime);
@@ -75,18 +69,73 @@ public partial class RuntimeEmitter
         var evalLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
         var checkBuiltInsLabel = il.DefineLabel();
+        var checkDeletedLabel = il.DefineLabel();
+
+        // Object.defineProperty can install data or accessor properties on the
+        // global sentinel. Consult that canonical descriptor carrier before
+        // the assignment dictionary and synthesized intrinsic table.
+        var globalGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, globalGetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+        var noGlobalGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, noGlobalGetterLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldloc, globalGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Br, returnLabel);
+        il.MarkLabel(noGlobalGetterLabel);
+
+        var globalReadDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, globalReadDescriptorLocal);
+        var noGlobalReadDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noGlobalReadDescriptorLabel);
+        var globalAccessorUndefinedLabel = il.DefineLabel();
+        var globalDataDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, globalAccessorUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, globalDataDescriptorLabel);
+        il.MarkLabel(globalAccessorUndefinedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Br, returnLabel);
+        il.MarkLabel(globalDataDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, globalReadDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Br, returnLabel);
+        il.MarkLabel(noGlobalReadDescriptorLabel);
 
         // --- Check user-assigned properties dictionary first ---
         var valueLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
-        il.Emit(OpCodes.Brfalse, checkBuiltInsLabel); // dict not initialized yet
+        il.Emit(OpCodes.Brfalse, checkDeletedLabel); // dict not initialized yet
         il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
         il.Emit(OpCodes.Ldarg_0); // name
         il.Emit(OpCodes.Ldloca, valueLocal);
         var dictTryGetValue = _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType());
         il.Emit(OpCodes.Callvirt, dictTryGetValue);
-        il.Emit(OpCodes.Brfalse, checkBuiltInsLabel); // not found in dict
+        il.Emit(OpCodes.Brfalse, checkDeletedLabel); // not found in dict
         il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Br, returnLabel);
+
+        // Deleting a configurable synthesized global records a tombstone.
+        // User assignment is checked first above so a later assignment revives
+        // the property, as ordinary JavaScript assignment does.
+        il.MarkLabel(checkDeletedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+        il.Emit(OpCodes.Brfalse, checkBuiltInsLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Br, returnLabel);
 
         il.MarkLabel(checkBuiltInsLabel);
@@ -385,6 +434,7 @@ public partial class RuntimeEmitter
             _types.Object, [_types.Object]);
         runtime.EvalIndirect = method;
         var il = method.GetILGenerator();
+
         var stringInput = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
@@ -454,6 +504,29 @@ public partial class RuntimeEmitter
         var method = (MethodBuilder)runtime.GlobalThisSetProperty;
 
         var il = method.GetILGenerator();
+
+        // Respect Object.defineProperty metadata installed on the global
+        // sentinel. A non-writable data property silently rejects sloppy-mode
+        // assignment. For a writable descriptor, update its live [[Value]] so
+        // subsequent descriptor reflection and ordinary reads agree.
+        var globalDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, globalDescriptorLocal);
+        var noGlobalDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noGlobalDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        var globalDescriptorWritableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, globalDescriptorWritableLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(globalDescriptorWritableLabel);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.MarkLabel(noGlobalDescriptorLabel);
 
         // Lazily initialize the dictionary: if (_globalThisProperties == null) _globalThisProperties = new();
         var dictReadyLabel = il.DefineLabel();

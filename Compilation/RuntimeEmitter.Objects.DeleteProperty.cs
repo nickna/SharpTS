@@ -168,32 +168,36 @@ public partial class RuntimeEmitter
             il.MarkLabel(nextName);
         }
 
-        var configurableGlobalLabel = il.DefineLabel();
-        foreach (var configurableName in new[]
-        {
-            "globalThis", "parseInt", "parseFloat", "isNaN", "isFinite", "eval",
-            "Array", "Date", "RegExp", "Map", "Set", "WeakMap", "WeakSet",
-            "Promise", "Function", "Object", "Number", "String", "Boolean",
-            "Symbol", "Error", "TypeError", "RangeError", "ReferenceError",
-            "SyntaxError", "URIError", "EvalError", "AggregateError", "Math", "JSON"
-        })
-        {
-            var nextName = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldstr, configurableName);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality",
-                _types.String, _types.String));
-            il.Emit(OpCodes.Brfalse, nextName);
-            il.Emit(OpCodes.Br, configurableGlobalLabel);
-            il.MarkLabel(nextName);
-        }
-        // Unknown globals retain the existing permissive delete behavior.
-        il.Emit(OpCodes.Br, trueLabel);
-        il.MarkLabel(configurableGlobalLabel);
+        // User-defined descriptors decide configurability for arbitrary global
+        // names. Synthesized globals not listed above are configurable.
+        var globalDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, globalDescriptorLocal);
+        var globalDescriptorConfigurableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, globalDescriptorConfigurableLabel);
+        il.Emit(OpCodes.Ldloc, globalDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, globalDescriptorConfigurableLabel);
+        EmitDeleteFail(" from global object");
+        il.MarkLabel(globalDescriptorConfigurableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
         il.Emit(OpCodes.Pop);
+        // The value-form global object also keeps assignment values in a
+        // dictionary; remove that backing entry so deletion is observable.
+        var noGlobalDictionaryLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Brfalse, noGlobalDictionaryLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisProperties);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(noGlobalDictionaryLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);

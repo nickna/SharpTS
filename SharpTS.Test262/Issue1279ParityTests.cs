@@ -5906,6 +5906,15 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-115.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-30.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-31.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-45.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-622.js")]
+    public void Intrinsic_descriptor_carriers_share_identity_and_mutation_state(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-a-19.js")]
     [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-19.js")]
     public void Array_search_preserves_nonconfigurable_tail_elements(string relativePath)

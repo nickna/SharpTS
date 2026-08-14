@@ -1510,6 +1510,34 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noTypePdsLabel);
 
+            // A configurable built-in that was deleted must stay absent. This
+            // check precedes both the JS built-in table and CLR reflection,
+            // either of which would otherwise synthesize it again.
+            var typeBuiltinPresentLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.IsBuiltinDeletedMethod);
+            il.Emit(OpCodes.Brfalse, typeBuiltinPresentLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(typeBuiltinPresentLabel);
+
+            // Prefer the JS static-member table to CLR reflection. Besides
+            // adapting signatures such as Date.UTC(object[]), this returns the
+            // identity-cached function used by getOwnPropertyDescriptor.
+            var typeBuiltInLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
+            il.Emit(OpCodes.Stloc, typeBuiltInLocal);
+            var noEarlyTypeBuiltInLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typeBuiltInLocal);
+            il.Emit(OpCodes.Brfalse, noEarlyTypeBuiltInLabel);
+            il.Emit(OpCodes.Ldloc, typeBuiltInLocal);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noEarlyTypeBuiltInLabel);
+
             // Function.prototype.length for built-in constructor Type tokens.
             // CLR constructor overload counts are not JS arities, so identify
             // emitted intrinsics explicitly.  Error.constructor is Function,
@@ -1635,24 +1663,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notTypeConstructorLabel);
-
-            // Built-in static-member dispatch (#63): for Type tokens that
-            // represent a JS-level built-in constructor (Array → IList<object>,
-            // Number → double, String → string), look up (type, name) against
-            // the runtime table that mirrors the compile-time static emitters.
-            // This is what makes `var A = Array; A.isArray(x)` work — the
-            // compile-time ArrayStaticEmitter only runs for bare `Array.isArray`.
-            var builtInLocal = il.DeclareLocal(_types.Object);
-            il.Emit(OpCodes.Ldloc, typeLocal);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
-            il.Emit(OpCodes.Stloc, builtInLocal);
-            il.Emit(OpCodes.Ldloc, builtInLocal);
-            var noBuiltInMatchLabel = il.DefineLabel();
-            il.Emit(OpCodes.Brfalse, noBuiltInMatchLabel);
-            il.Emit(OpCodes.Ldloc, builtInLocal);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(noBuiltInMatchLabel);
 
             // #265/#358: walk the constructor's superclass chain for inherited
             // statics. In Node a class constructor inherits from its parent

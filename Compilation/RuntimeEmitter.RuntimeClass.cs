@@ -642,6 +642,10 @@ public partial class RuntimeEmitter
         // ECMA-262 §20.1.3.2 step 1's ToPropertyKey).
         EmitGetSymbolDict(typeBuilder, runtime, symbolStorageField);
         EmitIsSymbol(typeBuilder, runtime);
+        // The shared built-in static inventory is consumed by HasOwnProperty
+        // as well as GetProperty. Reserve its method token before either body;
+        // the implementation is still filled later after its backing methods.
+        DefineLookupBuiltInStaticMember(typeBuilder, runtime);
         // hasOwnProperty + isPrototypeOf helpers — must come before
         // GetFunctionMethod so the corresponding arms can return $TSFunction
         // wrappers.
@@ -674,10 +678,6 @@ public partial class RuntimeEmitter
         // Type-callee dispatch branch emits a direct call to it for `Array(n)`
         // patterns where Array was stored as a value.
         EmitArrayConstructor(typeBuilder, runtime);
-        // LookupBuiltInStaticMember (#63): MethodBuilder defined here so
-        // GetProperty's Type branch can reference it; body emitted later
-        // after all backing static methods are in place.
-        DefineLookupBuiltInStaticMember(typeBuilder, runtime);
         // InvokeValue/InvokeMethodValue must come before GetFieldsProperty (needs InvokeMethodValue for getters)
         // and before Promise methods (needed by InvokeCallback)
         // Pre-declare ArrayLikeMaterialize's MethodBuilder so InvokeMethodValue

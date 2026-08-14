@@ -94,11 +94,13 @@ public partial class RuntimeEmitter
             catch { /* already named — ignore */ }
         }
         var wrapperLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldnull); // target — helpers take the receiver as __this
         _types.EmitLoadMethodInfo(il, helper);
         il.Emit(OpCodes.Ldstr, jsName);
         il.Emit(OpCodes.Ldc_I4, jsLength);
-        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        // Use the declaration cache shared by GetProperty's synthesized
+        // Object.prototype method path so descriptor.value and direct reads
+        // preserve function identity.
+        il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
         il.Emit(OpCodes.Stloc, wrapperLocal);
         // Fast-path dict store
         il.Emit(OpCodes.Ldsfld, protoField);

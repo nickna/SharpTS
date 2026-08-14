@@ -1098,11 +1098,10 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
             il.Emit(OpCodes.Brtrue, skip);
-            il.Emit(OpCodes.Ldnull);
             _types.EmitLoadMethodInfo(il, helper);
             il.Emit(OpCodes.Ldstr, jsName);
             il.Emit(OpCodes.Ldc_I4, jsLength);
-            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+            il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(skip);
         }

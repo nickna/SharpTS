@@ -470,6 +470,16 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpConsLabel);
         }
 
+        // Shared JS built-in static dispatch is also the authoritative own-
+        // property inventory for runtime-emitted members such as Date.now,
+        // Date.UTC, and Date.parse. Reflection cannot discover their adapted
+        // JS names/signatures.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+
         // Reflection: type.GetField(name, Public|Static) ?? type.GetMethod(name, Public|Static)
         const System.Reflection.BindingFlags staticPub = System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static;
         var typeLocal2 = il.DeclareLocal(_types.Type);
