@@ -598,6 +598,51 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notProxyLabel);
 
+        // OrdinarySetWithOwnDescriptor consults an inherited descriptor before
+        // creating a new own property. This shared check covers intrinsic CLR
+        // carriers (boxed primitives, Date, and bound functions) whose own
+        // storage branches otherwise created a shadow even for a getter-only
+        // inherited accessor.
+        var inheritedSetContinueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brtrue, inheritedSetContinueLabel);
+        var inheritedSetPrototypeLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Brfalse, inheritedSetContinueLabel);
+        var inheritedSetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, inheritedSetContinueLabel);
+        var inheritedSetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, inheritedSetterLocal);
+        var inheritedSetNoSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, inheritedSetterLocal);
+        il.Emit(OpCodes.Brfalse, inheritedSetNoSetterLabel);
+        il.Emit(OpCodes.Ldloc, inheritedSetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nullLabel);
+        EmitInvokePdsSetterWithValueAndReturn(il, runtime, inheritedSetterLocal);
+        il.MarkLabel(inheritedSetNoSetterLabel);
+        // Getter-only accessors reject assignment; writable inherited data
+        // properties allow creation of a new own property.
+        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, nullLabel);
+        il.Emit(OpCodes.Ldloc, inheritedSetDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, nullLabel);
+        il.MarkLabel(inheritedSetContinueLabel);
+
         // $Object (with setter support) - call obj.SetProperty(name, value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);

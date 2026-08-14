@@ -685,6 +685,29 @@ public partial class RuntimeEmitter
         // RegExp.prototype, Error.prototype, Promise.prototype, and explicit
         // Object.setPrototypeOf targets were consequently invisible.
         il.MarkLabel(errorPrototypeLookupLabel);
+
+        // Object.prototype methods inherited by CLR-backed intrinsic objects
+        // must be bound to the original receiver, not to Object.prototype.
+        // The generic prototype recursion below is correct for data/accessor
+        // values but would bind these helper wrappers to the prototype dict.
+        void EmitInheritedObjectMethod(string jsName, MethodBuilder helper)
+        {
+            var notThisMethodLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, jsName);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, notThisMethodLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            _types.EmitLoadMethodInfo(il, helper);
+            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notThisMethodLabel);
+        }
+        EmitInheritedObjectMethod("hasOwnProperty", runtime.HasOwnPropertyHelperMethod);
+        EmitInheritedObjectMethod("propertyIsEnumerable", runtime.PropertyIsEnumerableHelperMethod);
+        EmitInheritedObjectMethod("isPrototypeOf", runtime.IsPrototypeOfHelperMethod);
+
         var noPrototypeLabel = il.DefineLabel();
         var prototypeLocal = il.DeclareLocal(_types.Object);
         // Internal runtime probes historically use GetProperty(undefined, k)

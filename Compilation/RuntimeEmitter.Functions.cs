@@ -812,6 +812,59 @@ public partial class RuntimeEmitter
         // shadow that).
         il.MarkLabel(fnProtoFallbackLabel);
         il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        var functionPrototypeDescriptorLocal = il.DeclareLocal(
+            runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, functionPrototypeDescriptorLocal);
+        var noFunctionPrototypeDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noFunctionPrototypeDescriptorLabel);
+        var functionPrototypeGetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, functionPrototypeGetterLocal);
+        var functionPrototypeDataLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
+        il.Emit(OpCodes.Brfalse, functionPrototypeDataLabel);
+        il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var functionPrototypeUndefinedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, functionPrototypeUndefinedLabel);
+        var functionPrototypeBoundGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, functionPrototypeBoundGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(functionPrototypeBoundGetterLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, functionPrototypeGetterLocal);
+        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(functionPrototypeDataLabel);
+        il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, functionPrototypeUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, functionPrototypeDescriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(functionPrototypeUndefinedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noFunctionPrototypeDescriptorLabel);
         var fpSlotLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
         il.Emit(OpCodes.Ldarg_1);

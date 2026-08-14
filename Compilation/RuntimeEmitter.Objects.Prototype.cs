@@ -618,6 +618,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSErrForProtoLabel);
 
+        // Date instances inherit from Date.prototype. They are emitted CLR
+        // objects rather than dictionary wrappers, so they need an explicit
+        // intrinsic-prototype branch.
+        if (_features.UsesDate)
+        {
+            var notTSDateForProtoLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Brfalse, notTSDateForProtoLabel);
+            il.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notTSDateForProtoLabel);
+        }
+
         // $RegExp instances → RegExp.prototype per ECMA-262 §22.2.3.
         if (_features.UsesRegExp)
         {
@@ -674,6 +689,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForProtoLabel);
+        var notBoundTSFnForProtoLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brfalse, notBoundTSFnForProtoLabel);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBoundTSFnForProtoLabel);
         var notResolveCallbackForProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
