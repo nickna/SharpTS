@@ -747,6 +747,23 @@ public class ArrayMethodTests
         Assert.Equal("false\ntrue\nfirst\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Shift_RejectsNonWritableFunctionLength(ExecutionMode mode)
+    {
+        var source = """
+            function value() {}
+            try {
+                Array.prototype.shift.call(value);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            console.log(value.length);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n0\n", output);
+    }
+
     [Theory, InterpretedOnlyData]
     public void Array_Fill_IsGenericAndCoercesEmptyBounds(ExecutionMode mode)
     {

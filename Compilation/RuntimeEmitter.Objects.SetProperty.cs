@@ -1182,6 +1182,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(tsFnDefineNewLabel);
+            // Function `length` is an intrinsic own data property with
+            // [[Writable]] false. It is synthesized by Get/descriptor helpers
+            // rather than stored in PDS, so an absent PDS entry must not be
+            // mistaken for permission to create a writable shadow.
+            var tsFnNotIntrinsicLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, tsFnNotIntrinsicLengthLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(tsFnNotIntrinsicLengthLabel);
             var tsFnDoSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -1740,6 +1751,18 @@ public partial class RuntimeEmitter
             EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
 
             il.MarkLabel(tsFnStrictNewPropertyLabel);
+            // The synthesized intrinsic function `length` property is
+            // non-writable even though it has no backing PDS entry. A strict
+            // Set must reject it instead of defining a writable shadow.
+            var tsFnStrictNotIntrinsicLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, tsFnStrictNotIntrinsicLengthLabel);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
+            il.MarkLabel(tsFnStrictNotIntrinsicLengthLabel);
             var tsFnStrictCanAddLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
