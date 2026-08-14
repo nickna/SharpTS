@@ -583,7 +583,8 @@ public partial class ILEmitter
         bool useLazyMaterializer = methodName is "every" or "some" or "filter"
             or "map" or "forEach" or "find" or "findIndex" or "findLast"
             or "findLastIndex" or "flatMap" or "reduce" or "reduceRight"
-            or "includes" or "indexOf" or "lastIndexOf";
+            or "includes" or "indexOf" or "lastIndexOf"
+            or "toReversed" or "toSpliced" or "with";
         // concat itself performs IsConcatSpreadable before consulting length;
         // pre-materializing here would erase the receiver's identity and read
         // length even when @@isConcatSpreadable is false.

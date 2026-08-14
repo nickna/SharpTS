@@ -296,6 +296,34 @@ public class ArraySpliceTests
         Assert.Equal("0\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_CopyingMethods_ReadOnlyRequiredIndicesInSpecificationOrder(ExecutionMode mode)
+    {
+        var source = """
+            let order: any[] = [];
+            const source: any = { length: 4 };
+            Object.defineProperty(source, "0", { get: function(): any { order.push(0); return "a"; } });
+            Object.defineProperty(source, "1", { get: function(): any { order.push(1); return "b"; } });
+            Object.defineProperty(source, "2", { get: function(): any { throw new Error("discarded index read"); } });
+            Object.defineProperty(source, "3", { get: function(): any { order.push(3); return "c"; } });
+            const spliced: any[] = Array.prototype.toSpliced.call(source, 2, 1);
+            console.log(spliced.join(","));
+            console.log(order.join(","));
+
+            order = [];
+            const reverseSource: any = { length: 3 };
+            Object.defineProperty(reverseSource, "0", { get: function(): any { order.push(0); return "a"; } });
+            Object.defineProperty(reverseSource, "1", { get: function(): any { order.push(1); return "b"; } });
+            Object.defineProperty(reverseSource, "2", { get: function(): any { order.push(2); return "c"; } });
+            const reversed: any[] = Array.prototype.toReversed.call(reverseSource);
+            console.log(reversed.join(","));
+            console.log(order.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("a,b,c\n0,1,3\nc,b,a\n2,1,0\n", output);
+    }
+
     #endregion
 
     #region Frozen/Sealed Arrays
