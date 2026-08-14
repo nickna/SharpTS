@@ -968,9 +968,9 @@ public class IteratorProtocolTests
     // Array.from(items, mapFn): mapfn is applied DURING iteration, and a throwing
     // mapfn triggers IteratorClose. Finite iterator so it terminates regardless of
     // the fix (pre-fix the throw still surfaced after materializing, but return()
-    // was never called → close=0). Interpreter-only.
-    [Fact]
-    public void ArrayFrom_MapFnThrows_AppliedDuringIterationAndClosesIterator()
+    // was never called → close=0).
+    [Theory, ModeData]
+    public void ArrayFrom_MapFnThrows_AppliedDuringIterationAndClosesIterator(ExecutionMode mode)
     {
         var source = """
             let closed = 0;
@@ -991,7 +991,7 @@ public class IteratorProtocolTests
             console.log(caught + " calls=" + calls + " closed=" + closed);
             """;
 
-        var output = TestHarness.Run(source, ExecutionMode.Interpreted);
+        var output = TestHarness.Run(source, mode);
         Assert.Equal("stop calls=2 closed=1\n", output);
     }
 
