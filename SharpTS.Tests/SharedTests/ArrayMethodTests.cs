@@ -764,6 +764,24 @@ public class ArrayMethodTests
         Assert.Equal("true\n0\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Slice_UsesSafeIntegerSourceIndices(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = {
+                9007199254740989: "a",
+                9007199254740990: "b",
+                length: 9007199254740992
+            };
+            const result = Array.prototype.slice.call(object, 9007199254740989);
+            console.log(result.length);
+            console.log(result.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\na,b\n", output);
+    }
+
     [Theory, InterpretedOnlyData]
     public void Array_Fill_IsGenericAndCoercesEmptyBounds(ExecutionMode mode)
     {

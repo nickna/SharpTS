@@ -494,7 +494,7 @@ public partial class ILEmitter
         // lengths — those get clamped to 0 / 1M by the materializer below.
         // flatMap creates its result with length 0, so its source length does
         // not participate in ArrayCreate and must not be read a second time.
-        bool createsNewArrayPre = methodGet.Name.Lexeme is "map" or "filter" or "slice"
+        bool createsNewArrayPre = methodGet.Name.Lexeme is "map" or "filter"
             or "splice" or "toSpliced" or "with" or "flat"
             or "toReversed" or "toSorted";
         if (createsNewArrayPre)
@@ -630,7 +630,7 @@ public partial class ILEmitter
         // length even when @@isConcatSpreadable is false.
         bool usesOriginalReceiver = methodName is "push" or "pop" or "shift"
             or "unshift" or "reverse" or "fill" or "copyWithin"
-            or "indexOf" or "lastIndexOf";
+            or "indexOf" or "lastIndexOf" or "slice";
         if (methodName != "concat" && !usesOriginalReceiver)
         {
             IL.Emit(OpCodes.Call, useLazyMaterializer
