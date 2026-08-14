@@ -2541,6 +2541,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, afterLabel);
 
+            // OrdinaryToPrimitive ignores a present valueOf/toString property
+            // when it is not callable. InvokeMethodValue deliberately throws
+            // for non-functions, so perform the spec callability check here
+            // before dispatching. This mirrors the shared ToNumber helper.
+            il.Emit(OpCodes.Ldloc, fnLocal);
+            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, afterLabel);
+
             var invResultLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, coercedLocal);
             il.Emit(OpCodes.Ldloc, fnLocal);
