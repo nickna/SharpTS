@@ -731,6 +731,22 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.replace/coerce-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-coerce-lastindex-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-coerce-lastindex.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-result-coerce-length-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-result-coerce-length.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-result-get-capture-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/str-result-get-length-err.js")]
+    public void RegExp_protocols_coerce_array_like_match_state_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void RegExp_global_descriptor_matches_in_both_modes()
+        => AssertPassInBothModes("built-ins/RegExp/prop-desc.js");
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]

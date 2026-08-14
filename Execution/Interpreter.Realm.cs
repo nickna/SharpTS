@@ -426,6 +426,11 @@ public partial class Interpreter
             value = GetArrayGlobal();
             return true;
         }
+        if (name == BuiltInNames.RegExp)
+        {
+            value = RegExpConstructorObject;
+            return true;
+        }
         value = null;
         return false;
     }
@@ -438,7 +443,7 @@ public partial class Interpreter
     /// method identity holds (<c>Math.max === Math.max</c>).
     /// </summary>
     internal static bool IsRealmIntrinsicName(string name)
-        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array"
+        => name is "Object" or "Math" or "JSON" or "String" or "Number" or "Boolean" or "Array" or "RegExp"
             || BuiltInNames.IsErrorTypeName(name);
 
     // Per-realm String/Number/Boolean.prototype. Each is an extensible ECMA-262

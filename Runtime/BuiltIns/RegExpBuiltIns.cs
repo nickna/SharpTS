@@ -864,7 +864,8 @@ public static class RegExpBuiltIns
             var matchStr = ToStr(interp, interp.GetProperty(result, "0"));
             if (matchStr.Length == 0)
             {
-                var thisIndex = ToLengthAsInt(interp.GetProperty(recv, "lastIndex"));
+                var thisIndex = ToLengthAsInt(
+                    interp, interp.GetPropertyValue(recv, "lastIndex"));
                 int nextIndex = AdvanceStringIndex(s, thisIndex, fullUnicode);
                 interp.SetProperty(recv, "lastIndex", (double)nextIndex);
             }
@@ -1098,7 +1099,8 @@ public static class RegExpBuiltIns
             // a successful exec advances lastIndex by the match length. For
             // non-sticky receivers (user-installed exec on a plain object),
             // the user is responsible for advancing lastIndex.
-            int e = ToLengthAsInt(interp.GetProperty(splitter, "lastIndex"));
+            int e = ToLengthAsInt(
+                interp, interp.GetPropertyValue(splitter, "lastIndex"));
             e = Math.Min(e, s.Length);
             if (e == p)
             {
@@ -1110,14 +1112,17 @@ public static class RegExpBuiltIns
             arr.Add(s.Substring(p, q - p));
             if (arr.Count >= limit) return RuntimeValue.FromObject(new SharpTSArray(arr));
 
-            // Add capture groups.
-            if (z is SharpTSArray zArr)
+            // Add capture groups from the generic array-like match object.
+            // Both `length` and each capture are observable Gets and their
+            // coercion/accessor errors must propagate.
+            int numberOfCaptures = ToLengthAsInt(
+                interp, interp.GetPropertyValue(z, "length"));
+            for (int i = 1; i < numberOfCaptures; i++)
             {
-                for (int i = 1; i < zArr.Length; i++)
-                {
-                    arr.Add(zArr[i]);
-                    if (arr.Count >= limit) return RuntimeValue.FromObject(new SharpTSArray(arr));
-                }
+                arr.Add(interp.GetPropertyValue(
+                    z, i.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                if (arr.Count >= limit)
+                    return RuntimeValue.FromObject(new SharpTSArray(arr));
             }
 
             p = e;
