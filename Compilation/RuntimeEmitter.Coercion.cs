@@ -818,6 +818,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
+        if (_features.UsesRegExp)
+        {
+            // RegExp keeps its compact literal Stringify form by default, but
+            // an own toString override participates in OrdinaryToPrimitive.
+            var notRegExpWithOwnToStringLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, notRegExpWithOwnToStringLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "toString");
+            il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+            il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
+            il.MarkLabel(notRegExpWithOwnToStringLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);

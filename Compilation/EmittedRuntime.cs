@@ -539,7 +539,7 @@ public class EmittedRuntime
     public MethodBuilder BigIntPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Generic <c>$Runtime</c> stub used as MethodInfo backing for String.prototype wrappers without dedicated helpers (match/search/toString/valueOf/etc.) — only typeof + isConstructor are ever observed.</summary>
     public MethodBuilder StringPrototypeGenericStub { get; set; } = null!;
-    /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn) — handles ECMA-262 22.1.3.18 step 3 when replaceValue is callable; calls fn(matched, position, string) per match and stringifies the result.</summary>
+    /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn, replaceAll) — handles functional replacement for replace/replaceAll and stringifies each callback result.</summary>
     public MethodBuilder StringReplaceWithFunction { get; set; } = null!;
     /// <summary>Strict variant of <see cref="StringPrototypeGenericStub"/> that throws TypeError on null/undefined receivers per ECMA-262 22.1.3.* step 1 (RequireObjectCoercible). Used for borrowed-method calls of <c>String.prototype.match/search/matchAll/etc.</c></summary>
     /// <summary>$Runtime.StringProtoToString(this) — ECMA-262 22.1.3.27 String.prototype.toString. thisStringValue extraction: string→as-is; $Object with __primitiveType="String"→__primitiveValue; String.prototype itself→""; else throws TypeError. Reads the marker dict directly to avoid prototype-chain recursion.</summary>

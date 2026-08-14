@@ -17,6 +17,17 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        // replaceAll performs observable @@replace dispatch before ToString(this).
+        // Preserve a boxed String receiver until the runtime helper has offered
+        // the custom protocol method the original value.
+        if (methodName == "replaceAll")
+        {
+            emitter.EmitExpression(receiver);
+            emitter.EmitBoxIfNeeded(receiver);
+            EmitReplaceAll(emitter, arguments);
+            return true;
+        }
+
         // Emit the receiver. UnwrapStringReceiver handles primitive strings
         // (fast pass-through) AND Stage-4z19 boxed-primitive wrappers from
         // `new String(x)` — the type checker treats `s : String` for both
@@ -131,10 +142,6 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             case "trimEnd":
                 il.Emit(OpCodes.Ldc_I4_2);
                 il.Emit(OpCodes.Call, ctx.Runtime!.JsTrimInline);
-                return true;
-
-            case "replaceAll":
-                EmitReplaceAll(emitter, arguments);
                 return true;
 
             case "at":

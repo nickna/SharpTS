@@ -129,6 +129,11 @@ public partial class ILEmitter
                 break;
 
             case "replaceAll":
+                // The string fast-path unwrapped the receiver before this
+                // switch. replaceAll must preserve the original boxed value
+                // until custom @@replace dispatch has received it.
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldloc, objLocal);
                 if (arguments.Count > 0)
                 {
                     EmitExpression(arguments[0]);

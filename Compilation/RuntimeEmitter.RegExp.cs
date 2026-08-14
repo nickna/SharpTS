@@ -222,6 +222,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, stringLocal);
         il.Emit(OpCodes.Ldloc, effectivePatternLocal);
         il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.StringReplaceWithFunction);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(nonCallableReplacementLabel);
@@ -1592,6 +1593,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Call, runtime.StringReplaceWithFunction);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notCallableLabel);
@@ -1668,7 +1670,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.StringReplaceWithFunction(string str, object pattern, object func) → string</c>.
+    /// Emits <c>$Runtime.StringReplaceWithFunction(string str, object pattern, object func, bool replaceAll) → string</c>.
     /// ECMA-262 22.1.3.18 step 3: when replaceValue is callable, the per-match
     /// substitution is `Call(func, undefined, [matched, ..., position, str])`.
     /// We pass `(matched, position, str)` for the string-pattern case (no
@@ -1681,7 +1683,7 @@ public partial class RuntimeEmitter
             "StringReplaceWithFunction",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.String, _types.Object, _types.Object]);
+            [_types.String, _types.Object, _types.Object, _types.Boolean]);
         runtime.StringReplaceWithFunction = method;
 
         var il = method.GetILGenerator();
@@ -1689,6 +1691,7 @@ public partial class RuntimeEmitter
         var searchLocal = il.DeclareLocal(_types.String);
         var stringPatternLabel = il.DefineLabel();
         var notFoundLabel = il.DefineLabel();
+        var regexLoopSetupLabel = il.DefineLabel();
 
         // var regexp = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_1);
@@ -1709,8 +1712,11 @@ public partial class RuntimeEmitter
         var isGlobalLocal = il.DeclareLocal(_types.Boolean);
         il.Emit(OpCodes.Ldloc, regexpLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Or);
         il.Emit(OpCodes.Stloc, isGlobalLocal);
 
+        il.MarkLabel(regexLoopSetupLabel);
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, sbLocal);
@@ -1862,11 +1868,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, posLocal);
 
-        // Empty match → advance by 1 to avoid infinite loop
+        // Empty match → retain the source code unit while advancing. At the
+        // terminal empty match, finish after the replacement to avoid
+        // re-entering Regex.Match at the same end position.
         var advanceDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, matchLocal);
         il.Emit(OpCodes.Callvirt, typeof(Capture).GetProperty("Length")!.GetGetMethod()!);
         il.Emit(OpCodes.Brtrue, advanceDoneLabel);
+        il.Emit(OpCodes.Ldloc, posLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, loopEnd);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, posLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", _types.Int32));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", _types.Char));
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldloc, posLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -1896,6 +1914,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
+
+        // replaceAll with a string search reuses the regex loop with an escaped
+        // literal pattern. That loop supplies the required callback arguments
+        // and invokes the replacer once per match position.
+        var replaceFirstStringLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, replaceFirstStringLabel);
+        il.Emit(OpCodes.Ldloc, searchLocal);
+        il.Emit(OpCodes.Call, typeof(Regex).GetMethod("Escape", [_types.String])!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(typeof(Regex), _types.String));
+        il.Emit(OpCodes.Stloc, regexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, isGlobalLocal);
+        il.Emit(OpCodes.Br, regexLoopSetupLabel);
+        il.MarkLabel(replaceFirstStringLabel);
 
         // var idx = str.IndexOf(search)
         var idxLocal2 = il.DeclareLocal(_types.Int32);
