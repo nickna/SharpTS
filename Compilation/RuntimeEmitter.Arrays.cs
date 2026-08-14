@@ -803,6 +803,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
 
         // Return empty list

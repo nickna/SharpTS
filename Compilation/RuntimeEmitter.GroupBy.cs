@@ -47,32 +47,48 @@ public partial class RuntimeEmitter
         var addElementLabel = il.DefineLabel();
         var keyNotNullLabel = il.DefineLabel();
 
-        var isTSArrayLabel = il.DefineLabel();
-        var afterUnwrapLabel = il.DefineLabel();
-
         // dict = new Dictionary<string, object?>()
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, dictLocal);
 
-        // list = unwrap iterable (handle both List<object?> and $Array)
+        // GroupBy requires a JavaScript iterable. The general materializer has
+        // a CLR-IEnumerable compatibility fallback for host APIs; reject an
+        // ordinary non-iterable object here so a nullish/absent @@iterator
+        // produces the guest TypeError mandated by GetIterator.
+        var groupByMaterializeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        il.Emit(OpCodes.Brtrue, isTSArrayLabel);
-
-        // It's a List<object?> directly
+        il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Br, afterUnwrapLabel);
-
-        // It's a $Array — unwrap
-        il.MarkLabel(isTSArrayLabel);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
-        il.Emit(OpCodes.Stloc, listLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, groupByMaterializeLabel);
+        var groupByIteratorLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Stloc, groupByIteratorLocal);
+        var groupByHasIteratorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, groupByIteratorLocal);
+        il.Emit(OpCodes.Brfalse, groupByHasIteratorLabel);
+        il.Emit(OpCodes.Ldloc, groupByIteratorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, groupByMaterializeLabel);
+        il.MarkLabel(groupByHasIteratorLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.groupBy: items is not iterable");
+        il.MarkLabel(groupByMaterializeLabel);
 
-        il.MarkLabel(afterUnwrapLabel);
+        // Materialize through the shared iterator protocol. Besides arrays,
+        // this handles custom iterables and produces the spec TypeError for a
+        // nullish/non-callable Symbol.iterator instead of a CLR cast error.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, runtime.IterateToList);
+        il.Emit(OpCodes.Stloc, listLocal);
 
         // i = 0
         il.Emit(OpCodes.Ldc_I4_0);
@@ -160,9 +176,14 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
 
-        // return new $Object(dict)
+        // Return an ordinary object with a null prototype (§20.1.2.7 step 2).
+        // A plain dictionary is already the compiler's ordinary-object
+        // carrier and, unlike $Object, does not have a baked-in prototype
+        // fallback that can mask the explicit null PDS entry.
         il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor!);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
     }
 

@@ -771,6 +771,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, method);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsObjectNoProto);
+        // An explicit null prototype is different from having no prototype
+        // entry at all. Only the latter receives the implicit
+        // Object.prototype fallback.
+        var tsObjectImplicitProtoLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
+        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Brfalse, tsObjectImplicitProtoLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsObjectImplicitProtoLabel);
         // No own prototype — fall back to Object.prototype singleton (mirrors
         // the dict-branch fallback). Catches `({}.toString)` style accesses on
         // $Object instances created without an explicit prototype link.

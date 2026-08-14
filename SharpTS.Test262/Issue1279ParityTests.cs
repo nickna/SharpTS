@@ -5787,6 +5787,13 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/Object/groupBy/groupLength.js")]
+    [InlineData("built-ins/Object/groupBy/invalid-iterable.js")]
+    [InlineData("built-ins/Object/groupBy/null-prototype.js")]
+    public void Compiled_object_group_by_remaining_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/executor-call-context-strict.js")]
     public void Promise_jobs_invoke_guest_functions_with_undefined_this(string relativePath)
         => AssertPassInBothModes(relativePath);
