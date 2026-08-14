@@ -1789,8 +1789,9 @@ public partial class RuntimeEmitter
         var str2Local = il.DeclareLocal(_types.String);
         var elementLocal = il.DeclareLocal(_types.Object);
         LocalBuilder? isLazyLocal = null;
+        LocalBuilder? observableReceiverLocal = null;
         if (observeProperties)
-            EmitHoistedLazyCheck(il, runtime, out isLazyLocal, out _);
+            EmitHoistedLazyCheck(il, runtime, out isLazyLocal, out observableReceiverLocal);
 
         // === Phase 1: Partition defined vs undefined ===
         // defined = new List<object>()
@@ -2055,9 +2056,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, jLocal);
         il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
 
         // Convert compare result to a sign in compareResultLocal:
         // double -> sign (<0 / 0 / >0); NaN or non-double -> 0 (equal -> take left -> stable).
@@ -2270,7 +2272,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Ldloc, nLocal);
             il.Emit(OpCodes.Bge, writeDefinedDone);
-            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
@@ -2295,7 +2297,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, undefinedWrittenLocal);
             il.Emit(OpCodes.Ldloc, undefinedCountLocal);
             il.Emit(OpCodes.Bge, writeUndefinedDone);
-            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);
@@ -2319,7 +2321,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Ldloc, sortLengthLocal);
             il.Emit(OpCodes.Bge, deleteTailDone);
-            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
             il.Emit(OpCodes.Ldloc, writeIndexLocal);
             il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Box, _types.Double);

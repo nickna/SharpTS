@@ -115,6 +115,21 @@ public class ArraySortTests
         Assert.Equal("a\nb\nc\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Sort_ComparatorReceivesUndefinedThis(ExecutionMode mode)
+    {
+        var source = """
+            [2, 1].sort(function (a: number, b: number): number {
+                "use strict";
+                console.log(this === undefined);
+                return a - b;
+            });
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
     #endregion
 
     #region Stability

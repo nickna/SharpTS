@@ -1733,6 +1733,37 @@ public partial class RuntimeEmitter
             il.MarkLabel(skipLabel);
         }
 
+        // Array.prototype.sort returns the original receiver. Generic method
+        // dispatch materializes object receivers into a temporary list and
+        // records the original in _currentArrayLikeReceiver; do not expose the
+        // implementation list as the JavaScript result.
+        void EmitSortCase()
+        {
+            var skipLabel = il.DefineLabel();
+            var haveOriginalReceiver = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, methodNameField);
+            il.Emit(OpCodes.Ldstr, "sort");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brfalse, skipLabel);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, listField);
+            EmitArgZeroOrUndefined();
+            il.Emit(OpCodes.Call, runtime.ArraySort);
+            il.Emit(OpCodes.Pop);
+
+            il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, haveOriginalReceiver);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, listField);
+            il.MarkLabel(haveOriginalReceiver);
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(skipLabel);
+        }
+
         // Case: callback-taking method (map/filter/forEach/find/findIndex/some/every/flatMap/...).
         // The runtime helper takes (list, callback), but the spec also accepts an
         // optional thisArg as args[1] which must be plumbed via the
@@ -1915,7 +1946,7 @@ public partial class RuntimeEmitter
         EmitCallbackCase("findLastIndex", runtime.ArrayFindLastIndex);
         EmitCallbackCase("some", runtime.ArraySome);
         EmitCallbackCase("every", runtime.ArrayEvery);
-        EmitOptionalCallableCase("sort", runtime.ArraySort);
+        EmitSortCase();
         EmitOptionalCallableCase("toSorted", runtime.ArrayToSorted);
         EmitSingleArgCase("flat", runtime.ArrayFlat);
         EmitCallbackCase("flatMap", runtime.ArrayFlatMap);
