@@ -7128,7 +7128,7 @@ test/built-ins/Object/prototype/__proto__/set-abrupt.js Fail
 test/built-ins/Object/prototype/__proto__/set-cycle-shadowed.js Timeout
 test/built-ins/Object/prototype/__proto__/set-cycle.js Fail
 test/built-ins/Object/prototype/__proto__/set-fn-name.js RuntimeError
-test/built-ins/Object/prototype/__proto__/set-immutable.js RuntimeError:worker-stalled
+test/built-ins/Object/prototype/__proto__/set-immutable.js Fail
 test/built-ins/Object/prototype/__proto__/set-invalid-value.js RuntimeError
 test/built-ins/Object/prototype/__proto__/set-non-extensible.js Fail
 test/built-ins/Object/prototype/__proto__/set-non-obj-coercible.js RuntimeError
