@@ -665,10 +665,35 @@ public partial class Interpreter
 
             if (current is ISharpTSCallable callable)
             {
-                // Return inherited Function.prototype methods unbound. A
-                // member call binds the original receiver afterwards; binding
-                // to a proxy target here would bypass the proxy [[Call]] trap.
-                return FunctionBuiltIns.GetPrototypeMethod(name)
+                // Ordinary callables inherit from the realm's mutable
+                // Function.prototype. Consult its descriptor overlay before
+                // the intrinsic members so user data properties/accessors
+                // (including numeric concat indices and a replaced toString)
+                // participate in internal Get(O, P) operations. Return methods
+                // unbound: the eventual call site supplies the original
+                // receiver, preserving proxy [[Call]] behavior.
+                var functionPrototype = GetFunctionPrototype();
+                if (functionPrototype.GetOwnPropertyDescriptor(name) is { } descriptor)
+                {
+                    if (descriptor.HasGet || descriptor.HasSet)
+                        return descriptor.Get is null
+                            ? SharpTSUndefined.Instance
+                            : BindAccessorToObject(descriptor.Get, receiver!).CallBoxed(this, []);
+                    return descriptor.Value;
+                }
+                if (functionPrototype.GetMember(name) is { } member)
+                    return member;
+
+                var objectPrototype = GetObjectPrototype();
+                if (objectPrototype.GetOwnPropertyDescriptor(name) is { } objectDescriptor)
+                {
+                    if (objectDescriptor.HasGet || objectDescriptor.HasSet)
+                        return objectDescriptor.Get is null
+                            ? SharpTSUndefined.Instance
+                            : BindAccessorToObject(objectDescriptor.Get, receiver!).CallBoxed(this, []);
+                    return objectDescriptor.Value;
+                }
+                return objectPrototype.GetMember(name)
                     ?? FunctionBuiltIns.GetMember(callable, name)
                     ?? SharpTSUndefined.Instance;
             }
