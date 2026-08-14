@@ -414,6 +414,26 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Stloc, receiverLocal);
 
+        // toSorted must read the generic receiver's indexed properties exactly
+        // once before comparison, and abrupt completion must not leak the
+        // observable-receiver thread-static into a later array call. Keep that
+        // state management inside one emitted runtime helper.
+        if (methodName == "toSorted")
+        {
+            if (c.Arguments.Count >= 2)
+            {
+                EmitExpression(c.Arguments[1]);
+                EmitBoxIfNeeded(c.Arguments[1]);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            }
+            IL.Emit(OpCodes.Call, runtime.ArrayToSortedGeneric);
+            SetStackUnknown();
+            return true;
+        }
+
         // The length-changing mutators always perform Set(O, "length", ...,
         // true). String exotic objects expose a non-writable length, including
         // the empty string, so the operation must throw instead of silently

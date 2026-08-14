@@ -5731,6 +5731,12 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Array/prototype/toSorted/comparefn-called-after-get-elements.js")]
+    [InlineData("built-ins/Array/prototype/toSorted/comparefn-stop-after-error.js")]
+    public void Compiled_copying_sort_preserves_abrupt_completion_order(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/executor-call-context-strict.js")]
     public void Promise_jobs_invoke_guest_functions_with_undefined_this(string relativePath)
         => AssertPassInBothModes(relativePath);

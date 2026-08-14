@@ -918,6 +918,7 @@ public partial class RuntimeEmitter
         // full-prototype-surface implementation can wire it up.
         EmitArrayLikeMaterialize(typeBuilder, runtime);
         EmitArrayLikeMaterializeForIteration(typeBuilder, runtime);
+        EmitArrayLikeMaterializeForCopy(typeBuilder, runtime);
         EmitHasArrayLikeProperty(typeBuilder, runtime);
         EmitLoadArrayLikeElement(typeBuilder, runtime);
         // RequireObjectCoercible(this) — emitted after TSError so it can
@@ -938,6 +939,7 @@ public partial class RuntimeEmitter
         // MethodBuilder is available to InvokeValue's Type-callee dispatch.
         EmitArraySort(typeBuilder, runtime);
         EmitArrayToSorted(typeBuilder, runtime);
+        EmitArrayToSortedGeneric(typeBuilder, runtime);
         // ToIntegerOrInfinity now emitted earlier (before EmitArrayIndexOf).
         EmitArraySplice(typeBuilder, runtime);
         EmitArraySpliceProto(typeBuilder, runtime);

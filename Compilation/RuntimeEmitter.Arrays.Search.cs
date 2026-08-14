@@ -1750,6 +1750,46 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Copying-array companion to ArrayLikeMaterializeForIteration. Descriptor-
+    /// capable receivers stay lazy so indexed getters run exactly once in the
+    /// consuming algorithm, while their single length read also enforces the
+    /// ArrayCreate 2^32-1 limit.
+    /// </summary>
+    private void EmitArrayLikeMaterializeForCopy(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayLikeMaterializeForCopy",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.Object]);
+        runtime.ArrayLikeMaterializeForCopy = method;
+
+        var il = method.GetILGenerator();
+
+        var notDict = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, notDict);
+        EmitLazyMaterializePath(il, runtime, holeAware: true, rejectOverArrayLength: true);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notDict);
+
+        var notTSObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, notTSObject);
+        EmitLazyMaterializePath(il, runtime, holeAware: false, rejectOverArrayLength: true);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notTSObject);
+
+        // Arrays, arguments, strings, and primitive wrappers have bounded CLR
+        // storage and retain the established materialization behavior.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterializeForIteration);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Reads <c>length</c> from arg0 (with full ToNumber side effects), clamps
     /// it to <c>[0, 1&lt;&lt;20]</c>, allocates a <c>List&lt;object&gt;</c> of
     /// that size, and fills it. When <paramref name="holeAware"/> is true (Dict
@@ -1761,7 +1801,11 @@ public partial class RuntimeEmitter
     /// slots are filled with null. The dispatch site already stored the
     /// receiver in <c>_currentArrayLikeReceiver</c>.
     /// </summary>
-    private void EmitLazyMaterializePath(ILGenerator il, EmittedRuntime runtime, bool holeAware)
+    private void EmitLazyMaterializePath(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        bool holeAware,
+        bool rejectOverArrayLength = false)
     {
         var lenLocal = il.DeclareLocal(_types.Int32);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
@@ -1774,6 +1818,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Stloc, dLocal);
+
+        if (rejectOverArrayLength)
+        {
+            var withinArrayLimit = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, dLocal);
+            il.Emit(OpCodes.Ldc_R8, 4294967295.0);
+            // NaN is unordered and becomes length zero below; finite values at
+            // or below the maximum are valid. Positive infinity and larger
+            // finite values require ArrayCreate to throw RangeError.
+            il.Emit(OpCodes.Ble_Un, withinArrayLimit);
+            GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+            il.MarkLabel(withinArrayLimit);
+        }
 
         // NaN → 0
         var afterLen = il.DefineLabel();

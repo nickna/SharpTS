@@ -1704,6 +1704,49 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Generic Array.prototype.toSorted.call receiver boundary. It keeps the
+    /// observable array-like receiver scoped across lazy materialization and
+    /// sorting, restoring nested-call state even when a getter or comparator
+    /// completes abruptly.
+    /// </summary>
+    private void EmitArrayToSortedGeneric(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayToSortedGeneric",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.Object, _types.Object]);
+        runtime.ArrayToSortedGeneric = method;
+
+        var il = method.GetILGenerator();
+        var previousReceiver = il.DeclareLocal(_types.Object);
+        var result = il.DeclareLocal(_types.ListOfObject);
+
+        EmitThrowIfCallbackNotCallable(
+            il, runtime, 1, "Array.prototype.toSorted comparator", allowUndefined: true);
+
+        il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stloc, previousReceiver);
+
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterializeForCopy);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ArrayToSorted);
+        il.Emit(OpCodes.Stloc, result);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldloc, previousReceiver);
+        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.EndExceptionBlock();
+
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits the body of the sort algorithm (stable bottom-up merge sort, Θ(n log n)).
     /// When mutateInPlace is true, sorts arg0 and returns arg0.
     /// </summary>

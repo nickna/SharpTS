@@ -123,10 +123,10 @@ public partial class RuntimeEmitter
             _ => throw new InvalidOperationException("EmitThrowIfCallbackNotCallable: unsupported argIndex")
         };
         il.Emit(loadOp);
-        // Optional callback slots such as Array.prototype.sort's comparator
-        // arrive as CLR null when omitted; treat that as undefined only at
-        // call sites which explicitly allow an absent callback.
-        il.Emit(OpCodes.Brfalse, allowUndefined ? okLabel : throwLabel);
+        // Missing optional callback slots are normalized to $Undefined by
+        // both direct and bound-method dispatch. CLR null is JavaScript null,
+        // which is never callable and must not be treated as an omission.
+        il.Emit(OpCodes.Brfalse, throwLabel);
         il.Emit(loadOp);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, allowUndefined ? okLabel : throwLabel);
