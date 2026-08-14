@@ -184,7 +184,8 @@ public class JSONProxyTests
     {
         // Reviver inserts a Proxy as a sibling value; the walker continues
         // into that Proxy, which must use its `get` and `ownKeys` traps to
-        // enumerate and read children, and `set` to write the reviver's result.
+        // enumerate and read children, and `defineProperty` to create each
+        // revived data property.
         var source = """
             let trapLog: string = "";
             JSON.parse('{"a":1,"replaceMe":2}', function (this: any, k: string, v: any): any {
@@ -199,9 +200,9 @@ public class JSONProxyTests
                             trapLog += "ownKeys;";
                             return Object.keys(t);
                         },
-                        set: function(t: any, p: string, val: any): boolean {
-                            trapLog += "set:" + p + "=" + val + ";";
-                            t[p] = val;
+                        defineProperty: function(t: any, p: string, desc: any): boolean {
+                            trapLog += "define:" + p + "=" + desc.value + ";";
+                            Object.defineProperty(t, p, desc);
                             return true;
                         }
                     });
@@ -214,14 +215,14 @@ public class JSONProxyTests
 
         var output = TestHarness.Run(source, mode);
         // Expect ownKeys is called once, get is called for each key while
-        // recursing in, and set is called for each key when storing the
-        // reviver-returned value back. (`get` may fire more than twice if
+        // recursing in, and defineProperty is called for each key when storing
+        // the reviver-returned value back. (`get` may fire more than twice if
         // intermediate paths read the proxy back.)
         Assert.Contains("ownKeys;", output);
         Assert.Contains("get:x;", output);
         Assert.Contains("get:y;", output);
-        Assert.Contains("set:x=100;", output);
-        Assert.Contains("set:y=200;", output);
+        Assert.Contains("define:x=100;", output);
+        Assert.Contains("define:y=200;", output);
     }
 
     [Theory, ModeData]

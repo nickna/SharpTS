@@ -176,13 +176,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.ListOfString);
         il.Emit(OpCodes.Stloc, keysLocal);
 
-        // Cache TrapSet / TrapDeleteProperty MethodInfo across the loop.
-        var trapSetMi = il.DeclareLocal(_types.MethodInfo);
+        // Cache TrapDeleteProperty MethodInfo across the loop. The write side
+        // uses ObjectDefineProperty below because InternalizeJSONProperty calls
+        // CreateDataProperty rather than ordinary [[Set]].
         var trapDelMi = il.DeclareLocal(_types.MethodInfo);
-        il.Emit(OpCodes.Ldloc, proxyTypeLocal);
-        il.Emit(OpCodes.Ldstr, "TrapSet");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        il.Emit(OpCodes.Stloc, trapSetMi);
         il.Emit(OpCodes.Ldloc, proxyTypeLocal);
         il.Emit(OpCodes.Ldstr, "TrapDeleteProperty");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
@@ -216,35 +213,45 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, applyReviverMethod);
         il.Emit(OpCodes.Stloc, newElemLocal);
 
-        // ECMA-262 step 2.b.iii.3 / 2.c.ii.2: if newElement is undefined,
-        // delete; else set. We treat C# null and the $Undefined singleton
-        // both as "undefined" here (parity with the interpreter helper).
+        // ECMA-262 step 2.b.iii.3 / 2.c.ii.2: only JavaScript undefined
+        // selects Delete. CLR null is the JavaScript null primitive and must
+        // be written back as an ordinary value.
         var deleteLabel = il.DefineLabel();
         var setLabel = il.DefineLabel();
         var endIfLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Brfalse, deleteLabel);
         il.Emit(OpCodes.Ldloc, newElemLocal);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, deleteLabel);
         il.Emit(OpCodes.Br, setLabel);
 
         il.MarkLabel(setLabel);
-        // TrapSet(val, prop, newElement, null)
-        il.Emit(OpCodes.Ldloc, trapSetMi);
+        // CreateDataProperty uses [[DefineOwnProperty]], not [[Set]]. Route
+        // through ObjectDefineProperty so Proxy defineProperty traps observe
+        // each revived child. All CreateDataProperty attributes are true.
+        var createDescLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, createDescLocal);
+        void SetCreateDescriptorField(string name, Action emitValue)
+        {
+            il.Emit(OpCodes.Ldloc, createDescLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            emitValue();
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        }
+        SetCreateDescriptorField("value", () => il.Emit(OpCodes.Ldloc, newElemLocal));
+        foreach (var attribute in new[] { "writable", "enumerable", "configurable" })
+        {
+            SetCreateDescriptorField(attribute, () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Box, _types.Boolean);
+            });
+        }
         il.Emit(OpCodes.Ldloc, valLocal);
-        il.Emit(OpCodes.Ldc_I4_3);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Stelem_Ref);
-        // [2] = null (Interpreter) — already null from Newarr
-        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Ldloc, createDescLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, endIfLabel);
 
@@ -279,9 +286,8 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// Emits the List branch of ApplyReviver: iterate by index 0..Count, recurse
-    /// with val as the new holder, then list[i] = newElement (compiled mode does
-    /// not model array holes; null is stored when the reviver returns
-    /// null/undefined). Falls through if val is not a List&lt;object?&gt;.
+    /// with val as the new holder, then CreateDataProperty or Delete according
+    /// to the reviver result. Falls through if val is not a List&lt;object?&gt;.
     /// </summary>
     private void EmitReviverListBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
@@ -323,17 +329,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, applyReviverMethod);
         il.Emit(OpCodes.Stloc, newElemLocal);
 
-        // Normalize $Undefined to null so the stored list slot reads as null
-        // when joined/stringified; keeps parity with the no-reviver path
-        // where missing indexes are absent rather than undefined-tagged.
-        var stripUndefDoneLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brfalse, stripUndefDoneLabel);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Stloc, newElemLocal);
-        il.MarkLabel(stripUndefDoneLabel);
-
         // ECMA-262 25.5.1.1.1 InternalizeJSONProperty step 2.b.iii.3.a:
         // CreateDataProperty(val, ToString(I), newElement). When the property
         // already exists on the holder with Configurable: false (as set by a
@@ -343,20 +338,31 @@ public partial class RuntimeEmitter
         // would punch through the non-configurable lock.
         var doSetLabel = il.DefineLabel();
         var afterSetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, newElemLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, doSetLabel);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, propLocal);
+        il.Emit(OpCodes.Call, runtime.DeleteProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, afterSetLabel);
+
+        il.MarkLabel(doSetLabel);
         var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
         il.Emit(OpCodes.Ldloc, descLocal);
-        il.Emit(OpCodes.Brfalse, doSetLabel);
+        var writeElementLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, writeElementLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, doSetLabel);
+        il.Emit(OpCodes.Brtrue, writeElementLabel);
         // Non-configurable: skip set, fall through to the increment.
         il.Emit(OpCodes.Br, afterSetLabel);
 
-        il.MarkLabel(doSetLabel);
+        il.MarkLabel(writeElementLabel);
         // list[i] = newElement
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -380,9 +386,9 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the Dictionary branch of ApplyReviver: snapshot keys (so revivers
     /// that defineProperty on `this` don't shift the iteration), recurse on each
-    /// key with val as the new holder, then val[prop] = newElement (or
-    /// val.Remove(prop) when newElement is null/undefined). Falls through if val
-    /// is not a Dictionary&lt;string, object?&gt;.
+    /// key with val as the new holder, then CreateDataProperty or Delete
+    /// according to the reviver result. Falls through if val is not a
+    /// Dictionary&lt;string, object?&gt;.
     /// </summary>
     private void EmitReviverDictBranch(ILGenerator il, EmittedRuntime runtime, MethodBuilder applyReviverMethod, LocalBuilder valLocal, Label afterIterLabel)
     {
@@ -397,11 +403,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
-        // Snapshot keys to a List<string>: spec EnumerableOwnProperties is
+        // Snapshot keys to a List<object>: spec EnumerableOwnProperties is
         // captured before iteration. Without snapshotting, dict.Keys is a live
         // KeyCollection — adding/removing keys during the loop throws.
-        var keysLocal = il.DeclareLocal(_types.ListOfString);
-        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfString));
+        var keysLocal = il.DeclareLocal(_types.ListOfObject);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, keysLocal);
 
         // foreach (var k in dict.Keys) keys.Add(k);
@@ -426,9 +432,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call,
             typeof(Dictionary<string, object>.KeyCollection.Enumerator)
                 .GetProperty("Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "Add", [_types.String]));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
         il.Emit(OpCodes.Br, keyCopyStart);
         il.MarkLabel(keyCopyEnd);
+
+        // EnumerableOwnPropertyNames uses OrdinaryOwnPropertyKeys ordering:
+        // canonical array indices first in ascending order, then other string
+        // keys in creation order. Reuse the shared normalizer used by
+        // Object.keys/ownKeys consumers.
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
+        il.Emit(OpCodes.Stloc, keysLocal);
 
         // for (int i = 0; i < keys.Count; i++)
         var iLocal = il.DeclareLocal(_types.Int32);
@@ -440,14 +454,15 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopStart);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfString, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
 
         // prop = keys[i]
         var propLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Item", [_types.Int32]));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32]));
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, propLocal);
 
         // newElement = ApplyReviver(val, prop, reviver)
@@ -458,18 +473,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, applyReviverMethod);
         il.Emit(OpCodes.Stloc, newElemLocal);
 
-        // if (newElement == null || newElement is $Undefined) Remove else Set
+        // Only undefined deletes. JavaScript null remains a data value.
         var setLabel = il.DefineLabel();
         var deleteLabel = il.DefineLabel();
         var endIfLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, newElemLocal);
-        il.Emit(OpCodes.Brfalse, deleteLabel);
         il.Emit(OpCodes.Ldloc, newElemLocal);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, deleteLabel);
         il.Emit(OpCodes.Br, setLabel);
 
         il.MarkLabel(setLabel);
+        // CreateDataProperty cannot replace a non-configurable own property.
+        // Its false result is ignored by InternalizeJSONProperty.
+        var dictDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var writeDictLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, propLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, dictDescLocal);
+        il.Emit(OpCodes.Ldloc, dictDescLocal);
+        il.Emit(OpCodes.Brfalse, writeDictLabel);
+        il.Emit(OpCodes.Ldloc, dictDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, endIfLabel);
+        il.MarkLabel(writeDictLabel);
         // dict[prop] = newElement
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
@@ -478,10 +505,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endIfLabel);
 
         il.MarkLabel(deleteLabel);
-        // dict.Remove(prop)
-        il.Emit(OpCodes.Ldloc, dictLocal);
+        // Ordinary [[Delete]] respects non-configurable descriptors and
+        // returns false without throwing in this non-strict algorithm.
+        il.Emit(OpCodes.Ldloc, valLocal);
         il.Emit(OpCodes.Ldloc, propLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", [_types.String]));
+        il.Emit(OpCodes.Call, runtime.DeleteProperty);
         il.Emit(OpCodes.Pop);
 
         il.MarkLabel(endIfLabel);
