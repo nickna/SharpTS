@@ -258,6 +258,8 @@ public partial class RuntimeEmitter
 
     private void EmitGetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        EmitNormalizeOwnPropertyKeys(typeBuilder, runtime);
+
         var method = typeBuilder.DefineMethod(
             "GetKeys",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -302,7 +304,7 @@ public partial class RuntimeEmitter
         var notProxyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, notProxyLabel);
-        EmitProxyOwnKeysCheck(il, () => il.Emit(OpCodes.Ldarg_0), notProxyLabel);
+        EmitProxyOwnKeysCheck(il, runtime, () => il.Emit(OpCodes.Ldarg_0), notProxyLabel, enumerableOnly: true);
         il.MarkLabel(notProxyLabel);
 
         // String primitive: indexed-char keys "0", "1", ... per ECMA-262
@@ -422,6 +424,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
 
         // Check if obj is List<object?>
@@ -506,6 +509,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
 
         // Emitted $Object path for class instances (standalone-safe)
@@ -523,15 +527,69 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notTSFnForKeysLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
+
+        // Function intrinsic keys predate user expandos. If defineProperty
+        // makes one enumerable after `fn.a` was created, changing attributes
+        // must not move the intrinsic key behind `a`.
+        void EmitEnumerableFunctionIntrinsic(string name)
+        {
+            var skip = il.DefineLabel();
+            var desc = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, desc);
+            il.Emit(OpCodes.Ldloc, desc);
+            il.Emit(OpCodes.Brfalse, skip);
+            il.Emit(OpCodes.Ldloc, desc);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, skip);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.MarkLabel(skip);
+        }
+        EmitEnumerableFunctionIntrinsic("length");
+        EmitEnumerableFunctionIntrinsic("name");
+        EmitEnumerableFunctionIntrinsic("prototype");
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
         var fnPdsKeysLocal = il.DeclareLocal(listType);
         il.Emit(OpCodes.Stloc, fnPdsKeysLocal);
-        il.Emit(OpCodes.Ldloc, resultLocal);
+        var fnKeyIndexLocal = il.DeclareLocal(_types.Int32);
+        var fnKeyLocal = il.DeclareLocal(_types.Object);
+        var fnKeyLoop = il.DefineLabel();
+        var fnKeyNext = il.DefineLabel();
+        var fnKeyEnd = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, fnKeyIndexLocal);
+        il.MarkLabel(fnKeyLoop);
+        il.Emit(OpCodes.Ldloc, fnKeyIndexLocal);
         il.Emit(OpCodes.Ldloc, fnPdsKeysLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
+        il.Emit(OpCodes.Bge, fnKeyEnd);
+        il.Emit(OpCodes.Ldloc, fnPdsKeysLocal);
+        il.Emit(OpCodes.Ldloc, fnKeyIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, fnKeyLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, fnKeyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Contains", [_types.Object])!);
+        il.Emit(OpCodes.Brtrue, fnKeyNext);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, fnKeyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+        il.MarkLabel(fnKeyNext);
+        il.Emit(OpCodes.Ldloc, fnKeyIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, fnKeyIndexLocal);
+        il.Emit(OpCodes.Br, fnKeyLoop);
+        il.MarkLabel(fnKeyEnd);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSFnForKeysLabel);
 
@@ -753,6 +811,120 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Applies OrdinaryOwnPropertyKeys string ordering to an already-collected
+    /// list: canonical array indices first in ascending numeric order, followed
+    /// by all other strings in their original creation order.
+    /// </summary>
+    private void EmitNormalizeOwnPropertyKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var listOfUInt32 = typeof(List<uint>);
+        var method = typeBuilder.DefineMethod(
+            "NormalizeOwnPropertyKeys",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject]
+        );
+        runtime.NormalizeOwnPropertyKeys = method;
+
+        var il = method.GetILGenerator();
+        var numericLocal = il.DeclareLocal(listOfUInt32);
+        var ordinaryLocal = il.DeclareLocal(_types.ListOfObject);
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var itemLocal = il.DeclareLocal(_types.Object);
+        var textLocal = il.DeclareLocal(_types.String);
+        var uintLocal = il.DeclareLocal(_types.UInt32);
+
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listOfUInt32, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, numericLocal);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, ordinaryLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var scanStart = il.DefineLabel();
+        var scanEnd = il.DefineLabel();
+        var ordinaryKey = il.DefineLabel();
+        var afterKey = il.DefineLabel();
+        il.MarkLabel(scanStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")!);
+        il.Emit(OpCodes.Bge, scanEnd);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, itemLocal);
+        il.Emit(OpCodes.Ldloc, itemLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, textLocal);
+        il.Emit(OpCodes.Ldloc, textLocal);
+        il.Emit(OpCodes.Brfalse, ordinaryKey);
+        il.Emit(OpCodes.Ldloc, textLocal);
+        il.Emit(OpCodes.Ldloca, uintLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, ordinaryKey);
+        il.Emit(OpCodes.Ldloc, uintLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, ordinaryKey);
+        // Reject non-canonical spellings such as "01" and "+1".
+        il.Emit(OpCodes.Ldloca, uintLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Ldloc, textLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, ordinaryKey);
+        il.Emit(OpCodes.Ldloc, numericLocal);
+        il.Emit(OpCodes.Ldloc, uintLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listOfUInt32, "Add", [_types.UInt32])!);
+        il.Emit(OpCodes.Br, afterKey);
+        il.MarkLabel(ordinaryKey);
+        il.Emit(OpCodes.Ldloc, ordinaryLocal);
+        il.Emit(OpCodes.Ldloc, itemLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.MarkLabel(afterKey);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, scanStart);
+        il.MarkLabel(scanEnd);
+
+        il.Emit(OpCodes.Ldloc, numericLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listOfUInt32, "Sort", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        var numericStart = il.DefineLabel();
+        var numericEnd = il.DefineLabel();
+        il.MarkLabel(numericStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, numericLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listOfUInt32, "get_Count")!);
+        il.Emit(OpCodes.Bge, numericEnd);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, numericLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listOfUInt32, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, uintLocal);
+        il.Emit(OpCodes.Ldloca, uintLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, numericStart);
+        il.MarkLabel(numericEnd);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, ordinaryLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitGetOwnPropertyNames(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -794,7 +966,7 @@ public partial class RuntimeEmitter
         var notProxyLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, notProxyLabel);
-        EmitProxyOwnKeysCheck(il, () => il.Emit(OpCodes.Ldarg_0), notProxyLabel);
+        EmitProxyOwnKeysCheck(il, runtime, () => il.Emit(OpCodes.Ldarg_0), notProxyLabel, enumerableOnly: false);
         il.MarkLabel(notProxyLabel);
 
         // if (obj is Dictionary<string, object?> dict)
@@ -874,6 +1046,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, pdsExtraNamesLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
         il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
 
         // List case: return ["0", "1", ..., "length"] (skipping holes).
@@ -935,11 +1108,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, runtime.PDSGetAllExtraKeys);
         il.Emit(OpCodes.Stloc, listPdsNamesLocal);
-        il.Emit(OpCodes.Ldloc, namesLocal);
+        var listExtraIndexLocal = il.DeclareLocal(_types.Int32);
+        var listExtraKeyLocal = il.DeclareLocal(_types.Object);
+        var listExtraLoop = il.DefineLabel();
+        var listExtraNext = il.DefineLabel();
+        var listExtraEnd = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, listExtraIndexLocal);
+        il.MarkLabel(listExtraLoop);
+        il.Emit(OpCodes.Ldloc, listExtraIndexLocal);
         il.Emit(OpCodes.Ldloc, listPdsNamesLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")!);
+        il.Emit(OpCodes.Bge, listExtraEnd);
+        il.Emit(OpCodes.Ldloc, listPdsNamesLocal);
+        il.Emit(OpCodes.Ldloc, listExtraIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, listExtraKeyLocal);
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ldloc, listExtraKeyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Contains", [_types.Object])!);
+        il.Emit(OpCodes.Brtrue, listExtraNext);
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ldloc, listExtraKeyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.MarkLabel(listExtraNext);
+        il.Emit(OpCodes.Ldloc, listExtraIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, listExtraIndexLocal);
+        il.Emit(OpCodes.Br, listExtraLoop);
+        il.MarkLabel(listExtraEnd);
 
         il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
 
         // Object case: use $IHasFields fields dictionary (standalone-safe)
@@ -1037,6 +1238,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumberTypeForNamesLabel);
 
+        // RegExp instances are created with an own non-enumerable lastIndex
+        // property before any user expando. Keep that intrinsic at the front
+        // even when defineProperty later changes its attributes/value.
+        if (_features.UsesRegExp)
+        {
+            var notRegExpForNamesLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, notRegExpForNamesLabel);
+            il.Emit(OpCodes.Ldloc, namesLocal);
+            il.Emit(OpCodes.Ldstr, "lastIndex");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+            il.MarkLabel(notRegExpForNamesLabel);
+        }
+
         var noFieldsDictLabel = il.DefineLabel();
         var fieldsDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_0);
@@ -1106,10 +1322,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
         il.Emit(OpCodes.Call, runtime.PDSGetAllExtraKeys);
         il.Emit(OpCodes.Stloc, objPdsExtraNamesLocal);
-        il.Emit(OpCodes.Ldloc, namesLocal);
+        var objExtraIndexLocal = il.DeclareLocal(_types.Int32);
+        var objExtraKeyLocal = il.DeclareLocal(_types.Object);
+        var objExtraLoop = il.DefineLabel();
+        var objExtraNext = il.DefineLabel();
+        var objExtraEnd = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, objExtraIndexLocal);
+        il.MarkLabel(objExtraLoop);
+        il.Emit(OpCodes.Ldloc, objExtraIndexLocal);
         il.Emit(OpCodes.Ldloc, objPdsExtraNamesLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "AddRange", [_types.IEnumerableOfObject])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")!);
+        il.Emit(OpCodes.Bge, objExtraEnd);
+        il.Emit(OpCodes.Ldloc, objPdsExtraNamesLocal);
+        il.Emit(OpCodes.Ldloc, objExtraIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, objExtraKeyLocal);
         il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ldloc, objExtraKeyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Contains", [_types.Object])!);
+        il.Emit(OpCodes.Brtrue, objExtraNext);
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ldloc, objExtraKeyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.MarkLabel(objExtraNext);
+        il.Emit(OpCodes.Ldloc, objExtraIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, objExtraIndexLocal);
+        il.Emit(OpCodes.Br, objExtraLoop);
+        il.MarkLabel(objExtraEnd);
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
     }
 

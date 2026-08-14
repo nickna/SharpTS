@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -273,102 +272,16 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
     {
         var ctx = emitter.Context;
         var runtime = ctx.Runtime!;
-
-        // Object.prototype — singleton dict populated lazily with hasOwnProperty,
-        // isPrototypeOf, toString, valueOf wrappers. Required for Test262
-        // patterns like `Object.prototype.isPrototypeOf(Number.prototype)`.
-        if (propertyName == "prototype")
-        {
-            var protoIL = ctx.IL;
-            protoIL.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
-            protoIL.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
-            return true;
-        }
-
-        // Constructor metadata properties (ECMA-262 §20.1.2): Object.length is 1, name is "Object".
-        if (propertyName == "length")
-        {
-            ctx.IL.Emit(OpCodes.Ldc_R8, 1.0);
-            ctx.IL.Emit(OpCodes.Box, ctx.Types.Double);
-            return true;
-        }
-        if (propertyName == "name")
-        {
-            ctx.IL.Emit(OpCodes.Ldstr, "Object");
-            return true;
-        }
-
-        // Stage 4y: expose Object.* static methods as values so
-        // `let f = Object.keys; f(obj)` works AND so test262's isConstructor
-        // harness sees `typeof f === "function"`.
-        // Only methods with a uniform `(object) -> object` or
-        // `(object[], object) -> object` shape compatible with the
-        // $TSFunction reflection-dispatch path are wrapped here. Methods
-        // with mismatched return types (e.g. bool) need their own adapters
-        // — deferred to a follow-up stage.
-        MethodInfo? method = propertyName switch
-        {
-            "keys"                 => runtime.GetKeys,
-            "values"               => runtime.GetValues,
-            "entries"              => runtime.GetEntries,
-            "fromEntries"          => runtime.ObjectFromEntries,
-            "freeze"               => runtime.ObjectFreeze,
-            "seal"                 => runtime.ObjectSeal,
-            "preventExtensions"    => runtime.ObjectPreventExtensions,
-            "getOwnPropertyNames"  => runtime.GetOwnPropertyNames,
-            "getOwnPropertySymbols" => runtime.GetOwnPropertySymbols,
-            "getPrototypeOf"       => runtime.ObjectGetPrototypeOf,
-            "setPrototypeOf"       => runtime.ObjectSetPrototypeOf,
-            "defineProperty"       => runtime.ObjectDefineProperty,
-            "defineProperties"     => runtime.ObjectDefineProperties,
-            "getOwnPropertyDescriptor"  => runtime.ObjectGetOwnPropertyDescriptor,
-            "getOwnPropertyDescriptors" => runtime.ObjectGetOwnPropertyDescriptors,
-            // Value-form wrapper (NOT raw ObjectCreate): under-application via
-            // $TSFunction pads props with null, which the raw method must
-            // treat as the explicit-null TypeError. Must match the runtime
-            // LookupBuiltInStaticMember entry so wrapper identity holds across
-            // both access forms.
-            "create"               => runtime.ObjectCreateValueForm,
-            "assign"               => runtime.ObjectAssign,
-            "is"                   => runtime.ObjectIs,
-            "hasOwn"               => runtime.ObjectHasOwn,
-            "groupBy"              => runtime.ObjectGroupBy,
-            "isExtensible"         => runtime.ObjectIsExtensible,
-            "isFrozen"             => runtime.ObjectIsFrozen,
-            "isSealed"             => runtime.ObjectIsSealed,
-            _ => null
-        };
-        if (method == null) return false;
-
-        // ECMA-262 §17: built-in function `name` matches the spec property name,
-        // and `length` is the spec-defined arity (not derived from CLR signature
-        // — e.g. `assign(target, ...sources)` has spec length 2 but our .NET
-        // implementation is `(object, List<object?>)` where the rest param is
-        // skipped by lazy compute, returning 1). Pass explicit length per spec.
-        int specLength = propertyName switch
-        {
-            "setPrototypeOf" => 2,
-            "defineProperty" => 3,
-            "defineProperties" => 2,
-            "getOwnPropertyDescriptor" => 2,
-            "create" => 2,
-            "assign" => 2,
-            "is" => 2,
-            "hasOwn" => 2,
-            "groupBy" => 2,
-            _ => 1,
-        };
-
-        // Use the GetOrCreate factory (not the ctor directly) so repeated
-        // access to the same Object.X returns the SAME $TSFunction instance.
-        // Without identity, `Object.is === Object.is` would be false and any
-        // `delete fn.length` mark wouldn't survive — propertyHelper's
-        // isConfigurable check fails because the second instance is fresh.
         var il = ctx.IL;
-        ctx.Types.EmitLoadMethodInfo(il, method);
+
+        // Route static property reads through the value-form runtime lookup.
+        // It checks PDS shadows before intrinsic members, so assignments such
+        // as `Object.keys = replacement` become observable while retaining the
+        // identity-stable wrappers used for untouched built-ins.
+        il.Emit(OpCodes.Ldtoken, ctx.Types.Object);
+        il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Ldstr, propertyName);
-        il.Emit(OpCodes.Ldc_I4, specLength);
-        il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         return true;
     }
 

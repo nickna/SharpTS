@@ -259,6 +259,62 @@ public partial class RuntimeEmitter
         var fieldsLoopStart = il.DefineLabel();
         var fieldsLoopEnd = il.DefineLabel();
 
+        var notProxyForValuesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, notProxyForValuesLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notProxyForValuesLabel);
+        EmitProxyEnumerableOwnPropertiesCheck(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            notProxyForValuesLabel, entries: false);
+        il.MarkLabel(notProxyForValuesLabel);
+
+        // EnumerableOwnProperties is defined in terms of [[OwnPropertyKeys]],
+        // followed by [[Get]] for each enumerable string key. Keep that single
+        // algorithm here instead of maintaining carrier-specific copies of the
+        // key filtering and ordering logic below. This is also essential for
+        // Proxy observability: ownKeys/gOPD happen in GetKeys, then each value
+        // read dispatches the proxy's get trap.
+        {
+            var keysLocal = il.DeclareLocal(listType);
+            var keyIndexLocal = il.DeclareLocal(_types.Int32);
+            var keyLocal = il.DeclareLocal(_types.String);
+            var loopStart = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.GetKeys);
+            il.Emit(OpCodes.Stloc, keysLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, keyIndexLocal);
+            il.MarkLabel(loopStart);
+            il.Emit(OpCodes.Ldloc, keyIndexLocal);
+            il.Emit(OpCodes.Ldloc, keysLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
+            il.Emit(OpCodes.Bge, loopEnd);
+            il.Emit(OpCodes.Ldloc, keysLocal);
+            il.Emit(OpCodes.Ldloc, keyIndexLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Stloc, keyLocal);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Ldloc, keyIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, keyIndexLocal);
+            il.Emit(OpCodes.Br, loopStart);
+            il.MarkLabel(loopEnd);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ret);
+        }
+
         // ECMA-262 §20.1.2.23 step 1: Let obj be ? ToObject(O). ToObject throws
         // TypeError on null/undefined.
         var notNullForValsLabel = il.DefineLabel();
@@ -747,6 +803,67 @@ public partial class RuntimeEmitter
         var returnResultLabel = il.DefineLabel();
         var fieldsLoopStart = il.DefineLabel();
         var fieldsLoopEnd = il.DefineLabel();
+
+        var notProxyForEntriesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, notProxyForEntriesLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notProxyForEntriesLabel);
+        EmitProxyEnumerableOwnPropertiesCheck(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            notProxyForEntriesLabel, entries: true);
+        il.MarkLabel(notProxyForEntriesLabel);
+
+        // Object.entries shares the same EnumerableOwnProperties key walk as
+        // Object.values. Build pairs from GetKeys + GetProperty so ordering,
+        // descriptor filtering, getters, and Proxy traps stay aligned.
+        {
+            var keysLocal = il.DeclareLocal(listType);
+            var keyIndexLocal = il.DeclareLocal(_types.Int32);
+            var keyLocal = il.DeclareLocal(_types.String);
+            var loopStart = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.GetKeys);
+            il.Emit(OpCodes.Stloc, keysLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, keyIndexLocal);
+            il.MarkLabel(loopStart);
+            il.Emit(OpCodes.Ldloc, keyIndexLocal);
+            il.Emit(OpCodes.Ldloc, keysLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Count")!);
+            il.Emit(OpCodes.Bge, loopEnd);
+            il.Emit(OpCodes.Ldloc, keysLocal);
+            il.Emit(OpCodes.Ldloc, keyIndexLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", [_types.Int32])!);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Stloc, keyLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, entryLocal);
+            il.Emit(OpCodes.Ldloc, entryLocal);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Ldloc, entryLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, entryLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Ldloc, keyIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, keyIndexLocal);
+            il.Emit(OpCodes.Br, loopStart);
+            il.MarkLabel(loopEnd);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ret);
+        }
 
         // ECMA-262 §20.1.2.5 step 1: Let obj be ? ToObject(O). ToObject throws
         // TypeError on null/undefined.

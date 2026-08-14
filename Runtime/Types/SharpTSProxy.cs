@@ -15,6 +15,10 @@ public class SharpTSProxy : ISharpTSCallable
     private object? _handler;
     private bool _isRevoked;
 
+    private static bool IsUndefinedLike(object? value)
+        => value is SharpTSUndefined
+            || value?.GetType().Name == "$Undefined";
+
     public object Target => _target;
     public bool IsRevoked => _isRevoked;
 
@@ -554,8 +558,12 @@ public class SharpTSProxy : ISharpTSCallable
             return descriptor ?? SharpTSUndefined.Instance;
         }
 
-        return ValidateDescriptorTrapResult(
-            InvokeTrap(trap, interp, [_target, prop]), prop, interp);
+        object? result = InvokeTrap(trap, interp, [_target, prop]);
+        // Compiler-emitted functions use CLR null for a returned JS undefined
+        // on this reflection bridge. Normalize it before descriptor validation.
+        if (interp == null && result == null)
+            result = SharpTSUndefined.Instance;
+        return ValidateDescriptorTrapResult(result, prop, interp);
     }
 
     internal object? TrapGetOwnPropertyDescriptor(
@@ -581,13 +589,13 @@ public class SharpTSProxy : ISharpTSCallable
             propertyKey, interpreter);
         bool targetHasProperty = targetDescriptor is not (null or SharpTSUndefined);
 
-        if (result is SharpTSUndefined)
+        if (IsUndefinedLike(result))
         {
-            if (!targetHasProperty) return result;
+            if (!targetHasProperty) return SharpTSUndefined.Instance;
             var targetRecord = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!);
             if (!targetRecord.Configurable || !TargetIsExtensible(_target))
                 ThrowDescriptorInvariant();
-            return result;
+            return SharpTSUndefined.Instance;
         }
         if (result is null or string or bool or double or int or long or float
             or decimal or SharpTSSymbol or SharpTSBigInt
@@ -718,6 +726,53 @@ public class SharpTSProxy : ISharpTSCallable
                 SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!));
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Compiled-runtime [[DefineOwnProperty]] dispatch. When the handler has no
+    /// trap, the emitted runtime callback applies the descriptor to the proxy
+    /// target's compiled carrier rather than going through interpreter-only
+    /// object representations.
+    /// </summary>
+    public bool TrapDefinePropertyCompiled(
+        string prop,
+        object descriptor,
+        Func<object, object, object, object?> ordinaryDefine)
+    {
+        var trap = GetTrapCallable("defineProperty", null);
+        if (trap == null)
+        {
+            if (_target is SharpTSProxy proxy)
+                return proxy.TrapDefinePropertyCompiled(prop, descriptor, ordinaryDefine);
+            ordinaryDefine(_target, prop, descriptor);
+            return true;
+        }
+
+        bool trapResult = ToBoolean(InvokeTrap(
+            trap, null, [_target, prop, descriptor]));
+        if (!trapResult) return false;
+
+        object? targetDescriptor = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapGetOwnPropertyDescriptor(prop, null)
+            : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop);
+        bool targetHasProperty = targetDescriptor is not (null or SharpTSUndefined);
+        var requested = SharpTSPropertyDescriptor.FromAnyObject(descriptor);
+        if (!targetHasProperty)
+        {
+            if (!TargetIsExtensible(_target))
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy defineProperty trap cannot add a property to a non-extensible target"));
+            if (requested.HasConfigurable && !requested.Configurable)
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy defineProperty trap cannot create a non-configurable target property"));
+        }
+        else
+        {
+            ValidateDefinePropertyInvariant(
+                requested,
+                SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!));
+        }
         return true;
     }
 

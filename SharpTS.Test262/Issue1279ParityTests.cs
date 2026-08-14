@@ -5768,6 +5768,25 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/Object/entries/observable-operations.js")]
+    [InlineData("built-ins/Object/entries/order-after-define-property-with-function.js")]
+    [InlineData("built-ins/Object/entries/return-order.js")]
+    [InlineData("built-ins/Object/entries/tamper-with-object-keys.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/observable-operations.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/order-after-define-property.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/tamper-with-object-keys.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/order-after-define-property.js")]
+    [InlineData("built-ins/Object/keys/order-after-define-property-with-function.js")]
+    [InlineData("built-ins/Object/keys/order-after-define-property.js")]
+    [InlineData("built-ins/Object/keys/return-order.js")]
+    [InlineData("built-ins/Object/values/observable-operations.js")]
+    [InlineData("built-ins/Object/values/order-after-define-property.js")]
+    [InlineData("built-ins/Object/values/return-order.js")]
+    [InlineData("built-ins/Object/values/tamper-with-object-keys.js")]
+    public void Compiled_object_enumeration_remaining_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/executor-call-context-strict.js")]
     public void Promise_jobs_invoke_guest_functions_with_undefined_this(string relativePath)
         => AssertPassInBothModes(relativePath);

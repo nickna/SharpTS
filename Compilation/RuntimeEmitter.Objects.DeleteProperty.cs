@@ -14,7 +14,84 @@ public partial class RuntimeEmitter
     /// Returns false for frozen/sealed objects or if the object doesn't support deletion.
     /// </summary>
     private void EmitDeleteProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
-        => EmitDeletePropertyCore(typeBuilder, runtime, strict: false);
+    {
+        EmitCompactDictionaryOrder(typeBuilder, runtime);
+        EmitDeletePropertyCore(typeBuilder, runtime, strict: false);
+    }
+
+    private void EmitCompactDictionaryOrder(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CompactDictionaryOrder",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.DictionaryStringObject]);
+        runtime.CompactDictionaryOrder = method;
+        var il = method.GetILGenerator();
+        var keysLocal = il.DeclareLocal(_types.ListOfString);
+        var valuesLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var keyLocal = il.DeclareLocal(_types.String);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Keys").GetGetMethod()!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfString, [_types.IEnumerableOfString])!);
+        il.Emit(OpCodes.Stloc, keysLocal);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, valuesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var copyLoop = il.DefineLabel();
+        var copyEnd = il.DefineLabel();
+        il.MarkLabel(copyLoop);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Count")!);
+        il.Emit(OpCodes.Bge, copyEnd);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, keyLocal);
+        il.Emit(OpCodes.Ldloc, valuesLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "get_Item", [_types.String])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, copyLoop);
+        il.MarkLabel(copyEnd);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Clear", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        var restoreLoop = il.DefineLabel();
+        var restoreEnd = il.DefineLabel();
+        il.MarkLabel(restoreLoop);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Count")!);
+        il.Emit(OpCodes.Bge, restoreEnd);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Ldloc, valuesLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item")!);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, restoreLoop);
+        il.MarkLabel(restoreEnd);
+        il.Emit(OpCodes.Ret);
+    }
     /// <summary>
     /// Emits DeleteProperty(object obj, string name) -> bool (non-strict) or
     /// DeletePropertyStrict(object obj, string name, bool strictMode) -> bool.
@@ -639,6 +716,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
         il.Emit(OpCodes.Pop);
+        // Dictionary reuses removed buckets on a later add, which does not
+        // match ECMAScript's chronological string-key order. Rebuild after a
+        // delete so a recreated property is appended after all surviving keys.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Call, runtime.CompactDictionaryOrder);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 

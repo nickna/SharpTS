@@ -204,6 +204,7 @@ public class EmittedRuntime
     public MethodBuilder GetLength { get; set; } = null!;
     public MethodBuilder GetElement { get; set; } = null!;
     public MethodBuilder GetKeys { get; set; } = null!;
+    public MethodBuilder NormalizeOwnPropertyKeys { get; set; } = null!;
     public MethodBuilder GetOwnPropertyNames { get; set; } = null!;
     public MethodBuilder GetValues { get; set; } = null!;
     public MethodBuilder GetEntries { get; set; } = null!;
@@ -373,6 +374,7 @@ public class EmittedRuntime
     public MethodBuilder SetProperty { get; set; } = null!;
     public MethodBuilder SetPropertyStrict { get; set; } = null!;
     public MethodBuilder DeleteProperty { get; set; } = null!;
+    public MethodBuilder CompactDictionaryOrder { get; set; } = null!;
     public MethodBuilder DeletePropertyStrict { get; set; } = null!;
     public MethodBuilder GetFieldsProperty { get; set; } = null!;
     public MethodBuilder SetFieldsProperty { get; set; } = null!;

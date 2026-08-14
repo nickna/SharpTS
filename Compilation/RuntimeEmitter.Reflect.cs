@@ -265,7 +265,7 @@ public partial class RuntimeEmitter
         // Non-dict path: use GetKeys for string keys
         il.MarkLabel(notDictLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Call, runtime.GetOwnPropertyNames);
         // GetKeys returns a List<object?> (array of keys); add all to result
         var keysResult = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);

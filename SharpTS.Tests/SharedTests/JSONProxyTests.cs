@@ -64,7 +64,10 @@ public class JSONProxyTests
         var source = """
             let target: any = { a: 1, b: 2 };
             let proxy: any = new Proxy(target, {
-                ownKeys: function(t: any): string[] { return ["x", "y"]; }
+                ownKeys: function(t: any): string[] { return ["x", "y"]; },
+                getOwnPropertyDescriptor: function(t: any, key: string): any {
+                    return { configurable: true, enumerable: true, value: key };
+                }
             });
             console.log(Object.keys(proxy).join(","));
             """;

@@ -123,6 +123,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
 
+        // Proxy [[DefineOwnProperty]] dispatch. The callback lets the runtime
+        // proxy forward a missing trap to the emitted target representation.
+        var notProxyForDefineLabel = il.DefineLabel();
+        var proxyForDefineLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il,
+            () => il.Emit(OpCodes.Ldarg_0),
+            proxyForDefineLabel,
+            notProxyForDefineLabel);
+        il.MarkLabel(proxyForDefineLabel);
+        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0), "TrapDefinePropertyCompiled", () =>
+        {
+            il.Emit(OpCodes.Ldc_I4_3);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, method);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                typeof(Func<object, object, object, object?>),
+                _types.Object, _types.IntPtr)!);
+            il.Emit(OpCodes.Stelem_Ref);
+        });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        var proxyDefineSucceededLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, proxyDefineSucceededLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Proxy defineProperty trap returned false");
+        il.MarkLabel(proxyDefineSucceededLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyForDefineLabel);
+
         // ECMA-262 10.4.2.4 ArraySetLength steps 3-4: newLen =
         // ToUint32(Desc.[[Value]]), numberLen = ToNumber(Desc.[[Value]]) —
         // exactly two coercions, in that order (test262 define-own-prop-
@@ -1179,11 +1219,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, accessorCleanupNotDict);
+        var accessorDictIndexLocal = il.DeclareLocal(_types.UInt32);
+        var accessorDictKeepPlaceholderLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, accessorDictIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, accessorDictKeepPlaceholderLabel);
+        // Numeric accessor keys are read through GetIndex hot paths that probe
+        // dictionary storage before PDS. Remove their stale backing value.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(accessorDictKeepPlaceholderLabel);
+        // Keep an undefined backing placeholder. Dictionary insertion order is
+        // our ordinary-object creation-order ledger; removing accessor keys
+        // loses their position when a later defineProperty converts them back
+        // to data properties. GetProperty consults PDS accessors first, so the
+        // placeholder is never observable as the property's value.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(accessorCleanupNotDict);
@@ -1556,6 +1617,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
+
+        // Proxy [[GetOwnProperty]] must dispatch the descriptor trap for each
+        // requested key. This path is shared by Object.getOwnPropertyDescriptor
+        // and the per-key loop in Object.getOwnPropertyDescriptors.
+        var notProxyForDescriptorLabel = il.DefineLabel();
+        var proxyForDescriptorLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il,
+            () => il.Emit(OpCodes.Ldarg_0),
+            proxyForDescriptorLabel,
+            notProxyForDescriptorLabel);
+        il.MarkLabel(proxyForDescriptorLabel);
+        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0), "TrapGetOwnPropertyDescriptor", () =>
+        {
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            // [1] = null interpreter, already initialized.
+        });
+        // The proxy implementation lives in SharpTS.dll and uses its runtime
+        // undefined singleton. Convert that bridge value to this compiled
+        // assembly's emitted undefined singleton before exposing it to JS.
+        var proxyDescriptorResultLocal = il.DeclareLocal(_types.Object);
+        var proxyDescriptorNotRuntimeUndefinedLabel = il.DefineLabel();
+        var proxyDescriptorReturnLabel = il.DefineLabel();
+        il.Emit(OpCodes.Stloc, proxyDescriptorResultLocal);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
+        il.Emit(OpCodes.Brfalse, proxyDescriptorNotRuntimeUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "SharpTSUndefined");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, proxyDescriptorNotRuntimeUndefinedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Br, proxyDescriptorReturnLabel);
+        il.MarkLabel(proxyDescriptorNotRuntimeUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
+        il.MarkLabel(proxyDescriptorReturnLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyForDescriptorLabel);
 
         // The global object exposes its standard functions and constants as
         // own properties. Route descriptor values through the same global

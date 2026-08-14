@@ -272,7 +272,12 @@ public partial class RuntimeEmitter
     /// type as List&lt;object?&gt;. Falls through to <paramref name="notProxyLabel"/>
     /// otherwise. Used by Object.keys / Object.getOwnPropertyNames.
     /// </summary>
-    internal void EmitProxyOwnKeysCheck(ILGenerator il, Action emitLoadObj, Label notProxyLabel)
+    internal void EmitProxyOwnKeysCheck(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        Action emitLoadObj,
+        Label notProxyLabel,
+        bool enumerableOnly)
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
@@ -312,18 +317,161 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfString, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        il.Emit(OpCodes.Ldloc, resultLocal);
+        var currentKeyLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, keysListLocal);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Item", [_types.Int32]));
+        il.Emit(OpCodes.Stloc, currentKeyLocal);
+
+        var advanceLabel = il.DefineLabel();
+        if (enumerableOnly)
+        {
+            // EnumerableOwnProperties performs [[GetOwnProperty]] for every
+            // ownKeys result and keeps only descriptors whose Enumerable bit
+            // is true. Calling the public proxy method preserves trap order,
+            // abrupt completions, revocation, and invariant validation.
+            var descriptorLocal = il.DeclareLocal(_types.Object);
+            EmitProxyMethodCall(il, emitLoadObj, "TrapGetOwnPropertyDescriptor", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, currentKeyLocal);
+                il.Emit(OpCodes.Stelem_Ref);
+                // [1] = null interpreter, already initialized.
+            });
+            il.Emit(OpCodes.Stloc, descriptorLocal);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Brfalse, advanceLabel);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, advanceLabel);
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Ldstr, "enumerable");
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Call, runtime.IsTruthy);
+            il.Emit(OpCodes.Brfalse, advanceLabel);
+        }
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, currentKeyLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
 
+        il.MarkLabel(advanceLabel);
         il.Emit(OpCodes.Ldloc, iLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, iLocal);
         il.Emit(OpCodes.Br, loopStart);
 
+        il.MarkLabel(loopEnd);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the Proxy branch of EnumerableOwnProperties for Object.values or
+    /// Object.entries. The descriptor check and value get intentionally occur
+    /// in the same per-key loop, matching the observable specification order.
+    /// Non-proxy receivers branch to <paramref name="notProxyLabel"/>.
+    /// </summary>
+    internal void EmitProxyEnumerableOwnPropertiesCheck(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        Action emitLoadObj,
+        Label notProxyLabel,
+        bool entries)
+    {
+        var proxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+
+        var keysLocal = il.DeclareLocal(_types.ListOfString);
+        EmitProxyMethodCall(il, emitLoadObj, "TrapOwnKeys", () =>
+        {
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+        });
+        il.Emit(OpCodes.Castclass, _types.ListOfString);
+        il.Emit(OpCodes.Stloc, keysLocal);
+
+        var resultLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var keyLocal = il.DeclareLocal(_types.String);
+        var descriptorLocal = il.DeclareLocal(_types.Object);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        var loopStart = il.DefineLabel();
+        var advance = il.DefineLabel();
+        var loopEnd = il.DefineLabel();
+        il.MarkLabel(loopStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfString, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, loopEnd);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfString, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        EmitProxyMethodCall(il, emitLoadObj, "TrapGetOwnPropertyDescriptor", () =>
+        {
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+        });
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, advance);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, advance);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldstr, "enumerable");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brfalse, advance);
+
+        emitLoadObj();
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        if (entries)
+        {
+            var entryLocal = il.DeclareLocal(_types.ListOfObject);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, entryLocal);
+            il.Emit(OpCodes.Ldloc, entryLocal);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Ldloc, entryLocal);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, entryLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        }
+
+        il.MarkLabel(advance);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
