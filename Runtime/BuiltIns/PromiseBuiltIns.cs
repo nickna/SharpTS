@@ -236,12 +236,14 @@ public static class PromiseBuiltIns
                 .WithSpecLength(1),
 
             "resolve" => new BuiltInMethod("resolve", 0, 1, (interp, receiver, args) =>
-                ResolveStatic(interp, receiver, args, factory))
+                ResolveStatic(interp, receiver, args))
                 .WithSpecLength(1)
                 .AsNonConstructor(),
 
-            "reject" => new BuiltInAsyncMethod("reject", 0, 1, (_, _, args) =>
-                Task.FromResult(RejectImpl(args)), factory, speciesResolver: receiverResolver).WithSpecLength(1),
+            "reject" => new BuiltInMethod("reject", 0, 1, (interp, receiver, args) =>
+                RejectStatic(interp, receiver, args))
+                .WithSpecLength(1)
+                .AsNonConstructor(),
 
             "allSettled" => new BuiltInAsyncMethod("allSettled", 0, 1, (interp, receiver, args) =>
                 AllSettledImpl(args, interp, receiver), factory, speciesResolver: receiverResolver)
@@ -509,7 +511,7 @@ public static class PromiseBuiltIns
     /// the constructor passes it; calling it more than once, or with already-set
     /// slots, is a TypeError.
     /// </summary>
-    private sealed class PromiseCapabilityExecutor : ISharpTSCallable
+    private sealed class PromiseCapabilityExecutor : ISharpTSNonConstructorCallable
     {
         public ISharpTSCallable? ResolveFn { get; private set; }
         public ISharpTSCallable? RejectFn { get; private set; }
@@ -655,7 +657,7 @@ public static class PromiseBuiltIns
         try
         {
             var result = CallCallback(handler, [arg], interpreter);
-            return await UnwrapResult(result);
+            return await UnwrapResult(result, interpreter);
         }
         catch (Exceptions.ThrowException tex)
         {
@@ -733,11 +735,20 @@ public static class PromiseBuiltIns
             try
             {
                 var result = CallCallback(onFinally, [], interpreter);
-                // If callback returns a Promise, wait for it
-                if (result is SharpTSPromise p)
+                // PromiseResolve observes an overridden `then`, not only the
+                // promise's internal host task.
+                if (RuntimeValue.FromBoxed(result).IsObject)
                 {
-                    await p.GetValueAsync();
+                    await TaskFromResolvedValue(interpreter, result);
                 }
+            }
+            catch (Exceptions.ThrowException thrown)
+            {
+                throw new SharpTSPromiseRejectedException(thrown.Value);
+            }
+            catch (SharpTSPromiseRejectedException)
+            {
+                throw;
             }
             catch (Exception callbackError)
             {
@@ -1025,21 +1036,24 @@ public static class PromiseBuiltIns
     private static Task<object?> TaskFromResolvedValue(
         Interpreter interpreter, object? resolved)
     {
-        if (resolved is SharpTSPromise promise)
-            return promise.GetValueAsync();
-
-        if (resolved is SharpTSObject or SharpTSInstance)
+        if (resolved is SharpTSPromise promise
+            && resolved is not SharpTSPromiseSubclassInstance
+            && !promise.TryGetAccessor("then", out _, out _)
+            && !promise.TryGetOwnProperty("then", out _))
         {
-            var then = interpreter.GetProperty(resolved, "then");
+            return promise.GetValueAsync();
+        }
+
+        if (RuntimeValue.FromBoxed(resolved).IsObject)
+        {
+            var then = interpreter.GetPropertyValue(resolved, "then");
             if (then is ISharpTSCallable thenCallable)
             {
                 var completion = new TaskCompletionSource<object?>();
                 var fulfill = new PromiseResolveCallback(value =>
                 {
-                    if (value is SharpTSPromise inner)
-                        _ = AdoptResolvedPromise(inner, completion);
-                    else
-                        completion.TrySetResult(value);
+                    if (!completion.Task.IsCompleted)
+                        ResolveThenableIntoCapability(interpreter, completion, value);
                 });
                 var reject = new PromiseRejectCallback(reason =>
                     completion.TrySetException(new SharpTSPromiseRejectedException(reason)));
@@ -1059,17 +1073,86 @@ public static class PromiseBuiltIns
         return Task.FromResult(resolved);
     }
 
-    private static async Task AdoptResolvedPromise(
-        SharpTSPromise promise, TaskCompletionSource<object?> completion)
+    /// <summary>
+    /// Promise Resolve Functions / NewPromiseResolveThenableJob. Resolves a
+    /// host-backed capability with full thenable assimilation, including
+    /// self-resolution rejection and the per-thenable first-call-wins guard.
+    /// </summary>
+    internal static void ResolveThenableIntoCapability(
+        Interpreter interpreter,
+        TaskCompletionSource<object?> completion,
+        object? resolution)
     {
+        if (resolution is SharpTSPromise self
+            && ReferenceEquals(self.Task, completion.Task))
+        {
+            completion.TrySetException(new SharpTSPromiseRejectedException(
+                new SharpTSTypeError("A promise cannot resolve to itself")));
+            return;
+        }
+
+        if (!RuntimeValue.FromBoxed(resolution).IsObject)
+        {
+            completion.TrySetResult(resolution);
+            return;
+        }
+
+        object? then;
         try
         {
-            completion.TrySetResult(await promise.GetValueAsync());
+            then = interpreter.GetPropertyValue(resolution, "then");
         }
-        catch (Exception ex)
+        catch (Exceptions.ThrowException ex)
         {
-            completion.TrySetException(ex);
+            completion.TrySetException(new SharpTSPromiseRejectedException(ex.Value));
+            return;
         }
+
+        if (then is not ISharpTSCallable thenCallable)
+        {
+            completion.TrySetResult(resolution);
+            return;
+        }
+
+        // PromiseResolveThenableJob is a job, so the thenable's `then` runs
+        // after the current executor/call has returned.
+        interpreter.EnqueueCallback(() =>
+        {
+            bool alreadyResolved = false;
+            var resolve = new PromiseResolveCallback(value =>
+            {
+                if (alreadyResolved) return;
+                alreadyResolved = true;
+                ResolveThenableIntoCapability(interpreter, completion, value);
+            });
+            var reject = new PromiseRejectCallback(reason =>
+            {
+                if (alreadyResolved) return;
+                alreadyResolved = true;
+                completion.TrySetException(new SharpTSPromiseRejectedException(reason));
+            });
+            try
+            {
+                FunctionBuiltIns.CallWithThis(
+                    interpreter, thenCallable, resolution, [resolve, reject]);
+            }
+            catch (Exceptions.ThrowException ex)
+            {
+                if (!alreadyResolved)
+                {
+                    alreadyResolved = true;
+                    completion.TrySetException(new SharpTSPromiseRejectedException(ex.Value));
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!alreadyResolved)
+                {
+                    alreadyResolved = true;
+                    completion.TrySetException(new SharpTSPromiseRejectedException(ex.Message));
+                }
+            }
+        });
     }
 
     /// <summary>
@@ -1256,8 +1339,7 @@ public static class PromiseBuiltIns
     private static object? ResolveStatic(
         Interpreter interpreter,
         object? receiver,
-        List<object?> args,
-        Func<Interpreter, Task<object?>, SharpTSPromise>? promiseFactory)
+        List<object?> args)
     {
         RequireConstructorReceiver(receiver);
         var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
@@ -1268,44 +1350,43 @@ public static class PromiseBuiltIns
             return promise;
         }
 
-        var task = ResolveImplAsync(args);
-        if (promiseFactory != null)
-            return promiseFactory(interpreter, task);
         bool isBaseConstructor = ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
             || receiver is SharpTSPromiseClass promiseClass
                 && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
-        if (!isBaseConstructor)
+        if (isBaseConstructor)
         {
-            return ConstructPromiseCapabilityAndAdopt(interpreter, receiver, task);
-        }
-        return new SharpTSPromise(task);
-    }
-
-    private static async Task<object?> ResolveImplAsync(List<object?> args)
-    {
-        var value = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
-
-        // If already a Promise, await it to unwrap and avoid double-wrapping
-        // (BuiltInAsyncMethod.Call will wrap the result in a new Promise)
-        if (value is SharpTSPromise promise)
-        {
-            // Properly await the promise instead of blocking
-            return await promise.GetValueAsync();
+            var completion = new TaskCompletionSource<object?>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            var result = new SharpTSPromise(completion.Task);
+            ResolveThenableIntoCapability(interpreter, completion, value);
+            return result;
         }
 
-        // Return the raw value - BuiltInAsyncMethod.Call will wrap it in a Promise
-        return value;
+        var (promiseObject, resolveFn, _) = CreatePromiseCapability(interpreter, receiver);
+        FunctionBuiltIns.CallWithThis(
+            interpreter, resolveFn, SharpTSUndefined.Instance, [value]);
+        return promiseObject;
     }
 
     /// <summary>
-    /// Implementation of Promise.reject(reason)
-    /// Throws an exception that BuiltInAsyncMethod.Call will convert to a rejected Promise.
+    /// Implementation of Promise.reject(reason). NewPromiseCapability and the
+    /// reject callback invocation are synchronous and observable.
     /// </summary>
-    private static object? RejectImpl(List<object?> args)
+    private static object? RejectStatic(
+        Interpreter interpreter, object? receiver, List<object?> args)
     {
+        RequireConstructorReceiver(receiver);
         var reason = args.Count > 0 ? args[0] : SharpTSUndefined.Instance;
-        // Throw to let BuiltInAsyncMethod.Call create the rejected Promise
-        throw new SharpTSPromiseRejectedException(reason);
+        bool isBaseConstructor = ReferenceEquals(receiver, Interpreter.PromiseGlobalValue)
+            || receiver is SharpTSPromiseClass promiseClass
+                && ReferenceEquals(promiseClass, SharpTSPromiseClass.PromiseBase);
+        if (isBaseConstructor)
+            return SharpTSPromise.Reject(reason);
+
+        var (promiseObject, _, rejectFn) = CreatePromiseCapability(interpreter, receiver);
+        FunctionBuiltIns.CallWithThis(
+            interpreter, rejectFn, SharpTSUndefined.Instance, [reason]);
+        return promiseObject;
     }
 
     /// <summary>
@@ -1367,11 +1448,12 @@ public static class PromiseBuiltIns
     /// GetValueAsync() already contains a while-loop to flatten arbitrarily nested
     /// Promises, so we only need a single check here.
     /// </remarks>
-    private static async Task<object?> UnwrapResult(object? result)
+    private static async Task<object?> UnwrapResult(
+        object? result, Interpreter interpreter)
     {
-        if (result is SharpTSPromise promise)
+        if (RuntimeValue.FromBoxed(result).IsObject)
         {
-            return await promise.GetValueAsync();
+            return await TaskFromResolvedValue(interpreter, result);
         }
         return result;
     }

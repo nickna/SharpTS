@@ -459,7 +459,8 @@ public static class ReflectBuiltIns
     {
         // Direct rejections — methods/wrappers that are clearly callable but
         // aren't constructors per spec.
-        if (value is SharpTS.Runtime.Types.ArrayPrototypeMethodWrapper
+        if (value is ISharpTSNonConstructorCallable
+            or SharpTS.Runtime.Types.ArrayPrototypeMethodWrapper
             or SharpTS.Runtime.Types.StringPrototypeMethodWrapper
             or SharpTS.Runtime.Types.NumberPrototypeMethodWrapper
             or SharpTS.Runtime.Types.BooleanPrototypeMethodWrapper

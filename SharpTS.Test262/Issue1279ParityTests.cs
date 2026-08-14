@@ -4941,8 +4941,9 @@ public sealed class Issue1279ParityTests
     [InlineData("built-ins/Promise/race/resolve-thenable.js")]
     [InlineData("built-ins/Promise/resolve-self.js")]
     [InlineData("built-ins/Promise/resolve/S25.4.4.5_A4.1_T1.js")]
-    public void Compiled_Promise_executor_resolve_adopts_promises(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+    [InlineData("built-ins/Promise/executor-function-not-a-constructor.js")]
+    public void Promise_executor_resolve_adopts_thenables(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Promise/allSettled/call-resolve-element-after-return.js")]
@@ -4956,10 +4957,41 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/Promise/any/capability-resolve-throws-reject.js")]
     [InlineData("built-ins/Promise/reject/capability-invocation-error.js")]
+    [InlineData("built-ins/Promise/reject/capability-invocation.js")]
     [InlineData("built-ins/Promise/resolve/capability-invocation-error.js")]
-    public void Compiled_Promise_custom_capability_invocation_errors_are_observed(
+    public void Promise_custom_capability_invocations_are_observed(
         string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/reject-deferred.js")]
+    [InlineData("built-ins/Promise/all/reject-immed.js")]
+    [InlineData("built-ins/Promise/all/resolve-ignores-late-rejection-deferred.js")]
+    [InlineData("built-ins/Promise/all/resolve-ignores-late-rejection.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-deferred.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-ignored-deferred.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-ignored-immed.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-immed.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-ignores-late-rejection-deferred.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-ignores-late-rejection.js")]
+    [InlineData("built-ins/Promise/any/invoke-then-on-promises-every-iteration.js")]
+    [InlineData("built-ins/Promise/any/reject-deferred.js")]
+    [InlineData("built-ins/Promise/any/reject-ignored-deferred.js")]
+    [InlineData("built-ins/Promise/any/reject-immed.js")]
+    [InlineData("built-ins/Promise/any/resolve-ignores-late-rejection-deferred.js")]
+    [InlineData("built-ins/Promise/any/resolve-ignores-late-rejection.js")]
+    [InlineData("built-ins/Promise/promise.js")]
+    [InlineData("built-ins/Promise/prototype/finally/rejection-reason-override-with-throw.js")]
+    [InlineData("built-ins/Promise/prototype/finally/resolved-observable-then-calls.js")]
+    [InlineData("built-ins/Promise/race/reject-deferred.js")]
+    [InlineData("built-ins/Promise/race/reject-immed.js")]
+    [InlineData("built-ins/Promise/race/resolve-ignores-late-rejection-deferred.js")]
+    [InlineData("built-ins/Promise/race/resolve-ignores-late-rejection.js")]
+    [InlineData("built-ins/Promise/race/resolve-non-obj.js")]
+    [InlineData("built-ins/Promise/race/resolve-non-thenable.js")]
+    public void Promise_combinators_and_finally_preserve_settlement_semantics(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Promise/prototype/finally/rejection-reason-override-with-throw.js")]

@@ -1,5 +1,6 @@
 using SharpTS.Execution;
 using SharpTS.Parsing;
+using SharpTS.Runtime.BuiltIns;
 
 namespace SharpTS.Runtime.Types;
 
@@ -187,7 +188,19 @@ public class SharpTSPromiseClass : SharpTSClass
             // (fixes the resolve-with-thenable Pass/Fail flake under load).
             if (value is SharpTSPromise innerPromise)
             {
-                interpreter.AdoptInnerPromise(innerPromise.Task, tcs);
+                if (ReferenceEquals(innerPromise.Task, tcs.Task))
+                {
+                    tcs.TrySetException(new SharpTSPromiseRejectedException(
+                        new SharpTSTypeError("A promise cannot resolve to itself")));
+                }
+                else
+                {
+                    interpreter.AdoptInnerPromise(innerPromise.Task, tcs);
+                }
+            }
+            else if (RuntimeValue.FromBoxed(value).IsObject)
+            {
+                PromiseBuiltIns.ResolveThenableIntoCapability(interpreter, tcs, value);
             }
             else
             {

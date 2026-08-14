@@ -34,6 +34,13 @@ public interface ISharpTSCallable
 }
 
 /// <summary>
+/// Marks an internal callable that deliberately has no [[Construct]] slot.
+/// </summary>
+public interface ISharpTSNonConstructorCallable : ISharpTSCallable
+{
+}
+
+/// <summary>
 /// Runtime wrapper for named function declarations.
 /// </summary>
 /// <remarks>

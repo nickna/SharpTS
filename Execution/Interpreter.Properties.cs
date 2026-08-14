@@ -244,6 +244,10 @@ public partial class Interpreter
     /// </summary>
     internal object? Construct(object? callable, IList<object?> args)
     {
+        if (callable is ISharpTSNonConstructorCallable)
+        {
+            throw new ThrowException(new SharpTSTypeError("X is not a constructor"));
+        }
         if (callable is SharpTSFunction userFn)
         {
             if (!userFn.TryGetProperty("prototype", out var protoObj))
@@ -1439,7 +1443,8 @@ public partial class Interpreter
     /// constructor registrations while rejecting ordinary built-in methods.
     /// </summary>
     private static bool IsNonConstructorWrapper(object? callable) => callable
-        is ArrayPrototypeMethodWrapper
+        is ISharpTSNonConstructorCallable
+        or ArrayPrototypeMethodWrapper
         or StringPrototypeMethodWrapper
         or NumberPrototypeMethodWrapper
         or BooleanPrototypeMethodWrapper
