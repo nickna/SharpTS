@@ -873,6 +873,7 @@ public partial class RuntimeEmitter
         // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
         // but BEFORE IterateToList (which needs IteratorWrapperCtor)
         EmitIteratorWrapperType(moduleBuilder, runtime);
+        EmitArrayIteratorType(moduleBuilder, runtime);
         EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
         // but its incremental custom-iterator body needs both the basic

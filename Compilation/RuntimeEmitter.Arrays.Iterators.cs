@@ -2423,71 +2423,9 @@ public partial class RuntimeEmitter
         runtime.ArrayEntries = method;
 
         var il = method.GetILGenerator();
-
-        // Create result list
-        var resultLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        // Loop index
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-
-        // Loop: for (int i = 0; i < list.Count; i++)
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // Create pair array: [index, value]
         il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-
-        // pair[0] = (double)index
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Stelem_Ref);
-
-        // pair[1] = list[index]
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Stelem_Ref);
-
-        // Create List<object> from array and add to result
-        var pairArrayLocal = il.DeclareLocal(_types.ObjectArray);
-        il.Emit(OpCodes.Stloc, pairArrayLocal);
-
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, pairArrayLocal);
-        // new List<object>(array)
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, typeof(IEnumerable<object>)));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-        // Wrap List<object> → stateful IEnumerator<object> so .next() advances.
-        // Pre-fix returned the List directly, which made every call to .next()
-        // re-fetch position 0. Test262 entries/iteration.js depends on stateful
-        // iteration.
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2505,45 +2443,9 @@ public partial class RuntimeEmitter
         runtime.ArrayKeys = method;
 
         var il = method.GetILGenerator();
-
-        // Create result list
-        var resultLocal = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
-        il.Emit(OpCodes.Stloc, resultLocal);
-
-        // Loop index
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-
-        // Loop: for (int i = 0; i < list.Count; i++)
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // result.Add((double)i)
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
-
-        // i++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-        // Same NormalizeToEnumerator wrapping as ArrayEntries — stateful .next().
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -2562,10 +2464,9 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // Return NormalizeToEnumerator(list) — returns a stateful IEnumerator<object>
-        // that supports both for...of iteration and iterator protocol (.next())
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeToEnumerator);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 }

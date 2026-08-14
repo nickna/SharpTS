@@ -289,6 +289,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayEntries { get; set; } = null!;
     public MethodBuilder ArrayKeys { get; set; } = null!;
     public MethodBuilder ArrayValues { get; set; } = null!;
+    public TypeBuilder ArrayIteratorType { get; set; } = null!;
+    public ConstructorBuilder ArrayIteratorCtor { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterialize { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via

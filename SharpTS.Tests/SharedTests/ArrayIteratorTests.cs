@@ -58,6 +58,44 @@ public class ArrayIteratorTests
     }
 
     [Theory, ModeData]
+    public void Array_Iterators_ObserveGrowthUntilPermanentlyExhausted(ExecutionMode mode)
+    {
+        var source = """
+            const entriesArray: any[] = [];
+            const entries: any = entriesArray.entries();
+            entriesArray.push("a");
+            let result: any = entries.next();
+            console.log(result.done + ":" + result.value[0] + ":" + result.value[1]);
+            console.log(entries.next().done);
+            entriesArray.push("b");
+            console.log(entries.next().done);
+
+            const keysArray: any[] = [];
+            const keys: any = keysArray.keys();
+            keysArray.push("a");
+            result = keys.next();
+            console.log(result.done + ":" + result.value);
+            console.log(keys.next().done);
+            keysArray.push("b");
+            console.log(keys.next().done);
+
+            const valuesArray: any[] = [];
+            const values: any = valuesArray.values();
+            valuesArray.push("a");
+            result = values.next();
+            console.log(result.done + ":" + result.value);
+            console.log(values.next().done);
+            valuesArray.push("b");
+            console.log(values.next().done);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "false:0:a\ntrue\ntrue\nfalse:0\ntrue\ntrue\nfalse:a\ntrue\ntrue\n",
+            output);
+    }
+
+    [Theory, ModeData]
     public void Array_Entries_WithMixedTypes(ExecutionMode mode)
     {
         var source = """
