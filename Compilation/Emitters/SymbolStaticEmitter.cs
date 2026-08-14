@@ -80,6 +80,9 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
 
         switch (propertyName)
         {
+            case "prototype":
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolPrototypeField);
+                return true;
             case "iterator":
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);
                 return true;
@@ -153,7 +156,7 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
     }
 
     public bool HasStaticProperty(string memberName) => memberName is
-        "iterator" or "asyncIterator" or "toStringTag" or "hasInstance" or
+        "prototype" or "iterator" or "asyncIterator" or "toStringTag" or "hasInstance" or
         "isConcatSpreadable" or "toPrimitive" or "species" or "unscopables" or
         "dispose" or "asyncDispose" or "match" or "matchAll" or "replace" or
         "search" or "split"

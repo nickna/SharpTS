@@ -497,6 +497,8 @@ public class EmittedRuntime
     public FieldBuilder StringPrototypeField { get; set; } = null!;
     /// <summary>BigInt.prototype singleton used by value-position BigInt and primitive BigInteger symbol lookup.</summary>
     public FieldBuilder BigIntPrototypeField { get; set; } = null!;
+    /// <summary>Symbol.prototype singleton used by value-position Symbol prototype access.</summary>
+    public FieldBuilder SymbolPrototypeField { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
     public FieldBuilder JsonSingletonField { get; set; } = null!;
     /// <summary>

@@ -2095,9 +2095,13 @@ public partial class RuntimeEmitter
         var posLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
-        // result = string.Compare(str, that, StringComparison.CurrentCulture)
+        // ECMA-402 locale comparison treats canonically equivalent Unicode
+        // sequences as equal. Normalize both operands before delegating to the
+        // host culture comparison so composed/decomposed forms collate alike.
         il.Emit(OpCodes.Ldarg_0); // str
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "Normalize"));
         il.Emit(OpCodes.Ldarg_1); // that
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "Normalize"));
         il.Emit(OpCodes.Ldc_I4_1); // StringComparison.CurrentCulture = 1
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Compare", [_types.String, _types.String, typeof(StringComparison)])!);
         il.Emit(OpCodes.Stloc, resultLocal);
