@@ -181,6 +181,42 @@ public class ArrayMethodTests
         Assert.Equal("false\ntrue\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_PrototypeCalls_ValidateReceiverAndLengthBeforeArguments(ExecutionMode mode)
+    {
+        var source = """
+            const includes: any = Array.prototype.includes;
+            try {
+                includes.call(null, 1);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+
+            try {
+                [].flat.call();
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+
+            const marker: any = {};
+            const receiver: any = {
+                get length(): any {
+                    return {
+                        valueOf: function(): any { throw marker; }
+                    };
+                }
+            };
+            try {
+                Array.prototype.find.call(receiver, 0);
+            } catch (error) {
+                console.log(error === marker);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\n", output);
+    }
+
     #endregion
 
     #region Reduce Tests

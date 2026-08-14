@@ -395,9 +395,9 @@ public partial class ILEmitter
         if (c.Arguments.Count == 0)
         {
             // Array.prototype.X.call() — spec: this is undefined, throw TypeError.
-            // Easiest: still emit the materializer on null; it throws.
             IL.Emit(OpCodes.Ldnull);
-            IL.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
+            IL.Emit(OpCodes.Call, runtime.RequireObjectCoercibleThis);
+            IL.Emit(OpCodes.Pop);
             // Unreachable after throw, but keep stack balanced for any dead-code
             // path verification. Load default return and box.
             IL.Emit(OpCodes.Ldnull);
@@ -413,6 +413,13 @@ public partial class ILEmitter
         EmitBoxIfNeeded(c.Arguments[0]);
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Stloc, receiverLocal);
+
+        // Every Array.prototype algorithm begins with ToObject(this). Perform
+        // the null/undefined guard before species/length work so failures use
+        // the guest TypeError brand and no later observable operation runs.
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
+        IL.Emit(OpCodes.Call, runtime.RequireObjectCoercibleThis);
+        IL.Emit(OpCodes.Pop);
 
         // toSorted must read the generic receiver's indexed properties exactly
         // once before comparison, and abrupt completion must not leak the
@@ -511,14 +518,14 @@ public partial class ILEmitter
         // For test fixtures that set length to a getter returning an object
         // with a custom toString, both the length getter AND the toString
         // must fire before the IsCallable(callbackfn) check throws. We
-        // approximate by calling GetProperty + ToJsString (does ToPrimitive
-        // valueOf/toString chain). Stack-in: [], stack-out: [].
+        // call GetProperty + ToNumber so the number-hint valueOf/toString
+        // order and abrupt completions match LengthOfArrayLike.
         void EmitLengthSideEffect()
         {
             IL.Emit(OpCodes.Ldloc, receiverLocal);
             IL.Emit(OpCodes.Ldstr, "length");
             IL.Emit(OpCodes.Call, runtime.GetProperty);
-            IL.Emit(OpCodes.Call, runtime.ToJsString);
+            IL.Emit(OpCodes.Call, runtime.ToNumber);
             IL.Emit(OpCodes.Pop);
         }
 
