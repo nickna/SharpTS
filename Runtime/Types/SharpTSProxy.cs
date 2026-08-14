@@ -88,7 +88,7 @@ public class SharpTSProxy : ISharpTSCallable
             dict.TryGetValue(trapName, out value);
         }
 
-        if (value == null || value is SharpTSUndefined)
+        if (value == null || IsUndefinedLike(value))
             return null;
 
         if (RuntimeCallableDispatcher.IsCallable(value))
@@ -99,6 +99,24 @@ public class SharpTSProxy : ISharpTSCallable
         var invokeMethod = ManagedStructuralClrReflection.TryGetPublicMethodByName(
             value.GetType(), "Invoke");
         if (invokeMethod != null)
+            return value;
+
+        throw new ThrowException(new SharpTSTypeError(
+            $"Proxy handler trap '{trapName}' is not callable"));
+    }
+
+    private object? GetTrapCallableCompiled(
+        string trapName, Func<object, string, object?> ordinaryGet)
+    {
+        EnsureNotRevoked();
+        object? value = _handler is SharpTSProxy proxy
+            ? proxy.TrapGetCompiled(trapName, ordinaryGet)
+            : ordinaryGet(_handler!, trapName);
+
+        if (value == null || IsUndefinedLike(value)) return null;
+        if (RuntimeCallableDispatcher.IsCallable(value)) return value;
+        if (ManagedStructuralClrReflection.TryGetPublicMethodByName(
+                value.GetType(), "Invoke") != null)
             return value;
 
         throw new ThrowException(new SharpTSTypeError(
@@ -609,6 +627,84 @@ public class SharpTSProxy : ISharpTSCallable
         return ValidateDescriptorTrapResult(result, prop, interp);
     }
 
+    /// <summary>
+    /// Compiled-runtime [[GetOwnProperty]] dispatch. Property keys remain
+    /// object-valued so emitted Symbols cross the SharpTS.dll reflection
+    /// boundary without being stringified. Ordinary descriptor lookup and
+    /// extensibility checks are delegated to the emitted runtime, whose
+    /// descriptor/integrity stores own the compiled target representation.
+    /// </summary>
+    public object? TrapGetOwnPropertyDescriptorCompiled(
+        object prop,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallableCompiled(
+            "getOwnPropertyDescriptor", ordinaryGet);
+        if (trap == null)
+        {
+            if (_target is SharpTSProxy proxy)
+            {
+                return proxy.TrapGetOwnPropertyDescriptorCompiled(
+                    prop, ordinaryGetOwnPropertyDescriptor,
+                    ordinaryIsExtensible, ordinaryGet);
+            }
+
+            return ordinaryGetOwnPropertyDescriptor(_target, prop)
+                ?? SharpTSUndefined.Instance;
+        }
+
+        object? result = InvokeTrap(trap, null, [_target, prop]);
+        if (result == null) result = SharpTSUndefined.Instance;
+
+        object? targetDescriptor = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapGetOwnPropertyDescriptorCompiled(
+                prop, ordinaryGetOwnPropertyDescriptor,
+                ordinaryIsExtensible, ordinaryGet)
+            : ordinaryGetOwnPropertyDescriptor(_target, prop);
+        bool targetHasProperty = !IsUndefinedLike(targetDescriptor)
+            && targetDescriptor != null;
+
+        if (IsUndefinedLike(result))
+        {
+            if (!targetHasProperty) return SharpTSUndefined.Instance;
+            var targetRecord = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!);
+            if (!targetRecord.Configurable || !ordinaryIsExtensible(_target))
+                ThrowDescriptorInvariant();
+            return SharpTSUndefined.Instance;
+        }
+
+        if (result is string or bool or byte or sbyte or short or ushort
+            or int or uint or long or ulong or float or double or decimal
+            or System.Numerics.BigInteger or SharpTSSymbol or SharpTSBigInt
+            || result.GetType().Name is "$TSSymbol" or "$TSBigInt")
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy getOwnPropertyDescriptor trap must return an object or undefined"));
+        }
+
+        var resultDescriptor = SharpTSPropertyDescriptor.FromAnyObject(result);
+        if (!targetHasProperty)
+        {
+            if (!ordinaryIsExtensible(_target) || !resultDescriptor.Configurable)
+                ThrowDescriptorInvariant();
+        }
+        else
+        {
+            var targetRecord = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!);
+            ValidateDefinePropertyInvariant(resultDescriptor, targetRecord);
+            if (!resultDescriptor.Configurable && targetRecord.Configurable)
+                ThrowDescriptorInvariant();
+        }
+
+        return resultDescriptor.ToObject();
+
+        static void ThrowDescriptorInvariant() => throw new ThrowException(
+            new SharpTSTypeError(
+                "Proxy getOwnPropertyDescriptor trap result is incompatible with the target"));
+    }
+
     internal object? TrapGetOwnPropertyDescriptor(
         SharpTSSymbol prop, Interpreter interpreter)
     {
@@ -927,6 +1023,95 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     public List<string> TrapOwnKeys(Interpreter? interp)
         => TrapOwnPropertyKeys(interp).OfType<string>().ToList();
+
+    /// <summary>
+    /// Compiled-runtime [[OwnPropertyKeys]] dispatch. Unlike the legacy
+    /// string-only reflection bridge, this retains emitted Symbol keys through
+    /// duplicate and target-invariant validation. Compiler-owned callbacks
+    /// provide CreateListFromArrayLike, ordinary target keys/descriptors, and
+    /// extensibility state.
+    /// </summary>
+    public List<object?> TrapOwnKeysCompiled(
+        Func<object, List<object?>> ordinaryOwnPropertyKeys,
+        Func<object, List<object?>> createListFromArrayLike,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, bool> isSymbol,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallableCompiled("ownKeys", ordinaryGet);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapOwnKeysCompiled(
+                    ordinaryOwnPropertyKeys, createListFromArrayLike,
+                    ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
+                    isSymbol, ordinaryGet)
+                : ordinaryOwnPropertyKeys(_target);
+        }
+
+        object? trapResult = InvokeTrap(trap, null, [_target]);
+        if (trapResult == null || IsUndefinedLike(trapResult)
+            || trapResult is string or bool or byte or sbyte or short or ushort
+                or int or uint or long or ulong or float or double or decimal
+                or System.Numerics.BigInteger or SharpTSSymbol or SharpTSBigInt
+            || trapResult.GetType().Name is "$TSSymbol" or "$TSBigInt")
+        {
+            throw InvalidOwnKeysResult();
+        }
+
+        List<object?> values = createListFromArrayLike(trapResult);
+        var uniqueKeys = new HashSet<object?>();
+        foreach (object? value in values)
+        {
+            if (value is not string && (value == null || !isSymbol(value)))
+                throw InvalidOwnKeysResult();
+            if (!uniqueKeys.Add(value))
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    "Proxy ownKeys trap returned duplicate property keys"));
+            }
+        }
+
+        List<object?> targetKeys = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapOwnKeysCompiled(
+                ordinaryOwnPropertyKeys, createListFromArrayLike,
+                ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
+                isSymbol, ordinaryGet)
+            : ordinaryOwnPropertyKeys(_target);
+
+        foreach (object? targetKey in targetKeys)
+        {
+            if (targetKey == null) continue;
+            object? descriptor = _target is SharpTSProxy descriptorProxy
+                ? descriptorProxy.TrapGetOwnPropertyDescriptorCompiled(
+                    targetKey, ordinaryGetOwnPropertyDescriptor,
+                    ordinaryIsExtensible, ordinaryGet)
+                : ordinaryGetOwnPropertyDescriptor(_target, targetKey);
+            if (descriptor == null || IsUndefinedLike(descriptor)) continue;
+            if (!SharpTSPropertyDescriptor.FromAnyObject(descriptor).Configurable
+                && !uniqueKeys.Contains(targetKey))
+            {
+                ThrowOwnKeysInvariant();
+            }
+        }
+
+        if (!ordinaryIsExtensible(_target)
+            && (values.Count != targetKeys.Count
+                || targetKeys.Any(key => !uniqueKeys.Contains(key))))
+        {
+            ThrowOwnKeysInvariant();
+        }
+
+        return values;
+
+        static ThrowException InvalidOwnKeysResult() => new(
+            new SharpTSTypeError(
+                "Proxy ownKeys trap result must contain only strings and symbols"));
+        static void ThrowOwnKeysInvariant() => throw new ThrowException(
+            new SharpTSTypeError(
+                "Proxy ownKeys trap result is incompatible with the target"));
+    }
 
     /// <summary>
     /// Full [[OwnPropertyKeys]] result, retaining both string and Symbol keys.

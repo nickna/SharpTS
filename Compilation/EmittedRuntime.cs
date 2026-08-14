@@ -206,6 +206,8 @@ public class EmittedRuntime
     public MethodBuilder GetKeys { get; set; } = null!;
     public MethodBuilder NormalizeOwnPropertyKeys { get; set; } = null!;
     public MethodBuilder GetOwnPropertyNames { get; set; } = null!;
+    public MethodBuilder GetOrdinaryOwnPropertyKeys { get; set; } = null!;
+    public MethodBuilder CreateProxyOwnKeysList { get; set; } = null!;
     public MethodBuilder GetValues { get; set; } = null!;
     public MethodBuilder GetEntries { get; set; } = null!;
     public MethodBuilder IsArray { get; set; } = null!;

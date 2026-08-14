@@ -352,6 +352,15 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(gOPSTypeOkLabel);
 
+        // Proxy [[OwnPropertyKeys]] validates the complete mixed key list
+        // before GetOwnPropertyKeys filters it to Symbols.
+        var notProxyForSymbolsLabel = il.DefineLabel();
+        EmitProxyOwnKeysCheck(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            notProxyForSymbolsLabel, enumerableOnly: false,
+            symbolsOnly: true);
+        il.MarkLabel(notProxyForSymbolsLabel);
+
         // Create the result list
         // var result = new List<object?>();
         var resultLocal = il.DeclareLocal(_types.ListOfObjectNullable);

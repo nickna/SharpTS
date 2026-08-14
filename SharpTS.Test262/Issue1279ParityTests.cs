@@ -4852,6 +4852,25 @@ public sealed class Issue1279ParityTests
         string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/proxy-no-ownkeys-returned-keys-order.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/proxy-invariant-absent-not-configurable-symbol-key.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/proxy-invariant-duplicate-symbol-entry.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/proxy-invariant-not-extensible-absent-symbol-key.js")]
+    [InlineData("built-ins/Object/getOwnPropertyNames/proxy-invariant-not-extensible-extra-symbol-key.js")]
+    [InlineData("built-ins/Object/getOwnPropertySymbols/proxy-invariant-absent-not-configurable-string-key.js")]
+    [InlineData("built-ins/Object/getOwnPropertySymbols/proxy-invariant-duplicate-string-entry.js")]
+    [InlineData("built-ins/Object/getOwnPropertySymbols/proxy-invariant-not-extensible-absent-string-key.js")]
+    [InlineData("built-ins/Object/getOwnPropertySymbols/proxy-invariant-not-extensible-extra-string-key.js")]
+    [InlineData("built-ins/Object/keys/property-traps-order-with-proxied-array.js")]
+    [InlineData("built-ins/Object/keys/proxy-keys.js")]
+    [InlineData("built-ins/Object/keys/proxy-non-enumerable-prop-invariant-1.js")]
+    [InlineData("built-ins/Object/keys/proxy-non-enumerable-prop-invariant-2.js")]
+    [InlineData("built-ins/Object/keys/proxy-non-enumerable-prop-invariant-3.js")]
+    public void Object_own_key_consumers_share_proxy_validation_and_filtering(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(

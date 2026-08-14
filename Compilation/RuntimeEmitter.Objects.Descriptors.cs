@@ -1553,15 +1553,20 @@ public partial class RuntimeEmitter
     /// Signature: object ObjectGetOwnPropertyDescriptor(object obj, object prop)
     /// Returns a JavaScript object with descriptor properties.
     /// </summary>
-    private void EmitObjectGetOwnPropertyDescriptor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void DeclareObjectGetOwnPropertyDescriptor(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = typeBuilder.DefineMethod(
+        runtime.ObjectGetOwnPropertyDescriptor = typeBuilder.DefineMethod(
             "ObjectGetOwnPropertyDescriptor",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]
         );
-        runtime.ObjectGetOwnPropertyDescriptor = method;
+    }
+
+    private void EmitObjectGetOwnPropertyDescriptor(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = runtime.ObjectGetOwnPropertyDescriptor;
 
         var il = method.GetILGenerator();
 
@@ -1598,6 +1603,43 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, endLabel);
         }
 
+        // Proxy [[GetOwnProperty]] dispatch must run before the ordinary Symbol
+        // dictionary fast path. Keeping arg1 object-valued preserves emitted
+        // Symbols across the SharpTS.dll reflection boundary.
+        var notProxyForDescriptorLabel = il.DefineLabel();
+        var proxyForDescriptorLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il,
+            () => il.Emit(OpCodes.Ldarg_0),
+            proxyForDescriptorLabel,
+            notProxyForDescriptorLabel);
+        il.MarkLabel(proxyForDescriptorLabel);
+        EmitProxyGetOwnPropertyDescriptorCompiledCall(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            () => il.Emit(OpCodes.Ldarg_1));
+        // The bridge uses SharpTS.dll's undefined singleton. Normalize it to
+        // the generated assembly's singleton before returning to guest code.
+        var proxyDescriptorResultLocal = il.DeclareLocal(_types.Object);
+        var proxyDescriptorNotRuntimeUndefinedLabel = il.DefineLabel();
+        var proxyDescriptorReturnLabel = il.DefineLabel();
+        il.Emit(OpCodes.Stloc, proxyDescriptorResultLocal);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
+        il.Emit(OpCodes.Brfalse, proxyDescriptorNotRuntimeUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType")!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "SharpTSUndefined");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, proxyDescriptorNotRuntimeUndefinedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Br, proxyDescriptorReturnLabel);
+        il.MarkLabel(proxyDescriptorNotRuntimeUndefinedLabel);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
+        il.MarkLabel(proxyDescriptorReturnLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyForDescriptorLabel);
+
         // ECMA-262 §7.3.5 + §19.1.2.4: when the property key is a Symbol,
         // look it up in the per-object symbol dict (same one that handles
         // `obj[Symbol.x]` index access). Required for prop-desc.js tests
@@ -1617,50 +1659,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, propNameLocal);
-
-        // Proxy [[GetOwnProperty]] must dispatch the descriptor trap for each
-        // requested key. This path is shared by Object.getOwnPropertyDescriptor
-        // and the per-key loop in Object.getOwnPropertyDescriptors.
-        var notProxyForDescriptorLabel = il.DefineLabel();
-        var proxyForDescriptorLabel = il.DefineLabel();
-        EmitProxyTypeCheck(
-            il,
-            () => il.Emit(OpCodes.Ldarg_0),
-            proxyForDescriptorLabel,
-            notProxyForDescriptorLabel);
-        il.MarkLabel(proxyForDescriptorLabel);
-        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0), "TrapGetOwnPropertyDescriptor", () =>
-        {
-            il.Emit(OpCodes.Ldc_I4_2);
-            il.Emit(OpCodes.Newarr, _types.Object);
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ldloc, propNameLocal);
-            il.Emit(OpCodes.Stelem_Ref);
-            // [1] = null interpreter, already initialized.
-        });
-        // The proxy implementation lives in SharpTS.dll and uses its runtime
-        // undefined singleton. Convert that bridge value to this compiled
-        // assembly's emitted undefined singleton before exposing it to JS.
-        var proxyDescriptorResultLocal = il.DeclareLocal(_types.Object);
-        var proxyDescriptorNotRuntimeUndefinedLabel = il.DefineLabel();
-        var proxyDescriptorReturnLabel = il.DefineLabel();
-        il.Emit(OpCodes.Stloc, proxyDescriptorResultLocal);
-        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
-        il.Emit(OpCodes.Brfalse, proxyDescriptorNotRuntimeUndefinedLabel);
-        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType")!);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name").GetGetMethod()!);
-        il.Emit(OpCodes.Ldstr, "SharpTSUndefined");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, proxyDescriptorNotRuntimeUndefinedLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Br, proxyDescriptorReturnLabel);
-        il.MarkLabel(proxyDescriptorNotRuntimeUndefinedLabel);
-        il.Emit(OpCodes.Ldloc, proxyDescriptorResultLocal);
-        il.MarkLabel(proxyDescriptorReturnLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notProxyForDescriptorLabel);
 
         // The global object exposes its standard functions and constants as
         // own properties. Route descriptor values through the same global
@@ -3035,146 +3033,87 @@ public partial class RuntimeEmitter
         runtime.ObjectGetOwnPropertyDescriptors = method;
 
         var il = method.GetILGenerator();
-
         var resultLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var keysLocal = il.DeclareLocal(_types.ListOfObject);
         var indexLocal = il.DeclareLocal(_types.Int32);
-        var keyLocal = il.DeclareLocal(_types.String);
+        var keyLocal = il.DeclareLocal(_types.Object);
         var descLocal = il.DeclareLocal(_types.Object);
-
-        var loopStartLabel = il.DefineLabel();
-        var loopEndLabel = il.DefineLabel();
-        var skipNullLabel = il.DefineLabel();
-
-        // result = new Dictionary<string, object?>()
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // Get OWN property names (NOT filtered by enumerable). ECMA-262
-        // §20.1.2.7 Object.getOwnPropertyDescriptors uses [[OwnPropertyKeys]]
-        // (no enumerable filter) — non-enumerable own keys must appear in
-        // the result. Pre-fix used runtime.GetKeys which post-e0577095 also
-        // filters by PDS enumerable; that regressed inherited-properties-
-        // omitted.js (a non-enumerable own key was missing from the result).
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertyNames);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        // Obtain the complete [[OwnPropertyKeys]] list exactly once. The Proxy
+        // branch preserves trap order (including interleaved string/Symbol
+        // results); ordinary objects use the shared string-then-Symbol helper.
+        var proxyKeysLabel = il.DefineLabel();
+        var ordinaryKeysLabel = il.DefineLabel();
+        var keysReadyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0),
+            proxyKeysLabel, ordinaryKeysLabel);
+        il.MarkLabel(proxyKeysLabel);
+        EmitProxyOwnKeysCompiledCall(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0));
         il.Emit(OpCodes.Stloc, keysLocal);
+        il.Emit(OpCodes.Br, keysReadyLabel);
+        il.MarkLabel(ordinaryKeysLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetOrdinaryOwnPropertyKeys);
+        il.Emit(OpCodes.Stloc, keysLocal);
+        il.MarkLabel(keysReadyLabel);
 
-        // If keys is null, return empty result
-        il.Emit(OpCodes.Ldloc, keysLocal);
-        il.Emit(OpCodes.Brfalse, loopEndLabel);
-
-        // index = 0
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
-
-        // Loop
+        var loopStartLabel = il.DefineLabel();
+        var loopEndLabel = il.DefineLabel();
+        var skipNullLabel = il.DefineLabel();
+        var symbolKeyLabel = il.DefineLabel();
+        var storedLabel = il.DefineLabel();
         il.MarkLabel(loopStartLabel);
-        // if (index >= keys.Count) break
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Bge, loopEndLabel);
 
-        // key = keys[index].ToString()
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, keyLocal);
-
-        // desc = ObjectGetOwnPropertyDescriptor(obj, key)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
         il.Emit(OpCodes.Stloc, descLocal);
-
-        // if (desc == null || desc is undefined) skip
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Brfalse, skipNullLabel);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Beq, skipNullLabel);
 
-        // result[key] = desc
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, symbolKeyLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldloc, descLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Br, storedLabel);
+
+        il.MarkLabel(symbolKeyLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+        il.MarkLabel(storedLabel);
 
         il.MarkLabel(skipNullLabel);
-        // index++
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Br, loopStartLabel);
-
         il.MarkLabel(loopEndLabel);
-
-        // ECMA-262 §20.1.2.7 step 3: For each own key (string AND symbol)
-        // of obj, return descriptor. After the string-key loop, also
-        // populate the result's symbol dict with descriptors for each
-        // own symbol-keyed property.
-        var symKeysLocal = il.DeclareLocal(_types.ListOfObject);
-        var symIdxLocal = il.DeclareLocal(_types.Int32);
-        var symKeyLocal = il.DeclareLocal(_types.Object);
-        var symDescLocal = il.DeclareLocal(_types.Object);
-        var symLoopStart = il.DefineLabel();
-        var symLoopEnd = il.DefineLabel();
-        var symSkipNullLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Stloc, symKeysLocal);
-        il.Emit(OpCodes.Ldloc, symKeysLocal);
-        il.Emit(OpCodes.Brfalse, symLoopEnd);
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, symIdxLocal);
-
-        il.MarkLabel(symLoopStart);
-        il.Emit(OpCodes.Ldloc, symIdxLocal);
-        il.Emit(OpCodes.Ldloc, symKeysLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, symLoopEnd);
-
-        // symKey = keys[idx];
-        il.Emit(OpCodes.Ldloc, symKeysLocal);
-        il.Emit(OpCodes.Ldloc, symIdxLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Stloc, symKeyLocal);
-
-        // symDesc = ObjectGetOwnPropertyDescriptor(obj, symKey)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, symKeyLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, symDescLocal);
-
-        il.Emit(OpCodes.Ldloc, symDescLocal);
-        il.Emit(OpCodes.Brfalse, symSkipNullLabel);
-        il.Emit(OpCodes.Ldloc, symDescLocal);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Beq, symSkipNullLabel);
-
-        // GetSymbolDict(result)[symKey] = symDesc
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Ldloc, symKeyLocal);
-        il.Emit(OpCodes.Ldloc, symDescLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
-
-        il.MarkLabel(symSkipNullLabel);
-        il.Emit(OpCodes.Ldloc, symIdxLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, symIdxLocal);
-        il.Emit(OpCodes.Br, symLoopStart);
-
-        il.MarkLabel(symLoopEnd);
-
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
     }

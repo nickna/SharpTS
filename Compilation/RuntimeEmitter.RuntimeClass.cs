@@ -591,6 +591,9 @@ public partial class RuntimeEmitter
         // bubbles up to every compiled program. The original line-378 EmitCreateException
         // is left in place; calling here just reuses the same MethodBuilder slot.
         EmitCreateException(typeBuilder, runtime);
+        // Reflection-backed Proxy bridges also use this helper to unwrap
+        // SharpTS.dll guest exceptions and preserve emitted error branding.
+        EmitInvokeMethodUnwrapped(typeBuilder, runtime);
         EmitWrapException(typeBuilder, runtime);
         // ToNumber slot is forward-declared in DefineRuntimeClassPhase1 so
         // $RegExp's Symbol.split limit-coercion (which runs before $Runtime
@@ -803,11 +806,20 @@ public partial class RuntimeEmitter
         EmitCreateArray(typeBuilder, runtime);
         EmitGetLength(typeBuilder, runtime);
         EmitGetElement(typeBuilder, runtime);
-        EmitGetKeys(typeBuilder, runtime);
+        // Proxy [[OwnPropertyKeys]] needs compiler-owned descriptor and
+        // extensibility callbacks even though their public Object methods are
+        // emitted later in this section. Declare the descriptor shell and emit
+        // isExtensible up front so key consumers can capture stable delegates.
+        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
+        EmitObjectIsExtensible(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
+        DeclareProxyOwnKeysHelpers(typeBuilder, runtime);
+        EmitNormalizeOwnPropertyKeys(typeBuilder, runtime);
         EmitGetOwnPropertyNames(typeBuilder, runtime);
         // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
         // the Symbol-key collector available before emitting assign.
         EmitGetOwnPropertySymbols(typeBuilder, runtime);
+        EmitProxyOwnKeysHelperBodies(runtime);
+        EmitGetKeys(typeBuilder, runtime);
         EmitGetValues(typeBuilder, runtime);
         EmitGetEntries(typeBuilder, runtime);
         EmitObjectFromEntries(typeBuilder, runtime);
@@ -842,7 +854,6 @@ public partial class RuntimeEmitter
         // but their implementation needs all of the object-model helpers above.
         EmitPromiseKeyedMethodBodies(runtime);
         EmitObjectPreventExtensions(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
-        EmitObjectIsExtensible(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
         EmitObjectGetPrototypeOf(typeBuilder, runtime, prototypeStoreField);
         EmitObjectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
         // __lookupGetter__ / __lookupSetter__ helpers (ECMA-262 §B.2.2.4/5).
@@ -1039,7 +1050,6 @@ public partial class RuntimeEmitter
         // JSON methods — gated on UsesJSON (also implied by UsesHttp).
         if (_features.UsesJSON)
         {
-            EmitInvokeMethodUnwrapped(typeBuilder, runtime);
             EmitJsonParse(typeBuilder, runtime);
             EmitJsonParseWithReviver(typeBuilder, runtime);
             EmitJsonStringify(typeBuilder, runtime);

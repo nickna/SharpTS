@@ -258,8 +258,6 @@ public partial class RuntimeEmitter
 
     private void EmitGetKeys(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        EmitNormalizeOwnPropertyKeys(typeBuilder, runtime);
-
         var method = typeBuilder.DefineMethod(
             "GetKeys",
             MethodAttributes.Public | MethodAttributes.Static,
