@@ -199,5 +199,18 @@ public class ArrayFlatTests
         Assert.Equal("1\n39,42,39,39\n", output);
     }
 
+    [Theory, ModeData]
+    public void Flat_BoundMethod_UsesExplicitBoundReceiver(ExecutionMode mode)
+    {
+        var source = """
+            let method: any = ([] as any).flat;
+            let result = method.bind([[0], [1]])();
+            console.log(result.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0,1\n", output);
+    }
+
     #endregion
 }

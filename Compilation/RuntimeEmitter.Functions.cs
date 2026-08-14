@@ -994,19 +994,46 @@ public partial class RuntimeEmitter
 
         // Dispatch based on target type:
         //   $TSFunction → $BoundTSFunction (keeps thisArg + boundArgs)
-        //   anything else callable (arrays/maps/sets/bound methods/etc.)
-        //     → $BoundAnyFunction (partial-apply only; thisArg ignored because
-        //       those targets already capture their receiver per JS bound-callable semantics)
+        //   $BoundArrayMethod + array thisArg → a wrapper rebound to thisArg
+        //   anything else callable → $BoundAnyFunction (partial-apply only)
+        // Array method values are represented by receiver-capturing wrappers as
+        // an implementation detail, but Function.prototype.bind must still honor
+        // its explicit thisArg (for example, `[].flat.bind(otherArray)()`).
         var isTSFunctionLabel = il.DefineLabel();
+        var isBoundArrayMethodLabel = il.DefineLabel();
+        var otherCallableLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, isTSFunctionLabel);
 
-        // Non-TSFunction target: new $BoundAnyFunction(target, boundArgs)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Brfalse, otherCallableLabel);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, isBoundArrayMethodLabel);
+
+        // Non-TSFunction target: new $BoundAnyFunction(target, boundArgs)
+        il.MarkLabel(otherCallableLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Ldloc, boundArgsLocal);
+        il.Emit(OpCodes.Newobj, runtime.BoundAnyFunctionCtor);
+        il.Emit(OpCodes.Ret);
+
+        // Recreate the implementation wrapper with the explicit bound receiver,
+        // then retain the ordinary bound-argument concatenation behavior.
+        il.MarkLabel(isBoundArrayMethodLabel);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodNameField);
+        il.Emit(OpCodes.Newobj, runtime.BoundArrayMethodCtor);
         il.Emit(OpCodes.Ldloc, boundArgsLocal);
         il.Emit(OpCodes.Newobj, runtime.BoundAnyFunctionCtor);
         il.Emit(OpCodes.Ret);
