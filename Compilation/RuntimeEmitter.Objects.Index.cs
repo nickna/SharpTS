@@ -234,13 +234,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpForSymbolLabel);
 
-            // User data on RegExp.prototype (for example
-            // Symbol.isConcatSpreadable) takes precedence over the intrinsic
-            // @@match/replace/search/split protocol fallbacks below.
-            var notConcatSpreadableSymbolLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Ldsfld, runtime.SymbolIsConcatSpreadable);
-            il.Emit(OpCodes.Bne_Un, notConcatSpreadableSymbolLabel);
+            // Ordinary inherited symbol lookup precedes the intrinsic fallback.
+            // This observes replacements such as
+            // `RegExp.prototype[Symbol.search] = custom` for every symbol, while
+            // the populated intrinsic descriptors naturally preserve the
+            // standard methods when no replacement exists.
             il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
             il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
             il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
@@ -248,7 +246,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, symbolValueLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
             il.Emit(OpCodes.Brtrue, symbolFoundLabel);
-            il.MarkLabel(notConcatSpreadableSymbolLabel);
             EmitRegExpSymbolDispatch(il, runtime);
             il.MarkLabel(notRegExpForSymbolLabel);
         }

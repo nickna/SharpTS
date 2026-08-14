@@ -58,13 +58,15 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(objectCandidateLabel);
 
-        // Native RegExp objects keep using the mature compiled fast path when
-        // they inherit the standard protocol method. Only an own override is
-        // dispatched here. Ordinary objects still use full prototype lookup.
+        // Record whether a native RegExp supplied an own symbol property.
+        // Regardless of that result, continue through ordinary GetIndex below:
+        // it resolves the current RegExp.prototype descriptor before falling
+        // back to the intrinsic. This makes prototype replacements observable
+        // to String.prototype.match/search/replace/split as required by GetMethod.
         if (_features.UsesRegExp)
         {
             var notNativeRegExpLabel = il.DefineLabel();
-            var ownRegExpSymbolLabel = il.DefineLabel();
+            var afterOwnRegExpSymbolLabel = il.DefineLabel();
             var ownSymbolsLocal = il.DeclareLocal(_types.DictionaryObjectObject);
             var ownSymbolValueLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
@@ -77,12 +79,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, ownSymbolValueLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
-            il.Emit(OpCodes.Brtrue, ownRegExpSymbolLabel);
-            il.Emit(OpCodes.Br, noMethodLabel);
-            il.MarkLabel(ownRegExpSymbolLabel);
+            il.Emit(OpCodes.Brfalse, afterOwnRegExpSymbolLabel);
             il.Emit(OpCodes.Ldarg, 4);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Stind_I1);
+            il.MarkLabel(afterOwnRegExpSymbolLabel);
             il.MarkLabel(notNativeRegExpLabel);
         }
 

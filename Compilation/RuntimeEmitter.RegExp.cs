@@ -838,9 +838,6 @@ public partial class RuntimeEmitter
         var isStringPatternLabel = il.DefineLabel();
         var globalMatchLabel = il.DefineLabel();
         var globalMatchLabelEntryFromCoerced = il.DefineLabel();
-        var searchLocal = il.DeclareLocal(_types.String);
-        var idxLocal = il.DeclareLocal(_types.Int32);
-        var notFoundLabel = il.DefineLabel();
         var matchesLocal = il.DeclareLocal(_types.ListOfObject);
 
         // ECMA-262 22.1.3.13 String.prototype.match: when pattern is undefined,
@@ -907,57 +904,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
         il.Emit(OpCodes.Ret);
 
-        // String pattern fallback
+        // RegExpCreate(pattern, undefined), then Invoke(rx, @@match, « str »).
+        // This is observably different from a literal substring search: object
+        // patterns are ToString-coerced into regex source, and replacements of
+        // RegExp.prototype[@@match] receive the newly-created RegExp.
         il.MarkLabel(isStringPatternLabel);
-
-        // ECMA-262 ToString protocol — handles objects with custom toString.
+        var createdMatcherLocal = il.DeclareLocal(_types.Object);
+        var createdMethodLocal = il.DeclareLocal(_types.Object);
+        var createdArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, searchLocal);
-
-        // var idx = str.IndexOf(search)
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [_types.String])!);
-        il.Emit(OpCodes.Stloc, idxLocal);
-
-        // if (idx < 0) return null
-        il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Blt, notFoundLabel);
-
-        // ECMA-262 22.2.5.4 (and 21.2.5.7 for non-global match) — the result
-        // array carries `index` and `input` properties. The plain $Array we
-        // returned previously was missing those, so test262 tests that read
-        // `m.index` / `m.input` got null. Build the array, then attach the
-        // properties via $Runtime.SetProperty so they appear as own props.
-        var matchArrayLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+        il.Emit(OpCodes.Stloc, createdMatcherLocal);
+        il.Emit(OpCodes.Ldloc, createdMatcherLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolMatch);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, createdMethodLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
-        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
-        il.Emit(OpCodes.Stloc, matchArrayLocal);
-
-        // matchArray.index = (double)idx
-        il.Emit(OpCodes.Ldloc, matchArrayLocal);
-        il.Emit(OpCodes.Ldstr, "index");
-        il.Emit(OpCodes.Ldloc, idxLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
-
-        // matchArray.input = str
-        il.Emit(OpCodes.Ldloc, matchArrayLocal);
-        il.Emit(OpCodes.Ldstr, "input");
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.SetProperty);
-
-        il.Emit(OpCodes.Ldloc, matchArrayLocal);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notFoundLabel);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Stloc, createdArgsLocal);
+        il.Emit(OpCodes.Ldloc, createdMatcherLocal);
+        il.Emit(OpCodes.Ldloc, createdMethodLocal);
+        il.Emit(OpCodes.Ldloc, createdArgsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1680,6 +1653,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var searchLocal = il.DeclareLocal(_types.String);
         var stringPatternLabel = il.DefineLabel();
         var notFoundLabel = il.DefineLabel();
 
@@ -1886,7 +1860,6 @@ public partial class RuntimeEmitter
 
         // String pattern path
         il.MarkLabel(stringPatternLabel);
-        var searchLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, searchLocal);
@@ -1970,7 +1943,6 @@ public partial class RuntimeEmitter
         EmitStringSymbolDispatchPreamble(il, runtime, runtime.SymbolSearch, 0);
         var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
         var isStringPatternLabel = il.DefineLabel();
-        var searchLocal = il.DeclareLocal(_types.String);
 
         // var regexp = pattern as $RegExp
         il.Emit(OpCodes.Ldarg_1);
@@ -1989,20 +1961,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
 
-        // String pattern fallback — coerce via ECMA-262 ToString protocol so
-        // objects with custom toString return the user-defined string.
+        // RegExpCreate(pattern, undefined), then Invoke(rx, @@search, « str »).
         il.MarkLabel(isStringPatternLabel);
-
+        var createdMatcherLocal = il.DeclareLocal(_types.Object);
+        var createdMethodLocal = il.DeclareLocal(_types.Object);
+        var createdArgsLocal = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, searchLocal);
-
-        // return (double)str.IndexOf(search)
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Call, runtime.RegExpFromArgs);
+        il.Emit(OpCodes.Stloc, createdMatcherLocal);
+        il.Emit(OpCodes.Ldloc, createdMatcherLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolSearch);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, createdMethodLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, searchLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [_types.String])!);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Stloc, createdArgsLocal);
+        il.Emit(OpCodes.Ldloc, createdMatcherLocal);
+        il.Emit(OpCodes.Ldloc, createdMethodLocal);
+        il.Emit(OpCodes.Ldloc, createdArgsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
     }
 
