@@ -90,27 +90,25 @@ public partial class RuntimeEmitter
         var invokeLabel = il.DefineLabel();
 
         var disposeMethodLocal = il.DeclareLocal(_types.Object); // local 0: dispose method
-        var symbolDictLocal = il.DeclareLocal(_types.DictionaryObjectObject); // local 1: symbol dict
 
         // if (resource == null) return;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, doneLabel);
 
-        // var symbolDict = GetSymbolDict(resource);
+        // Use the shared indexed-get path so descriptor-backed symbol
+        // properties yield their value and accessor descriptors invoke with
+        // the resource as receiver.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
-        il.Emit(OpCodes.Stloc, symbolDictLocal);
-
-        // if (!symbolDict.TryGetValue(disposeSymbol, out disposeMethod)) return;
-        il.Emit(OpCodes.Ldloc, symbolDictLocal);
-        il.Emit(OpCodes.Ldarg_1); // disposeSymbol
-        il.Emit(OpCodes.Ldloca, disposeMethodLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
-        il.Emit(OpCodes.Brfalse, noDisposeLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, disposeMethodLocal);
 
         // if (disposeMethod == null) return;
         il.Emit(OpCodes.Ldloc, disposeMethodLocal);
         il.Emit(OpCodes.Brfalse, noDisposeLabel);
+        il.Emit(OpCodes.Ldloc, disposeMethodLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, noDisposeLabel);
 
         // Invoke the dispose method with resource as the context
         // Use InvokeMethodValue(thisObj, method, args) which handles various function types

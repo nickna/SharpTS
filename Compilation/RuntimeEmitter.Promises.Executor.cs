@@ -428,6 +428,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, expandoLoopLabel);
 
         il.MarkLabel(haveExpandoLabel);
+        // Expando assignments now carry an ordinary data descriptor. Promise
+        // support is emitted before GetIndex, so unwrap its Value directly at
+        // this early dependency boundary.
+        var expandoDescriptorLocal = il.DeclareLocal(
+            runtime.CompiledPropertyDescriptorType);
+        var expandoValueReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, expandoValLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Stloc, expandoDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, expandoDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, expandoValueReadyLabel);
+        il.Emit(OpCodes.Ldloc, expandoDescriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, expandoValLocal);
+        il.MarkLabel(expandoValueReadyLabel);
         // speciesVal = expandoVal; speciesType = expandoVal as Type;
         il.Emit(OpCodes.Ldloc, expandoValLocal);
         il.Emit(OpCodes.Stloc, speciesValLocal);

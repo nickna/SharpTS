@@ -316,7 +316,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
             il.Emit(OpCodes.Brfalse, symWalkLoop);
             il.Emit(OpCodes.Ldloc, symWalkVal);
-            il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Stloc, symbolValueLocal);
+            il.Emit(OpCodes.Br, symbolFoundLabel);
             il.MarkLabel(notTypeForSymbolLabel);
         }
 
@@ -1151,9 +1152,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
             il.Emit(OpCodes.Stloc, symDictLocal);
 
+            // Frozen objects reject writes to existing symbol properties too.
+            // (Sealed/non-extensible objects may still update an existing
+            // writable property, so only the frozen table is checked here.)
+            var symFrozenStateLocal = il.DeclareLocal(_types.Object);
+            var symReceiverNotFrozenLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloca, symFrozenStateLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ConditionalWeakTable, "TryGetValue",
+                _types.Object, _types.Object.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, symReceiverNotFrozenLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(symReceiverNotFrozenLabel);
+
             // Existing descriptor entries apply ordinary setter/writable
             // semantics while preserving their attributes.
-            var symDoSetLabel = il.DefineLabel();
+            var symRawSetLabel = il.DefineLabel();
+            var symCreateLabel = il.DefineLabel();
             var symCheckExtensibilityLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldloc, symDictLocal);
             il.Emit(OpCodes.Ldarg_1);
@@ -1164,7 +1181,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.CompiledPropertyDescriptorType);
             il.Emit(OpCodes.Stloc, symExistingDescriptorLocal);
             il.Emit(OpCodes.Ldloc, symExistingDescriptorLocal);
-            il.Emit(OpCodes.Brfalse, symDoSetLabel);
+            il.Emit(OpCodes.Brfalse, symRawSetLabel);
 
             var symNoSetterLabel = il.DefineLabel();
             var symSetterValueLocal = il.DeclareLocal(_types.Object);
@@ -1241,11 +1258,31 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(symNotSealedLabel);
 
-            il.MarkLabel(symDoSetLabel);
+            // A newly-created symbol property is an ordinary data descriptor,
+            // not an attribute-less raw side-table value. The descriptor ctor
+            // supplies writable/enumerable/configurable = true.
+            il.Emit(OpCodes.Br, symCreateLabel);
+            il.MarkLabel(symRawSetLabel);
             il.Emit(OpCodes.Ldloc, symDictLocal);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "set_Item"));
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(symCreateLabel);
+            var newSymbolDescriptorLocal = il.DeclareLocal(
+                runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Stloc, newSymbolDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, newSymbolDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ldloc, symDictLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, newSymbolDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryObjectObject, "set_Item"));
             il.Emit(OpCodes.Ret);
         }
 

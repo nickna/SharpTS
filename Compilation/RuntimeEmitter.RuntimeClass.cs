@@ -774,8 +774,6 @@ public partial class RuntimeEmitter
         EmitMergeIntoTSObject(typeBuilder, runtime);
         // (Symbol helpers EmitGetSymbolDict + EmitIsSymbol now emitted earlier
         // — before EmitToJsString — so the @@toPrimitive lookup can use them.)
-        // DisposeResource depends on GetSymbolDict and InvokeMethodValue
-        EmitDisposeResource(typeBuilder, runtime);
         // HasIn operator depends on IsSymbol and GetSymbolDict
         EmitHasIn(typeBuilder, runtime);
         // Array SetElement helpers - must come BEFORE GetIndex/SetIndex which reference them.
@@ -786,6 +784,9 @@ public partial class RuntimeEmitter
             EmitSetArrayElementFor(typeBuilder, runtime, desc);
         // Note: TypedArray detection helpers are emitted earlier (before GetProperty)
         EmitGetIndex(typeBuilder, runtime);
+        // DisposeResource uses the shared Symbol indexed-get path so descriptor
+        // carriers and accessors are observed correctly.
+        EmitDisposeResource(typeBuilder, runtime);
         EmitSetIndex(typeBuilder, runtime);
         EmitSetIndexStrict(typeBuilder, runtime);
         EmitDeleteIndex(typeBuilder, runtime);

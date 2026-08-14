@@ -228,6 +228,9 @@ public partial class RuntimeEmitter
         var sourceIndex = il.DeclareLocal(_types.Int32);
         var keyIndex = il.DeclareLocal(_types.Int32);
         var key = il.DeclareLocal(_types.Object);
+        var descriptor = il.DeclareLocal(_types.Object);
+        var sourceIsProxy = il.DeclareLocal(_types.Boolean);
+        var symbolKeys = il.DeclareLocal(listType);
 
         var throwTarget = il.DefineLabel();
         var targetReady = il.DefineLabel();
@@ -236,10 +239,16 @@ public partial class RuntimeEmitter
         var nextSource = il.DefineLabel();
         var sourcePresent = il.DefineLabel();
         var keyLoop = il.DefineLabel();
-        var stringKeysDone = il.DefineLabel();
-        var symbolLoop = il.DefineLabel();
-        var symbolsDone = il.DefineLabel();
-        var nextSymbol = il.DefineLabel();
+        var keysDone = il.DefineLabel();
+        var nextKey = il.DefineLabel();
+        var proxySource = il.DefineLabel();
+        var ordinarySource = il.DefineLabel();
+        var keysReady = il.DefineLabel();
+        var symbolSet = il.DefineLabel();
+        var keySetDone = il.DefineLabel();
+        var ordinaryEnumerableCheck = il.DefineLabel();
+        var ordinaryStringEnumerable = il.DefineLabel();
+        var enumerableCheckDone = il.DefineLabel();
 
         // 1. Let to be ? ToObject(target).
         il.Emit(OpCodes.Ldarg_0);
@@ -254,9 +263,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToObjectMethod);
         il.Emit(OpCodes.Stloc, target);
 
-        // 2. Process sources in argument order. GetKeys performs the source's
-        // [[OwnPropertyKeys]]/[[GetOwnProperty]] work for enumerable string
-        // keys and preserves the observable Proxy traps and key snapshot.
+        // 2. Process sources in argument order. Snapshot the complete mixed
+        // [[OwnPropertyKeys]] list once; descriptor filtering happens in the
+        // per-key loop as required by Object.assign.
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, sourceIndex);
         il.MarkLabel(sourceLoop);
@@ -276,24 +285,86 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, nextSource);
 
         il.MarkLabel(sourcePresent);
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldloc, source),
+            proxySource, ordinarySource);
+        il.MarkLabel(proxySource);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, sourceIsProxy);
+        EmitProxyOwnKeysCompiledCall(
+            il, runtime, () => il.Emit(OpCodes.Ldloc, source));
+        il.Emit(OpCodes.Stloc, keys);
+        il.Emit(OpCodes.Br, keysReady);
+        il.MarkLabel(ordinarySource);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, sourceIsProxy);
         il.Emit(OpCodes.Ldloc, source);
+        // Preserve GetKeys' mature ordinary-object descriptor handling for
+        // enumerable strings, then append all Symbols for per-key filtering.
         il.Emit(OpCodes.Call, runtime.GetKeys);
         il.Emit(OpCodes.Stloc, keys);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
+        il.Emit(OpCodes.Castclass, listType);
+        il.Emit(OpCodes.Stloc, symbolKeys);
+        il.Emit(OpCodes.Ldloc, keys);
+        il.Emit(OpCodes.Ldloc, symbolKeys);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            listType, "AddRange", [_types.IEnumerableOfObject])!);
+        il.MarkLabel(keysReady);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, keyIndex);
 
-        // Read and set one key at a time. GetIndex observes accessors; the
-        // strict indexed setter implements Set(to, key, value, true) for both
-        // string and Symbol keys, including Array exotic and integrity rules.
+        // For each snapshotted key, re-query [[GetOwnProperty]], then read and
+        // strictly set only enumerable properties. This preserves Proxy trap
+        // ordering and handles properties deleted after ownKeys.
         il.MarkLabel(keyLoop);
         il.Emit(OpCodes.Ldloc, keyIndex);
         il.Emit(OpCodes.Ldloc, keys);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, stringKeysDone);
+        il.Emit(OpCodes.Bge, keysDone);
         il.Emit(OpCodes.Ldloc, keys);
         il.Emit(OpCodes.Ldloc, keyIndex);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", _types.Int32));
         il.Emit(OpCodes.Stloc, key);
+
+        il.Emit(OpCodes.Ldloc, sourceIsProxy);
+        il.Emit(OpCodes.Brfalse, ordinaryEnumerableCheck);
+        // Proxy [[GetOwnProperty]] is observable and may report that a
+        // snapshotted key disappeared.
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptor);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Brfalse, nextKey);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nextKey);
+        il.Emit(OpCodes.Ldloc, descriptor);
+        il.Emit(OpCodes.Ldstr, "enumerable");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brfalse, nextKey);
+        il.Emit(OpCodes.Br, enumerableCheckDone);
+
+        // The shared descriptor carrier is authoritative for ordinary
+        // Symbol properties. Ordinary string keys were already filtered by
+        // GetKeys, including accessor placeholders and array indices.
+        il.MarkLabel(ordinaryEnumerableCheck);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brfalse, ordinaryStringEnumerable);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.PropertyIsEnumerableHelperMethod);
+        il.Emit(OpCodes.Brfalse, nextKey);
+        il.MarkLabel(ordinaryStringEnumerable);
+        il.MarkLabel(enumerableCheckDone);
+
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, symbolSet);
         il.Emit(OpCodes.Ldloc, target);
         il.Emit(OpCodes.Ldloc, key);
         il.Emit(OpCodes.Castclass, _types.String);
@@ -302,52 +373,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetIndex);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Br, keySetDone);
+
+        il.MarkLabel(symbolSet);
+        il.Emit(OpCodes.Ldloc, target);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldloc, source);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.SetIndexStrict);
+        il.MarkLabel(keySetDone);
+
+        il.MarkLabel(nextKey);
         il.Emit(OpCodes.Ldloc, keyIndex);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, keyIndex);
         il.Emit(OpCodes.Br, keyLoop);
-
-        // OrdinaryOwnPropertyKeys orders Symbols after strings. Symbol
-        // descriptors are filtered here because GetOwnPropertySymbols returns
-        // all own Symbol keys, including non-enumerable ones.
-        il.MarkLabel(stringKeysDone);
-        if (runtime.GetOwnPropertySymbols is not null)
-        {
-            il.Emit(OpCodes.Ldloc, source);
-            il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
-            il.Emit(OpCodes.Castclass, listType);
-            il.Emit(OpCodes.Stloc, keys);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stloc, keyIndex);
-            il.MarkLabel(symbolLoop);
-            il.Emit(OpCodes.Ldloc, keyIndex);
-            il.Emit(OpCodes.Ldloc, keys);
-            il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
-            il.Emit(OpCodes.Bge, symbolsDone);
-            il.Emit(OpCodes.Ldloc, keys);
-            il.Emit(OpCodes.Ldloc, keyIndex);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "get_Item", _types.Int32));
-            il.Emit(OpCodes.Stloc, key);
-            il.Emit(OpCodes.Ldloc, source);
-            il.Emit(OpCodes.Ldloc, key);
-            il.Emit(OpCodes.Call, runtime.PropertyIsEnumerableHelperMethod);
-            il.Emit(OpCodes.Brfalse, nextSymbol);
-            il.Emit(OpCodes.Ldloc, target);
-            il.Emit(OpCodes.Ldloc, key);
-            il.Emit(OpCodes.Ldloc, source);
-            il.Emit(OpCodes.Ldloc, key);
-            il.Emit(OpCodes.Call, runtime.GetIndex);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Call, runtime.SetIndexStrict);
-            il.MarkLabel(nextSymbol);
-            il.Emit(OpCodes.Ldloc, keyIndex);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stloc, keyIndex);
-            il.Emit(OpCodes.Br, symbolLoop);
-            il.MarkLabel(symbolsDone);
-        }
+        il.MarkLabel(keysDone);
         il.MarkLabel(nextSource);
         il.Emit(OpCodes.Ldloc, sourceIndex);
         il.Emit(OpCodes.Ldc_I4_1);

@@ -4871,6 +4871,14 @@ public sealed class Issue1279ParityTests
         string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/symbols-included.js")]
+    [InlineData("built-ins/Object/freeze/frozen-object-contains-symbol-properties-non-strict.js")]
+    [InlineData("built-ins/Object/freeze/frozen-object-contains-symbol-properties-strict.js")]
+    public void Symbol_properties_use_ordinary_descriptor_and_integrity_semantics(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()
         => AssertPassInBothModes(

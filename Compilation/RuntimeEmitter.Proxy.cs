@@ -543,6 +543,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, descriptorLocal);
             il.Emit(OpCodes.Isinst, runtime.UndefinedType);
             il.Emit(OpCodes.Brtrue, advanceLabel);
+            // Reflection bridges use SharpTS.dll's undefined singleton.
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType")!);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.Type, "Name").GetGetMethod()!);
+            il.Emit(OpCodes.Ldstr, "SharpTSUndefined");
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String)!);
+            il.Emit(OpCodes.Brtrue, advanceLabel);
             il.Emit(OpCodes.Ldloc, descriptorLocal);
             il.Emit(OpCodes.Ldstr, "enumerable");
             il.Emit(OpCodes.Call, runtime.GetProperty);
