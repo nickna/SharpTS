@@ -538,6 +538,30 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Br, constructionDone);
         IL.MarkLabel(notObjectType);
 
+        // String.prototype.constructor and other aliased String references
+        // carry the System.String Type token. Do not reflect over CLR's
+        // String(char[]) constructor; JavaScript `new String(value)` applies
+        // ToString and returns a boxed String exotic object.
+        var notStringType = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, typeLocal);
+        IL.Emit(OpCodes.Ldtoken, _ctx.Types.String);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+            _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        IL.Emit(OpCodes.Bne_Un, notStringType);
+        IL.Emit(OpCodes.Ldstr, "String");
+        if (argTemps.Count > 0)
+        {
+            IL.Emit(OpCodes.Ldloc, argTemps[0]);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ToJsString);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldstr, "");
+        }
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NewBoxedPrimitiveMethod);
+        IL.Emit(OpCodes.Br, constructionDone);
+        IL.MarkLabel(notStringType);
+
         var regExpType = _ctx.Runtime!.TSRegExpType;
         if (regExpType is not null)
         {

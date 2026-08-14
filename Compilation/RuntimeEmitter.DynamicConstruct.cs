@@ -86,6 +86,37 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpTypeLabel);
         }
 
+        // An aliased String constructor is represented by System.String, but
+        // its CLR constructors are implementation details (notably
+        // String(char[])). JavaScript `new String(value)` instead creates a
+        // boxed String exotic object after applying ToString to its first
+        // argument. Route the Type token through the same boxed-primitive
+        // helper used by the statically recognized constructor path.
+        var notStringTypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldtoken, _types.String);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Bne_Un, notStringTypeLabel);
+        il.Emit(OpCodes.Ldstr, "String");
+        var stringArgPresentLabel = il.DefineLabel();
+        var stringValueReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Brtrue, stringArgPresentLabel);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Br, stringValueReadyLabel);
+        il.MarkLabel(stringArgPresentLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.MarkLabel(stringValueReadyLabel);
+        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notStringTypeLabel);
+
         // System.Type (built-in or user class reference) → Activator.CreateInstance(type, args)
         var notTypeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
