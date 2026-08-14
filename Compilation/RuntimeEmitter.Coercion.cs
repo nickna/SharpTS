@@ -878,10 +878,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, unwrapNotSymLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a Symbol value to a string");
         il.MarkLabel(unwrapNotSymLabel);
-        // Stringify the primitive — handles bool/double/string identically to
-        // the top-level fallback path.
+        // Re-enter language ToString for the primitive. This is observably
+        // different from debug Stringify for BigInt ("42" versus "42n").
         il.Emit(OpCodes.Ldloc, primValLocal);
-        il.Emit(OpCodes.Call, runtime.Stringify);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoxedLabel);
 

@@ -265,6 +265,15 @@ public partial class ILEmitter
                     // ECMA-262 §22.1.3.9: ToString(undefined) = "undefined".
                     IL.Emit(OpCodes.Ldstr, "undefined");
                 }
+                // Position coercion is observable even though the current
+                // search helper still uses the default starting position.
+                if (arguments.Count >= 2)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                    IL.Emit(OpCodes.Pop);
+                }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.StringLastIndexOf);
                 IL.Emit(OpCodes.Box, _ctx.Types.Double);
                 break;
