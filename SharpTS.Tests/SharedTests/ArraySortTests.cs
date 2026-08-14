@@ -157,6 +157,25 @@ public class ArraySortTests
         Assert.Equal("true\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Sort_HoleWriteWalksPrototypeSetters(ExecutionMode mode)
+    {
+        var source = """
+            let writes: any[] = [];
+            Object.defineProperty(Object.prototype, "1", {
+                get() { return 5; },
+                set(value: any) { writes.push(value); }
+            });
+            let values: any[] = [2, , 1];
+            values.sort();
+            console.log(values[0]);
+            console.log(writes.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n2\n", output);
+    }
+
     #endregion
 
     #region Stability

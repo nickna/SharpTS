@@ -2123,11 +2123,13 @@ public partial class RuntimeEmitter
         il.MarkLabel(strictArrayRawStoreLabel);
         var strictArrayNoInheritedSetterLabel = il.DefineLabel();
         var strictArrayInheritedSetterLocal = il.DeclareLocal(_types.Object);
+        var strictArrayPrototypeLocal = il.DeclareLocal(_types.Object);
+        var strictArrayPrototypeLoop = il.DefineLabel();
+        var strictArrayNextPrototype = il.DefineLabel();
 
-        // An existing dense own element shadows Array.prototype.  For a hole,
-        // however, OrdinarySet must consult an inherited indexed accessor
-        // before creating a new own element.  This is observable when push or
-        // unshift targets an accessor installed on Array.prototype.
+        // An existing dense own element shadows the prototype chain. For a
+        // hole, however, OrdinarySet must walk every inherited object looking
+        // for an indexed accessor before creating a new own element.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldarg_1);
@@ -2135,10 +2137,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
         il.Emit(OpCodes.Brtrue, strictArrayNoInheritedSetterLabel);
         il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Stloc, strictArrayPrototypeLocal);
+
+        il.MarkLabel(strictArrayPrototypeLoop);
+        il.Emit(OpCodes.Ldloc, strictArrayPrototypeLocal);
+        il.Emit(OpCodes.Brfalse, strictArrayNoInheritedSetterLabel);
+        il.Emit(OpCodes.Ldloc, strictArrayPrototypeLocal);
         il.Emit(OpCodes.Ldloc, strictArrayKeyLocal);
         il.Emit(OpCodes.Ldloca, strictArrayInheritedSetterLocal);
         il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
-        il.Emit(OpCodes.Brfalse, strictArrayNoInheritedSetterLabel);
+        il.Emit(OpCodes.Brfalse, strictArrayNextPrototype);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, strictArrayInheritedSetterLocal);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -2150,6 +2158,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictArrayNextPrototype);
+        il.Emit(OpCodes.Ldloc, strictArrayPrototypeLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Stloc, strictArrayPrototypeLocal);
+        il.Emit(OpCodes.Br, strictArrayPrototypeLoop);
 
         il.MarkLabel(strictArrayNoInheritedSetterLabel);
         il.Emit(OpCodes.Ldarg_0);
