@@ -1589,8 +1589,8 @@ public partial class Interpreter
                     }
                     else if (strictMode)
                     {
-                        throw new InterpreterException(
-                            $"Cannot set array index '{t.Index}' which has only a getter.");
+                        throw new ThrowException(new SharpTSTypeError(
+                            $"Cannot set array index '{t.Index}' which has only a getter."));
                     }
                 }
                 else if (strictMode)

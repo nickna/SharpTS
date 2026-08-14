@@ -527,6 +527,20 @@ public static partial class ObjectBuiltIns
                             "Cannot redefine symbol property"));
                     }
                     return target;
+                case SharpTSJSON json:
+                    if (!json.DefineProperty(symKey, descriptor))
+                    {
+                        throw new ThrowException(new SharpTSTypeError(
+                            "Cannot redefine symbol property"));
+                    }
+                    return target;
+                case SharpTSBigIntPrototype bigIntPrototype:
+                    if (!bigIntPrototype.DefineProperty(symKey, descriptor))
+                    {
+                        throw new ThrowException(new SharpTSTypeError(
+                            "Cannot redefine symbol property"));
+                    }
+                    return target;
                 case SharpTSInstance symInst:
                     if (descriptorHasValue)
                         symInst.SetBySymbol(symKey, descriptor.Value);
@@ -1057,6 +1071,11 @@ public static partial class ObjectBuiltIns
             case SharpTSStringPrototype stringPrototype
                 when stringPrototype.GetOwnPropertyDescriptor(key) is { } descriptor:
                 return descriptor.ToObject();
+            case SharpTSJSON json when json.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
+            case SharpTSBigIntPrototype bigIntPrototype
+                when bigIntPrototype.GetOwnPropertyDescriptor(key) is { } descriptor:
+                return descriptor.ToObject();
             default:
                 return SharpTSUndefined.Instance;
         }
@@ -1578,6 +1597,9 @@ public static partial class ObjectBuiltIns
             case SharpTSArrowFunction arrow:
                 arrow.PreventExtensions();
                 return arrow;
+            case SharpTSRegExp regex:
+                regex.PreventExtensions();
+                return regex;
             case ISharpTSCallable callable:
                 PropertyDescriptorStore.PreventExtensions(callable);
                 return callable;
@@ -1642,6 +1664,7 @@ public static partial class ObjectBuiltIns
             SharpTSArray arr => arr.IsExtensible,
             SharpTSFunction function => function.IsExtensible,
             SharpTSArrowFunction arrow => arrow.IsExtensible,
+            SharpTSRegExp regex => regex.IsExtensible,
             ISharpTSCallable callable => PropertyDescriptorStore.IsExtensible(callable),
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsExtensible(idict),

@@ -149,6 +149,8 @@ public class SharpTSRegExp : ITypeCategorized
     internal bool HasOwnProperty(string name) => _properties.HasProperty(name);
 
     internal bool DeleteProperty(string name) => _properties.DeleteProperty(name);
+    internal bool IsExtensible => _properties.IsExtensible;
+    internal void PreventExtensions() => _properties.PreventExtensions();
 
     internal IEnumerable<string> OwnEnumerableKeys() => _properties.OwnEnumerableKeys();
     internal IEnumerable<string> OwnStringKeys() => _properties.OwnStringKeys();

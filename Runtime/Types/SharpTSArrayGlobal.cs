@@ -86,7 +86,9 @@ public sealed class SharpTSArrayGlobal : ISharpTSCallable, ISharpTSMutableBuiltI
     }
 
     private object? GetBuiltInMember(string name)
-        => name == "prototype"
+        => name == "length"
+            ? 1d
+            : name == "prototype"
             ? RealmPrototype ?? new SharpTSArrayPrototype { RealmConstructor = this }
             : BuiltInRegistry.Instance.GetStaticMethod("Array", name);
 

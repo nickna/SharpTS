@@ -1121,6 +1121,9 @@ public partial class Interpreter
                 SharpTSMath math => math.DeleteBySymbolStrict(symbol, strictMode),
                 SharpTSStringPrototype stringPrototype
                     => stringPrototype.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSJSON json => json.DeleteBySymbolStrict(symbol, strictMode),
+                SharpTSBigIntPrototype bigIntPrototype
+                    => bigIntPrototype.DeleteBySymbolStrict(symbol, strictMode),
                 _ => true
             };
         }
@@ -1267,29 +1270,19 @@ public partial class Interpreter
         // Handle symbol keys specially
         if (left is SharpTSSymbol symbol)
         {
-            if (right is SharpTSObject or SharpTSInstance or SharpTSArray)
+            if (RuntimeValue.FromBoxed(right).IsObject)
                 return HasSymbolProperty(right, symbol);
-            throw new InterpreterException("'in' operator requires an object on the right side.");
+            throw new ThrowException(new SharpTSTypeError(
+                "'in' operator requires an object on the right side."));
         }
 
         string key = left?.ToString() ?? "";
 
-        if (right is SharpTSObject obj)
-        {
-            return HasProperty(obj, key);
-        }
-        if (right is SharpTSInstance instance)
-        {
-            return HasProperty(instance, key);
-        }
-        if (right is SharpTSArray arr)
-        {
-            // Route through the shared HasProperty operation so holes remain
-            // absent while inherited indexed and named properties participate.
-            return HasProperty(arr, key);
-        }
+        if (RuntimeValue.FromBoxed(right).IsObject)
+            return HasProperty(right, key);
 
-        throw new InterpreterException("'in' operator requires an object on the right side.");
+        throw new ThrowException(new SharpTSTypeError(
+            "'in' operator requires an object on the right side."));
     }
 
     /// <summary>

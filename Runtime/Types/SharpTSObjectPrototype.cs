@@ -235,6 +235,10 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                 SharpTSMath math => math.GetOwnPropertyDescriptor(sym) is not null,
                 SharpTSStringPrototype stringPrototype
                     => stringPrototype.GetOwnPropertyDescriptor(sym) is not null,
+                SharpTSJSON json => json.GetOwnPropertyDescriptor(sym) is not null,
+                SharpTSBigIntPrototype bigIntPrototype
+                    => bigIntPrototype.GetOwnPropertyDescriptor(sym) is not null,
+                ISharpTSSymbolPropertyBag symbolBag => symbolBag.HasSymbolProperty(sym),
                 _ => false,
             };
         }

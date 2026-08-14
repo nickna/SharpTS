@@ -14,12 +14,25 @@ namespace SharpTS.Runtime.Types;
 /// handled by <see cref="BuiltIns.JSONBuiltIns.GetStaticMethod"/> via the
 /// registry's instance-type lookup.
 /// </remarks>
-public class SharpTSJSON
+public class SharpTSJSON : ISharpTSSymbolPropertyBag
 {
     public static readonly SharpTSJSON Instance = new();
     private readonly SharpTSObject _extras = new([]);
     private readonly HashSet<string> _deletedBuiltIns = [];
-    internal SharpTSJSON() { }
+    internal SharpTSJSON()
+    {
+        _extras.DefineProperty(SharpTSSymbol.ToStringTag, new SharpTSPropertyDescriptor
+        {
+            Value = "JSON",
+            HasValue = true,
+            Writable = false,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
+    }
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
@@ -55,6 +68,23 @@ public class SharpTSJSON
         return true;
     }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
 
     public override string ToString() => "[object JSON]";
 }

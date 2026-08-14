@@ -793,6 +793,8 @@ public partial class Interpreter
                 if (GetArrayPrototype().HasOwnProperty(name)) return true;
                 return GetObjectPrototype().HasOwnProperty(name);
             }
+            if (obj is SharpTSObjectPrototype objectPrototype)
+                return objectPrototype.GetOwnPropertyDescriptor(name) is not null;
             if (obj is SharpTSObject so)
             {
                 // SharpTSObject.HasProperty covers own fields + getters; add setters
@@ -1657,7 +1659,10 @@ public partial class Interpreter
     /// </summary>
     private object? InheritedObjectPrototypeMember(object receiver, string memberName)
     {
-        var protoMember = GetObjectPrototype().GetMember(memberName);
+        var objectPrototype = GetObjectPrototype();
+        if (objectPrototype.GetExtraGetter(memberName) is { } getter)
+            return BindAccessorToObject(getter, receiver).CallBoxed(this, []);
+        var protoMember = objectPrototype.GetMember(memberName);
         return protoMember is SharpTSObjectUnboundMethod unbound
             ? unbound.BindTo(receiver)
             : protoMember;
@@ -1703,7 +1708,7 @@ public partial class Interpreter
         // maps from its Prototype property for Object.create-linked objects).
         // Handles both SharpTSObject and SharpTSInstance prototypes — the
         // latter is the case for `Object.create(new Point(...))`.
-        object? current = simpleObj.HasProperty("__proto__") ? simpleObj.GetProperty("__proto__") : null;
+        object? current = GetRecordPrototype(simpleObj);
         for (int i = 0; i < 64 && current != null; i++)
         {
             if (current is SharpTSProxy proxy)
@@ -1729,6 +1734,22 @@ public partial class Interpreter
                 if (ReferenceEquals(next, proto)) break;
                 current = next;
                 continue;
+            }
+            if (current is SharpTSObjectPrototype objectPrototype)
+            {
+                var descriptor = objectPrototype.GetOwnPropertyDescriptor(memberName);
+                if (descriptor is not null)
+                {
+                    if (descriptor.HasGet || descriptor.HasSet)
+                    {
+                        return descriptor.Get is null
+                            ? RuntimeValue.Undefined
+                            : BindAccessorToObject(descriptor.Get, simpleObj).CallV2(
+                                this, ReadOnlySpan<RuntimeValue>.Empty);
+                    }
+                    return RuntimeValue.FromBoxed(objectPrototype.TryGetExtra(memberName));
+                }
+                break;
             }
             // `function Foo(){}; Foo.prototype = new Array(1,2,3)` — an array standing in as a
             // prototype. Instances must inherit both its own indexed/named data and the

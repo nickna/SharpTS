@@ -67,6 +67,21 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
             return userDescriptor;
         if (!HasProperty(name)) return null;
 
+        if (name is BuiltInNames.Undefined or BuiltInNames.NaN or BuiltInNames.Infinity)
+        {
+            return new SharpTSPropertyDescriptor
+            {
+                Value = GetProperty(name),
+                HasValue = true,
+                Writable = false,
+                HasWritable = true,
+                Enumerable = false,
+                HasEnumerable = true,
+                Configurable = false,
+                HasConfigurable = true,
+            };
+        }
+
         // Constructor/function globals are ordinary properties of the global
         // object: writable and configurable, but not enumerable (§19.1).
         return new SharpTSPropertyDescriptor

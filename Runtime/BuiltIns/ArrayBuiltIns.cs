@@ -34,8 +34,8 @@ public static class ArrayBuiltIns
             .MethodV2("reduce", 0, int.MaxValue, specLength: 1, ReduceV2)
             .MethodV2("reduceRight", 0, int.MaxValue, specLength: 1, ReduceRightV2)
             .MethodV2("includes", 0, 2, specLength: 1, IncludesV2)
-            .MethodV2("indexOf", 1, 2, IndexOfV2)
-            .MethodV2("lastIndexOf", 1, 2, LastIndexOfV2)
+            .MethodV2("indexOf", 0, 2, specLength: 1, IndexOfV2)
+            .MethodV2("lastIndexOf", 0, 2, specLength: 1, LastIndexOfV2)
             .MethodV2("join", 0, 1, specLength: 1, JoinV2)
             // Array.prototype.toString = join() with ","; distinct from the debug ToString().
             .MethodV2("toString", 0, static (interp, arr, _) => RuntimeValue.FromString(ToJsString(interp, arr)))
@@ -1417,7 +1417,19 @@ public static class ArrayBuiltIns
         if (length > MaxSafeInteger - nextIndex)
             throw TypeError("Array.prototype.concat result exceeds the maximum safe integer.");
         if (length > SharpTSArray.MaxLength - nextIndex)
+        {
+            // Preserve the observable access to the first element before the
+            // implementation's narrower array-length limit is reported. This
+            // is significant when the property is an accessor that throws.
+            if (length > 0 && interpreter.HasProperty(item, "0"))
+            {
+                result.Set(
+                    nextIndex,
+                    interpreter.GetPropertyValue(item, "0"));
+            }
+
             throw new ThrowException(new SharpTSRangeError("Invalid array length."));
+        }
 
         for (long sourceIndex = 0; sourceIndex < length; sourceIndex++)
         {

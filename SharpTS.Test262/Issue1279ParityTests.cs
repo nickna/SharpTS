@@ -5807,6 +5807,32 @@ public sealed class Issue1279ParityTests
     public void Array_search_preserves_nonconfigurable_tail_elements(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Array/prototype/concat/arg-length-near-integer-limit.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-this-length-as-symbol.js")]
+    [InlineData("built-ins/Array/prototype/fill/return-abrupt-from-this-length.js")]
+    [InlineData("built-ins/Array/prototype/filter/15.4.4.20-9-b-6.js")]
+    [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-b-i-22.js")]
+    [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-b-ii-2.js")]
+    [InlineData("built-ins/Array/prototype/indexOf/calls-only-has-on-prototype-after-length-zeroed.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-b-i-22.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-b-ii-2.js")]
+    [InlineData("built-ins/Array/prototype/lastIndexOf/calls-only-has-on-prototype-after-length-zeroed.js")]
+    public void Remaining_Array_interpreter_parity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-243-2.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-180.js")]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-4.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-19.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-9.js")]
+    [InlineData("built-ins/Object/prototype/toString/symbol-tag-non-str-bigint.js")]
+    [InlineData("built-ins/JSON/Symbol.toStringTag.js")]
+    [InlineData("language/expressions/property-accessors/S11.2.1_A4_T4.js")]
+    public void Remaining_object_and_intrinsic_interpreter_parity(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
 
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)

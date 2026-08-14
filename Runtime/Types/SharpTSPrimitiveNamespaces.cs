@@ -385,7 +385,7 @@ internal sealed class StringPrototypeMethodWrapper : ISharpTSCallable, IBuiltInF
 /// a first-class global function, while this ordinary mutable object carries
 /// its constructor back-reference and guest-defined properties.
 /// </summary>
-public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
+public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn, ISharpTSSymbolPropertyBag
 {
     internal object? RealmConstructor { get; set; }
     private readonly SharpTSObject _extras = new([]);
@@ -393,7 +393,20 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
     private readonly Dictionary<string, BigIntPrototypeMethodWrapper> _methodCache = [];
     private readonly HashSet<string> _deletedMethods = [];
 
-    internal SharpTSBigIntPrototype() { }
+    internal SharpTSBigIntPrototype()
+    {
+        _extras.DefineProperty(SharpTSSymbol.ToStringTag, new SharpTSPropertyDescriptor
+        {
+            Value = "BigInt",
+            HasValue = true,
+            Writable = false,
+            HasWritable = true,
+            Enumerable = false,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        });
+    }
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
@@ -446,6 +459,22 @@ public sealed class SharpTSBigIntPrototype : ISharpTSMutableBuiltIn
         return true;
     }
     public IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    internal bool DefineProperty(SharpTSSymbol symbol, SharpTSPropertyDescriptor descriptor)
+        => _extras.DefineProperty(symbol, descriptor);
+    internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
+        => _extras.GetOwnPropertyDescriptor(symbol);
+    internal bool DeleteBySymbolStrict(SharpTSSymbol symbol, bool strictMode)
+        => _extras.DeleteBySymbolStrict(symbol, strictMode);
+    bool ISharpTSSymbolPropertyBag.HasSymbolProperty(SharpTSSymbol symbol)
+        => _extras.HasSymbolProperty(symbol);
+    object? ISharpTSSymbolPropertyBag.GetBySymbol(SharpTSSymbol symbol)
+        => _extras.GetBySymbol(symbol);
+    bool ISharpTSSymbolPropertyBag.TryGetSymbolAccessor(
+        SharpTSSymbol symbol, out ISharpTSCallable? getter, out ISharpTSCallable? setter)
+        => _extras.TryGetSymbolAccessor(symbol, out getter, out setter);
+    void ISharpTSSymbolPropertyBag.SetBySymbolStrict(
+        SharpTSSymbol symbol, object? value, bool strictMode)
+        => _extras.SetBySymbolStrict(symbol, value, strictMode);
     public object? GetMember(string name)
         => HasExtra(name) ? TryGetExtra(name)
             : name == "constructor" && !_constructorDeleted ? RealmConstructor
