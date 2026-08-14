@@ -511,7 +511,7 @@ public partial class RuntimeEmitter
 
         // Dictionary<string, object> - stringify object
         il.MarkLabel(dictLabel);
-        EmitStringifyObject(il, method, valueLocal);
+        EmitStringifyObject(il, method, valueLocal, runtime);
 
         // Class instance - stringify via $IHasFields fields dictionary.
         // Use TSObjectMergeEnumerable to also include accessor (getter)
@@ -528,7 +528,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObject(il, method, valueLocal);
+        EmitStringifyObject(il, method, valueLocal, runtime);
 
         il.MarkLabel(noClassFieldsLabel);
         il.Emit(OpCodes.Ldstr, "{}");
@@ -935,12 +935,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringifyObject(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal)
+    private void EmitStringifyObject(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedRuntime runtime)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var enumeratorLocal = il.DeclareLocal(_types.DictionaryStringObjectEnumerator);
-        var currentLocal = il.DeclareLocal(_types.KeyValuePairStringObject);
+        var keysLocal = il.DeclareLocal(_types.ListOfObject);
+        var keyLocal = il.DeclareLocal(_types.String);
+        var iLocal = il.DeclareLocal(_types.Int32);
         var firstLocal = il.DeclareLocal(_types.Boolean);
 
         var loopStart = il.DefineLabel();
@@ -950,9 +951,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
-        // if (dict.Count == 0) return "{}";
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
+        // Snapshot EnumerableOwnPropertyNames before invoking any getter. GetKeys
+        // applies descriptor filtering and OrdinaryOwnPropertyKeys ordering.
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Stloc, keysLocal);
+
+        // if (keys.Count == 0) return "{}";
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmpty);
         il.Emit(OpCodes.Ldstr, "{}");
@@ -969,19 +976,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Stloc, firstLocal);
 
-        // Get enumerator
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator")!);
-        il.Emit(OpCodes.Stloc, enumeratorLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
 
         il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.DictionaryStringObjectEnumerator, "MoveNext")!);
-        il.Emit(OpCodes.Brfalse, loopEnd);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, loopEnd);
 
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(_types.DictionaryStringObjectEnumerator, "Current")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32]));
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        // Advance before any continue branch.
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
 
         // strResult = StringifyValue(currentValue, indent, depth + 1, currentKey)
         // Compute first; if null, the value was undefined → skip entry per
@@ -989,14 +1003,14 @@ public partial class RuntimeEmitter
         // ECMA-262 25.5.2.5 step 6.a: the recursive key is the property name
         // so toJSON can branch on it.
         var dictValStrLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Value").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, stringifyMethod);
         il.Emit(OpCodes.Stloc, dictValStrLocal);
         il.Emit(OpCodes.Ldloc, dictValStrLocal);
@@ -1016,8 +1030,7 @@ public partial class RuntimeEmitter
 
         // sb.Append(EscapeJsonString(key));
         il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(_types.KeyValuePairStringObject, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
         il.Emit(OpCodes.Pop);
@@ -1037,11 +1050,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);
-
-        // Dispose enumerator
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Constrained, _types.DictionaryStringObjectEnumerator);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.IDisposable, "Dispose"));
 
         // sb.Append("}");
         il.Emit(OpCodes.Ldloc, sbLocal);
