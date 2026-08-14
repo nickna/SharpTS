@@ -25,7 +25,8 @@ namespace SharpTS.Test262;
 /// Env-var switches:
 ///   <c>SHARPTS_TEST262_UPDATE_BASELINE=1</c> — write baselines instead of diffing.
 ///   <c>SHARPTS_TEST262_WIDE_SWEEP=1</c>      — use <c>wide-sweep.json</c>;
-///                                              write <c>wide-sweep-report.md</c> instead of diffing.
+///                                              write per-mode snapshots and a
+///                                              differential report instead of diffing.
 ///   <c>SHARPTS_TEST262_DIFFERENTIAL_REPORT=1</c> — skip execution while the
 ///                                                  report-mode fact compares committed baselines.
 /// </summary>
@@ -132,9 +133,14 @@ public abstract class Test262TestsBase
 
         if (wideSweep)
         {
-            var reportPath = Path.Combine(projectDir, "wide-sweep-report.md");
-            WriteWideSweepReport(reportPath, mode, config, counts, current, elapsed);
-            _output.WriteLine($"[{mode}] wrote {reportPath}");
+            var artifacts = Test262WideSweepArtifacts.Write(
+                projectDir,
+                mode,
+                current,
+                Test262Paths.GetCorpusRevision(test262Root));
+            _output.WriteLine($"[{mode}] wrote {artifacts.SnapshotPath}");
+            if (artifacts.DifferentialReportPath is not null)
+                _output.WriteLine($"[{mode}] wrote {artifacts.DifferentialReportPath}");
             return;
         }
 
@@ -234,31 +240,6 @@ public abstract class Test262TestsBase
         Dump("bucket changes (soft)", diff.BucketChanges);
     }
 
-    private static void WriteWideSweepReport(
-        string path,
-        Test262ExecutionMode mode,
-        Test262Config config,
-        Dictionary<Test262Outcome, int> counts,
-        IReadOnlyDictionary<string, string> current,
-        TimeSpan elapsed)
-    {
-        var sb = new StringBuilder();
-        sb.AppendLine($"# Test262 wide-sweep report — {mode}");
-        sb.AppendLine();
-        sb.AppendLine($"- generated: {DateTime.UtcNow:u}");
-        sb.AppendLine($"- folders: {string.Join(", ", config.Folders)}");
-        sb.AppendLine($"- timeout: {config.TimeoutSeconds}s");
-        sb.AppendLine($"- elapsed: {elapsed.TotalSeconds:F1}s");
-        sb.AppendLine($"- total: {current.Count}");
-        sb.AppendLine();
-        sb.AppendLine("## Outcomes");
-        sb.AppendLine();
-        sb.AppendLine("| Bucket | Count |");
-        sb.AppendLine("|--------|------:|");
-        foreach (var kv in counts.OrderBy(kv => kv.Key))
-            sb.AppendLine($"| {kv.Key} | {kv.Value} |");
-        File.AppendAllText(path, sb.ToString());
-    }
 }
 
 public class Test262InterpretedTests : Test262TestsBase

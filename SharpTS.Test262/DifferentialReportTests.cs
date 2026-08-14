@@ -252,6 +252,40 @@ public sealed class DifferentialReportTests
     }
 
     [Fact]
+    public void Wide_sweep_artifacts_write_mode_snapshots_then_a_differential_report()
+    {
+        var directory = Directory.CreateTempSubdirectory("sharpts-wide-sweep-");
+        try
+        {
+            const string revision = "0123456789abcdef0123456789abcdef01234567";
+            var interpreted = Test262WideSweepArtifacts.Write(
+                directory.FullName,
+                Test262ExecutionMode.Interpreted,
+                Baseline(("a.js", "Pass"), ("b.js", "Fail")),
+                revision);
+
+            Assert.True(File.Exists(interpreted.SnapshotPath));
+            Assert.Null(interpreted.DifferentialReportPath);
+
+            var compiled = Test262WideSweepArtifacts.Write(
+                directory.FullName,
+                Test262ExecutionMode.Compiled,
+                Baseline(("a.js", "Fail"), ("b.js", "Pass")),
+                revision);
+
+            Assert.NotNull(compiled.DifferentialReportPath);
+            Assert.True(File.Exists(compiled.DifferentialReportPath));
+            var markdown = File.ReadAllText(compiled.DifferentialReportPath);
+            Assert.Contains("| 1 | Pass → Fail |", markdown);
+            Assert.Contains("| 1 | Fail → Pass |", markdown);
+        }
+        finally
+        {
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void Mode_summary_counts_each_outcome()
     {
         var baseline = Baseline(

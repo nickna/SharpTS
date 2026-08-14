@@ -16,7 +16,7 @@ This project is **not** included in `SharpTS.sln` and won't be picked up by solu
 dotnet test SharpTS.Test262/SharpTS.Test262.csproj
 ```
 
-The default subset (config/subset.json) keeps a runtime budget of a few minutes. The wide-sweep config (config/wide-sweep.json) exercises a much larger slice and writes a markdown report instead of diffing — useful for periodic deep checks.
+The default subset (config/subset.json) keeps a runtime budget of a few minutes. The wide-sweep config (config/wide-sweep.json) exercises a much larger slice and writes gitignored path-level snapshots plus a differential markdown report — useful for periodic deep checks.
 
 ## Updating the baselines
 
@@ -30,7 +30,7 @@ Writes `baselines/interpreted.txt` and `baselines/compiled.txt`. Commit the rege
 SHARPTS_TEST262_WIDE_SWEEP=1 dotnet test SharpTS.Test262/SharpTS.Test262.csproj
 ```
 
-Switches to the wide-sweep config and writes `wide-sweep-report.md` instead of diffing. Long-running.
+Switches to the wide-sweep config and writes `wide-sweep-baselines/{interpreted|compiled}.txt`. Once both modes finish against the same Test262 revision, it also writes `wide-sweep-report.md`. These artifacts are gitignored and the run is long-running.
 
 ## Comparing interpreter and compiler baselines
 
@@ -95,6 +95,8 @@ the percentage.
 | `baselines/interpreted.txt` | Committed baseline for interpreter mode |
 | `baselines/compiled.txt` | Committed baseline for compiled-IL mode |
 | `differential-report.md` | Generated interpreter↔compiler parity report (not committed) |
+| `wide-sweep-baselines/` | Generated path-level snapshots for the wide interpreted and compiled sweeps (not committed) |
+| `wide-sweep-report.md` | Generated wide-sweep interpreter↔compiler differential report (not committed) |
 
 ## See also
 
