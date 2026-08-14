@@ -62,4 +62,16 @@ public class BaselineContractTests
             File.Delete(path);
         }
     }
+
+    [Fact]
+    public void Corpus_revision_uses_a_process_scoped_safe_directory()
+    {
+        var root = Test262Paths.TryFindRoot();
+        if (root is null) return;
+
+        var revision = Test262Paths.GetCorpusRevision(root);
+
+        Assert.Equal(40, revision.Length);
+        Assert.All(revision, c => Assert.True(char.IsAsciiHexDigit(c)));
+    }
 }

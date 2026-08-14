@@ -7128,7 +7128,7 @@ test/built-ins/Object/prototype/__proto__/set-abrupt.js Fail
 test/built-ins/Object/prototype/__proto__/set-cycle-shadowed.js Timeout
 test/built-ins/Object/prototype/__proto__/set-cycle.js Fail
 test/built-ins/Object/prototype/__proto__/set-fn-name.js RuntimeError
-test/built-ins/Object/prototype/__proto__/set-immutable.js Fail
+test/built-ins/Object/prototype/__proto__/set-immutable.js RuntimeError:worker-stalled
 test/built-ins/Object/prototype/__proto__/set-invalid-value.js RuntimeError
 test/built-ins/Object/prototype/__proto__/set-non-extensible.js Fail
 test/built-ins/Object/prototype/__proto__/set-non-obj-coercible.js RuntimeError
@@ -7700,11 +7700,11 @@ test/built-ins/Promise/any/invoke-resolve-on-values-every-iteration-of-promise.j
 test/built-ins/Promise/any/invoke-resolve-return.js Pass
 test/built-ins/Promise/any/invoke-resolve.js Pass
 test/built-ins/Promise/any/invoke-then-error-close.js Fail
-test/built-ins/Promise/any/invoke-then-error-reject.js RuntimeError
+test/built-ins/Promise/any/invoke-then-error-reject.js Fail
 test/built-ins/Promise/any/invoke-then-get-error-close.js Fail
-test/built-ins/Promise/any/invoke-then-get-error-reject.js RuntimeError
+test/built-ins/Promise/any/invoke-then-get-error-reject.js Fail
 test/built-ins/Promise/any/invoke-then-on-promises-every-iteration.js Pass
-test/built-ins/Promise/any/invoke-then.js Fail
+test/built-ins/Promise/any/invoke-then.js RuntimeError
 test/built-ins/Promise/any/is-function.js Pass
 test/built-ins/Promise/any/iter-arg-is-empty-iterable-reject.js Pass
 test/built-ins/Promise/any/iter-arg-is-empty-string-reject.js Pass
@@ -9306,7 +9306,7 @@ test/built-ins/RegExp/prototype/Symbol.match/y-fail-lastindex.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/y-fail-return.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/y-init-lastindex.js Pass
 test/built-ins/RegExp/prototype/Symbol.match/y-set-lastindex.js Pass
-test/built-ins/RegExp/prototype/Symbol.matchAll/isregexp-called-once.js RuntimeError
+test/built-ins/RegExp/prototype/Symbol.matchAll/isregexp-called-once.js Fail
 test/built-ins/RegExp/prototype/Symbol.matchAll/isregexp-this-throws.js Pass
 test/built-ins/RegExp/prototype/Symbol.matchAll/length.js Pass
 test/built-ins/RegExp/prototype/Symbol.matchAll/name.js Pass

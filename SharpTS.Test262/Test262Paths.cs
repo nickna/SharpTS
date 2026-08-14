@@ -9,7 +9,7 @@ public static class Test262Paths
 {
     public static string GetCorpusRevision(string root)
     {
-        var startInfo = new System.Diagnostics.ProcessStartInfo("git", "rev-parse HEAD")
+        var startInfo = new System.Diagnostics.ProcessStartInfo("git")
         {
             WorkingDirectory = root,
             RedirectStandardOutput = true,
@@ -17,6 +17,13 @@ public static class Test262Paths
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        // The Test262 checkout may be owned by the interactive Windows user
+        // while tests run as the sandbox account. Scope the ownership exception
+        // to this read-only invocation; do not mutate global Git configuration.
+        startInfo.ArgumentList.Add("-c");
+        startInfo.ArgumentList.Add($"safe.directory={Path.GetFullPath(root).Replace('\\', '/')}");
+        startInfo.ArgumentList.Add("rev-parse");
+        startInfo.ArgumentList.Add("HEAD");
         using var process = System.Diagnostics.Process.Start(startInfo)
             ?? throw new InvalidOperationException("Could not start git to resolve the Test262 corpus revision.");
         var revision = process.StandardOutput.ReadToEnd().Trim();
