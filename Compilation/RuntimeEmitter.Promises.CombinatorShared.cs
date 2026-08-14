@@ -93,7 +93,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitCombinatorWrapper(ILGenerator il, TypeBuilder smType, FieldBuilder stateField,
         FieldBuilder inputField, FieldBuilder builderField, Type builderType, System.Action emitInputValue,
-        FieldBuilder? constructorField = null, System.Action? emitConstructorValue = null)
+        FieldBuilder? constructorField = null, System.Action? emitConstructorValue = null,
+        FieldBuilder? capabilityField = null, System.Action? emitCapabilityValue = null)
     {
         var smLocal = il.DeclareLocal(smType);
 
@@ -116,6 +117,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, smLocal);
             emitConstructorValue();
             il.Emit(OpCodes.Stfld, constructorField);
+        }
+
+        if (capabilityField is not null && emitCapabilityValue is not null)
+        {
+            il.Emit(OpCodes.Ldloca, smLocal);
+            emitCapabilityValue();
+            il.Emit(OpCodes.Stfld, capabilityField);
         }
 
         // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create();
@@ -148,13 +156,22 @@ public partial class RuntimeEmitter
     /// synchronously from the static method.
     /// </summary>
     private static void EmitNormalizeCombinatorIterable(ILGenerator il, EmittedRuntime runtime,
-        FieldBuilder iterableField, FieldBuilder constructorField)
+        FieldBuilder iterableField, FieldBuilder constructorField, FieldBuilder? capabilityField = null)
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, iterableField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, constructorField);
+        if (capabilityField is null)
+        {
+            il.Emit(OpCodes.Ldnull);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, capabilityField);
+        }
         il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
         il.Emit(OpCodes.Stfld, iterableField);
     }

@@ -468,11 +468,12 @@ public partial class ILEmitter
             }
             else if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(capturedVar), out var capturedFuncMethod))
             {
-                // Variable references an outer function declaration — wrap as $TSFunction
-                // so the captured value matches what `callbackfn` resolves to in the
-                // enclosing scope. Without this, capturing falls through to Ldnull and
-                // the inner body sees `null` (typeof === "object") instead of a function.
-                IL.Emit(OpCodes.Ldnull);
+                // Variable references an outer function declaration. Use the
+                // MethodInfo-keyed canonical wrapper, exactly like a normal global
+                // function-value read. Constructing a fresh $TSFunction here loses
+                // expando state attached earlier to the function object — notably
+                // test262's assert.sameValue / assert.throwsAsync helpers — so the
+                // captured closure observes a different, property-less function.
                 IL.Emit(OpCodes.Ldtoken, capturedFuncMethod);
                 if (_ctx.ProgramType != null)
                 {
@@ -484,7 +485,17 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                 }
                 IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-                IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSFunctionCtor);
+                int arity = 0;
+                foreach (var param in capturedFuncMethod.GetParameters())
+                {
+                    if (param.IsOptional) continue;
+                    if (param.ParameterType == typeof(List<object>)) continue;
+                    if (param.Name?.StartsWith("__") == true) continue;
+                    arity++;
+                }
+                IL.Emit(OpCodes.Ldstr, capturedVar);
+                IL.Emit(OpCodes.Ldc_I4, arity);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
             }
             else
             {

@@ -81,6 +81,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
                 EmitBasePromiseConstructor(ctx);
+                il.Emit(OpCodes.Ldnull); // no custom capability on intrinsic Promise.race
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseRace);
                 return true;
 

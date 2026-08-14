@@ -11,6 +11,70 @@ namespace SharpTS.Tests.SharedTests;
 public class PromiseMethodTests
 {
     [Theory, ModeData]
+    public void All_CustomConstructorUsesSingleResolveElementCallback(ExecutionMode mode)
+    {
+        var source = """
+            let callCount = 0;
+            function Constructor(executor: any): void {
+                function resolve(values: any): void {
+                    callCount += 1;
+                    console.log(Array.isArray(values));
+                    console.log(values.length);
+                    console.log(values[0]);
+                }
+                executor(resolve, () => {});
+            }
+            (Constructor as any).resolve = (value: any) => value;
+            const p = {
+                then(onFulfilled: any): void {
+                    onFulfilled("expectedValue");
+                    onFulfilled("unexpectedValue");
+                }
+            };
+            (Promise.all as any).call(Constructor, [p]);
+            console.log(callCount);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n1\nexpectedValue\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void All_IgnoredCustomCapabilityRejectionDoesNotBecomeTopLevelThrow(ExecutionMode mode)
+    {
+        var source = """
+            let nextCount = 0;
+            let returnCount = 0;
+            const iterable: any = {};
+            iterable[Symbol.iterator] = function (): any {
+                return {
+                    next(): any {
+                        nextCount += 1;
+                        return { done: true };
+                    },
+                    return(): any {
+                        returnCount += 1;
+                        return {};
+                    }
+                };
+            };
+            function Custom(executor: any): any {
+                return new Promise((_resolve: any, reject: any) => {
+                    executor(() => { throw new Error("resolve failed"); }, reject);
+                });
+            }
+            (Custom as any).resolve = Promise.resolve;
+            (Promise.all as any).call(Custom, iterable);
+            console.log(nextCount);
+            console.log(returnCount);
+            console.log("continued");
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n0\ncontinued\n", output);
+    }
+
+    [Theory, ModeData]
     public void Constructor_AllowsOwnPropertyOverrides(ExecutionMode mode)
     {
         var source = """

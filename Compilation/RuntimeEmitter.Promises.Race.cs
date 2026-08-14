@@ -22,6 +22,7 @@ public partial class RuntimeEmitter
         var whenAnyAwaiterField = shell.Type.DefineField("<>u__1", whenAnyAwaiterType, FieldAttributes.Private);
         var resultAwaiterField = shell.Type.DefineField("<>u__2", resultAwaiterType, FieldAttributes.Private);
         var winningTaskField = shell.Type.DefineField("<winningTask>5__1", typeof(Task<object?>), FieldAttributes.Private);
+        var capabilityField = shell.Type.DefineField("capability", _types.Object, FieldAttributes.Public);
 
         return new PromiseRaceStateMachine
         {
@@ -30,6 +31,7 @@ public partial class RuntimeEmitter
             BuilderField = shell.BuilderField,
             IterableField = shell.InputField,
             ConstructorField = shell.ConstructorField,
+            CapabilityField = capabilityField,
             WhenAnyAwaiterField = whenAnyAwaiterField,
             ResultAwaiterField = resultAwaiterField,
             WinningTaskField = winningTaskField,
@@ -47,7 +49,8 @@ public partial class RuntimeEmitter
             {
                 // Normalize inside MoveNext's try block; see PromiseAll.
                 il.Emit(OpCodes.Ldarg_0);
-            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1));
+            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
+            sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2));
 
     /// <summary>
     /// Emits the MoveNext body for PromiseRace state machine.
@@ -87,7 +90,8 @@ public partial class RuntimeEmitter
 
         // ========== STATE -1: Initial execution ==========
 
-        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField);
+        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField,
+            sm.CapabilityField);
 
         // ECMA-262 §27.2.4.5 Promise.race: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws

@@ -337,6 +337,65 @@ public partial class RuntimeEmitter
         );
         runtime.DeletedBuiltinsField = deletedBuiltinsField;
 
+        // SharpTS standalone programs historically auto-await Task-valued
+        // top-level expressions. A custom NewPromiseCapability result is still
+        // an ordinary JavaScript value, however, and an ignored rejection must
+        // not be rethrown by that host convenience. Track those result objects
+        // weakly so the entry-point emitter can distinguish them without
+        // changing their JavaScript identity or adding an observable property.
+        var nonAutoAwaitPromisesField = typeBuilder.DefineField(
+            "_nonAutoAwaitPromises",
+            _types.ConditionalWeakTable,
+            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
+        );
+        runtime.NonAutoAwaitPromisesField = nonAutoAwaitPromisesField;
+
+        var markNonAutoAwaitPromise = typeBuilder.DefineMethod(
+            "MarkNonAutoAwaitPromise",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object]);
+        runtime.MarkNonAutoAwaitPromiseMethod = markNonAutoAwaitPromise;
+        {
+            var il = markNonAutoAwaitPromise.GetILGenerator();
+            var doneLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Brfalse, doneLabel);
+            il.Emit(OpCodes.Ldsfld, nonAutoAwaitPromisesField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ConditionalWeakTable, "AddOrUpdate", [_types.Object, _types.Object]));
+            il.MarkLabel(doneLabel);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var shouldAutoAwaitPromise = typeBuilder.DefineMethod(
+            "ShouldAutoAwaitPromise",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.ShouldAutoAwaitPromiseMethod = shouldAutoAwaitPromise;
+        {
+            var il = shouldAutoAwaitPromise.GetILGenerator();
+            var valueLocal = il.DeclareLocal(_types.Object);
+            var nonNullLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Brtrue, nonNullLabel);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(nonNullLabel);
+            il.Emit(OpCodes.Ldsfld, nonAutoAwaitPromisesField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloca, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ConditionalWeakTable, "TryGetValue",
+                [_types.Object, _types.Object.MakeByRefType()]));
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ceq);
+            il.Emit(OpCodes.Ret);
+        }
+
         // Static sentinel field for null/undefined Map keys
         var mapNullSentinelField = typeBuilder.DefineField(
             "_mapNullSentinel",
@@ -483,6 +542,10 @@ public partial class RuntimeEmitter
         // Initialize _deletedBuiltins = new ConditionalWeakTable<object, object>()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
         cctorIL.Emit(OpCodes.Stsfld, deletedBuiltinsField);
+
+        // Initialize custom-capability top-level auto-await exclusions.
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
+        cctorIL.Emit(OpCodes.Stsfld, nonAutoAwaitPromisesField);
 
         // Link the built-in singletons (Math, JSON, Boolean/Number/String/Array
         // prototypes) to Object.prototype via PDS. ECMA-262 declares each of

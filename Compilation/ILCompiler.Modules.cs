@@ -451,6 +451,14 @@ public partial class ILCompiler
         var waitForTaskLabel = il.DefineLabel();
         var isTaskLabel = il.DefineLabel();
 
+        // NewPromiseCapability can legitimately return a native Promise/Task
+        // from a custom constructor. JavaScript discards an unused expression;
+        // do not let SharpTS's standalone top-level auto-await extension turn
+        // an intentionally ignored rejection into an uncaught program error.
+        il.Emit(OpCodes.Ldloc, exprResult);
+        il.Emit(OpCodes.Call, _runtime.ShouldAutoAwaitPromiseMethod);
+        il.Emit(OpCodes.Brfalse, notTaskLabel);
+
         // Check for Task<object> first
         il.Emit(OpCodes.Ldloc, exprResult);
         il.Emit(OpCodes.Isinst, _types.TaskOfObject);

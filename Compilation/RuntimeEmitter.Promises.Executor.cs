@@ -87,7 +87,7 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits NormalizePromiseList(object iterable, object constructor) -> object:
+    /// Emits NormalizePromiseList(object iterable, object constructor, object capability) -> object:
     /// materializes supported finite iterables and returns a list normalized through constructor C's
     /// current <c>resolve</c> method. The built-in path unwraps
     /// $Promise elements (including #242 subclasses) to their backing Task;
@@ -170,6 +170,7 @@ public partial class RuntimeEmitter
         var elementLocal = il.DeclareLocal(_types.Object);
         var resolvedElementLocal = il.DeclareLocal(_types.Object);
         var resolveFunctionLocal = il.DeclareLocal(_types.Object);
+        var thenFunctionLocal = il.DeclareLocal(_types.Object);
         var resolveDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var invokeResolveLocal = il.DeclareLocal(_types.Boolean);
         var constructorTypeLocal = il.DeclareLocal(_types.Type);
@@ -440,10 +441,64 @@ public partial class RuntimeEmitter
         void EmitNormalizeResolvedPromiseElement(ILGenerator targetIl)
         {
             // Stack on entry: [..., resultList, resolvedElement]. Spill the
-            // value while retaining the list receiver for List.Add.
+            // value and discard the receiver; every branch reloads resultLocal
+            // so it leaves [resultList, task] for the caller's List.Add.
             targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Pop);
+            var ordinaryCapabilityLabel = targetIl.DefineLabel();
             var useOrdinaryCoercionLabel = targetIl.DefineLabel();
             var normalizedLabel = targetIl.DefineLabel();
+
+            // Promise.race with a custom constructor must pass the SAME result
+            // capability resolve/reject functions to every nextPromise.then.
+            // Converting each element to a host Task would substitute fresh
+            // resolving callbacks and violate observable callback identity.
+            targetIl.Emit(OpCodes.Ldarg_2);
+            targetIl.Emit(OpCodes.Brfalse, ordinaryCapabilityLabel);
+
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Ldstr, "function");
+            targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
+            var directThenCallableLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Brtrue, directThenCallableLabel);
+            GuestErrorEmitter.ThrowTypeError(targetIl, runtime,
+                "Promise.race resolved element then is not callable");
+            targetIl.MarkLabel(directThenCallableLabel);
+
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldc_I4_2);
+            targetIl.Emit(OpCodes.Newarr, _types.Object);
+            targetIl.Emit(OpCodes.Dup);
+            targetIl.Emit(OpCodes.Ldc_I4_0);
+            targetIl.Emit(OpCodes.Ldarg_2);
+            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityResolveMethod);
+            targetIl.Emit(OpCodes.Stelem_Ref);
+            targetIl.Emit(OpCodes.Dup);
+            targetIl.Emit(OpCodes.Ldc_I4_1);
+            targetIl.Emit(OpCodes.Ldarg_2);
+            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityRejectMethod);
+            targetIl.Emit(OpCodes.Stelem_Ref);
+            targetIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            targetIl.Emit(OpCodes.Pop);
+
+            // The custom capability has been wired directly. Keep the host
+            // race task pending forever; its only role is to preserve the
+            // existing wrapper signature while the capability itself settles.
+            targetIl.Emit(OpCodes.Ldloc, resultLocal);
+            targetIl.Emit(OpCodes.Newobj,
+                _types.GetDefaultConstructor(_types.TaskCompletionSourceOfObject));
+            targetIl.Emit(OpCodes.Callvirt,
+                _types.GetProperty(_types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+            targetIl.Emit(OpCodes.Br, normalizedLabel);
+
+            targetIl.MarkLabel(ordinaryCapabilityLabel);
+            targetIl.Emit(OpCodes.Ldloc, resultLocal);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
             targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
@@ -937,8 +992,24 @@ public partial class RuntimeEmitter
 
             // Promise Resolve Functions adopt promises and thenables instead of
             // fulfilling with their host Task representation as a plain value.
+            // Native promises/tasks retain their backing task. For every other
+            // value use PromiseResolveValue: it performs the observable `then`
+            // Get inside its own try/catch and turns an abrupt getter into a
+            // rejected task. Calling CoerceAwaitableToTask directly here let the
+            // getter escape from resolve(), so resolve(poisonedThen) returned by
+            // throwing and the executor catch observed the wrong completion.
+            var resolveOrdinaryValueLabel = il.DefineLabel();
+            var haveAdoptedTaskLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            il.Emit(OpCodes.Brfalse, resolveOrdinaryValueLabel);
             il.Emit(OpCodes.Ldloc, valueLocal);
             il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            il.Emit(OpCodes.Br, haveAdoptedTaskLabel);
+            il.MarkLabel(resolveOrdinaryValueLabel);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            il.MarkLabel(haveAdoptedTaskLabel);
             il.Emit(OpCodes.Stloc, adoptedTaskLocal);
             // Resolving a promise with itself rejects with TypeError rather than
             // installing a continuation cycle that can never settle.
@@ -1228,11 +1299,19 @@ public partial class RuntimeEmitter
         il.BeginCatchBlock(_types.Exception);
         il.Emit(OpCodes.Stloc, exLocal);
 
-        // tcs.TrySetException(ex)
-        il.Emit(OpCodes.Ldloc, tcsLocal);
+        // Call the capability's reject function instead of writing the TCS
+        // directly. Resolve may already have claimed the shared settled flag
+        // while adopting a pending thenable; an executor throw after that must
+        // be ignored by reject (CreateResolvingFunctions single-settlement).
+        il.Emit(OpCodes.Ldloc, rejectLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldloc, exLocal);
-        var trySetException = typeof(TaskCompletionSource<object?>).GetMethod("TrySetException", [typeof(Exception)])!;
-        il.Emit(OpCodes.Callvirt, trySetException);
+        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Leave, endTryLabel);

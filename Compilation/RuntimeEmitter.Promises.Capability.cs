@@ -29,6 +29,7 @@ public partial class RuntimeEmitter
         EmitAdoptPromiseCapabilityBody(runtime);
         EmitAdoptCompletedPromiseCapabilityBody(runtime);
         EmitResolvePreparedPromiseCapabilityBody(runtime);
+        EmitPromiseCapabilitySlotGetterBodies(runtime);
         EmitNewPromiseCapabilityResultBody(runtime);
         EmitCoerceAwaitableToTask(runtime);
     }
@@ -354,6 +355,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, instanceLocal);
         il.Emit(OpCodes.Stfld, runtime.PromiseCapabilityInstanceField);
+        il.Emit(OpCodes.Ldloc, instanceLocal);
+        il.Emit(OpCodes.Call, runtime.MarkNonAutoAwaitPromiseMethod);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ret);
     }
@@ -407,9 +410,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilitySettleMethod);
         il.Emit(OpCodes.Newobj, actionType.GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, typeof(CancellationToken).GetProperty("None")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Ldloc, schedulerLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
-            _types.TaskOfObject, "ContinueWith", [actionType, schedulerType])!);
+            _types.TaskOfObject, "ContinueWith",
+            [actionType, typeof(CancellationToken), typeof(TaskContinuationOptions), schedulerType])!);
         il.Emit(OpCodes.Pop);
 
         il.Emit(OpCodes.Ldloc, capabilityLocal);
@@ -426,16 +432,60 @@ public partial class RuntimeEmitter
     {
         var il = runtime.AdoptCompletedPromiseCapabilityMethod.GetILGenerator();
         var schedulePendingLabel = il.DefineLabel();
+        var settleFaultedLabel = il.DefineLabel();
+        var returnPromiseLabel = il.DefineLabel();
         var capabilityType = runtime.PromiseCapabilityType;
+        var capabilityLocal = il.DeclareLocal(capabilityType);
+        var exceptionLocal = il.DeclareLocal(_types.Exception);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsCompleted").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, schedulePendingLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, capabilityType);
-        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stloc, capabilityLocal);
+
+        // A faulted operation already carries the abrupt completion that must
+        // be delivered to capability.[[Reject]]. Do not catch a throw from that
+        // reject callback and attempt to call it a second time.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Task, "IsFaulted").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, settleFaultedLabel);
+
+        // For a fulfilled combinator, a throw from capability.[[Resolve]] is
+        // itself the abrupt completion handled by IfAbruptRejectPromise. Turn
+        // it into one call to capability.[[Reject]] before returning the
+        // constructed promise. This is observable for empty Promise.all and
+        // Promise.allSettled inputs whose custom resolve throws.
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.PromiseCapabilitySettleMethod);
+        il.Emit(OpCodes.Leave, returnPromiseLabel);
+
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Stloc, exceptionLocal);
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
+        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityRejectField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
+        il.Emit(OpCodes.Call, runtime.WrapException);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, returnPromiseLabel);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(settleFaultedLabel);
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PromiseCapabilitySettleMethod);
+
+        il.MarkLabel(returnPromiseLabel);
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
         il.Emit(OpCodes.Ret);
 
@@ -468,6 +518,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitPromiseCapabilitySlotGetterBodies(EmittedRuntime runtime)
+    {
+        EmitGetter(runtime.GetPromiseCapabilityResolveMethod,
+            runtime.PromiseCapabilityResolveField);
+        EmitGetter(runtime.GetPromiseCapabilityRejectMethod,
+            runtime.PromiseCapabilityRejectField);
+
+        void EmitGetter(MethodBuilder method, FieldInfo field)
+        {
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.PromiseCapabilityType);
+            il.Emit(OpCodes.Ldfld, field);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>

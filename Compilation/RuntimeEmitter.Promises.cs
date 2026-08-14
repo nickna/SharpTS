@@ -30,6 +30,7 @@ internal class PromiseRaceStateMachine
     public required FieldBuilder BuilderField { get; init; }
     public required FieldBuilder IterableField { get; init; }
     public required FieldBuilder ConstructorField { get; init; }
+    public required FieldBuilder CapabilityField { get; init; }
     public required FieldBuilder WhenAnyAwaiterField { get; init; }  // TaskAwaiter<Task<object?>>
     public required FieldBuilder ResultAwaiterField { get; init; }    // TaskAwaiter<object?>
     public required FieldBuilder WinningTaskField { get; init; }      // Task<object?> from WhenAny
@@ -175,6 +176,16 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.TaskOfObject]);
+        runtime.GetPromiseCapabilityResolveMethod ??= typeBuilder.DefineMethod(
+            "GetPromiseCapabilityResolve",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.GetPromiseCapabilityRejectMethod ??= typeBuilder.DefineMethod(
+            "GetPromiseCapabilityReject",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
 
         // Promise.resolve(value?) - returns an existing intrinsic Promise only
         // when its observable constructor is %Promise%. An own constructor
@@ -504,7 +515,7 @@ public partial class RuntimeEmitter
             "NormalizePromiseList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, _types.Object]);
+            [_types.Object, _types.Object, _types.Object]);
 
         // Promise.all(iterable) - async state machine using Task.WhenAll
         var promiseAllSM = DefinePromiseAllStateMachine(moduleBuilder);
@@ -525,7 +536,7 @@ public partial class RuntimeEmitter
             "PromiseRace",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.PromiseRace = race;
         EmitPromiseRaceWrapper(race.GetILGenerator(), promiseRaceSM, runtime);
@@ -628,7 +639,7 @@ public partial class RuntimeEmitter
                 $"Promise.{jsName} called on non-Object");
             EmitPromiseStaticCapabilityResult(il, runtime, target,
                 passConstructorToIntrinsic: jsName is "all" or "race" or "allSettled" or "any",
-                settleCompletedSynchronously: jsName != "race");
+                passCapabilityToIntrinsic: jsName == "race");
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.PromiseAllKeyed, m => runtime.PromiseAllKeyedStatic = m);
@@ -742,7 +753,7 @@ public partial class RuntimeEmitter
     private void EmitPromiseStaticCapabilityResult(
         ILGenerator il, EmittedRuntime runtime, MethodInfo intrinsic,
         bool passConstructorToIntrinsic = false,
-        bool settleCompletedSynchronously = true)
+        bool passCapabilityToIntrinsic = false)
     {
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var capabilityLocal = il.DeclareLocal(_types.Object);
@@ -770,6 +781,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         if (passConstructorToIntrinsic)
             il.Emit(OpCodes.Ldarg_0);
+        if (passCapabilityToIntrinsic)
+            il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Call, intrinsic);
         il.Emit(OpCodes.Stloc, taskLocal);
 
@@ -778,9 +791,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, returnIntrinsicLabel);
         il.Emit(OpCodes.Ldloc, capabilityLocal);
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Call, settleCompletedSynchronously
-            ? runtime.AdoptCompletedPromiseCapabilityMethod
-            : runtime.AdoptPromiseCapabilityMethod);
+        il.Emit(OpCodes.Call, runtime.AdoptCompletedPromiseCapabilityMethod);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnIntrinsicLabel);

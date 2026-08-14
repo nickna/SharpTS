@@ -952,6 +952,37 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Ldsfld, topField);
             }
+            else if (ctx.Functions.TryGetValue(ctx.ResolveFunctionName(capturedVar), out var capturedFuncMethod))
+            {
+                // Inner function declarations capture function objects too.
+                // Populate the field with the canonical MethodInfo-keyed wrapper
+                // so expandos assigned to the declaration remain observable in
+                // the nested body. A null fallback here made test262 helpers such
+                // as assert.sameValue and assert.throwsAsync disappear only when
+                // referenced from a nested declaration.
+                il.Emit(OpCodes.Ldtoken, capturedFuncMethod);
+                if (ctx.ProgramType != null)
+                {
+                    il.Emit(OpCodes.Ldtoken, ctx.ProgramType);
+                    il.Emit(OpCodes.Call, ctx.Types.MethodBaseGetMethodFromHandleWithType);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Call, ctx.Types.MethodBaseGetMethodFromHandle);
+                }
+                il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+                int arity = 0;
+                foreach (var param in capturedFuncMethod.GetParameters())
+                {
+                    if (param.IsOptional) continue;
+                    if (param.ParameterType == typeof(List<object>)) continue;
+                    if (param.Name?.StartsWith("__") == true) continue;
+                    arity++;
+                }
+                il.Emit(OpCodes.Ldstr, capturedVar);
+                il.Emit(OpCodes.Ldc_I4, arity);
+                il.Emit(OpCodes.Call, ctx.Runtime!.TSFunctionGetOrCreate);
+            }
             else
             {
                 var existingLocal = ctx.Locals.GetLocal(capturedVar);

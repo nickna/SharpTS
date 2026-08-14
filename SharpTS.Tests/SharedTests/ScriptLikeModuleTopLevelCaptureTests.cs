@@ -165,4 +165,40 @@ public class ScriptLikeModuleTopLevelCaptureTests
         var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("total=9", output.Replace("\r\n", "\n").Trim());
     }
+
+    [Theory, ModeData]
+    public void NestedClosure_CapturesCanonicalFunctionObjectWithExpandos(ExecutionMode mode)
+    {
+        Expect("""
+            function helper(): void {}
+            (helper as any).answer = 42;
+            function makeReader(): () => number {
+                return function read(): number {
+                    return (helper as any).answer;
+                };
+            }
+            console.log(makeReader()());
+            """, "42", mode);
+    }
+
+    [Theory, ModeData]
+    public void NestedClosure_SeesFunctionValuedExpandosThatCaptureTheFunction(ExecutionMode mode)
+    {
+        Expect("""
+            function helper(): void {}
+            (helper as any)._same = function (a: any, b: any): boolean {
+                return a === b;
+            };
+            (helper as any).same = function (a: any, b: any): boolean {
+                return (helper as any)._same(a, b);
+            };
+            function outer(callback: any): void {
+                function inner(): void {
+                    console.log((helper as any).same(42, 42));
+                }
+                callback(inner);
+            }
+            outer((fn: any) => fn());
+            """, "true", mode);
+    }
 }

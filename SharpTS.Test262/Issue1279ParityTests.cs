@@ -6081,6 +6081,29 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Promise_combinator_callbacks_expose_builtin_metadata(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/call-resolve-element-after-return.js")]
+    [InlineData("built-ins/Promise/all/call-resolve-element-items.js")]
+    [InlineData("built-ins/Promise/all/call-resolve-element.js")]
+    [InlineData("built-ins/Promise/all/capability-resolve-throws-no-close.js")]
+    [InlineData("built-ins/Promise/all/resolve-before-loop-exit-from-same.js")]
+    [InlineData("built-ins/Promise/all/resolve-before-loop-exit.js")]
+    [InlineData("built-ins/Promise/all/resolve-from-same-thenable.js")]
+    [InlineData("built-ins/Promise/allKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/allSettled/capability-resolve-throws-no-close.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-before-loop-exit-from-same.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-from-same-thenable.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/arg-not-object-reject.js")]
+    [InlineData("built-ins/Promise/any/call-reject-element-items.js")]
+    [InlineData("built-ins/Promise/any/reject-from-same-thenable.js")]
+    [InlineData("built-ins/Promise/any/resolve-before-loop-exit.js")]
+    [InlineData("built-ins/Promise/race/resolve-throws-iterator-return-is-not-callable.js")]
+    [InlineData("built-ins/Promise/race/resolve-throws-iterator-return-null-or-undefined.js")]
+    [InlineData("built-ins/Promise/resolve-poisoned-then-deferred.js")]
+    [InlineData("built-ins/Promise/resolve-poisoned-then-immed.js")]
+    public void Remaining_Promise_compiler_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
