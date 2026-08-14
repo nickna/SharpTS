@@ -148,4 +148,21 @@ public class ArrayConcatSpreadTests
             "[\"r0\",\"r1\"]\n[\"own\",\"inherited\"]\n",
             output);
     }
+
+    [Theory, CompiledOnlyData]
+    public void Concat_ObservesRedefinedArgumentsLength(ExecutionMode mode)
+    {
+        var source = """
+            const args: any = (function(a: any, b: any, c: any) {
+                return arguments;
+            })(1, 2, 3);
+            args[Symbol.isConcatSpreadable] = true;
+            Object.defineProperty(args, "length", { value: 6 });
+            console.log(args.length);
+            console.log(JSON.stringify([].concat(args)));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("6\n[1,2,3,null,null,null]\n", output);
+    }
 }

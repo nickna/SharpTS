@@ -365,10 +365,19 @@ public partial class RuntimeEmitter
         // Descriptor-backed expandos/accessors win over raw list slots, with
         // the live exotic length slot as the sole exception.
         var listNoDescriptorLabel = il.DefineLabel();
+        var listCheckDescriptorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brtrue, listNoDescriptorLabel);
+        il.Emit(OpCodes.Brfalse, listCheckDescriptorLabel);
+        // Array length is an exotic live slot, but arguments.length is an
+        // ordinary configurable data property. A defineProperty override on
+        // an Arguments object must therefore win over its initial length
+        // field while ordinary arrays continue to bypass length descriptors.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
+        il.MarkLabel(listCheckDescriptorLabel);
         var listOwnDescriptor = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -399,8 +408,23 @@ public partial class RuntimeEmitter
         il.MarkLabel(listDataDescriptorLabel);
         il.Emit(OpCodes.Ldloc, listOwnDescriptor);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
-        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
+        var listDataDescriptorValueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, listDataDescriptorValueLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(listDataDescriptorValueLabel);
+        // Dense Array/List indices keep their value in backing storage, but
+        // arguments.length is an ordinary data property whose redefined value
+        // lives only in its descriptor.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, listNoDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, listOwnDescriptor);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(listNoDescriptorLabel);
 
