@@ -5963,7 +5963,12 @@ public sealed class Issue1279ParityTests
     public void Remaining_object_and_intrinsic_interpreter_parity(string relativePath)
         => AssertPassInBothModes(relativePath);
 
-
+    [Theory]
+    [InlineData("built-ins/Object/bigint.js")]
+    [InlineData("built-ins/Object/prototype/constructor/S15.2.4.1_A1_T2.js")]
+    [InlineData("built-ins/Object/prototype/toString/Object.prototype.toString.call-function.js")]
+    public void Object_conversion_preserves_guest_boxing_and_callable_branding(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {

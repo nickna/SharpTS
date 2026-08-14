@@ -1433,6 +1433,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldtoken, _types.BigInteger);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Bne_Un, notBigIntLabel);
+            if (_features.UsesBigInt)
+                il.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
             il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notBigIntLabel);

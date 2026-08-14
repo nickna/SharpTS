@@ -541,6 +541,7 @@ public partial class RuntimeEmitter
         CheckBoxed(_types.Boolean, "Boolean");
         CheckBoxed(_types.Double,  "Number");
         CheckBoxed(_types.String,  "String");
+        CheckBoxed(_types.BigInteger, "BigInt");
         // Symbol lowers to the $TSSymbol Type token, so a bare $TSSymbol would
         // otherwise reach the IsAssignableFrom($TSSymbol, $TSSymbol) fallback and
         // wrongly match. Terminal like the wrappers above: true iff `instance` is

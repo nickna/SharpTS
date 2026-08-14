@@ -39,6 +39,17 @@ public abstract partial class ExpressionEmitterBase
         if (TryEmitFunctionReturnThisIdiom(c))
             return;
 
+        // Function(...) constructs a callable function object. Dynamic source
+        // compilation remains outside compiled mode, but the callable carrier
+        // itself must still have Function branding and identity semantics.
+        if (c.Callee is Expr.Variable { Name.Lexeme: "Function" }
+            && Ctx.Locals.GetLocal("Function") == null
+            && !Ctx.Functions.ContainsKey(Ctx.ResolveFunctionName("Function")))
+        {
+            EmitFunctionConstructorShell(c.Arguments);
+            return;
+        }
+
         // Handler chain covers: console methods, fetch, parseInt/parseFloat/isNaN/isFinite,
         // setTimeout/clearTimeout/setInterval/clearInterval/queueMicrotask, Symbol/BigInt/Date/Error,
         // Date.now(), Math/JSON/Object/Array/Number/Promise/Symbol statics, built-in module methods,

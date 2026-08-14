@@ -523,6 +523,21 @@ public partial class ILEmitter
         // this one built-in through the same boxed-argument helper as a direct
         // `new RegExp(...)` call.
         var constructionDone = IL.DefineLabel();
+
+        // Object.prototype.constructor is represented by the System.Object
+        // Type token. Construct a guest $Object so the result participates in
+        // JavaScript property/prototype lookup instead of exposing a raw CLR
+        // System.Object with no visible `constructor`, toString, or valueOf.
+        var notObjectType = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, typeLocal);
+        IL.Emit(OpCodes.Ldtoken, _ctx.Types.Object);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        IL.Emit(OpCodes.Bne_Un, notObjectType);
+        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(_ctx.Types.DictionaryStringObject));
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime!.TSObjectCtor);
+        IL.Emit(OpCodes.Br, constructionDone);
+        IL.MarkLabel(notObjectType);
+
         var regExpType = _ctx.Runtime!.TSRegExpType;
         if (regExpType is not null)
         {
@@ -589,8 +604,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, ctorLocal);
         IL.Emit(OpCodes.Ldloc, argsArrayLocal);
         IL.Emit(OpCodes.Callvirt, invokeMethod);
-        if (regExpType is not null)
-            IL.MarkLabel(constructionDone);
+        IL.MarkLabel(constructionDone);
     }
 
     /// <summary>

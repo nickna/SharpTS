@@ -529,6 +529,8 @@ public class EmittedRuntime
     public MethodBuilder StringPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="NumberPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
     public MethodBuilder NumberPrototypePopulateMethod { get; set; } = null!;
+    /// <summary>Populates <see cref="BigIntPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
+    public MethodBuilder BigIntPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Generic <c>$Runtime</c> stub used as MethodInfo backing for String.prototype wrappers without dedicated helpers (match/search/toString/valueOf/etc.) — only typeof + isConstructor are ever observed.</summary>
     public MethodBuilder StringPrototypeGenericStub { get; set; } = null!;
     /// <summary>$Runtime.StringReplaceWithFunction(str, pattern, fn) — handles ECMA-262 22.1.3.18 step 3 when replaceValue is callable; calls fn(matched, position, string) per match and stringifies the result.</summary>

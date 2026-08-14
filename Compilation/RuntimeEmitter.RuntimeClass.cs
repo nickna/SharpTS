@@ -372,6 +372,7 @@ public partial class RuntimeEmitter
         DefineJsonSingletonPopulateShell(typeBuilder, runtime);
         DefineStringPrototypePopulateShell(typeBuilder, runtime);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime);
+        DefineBigIntPrototypePopulateShell(typeBuilder, runtime);
         DefineBooleanPrototypePopulateShell(typeBuilder, runtime);
         DefineDatePrototypePopulateShell(typeBuilder, runtime);
         DefineErrorPrototypePopulateShell(typeBuilder, runtime);
@@ -541,6 +542,8 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
+        if (_features.UsesBigInt)
+            cctorIL.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
@@ -1075,6 +1078,7 @@ public partial class RuntimeEmitter
             EmitBigIntArithmetic(typeBuilder, runtime);
             EmitBigIntComparison(typeBuilder, runtime);
             EmitBigIntBitwise(typeBuilder, runtime);
+            EmitBigIntPrototypePopulate(typeBuilder, runtime);
         }
         // Promise methods moved earlier (before GetProperty, which needs PromiseThen for typeof p.then)
         // Number methods

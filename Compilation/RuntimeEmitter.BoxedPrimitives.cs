@@ -198,7 +198,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(descriptorLoopEnd);
         il.MarkLabel(skipStringDescriptors);
 
-        // Set prototype based on typeTag (Boolean/Number/String → matching singleton).
+        // Set prototype based on typeTag (Boolean/Number/String/BigInt → matching singleton).
         // Populate is called to ensure the prototype singleton has the right
         // methods (e.g. toString stub) before we link.
         void LinkProto(string tag, FieldBuilder protoField, MethodBuilder populate)
@@ -217,6 +217,8 @@ public partial class RuntimeEmitter
         LinkProto("Boolean", runtime.BooleanPrototypeField, runtime.BooleanPrototypePopulateMethod);
         LinkProto("Number",  runtime.NumberPrototypeField,  runtime.NumberPrototypePopulateMethod);
         LinkProto("String",  runtime.StringPrototypeField,  runtime.StringPrototypePopulateMethod);
+        if (_features.UsesBigInt)
+            LinkProto("BigInt", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod);
 
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Ret);
@@ -377,6 +379,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notNumLabel);
+
+        // BigInt → NewBoxedPrimitive("BigInt", arg)
+        var notBigIntLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, notBigIntLabel);
+        il.Emit(OpCodes.Ldstr, "BigInt");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.NewBoxedPrimitiveMethod);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBigIntLabel);
 
         // Symbol → NewBoxedPrimitive("Symbol", arg). ECMA-262 §7.1.18 step 4:
         // ToObject on a Symbol returns a fresh wrapper whose [[SymbolData]]

@@ -403,6 +403,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notStringMarkerLabel);
         EmitTag("[object String]");
         il.MarkLabel(notStringMarkerLabel);
+        var notBigIntMarkerLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, boxedTypeLocal);
+        il.Emit(OpCodes.Ldstr, "BigInt");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+        il.Emit(OpCodes.Brfalse, notBigIntMarkerLabel);
+        EmitTag("[object BigInt]");
+        il.MarkLabel(notBigIntMarkerLabel);
         il.MarkLabel(notBoxedTSObjectLabel);
 
         // JSON singleton
