@@ -519,6 +519,26 @@ public partial class RuntimeEmitter
         // `arr[i]` runs past the end during parsing.
         il.MarkLabel(tsArrayLabel);
 
+        // Object-valued property keys require ToPropertyKey with string hint
+        // before array-index classification. Sending a Dictionary/$Object
+        // directly to Convert.ToInt64 leaks InvalidCastException and skips
+        // observable toString/valueOf calls (including abrupt completion).
+        var tsArrayIndexIsPrimitiveLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        var tsArrayCoerceObjectKeyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, tsArrayCoerceObjectKeyLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, tsArrayIndexIsPrimitiveLabel);
+        il.MarkLabel(tsArrayCoerceObjectKeyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsArrayIndexIsPrimitiveLabel);
+
         // Non-numeric string index → route as named-property get (ECMA-262
         // §23.1.5). Convert.ToInt64("foo") throws FormatException — pre-fix
         // the array would crash when verifyProperty did `arr["foo"]` on a

@@ -217,6 +217,31 @@ public class IndexSignatureTests
 
     #endregion
 
+    [Theory, ModeData]
+    public void Array_ObjectIndexUsesStringHintPropertyKeyCoercion(ExecutionMode mode)
+    {
+        var source = """
+            const values: any[] = [10, 20];
+            const events: string[] = [];
+            const key: any = {
+                toString: function() { events.push("toString"); return "1"; },
+                valueOf: function() { events.push("valueOf"); return 0; }
+            };
+            console.log(values[key]);
+            console.log(events.join(","));
+
+            const abrupt: any = {
+                toString: function() { throw "key-error"; },
+                valueOf: function() { return 0; }
+            };
+            try { console.log(values[abrupt]); }
+            catch (error) { console.log(error); }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("20\ntoString\nkey-error\n", output);
+    }
+
     #region Class Instance Bracket Notation
 
     [Theory, ModeData]
