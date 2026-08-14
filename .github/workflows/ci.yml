@@ -98,8 +98,12 @@ jobs:
       # registry.npmjs.org (RealPackageSmokeTests) — same hermeticity policy as
       # LiveNetwork; the host-literal guardrail can't see package-name installs.
       # Run them on demand locally: dotnet test --filter "Category=npm"
-      - name: Test
-        run: dotnet test --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+      - name: Test core
+        run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+        timeout-minutes: 10
+
+      - name: Test GUI conformance
+        run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
       - name: Test NuGet release helper

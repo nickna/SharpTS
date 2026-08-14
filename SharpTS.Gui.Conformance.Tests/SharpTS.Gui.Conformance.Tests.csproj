@@ -33,6 +33,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <GuiConformancePackageSource Include="..\SharpTS.Gui.Sdk\GuiPackage\index.ts;..\SharpTS.Gui.Sdk\GuiPackage\devtools.ts;..\SharpTS.Gui.Sdk\GuiPackage\testing.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\jsx-dev-runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime.ts;..\SharpTS.Gui.Sdk\GuiPackage\runtime-types.ts;..\SharpTS.Gui.Sdk\GuiPackage\control-surface.generated.ts;..\SharpTS.Gui.Sdk\GuiPackage\control-docs.generated.json;..\SharpTS.Gui.Sdk\GuiPackage\package.json;Fixtures\conformance.ts" />
   </ItemGroup>
 
