@@ -144,7 +144,6 @@ public partial class RuntimeEmitter
         var state1Label = il.DefineLabel();  // Resume after flatten await (inside handler try)
         var continue0Label = il.DefineLabel();
         var continue1Label = il.DefineLabel();
-        var checkFlattenLabel = il.DefineLabel();
         var setResultLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
         var rejectionFlattenLabel = il.DefineLabel();
@@ -281,14 +280,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeCallback);
         il.Emit(OpCodes.Stloc, callbackResultLocal);
 
-        // Check if result is Task<object?> (needs flattening)
+        // Resolve the handler result through the Promise Resolve Functions
+        // algorithm before flattening it. This deliberately performs the
+        // observable `then` lookup even when the host value is already a
+        // Task-backed native Promise (an own `then` override must win), and
+        // turns an abrupt getter into a rejected task.
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Isinst, typeof(Task<object?>));
-        il.Emit(OpCodes.Brfalse, checkFlattenLabel);
-
-        // Result is a Task - flatten it
-        il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Castclass, typeof(Task<object?>));
+        il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var flattenAwaiterLocal = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Stloc, flattenAwaiterLocal);
@@ -328,12 +326,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.FlattenAwaiterField);
         il.Emit(OpCodes.Call, awaiterType.GetMethod("GetResult")!);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.Emit(OpCodes.Leave, setResultLabel);
-
-        // ========== checkFlattenLabel: callback returned non-Task ==========
-        il.MarkLabel(checkFlattenLabel);
-        il.Emit(OpCodes.Ldloc, callbackResultLocal);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, setResultLabel);
 
@@ -439,18 +431,20 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
         il.MarkLabel(handlerInvokeDoneLabel);
 
-        // Promise resolution adopts a Task returned by onRejected just as it
-        // does for onFulfilled. Keep the awaiter in the state machine so a
-        // pending recovery promise resumes outside this catch handler; CLR IL
-        // does not permit branching back into a catch region on resume.
+        // Keep the awaiter in the state machine so a pending recovery promise
+        // resumes outside this catch handler; CLR IL does not permit branching
+        // back into a catch region on resume.
         var rejectionTaskLocal = il.DeclareLocal(_types.TaskOfObject);
         var rejectionHandlerNonTaskLabel = il.DefineLabel();
         var rejectionTaskCompletedLabel = il.DefineLabel();
+
+        // A throwing handler rejects directly. Successful handler results use
+        // the same observable Promise Resolve path as fulfilled reactions.
+        il.Emit(OpCodes.Ldloc, handlerExceptionLocal);
+        il.Emit(OpCodes.Brtrue, rejectionHandlerNonTaskLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
         il.Emit(OpCodes.Stloc, rejectionTaskLocal);
-        il.Emit(OpCodes.Ldloc, rejectionTaskLocal);
-        il.Emit(OpCodes.Brfalse, rejectionHandlerNonTaskLabel);
         il.Emit(OpCodes.Ldloc, rejectionTaskLocal);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var rejectionAwaiterLocal = il.DeclareLocal(awaiterType);

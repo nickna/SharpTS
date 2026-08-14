@@ -390,13 +390,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Br, fastPathLabel);
 
-        // Branch B: raw Task<object> → fast path directly.
+        // Branch B: raw Task<object>. Its ordinary own descriptors live in
+        // the shared descriptor store just like $Promise expandos, so an own
+        // `then` must take the dynamic invocation path.
         il.MarkLabel(notTSPromiseLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.TaskOfObject);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Stloc, taskLocal);
         il.Emit(OpCodes.Brfalse, userThenPathLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "then");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, userThenPathLabel);
         il.Emit(OpCodes.Br, fastPathLabel);
 
         il.MarkLabel(fastPathLabel);

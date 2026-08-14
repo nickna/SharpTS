@@ -213,14 +213,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.InvokeCallbackNoArgs);
         il.Emit(OpCodes.Stloc, callbackResultLocal);
 
-        // Check if result is Task<object?> (needs awaiting)
+        // Await PromiseResolve(result), including the observable `then` lookup
+        // required for native promises whose method was overridden.
         il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Isinst, typeof(Task<object?>));
-        il.Emit(OpCodes.Brfalse, setResultLabel);
-
-        // Result is a Task - await it
-        il.Emit(OpCodes.Ldloc, callbackResultLocal);
-        il.Emit(OpCodes.Castclass, typeof(Task<object?>));
+        il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
         il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
         var callbackAwaiterLocal = il.DeclareLocal(awaiterType);
         il.Emit(OpCodes.Stloc, callbackAwaiterLocal);

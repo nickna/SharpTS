@@ -1981,15 +1981,17 @@ public abstract partial class ExpressionEmitterBase
         var promiseReceiverLocal = IL.DeclareLocal(typeof(object));
         IL.Emit(OpCodes.Stloc, promiseReceiverLocal);
 
-        // Promise.prototype.finally is specified in terms of an observable
-        // Get(promise, "then") followed by Invoke.  Keep compiled instance
-        // calls on the same helper path as Promise.prototype.finally.call(...)
-        // so own accessors/replacements are not bypassed by the Task fast path.
-        if (methodName == "finally")
+        // Promise.prototype.catch/finally are specified in terms of an
+        // observable Get(promise, "then") followed by Invoke. Keep compiled
+        // instance calls on their prototype-helper paths so own accessors or
+        // replacements are not bypassed by the Task fast path.
+        if (methodName is "catch" or "finally")
         {
             IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
             EmitBoxedArgOrNull(arguments, 0);
-            IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFinallyHelperMethod);
+            IL.Emit(OpCodes.Call, methodName == "catch"
+                ? Ctx.Runtime!.PromiseCatchHelperMethod
+                : Ctx.Runtime!.PromiseFinallyHelperMethod);
             SetStackUnknown();
             return;
         }
@@ -2010,17 +2012,6 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Ldloc, onFulfilledLocal);
                 IL.Emit(OpCodes.Ldloc, onRejectedLocal);
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
-                break;
-            case "catch":
-                var catchHandlerLocal = IL.DeclareLocal(typeof(object));
-                EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Stloc, catchHandlerLocal);
-                IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.ObservePromiseConstructorMethod);
-                IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.UnwrapPromiseReceiverMethod);
-                IL.Emit(OpCodes.Ldloc, catchHandlerLocal);
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseCatch);
                 break;
         }
 

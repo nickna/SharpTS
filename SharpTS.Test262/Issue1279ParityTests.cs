@@ -6040,6 +6040,15 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Promise_resolve_uses_capabilities_and_queued_thenable_jobs(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/prototype/finally/rejected-observable-then-calls.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-pending-fulfilled-poisoned-then.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-pending-fulfilled-prms-cstm-then.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-pending-rejected-poisoned-then.js")]
+    [InlineData("built-ins/Promise/prototype/then/resolve-pending-rejected-prms-cstm-then.js")]
+    public void Promise_reactions_adopt_observable_thenables(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
