@@ -548,8 +548,9 @@ public partial class RuntimeEmitter
     /// to the boxed-primitive fast path, this performs the observable first
     /// step of default-hint OrdinaryToPrimitive for dictionary-backed objects:
     /// an own callable <c>valueOf</c> is invoked before string conversion. This
-    /// is shared by abstract equality and addition, both of which require
-    /// ToPrimitive before choosing their comparison/concatenation branch.
+    /// Addition applies this to both operands. Abstract equality applies it
+    /// only to an object operand paired with a non-nullish primitive; nullish
+    /// and object-to-object comparisons must bypass this observable conversion.
     /// </summary>
     /// <summary>
     /// Defines the <c>UnwrapIfBoxed</c> MethodBuilder shell (no body). Emitted

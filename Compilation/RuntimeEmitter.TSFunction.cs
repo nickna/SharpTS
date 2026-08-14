@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
         // name/arity, so repeated references still return the same instance.
         // Only applies to target=null wrappers (static function declarations) —
         // bound/closure wrappers carry state and must stay fresh.
-        var instanceCacheKeyType = typeof(ValueTuple<,,>).MakeGenericType(
+        var instanceCacheKeyType = _types.MakeGenericType(typeof(ValueTuple<,,>),
             _types.MethodInfo, _types.String, _types.Int32);
         var instanceCacheType = _types.MakeGenericType(
             _types.ConcurrentDictionaryOpen, instanceCacheKeyType, typeBuilder);

@@ -112,6 +112,72 @@ public class NullishEqualityFastPathTests
     }
 
     [Theory, ModeData]
+    public void LooseEquality_RuntimeFallbackOnlyCoercesObjectAgainstPrimitive(ExecutionMode mode)
+    {
+        // Keep both operands behind function parameters so compiled mode must use
+        // $Runtime.Equals instead of the literal-nullish fast path.
+        var source = """
+            function equal(left: any, right: any): boolean {
+                return left == right;
+            }
+            function notEqual(left: any, right: any): boolean {
+                return left != right;
+            }
+            function unexpectedCoercion(): any {
+                throw new Error("unexpected coercion");
+            }
+
+            const objectValue: any = {
+                [Symbol.toPrimitive]: unexpectedCoercion,
+                valueOf: unexpectedCoercion,
+                toString: unexpectedCoercion
+            };
+            const otherObject: any = {
+                [Symbol.toPrimitive]: unexpectedCoercion,
+                valueOf: unexpectedCoercion,
+                toString: unexpectedCoercion
+            };
+
+            console.log(
+                equal(objectValue, null), notEqual(objectValue, null),
+                equal(null, objectValue), notEqual(null, objectValue));
+            console.log(
+                equal(objectValue, undefined), notEqual(objectValue, undefined),
+                equal(undefined, objectValue), notEqual(undefined, objectValue));
+            console.log(equal(objectValue, objectValue), notEqual(objectValue, objectValue));
+            console.log(equal(objectValue, otherObject), notEqual(objectValue, otherObject));
+
+            const firstFunction: any = function () { };
+            const secondFunction: any = function () { };
+            firstFunction.valueOf = unexpectedCoercion;
+            firstFunction.toString = unexpectedCoercion;
+            secondFunction.valueOf = unexpectedCoercion;
+            secondFunction.toString = unexpectedCoercion;
+            console.log(equal(firstFunction, firstFunction), notEqual(firstFunction, firstFunction));
+            console.log(equal(firstFunction, secondFunction), notEqual(firstFunction, secondFunction));
+            console.log(equal(objectValue, firstFunction), notEqual(firstFunction, objectValue));
+
+            let valueOfCalls = 0;
+            const numericObject: any = {
+                valueOf: function () { valueOfCalls++; return 7; },
+                toString: unexpectedCoercion
+            };
+            console.log(equal(numericObject, 7), notEqual(7, numericObject), valueOfCalls);
+            """;
+
+        Assert.Equal(
+            "false true false true\n" +
+            "false true false true\n" +
+            "true false\n" +
+            "false true\n" +
+            "true false\n" +
+            "false true\n" +
+            "false true\n" +
+            "true false 2\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void NullGuardedTreeTraversal(ExecutionMode mode)
     {
         // The binary-trees idiom: `node === null` driving recursion. Exercises the fast

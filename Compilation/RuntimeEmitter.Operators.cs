@@ -884,10 +884,10 @@ public partial class RuntimeEmitter
         var undefinedNanLabel = il.DefineLabel();
 
         // ECMA-262 §13.10.1 step 1-2: ToPrimitive both operands (default hint)
-        // before the string-vs-numeric branch. UnwrapIfBoxed handles the boxed-
-        // primitive case (`new String("x") + "y"` → "xy" instead of
-        // "[object Object]y"); plain $Object operands pass through unchanged
-        // and continue to the existing Stringify path which calls .ToString().
+        // before the string-vs-numeric branch. UnwrapIfBoxed handles boxed
+        // primitives and the observable valueOf/toString conversion for plain
+        // objects (`new String("x") + "y"` → "xy" instead of
+        // "[object Object]y").
         var leftLocal = il.DeclareLocal(_types.Object);
         var rightLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
@@ -960,29 +960,21 @@ public partial class RuntimeEmitter
         var method = runtime.Equals;
 
         var il = method.GetILGenerator();
-        var trueLabel = il.DefineLabel();
-        var falseLabel = il.DefineLabel();
         var checkRightNullish = il.DefineLabel();
         var notBothNullish = il.DefineLabel();
         var objectEqualsLabel = il.DefineLabel();
         var endLabel = il.DefineLabel();
 
-        // ECMA-262 §7.2.14 step 11/12: when one operand is an Object and the
-        // other a primitive, IsLooselyEqual delegates to ToPrimitive on the
-        // Object then re-runs. For boxed-primitive wrappers the spec'd
-        // OrdinaryToPrimitive lands at __primitiveValue via valueOf, so unwrap
-        // upfront and let the existing primitive-vs-primitive logic do the
-        // rest. Plain $Object operands without a __primitiveType marker pass
-        // through unchanged (UnwrapIfBoxed is a no-op there) and continue to
-        // the existing Dict/$Object-vs-primitive ToNumber path below, which
-        // handles `Number.prototype == 0` and similar.
+        // Retain the original operands until nullish and object-like
+        // classification is complete. UnwrapIfBoxed performs observable
+        // ToPrimitive work for plain objects, so calling it before these checks
+        // would incorrectly invoke coercion hooks for object == null and for
+        // object == object.
         var leftLocal = il.DeclareLocal(_types.Object);
         var rightLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
         il.Emit(OpCodes.Stloc, leftLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
         il.Emit(OpCodes.Stloc, rightLocal);
 
         // Local to track if left is nullish
@@ -1027,17 +1019,78 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(afterRightCheck);
 
-        // If both are nullish, return true (null == undefined)
+        // Nullish combinations are terminal and must not reach ToPrimitive.
+        // If both are nullish, return true (null == undefined).
+        var notBothNullishLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, leftNullish);
         il.Emit(OpCodes.Ldloc, rightNullish);
         il.Emit(OpCodes.And);
-        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.Emit(OpCodes.Brfalse, notBothNullishLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBothNullishLabel);
 
-        // If only one is nullish, return false
+        // If only one is nullish, return false.
+        var neitherNullishLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, leftNullish);
         il.Emit(OpCodes.Ldloc, rightNullish);
         il.Emit(OpCodes.Or);
-        il.Emit(OpCodes.Brtrue, falseLabel);
+        il.Emit(OpCodes.Brfalse, neitherNullishLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(neitherNullishLabel);
+
+        // Classify every non-nullish value through the runtime's JS typeof
+        // implementation. Both "object" and "function" are object-like here,
+        // covering $TSFunction, bound functions, delegates, class references,
+        // and object-valued union wrappers without duplicating TypeOf's catalog.
+        var leftObjectLike = il.DeclareLocal(_types.Boolean);
+        var rightObjectLike = il.DeclareLocal(_types.Boolean);
+        void EmitObjectLikeClassification(LocalBuilder operand, LocalBuilder result)
+        {
+            var typeOfLocal = il.DeclareLocal(_types.String);
+            il.Emit(OpCodes.Ldloc, operand);
+            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Stloc, typeOfLocal);
+            il.Emit(OpCodes.Ldloc, typeOfLocal);
+            il.Emit(OpCodes.Ldstr, "object");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Ldloc, typeOfLocal);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Or);
+            il.Emit(OpCodes.Stloc, result);
+        }
+
+        EmitObjectLikeClassification(leftLocal, leftObjectLike);
+        EmitObjectLikeClassification(rightLocal, rightObjectLike);
+
+        // IsLooselyEqual compares two objects by identity/equality without
+        // ToPrimitive, even when either object is callable.
+        il.Emit(OpCodes.Ldloc, leftObjectLike);
+        il.Emit(OpCodes.Ldloc, rightObjectLike);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Brtrue, objectEqualsLabel);
+
+        // ECMA-262 §7.2.14 steps 11/12: only the object operand is converted
+        // when exactly one side is object-like and the other is a non-nullish
+        // primitive. Primitive/primitive comparisons skip this observable path.
+        var checkRightObjectLikeLabel = il.DefineLabel();
+        var operandsReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, leftObjectLike);
+        il.Emit(OpCodes.Brfalse, checkRightObjectLikeLabel);
+        il.Emit(OpCodes.Ldloc, leftLocal);
+        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Stloc, leftLocal);
+        il.Emit(OpCodes.Br, operandsReadyLabel);
+
+        il.MarkLabel(checkRightObjectLikeLabel);
+        il.Emit(OpCodes.Ldloc, rightObjectLike);
+        il.Emit(OpCodes.Brfalse, operandsReadyLabel);
+        il.Emit(OpCodes.Ldloc, rightLocal);
+        il.Emit(OpCodes.Call, runtime.UnwrapIfBoxedMethod);
+        il.Emit(OpCodes.Stloc, rightLocal);
+        il.MarkLabel(operandsReadyLabel);
 
         // ECMA-262 7.2.14 IsLooselyEqual: when one side is a Dictionary/$Object
         // and the other is a String, Number, or Boolean, the spec calls
@@ -1133,18 +1186,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notRightCoercibleLabel);
 
-        // Neither is nullish - use object.Equals
+        // Primitive equality and object identity/equality share the existing
+        // Object.Equals terminal path. Object/object branches arrive here with
+        // the untouched original operands.
+        il.MarkLabel(objectEqualsLabel);
         il.Emit(OpCodes.Ldloc, leftLocal);
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Br, endLabel);
-
-        il.MarkLabel(trueLabel);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Br, endLabel);
-
-        il.MarkLabel(falseLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
 
         il.MarkLabel(endLabel);
         il.Emit(OpCodes.Ret);
