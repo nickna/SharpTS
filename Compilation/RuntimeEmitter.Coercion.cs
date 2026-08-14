@@ -1217,6 +1217,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, doToPrimLabelTop);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, doToPrimLabelTop);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, skipToPrimLabelTop);
         il.MarkLabel(doToPrimLabelTop);
 
@@ -1324,6 +1327,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, doThrowN);
         il.Emit(OpCodes.Ldloc, toPrimResultLocalN);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Brtrue, doThrowN);
+        il.Emit(OpCodes.Ldloc, toPrimResultLocalN);
         il.Emit(OpCodes.Stloc, argLocal);
         il.Emit(OpCodes.Br, afterToPrimSymN);
         il.MarkLabel(doThrowN);
@@ -1351,6 +1357,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, continueOrdinaryNumberLabel);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, continueOrdinaryNumberLabel);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, skipToPrimLabelTop);
         il.MarkLabel(continueOrdinaryNumberLabel);
 
@@ -1394,6 +1403,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSObjectType);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, resLoc);
+            il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Brtrue, afterLabel);
+            il.Emit(OpCodes.Ldloc, resLoc);
             il.Emit(OpCodes.Stloc, argLocal);
         }
 
@@ -1408,6 +1420,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, stillObjT);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, stillObjT);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, afterToStringT);
         il.MarkLabel(stillObjT);
         TryToPrim2("toString", afterToStringT);
@@ -1421,6 +1436,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, stillObjTeT);
         il.Emit(OpCodes.Ldloc, argLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, stillObjTeT);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, afterTeT);
         il.MarkLabel(stillObjTeT);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");

@@ -1668,6 +1668,10 @@ public partial class RuntimeEmitter
         runtime.ArraySortProto = method;
 
         var il = method.GetILGenerator();
+        // Validate comparefn before ToObject/LengthOfArrayLike. A poisoned
+        // receiver length getter must not run when comparefn is non-callable.
+        EmitThrowIfCallbackNotCallable(
+            il, runtime, 1, "Array.prototype.sort comparator", allowUndefined: true);
         var receiver = il.DeclareLocal(_types.Object);
         var materialized = il.DeclareLocal(_types.ListOfObject);
         var previousReceiver = il.DeclareLocal(_types.Object);
@@ -2478,12 +2482,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, coercedLocal);
 
         var notObjectLabel = il.DefineLabel();
+        // ToNumber already owns the complete ToPrimitive(number) protocol,
+        // including inherited valueOf, @@toPrimitive, boxed primitives, and
+        // abrupt completions. Keep ToIntegerOrInfinity responsible only for
+        // the numeric truncation/infinity step instead of maintaining a
+        // second object-coercion implementation here.
+        il.Emit(OpCodes.Br, notObjectLabel);
         var isObjectLikeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, coercedLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
+        il.Emit(OpCodes.Ldloc, coercedLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         // ECMA-262 ToNumber([1]) → ToPrimitive routes via valueOf/toString,
         // and Array.prototype.toString returns the comma-joined representation.
@@ -2566,6 +2579,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSObjectType);
             il.Emit(OpCodes.Brtrue, afterLabel);
             il.Emit(OpCodes.Ldloc, invResultLocal);
+            il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Brtrue, afterLabel);
+            il.Emit(OpCodes.Ldloc, invResultLocal);
             il.Emit(OpCodes.Stloc, coercedLocal);
         }
 
@@ -2579,6 +2595,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, stillObjectLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, stillObjectLabel);
+        il.Emit(OpCodes.Ldloc, coercedLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, stillObjectLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
         il.Emit(OpCodes.Isinst, _types.ListOfObject);
@@ -2606,6 +2625,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, stillObjThrowLabel);
         il.Emit(OpCodes.Ldloc, coercedLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, stillObjThrowLabel);
+        il.Emit(OpCodes.Ldloc, coercedLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, afterToPrimCheck);
         il.MarkLabel(stillObjThrowLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");

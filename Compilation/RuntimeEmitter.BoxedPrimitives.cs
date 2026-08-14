@@ -626,16 +626,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, emptyArgs);
 
-        var noOwnValueOf = il.DefineLabel();
+        var noCallableValueOf = il.DefineLabel();
         var useStringFallback = il.DefineLabel();
-        // if (!HasOwnPropertyHelper(arg, "valueOf")) goto noOwnValueOf
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldstr, "valueOf");
-        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
-        il.Emit(OpCodes.Brfalse, noOwnValueOf);
-        // fn = GetProperty(arg, "valueOf"); a non-callable own property is
-        // skipped by OrdinaryToPrimitive and therefore falls through to
-        // toString.
+        // OrdinaryToPrimitive uses ordinary [[Get]], so an inherited custom
+        // valueOf must be observed just like an own method. A missing or
+        // non-callable method falls through to the boxed-slot fast path (when
+        // applicable), then toString.
         var fnLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "valueOf");
@@ -646,7 +642,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "function");
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, useStringFallback);
+        il.Emit(OpCodes.Brfalse, noCallableValueOf);
         // res = InvokeMethodValue(arg, fn, emptyArgs) — a throwing override
         // propagates naturally.
         var resLocal = il.DeclareLocal(_types.Object);
@@ -665,7 +661,7 @@ public partial class RuntimeEmitter
         // Primitive (incl. null/undefined/string/number/bool) → return it.
         il.Emit(OpCodes.Ldloc, resLocal);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(noOwnValueOf);
+        il.MarkLabel(noCallableValueOf);
 
         // No own override on a boxed primitive: its inherited valueOf returns
         // [[PrimitiveValue]], so use the internal slot directly.
