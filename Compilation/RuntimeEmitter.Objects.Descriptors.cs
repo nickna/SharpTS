@@ -88,6 +88,26 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brfalse, notSymbolLabel);
 
+        // A symbol property uses a separate key dictionary, but it is still an
+        // ordinary own property for [[Extensible]]. Existing symbol keys may be
+        // redefined; creating a new one on a non-extensible target must throw.
+        var symbolCanDefineLabel = il.DefineLabel();
+        var symbolDefineDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Stloc, symbolDefineDictLocal);
+        il.Emit(OpCodes.Ldloc, symbolDefineDictLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "ContainsKey", _types.Object));
+        il.Emit(OpCodes.Brtrue, symbolCanDefineLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsExtensible);
+        il.Emit(OpCodes.Brtrue, symbolCanDefineLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Cannot define property on a non-extensible object");
+        il.MarkLabel(symbolCanDefineLabel);
+
         var symbolDescriptorHolderLocal = il.DeclareLocal(_types.DictionaryStringObject);
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, symbolDescriptorHolderLocal);
@@ -1160,7 +1180,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
         il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
-        il.Emit(OpCodes.Pop);  // Discard bool result
+        var descriptorStoredLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, descriptorStoredLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Cannot define property on a non-extensible object");
+        il.MarkLabel(descriptorStoredLabel);
 
         // ArrayDefineOwnProperty updates [[ArrayLength]] for every newly
         // defined numeric index, including accessor descriptors that have no

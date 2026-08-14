@@ -383,6 +383,35 @@ public class SharpTSProxy : ISharpTSCallable
         return true;
     }
 
+    /// <summary>
+    /// Compiled-runtime [[PreventExtensions]] dispatch. Ordinary target
+    /// operations are supplied by the emitted runtime so its descriptor-store
+    /// state participates in the proxy invariant check.
+    /// </summary>
+    public bool TrapPreventExtensionsCompiled(
+        Func<object, object?> ordinaryPreventExtensions,
+        Func<object, bool> ordinaryIsExtensible)
+    {
+        var trap = GetTrapCallable("preventExtensions", null);
+        if (trap == null)
+        {
+            if (_target is SharpTSProxy proxy)
+                return proxy.TrapPreventExtensionsCompiled(
+                    ordinaryPreventExtensions, ordinaryIsExtensible);
+            _ = ordinaryPreventExtensions(_target);
+            return true;
+        }
+
+        bool result = ToBoolean(InvokeTrap(trap, null, [_target]));
+        if (!result) return false;
+        if (ordinaryIsExtensible(_target))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy preventExtensions trap returned true for an extensible target"));
+        }
+        return true;
+    }
+
     public object? TrapSet(string prop, object? value, Interpreter? interp)
     {
         TrapSetProperty(prop, value, interp, interp != null ? this : null);

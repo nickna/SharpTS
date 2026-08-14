@@ -914,6 +914,18 @@ public partial class RuntimeEmitter
         var keyLocal = il.DeclareLocal(_types.Object);
         EmitNormalizePDSKey(il, runtime, keyLocal);
 
+        // OrdinaryDefineOwnProperty cannot create a new property on a
+        // non-extensible receiver. Existing backing or descriptor properties
+        // remain redefinable and are recognized by CanAddProperty.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
+        var canDefinePropertyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, canDefinePropertyLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(canDefinePropertyLabel);
+
         // var descriptors = _descriptors.GetOrCreateValue(key);
         il.Emit(OpCodes.Ldsfld, descriptorsField);
         il.Emit(OpCodes.Ldloc, keyLocal);

@@ -1498,13 +1498,14 @@ public partial class RuntimeEmitter
             il.MarkLabel(listSetNumericKeyLabel);
 
             var listSetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var listSetCanCreate = il.DefineLabel();
             var listSetRawStorage = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listSetKeyLocal);
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, listSetDescriptorLocal);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
-            il.Emit(OpCodes.Brfalse, listSetRawStorage);
+            il.Emit(OpCodes.Brfalse, listSetCanCreate);
             var listSetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
@@ -1532,6 +1533,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, nullLabel);
             il.Emit(OpCodes.Ldloc, listSetDescriptorLocal);
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            il.Emit(OpCodes.Br, listSetRawStorage);
+
+            il.MarkLabel(listSetCanCreate);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, listSetKeyLocal);
+            il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
             il.Emit(OpCodes.Brfalse, nullLabel);
             il.MarkLabel(listSetRawStorage);
 

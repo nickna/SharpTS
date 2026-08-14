@@ -167,6 +167,45 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnLabel);
 
+        // Proxy [[PreventExtensions]] dispatch. False becomes the mandated
+        // Object.preventExtensions TypeError; trap throws and invariant
+        // violations propagate through the common proxy reflection bridge.
+        var notProxyForPreventExtensionsLabel = il.DefineLabel();
+        var proxyForPreventExtensionsLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0),
+            proxyForPreventExtensionsLabel, notProxyForPreventExtensionsLabel);
+        il.MarkLabel(proxyForPreventExtensionsLabel);
+        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapPreventExtensionsCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectPreventExtensions);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object?>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, bool>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        var proxyPreventExtensionsSucceededLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, proxyPreventExtensionsSucceededLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Proxy preventExtensions trap returned false");
+        il.MarkLabel(proxyPreventExtensionsSucceededLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyForPreventExtensionsLabel);
+
         // If obj is a $Object, set its instance _isNonExtensible flag so the
         // instance-method SetProperty path honors non-extensibility for new
         // properties. The PDS/CWT bookkeeping below is the cross-type record.

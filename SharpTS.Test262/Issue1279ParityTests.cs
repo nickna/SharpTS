@@ -5915,6 +5915,16 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-11.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-14.js")]
+    [InlineData("built-ins/Object/preventExtensions/15.2.3.10-3-21.js")]
+    [InlineData("built-ins/Object/preventExtensions/abrupt-completion.js")]
+    [InlineData("built-ins/Object/preventExtensions/symbol-object-contains-symbol-properties-strict.js")]
+    [InlineData("built-ins/Object/preventExtensions/throws-when-false.js")]
+    public void PreventExtensions_is_shared_by_property_carriers_and_proxies(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Array/prototype/indexOf/15.4.4.14-9-a-19.js")]
     [InlineData("built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-19.js")]
     public void Array_search_preserves_nonconfigurable_tail_elements(string relativePath)
