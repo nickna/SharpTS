@@ -695,6 +695,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, alreadyStringLabel);
 
+        // Classic-script top-level `this` is the global object. Its `var`
+        // bindings are mirrored into GlobalThisProperties, so ToString must
+        // observe a live global `toString` override just like an ordinary
+        // object's own method. If no callable override exists, retain the
+        // legacy fallback below.
+        var notGlobalThisLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Bne_Un, notGlobalThisLabel);
+        var globalToStringLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, runtime.GlobalThisGetProperty);
+        il.Emit(OpCodes.Stloc, globalToStringLocal);
+        il.Emit(OpCodes.Ldloc, globalToStringLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, fallbackLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, globalToStringLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notGlobalThisLabel);
+
         // ECMA-262 22.3.7 Arguments.prototype.toString inherits from
         // Object.prototype.toString → "[object Arguments]". Without this
         // check, $Arguments (which extends List<object>) hits the List

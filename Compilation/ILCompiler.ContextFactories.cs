@@ -190,6 +190,8 @@ public partial class ILCompiler
         ctx.EntryPointDisplayClassCtor = _closures.EntryPointDisplayClassCtor;
         // Top-level statements run here: var/let/const are module-level bindings (#562).
         ctx.IsModuleTopLevel = true;
+        // The single-file entry point has classic-script global semantics.
+        ctx.IsScriptTopLevel = true;
         AttachLocalSymbols(ctx);
         return ctx;
     }

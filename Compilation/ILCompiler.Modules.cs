@@ -700,6 +700,7 @@ public partial class ILCompiler
         _modules.CurrentPath = null;
         var ctx = CreateModuleTopLevelContext(il, initMethod);
         _modules.CurrentPath = savedPath;
+        ctx.IsScriptTopLevel = true;
         ctx.CurrentModulePath = script.Path;
         ctx.ModuleExportFields = _modules.ExportFields;
         ctx.ModuleTypes = _modules.Types;

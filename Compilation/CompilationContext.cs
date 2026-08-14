@@ -189,6 +189,14 @@ public partial class CompilationContext
     /// </summary>
     public bool IsModuleTopLevel { get; set; }
 
+    /// <summary>
+    /// True when the current top-level context represents a classic script
+    /// global environment rather than an ES/CommonJS module. Top-level
+    /// <c>var</c> bindings in this mode also materialize as properties of the
+    /// global object; lexical declarations and module bindings do not.
+    /// </summary>
+    public bool IsScriptTopLevel { get; set; }
+
     // Namespace support: namespace path -> static field
     public Dictionary<string, FieldBuilder>? NamespaceFields { get; set; }
 

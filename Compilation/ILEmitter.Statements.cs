@@ -32,6 +32,16 @@ public partial class ILEmitter
 
     protected override void EmitVarDeclaration(Stmt.Var v)
     {
+        void MirrorScriptVarToGlobal(Action emitValue)
+        {
+            if (!_ctx.IsScriptTopLevel || !v.IsVar)
+                return;
+
+            IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
+            emitValue();
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
+        }
+
         // Module-level storage (static field / entry-point display class) is only the right
         // target when this declaration IS a module-level binding: we are emitting the module
         // top-level statements (IsModuleTopLevel) and not inside a nested block. Inside a
@@ -83,6 +93,14 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Stfld, displayField);
+                MirrorScriptVarToGlobal(() =>
+                {
+                    if (_ctx.EntryPointDisplayClassLocal != null)
+                        IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+                    else
+                        IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField!);
+                    IL.Emit(OpCodes.Ldfld, displayField);
+                });
                 return;
             }
 
@@ -112,6 +130,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                     IL.Emit(OpCodes.Stsfld, staticField);
                 }
+                MirrorScriptVarToGlobal(() => IL.Emit(OpCodes.Ldsfld, staticField));
                 return;
             }
         }

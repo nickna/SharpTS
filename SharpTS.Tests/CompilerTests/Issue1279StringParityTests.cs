@@ -6,6 +6,17 @@ namespace SharpTS.Tests.CompilerTests;
 public class Issue1279StringParityTests
 {
     [Fact]
+    public void String_Of_Script_Global_Uses_Global_Var_ToString()
+    {
+        const string source = """
+            var toString = function() { return "__THIS__"; };
+            console.log(String(this));
+            """;
+
+        Assert.Equal("__THIS__\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void String_ValueOf_Rejects_Every_Non_String_Receiver()
     {
         const string source = """
