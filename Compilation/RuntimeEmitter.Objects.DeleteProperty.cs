@@ -588,6 +588,19 @@ public partial class RuntimeEmitter
 
         // $TSObject - call the DeleteProperty / DeletePropertyStrict instance method
         il.MarkLabel(sharpTSObjectLabel);
+
+        // SetIntegrityLevel makes every existing own property non-configurable.
+        // The stable PDS descriptor intentionally retains its original bit, so
+        // consult the receiver's effective sealed state before either the
+        // sloppy or strict deletion path. This mirrors the dictionary/array
+        // branches and keeps accessor-backed constructor instances intact.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        var tsObjectNotSealedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, tsObjectNotSealedLabel);
+        EmitDeleteFail("' of a sealed object");
+        il.MarkLabel(tsObjectNotSealedLabel);
+
         if (strict)
         {
             // Indexed/named writes on $Object may have both a live _fields entry

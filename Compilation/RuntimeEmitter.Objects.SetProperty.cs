@@ -1152,6 +1152,16 @@ public partial class RuntimeEmitter
             EmitInvokePdsSetterWithValueAndReturn(il, runtime, tsFnSetterLocal);
             il.MarkLabel(tsFnNoSetterLabel);
 
+            // Freezing changes every data property's effective [[Writable]]
+            // to false without mutating the stable stored descriptor. Accessor
+            // setters were handled above and remain callable after freeze.
+            var tsFnNotFrozenLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+            il.Emit(OpCodes.Brfalse, tsFnNotFrozenLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(tsFnNotFrozenLabel);
+
             var tsFnExistingDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -1680,10 +1690,68 @@ public partial class RuntimeEmitter
             EmitCjsModuleExportsSetBranch(il, runtime);
         }
 
-        // $TSFunction handler: create data descriptor with the value, store via PDSDefineProperty
+        // $TSFunction handler: ordinary [[Set]] over PDS-backed function
+        // properties, including accessors and effective integrity-level state.
         il.MarkLabel(tsFunctionSetStrictLabel);
-        EmitDefineDataDescriptorFromValue(il, runtime);
-        il.Emit(OpCodes.Ret);
+        {
+            var tsFnStrictSetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, tsFnStrictSetterLocal);
+            il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+            var tsFnStrictNoSetterLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, tsFnStrictNoSetterLabel);
+            EmitInvokePdsSetterWithValueAndReturn(il, runtime, tsFnStrictSetterLocal);
+            il.MarkLabel(tsFnStrictNoSetterLabel);
+
+            var tsFnStrictDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsFnStrictDescriptorLocal);
+            var tsFnStrictNewPropertyLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, tsFnStrictDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, tsFnStrictNewPropertyLabel);
+
+            // Getter-only/accessor-with-undefined-setter and non-writable data
+            // descriptors reject assignment. A frozen data property is also
+            // effectively non-writable even if its stored bit remains true.
+            var tsFnStrictRejectLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, tsFnStrictDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, tsFnStrictRejectLabel);
+            il.Emit(OpCodes.Ldloc, tsFnStrictDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, tsFnStrictRejectLabel);
+            il.Emit(OpCodes.Ldloc, tsFnStrictDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, tsFnStrictRejectLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+            il.Emit(OpCodes.Brtrue, tsFnStrictRejectLabel);
+            il.Emit(OpCodes.Ldloc, tsFnStrictDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(tsFnStrictRejectLabel);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
+
+            il.MarkLabel(tsFnStrictNewPropertyLabel);
+            var tsFnStrictCanAddLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
+            il.Emit(OpCodes.Brtrue, tsFnStrictCanAddLabel);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            EmitThrowTypeErrorWithName(il, runtime, "Cannot add property '", "' to a non-extensible function");
+            il.MarkLabel(tsFnStrictCanAddLabel);
+            EmitDefineDataDescriptorFromValue(il, runtime);
+            il.Emit(OpCodes.Ret);
+        }
 
         // $Object - honor PDS accessors/read-only data properties before the
         // TSObject dictionary fast path.

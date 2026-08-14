@@ -3122,6 +3122,21 @@ public partial class RuntimeEmitter
         var indexLocal = il.DeclareLocal(_types.Int32);
         var keyLocal = il.DeclareLocal(_types.Object);
         var descLocal = il.DeclareLocal(_types.Object);
+
+        // ECMA-262 §20.1.2.3 step 1: ToObject throws for null/undefined.
+        // Do this before allocating/enumerating so the guest observes a
+        // TypeError rather than a host NullReferenceException wrapped as Error.
+        var descriptorsReceiverThrowLabel = il.DefineLabel();
+        var descriptorsReceiverContinueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, descriptorsReceiverThrowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, descriptorsReceiverContinueLabel);
+        il.MarkLabel(descriptorsReceiverThrowLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
+        il.MarkLabel(descriptorsReceiverContinueLabel);
+
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 

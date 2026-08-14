@@ -23,6 +23,56 @@ public sealed class Issue1279ParityRuntimeTests
     }
 
     [Fact]
+    public void Integrity_levels_apply_to_descriptor_backed_constructor_instances()
+    {
+        const string source = """
+            var prototype: any = {};
+            var Constructor: any = function() {};
+            Constructor.prototype = prototype;
+            var instance: any = new Constructor();
+            Object.defineProperty(instance, "property", {
+              get: function() { return 10; },
+              configurable: true
+            });
+            console.log(Object.getOwnPropertyDescriptor(instance, "property").configurable);
+            Object.freeze(instance);
+            console.log(Object.isFrozen(instance));
+            console.log(Object.getOwnPropertyDescriptor(instance, "property").configurable);
+            console.log(instance.property);
+            console.log(delete instance.property);
+            console.log(Object.hasOwn(instance, "property"));
+            """;
+
+        Assert.Equal("true\ntrue\nfalse\n10\nfalse\ntrue\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Freeze_applies_to_function_expando_properties()
+    {
+        const string source = """
+            var functionObject: any = function() {};
+            functionObject.property = 10;
+            var setterValue = 0;
+            Object.defineProperty(functionObject, "accessor", {
+              set: function(value) { setterValue = value; }
+            });
+            Object.freeze(functionObject);
+            console.log(Object.getOwnPropertyDescriptor(functionObject, "property").writable);
+            functionObject.property = 20;
+            console.log(functionObject.property);
+            functionObject.accessor = 5;
+            console.log(setterValue);
+            function strictWrite() {
+              "use strict";
+              functionObject.property = 30;
+            }
+            try { strictWrite(); } catch (error) { console.log(error instanceof TypeError); }
+            """;
+
+        Assert.Equal("false\n10\n5\ntrue\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void Strict_array_index_writes_observe_accessors_and_in_reports_them()
     {
         const string source = """

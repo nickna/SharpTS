@@ -339,6 +339,31 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, endLabel);
         }
 
+        void EmitBigIntPrototypeTag()
+        {
+            // BigInt's builtin tag comes from the configurable
+            // %BigInt.prototype% @@toStringTag property. Read it dynamically:
+            // non-string replacements are ignored and fall back to "Object".
+            var tagLocal = il.DeclareLocal(_types.String);
+            var nonStringTagLabel = il.DefineLabel();
+            il.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+            il.Emit(OpCodes.Call, runtime.GetIndex);
+            il.Emit(OpCodes.Isinst, _types.String);
+            il.Emit(OpCodes.Stloc, tagLocal);
+            il.Emit(OpCodes.Ldloc, tagLocal);
+            il.Emit(OpCodes.Brfalse, nonStringTagLabel);
+            il.Emit(OpCodes.Ldstr, "[object ");
+            il.Emit(OpCodes.Ldloc, tagLocal);
+            il.Emit(OpCodes.Ldstr, "]");
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "Concat", _types.String, _types.String, _types.String));
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(nonStringTagLabel);
+            EmitTag("[object Object]");
+        }
+
         // null
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -408,7 +433,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "BigInt");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
         il.Emit(OpCodes.Brfalse, notBigIntMarkerLabel);
-        EmitTag("[object BigInt]");
+        EmitBigIntPrototypeTag();
         il.MarkLabel(notBigIntMarkerLabel);
         il.MarkLabel(notBoxedTSObjectLabel);
 
@@ -506,6 +531,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notDoubleLabel);
         EmitTag("[object Number]");
         il.MarkLabel(notDoubleLabel);
+
+        // BigInt primitives are boxed for @@toStringTag lookup and therefore
+        // observe the same mutable prototype tag as Object(0n).
+        var notBigIntLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, notBigIntLabel);
+        EmitBigIntPrototypeTag();
+        il.MarkLabel(notBigIntLabel);
 
         // Function classification — every value the emitted TypeOf reports as
         // "function" must brand "[object Function]" (ECMA-262 §20.1.3.6 step 7

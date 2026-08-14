@@ -6002,6 +6002,22 @@ public sealed class Issue1279ParityTests
     public void Property_descriptor_fields_invoke_own_accessors(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-5.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-6.js")]
+    [InlineData("built-ins/Object/freeze/15.2.3.9-2-a-9.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-accessor-property-that-overrides-an-inherited-accessor-property.js")]
+    [InlineData("built-ins/Object/seal/object-seal-p-is-own-accessor-property-that-overrides-an-inherited-data-property.js")]
+    public void Integrity_levels_preserve_own_accessor_and_function_properties(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/Object/getOwnPropertyDescriptors/exception-not-object-coercible.js")]
+    [InlineData("built-ins/Object/prototype/toString/symbol-tag-non-str-bigint.js")]
+    [InlineData("built-ins/Object/S15.2.3_A3.js")]
+    public void Remaining_object_builtin_surface_matches_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

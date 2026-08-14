@@ -1590,6 +1590,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Box, _types.Double);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notFunctionLengthLabel);
+            var notObjectLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, _types.Object);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notObjectLengthLabel);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notObjectLengthLabel);
             il.MarkLabel(notTypeLengthLabel);
 
             // hasOwnProperty — return a $TSFunction wrapping HasOwnPropertyHelper,

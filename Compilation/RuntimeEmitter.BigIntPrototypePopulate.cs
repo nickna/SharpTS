@@ -38,6 +38,31 @@ public partial class RuntimeEmitter
         EmitWirePrototypeMethod(il, runtime, runtime.BigIntPrototypeField, descLocal,
             setItem, "valueOf", valueOfHelper, 0);
 
+        // %BigInt.prototype% owns @@toStringTag = "BigInt" with the standard
+        // { writable:false, enumerable:false, configurable:true } attributes.
+        // Store the descriptor in the shared symbol dictionary so user
+        // defineProperty/delete operations participate in ordinary lookup.
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Stloc, descLocal);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldstr, "BigInt");
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+        il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolToStringTag);
+        il.Emit(OpCodes.Ldloc, descLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryObjectObject, "set_Item", _types.Object, _types.Object));
+
         il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
         il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
         il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
