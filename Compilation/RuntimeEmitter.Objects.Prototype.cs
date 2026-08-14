@@ -1008,6 +1008,20 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime,
             "Cyclic prototype value");
         il.MarkLabel(noCycleAtCursor);
+        // OrdinarySetPrototypeOf's cycle walk stops when the next object does
+        // not use the ordinary [[GetPrototypeOf]] internal method. A Proxy is
+        // such an exotic object, so probing through it would incorrectly fire
+        // an observable getPrototypeOf trap during Object.setPrototypeOf.
+        var cycleCursorProxy = il.DefineLabel();
+        var cycleCursorNotProxy = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il,
+            () => il.Emit(OpCodes.Ldloc, cycleCursor),
+            cycleCursorProxy,
+            cycleCursorNotProxy);
+        il.MarkLabel(cycleCursorProxy);
+        il.Emit(OpCodes.Br, cycleDone);
+        il.MarkLabel(cycleCursorNotProxy);
         il.Emit(OpCodes.Ldloc, cycleCursor);
         il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
         il.Emit(OpCodes.Stloc, cycleCursor);

@@ -350,6 +350,26 @@ public class ObjectPrototypeTests
     }
 
     [Theory, ModeData]
+    public void SetPrototypeOf_DoesNotProbeProxyPrototypeForCycles(ExecutionMode mode)
+    {
+        var source = """
+            let probed = false;
+            const prototype = new Proxy({}, {
+                getPrototypeOf() {
+                    probed = true;
+                    throw new Error("unexpected prototype probe");
+                }
+            });
+            const object = {};
+            Object.setPrototypeOf(object, prototype);
+            console.log(probed);
+            console.log(Object.getPrototypeOf(object) === prototype);
+            """;
+
+        Assert.Equal("false\ntrue\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void SetPrototypeOf_ThrowsOnNonExtensible(ExecutionMode mode)
     {
         var source = """
