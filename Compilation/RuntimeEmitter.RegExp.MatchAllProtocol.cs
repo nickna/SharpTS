@@ -20,6 +20,7 @@ public partial class RuntimeEmitter
         var args = il.DeclareLocal(_types.ObjectArray);
         var lastIndexNumber = il.DeclareLocal(_types.Double);
         var lastIndex = il.DeclareLocal(_types.Int32);
+        var global = il.DeclareLocal(_types.Boolean);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
@@ -62,6 +63,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, flags);
+
+        il.Emit(OpCodes.Ldloc, flags);
+        il.Emit(OpCodes.Ldstr, "g");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.String));
+        il.Emit(OpCodes.Stloc, global);
 
         // Construct the matcher. RegExpFromArgs is the intrinsic default and
         // observes regexp-like source access; custom species use JS Construct.
@@ -138,6 +144,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, s);
         il.Emit(OpCodes.Ldloc, matcher);
         il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, global);
         il.Emit(OpCodes.Call, runtime.StringMatchAllRegExpPrepared);
         il.Emit(OpCodes.Ret);
     }

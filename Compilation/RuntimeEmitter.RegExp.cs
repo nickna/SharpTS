@@ -944,7 +944,7 @@ public partial class RuntimeEmitter
             "StringMatchAllRegExpPrepared",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, _types.Object, _types.Boolean]
+            [_types.Object, _types.Object, _types.Boolean, _types.Boolean]
         );
         runtime.StringMatchAllRegExpPrepared = coreMethod;
 
@@ -961,6 +961,7 @@ public partial class RuntimeEmitter
         wrapperIL.Emit(OpCodes.Ldarg_0);
         wrapperIL.Emit(OpCodes.Ldarg_1);
         wrapperIL.Emit(OpCodes.Ldc_I4_0);
+        wrapperIL.Emit(OpCodes.Ldc_I4_1);
         wrapperIL.Emit(OpCodes.Call, coreMethod);
         wrapperIL.Emit(OpCodes.Ret);
 
@@ -984,6 +985,7 @@ public partial class RuntimeEmitter
         var patternTypeLocal = il.DeclareLocal(_types.String);
         var patternIsObjectLocal = il.DeclareLocal(_types.Boolean);
         var patternIsRegExpLocal = il.DeclareLocal(_types.Boolean);
+        var globalLocal = il.DeclareLocal(_types.Boolean);
         var buildResultLabel = il.DefineLabel();
         var fallbackCreateLabel = il.DefineLabel();
 
@@ -1005,9 +1007,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
         il.Emit(OpCodes.Stloc, regexpLocal);
 
+        // String.prototype.matchAll's ordinary fallback always creates a
+        // global matcher. RegExp.prototype[@@matchAll] supplies the global
+        // bit derived from the ORIGINAL receiver's flags; a custom species
+        // result may have different flags and must not change that decision.
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, globalLocal);
         var preparedMatcherLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Brtrue, preparedMatcherLabel);
+        var notPreparedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notPreparedLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Stloc, globalLocal);
+        il.Emit(OpCodes.Br, preparedMatcherLabel);
+        il.MarkLabel(notPreparedLabel);
 
         // ES2026 String.prototype.matchAll only performs IsRegExp/GetMethod
         // when regexp is an Object. In particular, primitive Boolean/Number/
@@ -1385,6 +1398,7 @@ public partial class RuntimeEmitter
         var countLocal = il.DeclareLocal(_types.Int32);
         var groupIndexLocal = il.DeclareLocal(_types.Int32);
         var groupLocal = il.DeclareLocal(typeof(Group));
+        var startIndexLocal = il.DeclareLocal(_types.Int32);
 
         var loopStartLabel = il.DefineLabel();
         var loopEndLabel = il.DefineLabel();
@@ -1395,10 +1409,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // var matchColl = regex.Matches(str)
+        // Start from the matcher lastIndex captured by @@matchAll. The matcher
+        // is a fresh intrinsic/custom-species RegExp, so reading it here does
+        // not re-read the original receiver whose value was already cached.
+        il.Emit(OpCodes.Ldloc, regexpLocal);
+        il.Emit(OpCodes.Ldstr, "lastIndex");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.JsToInt32);
+        il.Emit(OpCodes.Stloc, startIndexLocal);
+        il.Emit(OpCodes.Ldloc, startIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        var startReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Bge, startReadyLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, startIndexLocal);
+        il.MarkLabel(startReadyLabel);
+
+        // var matchColl = regex.Matches(str, startIndex)
         il.Emit(OpCodes.Ldloc, regexLocal);
         il.Emit(OpCodes.Ldloc, stringLocal);
-        il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Matches", [_types.String])!);
+        il.Emit(OpCodes.Ldloc, startIndexLocal);
+        il.Emit(OpCodes.Callvirt, typeof(Regex).GetMethod("Matches", [_types.String, _types.Int32])!);
         il.Emit(OpCodes.Stloc, matchCollLocal);
 
         // var count = matchColl.Count
@@ -1506,6 +1537,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, iLocal);
+        il.Emit(OpCodes.Ldloc, globalLocal);
+        il.Emit(OpCodes.Brfalse, loopEndLabel);
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(loopEndLabel);
