@@ -270,6 +270,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayFlatMap { get; set; } = null!;
     public MethodBuilder ArrayFlatHelper { get; set; } = null!;
     public MethodBuilder ArraySort { get; set; } = null!;
+    public MethodBuilder ArraySortProto { get; set; } = null!;
     public MethodBuilder ArrayToSorted { get; set; } = null!;
     public MethodBuilder ArrayToSortedGeneric { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterializeForCopy { get; set; } = null!;

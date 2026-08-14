@@ -130,6 +130,33 @@ public class ArraySortTests
         Assert.Equal("true\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Sort_GenericObject_MutatesAndReturnsReceiver(ExecutionMode mode)
+    {
+        var source = """
+            let receiver: any = { 0: 2, 1: 1, 2: 3, length: 3 };
+            receiver.sort = Array.prototype.sort;
+            let result = receiver.sort();
+            console.log(result === receiver);
+            console.log(receiver[0] + "," + receiver[1] + "," + receiver[2]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n1,2,3\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_SymbolReceiver_ReturnsBoxedSymbol(ExecutionMode mode)
+    {
+        var source = """
+            let result = [].sort.call(Symbol());
+            console.log(result instanceof Symbol);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n", output);
+    }
+
     #endregion
 
     #region Stability

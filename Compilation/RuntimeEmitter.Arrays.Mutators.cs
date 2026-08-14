@@ -1651,6 +1651,65 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Generic Array.prototype.sort entry point. Keeps the ToObject receiver
+    /// observable while the List-based stable-sort core snapshots and writes
+    /// indexed properties, then returns that original object per ECMA-262.
+    /// </summary>
+    private void EmitArraySortProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArraySortProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
+        method.SetCustomAttribute(
+            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+        runtime.ArraySortProto = method;
+
+        var il = method.GetILGenerator();
+        var receiver = il.DeclareLocal(_types.Object);
+        var materialized = il.DeclareLocal(_types.ListOfObject);
+        var previousReceiver = il.DeclareLocal(_types.Object);
+
+        var receiverCoercible = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, receiverCoercible);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var receiverReady = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, receiverReady);
+        il.MarkLabel(receiverCoercible);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Cannot convert undefined or null to object");
+        il.MarkLabel(receiverReady);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToObjectMethod);
+        il.Emit(OpCodes.Stloc, receiver);
+        il.Emit(OpCodes.Ldsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Stloc, previousReceiver);
+
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Call, runtime.ArrayLikeMaterializeForIteration);
+        il.Emit(OpCodes.Stloc, materialized);
+        il.Emit(OpCodes.Ldloc, materialized);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ArraySort);
+        il.Emit(OpCodes.Pop);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldloc, previousReceiver);
+        il.Emit(OpCodes.Stsfld, runtime.CurrentArrayLikeReceiverField);
+        il.EndExceptionBlock();
+
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayToSorted(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ArrayToSorted(List<object> list, object? compareFn) -> List<object>

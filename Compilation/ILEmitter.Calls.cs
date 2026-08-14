@@ -371,6 +371,7 @@ public partial class ILEmitter
             "keys"          => (runtime.ArrayKeys,       "noArg",     _ctx.Types.Object),
             "values"        => (runtime.ArrayValues,     "noArg",     _ctx.Types.Object),
             "toReversed"    => (runtime.ArrayToReversed, "noArg",     _ctx.Types.Object),
+            "sort"          => (runtime.ArraySortProto,  "single",    _ctx.Types.Object),
             "toSorted"      => (runtime.ArrayToSorted,   "single",    _ctx.Types.Object),
             "toSpliced"     => (runtime.ArrayToSpliced,  "argsArray", _ctx.Types.Object),
             "with"          => (runtime.ArrayWith,       "argsArray", _ctx.Types.Object),
@@ -414,12 +415,24 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Dup);
         IL.Emit(OpCodes.Stloc, receiverLocal);
 
-        // Every Array.prototype algorithm begins with ToObject(this). Perform
-        // the null/undefined guard before species/length work so failures use
-        // the guest TypeError brand and no later observable operation runs.
+        // Every Array.prototype algorithm begins with ToObject(this). Its
+        // RequireObjectCoercible step rejects only null/undefined; unlike
+        // String.prototype, Symbol receivers are valid and get boxed.
+        var receiverCoercible = IL.DefineLabel();
+        var receiverNotNull = IL.DefineLabel();
         IL.Emit(OpCodes.Ldloc, receiverLocal);
-        IL.Emit(OpCodes.Call, runtime.RequireObjectCoercibleThis);
+        IL.Emit(OpCodes.Brtrue, receiverNotNull);
+        IL.Emit(OpCodes.Pop); // duplicated receiver retained for the helper call
+        GuestErrorEmitter.ThrowTypeError(IL, runtime,
+            "Cannot convert undefined or null to object");
+        IL.MarkLabel(receiverNotNull);
+        IL.Emit(OpCodes.Ldloc, receiverLocal);
+        IL.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        IL.Emit(OpCodes.Brfalse, receiverCoercible);
         IL.Emit(OpCodes.Pop);
+        GuestErrorEmitter.ThrowTypeError(IL, runtime,
+            "Cannot convert undefined or null to object");
+        IL.MarkLabel(receiverCoercible);
 
         // toSorted must read the generic receiver's indexed properties exactly
         // once before comparison, and abrupt completion must not leak the
@@ -437,6 +450,24 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             }
             IL.Emit(OpCodes.Call, runtime.ArrayToSortedGeneric);
+            SetStackUnknown();
+            return true;
+        }
+
+        // sort mutates and returns the original ToObject receiver; its runtime
+        // boundary owns observable-receiver scoping and materialization.
+        if (methodName == "sort")
+        {
+            if (c.Arguments.Count >= 2)
+            {
+                EmitExpression(c.Arguments[1]);
+                EmitBoxIfNeeded(c.Arguments[1]);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            }
+            IL.Emit(OpCodes.Call, runtime.ArraySortProto);
             SetStackUnknown();
             return true;
         }
