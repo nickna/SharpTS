@@ -272,7 +272,13 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "reverse":
-                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayReverse);
+                // Reverse is observable through inherited indexed properties,
+                // accessors, and deletions. Keep the statically-typed array
+                // fast path on the same generic algorithm as
+                // Array.prototype.reverse.call rather than List.Reverse().
+                il.Emit(OpCodes.Pop);
+                il.Emit(OpCodes.Ldloc, receiverLocal);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ArrayReverseProto);
                 break;
 
             case "flat":

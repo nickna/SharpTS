@@ -125,6 +125,12 @@ public partial class RuntimeEmitter
         // tier-0 JIT bug behind issue #39 (since fixed upstream).
         EmitCallArgsPool(moduleBuilder, runtime);
 
+        // Emit $PropertyDescriptorStore and $CompiledPropertyDescriptor before
+        // $Array: array length truncation must remove indexed descriptors as
+        // well as dense/sparse storage. The descriptor store itself depends
+        // only on helper types emitted above.
+        EmitPropertyDescriptorTypes(moduleBuilder, runtime);
+
         // Emit $Array class for standalone array support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSArray
         EmitTSArrayClass(moduleBuilder, runtime);
@@ -136,13 +142,6 @@ public partial class RuntimeEmitter
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
         EmitTSObjectClass(moduleBuilder, runtime);
-
-        // Emit $PropertyDescriptorStore and $CompiledPropertyDescriptor early
-        // so types that build property descriptors during their own emission
-        // ($RegExp.Exec attaches `index`/`input`/`groups` to its Array result
-        // via PDS so the result remains a List<object?> for `instanceof Array`)
-        // can reference CompiledPropertyDescriptorType / PDSDefineProperty.
-        EmitPropertyDescriptorTypes(moduleBuilder, runtime);
 
         if (features.UsesJSON)
             EmitTSRawJsonClass(moduleBuilder, runtime);

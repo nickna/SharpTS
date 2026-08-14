@@ -1914,7 +1914,7 @@ public partial class RuntimeEmitter
         // No-arg methods
         EmitNoArgCase("pop", runtime.ArrayPop);
         EmitNoArgCase("shift", runtime.ArrayShiftProto);
-        EmitNoArgCase("reverse", runtime.ArrayReverse);
+        EmitNoArgCase("reverse", runtime.ArrayReverseProto);
         EmitNoArgCase("toReversed", runtime.ArrayToReversed);
         EmitNoArgCase("entries", runtime.ArrayEntries);
         EmitNoArgCase("keys", runtime.ArrayKeys);

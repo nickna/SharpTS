@@ -1483,7 +1483,7 @@ public class ObjectFeatureTests
             """;
 
         var output = TestHarness.Run(source, mode);
-        Assert.Equal(mode == ExecutionMode.Interpreted ? "true\n1\n3\n" : "false\n1\n3\n", output);
+        Assert.Equal("true\n1\n3\n", output);
     }
 
     [Theory, ModeData]

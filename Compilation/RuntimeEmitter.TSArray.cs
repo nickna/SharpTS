@@ -1680,6 +1680,131 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsArrayLengthField);
         il.Emit(OpCodes.Bge, extendPathLabel);
 
+        // ArraySetLength must also truncate indexed properties represented by
+        // the descriptor store. First raise the effective length above the
+        // highest non-configurable indexed descriptor, then delete every
+        // configurable indexed descriptor at or above that effective length.
+        // Dense/sparse storage is truncated to the same boundary below.
+        var descriptorKeysLocal = il.DeclareLocal(_types.ListOfObject);
+        var descriptorKeyLocal = il.DeclareLocal(_types.String);
+        var descriptorIndexLocal = il.DeclareLocal(_types.UInt32);
+        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var descriptorLoopIndexLocal = il.DeclareLocal(_types.Int32);
+        var descriptorLoopCountLocal = il.DeclareLocal(_types.Int32);
+        var descriptorFirstLoop = il.DefineLabel();
+        var descriptorFirstNext = il.DefineLabel();
+        var descriptorFirstDone = il.DefineLabel();
+        var descriptorSecondLoop = il.DefineLabel();
+        var descriptorSecondNext = il.DefineLabel();
+        var descriptorSecondDone = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Call, runtime.PDSGetAllExtraKeys);
+        il.Emit(OpCodes.Stloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Ldloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, descriptorLoopCountLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, descriptorLoopIndexLocal);
+
+        // Pass 1: compute the effective lower bound imposed by
+        // non-configurable indexed descriptors.
+        il.MarkLabel(descriptorFirstLoop);
+        il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLoopCountLocal);
+        il.Emit(OpCodes.Bge, descriptorFirstDone);
+        il.Emit(OpCodes.Ldloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Brfalse, descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloca, descriptorIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", [_types.String, _types.UInt32.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloca, descriptorIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Blt_Un, descriptorFirstNext);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+        il.MarkLabel(descriptorFirstNext);
+        il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Br, descriptorFirstLoop);
+
+        // Pass 2: remove configurable indexed descriptors that are actually
+        // truncated at the effective length.
+        il.MarkLabel(descriptorFirstDone);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, descriptorLoopIndexLocal);
+        il.MarkLabel(descriptorSecondLoop);
+        il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLoopCountLocal);
+        il.Emit(OpCodes.Bge, descriptorSecondDone);
+        il.Emit(OpCodes.Ldloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Brfalse, descriptorSecondNext);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloca, descriptorIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", [_types.String, _types.UInt32.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, descriptorSecondNext);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, descriptorSecondNext);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloca, descriptorIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, descriptorSecondNext);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Blt_Un, descriptorSecondNext);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(descriptorSecondNext);
+        il.Emit(OpCodes.Ldloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, descriptorLoopIndexLocal);
+        il.Emit(OpCodes.Br, descriptorSecondLoop);
+        il.MarkLabel(descriptorSecondDone);
+
         // Truncate path.
         // if (_sparse != null) remove keys >= newLength.
         var sparseCheckSkipLabel = il.DefineLabel();

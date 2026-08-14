@@ -700,7 +700,7 @@ public class ArrayMethodTests
             output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Array_Reverse_IsGenericAndPreservesHoles(ExecutionMode mode)
     {
         var source = """
@@ -723,6 +723,28 @@ public class ArrayMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("true\nfalse\nthird\nfalse\nfirst\ninherited\na\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Reverse_ObservesGetterDeletion(ExecutionMode mode)
+    {
+        var source = """
+            const array: any[] = ["first", "second"];
+            Object.defineProperty(array, 0, {
+                get() {
+                    array.length = 0;
+                    return "first";
+                }
+            });
+
+            array.reverse();
+            console.log(0 in array);
+            console.log(1 in array);
+            console.log(array[1]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\ntrue\nfirst\n", output);
     }
 
     [Theory, InterpretedOnlyData]
