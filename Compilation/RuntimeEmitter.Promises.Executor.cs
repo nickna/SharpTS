@@ -786,9 +786,6 @@ public partial class RuntimeEmitter
         var tcsField = typeBuilder.DefineField("_tcs", typeof(TaskCompletionSource<object?>), FieldAttributes.Private);
         var lockField = typeBuilder.DefineField("_lock", _types.Object, FieldAttributes.Private);
         var settledField = typeBuilder.DefineField("_settled", typeof(bool), FieldAttributes.Private);
-        var adoptedTaskField = typeBuilder.DefineField(
-            "_adoptedTask", _types.TaskOfObject, FieldAttributes.Public);
-        runtime.PromiseResolveCallbackAdoptedTaskField = adoptedTaskField;
         var sharedSettledType = typeof(System.Runtime.CompilerServices.StrongBox<bool>);
         var sharedSettledValue = sharedSettledType.GetField("Value")!;
 
@@ -943,10 +940,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, valueLocal);
             il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
             il.Emit(OpCodes.Stloc, adoptedTaskLocal);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldloc, adoptedTaskLocal);
-            il.Emit(OpCodes.Stfld, adoptedTaskField);
-
             // Resolving a promise with itself rejects with TypeError rather than
             // installing a continuation cycle that can never settle.
             var notSelfResolutionLabel = il.DefineLabel();
@@ -1247,20 +1240,11 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
         il.MarkLabel(endTryLabel);
 
-        // When the executor synchronously resolved to a Promise/thenable, return
-        // the adopted task itself. This keeps the event loop attached to the
-        // actual async chain instead of an otherwise invisible host-continuation
-        // bridge. Deferred resolve calls still use tcs.Task below.
-        var returnBridgeTaskLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, resolveLocal);
-        il.Emit(OpCodes.Ldfld, runtime.PromiseResolveCallbackAdoptedTaskField);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brfalse, returnBridgeTaskLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(returnBridgeTaskLabel);
-        il.Emit(OpCodes.Pop);
-
-        // return tcs.Task;
+        // Always return this capability's own task. Returning the task adopted
+        // from a synchronous resolve aliases distinct Promise instances when
+        // Task.FromResult reuses a cached task (notably resolve() / null), so
+        // an expando such as p1.then = custom leaks onto p2. The continuation
+        // above still mirrors pending adopted settlement into this facade.
         il.Emit(OpCodes.Ldloc, tcsLocal);
         var taskProperty = typeof(TaskCompletionSource<object?>).GetProperty("Task")!.GetGetMethod()!;
         il.Emit(OpCodes.Callvirt, taskProperty);

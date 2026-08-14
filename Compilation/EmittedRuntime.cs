@@ -972,8 +972,6 @@ public class EmittedRuntime
     public TypeBuilder PromiseResolveCallbackType { get; set; } = null!;
     public ConstructorBuilder PromiseResolveCallbackCtor { get; set; } = null!;
     public MethodBuilder PromiseResolveCallbackInvoke { get; set; } = null!;
-    /// <summary>The task selected by a resolving function after Promise/thenable adoption; PromiseFromExecutor returns it directly when resolution occurs synchronously during executor evaluation.</summary>
-    public FieldBuilder PromiseResolveCallbackAdoptedTaskField { get; set; } = null!;
     public TypeBuilder PromiseRejectCallbackType { get; set; } = null!;
     public ConstructorBuilder PromiseRejectCallbackCtor { get; set; } = null!;
     public MethodBuilder PromiseRejectCallbackInvoke { get; set; } = null!;
