@@ -256,6 +256,49 @@ public class SharpTSProxy : ISharpTSCallable
         return result;
     }
 
+    /// <summary>
+    /// Compiled-runtime [[GetPrototypeOf]] dispatch. Ordinary target operations
+    /// are supplied by the emitted runtime so compiler-owned object shapes and
+    /// integrity state participate in the Proxy invariant checks.
+    /// </summary>
+    public object? TrapGetPrototypeOfCompiled(
+        Func<object, object?> ordinaryGetPrototypeOf,
+        Func<object, bool> ordinaryIsExtensible)
+    {
+        var trap = GetTrapCallable("getPrototypeOf", null);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapGetPrototypeOfCompiled(
+                    ordinaryGetPrototypeOf, ordinaryIsExtensible)
+                : ordinaryGetPrototypeOf(_target);
+        }
+
+        object? result = InvokeTrap(trap, null, [_target]);
+        if (IsUndefinedLike(result)
+            || result is string or bool or byte or sbyte or short or ushort
+                or int or uint or long or ulong or float or double or decimal
+                or System.Numerics.BigInteger or SharpTSSymbol or SharpTSBigInt
+            || result?.GetType().Name is "$TSSymbol" or "$TSBigInt")
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy getPrototypeOf trap must return an object or null"));
+        }
+
+        if (ordinaryIsExtensible(_target)) return result;
+
+        object? targetPrototype = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapGetPrototypeOfCompiled(
+                ordinaryGetPrototypeOf, ordinaryIsExtensible)
+            : ordinaryGetPrototypeOf(_target);
+        if (!ReferenceEquals(result, targetPrototype))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy getPrototypeOf trap result does not match the non-extensible target"));
+        }
+        return result;
+    }
+
     /// <summary>ECMA-262 §10.5.2 [[SetPrototypeOf]].</summary>
     internal bool TrapSetPrototypeOf(Interpreter interpreter, object? prototype)
     {
@@ -726,6 +769,42 @@ public class SharpTSProxy : ISharpTSCallable
                 SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!));
         }
 
+        return true;
+    }
+
+    /// <summary>Compiled-runtime [[SetPrototypeOf]] dispatch.</summary>
+    public bool TrapSetPrototypeOfCompiled(
+        object? prototype,
+        Func<object, object?, object?> ordinarySetPrototypeOf,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, object?> ordinaryGetPrototypeOf)
+    {
+        var trap = GetTrapCallable("setPrototypeOf", null);
+        if (trap == null)
+        {
+            if (_target is SharpTSProxy proxy)
+            {
+                return proxy.TrapSetPrototypeOfCompiled(
+                    prototype, ordinarySetPrototypeOf,
+                    ordinaryIsExtensible, ordinaryGetPrototypeOf);
+            }
+            _ = ordinarySetPrototypeOf(_target, prototype);
+            return true;
+        }
+
+        bool result = ToBoolean(InvokeTrap(trap, null, [_target, prototype]));
+        if (!result) return false;
+        if (ordinaryIsExtensible(_target)) return true;
+
+        object? targetPrototype = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapGetPrototypeOfCompiled(
+                ordinaryGetPrototypeOf, ordinaryIsExtensible)
+            : ordinaryGetPrototypeOf(_target);
+        if (!ReferenceEquals(prototype, targetPrototype))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy setPrototypeOf trap cannot change a non-extensible target"));
+        }
         return true;
     }
 

@@ -119,15 +119,16 @@ public partial class RuntimeEmitter
         var descLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
 
         var returnUndefinedLabel = il.DefineLabel();
+        var throwThisLabel = il.DefineLabel();
         var loopStartLabel = il.DefineLabel();
         var advanceProtoLabel = il.DefineLabel();
         var hasSlotLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
+        il.Emit(OpCodes.Brfalse, throwThisLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, returnUndefinedLabel);
+        il.Emit(OpCodes.Brtrue, throwThisLabel);
 
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
@@ -184,6 +185,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
         il.Emit(OpCodes.Stloc, oLocal);
         il.Emit(OpCodes.Br, loopStartLabel);
+
+        il.MarkLabel(throwThisLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            isGetter
+                ? "Object.prototype.__lookupGetter__ called on null or undefined"
+                : "Object.prototype.__lookupSetter__ called on null or undefined");
 
         il.MarkLabel(returnUndefinedLabel);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);

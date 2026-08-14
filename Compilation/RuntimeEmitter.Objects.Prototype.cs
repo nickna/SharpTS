@@ -449,6 +449,37 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Object.getPrototypeOf called on null or undefined");
         il.MarkLabel(notUndefForGpoLabel);
 
+        // Proxy [[GetPrototypeOf]] dispatch, including trap abrupt completions
+        // and non-extensible-target invariants. The delegates return ordinary
+        // operations to this emitted runtime for compiler-owned object shapes.
+        var notProxyForGpoLabel = il.DefineLabel();
+        var proxyForGpoLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyForGpoLabel, notProxyForGpoLabel);
+        il.MarkLabel(proxyForGpoLabel);
+        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapGetPrototypeOfCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectGetPrototypeOf);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object?>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, bool>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyForGpoLabel);
+
         var tempLocal = il.DeclareLocal(_types.Object);
 
         // Distinguish "no PDS entry" from "entry with null value" so explicit
@@ -758,10 +789,106 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
             il.Emit(OpCodes.Brtrue, protoThrowLabel);
         }
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brtrue, protoThrowLabel);
         il.Emit(OpCodes.Br, protoOkLabel);
         il.MarkLabel(protoThrowLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Object prototype may only be an Object or null");
         il.MarkLabel(protoOkLabel);
+
+        // Primitive targets are returned unchanged after prototype validation.
+        // Object.setPrototypeOf differs from Object.getPrototypeOf here: it does
+        // not box the target before returning it.
+        var objectTargetLabel = il.DefineLabel();
+        void ReturnPrimitiveTarget(Type primitiveType)
+        {
+            var next = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brfalse, next);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+        }
+        ReturnPrimitiveTarget(_types.Boolean);
+        ReturnPrimitiveTarget(_types.Double);
+        ReturnPrimitiveTarget(_types.Int32);
+        ReturnPrimitiveTarget(_types.String);
+        ReturnPrimitiveTarget(runtime.TSSymbolType!);
+        ReturnPrimitiveTarget(_types.BigInteger);
+        il.Emit(OpCodes.Br, objectTargetLabel);
+        il.MarkLabel(objectTargetLabel);
+
+        // Proxy [[SetPrototypeOf]] trap. A false status becomes Object.setPrototypeOf's
+        // TypeError; abrupt completions and invariant violations propagate.
+        var notProxyForSpoLabel = il.DefineLabel();
+        var proxyForSpoLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyForSpoLabel, notProxyForSpoLabel);
+        il.MarkLabel(proxyForSpoLabel);
+        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapSetPrototypeOfCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_4);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectSetPrototypeOf);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object?, object?>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, bool>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_3);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectGetPrototypeOf);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object?>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        var proxySetSucceeded = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, proxySetSucceeded);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Proxy setPrototypeOf trap returned false");
+        il.MarkLabel(proxySetSucceeded);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyForSpoLabel);
+
+        // SameValue(proto, current) succeeds even for non-extensible targets.
+        var currentPrototypeLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, currentPrototypeLocal);
+        var prototypeDiffers = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentPrototypeLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Bne_Un, prototypeDiffers);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(prototypeDiffers);
+
+        // %Object.prototype% is an immutable-prototype exotic object.
+        var mutablePrototypeTarget = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Bne_Un, mutablePrototypeTarget);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Immutable prototype object cannot change its prototype");
+        il.MarkLabel(mutablePrototypeTarget);
 
         // Check if object is null - if so, skip checks (dead code now that
         // null throws above, kept for layout symmetry).
@@ -791,6 +918,30 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot set prototype of non-extensible object");
 
         il.MarkLabel(nullCheckDoneLabel);
+
+        // OrdinarySetPrototypeOf rejects cycles. Walk the proposed prototype's
+        // observable [[GetPrototypeOf]] chain so Proxy traps and abrupt
+        // completions participate in the check.
+        var cycleCursor = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, cycleCursor);
+        var cycleLoop = il.DefineLabel();
+        var cycleDone = il.DefineLabel();
+        il.MarkLabel(cycleLoop);
+        il.Emit(OpCodes.Ldloc, cycleCursor);
+        il.Emit(OpCodes.Brfalse, cycleDone);
+        il.Emit(OpCodes.Ldloc, cycleCursor);
+        il.Emit(OpCodes.Ldarg_0);
+        var noCycleAtCursor = il.DefineLabel();
+        il.Emit(OpCodes.Bne_Un, noCycleAtCursor);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Cyclic prototype value");
+        il.MarkLabel(noCycleAtCursor);
+        il.Emit(OpCodes.Ldloc, cycleCursor);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, cycleCursor);
+        il.Emit(OpCodes.Br, cycleLoop);
+        il.MarkLabel(cycleDone);
 
         // Store in $PropertyDescriptorStore for standalone operation.
         var skipLocalStoreLabel = il.DefineLabel();

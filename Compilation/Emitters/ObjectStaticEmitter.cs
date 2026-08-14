@@ -221,7 +221,9 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Ldnull);
+                    // A missing prototype argument is undefined, not null;
+                    // Object.setPrototypeOf({}, undefined) must reject it.
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.ObjectSetPrototypeOf);
                 return true;

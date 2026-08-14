@@ -3085,10 +3085,21 @@ public sealed class Issue1279ParityTests
     [Theory]
     [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-own-acsr-w-getter.js")]
     [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-proto-acsr-w-getter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-own-proto-err.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/lookup-proto-proto-err.js")]
+    [InlineData("built-ins/Object/prototype/__lookupGetter__/this-non-obj.js")]
     [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-own-acsr-w-setter.js")]
     [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-proto-acsr-w-setter.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-own-proto-err.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/lookup-proto-proto-err.js")]
+    [InlineData("built-ins/Object/prototype/__lookupSetter__/this-non-obj.js")]
     public void Object_legacy_accessor_lookup_walks_descriptors(string relativePath)
         => AssertPassInBothModes(relativePath);
+
+    [Fact]
+    public void Object_isPrototypeOf_observes_proxy_getPrototypeOf()
+        => AssertPassInBothModes(
+            "built-ins/Object/prototype/isPrototypeOf/arg-is-proxy.js");
 
     [Theory]
     [InlineData("built-ins/Object/S15.2.1.1_A2_T11.js")]
@@ -3211,6 +3222,10 @@ public sealed class Issue1279ParityTests
 
     [Theory]
     [InlineData("built-ins/Object/setPrototypeOf/o-not-obj-coercible.js")]
+    [InlineData("built-ins/Object/setPrototypeOf/o-not-obj.js")]
+    [InlineData("built-ins/Object/setPrototypeOf/proto-not-obj.js")]
+    [InlineData("built-ins/Object/setPrototypeOf/set-error.js")]
+    [InlineData("built-ins/Object/setPrototypeOf/set-failure-cycle.js")]
     [InlineData("built-ins/Object/setPrototypeOf/success.js")]
     public void Object_setPrototypeOf_links_without_copying_properties(string relativePath)
         => AssertPassInBothModes(relativePath);
@@ -3338,10 +3353,13 @@ public sealed class Issue1279ParityTests
     public void Object_constructor_prototype_is_non_configurable()
         => AssertPassInBothModes("built-ins/Object/prototype/S15.2.3.1_A3.js");
 
-    [Fact]
-    public void Object_prototype_accepts_its_existing_null_prototype()
-        => AssertPassInBothModes(
-            "built-ins/Object/prototype/setPrototypeOf-with-same-value.js");
+    [Theory]
+    [InlineData("built-ins/Object/prototype/setPrototypeOf-with-different-values.js")]
+    [InlineData("built-ins/Object/prototype/setPrototypeOf-with-non-circular-values.js")]
+    [InlineData("built-ins/Object/prototype/setPrototypeOf-with-non-circular-values-__proto__.js")]
+    [InlineData("built-ins/Object/prototype/setPrototypeOf-with-same-value.js")]
+    public void Object_prototype_has_an_immutable_null_prototype(string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Array/prototype/push/S15.4.4.7_A1_T1.js")]
