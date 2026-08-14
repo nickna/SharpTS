@@ -296,13 +296,12 @@ public partial class RuntimeEmitter
         il.MarkLabel(haveResolvedElementLabel);
 
         // PerformPromiseAll/Race/AllSettled/Any invokes `then` for every
-        // resolved element. Route through the shared PromiseResolve-style
-        // adoption helper rather than treating a non-Task result as an
-        // already-fulfilled plain value. This preserves observable overridden
-        // `then` methods and adopts ordinary thenables consistently with await.
+        // resolved element. Preserve the established synchronous adoption
+        // path for ordinary thenables and intrinsic Tasks, but do not let the
+        // host Task fast path hide an own observable `then` override.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
-        il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+        EmitNormalizeResolvedPromiseElement(il);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
 
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -405,7 +404,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
-        il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+        EmitNormalizeResolvedPromiseElement(il);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
         il.Emit(OpCodes.Leave, customElementAddedLabel);
 
@@ -436,6 +435,26 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Stelem_Ref);
             targetIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
+        }
+
+        void EmitNormalizeResolvedPromiseElement(ILGenerator targetIl)
+        {
+            // Stack on entry: [..., resultList, resolvedElement]. Spill the
+            // value while retaining the list receiver for List.Add.
+            targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
+            var useOrdinaryCoercionLabel = targetIl.DefineLabel();
+            var normalizedLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            targetIl.Emit(OpCodes.Brfalse, useOrdinaryCoercionLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            targetIl.Emit(OpCodes.Br, normalizedLabel);
+            targetIl.MarkLabel(useOrdinaryCoercionLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            targetIl.MarkLabel(normalizedLabel);
         }
 
     }

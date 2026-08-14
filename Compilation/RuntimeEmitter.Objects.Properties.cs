@@ -1333,6 +1333,44 @@ public partial class RuntimeEmitter
         // ignored per JS bound-callable semantics — the CallWrapper/ApplyWrapper Invoke bodies
         // implement that via EmitDispatchToTarget.
         var callableWrapperLabel = il.DefineLabel();
+
+        // Promise resolving functions are ECMAScript anonymous built-ins, not
+        // ordinary reflected methods. Their host Invoke(object[]) signature
+        // must not leak through as length 0.
+        var notPromiseResolveCallbackLabel = il.DefineLabel();
+        var promiseCallbackMetadataLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brfalse, notPromiseResolveCallbackLabel);
+        il.Emit(OpCodes.Br, promiseCallbackMetadataLabel);
+        il.MarkLabel(notPromiseResolveCallbackLabel);
+        var notPromiseCallbackLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Brfalse, notPromiseCallbackLabel);
+        il.MarkLabel(promiseCallbackMetadataLabel);
+        var promiseCallbackNotLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, promiseCallbackNotLengthLabel);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(promiseCallbackNotLengthLabel);
+        var promiseCallbackNotNameLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "name");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, promiseCallbackNotNameLabel);
+        il.Emit(OpCodes.Ldstr, string.Empty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(promiseCallbackNotNameLabel);
+        il.Emit(OpCodes.Br, callableWrapperLabel);
+        il.MarkLabel(notPromiseCallbackLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
         il.Emit(OpCodes.Brtrue, callableWrapperLabel);
@@ -1523,6 +1561,7 @@ public partial class RuntimeEmitter
             il.MarkLabel(notProtoNameLabel);
 
             var typePdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var typePdsGetterLocal = il.DeclareLocal(_types.Object);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
@@ -1530,6 +1569,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, typePdsDescLocal);
             var noTypePdsLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, noTypePdsLabel);
+            var typePdsDataLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, typePdsDescLocal);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, typePdsGetterLocal);
+            il.Emit(OpCodes.Ldloc, typePdsGetterLocal);
+            il.Emit(OpCodes.Brfalse, typePdsDataLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, typePdsGetterLocal);
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+                _types.GetMethod(typeof(System.Array), "Empty"), _types.Object));
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(typePdsDataLabel);
             il.Emit(OpCodes.Ldloc, typePdsDescLocal);
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Ret);
@@ -1719,6 +1772,7 @@ public partial class RuntimeEmitter
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
             var walkTypeLocal = il.DeclareLocal(_types.Type);
             var baseDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var baseDescGetterLocal = il.DeclareLocal(_types.Object);
             var baseBuiltInLocal = il.DeclareLocal(_types.Object);
             var baseStaticMethodLocal = il.DeclareLocal(_types.MethodInfo);
             var baseStaticFieldLocal = il.DeclareLocal(typeof(FieldInfo));
@@ -1740,6 +1794,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, baseDescLocal);
             var baseProbeDeclaredLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, baseProbeDeclaredLabel);
+            var baseDescDataLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, baseDescLocal);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, baseDescGetterLocal);
+            il.Emit(OpCodes.Ldloc, baseDescGetterLocal);
+            il.Emit(OpCodes.Brfalse, baseDescDataLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, baseDescGetterLocal);
+            il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+                _types.GetMethod(typeof(System.Array), "Empty"), _types.Object));
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(baseDescDataLabel);
             il.Emit(OpCodes.Ldloc, baseDescLocal);
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Ret);

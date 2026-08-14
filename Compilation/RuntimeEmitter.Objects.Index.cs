@@ -1707,7 +1707,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
 
-        // $TSFunction — `delete fn.name` / `delete fn.length` records the
+        // Function-like runtime wrappers — `delete fn.name` / `delete
+        // fn.length` records the
         // deletion in the per-instance set so HasOwnPropertyHelper /
         // GetFunctionMethod / ObjectGetOwnPropertyDescriptor stop reporting
         // the synthetic value. ECMA-262 §17 declares these as configurable;
@@ -1716,6 +1717,12 @@ public partial class RuntimeEmitter
         var tsFunctionDeleteIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
         il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
 
         // $Array — `delete arr[i]` turns the slot into a hole via DeleteAt.

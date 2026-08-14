@@ -1147,6 +1147,34 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes));
         il.Emit(OpCodes.Stloc, namesLocal);
 
+        var addToList = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
+        void AddName(string name)
+        {
+            il.Emit(OpCodes.Ldloc, namesLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Callvirt, addToList);
+        }
+
+        // Promise combinator element callbacks are anonymous built-in
+        // functions. Their own string keys are ordered length, name.
+        var notResolveCallbackForNamesLabel = il.DefineLabel();
+        var promiseCallbackNamesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brfalse, notResolveCallbackForNamesLabel);
+        il.Emit(OpCodes.Br, promiseCallbackNamesLabel);
+        il.MarkLabel(notResolveCallbackForNamesLabel);
+        var notPromiseCallbackForNamesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Brfalse, notPromiseCallbackForNamesLabel);
+        il.MarkLabel(promiseCallbackNamesLabel);
+        AddName("length");
+        AddName("name");
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notPromiseCallbackForNamesLabel);
+
         // System.Object Type → return the spec-known static names for the
         // JS Object constructor. ECMA-262 §20.1.2 lists prototype/name/length
         // and all the static methods. Mirrors the HasOwnProperty + gOPD names
@@ -1156,13 +1184,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.Object);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
         il.Emit(OpCodes.Bne_Un, notObjectTypeLabel);
-        var addToList = _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!;
-        void AddName(string name)
-        {
-            il.Emit(OpCodes.Ldloc, namesLocal);
-            il.Emit(OpCodes.Ldstr, name);
-            il.Emit(OpCodes.Callvirt, addToList);
-        }
         AddName("length");
         AddName("name");
         AddName("prototype");

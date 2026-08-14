@@ -6049,6 +6049,37 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Promise_reactions_adopt_observable_thenables(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/invoke-resolve-get-error-reject.js")]
+    [InlineData("built-ins/Promise/all/invoke-resolve-get-error.js")]
+    [InlineData("built-ins/Promise/allSettled/invoke-resolve-get-error-reject.js")]
+    [InlineData("built-ins/Promise/allSettled/invoke-resolve-get-error.js")]
+    [InlineData("built-ins/Promise/any/invoke-resolve-get-error-reject.js")]
+    [InlineData("built-ins/Promise/any/invoke-resolve-get-error.js")]
+    [InlineData("built-ins/Promise/any/invoke-resolve-get-once-multiple-calls.js")]
+    [InlineData("built-ins/Promise/any/invoke-resolve-get-once-no-calls.js")]
+    [InlineData("built-ins/Promise/any/invoke-then.js")]
+    [InlineData("built-ins/Promise/race/invoke-resolve-get-error-reject.js")]
+    [InlineData("built-ins/Promise/race/invoke-resolve-get-error.js")]
+    public void Promise_combinators_use_constructor_capability_and_observable_then(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/resolve-element-function-length.js")]
+    [InlineData("built-ins/Promise/all/resolve-element-function-name.js")]
+    [InlineData("built-ins/Promise/all/resolve-element-function-property-order.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-element-function-length.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-element-function-name.js")]
+    [InlineData("built-ins/Promise/allSettled/resolve-element-function-property-order.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-element-function-length.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-element-function-name.js")]
+    [InlineData("built-ins/Promise/allSettled/reject-element-function-property-order.js")]
+    [InlineData("built-ins/Promise/any/reject-element-function-length.js")]
+    [InlineData("built-ins/Promise/any/reject-element-function-name.js")]
+    [InlineData("built-ins/Promise/any/reject-element-function-property-order.js")]
+    public void Promise_combinator_callbacks_expose_builtin_metadata(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

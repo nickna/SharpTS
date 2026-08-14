@@ -1841,17 +1841,23 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §17 — built-in functions expose `name` and `length` as
         // { writable: false, enumerable: false, configurable: true } own data
-        // properties. Synthesize those descriptors when the receiver is a
-        // $TSFunction (covers RegExp.prototype[Symbol.match], etc. that
-        // verifyProperty inspects). Other callable wrappers fall through to
-        // the existing paths (PDS / dict / class instance). After
+        // properties. Synthesize those descriptors for $TSFunction and the
+        // promise resolve/reject callback wrappers. After
         // `delete fn.name`/`length`, IsBuiltinDeleted hides the synthetic
         // descriptor — descriptor lookup returns null, matching the post-
         // delete state expected by verifyProperty's isConfigurable check.
         var notTSFunctionForDescLabel = il.DefineLabel();
+        var functionDescriptorCheckLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
         il.Emit(OpCodes.Brfalse, notTSFunctionForDescLabel);
+        il.MarkLabel(functionDescriptorCheckLabel);
 
         // name / length only — anything else on a function returns null.
         var notFnNameLabel = il.DefineLabel();

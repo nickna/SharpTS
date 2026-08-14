@@ -111,11 +111,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, falseLabel);
         il.MarkLabel(notGlobalObject);
 
-        // $TSFunction branch
+        // Function-like runtime wrappers branch. Promise resolving functions
+        // are anonymous ECMAScript built-ins and expose the same configurable
+        // own name/length slots as $TSFunction wrappers.
         var notTSFunction = il.DefineLabel();
+        var functionOwnPropertyCheck = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
         il.Emit(OpCodes.Brfalse, notTSFunction);
+        il.MarkLabel(functionOwnPropertyCheck);
         // If `name` or `length` was deleted on this instance, the property is
         // no longer own — report false. Per ECMA-262 §17, both are configurable.
         il.Emit(OpCodes.Ldarg_0);
