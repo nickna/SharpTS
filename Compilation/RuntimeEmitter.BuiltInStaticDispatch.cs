@@ -185,6 +185,18 @@ public partial class RuntimeEmitter
         EmitLookup(_types.TaskOfObject, "allSettled", runtime.PromiseAllSettledStatic, 1);
         EmitLookup(_types.TaskOfObject, "allSettledKeyed", runtime.PromiseAllSettledKeyedStatic, 1);
         EmitLookup(_types.TaskOfObject, "any", runtime.PromiseAnyStatic, 1);
+        // Guest classes that `extend Promise` derive from the emitted
+        // $Promise wrapper rather than Task<object>. Constructor inheritance
+        // must expose the same intrinsic static functions through that base
+        // Type token (for example Custom.resolve.bind(Custom)).
+        EmitLookup(runtime.TSPromiseType, "resolve", runtime.PromiseResolveStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "reject", runtime.PromiseRejectStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "all", runtime.PromiseAllStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "allKeyed", runtime.PromiseAllKeyedStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "race", runtime.PromiseRaceStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "allSettled", runtime.PromiseAllSettledStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "allSettledKeyed", runtime.PromiseAllSettledKeyedStatic, 1);
+        EmitLookup(runtime.TSPromiseType, "any", runtime.PromiseAnyStatic, 1);
         EmitLookup(runtime.TSErrorType, "isError", runtime.ErrorIsError, 1);
 
         // Date.* — bare `Date` resolves to the $TSDate Type token. The static

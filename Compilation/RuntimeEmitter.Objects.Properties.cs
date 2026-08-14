@@ -1719,6 +1719,7 @@ public partial class RuntimeEmitter
                 BindingFlags.Public | BindingFlags.Static | BindingFlags.DeclaredOnly;
             var walkTypeLocal = il.DeclareLocal(_types.Type);
             var baseDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var baseBuiltInLocal = il.DeclareLocal(_types.Object);
             var baseStaticMethodLocal = il.DeclareLocal(_types.MethodInfo);
             var baseStaticFieldLocal = il.DeclareLocal(typeof(FieldInfo));
             il.Emit(OpCodes.Ldloc, typeLocal);
@@ -1743,9 +1744,28 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
             il.Emit(OpCodes.Ret);
 
-            // No expando shadow on this ancestor — probe its declared statics, but
-            // only when it is an emitted user class ($IHasFields.IsAssignableFrom).
+            // Runtime intrinsic constructors (notably $Promise) do not implement
+            // $IHasFields, but their JS static table still participates in the
+            // constructor inheritance chain (Custom.resolve → Promise.resolve).
             il.MarkLabel(baseProbeDeclaredLabel);
+            var noBaseBuiltInLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, walkTypeLocal);
+            il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, noBaseBuiltInLabel);
+            il.Emit(OpCodes.Ldloc, walkTypeLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
+            il.Emit(OpCodes.Stloc, baseBuiltInLocal);
+            il.Emit(OpCodes.Ldloc, baseBuiltInLocal);
+            il.Emit(OpCodes.Brfalse, noBaseBuiltInLabel);
+            il.Emit(OpCodes.Ldloc, baseBuiltInLocal);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noBaseBuiltInLabel);
+
+            // No expando or built-in shadow on this ancestor — probe its declared statics, but
+            // only when it is an emitted user class ($IHasFields.IsAssignableFrom).
             il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
             il.Emit(OpCodes.Ldloc, walkTypeLocal);

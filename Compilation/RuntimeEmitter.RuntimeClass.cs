@@ -800,6 +800,10 @@ public partial class RuntimeEmitter
         // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
         // but BEFORE IterateToList (which needs IteratorWrapperCtor)
         EmitIteratorWrapperType(moduleBuilder, runtime);
+        // Promise combinators reserve their normalization method token early,
+        // but its incremental custom-iterator body needs both the basic
+        // protocol helpers and $IteratorWrapper.
+        EmitNormalizePromiseList(typeBuilder, runtime);
         // Advanced iterator methods (IterateToList) - needs IteratorWrapperCtor
         EmitIteratorMethodsAdvanced(typeBuilder, runtime);
         // ES2025 Iterator Helper methods and lazy wrapper types

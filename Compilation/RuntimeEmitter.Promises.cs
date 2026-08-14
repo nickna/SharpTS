@@ -480,11 +480,14 @@ public partial class RuntimeEmitter
             _types.TaskOfObject,
             [_types.Object]);
 
-        // NormalizePromiseList — replaces $Promise elements (#242 Promise
-        // subclasses) with their wrapped Task so the combinator state machines
-        // (which only test elements for Task<object?>) await them. Emitted
-        // before the combinators; each wrapper applies it to its iterable.
-        EmitNormalizePromiseList(typeBuilder, runtime);
+        // Reserve NormalizePromiseList before the combinators so their state
+        // machines can reference it. Its body is emitted after the iterator
+        // protocol helpers and $IteratorWrapper exist.
+        runtime.NormalizePromiseListMethod = typeBuilder.DefineMethod(
+            "NormalizePromiseList",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
 
         // Promise.all(iterable) - async state machine using Task.WhenAll
         var promiseAllSM = DefinePromiseAllStateMachine(moduleBuilder);

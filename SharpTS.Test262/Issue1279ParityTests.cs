@@ -6018,6 +6018,16 @@ public sealed class Issue1279ParityTests
     public void Remaining_object_builtin_surface_matches_in_both_modes(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/all/invoke-resolve-on-promises-every-iteration-of-custom.js")]
+    [InlineData("built-ins/Promise/all/iter-step-err-reject.js")]
+    [InlineData("built-ins/Promise/all/resolve-throws-iterator-return-is-not-callable.js")]
+[InlineData("built-ins/Promise/all/resolve-throws-iterator-return-null-or-undefined.js")]
+[InlineData("built-ins/Promise/allSettled/iter-next-val-err-reject.js")]
+[InlineData("built-ins/Promise/any/iter-returns-false-reject.js")]
+public void Promise_combinators_share_iterator_and_resolution_semantics(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

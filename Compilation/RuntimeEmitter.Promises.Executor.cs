@@ -98,13 +98,69 @@ public partial class RuntimeEmitter
     /// </summary>
     internal void EmitNormalizePromiseList(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
-        var method = runtimeType.DefineMethod(
-            "NormalizePromiseList",
+        // IteratorClose(iterator, throwCompletion) for the narrow abrupt path
+        // owned by Promise combinators. GetMethod(iterator, "return") can
+        // replace the original completion (for example when return is not
+        // callable), while an exception thrown by the return call itself does
+        // not replace an already-throwing completion.
+        var closeIteratorMethod = runtimeType.DefineMethod(
+            "ClosePromiseIteratorOnAbrupt",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]
+            _types.Void,
+            [_types.Object, _types.Exception]
         );
-        runtime.NormalizePromiseListMethod = method;
+        {
+            var closeIl = closeIteratorMethod.GetILGenerator();
+            var returnMethodLocal = closeIl.DeclareLocal(_types.Object);
+            var finishCloseLabel = closeIl.DefineLabel();
+            var noReturnMethodLabel = closeIl.DefineLabel();
+            var returnCallableLabel = closeIl.DefineLabel();
+
+            // For a throw completion, IteratorClose performs GetMethod/call
+            // for their side effects but the original completion wins over
+            // every abrupt close result (§7.4.11 step 5).
+            closeIl.BeginExceptionBlock();
+            closeIl.Emit(OpCodes.Ldarg_0);
+            closeIl.Emit(OpCodes.Ldstr, "return");
+            closeIl.Emit(OpCodes.Call, runtime.GetProperty);
+            closeIl.Emit(OpCodes.Stloc, returnMethodLocal);
+
+            closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
+            closeIl.Emit(OpCodes.Brfalse, noReturnMethodLabel);
+            closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
+            closeIl.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            closeIl.Emit(OpCodes.Brtrue, noReturnMethodLabel);
+
+            closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
+            closeIl.Emit(OpCodes.Call, runtime.TypeOf);
+            closeIl.Emit(OpCodes.Ldstr, "function");
+            closeIl.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            closeIl.Emit(OpCodes.Brtrue, returnCallableLabel);
+            GuestErrorEmitter.ThrowTypeError(closeIl, runtime,
+                "Iterator return method is not callable");
+
+            closeIl.MarkLabel(returnCallableLabel);
+            closeIl.Emit(OpCodes.Ldarg_0);
+            closeIl.Emit(OpCodes.Ldloc, returnMethodLocal);
+            closeIl.Emit(OpCodes.Ldc_I4_0);
+            closeIl.Emit(OpCodes.Newarr, _types.Object);
+            closeIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            closeIl.Emit(OpCodes.Pop);
+            closeIl.Emit(OpCodes.Leave, finishCloseLabel);
+            closeIl.MarkLabel(noReturnMethodLabel);
+            closeIl.Emit(OpCodes.Leave, finishCloseLabel);
+            closeIl.BeginCatchBlock(_types.Exception);
+            closeIl.Emit(OpCodes.Pop);
+            closeIl.Emit(OpCodes.Leave, finishCloseLabel);
+            closeIl.EndExceptionBlock();
+
+            closeIl.MarkLabel(finishCloseLabel);
+            closeIl.Emit(OpCodes.Ldarg_1);
+            closeIl.Emit(OpCodes.Throw);
+        }
+
+        var method = runtime.NormalizePromiseListMethod;
 
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
@@ -115,24 +171,55 @@ public partial class RuntimeEmitter
         var resolvedElementLocal = il.DeclareLocal(_types.Object);
         var resolveFunctionLocal = il.DeclareLocal(_types.Object);
         var resolveDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var invokeResolveLocal = il.DeclareLocal(_types.Boolean);
+        var constructorTypeLocal = il.DeclareLocal(_types.Type);
+        var iteratorFunctionLocal = il.DeclareLocal(_types.Object);
+        var iteratorLocal = il.DeclareLocal(_types.Object);
+        var iteratorWrapperLocal = il.DeclareLocal(_types.IEnumeratorOfObject);
+        var iteratorTypeLocal = il.DeclareLocal(_types.String);
+        var exceptionLocal = il.DeclareLocal(_types.Exception);
 
-        // The compiler's intrinsic/inherited Promise.resolve path is represented
-        // by no own descriptor and is handled by the raw-value normalization
-        // loop below. Only an observable own override needs to be invoked while
-        // values are pulled. This avoids wrapping built-in async Tasks or an
-        // inherited Promise-subclass value in a second promise layer.
+        // Capture an observable C.resolve before iterator acquisition. The
+        // intrinsic/inherited %Promise%.resolve path remains the compiler's
+        // raw Task-preserving fast path; calling its value-form wrapper here
+        // would re-wrap native tasks and lose rejection identity. Own expando
+        // overrides and non-Promise constructors (including declared statics)
+        // are invoked per element.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "resolve");
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Stloc, resolveDescriptorLocal);
-        var noResolveOverrideLabel = il.DefineLabel();
+        var captureResolveLabel = il.DefineLabel();
+        var resolveCaptureDoneLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, noResolveOverrideLabel);
+        il.Emit(OpCodes.Brtrue, captureResolveLabel);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Stloc, constructorTypeLocal);
+        il.Emit(OpCodes.Ldloc, constructorTypeLocal);
+        il.Emit(OpCodes.Brfalse, captureResolveLabel);
+        il.Emit(OpCodes.Ldloc, constructorTypeLocal);
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Beq, resolveCaptureDoneLabel);
+        il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldloc, constructorTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.Type, "IsAssignableFrom", _types.Type));
+        il.Emit(OpCodes.Brtrue, resolveCaptureDoneLabel);
+
+        il.MarkLabel(captureResolveLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "resolve");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, resolveFunctionLocal);
-        il.MarkLabel(noResolveOverrideLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, invokeResolveLocal);
+        il.MarkLabel(resolveCaptureDoneLabel);
 
         // GetPromiseResolve requires the captured resolve value to be
         // callable before iterator acquisition. InvokeMethodValue's permissive
@@ -141,7 +228,7 @@ public partial class RuntimeEmitter
         // the guest TypeError into a rejection.
         var resolveCallableLabel = il.DefineLabel();
         var resolveCheckedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, resolveDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, invokeResolveLocal);
         il.Emit(OpCodes.Brfalse, resolveCheckedLabel);
         il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
         il.Emit(OpCodes.Call, runtime.TypeOf);
@@ -155,21 +242,17 @@ public partial class RuntimeEmitter
         il.MarkLabel(resolveCheckedLabel);
 
         // Arrays use the existing dense-list path and strings are safely finite
-        // built-in iterables. General custom iterators cannot be eagerly
-        // materialized here: Promise combinators must interleave each next(),
-        // C.resolve(), and then() call and perform IteratorClose on abrupt
-        // completion. Until that state-machine loop owns those steps, retain
-        // the established non-list rejection instead of risking an unbounded
-        // pre-materialization.
+        // built-in iterables. General custom iterators use an incremental loop
+        // below so next(), C.resolve(), and thenable adoption stay interleaved.
         var materializeLabel = il.DefineLabel();
+        var customIteratorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, listType);
         il.Emit(OpCodes.Brtrue, materializeLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, materializeLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Br, customIteratorLabel);
         il.MarkLabel(materializeLabel);
 
         // Materialize through the shared iterator-protocol bridge. Lists retain
@@ -201,24 +284,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, elementLocal);
 
-        // Mapper-free callers retain this fallback, though Promise combinators
-        // normally arrive here with resolution already applied during iteration.
         var useBuiltInResolveLabel = il.DefineLabel();
         var haveResolvedElementLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
+        il.Emit(OpCodes.Ldloc, invokeResolveLocal);
         il.Emit(OpCodes.Brfalse, useBuiltInResolveLabel);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, resolveFunctionLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
-        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+        EmitInvokeCapturedResolve(il);
         il.Emit(OpCodes.Br, haveResolvedElementLabel);
-
         il.MarkLabel(useBuiltInResolveLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
@@ -243,6 +314,129 @@ public partial class RuntimeEmitter
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
+
+        // Custom iterables must not be pre-materialized: a resolve/then abrupt
+        // completion can terminate an otherwise-infinite iterator and requires
+        // IteratorClose before the combinator rejects.
+        il.MarkLabel(customIteratorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Stloc, iteratorFunctionLocal);
+
+        var haveIteratorFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, iteratorFunctionLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, haveIteratorFunctionLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Value is not iterable");
+        il.MarkLabel(haveIteratorFunctionLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iteratorFunctionLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, iteratorLocal);
+
+        // GetIterator requires @@iterator to return an Object. TypeOf(null) is
+        // "object", so retain explicit null/undefined checks before the broad
+        // object/function test.
+        var iteratorObjectOkLabel = il.DefineLabel();
+        var iteratorTypeErrorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Brfalse, iteratorTypeErrorLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, iteratorTypeErrorLabel);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Stloc, iteratorTypeLocal);
+        il.Emit(OpCodes.Ldloc, iteratorTypeLocal);
+        il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, iteratorObjectOkLabel);
+        il.Emit(OpCodes.Ldloc, iteratorTypeLocal);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, iteratorObjectOkLabel);
+        il.Emit(OpCodes.Br, iteratorTypeErrorLabel);
+        il.MarkLabel(iteratorTypeErrorLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Iterator method must return an object");
+        il.MarkLabel(iteratorObjectOkLabel);
+
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Newobj, runtime.IteratorWrapperCtor);
+        il.Emit(OpCodes.Stloc, iteratorWrapperLocal);
+
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        var customLoopLabel = il.DefineLabel();
+        var customLoopDoneLabel = il.DefineLabel();
+        var customElementAddedLabel = il.DefineLabel();
+        il.MarkLabel(customLoopLabel);
+        il.Emit(OpCodes.Ldloc, iteratorWrapperLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IEnumerator, "MoveNext"));
+        il.Emit(OpCodes.Brfalse, customLoopDoneLabel);
+        il.Emit(OpCodes.Ldloc, iteratorWrapperLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.IEnumeratorOfObject, "Current").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, elementLocal);
+
+        // IteratorClose applies only after IteratorStep/IteratorValue succeeded.
+        // Errors while reading next/done/value therefore remain outside this
+        // exception region, matching the iterator-record [[Done]] rules.
+        il.BeginExceptionBlock();
+        var customUseBuiltInResolveLabel = il.DefineLabel();
+        var customHaveResolvedElementLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, invokeResolveLocal);
+        il.Emit(OpCodes.Brfalse, customUseBuiltInResolveLabel);
+        EmitInvokeCapturedResolve(il);
+        il.Emit(OpCodes.Br, customHaveResolvedElementLabel);
+        il.MarkLabel(customUseBuiltInResolveLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+        il.MarkLabel(customHaveResolvedElementLabel);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add", _types.Object));
+        il.Emit(OpCodes.Leave, customElementAddedLabel);
+
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Stloc, exceptionLocal);
+        il.Emit(OpCodes.Ldloc, iteratorLocal);
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
+        il.Emit(OpCodes.Call, closeIteratorMethod);
+        il.Emit(OpCodes.Leave, customElementAddedLabel); // unreachable, keeps the handler well-formed
+        il.EndExceptionBlock();
+
+        il.MarkLabel(customElementAddedLabel);
+        il.Emit(OpCodes.Br, customLoopLabel);
+
+        il.MarkLabel(customLoopDoneLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        void EmitInvokeCapturedResolve(ILGenerator targetIl)
+        {
+            targetIl.Emit(OpCodes.Ldarg_1);
+            targetIl.Emit(OpCodes.Ldloc, resolveFunctionLocal);
+            targetIl.Emit(OpCodes.Ldc_I4_1);
+            targetIl.Emit(OpCodes.Newarr, _types.Object);
+            targetIl.Emit(OpCodes.Dup);
+            targetIl.Emit(OpCodes.Ldc_I4_0);
+            targetIl.Emit(OpCodes.Ldloc, elementLocal);
+            targetIl.Emit(OpCodes.Stelem_Ref);
+            targetIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
+        }
 
     }
 
