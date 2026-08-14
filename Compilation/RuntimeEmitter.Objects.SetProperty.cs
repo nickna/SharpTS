@@ -42,6 +42,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brtrue, endLabel); // Frozen - silently return
 
+        // Honor any own descriptor before receiver-specific storage. This is
+        // the common OrdinarySet path for CLR-backed JS objects (Date, Error,
+        // RegExp, Promise, and other host carriers): accessors invoke their
+        // setter, non-writable/getter-only properties reject the write, and a
+        // writable data property updates only [[Value]] while preserving its
+        // attributes.
+        var existingPdsDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var existingPdsSetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, existingPdsSetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+        var noExistingPdsSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, noExistingPdsSetterLabel);
+        EmitInvokePdsSetterWithValueAndReturn(il, runtime, existingPdsSetterLocal);
+        il.MarkLabel(noExistingPdsSetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, existingPdsDescriptorLocal);
+        var noExistingPdsDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, existingPdsDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noExistingPdsDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, existingPdsDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, endLabel);
+        il.Emit(OpCodes.Ldloc, existingPdsDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noExistingPdsDescriptorLabel);
+
         // No additional setter fallback in standalone mode.
         il.MarkLabel(trySetterLabel);
 
@@ -128,11 +161,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "name");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorNameLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorNameSetter);
+        // Error properties are ordinary JS data properties after
+        // construction and accept values of any ECMAScript type. Keep the
+        // string-typed CLR slots as constructor/runtime internals; user writes
+        // live in PDS so object-valued name/message assignments round-trip.
+        EmitDefineDataDescriptorFromValue(il, runtime);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorNameLabel);
 
@@ -163,11 +196,7 @@ public partial class RuntimeEmitter
         // do not flow through the string-typed CLR compatibility property.
         il.Emit(OpCodes.Ret);
         il.MarkLabel(noErrorMessageDescriptorLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorMessageSetter);
+        EmitDefineDataDescriptorFromValue(il, runtime);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorMessageLabel);
 
@@ -177,11 +206,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "stack");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notErrorStackLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSErrorType);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Callvirt, runtime.TSErrorStackSetter);
+        EmitDefineDataDescriptorFromValue(il, runtime);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notErrorStackLabel);
 
@@ -1015,6 +1040,40 @@ public partial class RuntimeEmitter
         // silently no-ops (non-strict). Existing PDS entries still update.
         il.MarkLabel(tsFunctionSetLabel);
         {
+            // Existing function properties retain their descriptor shape.
+            // The previous unconditional DefineDataDescriptor replaced
+            // non-writable/accessor descriptors with a fresh W/E/C=true data
+            // descriptor on ordinary assignment.
+            var tsFnSetterLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, tsFnSetterLocal);
+            il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+            var tsFnNoSetterLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, tsFnNoSetterLabel);
+            EmitInvokePdsSetterWithValueAndReturn(il, runtime, tsFnSetterLocal);
+            il.MarkLabel(tsFnNoSetterLabel);
+
+            var tsFnExistingDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsFnExistingDescLocal);
+            var tsFnDefineNewLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, tsFnExistingDescLocal);
+            il.Emit(OpCodes.Brfalse, tsFnDefineNewLabel);
+            il.Emit(OpCodes.Ldloc, tsFnExistingDescLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+            var tsFnUpdateExistingLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, tsFnUpdateExistingLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(tsFnUpdateExistingLabel);
+            il.Emit(OpCodes.Ldloc, tsFnExistingDescLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(tsFnDefineNewLabel);
             var tsFnDoSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);

@@ -2860,158 +2860,54 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert undefined or null to object");
         il.MarkLabel(dpsPropsOkLabel);
 
-        // Save the ORIGINAL props identity for PDS lookups before the $TSObject
-        // unwrap below. PDS entries (accessor descriptors) are keyed against
-        // the $TSObject, not its inner _fields dict, so the unwrapped arg1 is
-        // useless for PDS lookups.
-        var origPropsLocal = il.DeclareLocal(_types.Object);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Stloc, origPropsLocal);
-
-        // If props is a $Object (e.g. `new Constructor()`), unwrap to its
-        // _fields Dict so the iteration path below sees the own keys. This
-        // is the simple case for ECMA-262 §20.1.2.3 step 3 when the source
-        // is a JS object literal exposed as $Object.
-        var notTSObjectPropsLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Brfalse, notTSObjectPropsLabel);
-        // Replace arg1 by-value with the unwrapped _fields. We can't actually
-        // overwrite Ldarg_1, so push the unwrapped value into a local that
-        // shadows for the iteration. Easiest: load fields here and stash into
-        // a local that the subsequent Isinst sees.
-        // Simpler: also overwrite the local arg by pushing arg1 = fields via
-        // Starg. (Starg modifies the argument slot.)
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
-        il.Emit(OpCodes.Starg_S, (byte)1);
-        il.MarkLabel(notTSObjectPropsLabel);
-
-        // Cast props to Dictionary<string, object?>
-        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
-        var enumeratorLocal = il.DeclareLocal(typeof(Dictionary<string, object?>.Enumerator));
-        var currentLocal = il.DeclareLocal(typeof(KeyValuePair<string, object?>));
-
+        // Use the same generic enumerable-own-key abstraction as Object.keys.
+        // The previous implementation unwrapped only $Object and otherwise
+        // assumed Dictionary<string, object?>, which made boxed strings,
+        // functions, Errors, Dates, RegExps, and singleton objects either no-op
+        // or enter an invalid PDS-extra path. GetKeys already unifies backing
+        // dictionaries, $IHasFields, indexed carriers, and descriptor-only own
+        // properties while filtering non-enumerable keys.
+        var keysLocal = il.DeclareLocal(_types.ListOfObject);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var keyLocal = il.DeclareLocal(_types.Object);
         var loopStartLabel = il.DefineLabel();
         var loopEndLabel = il.DefineLabel();
 
-        // dict = props as Dictionary<string, object?>
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Stloc, dictLocal);
-
-        // If not a dictionary, just return obj
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Brfalse, loopEndLabel);
-
-        // Get enumerator
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "GetEnumerator"));
-        il.Emit(OpCodes.Stloc, enumeratorLocal);
-
-        // Loop. ECMA-262 §20.1.2.3 step 3: For each key in OwnPropertyKeys
-        // filter by `Enumerable` before calling DefinePropertyOrThrow. We use
-        // PDSGetPropertyDescriptor to check the enumerable bit when a PDS
-        // descriptor exists (e.g. installed by a prior defineProperty with
-        // enumerable:false), and otherwise treat the dict key as enumerable
-        // (the default for object-literal own keys).
-        il.MarkLabel(loopStartLabel);
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var moveNext = typeof(Dictionary<string, object?>.Enumerator).GetMethod("MoveNext")!;
-        il.Emit(OpCodes.Call, moveNext);
-        il.Emit(OpCodes.Brfalse, loopEndLabel);
-
-        // Get current KVP
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        var currentProp = typeof(Dictionary<string, object?>.Enumerator).GetProperty("Current")!.GetGetMethod()!;
-        il.Emit(OpCodes.Call, currentProp);
-        il.Emit(OpCodes.Stloc, currentLocal);
-
-        var keyGetter = typeof(KeyValuePair<string, object?>).GetProperty("Key")!.GetGetMethod()!;
-        var valueGetter = typeof(KeyValuePair<string, object?>).GetProperty("Value")!.GetGetMethod()!;
-
-        // Skip internal marker keys (`__primitiveType` / `__primitiveValue` etc.)
-        // — these are CLR-level slots on boxed-primitive wrappers, NOT JS-visible
-        // own properties. Per ECMA-262 wrappers don't expose them via
-        // OwnPropertyKeys. Cheap StartsWith("__") gate matches the
-        // get_Length convention used elsewhere.
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, keyGetter);
-        il.Emit(OpCodes.Ldstr, "__");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", [_types.String])!);
-        il.Emit(OpCodes.Brtrue, loopStartLabel);
-
-        // Skip if PDS descriptor exists with Enumerable=false.
-        var enumOkLabel = il.DefineLabel();
-        var keyDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        il.Emit(OpCodes.Ldarg_1);  // props
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, keyGetter);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, keyDescLocal);
-        il.Emit(OpCodes.Ldloc, keyDescLocal);
-        il.Emit(OpCodes.Brfalse, enumOkLabel);
-        il.Emit(OpCodes.Ldloc, keyDescLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, enumOkLabel);
-        // Non-enumerable — skip this key.
-        il.Emit(OpCodes.Br, loopStartLabel);
-        il.MarkLabel(enumOkLabel);
-
-        // Call ObjectDefineProperty(obj, key, descriptor)
-        il.Emit(OpCodes.Ldarg_0);  // obj
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, keyGetter);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, valueGetter);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
-        il.Emit(OpCodes.Pop);  // Discard return value from defineProperty
-
-        il.Emit(OpCodes.Br, loopStartLabel);
-
-        il.MarkLabel(loopEndLabel);
-
-        // PDS-extras loop: iterate accessor-only own keys not in _fields/dict.
-        // For each, Get(props, key) fires the getter and yields the descriptor
-        // object to pass to ObjectDefineProperty. Per ECMA-262 §20.1.2.3 step 3,
-        // descriptor objects are obtained via Get(O, key) — accessor-only keys
-        // therefore route through the getter rather than reading dict directly.
-        var pdsExtraKeys = il.DeclareLocal(_types.ListOfObject);
-        il.Emit(OpCodes.Ldloc, origPropsLocal);
-        il.Emit(OpCodes.Ldloc, dictLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetEnumerableExtraKeys);
-        il.Emit(OpCodes.Stloc, pdsExtraKeys);
-        var pdsIdxLocal = il.DeclareLocal(_types.Int32);
-        var pdsLoopStartLabel = il.DefineLabel();
-        var pdsLoopEndLabel = il.DefineLabel();
+        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Stloc, keysLocal);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, pdsIdxLocal);
-        il.MarkLabel(pdsLoopStartLabel);
-        il.Emit(OpCodes.Ldloc, pdsIdxLocal);
-        il.Emit(OpCodes.Ldloc, pdsExtraKeys);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(loopStartLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, pdsLoopEndLabel);
-        var pdsCurKey = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, pdsExtraKeys);
-        il.Emit(OpCodes.Ldloc, pdsIdxLocal);
+        il.Emit(OpCodes.Bge, loopEndLabel);
+
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", _types.Int32));
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Stloc, pdsCurKey);
-        // ObjectDefineProperty(obj, key, GetProperty(origProps, key))
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        // DefinePropertyOrThrow(target, key, ToPropertyDescriptor(Get(props,key))).
+        // GetProperty is essential here: accessor-valued entries must invoke
+        // their getter with the original Properties object as receiver.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, pdsCurKey);
-        il.Emit(OpCodes.Ldloc, origPropsLocal);
-        il.Emit(OpCodes.Ldloc, pdsCurKey);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, pdsIdxLocal);
+
+        il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, pdsIdxLocal);
-        il.Emit(OpCodes.Br, pdsLoopStartLabel);
-        il.MarkLabel(pdsLoopEndLabel);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopStartLabel);
+        il.MarkLabel(loopEndLabel);
 
         // Return obj
         il.Emit(OpCodes.Ldarg_0);

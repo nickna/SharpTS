@@ -531,8 +531,54 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, pdsDescLocal);
         var checkProtoLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, checkProtoLabel);
+
+        // Descriptor-backed function properties obey ordinary [[Get]]. In
+        // particular, Object.defineProperty(fn, "x", { get() { ... } }) must
+        // invoke the getter with fn as `this`; returning Descriptor.Value here
+        // made accessor-only properties look like null and broke generic
+        // consumers such as Object.defineProperties.
+        var functionPdsGetterLocal = il.DeclareLocal(_types.Object);
+        var functionPdsDataLabel = il.DefineLabel();
+        var functionPdsUndefinedAccessorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, pdsDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, functionPdsGetterLocal);
+        il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
+        il.Emit(OpCodes.Brfalse, functionPdsDataLabel);
+        il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, functionPdsUndefinedAccessorLabel);
+        var functionPdsBoundGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, functionPdsBoundGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(functionPdsBoundGetterLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, functionPdsGetterLocal);
+        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(functionPdsDataLabel);
+        // A setter-only descriptor is still an accessor descriptor; [[Get]]
+        // returns undefined rather than the descriptor's unused Value slot.
+        il.Emit(OpCodes.Ldloc, pdsDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, functionPdsUndefinedAccessorLabel);
         il.Emit(OpCodes.Ldloc, pdsDescLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(functionPdsUndefinedAccessorLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         // PDS lookup failed. Per JS spec every function auto-creates an empty

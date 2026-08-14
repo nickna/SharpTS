@@ -5743,6 +5743,31 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-30.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-5.js")]
+    [InlineData("built-ins/Object/create/15.2.3.5-4-7.js")]
+    [InlineData("built-ins/Object/create/properties-arg-to-object-non-empty-string.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-15.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-8.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-2-9.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-16.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-a-9.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-241.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-5-b-248.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-12.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-17.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-18.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-19.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-198.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-2.js")]
+    [InlineData("built-ins/Object/defineProperties/15.2.3.7-6-a-21.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-411.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-587.js")]
+    [InlineData("built-ins/Object/keys/15.2.3.14-5-13.js")]
+    public void Compiled_object_descriptor_carriers_remaining_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/executor-call-context-strict.js")]
     public void Promise_jobs_invoke_guest_functions_with_undefined_this(string relativePath)
         => AssertPassInBothModes(relativePath);

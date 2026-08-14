@@ -18,6 +18,24 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        // Reject non-Math members before emitting any arguments. The generic
+        // call emitter must handle inherited/user properties such as
+        // Math.hasOwnProperty("x"). Previously this method converted and left
+        // every argument on the IL stack before eventually returning false,
+        // so the fallback emitted the call a second time and produced invalid
+        // IL at runtime.
+        if (methodName is not (
+            "random" or "min" or "max" or "sumPrecise" or "hypot" or
+            "round" or "sign" or "abs" or "floor" or "ceil" or "sqrt" or
+            "sin" or "cos" or "tan" or "log" or "exp" or "trunc" or "pow" or
+            "asin" or "acos" or "atan" or "atan2" or "sinh" or "cosh" or
+            "tanh" or "asinh" or "acosh" or "atanh" or "cbrt" or "log10" or
+            "log2" or "log1p" or "expm1" or "fround" or "f16round" or
+            "clz32" or "imul"))
+        {
+            return false;
+        }
+
         if (methodName == "random")
         {
             il.Emit(OpCodes.Call, ctx.Runtime!.Random);

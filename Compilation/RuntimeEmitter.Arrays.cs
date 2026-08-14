@@ -457,9 +457,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
         il.Emit(OpCodes.Brtrue, listLoopSkip);
 
-        il.Emit(OpCodes.Ldloc, resultLocal);
+        // Indexed array/list properties can carry descriptor metadata in PDS.
+        // Object.keys and for-in must omit a present element whose own
+        // descriptor is enumerable:false (for example an index created by
+        // Object.defineProperties with no enumerable member).
+        var listKeyLocal = il.DeclareLocal(_types.String);
+        var listKeyDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         il.Emit(OpCodes.Ldloca, indexLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, listKeyLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, listKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, listKeyDescLocal);
+        var listKeyEnumerableLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, listKeyDescLocal);
+        il.Emit(OpCodes.Brfalse, listKeyEnumerableLabel);
+        il.Emit(OpCodes.Ldloc, listKeyDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, listLoopSkip);
+        il.MarkLabel(listKeyEnumerableLabel);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, listKeyLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Add")!);
 
         il.MarkLabel(listLoopSkip);
@@ -710,8 +730,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(notTSObjectForGetters);
 
         // PDS extra keys (accessor-only own properties not in _fields).
-        // Same shape as the Dict path above. Pass fieldsDictLocal so the
-        // helper skips keys already iterated.
+        // This tail also serves CLR-backed JS objects that don't implement
+        // $IHasFields (notably Error and Date): their expando/accessor own
+        // properties live entirely in PDS, so they must reach this append
+        // instead of returning an empty list at returnResultLabel.
+        il.MarkLabel(returnResultLabel);
         var pdsKeysListIH = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, fieldsDictLocal);
@@ -721,7 +744,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, pdsKeysListIH);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
-        il.MarkLabel(returnResultLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ret);
 

@@ -542,7 +542,36 @@ public partial class RuntimeEmitter
         }
         else
         {
+            // The backing $Object dictionary and PDS metadata together form
+            // one own property. Honor the descriptor's configurable bit, then
+            // remove both representations. Previously the sloppy path removed
+            // only _fields, leaving configurable PDS properties observable and
+            // allowing non-configurable properties to appear deleted briefly.
+            var tsObjectDeleteDesc = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var tsObjectDescriptorConfigurable = il.DefineLabel();
+            il.Emit(OpCodes.Pop); // discard receiver/name loaded for the old direct call
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsObjectDeleteDesc);
+            il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
+            il.Emit(OpCodes.Brfalse, tsObjectDescriptorConfigurable);
+            il.Emit(OpCodes.Ldloc, tsObjectDeleteDesc);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, tsObjectDescriptorConfigurable);
+            EmitDeleteFail("' of object");
+            il.MarkLabel(tsObjectDescriptorConfigurable);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+            il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Callvirt, runtime.TSObjectDeleteProperty);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldc_I4_1);
         }
         il.Emit(OpCodes.Ret);
 
