@@ -241,7 +241,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "join":
-                EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                if (arguments.Count > 0)
+                    EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0, argLocals);
+                else
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 il.Emit(OpCodes.Call, ctx.Runtime!.ArrayJoin);
                 break;
 

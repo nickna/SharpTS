@@ -1691,7 +1691,8 @@ public partial class RuntimeEmitter
         // one JS argument (includes element / map callback / join separator /
         // sort comparator / ...). The runtime helper's second param is a plain
         // `object`, not an `object[]`.
-        void EmitSingleArgCase(string methodName, MethodBuilder runtimeMethod)
+        void EmitSingleArgCase(string methodName, MethodBuilder runtimeMethod,
+            bool missingIsUndefined = false)
         {
             var skipLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
@@ -1702,7 +1703,10 @@ public partial class RuntimeEmitter
 
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, listField);
-            EmitArgZeroOrNull();
+            if (missingIsUndefined)
+                EmitArgZeroOrUndefined();
+            else
+                EmitArgZeroOrNull();
             il.Emit(OpCodes.Call, runtimeMethod);
             EmitReturnBoxing(runtimeMethod);
 
@@ -1899,7 +1903,7 @@ public partial class RuntimeEmitter
         EmitSearchCase("lastIndexOf", runtime.ArrayLastIndexOf, missingSearchIsUndefined: true);
         EmitSearchCase("includes", runtime.ArrayIncludes, missingSearchIsUndefined: true);
         EmitArgsArrayCase("concat", runtime.ArrayConcat);
-        EmitSingleArgCase("join", runtime.ArrayJoin);
+        EmitSingleArgCase("join", runtime.ArrayJoin, missingIsUndefined: true);
         // Callback methods accept (callback, thisArg). thisArg is plumbed via
         // the `_currentCallbackThisArg` thread-static; see EmitCallbackCase.
         EmitCallbackCase("map", runtime.ArrayMap);

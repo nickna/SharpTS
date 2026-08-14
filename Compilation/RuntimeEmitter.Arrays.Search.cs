@@ -1300,22 +1300,21 @@ public partial class RuntimeEmitter
             _types.String,
             [_types.ListOfObject, _types.Object]
         );
+        // join must distinguish an omitted separator (undefined => ",") from
+        // an explicit null separator (ToString(null) => "null") when invoked
+        // through a $TSFunction prototype wrapper.
+        method.SetCustomAttribute(
+            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayJoin = method;
 
         var il = method.GetILGenerator();
 
-        // separator = (arg1 == null || arg1 is $Undefined) ? "," : Stringify(arg1).
-        // ECMA-262 23.1.3.16 step 4 specifies undefined → ",". The compiler's
-        // TSFunction wrapper pads missing args with `null` (not $Undefined),
-        // so wrapper-invoked join() with no args reaches here as null, which
-        // we also treat as the default-trigger. This trades spec compliance
-        // for `arr.join(null) === "null"` against correctness for the more
-        // common `arr.join()` case.
+        // separator = (arg1 is $Undefined) ? "," : ToString(arg1).
+        // Explicit null therefore becomes "null", while all dispatch paths
+        // encode an omitted separator with the undefined sentinel.
         var sepLocal = il.DeclareLocal(_types.String);
         var hasSep = il.DefineLabel();
         var afterSep = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, afterSep);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, afterSep);

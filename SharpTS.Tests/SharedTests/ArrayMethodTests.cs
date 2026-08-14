@@ -243,6 +243,22 @@ public class ArrayMethodTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Join_DistinguishesNullFromMissingSeparator(ExecutionMode mode)
+    {
+        var source = """
+            const values: any[] = [0, 1, 2];
+            const join: any = Array.prototype.join;
+            console.log(values.join());
+            console.log(values.join(null));
+            console.log(Array.prototype.join.call(values));
+            console.log(join.call(values, null));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0,1,2\n0null1null2\n0,1,2\n0null1null2\n", output);
+    }
+
     #endregion
 
     #region Reduce Tests
