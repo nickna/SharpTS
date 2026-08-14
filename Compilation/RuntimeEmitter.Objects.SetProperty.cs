@@ -1532,6 +1532,35 @@ public partial class RuntimeEmitter
         // `this.value` / `this.get` and reuse `this` as a descriptor.
         EmitGlobalThisSetRedirect(il, runtime);
 
+        // Proxy [[Set]] must run before receiver-shape dispatch. Preserve the
+        // proxy as Receiver so a handler's Reflect.set(target, key, value,
+        // receiver) observes the receiver's [[GetOwnProperty]] and
+        // [[DefineOwnProperty]] methods.
+        if (_features.UsesProxy)
+        {
+            var strictSetNotProxyLabel = il.DefineLabel();
+            var strictSetProxyLabel = il.DefineLabel();
+            EmitProxyTypeCheck(
+                il, () => il.Emit(OpCodes.Ldarg_0),
+                strictSetProxyLabel, strictSetNotProxyLabel);
+            il.MarkLabel(strictSetProxyLabel);
+            EmitProxySetCompiledCall(
+                il, runtime,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldarg_1),
+                () => il.Emit(OpCodes.Ldarg_2),
+                () => il.Emit(OpCodes.Ldarg_0));
+            var strictSetProxySucceededLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, strictSetProxySucceededLabel);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            GuestErrorEmitter.ThrowTypeError(
+                il, runtime, "Proxy set trap returned false");
+            il.MarkLabel(strictSetProxySucceededLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(strictSetNotProxyLabel);
+        }
+
         // Check if $Object
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

@@ -301,6 +301,39 @@ public class ProxyTests
     }
 
     [Theory, ModeData]
+    public void Proxy_SetTrap_PreservesReceiverThroughReflectSet(ExecutionMode mode)
+    {
+        var source = """
+            const log: string[] = [];
+            const target: any = { x: 1 };
+            const proxy: any = new Proxy(target, {
+                set(t: any, key: string, value: any, receiver: any) {
+                    log.push("set");
+                    if (receiver !== proxy) throw new Error("receiver was not proxy");
+                    return Reflect.set(t, key, value, receiver);
+                },
+                getOwnPropertyDescriptor(t: any, key: string) {
+                    log.push("getOwnPropertyDescriptor");
+                    return Reflect.getOwnPropertyDescriptor(t, key);
+                },
+                defineProperty(t: any, key: string, descriptor: any) {
+                    log.push("defineProperty");
+                    return Reflect.defineProperty(t, key, descriptor);
+                }
+            });
+
+            console.log(Object.getOwnPropertyDescriptor(proxy, "x").value);
+            log.length = 0;
+            Reflect.set(proxy, "x", 2, proxy);
+            console.log(log.join(","));
+            console.log(target.x);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\nset,getOwnPropertyDescriptor,defineProperty\n2\n", output);
+    }
+
+    [Theory, ModeData]
     public void Proxy_NestedTraps(ExecutionMode mode)
     {
         var source = @"

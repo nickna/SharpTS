@@ -842,6 +842,9 @@ public partial class RuntimeEmitter
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.
         EmitStringRaw(typeBuilder, runtime);
+        // Strict Proxy [[Set]] captures this descriptor callback before the
+        // public Object descriptor APIs receive their bodies below.
+        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
@@ -893,7 +896,6 @@ public partial class RuntimeEmitter
         // extensibility callbacks even though their public Object methods are
         // emitted later in this section. Declare the descriptor shell and emit
         // isExtensible up front so key consumers can capture stable delegates.
-        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
         EmitObjectIsExtensible(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
         DeclareProxyOwnKeysHelpers(typeBuilder, runtime);
         EmitNormalizeOwnPropertyKeys(typeBuilder, runtime);
@@ -949,9 +951,12 @@ public partial class RuntimeEmitter
         // UsesReflectMetadata, gated separately at line 848.)
         // IsConstructor is emitted before Promise methods above; Reflect uses
         // the already-defined shared helper here.
+        // Proxy [[Set]] forwarding also uses the receiver-aware ordinary-set
+        // helper even when guest code never names the Reflect object.
+        if (_features.UsesReflect || _features.UsesProxy)
+            EmitReflectSet(typeBuilder, runtime);
         if (_features.UsesReflect)
         {
-            EmitReflectSet(typeBuilder, runtime);
             EmitReflectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
             EmitReflectDefineProperty(typeBuilder, runtime);
             EmitReflectOwnKeys(typeBuilder, runtime);

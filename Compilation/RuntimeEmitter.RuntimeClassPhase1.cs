@@ -68,6 +68,18 @@ public partial class RuntimeEmitter
             _types.Void,
             [_types.Object, _types.String, _types.Object]);
 
+        // Proxy [[Set]] needs the receiver-aware OrdinarySet helper while
+        // SetPropertyStrict is being emitted, before Reflect's public methods
+        // receive their bodies later in EmitRuntimeClass.
+        if (_features.UsesReflect || _features.UsesProxy)
+        {
+            runtime.ReflectSet = typeBuilder.DefineMethod(
+                "ReflectSet",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Boolean,
+                [_types.Object, _types.Object, _types.Object, _types.Object]);
+        }
+
         // Reserve GetProcessObject() → object — the live $Process singleton
         // (epic #1078). Body emitted by EmitProcessObjectInfrastructure; the
         // signature must exist earlier because GlobalThisGetProperty (emitted

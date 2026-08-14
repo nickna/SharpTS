@@ -445,6 +445,57 @@ public class SharpTSProxy : ISharpTSCallable
         return value;
     }
 
+    /// <summary>
+    /// Compiled-runtime [[Set]] dispatch. The ordinary-set and descriptor
+    /// callbacks keep generated carrier semantics inside the emitted runtime,
+    /// while preserving the original receiver through proxy forwarding.
+    /// </summary>
+    public bool TrapSetCompiled(
+        string prop,
+        object? value,
+        object? receiver,
+        Func<object, object, object, object, bool> ordinarySet,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallableCompiled("set", ordinaryGet);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy targetProxy
+                ? targetProxy.TrapSetCompiled(
+                    prop, value, receiver, ordinarySet,
+                    ordinaryGetOwnPropertyDescriptor, ordinaryGet)
+                : ordinarySet(_target, prop, value!, receiver!);
+        }
+
+        bool result = ToBoolean(InvokeTrap(
+            trap, null, [_target, prop, value, receiver]));
+        if (!result) return false;
+
+        object? targetDescriptor = _target is SharpTSProxy targetProxyForDescriptor
+            ? targetProxyForDescriptor.TrapGetOwnPropertyDescriptorCompiled(
+                prop, ordinaryGetOwnPropertyDescriptor,
+                _ => true, ordinaryGet)
+            : ordinaryGetOwnPropertyDescriptor(_target, prop);
+        if (targetDescriptor is null || IsUndefinedLike(targetDescriptor))
+            return true;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (descriptor.Configurable) return true;
+        if (descriptor.HasValue && !descriptor.Writable
+            && !SharpTSObject.SameValue(value, descriptor.Value))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy set trap cannot change a fixed data property"));
+        }
+        if ((descriptor.HasGet || descriptor.HasSet) && descriptor.Set == null)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy set trap cannot assign to a fixed accessor without a setter"));
+        }
+        return true;
+    }
+
     internal bool TrapSetProperty(
         string prop, object? value, Interpreter? interp, object? receiver)
     {

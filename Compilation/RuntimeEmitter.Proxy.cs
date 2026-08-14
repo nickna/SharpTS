@@ -222,6 +222,64 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits compiled Proxy [[Set]] dispatch while preserving the original
+    /// receiver and delegating ordinary operations back to generated helpers.
+    /// Leaves the trap's boolean status on the stack.
+    /// </summary>
+    private void EmitProxySetCompiledCall(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        Action emitLoadObj,
+        Action emitLoadName,
+        Action emitLoadValue,
+        Action emitLoadReceiver)
+    {
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, emitLoadObj, "TrapSetCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_6);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                emitLoadName();
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                emitLoadValue();
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_2);
+                emitLoadReceiver();
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_3);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ReflectSet);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object, object, object, bool>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_4);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectGetOwnPropertyDescriptor);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object, object?>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_5);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+    }
+
+    /// <summary>
     /// Emits the Proxy [[HasProperty]] trap and leaves its boolean result on
     /// the stack. Non-Proxy receivers branch to <paramref name="notProxyLabel"/>.
     /// </summary>

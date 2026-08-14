@@ -141,6 +141,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
             case "set":
             {
                 // Reflect.set(target, propertyKey, value, receiver?) → bool
+                var targetLocal = il.DeclareLocal(ctx.Types.Object);
                 if (arguments.Count > 0)
                 {
                     emitter.EmitExpression(arguments[0]);
@@ -148,6 +149,8 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                     il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Stloc, targetLocal);
 
                 if (arguments.Count > 1)
                 {
@@ -164,6 +167,14 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                     il.Emit(OpCodes.Ldnull);
+
+                if (arguments.Count > 3)
+                {
+                    emitter.EmitExpression(arguments[3]);
+                    emitter.EmitBoxIfNeeded(arguments[3]);
+                }
+                else
+                    il.Emit(OpCodes.Ldloc, targetLocal);
 
                 il.Emit(OpCodes.Call, ctx.Runtime!.ReflectSet);
                 il.Emit(OpCodes.Box, typeof(bool));

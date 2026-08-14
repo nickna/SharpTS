@@ -6,22 +6,14 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
-    /// Emits ReflectSet: (object target, object key, object? value) → bool
-    /// Tries to set the property; returns false if frozen/sealed.
+    /// Emits ReflectSet: (object target, object key, object? value, object receiver) → bool.
+    /// Preserves the receiver for Proxy/OrdinarySet observable operations.
     /// </summary>
     private void EmitReflectSet(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = typeBuilder.DefineMethod(
-            "ReflectSet",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Boolean,
-            [_types.Object, _types.Object, _types.Object]
-        );
-        runtime.ReflectSet = method;
+        var method = runtime.ReflectSet;
 
         var il = method.GetILGenerator();
-        var resultLocal = il.DeclareLocal(_types.Boolean);
-
         // Check if target is null
         var notNullLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -30,6 +22,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notNullLabel);
+
+        var keyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        // Proxy target: perform its [[Set]] with the caller-provided receiver.
+        var proxyTargetLabel = il.DefineLabel();
+        var notProxyTargetLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0),
+            proxyTargetLabel, notProxyTargetLabel);
+        il.MarkLabel(proxyTargetLabel);
+        EmitProxySetCompiledCall(
+            il, runtime,
+            () => il.Emit(OpCodes.Ldarg_0),
+            () => il.Emit(OpCodes.Ldloc, keyLocal),
+            () => il.Emit(OpCodes.Ldarg_2),
+            () => il.Emit(OpCodes.Ldarg_3));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyTargetLabel);
 
         // Check if target is frozen
         il.Emit(OpCodes.Ldarg_0);
@@ -41,26 +54,71 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notFrozenLabel);
 
-        // try { SetProperty(target, key.ToString(), value); return true; }
-        // catch { return false; }
-        il.BeginExceptionBlock();
-
+        // The common no-explicit-receiver case can use the existing ordinary
+        // property store directly.
+        var distinctReceiverLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Bne_Un, distinctReceiverLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.SetProperty);
-
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ret);
 
-        il.BeginCatchBlock(_types.Exception);
+        // With a distinct receiver, OrdinarySet defines/updates the property
+        // on Receiver. Probe its own descriptor first (observable for Proxy),
+        // then send a partial or complete descriptor through
+        // [[DefineOwnProperty]] as required.
+        il.MarkLabel(distinctReceiverLabel);
+        var receiverDescriptorLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, receiverDescriptorLocal);
+
+        var receiverMissingLabel = il.DefineLabel();
+        var descriptorReadyLabel = il.DefineLabel();
+        var descriptorLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldloc, receiverDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, receiverMissingLabel);
+        il.Emit(OpCodes.Ldloc, receiverDescriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, receiverMissingLabel);
+
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Br, descriptorReadyLabel);
+
+        il.MarkLabel(receiverMissingLabel);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        void EmitTrueDescriptorField(string name)
+        {
+            il.Emit(OpCodes.Ldloc, descriptorLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Box, _types.Boolean);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "set_Item"));
+        }
+        EmitTrueDescriptorField("writable");
+        EmitTrueDescriptorField("enumerable");
+        EmitTrueDescriptorField("configurable");
+
+        il.MarkLabel(descriptorReadyLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
         il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, resultLocal);
-        il.EndExceptionBlock();
-
-        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
     }
 
