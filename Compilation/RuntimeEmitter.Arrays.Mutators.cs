@@ -3476,6 +3476,223 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitArrayToSplicedProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayToSplicedProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.Object, _types.ObjectArray]);
+        runtime.ArrayToSplicedProto = method;
+
+        var il = method.GetILGenerator();
+        var (receiver, length) = EmitGenericArrayReceiverAndLength(il, runtime);
+        var argCount = il.DeclareLocal(_types.Int32);
+        var actualStart = il.DeclareLocal(_types.Double);
+        var actualSkipCount = il.DeclareLocal(_types.Double);
+        var insertCount = il.DeclareLocal(_types.Double);
+        var newLength = il.DeclareLocal(_types.Double);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, argCount);
+
+        // actualStart: zero when start is absent, otherwise the usual
+        // relative-index normalization over the full safe-integer length.
+        var parseStart = il.DefineLabel();
+        var startDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Brtrue, parseStart);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, actualStart);
+        il.Emit(OpCodes.Br, startDone);
+        il.MarkLabel(parseStart);
+        EmitGenericRelativeArrayIndex(
+            il, runtime,
+            () =>
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldelem_Ref);
+            },
+            length,
+            actualStart);
+        il.MarkLabel(startDone);
+
+        // No arguments copies the whole source. With only start, delete the
+        // tail. Otherwise clamp ToIntegerOrInfinity(deleteCount).
+        var noArguments = il.DefineLabel();
+        var onlyStart = il.DefineLabel();
+        var parseSkip = il.DefineLabel();
+        var skipDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Brfalse, noArguments);
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Beq, onlyStart);
+        il.Emit(OpCodes.Br, parseSkip);
+        il.MarkLabel(noArguments);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, actualSkipCount);
+        il.Emit(OpCodes.Br, skipDone);
+        il.MarkLabel(onlyStart);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, actualSkipCount);
+        il.Emit(OpCodes.Br, skipDone);
+
+        il.MarkLabel(parseSkip);
+        var skipNumber = il.DeclareLocal(_types.Double);
+        var skipNumberValid = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, skipNumber);
+        il.Emit(OpCodes.Ldloc, skipNumber);
+        il.Emit(OpCodes.Ldloc, skipNumber);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, skipNumberValid);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, skipNumber);
+        il.MarkLabel(skipNumberValid);
+        il.Emit(OpCodes.Ldloc, skipNumber);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Truncate", [typeof(double)])!);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Math, "Max", _types.Double, _types.Double));
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Math, "Min", _types.Double, _types.Double));
+        il.Emit(OpCodes.Stloc, actualSkipCount);
+        il.MarkLabel(skipDone);
+
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Math, "Max", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Stloc, insertCount);
+
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Ldloc, actualSkipCount);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldloc, insertCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, newLength);
+
+        // The safe-integer overflow is specified as TypeError and takes
+        // precedence over ArrayCreate's uint32 RangeError.
+        var withinSafeInteger = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Ldc_R8, 9007199254740991.0);
+        il.Emit(OpCodes.Ble, withinSafeInteger);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "Array.prototype.toSpliced exceeded the safe integer limit");
+        il.MarkLabel(withinSafeInteger);
+        var withinArrayLength = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, newLength);
+        il.Emit(OpCodes.Ldc_R8, 4294967295.0);
+        il.Emit(OpCodes.Ble, withinArrayLength);
+        GuestErrorEmitter.ThrowRangeError(il, runtime, "Invalid array length");
+        il.MarkLabel(withinArrayLength);
+
+        var result = il.DeclareLocal(_types.ListOfObject);
+        var sourceIndex = il.DeclareLocal(_types.Double);
+        var itemIndex = il.DeclareLocal(_types.Int32);
+        var key = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(
+            _types.ListOfObject, _types.EmptyTypes));
+        il.Emit(OpCodes.Stloc, result);
+
+        // Copy the prefix densely: unlike slice, toSpliced uses Get and turns
+        // holes into explicit undefined values.
+        var prefixLoop = il.DefineLabel();
+        var prefixDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, sourceIndex);
+        il.MarkLabel(prefixLoop);
+        il.Emit(OpCodes.Ldloc, sourceIndex);
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Bge, prefixDone);
+        il.Emit(OpCodes.Ldloc, sourceIndex);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, sourceIndex);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, sourceIndex);
+        il.Emit(OpCodes.Br, prefixLoop);
+        il.MarkLabel(prefixDone);
+
+        // Insert args[2..].
+        var insertLoop = il.DefineLabel();
+        var insertDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Stloc, itemIndex);
+        il.MarkLabel(insertLoop);
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Ldloc, argCount);
+        il.Emit(OpCodes.Bge, insertDone);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, itemIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, itemIndex);
+        il.Emit(OpCodes.Br, insertLoop);
+        il.MarkLabel(insertDone);
+
+        // Copy the surviving suffix. A valid new length bounds the number of
+        // iterations even when sourceIndex itself is near 2^53-1.
+        var suffixLoop = il.DefineLabel();
+        var suffixDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, actualStart);
+        il.Emit(OpCodes.Ldloc, actualSkipCount);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, sourceIndex);
+        il.MarkLabel(suffixLoop);
+        il.Emit(OpCodes.Ldloc, sourceIndex);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Bge, suffixDone);
+        il.Emit(OpCodes.Ldloc, sourceIndex);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldloc, receiver);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, sourceIndex);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, sourceIndex);
+        il.Emit(OpCodes.Br, suffixLoop);
+        il.MarkLabel(suffixDone);
+
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayToSpliced(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // ArrayToSpliced(List<object> list, object[] args) -> List<object>

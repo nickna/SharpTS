@@ -373,7 +373,7 @@ public partial class ILEmitter
             "toReversed"    => (runtime.ArrayToReversed, "noArg",     _ctx.Types.Object),
             "sort"          => (runtime.ArraySortProto,  "single",    _ctx.Types.Object),
             "toSorted"      => (runtime.ArrayToSorted,   "single",    _ctx.Types.Object),
-            "toSpliced"     => (runtime.ArrayToSpliced,  "argsArray", _ctx.Types.Object),
+            "toSpliced"     => (runtime.ArrayToSplicedProto,"argsArray",_ctx.Types.Object),
             "with"          => (runtime.ArrayWith,       "argsArray", _ctx.Types.Object),
             // These prototype-specific helpers implement the generic
             // array-like algorithms directly against the original receiver
@@ -495,7 +495,7 @@ public partial class ILEmitter
         // flatMap creates its result with length 0, so its source length does
         // not participate in ArrayCreate and must not be read a second time.
         bool createsNewArrayPre = methodGet.Name.Lexeme is "map" or "filter"
-            or "splice" or "toSpliced" or "with" or "flat"
+            or "splice" or "with" or "flat"
             or "toReversed" or "toSorted";
         if (createsNewArrayPre)
         {
@@ -630,7 +630,7 @@ public partial class ILEmitter
         // length even when @@isConcatSpreadable is false.
         bool usesOriginalReceiver = methodName is "push" or "pop" or "shift"
             or "unshift" or "reverse" or "fill" or "copyWithin"
-            or "indexOf" or "lastIndexOf" or "slice";
+            or "indexOf" or "lastIndexOf" or "slice" or "toSpliced";
         if (methodName != "concat" && !usesOriginalReceiver)
         {
             IL.Emit(OpCodes.Call, useLazyMaterializer

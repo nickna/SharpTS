@@ -277,6 +277,7 @@ public class EmittedRuntime
     public MethodBuilder ArraySplice { get; set; } = null!;
     public MethodBuilder ArraySpliceProto { get; set; } = null!;
     public MethodBuilder ArrayToSpliced { get; set; } = null!;
+    public MethodBuilder ArrayToSplicedProto { get; set; } = null!;
     public MethodBuilder ToIntegerOrInfinity { get; set; } = null!;
     public MethodBuilder ArrayFindLast { get; set; } = null!;
     public MethodBuilder ArrayFindLastIndex { get; set; } = null!;

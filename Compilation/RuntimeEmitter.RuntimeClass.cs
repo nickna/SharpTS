@@ -1044,6 +1044,7 @@ public partial class RuntimeEmitter
         EmitArraySplice(typeBuilder, runtime);
         EmitArraySpliceProto(typeBuilder, runtime);
         EmitArrayToSpliced(typeBuilder, runtime);
+        EmitArrayToSplicedProto(typeBuilder, runtime);
         EmitArrayToReversed(typeBuilder, runtime);
         EmitArrayWith(typeBuilder, runtime);
         EmitArrayAt(typeBuilder, runtime);

@@ -782,6 +782,40 @@ public class ArrayMethodTests
         Assert.Equal("2\na,b\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_ToSpliced_ValidatesFullWidthResultBeforeReadingElements(ExecutionMode mode)
+    {
+        var source = """
+            const clamped: any = {
+                9007199254740989: "a",
+                9007199254740990: "b",
+                length: 9007199254741012
+            };
+            const result = Array.prototype.toSpliced.call(
+                clamped, 0, 9007199254740989);
+            console.log(result.length);
+            console.log(result.join(","));
+
+            let read = false;
+            const tooLarge: any = {
+                get 0() {
+                    read = true;
+                    throw new Error("unexpected read");
+                },
+                length: 4294967296
+            };
+            try {
+                Array.prototype.toSpliced.call(tooLarge, 0, 0);
+            } catch (error) {
+                console.log(error instanceof RangeError);
+            }
+            console.log(read);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\na,b\ntrue\nfalse\n", output);
+    }
+
     [Theory, InterpretedOnlyData]
     public void Array_Fill_IsGenericAndCoercesEmptyBounds(ExecutionMode mode)
     {
