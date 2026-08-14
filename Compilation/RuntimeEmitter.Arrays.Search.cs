@@ -1493,13 +1493,26 @@ public partial class RuntimeEmitter
         // to IsArray(E); $Arguments deliberately fails that brand check.
         var spreadValueLocal = il.DeclareLocal(_types.Object);
         var spreadableLocal = il.DeclareLocal(_types.Boolean);
+        var readSpreadabilityLabel = il.DefineLabel();
+        var spreadabilityKnownLabel = il.DefineLabel();
+
+        // IsConcatSpreadable returns false immediately for primitives. In
+        // particular, String.prototype[Symbol.isConcatSpreadable] must affect
+        // boxed String objects but never primitive string values.
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, readSpreadabilityLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, spreadableLocal);
+        il.Emit(OpCodes.Br, spreadabilityKnownLabel);
+
+        il.MarkLabel(readSpreadabilityLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldsfld, runtime.SymbolIsConcatSpreadable);
         il.Emit(OpCodes.Call, runtime.GetIndex);
         il.Emit(OpCodes.Stloc, spreadValueLocal);
 
         var defaultSpreadabilityLabel = il.DefineLabel();
-        var spreadabilityKnownLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, spreadValueLocal);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, defaultSpreadabilityLabel);
@@ -2438,6 +2451,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notNumberPrimitive);
+
+        // RegExp instances have an intrinsic RegExp.prototype even though
+        // that relationship is not represented by a per-instance PDS entry.
+        // Generic Array algorithms use HasProperty before Get, so walk that
+        // singleton explicitly for indexed properties installed by user code.
+        if (_features.UsesRegExp)
+        {
+            var notRegExpInstance = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, currentLocal);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, notRegExpInstance);
+            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+            il.Emit(OpCodes.Stloc, currentLocal);
+            il.Emit(OpCodes.Br, loopStart);
+            il.MarkLabel(notRegExpInstance);
+        }
 
         // Other object shapes can still carry an explicit PDS prototype.
         // Continue that chain before falling back to Object.prototype.

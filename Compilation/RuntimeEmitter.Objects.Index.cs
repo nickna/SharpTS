@@ -233,6 +233,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brfalse, notRegExpForSymbolLabel);
+
+            // User data on RegExp.prototype (for example
+            // Symbol.isConcatSpreadable) takes precedence over the intrinsic
+            // @@match/replace/search/split protocol fallbacks below.
+            var notConcatSpreadableSymbolLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldsfld, runtime.SymbolIsConcatSpreadable);
+            il.Emit(OpCodes.Bne_Un, notConcatSpreadableSymbolLabel);
+            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, symbolValueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+            il.Emit(OpCodes.Brtrue, symbolFoundLabel);
+            il.MarkLabel(notConcatSpreadableSymbolLabel);
             EmitRegExpSymbolDispatch(il, runtime);
             il.MarkLabel(notRegExpForSymbolLabel);
         }
@@ -281,6 +297,37 @@ public partial class RuntimeEmitter
         // already passed it to il.Emit, which throws on null. A redundant != null guard here
         // would only poison nullable flow analysis for the unconditional casts further down.
         EmitProtoSymbolFallback(runtime.TSArrayType, runtime.ArrayPrototypeField, runtime.ArrayPrototypePopulateMethod);
+
+        // Ordinary symbol-keyed [[Get]] walks the receiver's explicit PDS
+        // prototype chain just like string-keyed GetProperty. This is needed
+        // for inherited well-known symbols on boxed primitive and RegExp
+        // prototypes (notably Symbol.isConcatSpreadable), and for user-defined
+        // symbol data/accessor properties on arbitrary prototypes.
+        {
+            var symbolProtoLocal = il.DeclareLocal(_types.Object);
+            var symbolProtoDictLocal = il.DeclareLocal(_types.DictionaryObjectObject);
+            var symbolProtoLoopLabel = il.DefineLabel();
+            var symbolProtoDoneLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+            il.Emit(OpCodes.Stloc, symbolProtoLocal);
+            il.MarkLabel(symbolProtoLoopLabel);
+            il.Emit(OpCodes.Ldloc, symbolProtoLocal);
+            il.Emit(OpCodes.Brfalse, symbolProtoDoneLabel);
+            il.Emit(OpCodes.Ldloc, symbolProtoLocal);
+            il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
+            il.Emit(OpCodes.Stloc, symbolProtoDictLocal);
+            il.Emit(OpCodes.Ldloc, symbolProtoDictLocal);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, symbolValueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue"));
+            il.Emit(OpCodes.Brtrue, symbolFoundLabel);
+            il.Emit(OpCodes.Ldloc, symbolProtoLocal);
+            il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+            il.Emit(OpCodes.Stloc, symbolProtoLocal);
+            il.Emit(OpCodes.Br, symbolProtoLoopLabel);
+            il.MarkLabel(symbolProtoDoneLabel);
+        }
 
         // #265: symbol-keyed expando statics set on a base class constructor are
         // readable through subclasses (`Base[Symbol.x] = v` visible as `Sub[Symbol.x]`).
@@ -722,7 +769,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Blt, inRangeLabel);
 
             il.MarkLabel(oobLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            // Absent own indices still perform ordinary prototype lookup.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(inRangeLabel);
@@ -738,13 +789,19 @@ public partial class RuntimeEmitter
             // sentinel — so `[1,2,3,4,5].map(cb-that-deletes)[i]` compared
             // unequal to `undefined`. The isinst is a no-op for value-typed
             // backing lists, which never contain holes.
+            var listElementLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, listElementLocal);
             var notHoleLabel = il.DefineLabel();
-            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldloc, listElementLocal);
             il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
             il.Emit(OpCodes.Brfalse, notHoleLabel);
-            il.Emit(OpCodes.Pop);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Ret);
             il.MarkLabel(notHoleLabel);
+            il.Emit(OpCodes.Ldloc, listElementLocal);
             il.Emit(OpCodes.Ret);
         }
 

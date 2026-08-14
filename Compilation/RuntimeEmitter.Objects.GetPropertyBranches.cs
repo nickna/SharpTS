@@ -1053,11 +1053,15 @@ public partial class RuntimeEmitter
             PrototypeMethodBranch("test");
             PrototypeMethodBranch("toString");
 
-            // Other property names fall through to GetFieldsProperty so
-            // user-set data and the shared intrinsic-prototype fallback resolve.
-            il.Emit(OpCodes.Ldarg_0);
+            // Other property names continue through the intrinsic
+            // RegExp.prototype object. Own expandos were already handled by
+            // the PDS-first arm above; the prototype walk is required for
+            // user-installed indexed data/accessors and other ordinary
+            // properties on RegExp.prototype.
+            il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
             il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.GetFieldsProperty);
+            il.Emit(OpCodes.Call, method);
             il.Emit(OpCodes.Ret);
     }
 

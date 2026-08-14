@@ -115,4 +115,37 @@ public class ArrayConcatSpreadTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("[0,1,2]\n", output);
     }
+
+    [Theory, CompiledOnlyData]
+    public void Concat_UsesInheritedSpreadabilityAndIndexedProperties(ExecutionMode mode)
+    {
+        var source = """
+            Number.prototype[Symbol.isConcatSpreadable] = true;
+            Number.prototype.length = 2;
+            Number.prototype[0] = "n0";
+            Number.prototype[1] = "n1";
+            console.log(JSON.stringify([].concat(new Number(7))));
+
+            String.prototype[Symbol.isConcatSpreadable] = true;
+            console.log(JSON.stringify([].concat(new String("ab"))));
+            console.log(JSON.stringify([].concat("ab")));
+
+            RegExp.prototype[Symbol.isConcatSpreadable] = true;
+            RegExp.prototype.length = 2;
+            RegExp.prototype[0] = "r0";
+            RegExp.prototype[1] = "r1";
+            console.log(JSON.stringify([].concat(/x/)));
+
+            Array.prototype[1] = "inherited";
+            const sparse: any[] = ["own"];
+            sparse.length = 2;
+            console.log(JSON.stringify(sparse.concat()));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "[\"n0\",\"n1\"]\n[\"a\",\"b\"]\n[\"ab\"]\n" +
+            "[\"r0\",\"r1\"]\n[\"own\",\"inherited\"]\n",
+            output);
+    }
 }
