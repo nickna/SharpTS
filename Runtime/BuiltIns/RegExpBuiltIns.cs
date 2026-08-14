@@ -693,30 +693,10 @@ public static class RegExpBuiltIns
         if (argument is not (SharpTSObject or SharpTSRegExp or SharpTSInstance
             or SharpTSArray or ISharpTSCallable))
             return false;
-        object? matcher = GetMatchMember(argument);
+        object? matcher = interp.GetSymbolPropertyValue(argument, SharpTSSymbol.Match);
         if (matcher is not (null or SharpTSUndefined))
             return Compilation.RuntimeTypes.IsTruthy(matcher);
         return argument is SharpTSRegExp;
-    }
-
-    /// <summary>
-    /// Reads <c>Get(argument, @@match)</c> — a user-set own symbol property
-    /// wins over the inherited RegExp.prototype[@@match] method.
-    /// </summary>
-    private static object? GetMatchMember(object? argument)
-    {
-        switch (argument)
-        {
-            case SharpTSRegExp rx:
-                return rx.TryGetSymbolProperty(SharpTSSymbol.Match, out var ov)
-                    ? ov : GetSymbolMember(rx, SharpTSSymbol.Match);
-            case SharpTSObject o:
-                return o.GetBySymbol(SharpTSSymbol.Match);
-            case SharpTSInstance inst:
-                return inst.GetBySymbol(SharpTSSymbol.Match);
-            default:
-                return null;
-        }
     }
 
     /// <summary>
@@ -1159,72 +1139,57 @@ public static class RegExpBuiltIns
     private static object? SpeciesConstructor(Interpreter interp, object? O)
     {
         // Step 2: Let C be ? Get(O, "constructor").
-        var c = interp.GetProperty(O, "constructor");
+        var c = interp.GetPropertyValue(O, "constructor");
 
         // Step 3: If C is undefined, return defaultConstructor (we signal
         // "use default" with null).
-        if (c is null or SharpTSUndefined) return null;
+        if (c is SharpTSUndefined) return null;
 
         // Step 4: If Type(C) is not Object, throw TypeError.
-        if (c is bool or double or string)
+        if (c is null or bool or double or int or long or float or decimal
+            or char or string or SharpTSSymbol or SharpTSBigInt
+            or System.Numerics.BigInteger)
             throw new ThrowException(new SharpTSTypeError(
                 "constructor must be an object"));
 
+        // Host constructor wrappers do not carry guest-defined symbol slots.
+        // %RegExp%[@@species] resolves to the default RegExp constructor; other
+        // built-ins (most commonly inherited %Object% on a plain receiver) have
+        // no @@species and therefore select the same default.
+        if (c is SharpTSBuiltInConstructor)
+            return null;
+
         // Step 5: Let S be ? Get(C, @@species).
-        // For symbol-keyed lookup we go through the symbol-dict mechanism on
-        // the constructor object; SharpTSObject / Function / etc. expose
-        // GetBySymbol or accept defineProperty for symbol keys. Symbol-keyed
-        // accessors (`Object.defineProperty(fn, Symbol.species, {get: ...})`)
-        // win over data values — test262's species-ctor-species-get-err.js
-        // installs a throwing getter that this lookup must propagate.
-        var species = c switch
-        {
-            SharpTSObject sObj => sObj.GetBySymbol(SharpTSSymbol.Species),
-            SharpTSInstance inst => inst.GetBySymbol(SharpTSSymbol.Species),
-            SharpTSFunction fn => GetSymbolPropertyFromCallable(interp, fn, SharpTSSymbol.Species),
-            SharpTSArrowFunction arr => GetSymbolPropertyFromCallable(interp, arr, SharpTSSymbol.Species),
-            _ => null
-        };
+        // Use the interpreter's ordinary symbol Get operation so accessors
+        // and proxies are observable and abrupt completions propagate.
+        var species = c is SharpTSObject
+            or SharpTSInstance
+            or SharpTSFunction
+            or SharpTSArrowFunction
+            or SharpTSArray
+            or SharpTSProxy
+            or ISharpTSSymbolPropertyBag
+                ? interp.GetSymbolPropertyValue(c, SharpTSSymbol.Species)
+                : SharpTSUndefined.Instance;
 
         // Step 6-7: undefined / null → return defaultConstructor.
         if (species is null or SharpTSUndefined) return null;
 
-        // Step 8: IsConstructor(S) → return S. We don't have IsConstructor
-        // implemented, so accept any callable (matches most test262 patterns
-        // — they install plain functions as species).
-        if (species is ISharpTSCallable) return species;
+        // Step 8: IsConstructor(S) → return S.
+        if (species is SharpTSClass
+            or SharpTSFunction
+            or SharpTSBuiltInConstructor
+            or BuiltInMethod { IsConstructor: true }
+            || species is SharpTSArrowFunction { HasOwnThis: true })
+            return species;
 
         throw new ThrowException(new SharpTSTypeError("species is not a constructor"));
     }
 
     /// <summary>
-    /// Reads a symbol-keyed property from a callable, honoring accessors
-    /// installed via <c>Object.defineProperty(fn, sym, {get, set})</c>.
-    /// Throwing getters propagate back to the caller (test262
-    /// species-ctor-species-get-err.js depends on this).
-    /// </summary>
-    private static object? GetSymbolPropertyFromCallable(Interpreter interp, object obj, SharpTSSymbol symbol)
-    {
-        if (obj is SharpTSFunction fn)
-        {
-            if (fn.TryGetSymbolAccessor(symbol, out var getter, out _) && getter != null)
-                return getter.Call(interp, []);
-            if (fn.TryGetSymbolProperty(symbol, out var v)) return v;
-        }
-        if (obj is SharpTSArrowFunction arr)
-        {
-            if (arr.TryGetSymbolAccessor(symbol, out var arrGetter, out _) && arrGetter != null)
-                return arrGetter.Call(interp, []);
-            if (arr.TryGetSymbolProperty(symbol, out var v2)) return v2;
-        }
-        return null;
-    }
-
-    /// <summary>
-    /// ECMA-262 §22.2.5.8 RegExp.prototype [@@matchAll]. Simplified — returns
-    /// a $Array of match results. Doesn't yet honor SpeciesConstructor
-    /// (callers' tests cover that separately); reads flags via Get for
-    /// user-getter propagation.
+    /// ECMA-262 §22.2.5.8 RegExp.prototype [@@matchAll]. Performs the
+    /// observable IsRegExp / SpeciesConstructor / flags / lastIndex sequence,
+    /// constructs a separate matcher, and returns its stateful result iterator.
     /// </summary>
     private static RuntimeValue SymbolMatchAllImpl(Interpreter interp, RuntimeValue recvV, ReadOnlySpan<RuntimeValue> args)
     {
@@ -1232,14 +1197,39 @@ public static class RegExpBuiltIns
         RequireObject(recv, "[Symbol.matchAll]");
         var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
 
-        var flags = ToStr(interp, interp.GetProperty(recv, "flags"));
-        bool fullUnicode = flags.Contains('u');
+        bool receiverIsRegExp = IsRegExp(interp, recv);
+        object? speciesCtor = receiverIsRegExp
+            ? SpeciesConstructor(interp, recv)
+            : null;
 
-        // Reset lastIndex when global; for non-global, the per-spec sequence
-        // would species-construct a global splitter, but our simplified
-        // implementation just iterates from current lastIndex (or 0 if none).
-        if (flags.Contains('g'))
-            interp.SetProperty(recv, "lastIndex", 0.0);
+        string flags = receiverIsRegExp
+            ? ToStr(interp, interp.GetProperty(recv, "flags"))
+            : "g";
+
+        object? matcher;
+        if (speciesCtor is not null)
+        {
+            matcher = interp.Construct(speciesCtor, [recv, flags]);
+        }
+        else if (receiverIsRegExp && recv is SharpTSRegExp rx)
+        {
+            matcher = new SharpTSRegExp(rx.Source, flags);
+        }
+        else if (receiverIsRegExp)
+        {
+            var source = ToStr(interp, interp.GetProperty(recv, "source"));
+            matcher = new SharpTSRegExp(source, flags);
+        }
+        else
+        {
+            matcher = new SharpTSRegExp(ToStr(interp, recv), flags);
+        }
+
+        int lastIndex = ToLengthAsInt(
+            interp, interp.GetPropertyValue(recv, "lastIndex"));
+        interp.SetProperty(matcher, "lastIndex", (double)lastIndex);
+
+        bool fullUnicode = flags.Contains('u');
 
         // Detect the underlying-regex/global mismatch: if `flags` claims
         // 'g' but the actual SharpTSRegExp's internal [[Global]] bit is
@@ -1250,7 +1240,7 @@ public static class RegExpBuiltIns
         // required to respect by spec but our internal matcher does not
         // when its construction-time [[Global]] is false.
         bool flagsClaimsGlobal = flags.Contains('g');
-        bool underlyingGlobal = recv is SharpTSRegExp recvRx && recvRx.Global;
+        bool underlyingGlobal = matcher is SharpTSRegExp matcherRx && matcherRx.Global;
         bool slicePath = flagsClaimsGlobal && !underlyingGlobal;
 
         var results = new List<object?>();
@@ -1258,7 +1248,7 @@ public static class RegExpBuiltIns
         while (true)
         {
             string searchStr = slicePath ? s.Substring(sliceOffset) : s;
-            var match = RegExpExec(interp, recv, searchStr);
+            var match = RegExpExec(interp, matcher, searchStr);
             if (match is null) break;
 
             if (slicePath)
@@ -1274,9 +1264,10 @@ public static class RegExpBuiltIns
             var matchStr = ToStr(interp, interp.GetProperty(match, "0"));
             if (matchStr.Length == 0)
             {
-                var thisIndex = ToLengthAsInt(interp.GetProperty(recv, "lastIndex"));
+                var thisIndex = ToLengthAsInt(
+                    interp, interp.GetPropertyValue(matcher, "lastIndex"));
                 int nextIndex = AdvanceStringIndex(s, thisIndex, fullUnicode);
-                interp.SetProperty(recv, "lastIndex", (double)nextIndex);
+                interp.SetProperty(matcher, "lastIndex", (double)nextIndex);
                 if (slicePath) sliceOffset = nextIndex;
             }
             else if (slicePath)
@@ -1285,7 +1276,7 @@ public static class RegExpBuiltIns
                 int matchEnd = absIdx + matchStr.Length;
                 if (matchEnd <= sliceOffset) break;
                 sliceOffset = matchEnd;
-                interp.SetProperty(recv, "lastIndex", (double)matchEnd);
+                interp.SetProperty(matcher, "lastIndex", (double)matchEnd);
             }
         }
         return RuntimeValue.FromObject(new SharpTSIterator(results));

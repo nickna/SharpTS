@@ -702,6 +702,35 @@ public sealed class Issue1279ParityTests
         => AssertPassInBothModes(relativePath);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/isregexp-this-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/regexpcreate-this-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-get-constructor-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-get-species-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-is-not-object-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-species-is-not-constructor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor-species-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/this-get-flags.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/this-tostring-flags.js")]
+    public void RegExp_matchAll_observes_species_and_dynamic_properties_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-constructor.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/this-lastindex-cached.js")]
+    public void RegExp_matchAll_additional_cases_pass_in_interpreted_mode(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted);
+
+    [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/coerce-flags-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/get-flags-err.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.split/species-ctor-species-non-ctor.js")]
+    public void RegExp_split_preserves_abrupt_flags_and_species_checks_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    [Theory]
     [InlineData("built-ins/Number/S15.7.5_A1_T01.js")]
     [InlineData("built-ins/Number/S15.7.5_A1_T03.js")]
     [InlineData("built-ins/Object/create/15.2.3.5-4-41.js")]
