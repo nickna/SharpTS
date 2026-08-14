@@ -1336,6 +1336,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDoublePrimLabel);
 
+        if (_features.UsesBigInt)
+        {
+            // BigInt primitive receivers walk BigInt.prototype. Accessor
+            // descriptors must observe the primitive (not the prototype
+            // dictionary) as `this`, matching GetV/Call semantics used by
+            // JSON.stringify's toJSON lookup.
+            var notBigIntPrimLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.BigInteger);
+            il.Emit(OpCodes.Brfalse, notBigIntPrimLabel);
+            il.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
+
+            var bigIntProtoDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var bigIntProtoGetterLocal = il.DeclareLocal(_types.Object);
+            var bigIntProtoOrdinaryLookupLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, bigIntProtoDescLocal);
+            il.Emit(OpCodes.Ldloc, bigIntProtoDescLocal);
+            il.Emit(OpCodes.Brfalse, bigIntProtoOrdinaryLookupLabel);
+            il.Emit(OpCodes.Ldloc, bigIntProtoDescLocal);
+            il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, bigIntProtoGetterLocal);
+            il.Emit(OpCodes.Ldloc, bigIntProtoGetterLocal);
+            il.Emit(OpCodes.Brfalse, bigIntProtoOrdinaryLookupLabel);
+            il.Emit(OpCodes.Ldloc, bigIntProtoGetterLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, bigIntProtoOrdinaryLookupLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, bigIntProtoGetterLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(bigIntProtoOrdinaryLookupLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.BigIntPrototypeField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, method);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notBigIntPrimLabel);
+        }
+
         // $Bound*Method and $BoundAnyFunction - callable wrappers that need .call/.apply/.bind
         // support. Route through GetFunctionMethod which handles bind/call/apply/length/name.
         // Bound methods already capture their receiver, so thisArg passed to .call/.apply is

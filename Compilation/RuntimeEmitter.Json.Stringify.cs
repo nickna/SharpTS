@@ -290,14 +290,10 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         // ECMA-262 25.5.2.1 step 12: SerializeJSONProperty("", { "": value }).
-        // toJSON (step 2) runs before recursion. Pre-invoke at the root with
-        // key="" so toJSON's first arg is correctly observed by tests like
-        // value-tojson-arguments.js. The duplicate check inside StringifyValue
-        // is a no-op when the value has already been replaced.
+        // StringifyValue performs the single toJSON lookup using the root key.
         var rootValueLocalSimple = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, rootValueLocalSimple);
-        EmitToJsonCheck(il, rootValueLocalSimple, runtime, "");
 
         // Map $Undefined → JS undefined directly here, since StringifyValue
         // returns C# null for $Undefined and we'd map back to $Undefined below.
@@ -386,10 +382,6 @@ public partial class RuntimeEmitter
         // callers).
         EmitToJsonCheck(il, valueLocal, runtime, keyArgIndex: 3);
 
-        // BigInt throws only after its prototype toJSON hook has had a chance
-        // to replace the primitive (SerializeJSONProperty steps 2 then 10).
-        EmitBigIntCheck(il, valueLocal, runtime);
-
         // toJSON may have returned $Undefined — re-check and return C# null
         // so the caller treats it as JSON-undefined (root: returns undefined,
         // array: emits "null", object: omits key). Without this re-check,
@@ -402,6 +394,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(afterToJsonUndefLabel);
+
+        // A callable toJSON may return JavaScript null. Handle it before
+        // object-only processing (notably BigInt's GetType-based check).
+        var afterToJsonNullLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Brtrue, afterToJsonNullLabel);
+        il.Emit(OpCodes.Ldstr, "null");
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(afterToJsonNullLabel);
 
         // JSON.rawJSON carries validated source text in an unforgeable emitted
         // type. Serialize it verbatim after the toJSON step.
@@ -426,6 +427,9 @@ public partial class RuntimeEmitter
         // the marker dict instead of "true". Check both $Object and Dictionary
         // since either may be the receiver shape.
         EmitBoxedPrimitiveJsonCoerce(il, valueLocal, runtime);
+
+        // BigInt rejection occurs after toJSON and boxed-primitive unwrapping.
+        EmitBigIntCheck(il, valueLocal, runtime);
 
         // Proxy materialization (#92): if value is SharpTSProxy, dispatch its
         // [[OwnPropertyKeys]] / [[Get]] traps and substitute a Dictionary so the
@@ -604,7 +608,66 @@ public partial class RuntimeEmitter
         il.MarkLabel(notSkippedLabel);
     }
 
-    private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime, string? key = null, int? keyArgIndex = null)
+    private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime,
+        string? key = null, int? keyArgIndex = null, LocalBuilder? keyLocal = null)
+    {
+        var doneLabel = il.DefineLabel();
+
+        // SerializeJSONProperty only performs Get(value, "toJSON") for
+        // Objects and BigInt primitives. Other primitive values skip this step.
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Brfalse, doneLabel);
+        foreach (var primitiveType in new[] { _types.Boolean, _types.Double, _types.String })
+        {
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, doneLabel);
+        }
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Brtrue, doneLabel);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, doneLabel);
+
+        var toJsonLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, toJsonLocal);
+
+        // IsCallable(toJSON)
+        il.Emit(OpCodes.Ldloc, toJsonLocal);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, doneLabel);
+
+        var argsLocal = il.DeclareLocal(_types.ObjectArray);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        if (keyLocal != null)
+            il.Emit(OpCodes.Ldloc, keyLocal);
+        else if (keyArgIndex.HasValue)
+            il.Emit(OpCodes.Ldarg, keyArgIndex.Value);
+        else
+            il.Emit(OpCodes.Ldstr, key ?? string.Empty);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, toJsonLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        il.MarkLabel(doneLabel);
+    }
+
+    private void EmitToJsonCheckLegacy(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime, string? key = null, int? keyArgIndex = null)
     {
         var noToJsonLabel = il.DefineLabel();
 
@@ -1064,7 +1127,7 @@ public partial class RuntimeEmitter
 
     /// <summary>
     /// ECMA-262 §25.5.2.3 step 4 / §25.5.2.1 step 5: coerce a boxed
-    /// Number/String/Boolean wrapper held in <paramref name="valueLocal"/> to the
+    /// Number/String/Boolean/BigInt wrapper held in <paramref name="valueLocal"/> to the
     /// primitive JSON serializes. Number → <c>$Runtime.ToNumber</c>, String →
     /// <c>$Runtime.ToJsString</c> (both run ECMA-262 ToPrimitive, honoring an own
     /// <c>valueOf</c>/<c>toString</c> override — #574), Boolean → its
@@ -1103,6 +1166,8 @@ public partial class RuntimeEmitter
         var strEq = _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String);
         var numberCase = il.DefineLabel();
         var booleanCase = il.DefineLabel();
+        var stringCase = il.DefineLabel();
+        var bigintCase = il.DefineLabel();
 
         il.Emit(OpCodes.Ldloc, tag);
         il.Emit(OpCodes.Ldstr, "Number");
@@ -1112,8 +1177,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Boolean");
         il.Emit(OpCodes.Call, strEq);
         il.Emit(OpCodes.Brtrue, booleanCase);
+        il.Emit(OpCodes.Ldloc, tag);
+        il.Emit(OpCodes.Ldstr, "String");
+        il.Emit(OpCodes.Call, strEq);
+        il.Emit(OpCodes.Brtrue, stringCase);
+        il.Emit(OpCodes.Ldloc, tag);
+        il.Emit(OpCodes.Ldstr, "BigInt");
+        il.Emit(OpCodes.Call, strEq);
+        il.Emit(OpCodes.Brtrue, bigintCase);
+        il.Emit(OpCodes.Br, notBoxed);
 
         // String tag → ToString (string-hint ToPrimitive → toString first).
+        il.MarkLabel(stringCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, valueLocal);
@@ -1129,6 +1204,15 @@ public partial class RuntimeEmitter
 
         // Boolean tag → [[BooleanData]] directly (no coercion per ECMA-262).
         il.MarkLabel(booleanCase);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldstr, "__primitiveValue");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Br, done);
+
+        // BigInt wrapper → [[BigIntData]]. The caller performs the required
+        // TypeError check after all user hooks have run.
+        il.MarkLabel(bigintCase);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldstr, "__primitiveValue");
         il.Emit(OpCodes.Call, runtime.GetProperty);

@@ -168,6 +168,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, rootValueLocal);
 
+        // Create the spec's synthetic ordinary-object holder with one own
+        // writable/enumerable/configurable data property named "". Populate
+        // the backing dictionary directly so an inherited Object.prototype
+        // setter for "" is not invoked.
+        var rootHolderFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var rootHolderLocal = il.DeclareLocal(runtime.TSObjectType);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stloc, rootHolderFieldsLocal);
+        il.Emit(OpCodes.Ldloc, rootHolderFieldsLocal);
+        il.Emit(OpCodes.Ldstr, "");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "Add", _types.String, _types.Object));
+        il.Emit(OpCodes.Ldloc, rootHolderFieldsLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSObjectCtor);
+        il.Emit(OpCodes.Stloc, rootHolderLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldloc, rootHolderLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, runtime.PDSSetPrototype);
+
         // Per ECMA-262 25.5.2.3 SerializeJSONProperty step 2: toJSON runs
         // BEFORE step 3 (replacer). At the root, key = "" — the synthetic
         // wrapper is `{ "": value }` per step 12. Pass "" so toJSON sees
@@ -205,7 +226,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(rootIsTSFunctionLabel);
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldloc, rootHolderLocal);
         il.Emit(OpCodes.Ldloc, rootArgsLocal);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, rootValueLocal);
@@ -214,7 +235,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(rootIsBoundLabel);
         il.Emit(OpCodes.Ldloc, replacerFuncLocal);
         il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldloc, rootHolderLocal);
         il.Emit(OpCodes.Ldloc, rootArgsLocal);
         il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
         il.Emit(OpCodes.Stloc, rootValueLocal);
@@ -435,24 +456,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Check for BigInt
-        EmitBigIntCheck(il, valueLocal, runtime);
-
-        // Check for toJSON() method. ECMA-262 25.5.2.3 step 2.b.i requires
-        // toJSON's first arg to be the property key — read it from arg 5
-        // (the helper's key parameter, threaded by all recursive callers).
-        EmitToJsonCheck(il, valueLocal, runtime, keyArgIndex: 5);
-
-        // toJSON returned $Undefined → C# null result (caller treats as
-        // JSON-undefined). See note in StringifyValue.
-        var afterToJsonUndefLabelFull = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brfalse, afterToJsonUndefLabelFull);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(afterToJsonUndefLabelFull);
-
         var notRawJsonLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, runtime.TSRawJsonType);
@@ -470,6 +473,10 @@ public partial class RuntimeEmitter
         // valueOf/toString override (#574). See EmitBoxedPrimitiveJsonCoerce
         // (RuntimeEmitter.Json.Stringify.cs) for the rationale.
         EmitBoxedPrimitiveJsonCoerce(il, valueLocal, runtime);
+
+        // The caller has already applied toJSON and the replacer. Unwrap a
+        // boxed BigInt result, then perform step 10's mandatory rejection.
+        EmitBigIntCheck(il, valueLocal, runtime);
 
         // Proxy materialization (#92): if value is SharpTSProxy, dispatch its
         // [[OwnPropertyKeys]] / [[Get]] traps and substitute a Dictionary so the
@@ -685,8 +692,14 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notHoleLabel);
 
-        // If replacer function exists, call it: elem = InvokeCallback(replacer, i, elem)
-        EmitCallReplacerIfNeeded(il, elemLocal, iLocal, arrLocal, runtime);
+        // SerializeJSONProperty order: toJSON first, then replacer. Both see
+        // the string form of the array index as the property key.
+        var elemKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloca, iLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Stloc, elemKeyLocal);
+        EmitToJsonCheck(il, elemLocal, runtime, keyLocal: elemKeyLocal);
+        EmitCallReplacerIfNeeded(il, elemLocal, elemKeyLocal, arrLocal, runtime);
 
         // strResult = StringifyValueFull(elem, replacer, allowedKeys, indentStr, depth + 1, i.ToString())
         // ECMA-262 25.5.2.4 SerializeJSONArray step 8.a — the key passed down
@@ -699,8 +712,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg, 4); // depth
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Ldloca, iLocal);
-        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Ldloc, elemKeyLocal);
         il.Emit(OpCodes.Call, stringifyMethod);
         il.Emit(OpCodes.Stloc, strResultLocal);
 
@@ -831,7 +843,7 @@ public partial class RuntimeEmitter
     /// invoked with the holder (parent array) as `this`.
     /// Handles both $TSFunction and $BoundTSFunction.
     /// </summary>
-    private void EmitCallReplacerIfNeeded(ILGenerator il, LocalBuilder elemLocal, LocalBuilder indexLocal, LocalBuilder holderLocal, EmittedRuntime runtime)
+    private void EmitCallReplacerIfNeeded(ILGenerator il, LocalBuilder elemLocal, LocalBuilder keyLocal, LocalBuilder holderLocal, EmittedRuntime runtime)
     {
         var skipLabel = il.DefineLabel();
         var isTSFunctionLabel = il.DefineLabel();
@@ -843,14 +855,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);  // replacer
         il.Emit(OpCodes.Brfalse, skipLabel);
 
-        // Create object[] { (double)index, elem } and store in local
+        // Create object[] { key, elem } and store in local
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Conv_R8);
-        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1086,7 +1096,8 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(iterDoneLabel);
 
-        // Call replacer if needed
+        // SerializeJSONProperty step 2 precedes the replacer step.
+        EmitToJsonCheck(il, valLocal, runtime, keyLocal: keyLocal);
         EmitCallReplacerWithKey(il, valLocal, keyLocal, dictLocal, runtime);
 
         // strResult = StringifyValueFull(val, replacer, allowedKeys, indentStr, depth + 1, keyLocal)
