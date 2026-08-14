@@ -70,37 +70,50 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Array.from: mapfn argument must be callable");
         il.MarkLabel(mapFnOkLabel);
 
-        // ECMA-262 Array.from: if @@iterator is missing, treat receiver as
-        // array-like (read length, iterate by index). The IterateToList
-        // fallback enumerates Dictionary<string,object> as KeyValuePair —
-        // wrong semantics for `Array.from({0:'a',1:'b',length:2})`. Detect
-        // Dictionary receivers without a Symbol.iterator method and route
-        // through ArrayLikeMaterialize, which handles length+indexed reads
-        // and preserves holes.
-        var notArrayLikeDictLabel = il.DefineLabel();
-        var afterIteratorCheckLabel = il.DefineLabel();
+        // ECMA-262 Array.from: objects represented as property dictionaries
+        // and ArrayBuffer objects need the explicit @@iterator-or-array-like
+        // split. Other emitted iterable carriers (generators, typed arrays,
+        // Map/Set and iterator helpers) are recognized directly by
+        // IterateToList even when GetIteratorFunction has no registry entry.
+        var iterablePathLabel = il.DefineLabel();
+        var arrayLikePathLabel = il.DefineLabel();
+        var inspectIteratorLabel = il.DefineLabel();
         var afterListInit = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brfalse, notArrayLikeDictLabel);
-        // GetMethod normalizes both null and undefined to "no method" for
-        // Array.from, so either value selects its array-like path.
+        il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
+        if (runtime.ArrayBufferType != null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.ArrayBufferType);
+            il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
+        }
+        if (runtime.SharedArrayBufferType != null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.SharedArrayBufferType);
+            il.Emit(OpCodes.Brtrue, inspectIteratorLabel);
+        }
+        il.Emit(OpCodes.Br, iterablePathLabel);
+
+        il.MarkLabel(inspectIteratorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iteratorFnLocal);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
-        il.Emit(OpCodes.Brfalse, afterIteratorCheckLabel);
+        il.Emit(OpCodes.Brfalse, arrayLikePathLabel);
         il.Emit(OpCodes.Ldloc, iteratorFnLocal);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brfalse, notArrayLikeDictLabel);
-        il.MarkLabel(afterIteratorCheckLabel);
-        // dict has no @@iterator → ArrayLikeMaterialize
+        il.Emit(OpCodes.Brfalse, iterablePathLabel);
+
+        il.MarkLabel(arrayLikePathLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ArrayLikeMaterialize);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Br, afterListInit);
-        il.MarkLabel(notArrayLikeDictLabel);
+
+        il.MarkLabel(iterablePathLabel);
 
         // Call IterateToList(iterable, iteratorSymbol, runtimeType) to get the initial list
         il.Emit(OpCodes.Ldarg_0);  // iterable
@@ -109,6 +122,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.IterateToList);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.MarkLabel(afterListInit);
+
+        // Array.from defines every result index. The shared array-like
+        // materializer represents absent source properties with ArrayHole so
+        // hole-skipping methods can reuse it; replace those placeholders with
+        // actual undefined values before mapping or returning.
+        var normalizeIndexLocal = il.DeclareLocal(_types.Int32);
+        var normalizeLoopLabel = il.DefineLabel();
+        var normalizeNextLabel = il.DefineLabel();
+        var normalizeDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, normalizeIndexLocal);
+        il.MarkLabel(normalizeLoopLabel);
+        il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, normalizeDoneLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
+        il.Emit(OpCodes.Brfalse, normalizeNextLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetSetMethod()!);
+        il.MarkLabel(normalizeNextLabel);
+        il.Emit(OpCodes.Ldloc, normalizeIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, normalizeIndexLocal);
+        il.Emit(OpCodes.Br, normalizeLoopLabel);
+        il.MarkLabel(normalizeDoneLabel);
 
         // if (mapFn is $Undefined) return result. Callers now pass $Undefined
         // for absent mapfn, so the prior null-check is replaced by Isinst.

@@ -222,6 +222,23 @@ public class ArrayStaticTests
         Assert.Equal("3\n1\n2\n3\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_From_NonIterableArrayLikesCreatePresentUndefinedElements(ExecutionMode mode)
+    {
+        var source = """
+            const values: any[] = Array.from({ length: 3 });
+            console.log(values.length);
+            console.log((values as any).hasOwnProperty("0"));
+            console.log(values.map(function(): any { return 1; }).join(""));
+
+            const bufferValues: any[] = Array.from(new ArrayBuffer(7));
+            console.log(bufferValues.length);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("3\ntrue\n111\n0\n", output);
+    }
+
     #endregion
 
     #region Array.of Tests
