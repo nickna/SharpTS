@@ -6,6 +6,23 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class Issue1279ParityRuntimeTests
 {
     [Fact]
+    public void To_property_descriptor_reads_accessor_backed_fields()
+    {
+        const string source = """
+            var descriptor: any = {};
+            Object.defineProperty(descriptor, "enumerable", {
+              get: function() { return true; }
+            });
+            console.log(descriptor.enumerable);
+            var target: any = {};
+            Object.defineProperty(target, "property", descriptor);
+            console.log(Object.getOwnPropertyDescriptor(target, "property").enumerable);
+            """;
+
+        Assert.Equal("true\ntrue\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void Strict_array_index_writes_observe_accessors_and_in_reports_them()
     {
         const string source = """

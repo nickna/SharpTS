@@ -5976,6 +5976,32 @@ public sealed class Issue1279ParityTests
     public void Strict_arguments_indices_use_ordinary_descriptor_state(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    public static TheoryData<string> AccessorBackedDescriptorFieldCases => new()
+    {
+        "built-ins/Object/create/15.2.3.5-4-52.js",
+        "built-ins/Object/create/15.2.3.5-4-105.js",
+        "built-ins/Object/create/15.2.3.5-4-158.js",
+        "built-ins/Object/create/15.2.3.5-4-184.js",
+        "built-ins/Object/create/15.2.3.5-4-237.js",
+        "built-ins/Object/create/15.2.3.5-4-272.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-26.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-79.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-132.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-158.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-211.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-241.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-12.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-65.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-118.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-197.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-232.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(AccessorBackedDescriptorFieldCases))]
+    public void Property_descriptor_fields_invoke_own_accessors(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

@@ -518,6 +518,29 @@ public partial class RuntimeEmitter
         {
             var skipLabel = il.DefineLabel();
             var fieldValLocal = il.DeclareLocal(_types.Object);
+
+            // Accessor properties on dictionary-backed objects also have a raw
+            // placeholder entry in the dictionary. The GetProperty pass above
+            // has already invoked the accessor and stashed its result; copying
+            // the placeholder here would replace that result with undefined.
+            // Only overlay ordinary own data entries (the path needed to
+            // distinguish an explicit `{ value: undefined }` from absence).
+            var ownDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, ownDescriptorLocal);
+            var noOwnDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, noOwnDescriptorLabel);
+            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, getterGet);
+            il.Emit(OpCodes.Brtrue, skipLabel);
+            il.Emit(OpCodes.Ldloc, ownDescriptorLocal);
+            il.Emit(OpCodes.Callvirt, setterGet);
+            il.Emit(OpCodes.Brtrue, skipLabel);
+            il.MarkLabel(noOwnDescriptorLabel);
+
             il.Emit(OpCodes.Ldloc, origDictLocal);
             il.Emit(OpCodes.Ldstr, field);
             il.Emit(OpCodes.Ldloca, fieldValLocal);
