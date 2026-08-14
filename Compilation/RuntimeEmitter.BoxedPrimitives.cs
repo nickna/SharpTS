@@ -544,16 +544,12 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>$Runtime.UnwrapIfBoxed(object obj) -&gt; object</c>: returns
-    /// the underlying <c>__primitiveValue</c> when <paramref name="obj"/> is a
-    /// <c>$Object</c> wrapper produced by <c>NewBoxedPrimitive</c> (i.e. has
-    /// both <c>__primitiveType</c> and <c>__primitiveValue</c> fields), else
-    /// returns the value unchanged. Used by abstract equality and string
-    /// concatenation: ECMA-262 §7.2.14 step 11 and §13.10 require ToPrimitive
-    /// on Object operands before comparison/concatenation, and the spec'd
-    /// path lands at the wrapper's <c>__primitiveValue</c> via
-    /// <c>OrdinaryToPrimitive(hint)</c> → <c>valueOf()</c>. This is the cheap
-    /// shortcut the spec endorses for boxed primitives specifically.
+    /// Emits <c>$Runtime.UnwrapIfBoxed(object obj) -&gt; object</c>. In addition
+    /// to the boxed-primitive fast path, this performs the observable first
+    /// step of default-hint OrdinaryToPrimitive for dictionary-backed objects:
+    /// an own callable <c>valueOf</c> is invoked before string conversion. This
+    /// is shared by abstract equality and addition, both of which require
+    /// ToPrimitive before choosing their comparison/concatenation branch.
     /// </summary>
     /// <summary>
     /// Defines the <c>UnwrapIfBoxed</c> MethodBuilder shell (no body). Emitted
@@ -577,16 +573,29 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var passThruLabel = il.DefineLabel();
 
-        // null / undefined / non-$Object → pass through
+        // null / undefined / non-object-backed values → pass through.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, passThruLabel);
+        var objectLikeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, objectLikeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, passThruLabel);
+        il.MarkLabel(objectLikeLabel);
 
-        // Must have __primitiveType marker (else it's a plain $Object — passed
-        // through unchanged so == / + treat it as an ordinary object).
+        var isBoxedLocal = il.DeclareLocal(_types.Boolean);
+        var primitiveValueLocal = il.DeclareLocal(_types.Object);
+
+        // A $Object with __primitiveType uses its internal primitive value when
+        // it has no own valueOf override. Plain dictionary objects continue to
+        // the observable own-valueOf/default-string conversion below.
+        var afterMarkerProbeLabel = il.DefineLabel();
         var typeMarkerLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, afterMarkerProbeLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
@@ -594,7 +603,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, typeMarkerLocal);
         il.Emit(OpCodes.Ldloc, typeMarkerLocal);
         il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brfalse, passThruLabel);
+        il.Emit(OpCodes.Brfalse, afterMarkerProbeLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, isBoxedLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "__primitiveValue");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Stloc, primitiveValueLocal);
+        il.MarkLabel(afterMarkerProbeLabel);
 
         // #574: ECMA-262 7.1.1 ToPrimitive (default/number hint, used by == and +):
         // OrdinaryToPrimitive tries valueOf first. An OWN valueOf override wins;
@@ -609,20 +626,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, emptyArgs);
 
-        var afterValueOf = il.DefineLabel();
-        // if (!HasOwnPropertyHelper(arg, "valueOf")) goto afterValueOf
+        var noOwnValueOf = il.DefineLabel();
+        var useStringFallback = il.DefineLabel();
+        // if (!HasOwnPropertyHelper(arg, "valueOf")) goto noOwnValueOf
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "valueOf");
         il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
-        il.Emit(OpCodes.Brfalse, afterValueOf);
-        // fn = GetProperty(arg, "valueOf"); skip if missing
+        il.Emit(OpCodes.Brfalse, noOwnValueOf);
+        // fn = GetProperty(arg, "valueOf"); a non-callable own property is
+        // skipped by OrdinaryToPrimitive and therefore falls through to
+        // toString.
         var fnLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "valueOf");
         il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, fnLocal);
         il.Emit(OpCodes.Ldloc, fnLocal);
-        il.Emit(OpCodes.Brfalse, afterValueOf);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, useStringFallback);
         // res = InvokeMethodValue(arg, fn, emptyArgs) — a throwing override
         // propagates naturally.
         var resLocal = il.DeclareLocal(_types.Object);
@@ -634,20 +658,28 @@ public partial class RuntimeEmitter
         // An object result is not a primitive → fall back to the slot.
         il.Emit(OpCodes.Ldloc, resLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Brtrue, afterValueOf);
+        il.Emit(OpCodes.Brtrue, useStringFallback);
         il.Emit(OpCodes.Ldloc, resLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, afterValueOf);
+        il.Emit(OpCodes.Brtrue, useStringFallback);
         // Primitive (incl. null/undefined/string/number/bool) → return it.
         il.Emit(OpCodes.Ldloc, resLocal);
         il.Emit(OpCodes.Ret);
-        il.MarkLabel(afterValueOf);
+        il.MarkLabel(noOwnValueOf);
 
-        // Fallback: the wrapper's [[PrimitiveValue]] (≡ inherited valueOf).
+        // No own override on a boxed primitive: its inherited valueOf returns
+        // [[PrimitiveValue]], so use the internal slot directly.
+        il.Emit(OpCodes.Ldloc, isBoxedLocal);
+        il.Emit(OpCodes.Brfalse, useStringFallback);
+        il.Emit(OpCodes.Ldloc, primitiveValueLocal);
+        il.Emit(OpCodes.Ret);
+
+        // Plain object, non-callable own valueOf, or object-valued valueOf:
+        // continue at toString. ToJsString implements the remaining string-hint
+        // method lookup and primitive-result validation.
+        il.MarkLabel(useStringFallback);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
-        il.Emit(OpCodes.Ldstr, "__primitiveValue");
-        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(passThruLabel);
