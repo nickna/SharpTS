@@ -9,7 +9,7 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class ProxyTests
 {
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Proxy_ArrayConcat_PreservesSymbolKeysAndArrayClassification(ExecutionMode mode)
     {
         var source = """

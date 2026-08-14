@@ -1510,22 +1510,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, spreadabilityKnownLabel);
 
         il.MarkLabel(defaultSpreadabilityLabel);
-        // Default IsArray: $Array/List are arrays except the arguments marker.
-        var defaultNotArgumentsLabel = il.DefineLabel();
-        var defaultDoneLabel = il.DefineLabel();
+        // IsArray recursively unwraps proxies and rejects revoked proxies.
         il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
-        il.Emit(OpCodes.Brfalse, defaultNotArgumentsLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.IsArray);
         il.Emit(OpCodes.Stloc, spreadableLocal);
-        il.Emit(OpCodes.Br, defaultDoneLabel);
-        il.MarkLabel(defaultNotArgumentsLabel);
-        il.Emit(OpCodes.Ldloc, elementLocal);
-        il.Emit(OpCodes.Isinst, _types.ListOfObject);
-        il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Cgt_Un);
-        il.Emit(OpCodes.Stloc, spreadableLocal);
-        il.MarkLabel(defaultDoneLabel);
         il.MarkLabel(spreadabilityKnownLabel);
 
         var spreadElementLabel = il.DefineLabel();

@@ -90,7 +90,7 @@ public partial class RuntimeEmitter
         // Call TrapGetCompiled(string prop, Func<object,string,object>) via
         // reflection. The fallback delegate returns to this emitted runtime's
         // ordinary Get implementation when the handler has no get trap.
-        EmitProxyMethodCall(il, emitLoadObj, "TrapGetCompiled", () =>
+        EmitProxyMethodCallUnwrapped(il, runtime, emitLoadObj, "TrapGetCompiled", () =>
         {
             // new object[] { name, new Func<object,string,object>(GetProperty) }
             il.Emit(OpCodes.Ldc_I4_2);
@@ -143,34 +143,32 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits a proxy-aware index get: checks if obj is a proxy and calls TrapGet(key.ToString(), null).
     /// </summary>
-    internal void EmitProxyGetIndexCheck(ILGenerator il, Action emitLoadObj, Action emitLoadIndex, Label notProxyLabel)
+    internal void EmitProxyGetIndexCheck(
+        ILGenerator il, EmittedRuntime runtime, Action emitLoadObj,
+        Action emitLoadIndex, Label notProxyLabel)
     {
         var proxyLabel = il.DefineLabel();
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        // Convert index to string and call TrapGet
-        EmitProxyMethodCall(il, emitLoadObj, "TrapGet", () =>
+        // Preserve Symbol keys for the trap and let the emitted GetIndex
+        // implementation perform ordinary target lookup when the trap is absent.
+        EmitProxyMethodCallUnwrapped(il, runtime, emitLoadObj, "TrapGetIndexCompiled", () =>
         {
-            // new object[] { index?.ToString() ?? "", null }
+            // new object[] { index, new Func<object,object,object>(GetIndex) }
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
             emitLoadIndex();
-            // Convert index to string via ToString
-            var indexNullLabel = il.DefineLabel();
-            var indexEndLabel = il.DefineLabel();
-            il.Emit(OpCodes.Dup);
-            il.Emit(OpCodes.Brfalse, indexNullLabel);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
-            il.Emit(OpCodes.Br, indexEndLabel);
-            il.MarkLabel(indexNullLabel);
-            il.Emit(OpCodes.Pop);
-            il.Emit(OpCodes.Ldstr, "");
-            il.MarkLabel(indexEndLabel);
             il.Emit(OpCodes.Stelem_Ref);
-            // [1] = null (Interpreter) - already null from Newarr
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, runtime.GetIndex);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                typeof(Func<object, object, object?>), _types.Object, _types.IntPtr));
+            il.Emit(OpCodes.Stelem_Ref);
         });
         il.Emit(OpCodes.Ret);
     }
@@ -233,9 +231,9 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(il, emitLoadObj, proxyLabel, notProxyLabel);
 
         il.MarkLabel(proxyLabel);
-        EmitProxyMethodCall(il, emitLoadObj, "TrapHas", () =>
+        EmitProxyMethodCallUnwrapped(il, runtime, emitLoadObj, "TrapHasCompiled", () =>
         {
-            // new object[] { key?.ToString() ?? "", null }
+            // new object[] { keyString, new Func<object,string,bool>(HasArrayLikeProperty) }
             il.Emit(OpCodes.Ldc_I4_2);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
@@ -252,7 +250,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldstr, "");
             il.MarkLabel(keyEndLabel);
             il.Emit(OpCodes.Stelem_Ref);
-            // [1] = null (Interpreter) - already null from Newarr
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, runtime.HasArrayLikeProperty);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                typeof(Func<object, string, bool>), _types.Object, _types.IntPtr));
+            il.Emit(OpCodes.Stelem_Ref);
         });
         // TrapHas returns object — apply truthy coercion (JS `in` coerces to boolean)
         il.Emit(OpCodes.Call, runtime.IsTruthy);

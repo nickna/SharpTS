@@ -1430,6 +1430,40 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notArgumentsLabel);
 
+        // IsArray(proxy) recursively follows [[ProxyTarget]], but a revoked
+        // proxy must throw rather than report false. The proxy type lives in
+        // SharpTS.dll, so inspect its public state through reflection.
+        var notProxyLabel = il.DefineLabel();
+        var proxyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, notProxyLabel);
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "IsRevoked");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        var proxyActiveLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, proxyActiveLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot perform operation on a revoked proxy");
+        il.MarkLabel(proxyActiveLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "Target");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetProperty", _types.String));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.PropertyInfo, "GetValue", _types.Object));
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notProxyLabel);
+
         // Check if IList<object?> (covers List<object?>, $Array, and any other array-like type)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.IListOfObject);

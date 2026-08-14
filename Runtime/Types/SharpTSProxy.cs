@@ -174,6 +174,33 @@ public class SharpTSProxy : ISharpTSCallable
         return result;
     }
 
+    /// <summary>
+    /// Compiled-runtime keyed get dispatch. Unlike <see cref="TrapGetCompiled"/>,
+    /// this preserves Symbol keys for the proxy trap and delegates ordinary
+    /// lookup back to the emitted runtime's keyed-property implementation.
+    /// </summary>
+    public object? TrapGetIndexCompiled(
+        object? prop,
+        Func<object, object, object?> ordinaryGet)
+    {
+        object propertyKey = prop is SharpTSSymbol
+            || prop?.GetType().Name == "$TSSymbol"
+                ? prop
+                : prop?.ToString() ?? "";
+
+        var trap = GetTrapCallable("get", null);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy targetProxy
+                ? targetProxy.TrapGetIndexCompiled(propertyKey, ordinaryGet)
+                : ordinaryGet(_target, propertyKey);
+        }
+
+        object? result = InvokeTrap(trap, null, [_target, propertyKey, this]);
+        ValidateGetTrapResult(propertyKey, result, null);
+        return result;
+    }
+
     internal object? TrapGet(
         string prop, Interpreter? interp, object? receiver)
     {
@@ -565,6 +592,41 @@ public class SharpTSProxy : ISharpTSCallable
 
     public bool TrapHas(string prop, Interpreter? interp)
         => TrapHasCore(prop, interp);
+
+    /// <summary>
+    /// Compiled-runtime [[HasProperty]] dispatch. When no handler trap exists,
+    /// ordinary lookup is delegated back to the emitted runtime so compiler
+    /// carriers such as <c>List&lt;object?&gt;</c> retain their indexed semantics.
+    /// </summary>
+    public bool TrapHasCompiled(
+        string prop,
+        Func<object, string, bool> ordinaryHas)
+    {
+        var trap = GetTrapCallable("has", null);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy targetProxy
+                ? targetProxy.TrapHasCompiled(prop, ordinaryHas)
+                : ordinaryHas(_target, prop);
+        }
+
+        bool result = ToBoolean(InvokeTrap(trap, null, [_target, prop]));
+        if (result) return true;
+
+        object? targetDescriptor = GetTargetOwnPropertyDescriptor(prop, null);
+        if (targetDescriptor is null or SharpTSUndefined) return false;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (!descriptor.Configurable)
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy has trap cannot hide a non-configurable property"));
+
+        if (!TargetIsExtensible(_target))
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy has trap cannot hide a property on a non-extensible target"));
+
+        return false;
+    }
 
     internal bool TrapHas(SharpTSSymbol prop, Interpreter interp)
         => TrapHasCore(prop, interp);
