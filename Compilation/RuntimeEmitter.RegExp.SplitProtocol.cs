@@ -375,7 +375,17 @@ public partial class RuntimeEmitter
         string message)
     {
         var ok = il.DefineLabel();
-        foreach (var type in new[] { _types.String, _types.Double, _types.Boolean, runtime.TSSymbolType })
+        il.Emit(OpCodes.Ldloc, value);
+        var nonNull = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, nonNull);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, message);
+        il.MarkLabel(nonNull);
+
+        foreach (var type in new[]
+                 {
+                     _types.String, _types.Double, _types.Boolean,
+                     _types.BigInteger, runtime.TSSymbolType
+                 })
         {
             il.Emit(OpCodes.Ldloc, value);
             il.Emit(OpCodes.Isinst, type);

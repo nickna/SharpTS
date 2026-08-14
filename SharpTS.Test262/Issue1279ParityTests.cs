@@ -5737,6 +5737,12 @@ public sealed class Issue1279ParityTests
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
     [Theory]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-regexp-get-global-throws.js")]
+    [InlineData("built-ins/RegExp/prototype/Symbol.matchAll/species-regexp-get-unicode-throws.js")]
+    public void Compiled_matchAll_uses_original_flags_after_species_construction(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
     [InlineData("built-ins/Promise/executor-call-context-strict.js")]
     public void Promise_jobs_invoke_guest_functions_with_undefined_this(string relativePath)
         => AssertPassInBothModes(relativePath);

@@ -1233,6 +1233,7 @@ public class EmittedRuntime
     public MethodBuilder StringSplitRegExp { get; set; } = null!;
     public MethodBuilder StringSplitProto { get; set; } = null!;
     public MethodBuilder StringMatchAllRegExp { get; set; } = null!;
+    public MethodBuilder StringMatchAllRegExpPrepared { get; set; } = null!;
 
     // RegExp support - emitted $RegExp type for standalone assemblies
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSRegExp

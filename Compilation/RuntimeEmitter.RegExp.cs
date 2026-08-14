@@ -963,9 +963,18 @@ public partial class RuntimeEmitter
 
     private void EmitStringMatchAllRegExp(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        // StringMatchAll(object receiver, object? pattern) -> object?
-        // Builds $Object match results directly, accessing $RegExp._regex field.
-        // Uses index-based iteration (MatchCollection[i]) to avoid try/finally complexity.
+        // The public two-argument wrapper enters the full String#matchAll
+        // protocol. RegExp.prototype[@@matchAll] calls the prepared core after
+        // it has already completed SpeciesConstructor/flags construction; that
+        // path must not re-read global/unicode from the constructed matcher.
+        var coreMethod = typeBuilder.DefineMethod(
+            "StringMatchAllRegExpPrepared",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object, _types.Boolean]
+        );
+        runtime.StringMatchAllRegExpPrepared = coreMethod;
+
         var method = typeBuilder.DefineMethod(
             "StringMatchAllRegExp",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -975,7 +984,17 @@ public partial class RuntimeEmitter
         method.SetCustomAttribute(runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.StringMatchAllRegExp = method;
 
-        var il = method.GetILGenerator();
+        var wrapperIL = method.GetILGenerator();
+        wrapperIL.Emit(OpCodes.Ldarg_0);
+        wrapperIL.Emit(OpCodes.Ldarg_1);
+        wrapperIL.Emit(OpCodes.Ldc_I4_0);
+        wrapperIL.Emit(OpCodes.Call, coreMethod);
+        wrapperIL.Emit(OpCodes.Ret);
+
+        // StringMatchAllPrepared(object receiver, object? pattern, bool prepared) -> object?
+        // Builds $Object match results directly, accessing $RegExp._regex field.
+        // Uses index-based iteration (MatchCollection[i]) to avoid try/finally complexity.
+        var il = coreMethod.GetILGenerator();
         var regexpLocal = il.DeclareLocal(runtime.TSRegExpType);
         var regexLocal = il.DeclareLocal(typeof(Regex));
         var stringLocal = il.DeclareLocal(_types.String);
@@ -1012,6 +1031,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
         il.Emit(OpCodes.Stloc, regexpLocal);
+
+        var preparedMatcherLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brtrue, preparedMatcherLabel);
 
         // ES2026 String.prototype.matchAll only performs IsRegExp/GetMethod
         // when regexp is an Object. In particular, primitive Boolean/Number/
@@ -1193,6 +1216,7 @@ public partial class RuntimeEmitter
         EmitInvokeCurrentMatcher(loadReceiver: () => il.Emit(OpCodes.Ldarg_1),
             loadArgument: () => il.Emit(OpCodes.Ldarg_0));
         il.MarkLabel(standardReceiverOk);
+        il.MarkLabel(preparedMatcherLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, stringLocal);

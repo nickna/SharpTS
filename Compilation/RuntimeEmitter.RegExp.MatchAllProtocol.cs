@@ -137,7 +137,8 @@ public partial class RuntimeEmitter
         // re-entering this protocol.
         il.Emit(OpCodes.Ldloc, s);
         il.Emit(OpCodes.Ldloc, matcher);
-        il.Emit(OpCodes.Call, runtime.StringMatchAllRegExp);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.StringMatchAllRegExpPrepared);
         il.Emit(OpCodes.Ret);
     }
 }

@@ -1630,6 +1630,8 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.Object]
         );
+        method.SetCustomAttribute(
+            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArraySort = method;
 
         var il = method.GetILGenerator();
@@ -1659,6 +1661,8 @@ public partial class RuntimeEmitter
             _types.ListOfObject,
             [_types.ListOfObject, _types.Object]
         );
+        method.SetCustomAttribute(
+            runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
         runtime.ArrayToSorted = method;
 
         var il = method.GetILGenerator();
