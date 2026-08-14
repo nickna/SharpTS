@@ -1204,6 +1204,15 @@ public partial class RuntimeEmitter
 
         // Check extensibility via $PropertyDescriptorStore.CanAddProperty - fully standalone, no reflection
         il.MarkLabel(extensibleCheckLabel);
+        // Existing dictionary properties remain writable on a merely
+        // non-extensible object. PDSCanAddProperty answers whether a NEW key
+        // may be created, so bypass it when ordinary backing storage already
+        // owns the key (OrdinarySetWithOwnDescriptor step 3.d).
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", _types.String));
+        il.Emit(OpCodes.Brtrue, doSetLabel);
         il.Emit(OpCodes.Ldarg_0);  // obj
         il.Emit(OpCodes.Ldarg_1);  // name
         il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);

@@ -499,13 +499,44 @@ public partial class RuntimeEmitter
         // (or negative) are NOT array indexes — they're regular named
         // properties. Route those via GetProperty(arr, idx.ToString()) so
         // PDS-stored values (from the symmetric SetIndex path) round-trip.
+        var doArrayGetLabel = il.DefineLabel();
+        var routeAsNamedGetLabel = il.DefineLabel();
+        var convertArrayIndexLabel = il.DefineLabel();
         var tsArrayGetIdx = il.DeclareLocal(_types.Int64);
+        var tsArrayStringKey = il.DeclareLocal(_types.String);
+        var tsArrayParsedIndex = il.DeclareLocal(_types.UInt32);
+
+        // String keys are array indices only when they are canonical uint32
+        // strings other than 2^32-1. Convert.ToInt64 would otherwise collapse
+        // "-0" to element 0 and throw for ordinary names such as "length".
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stloc, tsArrayStringKey);
+        il.Emit(OpCodes.Brfalse, convertArrayIndexLabel);
+        il.Emit(OpCodes.Ldloc, tsArrayStringKey);
+        il.Emit(OpCodes.Ldloca, tsArrayParsedIndex);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, routeAsNamedGetLabel);
+        il.Emit(OpCodes.Ldloc, tsArrayParsedIndex);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, routeAsNamedGetLabel);
+        il.Emit(OpCodes.Ldloc, tsArrayStringKey);
+        il.Emit(OpCodes.Ldloca, tsArrayParsedIndex);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, routeAsNamedGetLabel);
+        il.Emit(OpCodes.Ldloc, tsArrayParsedIndex);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Stloc, tsArrayGetIdx);
+        il.Emit(OpCodes.Br, doArrayGetLabel);
+
+        il.MarkLabel(convertArrayIndexLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
         il.Emit(OpCodes.Stloc, tsArrayGetIdx);
 
-        var doArrayGetLabel = il.DefineLabel();
-        var routeAsNamedGetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, tsArrayGetIdx);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Conv_I8);
@@ -608,6 +639,7 @@ public partial class RuntimeEmitter
             // string-keyed prop stored via the symmetric SetIndex+PDS path.
             var listStringIndexLabel = il.DefineLabel();
             var listProceedWithToInt32Label = il.DefineLabel();
+            var listNamedPropertyLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Isinst, _types.String);
             il.Emit(OpCodes.Brtrue, listStringIndexLabel);
@@ -620,8 +652,17 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Castclass, _types.String);
             il.Emit(OpCodes.Ldloca, listStrIdxParsed);
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+            il.Emit(OpCodes.Brfalse, listNamedPropertyLabel);
+            // CanonicalNumericIndexString: spellings such as "-0" and "01"
+            // are ordinary named properties even though Int32.TryParse accepts
+            // them as integer values.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.String);
+            il.Emit(OpCodes.Ldloca, listStrIdxParsed);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brtrue, listProceedWithToInt32Label);
-            // Non-numeric string → named-property lookup.
+            il.MarkLabel(listNamedPropertyLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Castclass, _types.String);
@@ -849,45 +890,36 @@ public partial class RuntimeEmitter
         var valueLocal = il.DeclareLocal(_types.Object);
         var pdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
 
-        // Helper: emit the PDS-first lookup.
-        //   1. Check own dict._fields via TryGetValue → fast path for direct entries
-        //      (matches the legacy behavior for plain `obj[k] = v` keys).
-        //   2. Else check PDS for an own descriptor — if present, route through
-        //      GetProperty so a get accessor fires. Without this, indexed reads
-        //      bypassed Object.defineProperty(obj, k, {get: ...}) accessors and
-        //      returned null instead of invoking the getter (companion to the
-        //      SetIndex fix that routes writes through SetProperty for setters).
-        //   3. Else use ordinary Get so the prototype chain is consulted and a
-        //      final miss produces the JavaScript undefined sentinel.
+        // Helper: emit the PDS-first lookup. Accessor-only properties keep an
+        // undefined placeholder in the dictionary to preserve creation order,
+        // so probing backing storage first would bypass their getters.
         void EmitDictLookup(Action emitDict, Action emitKey)
         {
             var foundFieldsLabel = il.DefineLabel();
-            var checkPdsLabel = il.DefineLabel();
             var notFoundLabel = il.DefineLabel();
 
-            // dict.TryGetValue(key, out value)
-            emitDict();
-            emitKey();
-            il.Emit(OpCodes.Ldloca, valueLocal);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
-            il.Emit(OpCodes.Brtrue, foundFieldsLabel);
-
-            // PDS check
-            il.MarkLabel(checkPdsLabel);
+            // A descriptor, when present, is authoritative over its backing
+            // value/placeholder and GetProperty applies [[Get]] semantics.
             il.Emit(OpCodes.Ldarg_0);
             emitKey();
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, pdsDescLocal);
             il.Emit(OpCodes.Ldloc, pdsDescLocal);
             il.Emit(OpCodes.Brfalse, notFoundLabel);
-            // Descriptor present — fire GetProperty so the accessor's get
-            // function runs and any throw propagates.
             il.Emit(OpCodes.Ldarg_0);
             emitKey();
             il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(notFoundLabel);
+            // No descriptor: retain the direct own-data fast path.
+            emitDict();
+            emitKey();
+            il.Emit(OpCodes.Ldloca, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue"));
+            il.Emit(OpCodes.Brtrue, foundFieldsLabel);
+
+            // Ordinary inherited lookup / undefined miss.
             il.Emit(OpCodes.Ldarg_0);
             emitKey();
             il.Emit(OpCodes.Call, runtime.GetProperty);

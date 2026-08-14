@@ -251,6 +251,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, tsArrayPropertyIndexLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, returnTSArrayDescriptorValue);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, tsArrayPropertyIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, returnTSArrayDescriptorValue);
         il.Emit(OpCodes.Ldloc, tsArrayPropertyIndexLocal);
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Conv_U4);
@@ -758,6 +763,31 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         // Walk prototype chain
         il.MarkLabel(tsObjectWalkProto);
+
+        // A Symbol object wrapper carries [[SymbolData]] in the shared boxed-
+        // primitive marker fields. Its inherited Symbol.prototype.toString
+        // behavior delegates to the wrapped Symbol rather than Object.prototype.
+        // Resolve this after own properties/descriptors so an own override still
+        // wins, while hasOwnProperty continues to report false for the method.
+        var notBoxedSymbolToString = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notBoxedSymbolToString);
+        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
+        il.Emit(OpCodes.Ldstr, "__primitiveType");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Ldstr, "Symbol");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+        il.Emit(OpCodes.Brfalse, notBoxedSymbolToString);
+        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
+        il.Emit(OpCodes.Ldstr, "__primitiveValue");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        _types.EmitLoadMethodInfo(il, runtime.SymbolToStringMethod);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBoxedSymbolToString);
+
         var tsObjectProtoLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
         il.Emit(OpCodes.Call, runtime.PDSGetPrototype);

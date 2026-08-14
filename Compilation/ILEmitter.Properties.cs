@@ -862,7 +862,8 @@ public partial class ILEmitter
         // this still drops the per-access isinst ladder and the $Array virtual dispatch. The
         // `(uint)i >= (uint)Count` compare folds the negative-index case into the OOB branch.
         if (!gi.Optional && gi.Object is Expr.Variable promVarGet
-            && _ctx.TryGetPromotedArrayLocal(promVarGet.Name.Lexeme) is { } promGet)
+            && _ctx.TryGetPromotedArrayLocal(promVarGet.Name.Lexeme) is { } promGet
+            && _ctx.TypeMap?.Get(gi.Index) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
         {
             var listType = promGet.Descriptor.GetListType(_ctx.Types);
             var oobLabel = IL.DefineLabel();
@@ -923,7 +924,9 @@ public partial class ILEmitter
         // Object/Reflect descriptor APIs can install indexed accessors on a
         // statically typed array. In those programs, route reads through the
         // descriptor-aware runtime instead of reading the backing list.
-        if (desc != null && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true)
+        if (desc != null
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true
+            && _ctx.TypeMap?.Get(gi.Index) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
         {
             // Hoisted path: if the array's isinst was hoisted out of a loop,
             // use the cached typed local — no isinst/castclass per access.

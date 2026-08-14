@@ -805,6 +805,9 @@ public partial class RuntimeEmitter
         EmitGetElement(typeBuilder, runtime);
         EmitGetKeys(typeBuilder, runtime);
         EmitGetOwnPropertyNames(typeBuilder, runtime);
+        // Object.assign consumes both halves of [[OwnPropertyKeys]], so make
+        // the Symbol-key collector available before emitting assign.
+        EmitGetOwnPropertySymbols(typeBuilder, runtime);
         EmitGetValues(typeBuilder, runtime);
         EmitGetEntries(typeBuilder, runtime);
         EmitObjectFromEntries(typeBuilder, runtime);
@@ -833,9 +836,6 @@ public partial class RuntimeEmitter
         EmitRandom(typeBuilder, runtime, randomField);
         EmitObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
         EmitObjectDefineProperties(typeBuilder, runtime);
-        // GetOwnPropertySymbols must precede gOPDs (gOPDs now also iterates
-        // symbol keys to populate symbol-keyed descriptors in the result).
-        EmitGetOwnPropertySymbols(typeBuilder, runtime);
         EmitObjectGetOwnPropertyDescriptors(typeBuilder, runtime);
         EmitObjectCreate(typeBuilder, runtime, prototypeStoreField);
         // Promise keyed-combinator shells are declared with Promise methods,

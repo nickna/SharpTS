@@ -853,6 +853,7 @@ public class EmittedRuntime
     // Symbol support
     public TypeBuilder TSSymbolType { get; set; } = null!;
     public ConstructorBuilder TSSymbolCtor { get; set; } = null!;
+    public MethodBuilder SymbolToStringMethod { get; set; } = null!;
 
     // Well-known symbols (static fields on $TSSymbol)
     public FieldBuilder SymbolIterator { get; set; } = null!;

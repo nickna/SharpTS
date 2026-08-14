@@ -4820,23 +4820,19 @@ public sealed class Issue1279ParityTests
         string relativePath)
         => AssertPassInBothModes(relativePath);
 
-    [Fact]
-    public void Object_assign_reads_symbols_after_strings()
-        => AssertPass(
-            "built-ins/Object/assign/strings-and-symbol-order.js",
-            Test262ExecutionMode.Interpreted);
-
-    [Fact]
-    public void Object_assign_boxes_Symbol_targets()
-        => AssertPass(
-            "built-ins/Object/assign/Target-Symbol.js",
-            Test262ExecutionMode.Interpreted);
-
-    [Fact]
-    public void Object_assign_updates_Array_exotic_targets()
-        => AssertPass(
-            "built-ins/Object/assign/target-Array.js",
-            Test262ExecutionMode.Interpreted);
+    [Theory]
+    [InlineData("built-ins/Object/assign/source-get-attr-error.js")]
+    [InlineData("built-ins/Object/assign/source-own-prop-desc-missing.js")]
+    [InlineData("built-ins/Object/assign/source-own-prop-error.js")]
+    [InlineData("built-ins/Object/assign/source-own-prop-keys-error.js")]
+    [InlineData("built-ins/Object/assign/strings-and-symbol-order.js")]
+    [InlineData("built-ins/Object/assign/target-Array.js")]
+    [InlineData("built-ins/Object/assign/target-is-non-extensible-property-creation-throws.js")]
+    [InlineData("built-ins/Object/assign/target-is-sealed-property-creation-throws.js")]
+    [InlineData("built-ins/Object/assign/Target-Symbol.js")]
+    public void Object_assign_uses_shared_own_key_get_and_strict_set_semantics(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
 
     [Fact]
     public void Bound_functions_inherit_Function_prototype_expandos()

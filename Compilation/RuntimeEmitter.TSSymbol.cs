@@ -378,6 +378,7 @@ public partial class RuntimeEmitter
             _types.String,
             Type.EmptyTypes
         );
+        runtime.SymbolToStringMethod = toStringBuilder;
         var toStringIL = toStringBuilder.GetILGenerator();
         var hasDescription = toStringIL.DefineLabel();
         var doneToString = toStringIL.DefineLabel();
