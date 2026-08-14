@@ -6182,6 +6182,85 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Remaining_Promise_compiler_parity(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> RemainingStringCompilerParityCases => new()
+    {
+        "built-ins/String/prototype/constructor/S15.5.4.1_A1_T2.js",
+        "built-ins/String/prototype/indexOf/position-tointeger-toprimitive.js",
+        "built-ins/String/prototype/indexOf/searchstring-tostring-bigint.js",
+        "built-ins/String/prototype/isWellFormed/to-string-primitive.js",
+        "built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T1.js",
+        "built-ins/String/prototype/lastIndexOf/S15.5.4.8_A4_T2.js",
+        "built-ins/String/prototype/localeCompare/15.5.4.9_CE.js",
+        "built-ins/String/prototype/match/cstm-matcher-is-null.js",
+        "built-ins/String/prototype/match/invoke-builtin-match.js",
+        "built-ins/String/prototype/replace/regexp-capture-by-index.js",
+        "built-ins/String/prototype/replace/replaceValue-evaluation-order-regexp-object.js",
+        "built-ins/String/prototype/replaceAll/replaceValue-call-each-match-position.js",
+        "built-ins/String/prototype/replaceAll/replaceValue-fn-skip-toString.js",
+        "built-ins/String/prototype/replaceAll/searchValue-replacer-call.js",
+        "built-ins/String/prototype/replaceAll/searchValue-replacer-is-null.js",
+        "built-ins/String/prototype/search/cstm-search-is-null.js",
+        "built-ins/String/prototype/search/invoke-builtin-search-searcher-undef.js",
+        "built-ins/String/prototype/search/invoke-builtin-search.js",
+        "built-ins/String/prototype/slice/S15.5.4.13_A1_T5.js",
+        "built-ins/String/prototype/toLocaleLowerCase/name.js",
+        "built-ins/String/prototype/toLocaleUpperCase/name.js",
+        "built-ins/String/prototype/toWellFormed/to-string-primitive.js",
+        "built-ins/String/prototype/valueOf/name.js",
+        "built-ins/String/prototype/valueOf/non-generic.js",
+        "built-ins/String/raw/raw.js",
+        "built-ins/String/S15.5.1.1_A1_T9.js",
+        "built-ins/String/S15.5.2.1_A1_T11.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(RemainingStringCompilerParityCases))]
+    public void Remaining_String_compiler_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    public static TheoryData<string> RemainingJsonCompilerParityCases => new()
+    {
+        "built-ins/JSON/parse/reviver-array-define-prop-err.js",
+        "built-ins/JSON/parse/reviver-call-order.js",
+        "built-ins/JSON/parse/reviver-object-non-configurable-prop-delete.js",
+        "built-ins/JSON/stringify/property-order.js",
+        "built-ins/JSON/stringify/replacer-function-arguments.js",
+        "built-ins/JSON/stringify/replacer-function-result.js",
+        "built-ins/JSON/stringify/replacer-function-wrapper.js",
+        "built-ins/JSON/stringify/value-bigint-order.js",
+        "built-ins/JSON/stringify/value-bigint-tojson-receiver.js",
+        "built-ins/JSON/stringify/value-bigint.js",
+        "built-ins/JSON/stringify/value-tojson-array-circular.js",
+        "built-ins/JSON/stringify/value-tojson-result.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(RemainingJsonCompilerParityCases))]
+    public void Remaining_JSON_compiler_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    public static TheoryData<string> RemainingNumberCompilerParityCases => new()
+    {
+        "built-ins/Number/prototype/toLocaleString/length.js",
+        "built-ins/Number/prototype/toLocaleString/name.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(RemainingNumberCompilerParityCases))]
+    public void Remaining_Number_compiler_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    public static TheoryData<string> RemainingRegExpCompilerParityCases => new()
+    {
+        "built-ins/RegExp/prototype/Symbol.matchAll/species-constructor.js",
+        "built-ins/RegExp/prototype/Symbol.matchAll/this-lastindex-cached.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(RemainingRegExpCompilerParityCases))]
+    public void Remaining_RegExp_compiler_parity(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

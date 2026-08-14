@@ -186,7 +186,7 @@ public partial class RuntimeEmitter
         var fieldCacheType = _types.MakeGenericType(_types.ConcurrentDictionaryOpen, _types.Type, _types.FieldInfo);
         var fieldCacheField = typeBuilder.DefineField("_thisFieldCache", fieldCacheType, FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
 
-        // Static instance cache keyed by MethodInfo. Every reference to a
+        // Static instance cache keyed by MethodInfo plus JS metadata. Every reference to a
         // function declaration (`function f(){}` followed by `f` used as a value)
         // previously created a fresh $TSFunction wrapper — breaking
         // identity-keyed property storage in PropertyDescriptorStore. Result:
@@ -195,12 +195,18 @@ public partial class RuntimeEmitter
         // `function assert(...){}; assert.sameValue = function(...){}` and
         // then silently failed to dispatch `assert.sameValue(a, b)` (typeof
         // returned "object"), turning real spec failures into false-positive
-        // Passes. Caching by MethodInfo makes every reference to the same
-        // function declaration return the same $TSFunction instance so PDS
-        // read/write use the same key. Only applies to target=null wrappers
-        // (static function declarations) — bound/closure wrappers carry state
-        // and must stay fresh.
-        var instanceCacheType = _types.MakeGenericType(_types.ConcurrentDictionaryOpen, _types.MethodInfo, typeBuilder);
+        // Passes. The JS name and length are part of the key because distinct
+        // built-ins can share one runtime helper (for example String.prototype
+        // toString/valueOf and toLowerCase/toLocaleLowerCase). Keying only by
+        // MethodInfo collapsed those aliases onto the first wrapper populated
+        // and leaked its metadata. Function declarations use a stable emitted
+        // name/arity, so repeated references still return the same instance.
+        // Only applies to target=null wrappers (static function declarations) —
+        // bound/closure wrappers carry state and must stay fresh.
+        var instanceCacheKeyType = typeof(ValueTuple<,,>).MakeGenericType(
+            _types.MethodInfo, _types.String, _types.Int32);
+        var instanceCacheType = _types.MakeGenericType(
+            _types.ConcurrentDictionaryOpen, instanceCacheKeyType, typeBuilder);
         var instanceCacheField = typeBuilder.DefineField("_instanceCache", instanceCacheType, FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
         _ = instanceCacheField;
 
@@ -365,13 +371,11 @@ public partial class RuntimeEmitter
         ctorCacheIL.Emit(OpCodes.Ret);
 
         // Static factory: public static $TSFunction GetOrCreate(MethodInfo method, string name, int length).
-        // Returns a cached $TSFunction for the given MethodInfo, creating one if
+        // Returns a cached $TSFunction for the given method + JS metadata, creating one if
         // not present. Used only for function DECLARATIONS (target=null), where
         // identity must be stable across references for PropertyDescriptorStore
-        // to work (`fn.x = v` → `fn.x` roundtrips). name/length are used only
-        // on first create (subsequent calls return the cached instance whose
-        // name/length were fixed at that first-create moment). Cached values
-        // are required because MethodBuilder tokens don't reflect at runtime.
+        // to work (`fn.x = v` → `fn.x` roundtrips). Cached values are required
+        // because MethodBuilder tokens don't reflect at runtime.
         var getOrCreateBuilder = typeBuilder.DefineMethod(
             "GetOrCreate",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -381,8 +385,19 @@ public partial class RuntimeEmitter
         runtime.TSFunctionGetOrCreate = getOrCreateBuilder;
         var gocIL = getOrCreateBuilder.GetILGenerator();
 
+        var cacheKeyLocal = gocIL.DeclareLocal(instanceCacheKeyType);
         var existingLocal = gocIL.DeclareLocal(typeBuilder);
         var newInstLocal = gocIL.DeclareLocal(typeBuilder);
+
+        var cacheKeyCtor = _types.GetConstructor(instanceCacheKeyType,
+            _types.MethodInfo, _types.String, _types.Int32)!;
+
+        // key = (method, name, length)
+        gocIL.Emit(OpCodes.Ldarg_0);
+        gocIL.Emit(OpCodes.Ldarg_1);
+        gocIL.Emit(OpCodes.Ldarg_2);
+        gocIL.Emit(OpCodes.Newobj, cacheKeyCtor);
+        gocIL.Emit(OpCodes.Stloc, cacheKeyLocal);
 
         // Resolve methods via TypeBuilder.GetMethod because the value-type is
         // still an open TypeBuilder at emit time.
@@ -394,9 +409,9 @@ public partial class RuntimeEmitter
         var tryGetValueM = EmitterTypeHelpers.ResolveMethod(instanceCacheType, openTryGet);
         var getOrAddM = EmitterTypeHelpers.ResolveMethod(instanceCacheType, openGetOrAdd);
 
-        // if (_instanceCache.TryGetValue(method, out existing)) return existing;
+        // if (_instanceCache.TryGetValue(key, out existing)) return existing;
         gocIL.Emit(OpCodes.Ldsfld, instanceCacheField);
-        gocIL.Emit(OpCodes.Ldarg_0);
+        gocIL.Emit(OpCodes.Ldloc, cacheKeyLocal);
         gocIL.Emit(OpCodes.Ldloca, existingLocal);
         gocIL.Emit(OpCodes.Callvirt, tryGetValueM);
         var notFound = gocIL.DefineLabel();
@@ -415,9 +430,9 @@ public partial class RuntimeEmitter
         gocIL.Emit(OpCodes.Newobj, ctorWithCacheBuilder);
         gocIL.Emit(OpCodes.Stloc, newInstLocal);
 
-        // return _instanceCache.GetOrAdd(method, newInst)
+        // return _instanceCache.GetOrAdd(key, newInst)
         gocIL.Emit(OpCodes.Ldsfld, instanceCacheField);
-        gocIL.Emit(OpCodes.Ldarg_0);
+        gocIL.Emit(OpCodes.Ldloc, cacheKeyLocal);
         gocIL.Emit(OpCodes.Ldloc, newInstLocal);
         gocIL.Emit(OpCodes.Callvirt, getOrAddM);
         gocIL.Emit(OpCodes.Ret);
