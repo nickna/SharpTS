@@ -796,10 +796,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notKvpLabel);
 
-        // Only attempt JS-toString invocation for Dictionary, $Object, or user
-        // class instances ($IHasFields marker — #931). $Error/Map/Set/$TSFunction
-        // don't implement $IHasFields, so they fall through to Stringify (Error
-        // keeps its overridden CLR ToString → "TypeError: x"). A user class
+        // Only attempt JS-toString invocation for Dictionary, $Object, callable
+        // objects, or user class instances ($IHasFields marker — #931).
+        // Functions are Objects for OrdinaryToPrimitive and may carry own
+        // toString/valueOf overrides; without this branch they fell through to
+        // Stringify's debug "[Function]" before those properties were observed.
+        // $Error/Map/Set don't implement $IHasFields, so they still fall through
+        // to Stringify (Error keeps its overridden CLR ToString → "TypeError: x"). A user class
         // instance resolves toString/valueOf through its generated GetProperty,
         // yielding the user override or "[object Object]" when neither exists.
         var isObjectLikeLabel = il.DefineLabel();
@@ -808,6 +811,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, isObjectLikeLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
