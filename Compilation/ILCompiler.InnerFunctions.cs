@@ -597,6 +597,26 @@ public partial class ILCompiler
             // Emit function body
             if (func.Body != null)
             {
+                // Nested function declarations own their own `arguments`
+                // binding just like top-level declarations and function
+                // expressions. The main function emitter already installs
+                // this prologue; inner-function bodies need the equivalent
+                // instance/static arg-base variant.
+                if (ReferencesArgumentsIdentifier(func.Body))
+                {
+                    var resolvedArgumentTypes = new Type[func.Parameters.Count];
+                    for (int i = 0; i < resolvedArgumentTypes.Length; i++)
+                        resolvedArgumentTypes[i] = innerParamTypes != null && i < innerParamTypes.Length
+                            ? innerParamTypes[i] ?? _types.Object
+                            : _types.Object;
+                    if (hasDisplayClass)
+                        EmitArgumentsLocalPrologueForInstanceMethod(
+                            il, ctx, func.Parameters, resolvedArgumentTypes);
+                    else
+                        EmitArgumentsLocalPrologue(
+                            il, ctx, func.Parameters, resolvedArgumentTypes);
+                }
+
                 // Hoist inner functions within this inner function's body
                 EmitInnerFunctionHoisting(il, ctx, func.Body);
 

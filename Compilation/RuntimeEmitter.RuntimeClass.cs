@@ -616,6 +616,16 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [_types.Object]);
+        runtime.PromiseResolveValueMethod ??= typeBuilder.DefineMethod(
+            "PromiseResolveValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [_types.Object]);
+        runtime.ResolvePreparedPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+            "ResolvePreparedPromiseCapability",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
         // Promise resolving callbacks are callable built-ins. Define their
         // representation before TypeOf so it can classify them as functions;
         // InvokeValue consumes the same types later in this method.
@@ -800,6 +810,7 @@ public partial class RuntimeEmitter
         // Emit $IteratorWrapper AFTER basic iterator methods (needs InvokeIteratorNext etc.)
         // but BEFORE IterateToList (which needs IteratorWrapperCtor)
         EmitIteratorWrapperType(moduleBuilder, runtime);
+        EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
         // but its incremental custom-iterator body needs both the basic
         // protocol helpers and $IteratorWrapper.

@@ -28,6 +28,7 @@ public partial class RuntimeEmitter
         EmitPreparePromiseCapabilityBody(runtime);
         EmitAdoptPromiseCapabilityBody(runtime);
         EmitAdoptCompletedPromiseCapabilityBody(runtime);
+        EmitResolvePreparedPromiseCapabilityBody(runtime);
         EmitNewPromiseCapabilityResultBody(runtime);
         EmitCoerceAwaitableToTask(runtime);
     }
@@ -442,6 +443,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.AdoptPromiseCapabilityMethod);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitResolvePreparedPromiseCapabilityBody(EmittedRuntime runtime)
+    {
+        var il = runtime.ResolvePreparedPromiseCapabilityMethod.GetILGenerator();
+        var capabilityType = runtime.PromiseCapabilityType;
+        var capabilityLocal = il.DeclareLocal(capabilityType);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, capabilityType);
+        il.Emit(OpCodes.Stloc, capabilityLocal);
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
+        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityResolveField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
+        il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
         il.Emit(OpCodes.Ret);
     }
 

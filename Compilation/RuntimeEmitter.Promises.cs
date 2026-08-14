@@ -240,12 +240,12 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
             il.Emit(OpCodes.Ret);
 
-            // Not a Task, wrap in Task.FromResult
+            // Non-native values use the Promise Resolve Functions path: read
+            // `then` synchronously and enqueue PromiseResolveThenableJob when
+            // it is callable.
             il.MarkLabel(notTaskLabel);
             il.Emit(OpCodes.Ldarg_0);
-            // Call Task.FromResult<object?>(value) - keep typeof() for generic method lookup
-            var fromResult = EmitGenerics.MakeGenericMethod(typeof(Task).GetMethod("FromResult")!, _types.Object);
-            il.Emit(OpCodes.Call, fromResult);
+            il.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
             il.Emit(OpCodes.Ret);
         }
 
@@ -287,7 +287,24 @@ public partial class RuntimeEmitter
             var il = resolveStatic.GetILGenerator();
             EmitPromiseStaticThisObjectCheck(il, runtime,
                 "Promise.resolve called on non-Object");
-            EmitPromiseStaticCapabilityResult(il, runtime, resolve);
+            var intrinsicLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.Type);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Beq, intrinsicLabel);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PreparePromiseCapabilityMethod);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.ResolvePreparedPromiseCapabilityMethod);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(intrinsicLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, resolve);
+            il.Emit(OpCodes.Ret);
         }
 
         var rejectStatic = typeBuilder.DefineMethod(

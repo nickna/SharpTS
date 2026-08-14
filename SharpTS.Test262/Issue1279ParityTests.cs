@@ -6028,6 +6028,18 @@ public sealed class Issue1279ParityTests
 public void Promise_combinators_share_iterator_and_resolution_semantics(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Promise/resolve/S25.4.4.5_A3.1_T1.js")]
+    [InlineData("built-ins/Promise/resolve/S25.Promise_resolve_foreign_thenable_1.js")]
+    [InlineData("built-ins/Promise/resolve/S25.Promise_resolve_foreign_thenable_2.js")]
+    [InlineData("built-ins/Promise/resolve/arg-poisoned-then.js")]
+    [InlineData("built-ins/Promise/resolve/resolve-from-promise-capability.js")]
+    [InlineData("built-ins/Promise/resolve/resolve-poisoned-then.js")]
+    [InlineData("built-ins/Promise/resolve/resolve-self.js")]
+    [InlineData("built-ins/Promise/resolve/resolve-thenable.js")]
+    public void Promise_resolve_uses_capabilities_and_queued_thenable_jobs(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();
