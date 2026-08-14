@@ -782,6 +782,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(tsObjectPDSValue);
         il.Emit(OpCodes.Pop); // discard the null getter
+        var tsObjectPDSDataValue = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, tsObjectPDSDataValue);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(tsObjectPDSDataValue);
         il.Emit(OpCodes.Ldloc, tsObjectPDSDescLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);

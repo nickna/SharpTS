@@ -331,7 +331,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, pdsDescriptorLocal);
         il.Emit(OpCodes.Brfalse, afterPDSCheckLabel);
 
-        // Descriptor found - return descriptor.Value
+        // A descriptor with no getter but a setter is a setter-only accessor;
+        // ordinary [[Get]] returns undefined and it shadows any inherited
+        // getter. Otherwise this is a data descriptor and returns Value.
+        var pdsDataDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, pdsDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, pdsDataDescriptorLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(pdsDataDescriptorLabel);
         il.Emit(OpCodes.Ldloc, pdsDescriptorLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
         il.Emit(OpCodes.Ret);

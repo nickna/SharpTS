@@ -393,6 +393,7 @@ public partial class RuntimeEmitter
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         var idxLocal = il.DeclareLocal(_types.Int32);
         var idxAsIntLocal = il.DeclareLocal(_types.Int32);
+        var idxKeyLocal = il.DeclareLocal(_types.String);
 
         // lenVal = $Runtime.GetProperty(receiver, "length")
         il.Emit(OpCodes.Ldarg_0);
@@ -471,14 +472,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lenLocal);
         il.Emit(OpCodes.Bge, loopEnd);
 
-        // val = $Runtime.GetProperty(receiver, i.ToString())
-        il.Emit(OpCodes.Ldloc, listLocal);
+        // Ordinary indexed iteration first performs HasProperty. Preserve an
+        // absent property as the shared hole sentinel; a present property
+        // whose Get result is undefined remains observably present.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, idxLocal);
         il.Emit(OpCodes.Stloc, idxAsIntLocal);
         il.Emit(OpCodes.Ldloca, idxAsIntLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, idxKeyLocal);
+        il.Emit(OpCodes.Ldloc, idxKeyLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        var addHoleLabel = il.DefineLabel();
+        var addValueLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, addHoleLabel);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, idxKeyLocal);
         il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Br, addValueLabel);
+        il.MarkLabel(addHoleLabel);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+        il.MarkLabel(addValueLabel);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
 
         il.Emit(OpCodes.Ldloc, idxLocal);

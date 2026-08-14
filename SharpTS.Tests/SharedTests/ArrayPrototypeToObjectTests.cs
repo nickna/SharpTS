@@ -224,6 +224,32 @@ public class ArrayPrototypeToObjectTests
         Assert.Equal("5\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void GenericMethods_PreserveHolesAndSetterOnlyShadowing(ExecutionMode mode)
+    {
+        var source = """
+            const re: any = new RegExp();
+            re.length = 2;
+            re[1] = true;
+            const filtered = Array.prototype.filter.call(re, function(value: any, index: number, receiver: any) {
+                return receiver instanceof RegExp;
+            });
+            console.log(JSON.stringify(filtered));
+
+            const proto: any = {};
+            Object.defineProperty(proto, "0", { get: function() { return 2; }, configurable: true });
+            const Con: any = function() {};
+            Con.prototype = proto;
+            const child: any = new Con();
+            child.length = 1;
+            Object.defineProperty(child, "0", { set: function(_value: any) {}, configurable: true });
+            console.log(Array.prototype.indexOf.call(child, undefined));
+            console.log(Array.prototype.map.call(child, function(value: any) { return typeof value; })[0]);
+            """;
+
+        Assert.Equal("[true]\n0\nundefined\n", TestHarness.Run(source, mode));
+    }
+
     // ── Object.defineProperties reads Properties via Get (accessor getters) ──
 
     [Theory, ModeData]
