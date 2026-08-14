@@ -5970,6 +5970,12 @@ public sealed class Issue1279ParityTests
     public void Object_conversion_preserves_guest_boxing_and_callable_branding(string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    [Theory]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-292-2.js")]
+    [InlineData("built-ins/Object/defineProperty/15.2.3.6-4-293-4.js")]
+    public void Strict_arguments_indices_use_ordinary_descriptor_state(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(string relativePath, Test262ExecutionMode mode)
     {
         var root = Test262Paths.TryFindRoot();

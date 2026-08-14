@@ -2097,8 +2097,46 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(listLabel);
-        // Check if frozen - in strict mode, throw TypeError
-        var listSetLabel = il.DefineLabel();
+        // List/$Arguments strict indexed writes use the same PDS descriptor
+        // state as Object.defineProperty. The old path unboxed the key as a
+        // Double and wrote straight to List.set_Item, so a string key such as
+        // "0" threw InvalidCastException before writable:false could produce
+        // the required guest TypeError.
+        var strictListKeyLocal = il.DeclareLocal(_types.String);
+        var strictListIndexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, strictListKeyLocal);
+
+        // Non-canonical/non-integer keys are ordinary named properties.
+        var strictListNumericLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, strictListKeyLocal);
+        il.Emit(OpCodes.Ldloca, strictListIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        var strictListNamedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictListNamedLabel);
+        il.Emit(OpCodes.Ldloc, strictListIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, strictListNamedLabel);
+        il.Emit(OpCodes.Ldloc, strictListKeyLocal);
+        il.Emit(OpCodes.Ldloca, strictListIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, strictListNumericLabel);
+
+        il.MarkLabel(strictListNamedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictListKeyLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.SetPropertyStrict);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictListNumericLabel);
+
+        // Check if frozen - in strict mode, throw TypeError.
         var listFrozenCheckLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
         il.Emit(OpCodes.Ldarg_0);
@@ -2114,14 +2152,77 @@ public partial class RuntimeEmitter
         il.MarkLabel(listFrozenSilentLabel);
         il.Emit(OpCodes.Ret); // Silently return in non-strict mode
         il.MarkLabel(listNotFrozenLabel);
-        // Not frozen - set normally
+
+        var strictListDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var strictListSetterLocal = il.DeclareLocal(_types.Object);
+        var strictListCanCreateLabel = il.DefineLabel();
+        var strictListRawStoreLabel = il.DefineLabel();
+        var strictListRejectLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictListKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, strictListDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, strictListDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, strictListCanCreateLabel);
+
+        // Accessor setter wins.
+        il.Emit(OpCodes.Ldloc, strictListDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, strictListSetterLocal);
+        il.Emit(OpCodes.Ldloc, strictListSetterLocal);
+        var strictListNoSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictListNoSetterLabel);
+        il.Emit(OpCodes.Ldloc, strictListSetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, strictListRejectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictListSetterLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictListNoSetterLabel);
+        il.Emit(OpCodes.Ldloc, strictListDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, strictListRejectLabel);
+        il.Emit(OpCodes.Ldloc, strictListDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, strictListRejectLabel);
+        // Keep descriptor-backed reads and the live List slot synchronized.
+        il.Emit(OpCodes.Ldloc, strictListDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Br, strictListRawStoreLabel);
+
+        il.MarkLabel(strictListCanCreateLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, strictListKeyLocal);
+        il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
+        il.Emit(OpCodes.Brfalse, strictListRejectLabel);
+        il.Emit(OpCodes.Br, strictListRawStoreLabel);
+
+        il.MarkLabel(strictListRejectLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        var strictListSloppyReturnLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictListSloppyReturnLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Cannot assign to read only arguments element");
+        il.MarkLabel(strictListSloppyReturnLabel);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictListRawStoreLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.ListOfObjectNullable);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldloc, strictListIndexLocal);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObjectNullable, "set_Item", _types.Int32, _types.Object));
+        il.Emit(OpCodes.Call, runtime.SetArrayElement);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictLabel);
