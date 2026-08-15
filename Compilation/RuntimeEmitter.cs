@@ -41,6 +41,10 @@ public partial class RuntimeEmitter
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime);
 
+        // Marker used only to give compiler-generated prototype constructors a
+        // signature that cannot collide with a user-declared constructor.
+        EmitClassPrototypeMarkerInterface(moduleBuilder, runtime);
+
         // Forward-declare the $Runtime class plus a handful of helper signatures
         // (Stringify, CreateException) so types that emit BEFORE EmitRuntimeClass
         // — most importantly $RegExp, whose Symbol.* protocol helpers want to

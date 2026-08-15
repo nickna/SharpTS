@@ -46,6 +46,63 @@ public sealed class ClassPrototypeGeneratorMethodTests
     }
 
     [Fact]
+    public void Class_prototype_skips_user_field_initializers_through_inheritance()
+    {
+        const string source = """
+            let effects = 0;
+            class Base {
+              field: number = effects++;
+              constructor() { effects += 10; }
+              base() { return "base"; }
+            }
+            class Derived extends Base {
+              derivedField: number = effects++;
+              constructor() { super(); effects += 100; }
+              own() { return "own"; }
+            }
+            const prototype: any = Derived.prototype;
+            console.log(effects);
+            console.log(prototype.base(), prototype.own());
+            """;
+
+        Assert.Equal("0\nbase own\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Class_static_initializers_can_observe_registered_prototype()
+    {
+        const string source = """
+            let constructorCalls = 0;
+            class C {
+              static observed: any = C.prototype.method();
+              constructor() { constructorCalls++; }
+              method() { return "prototype"; }
+            }
+            console.log(C.observed);
+            console.log(constructorCalls);
+            """;
+
+        Assert.Equal("prototype\n0\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void Class_expression_prototype_uses_constructor_free_path()
+    {
+        const string source = """
+            let constructorCalls = 0;
+            const C: any = class {
+              value: string = "instance";
+              constructor() { constructorCalls++; }
+              method() { return "prototype"; }
+            };
+            console.log(C.prototype.method());
+            console.log(constructorCalls);
+            """;
+
+        Assert.Equal("prototype\n0\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void Async_method_default_preserves_explicit_null()
     {
         const string source = """

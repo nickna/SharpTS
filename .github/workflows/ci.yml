@@ -247,7 +247,7 @@ jobs:
           "$native" --compile Examples/AotCompileGate/features.ts --ref-asm \
             -o "$scratch/features.dll"
           dotnet "$scratch/features.dll" > "$scratch/features.txt"
-          grep -qx '2 2 33 7 11' "$scratch/features.txt"
+          grep -qx '2 2 33 7 11 0 prototype async generator' "$scratch/features.txt"
 
           # Known CLR attribute mappings use closed constructor metadata and remain
           # available in the native compiler; only arbitrary @attribute("Type")

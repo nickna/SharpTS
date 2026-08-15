@@ -53,9 +53,6 @@ public partial class ILCompiler
         bool hasSymbolAccessors = _classes.SymbolAccessors.ContainsKey(typeBuilder.Name);
         bool hasSymbolMethods = _classes.SymbolMethods.ContainsKey(typeBuilder.Name);
 
-        // Only emit if there are static fields with initializers, static lock fields, private field storage, static auto-accessors, static blocks, or symbol accessors/methods
-        if (staticFieldsWithInit.Count == 0 && !hasStaticLockFields && !hasPrivateFieldStorage && !hasStaticPrivateFields && staticAutoAccessorsWithInit.Count == 0 && !hasStaticInitializers && !hasSymbolAccessors && !hasSymbolMethods) return;
-
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             CallingConventions.Standard,
@@ -78,6 +75,10 @@ public partial class ILCompiler
         }
 
         var emitter = new ILEmitter(ctx);
+
+        // ECMAScript creates Constructor.prototype as part of class evaluation.
+        // Register it before user static fields/blocks so they can observe it.
+        EmitClassPrototypeRegistration(il, typeBuilder);
 
         // Initialize static @lock decorator fields
         if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))

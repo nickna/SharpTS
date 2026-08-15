@@ -397,7 +397,7 @@ jobs:
           "$native" --compile Examples/AotCompileGate/features.ts --ref-asm \
             -o "$scratch/features.dll"
           dotnet "$scratch/features.dll" | tr -d '\r' > "$scratch/features.txt"
-          grep -qx '2 2 33 7 11' "$scratch/features.txt"
+          grep -qx '2 2 33 7 11 0 prototype async generator' "$scratch/features.txt"
 
           # Prove the embedded AnyCPU managed runtime is extractable and usable.
           mkdir "$scratch/softdep"

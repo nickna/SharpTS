@@ -20,6 +20,25 @@ class Counter {
     }
 }
 
+let prototypeConstructorCalls = 0;
+class PrototypeProbe {
+    constructor() {
+        prototypeConstructorCalls++;
+    }
+
+    method(): string {
+        return "prototype";
+    }
+
+    async asyncMethod(): Promise<string> {
+        return "async";
+    }
+
+    *generatorMethod() {
+        yield "generator";
+    }
+}
+
 function* sequence(count: number) {
     for (let i = 0; i < count; i++) {
         yield i;
@@ -66,7 +85,22 @@ async function main() {
         totals += c.total;
     }
 
-    console.log(counter.total, counter.step, sum, made.step, totals);
+    // The native compiler must emit the compiler-only class prototype
+    // constructor without falling back to reflection or running guest code.
+    const prototype: any = PrototypeProbe.prototype;
+    const prototypeAsync = await prototype.asyncMethod();
+    const prototypeGenerator = prototype.generatorMethod().next().value;
+
+    console.log(
+        counter.total,
+        counter.step,
+        sum,
+        made.step,
+        totals,
+        prototypeConstructorCalls,
+        prototype.method(),
+        prototypeAsync,
+        prototypeGenerator);
 }
 
 main();

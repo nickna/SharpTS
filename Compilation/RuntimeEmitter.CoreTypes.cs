@@ -6,6 +6,23 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
+    /// Emits the marker parameter type used by compiler-only class prototype
+    /// constructors. No instance is ever created; prototype constructors receive
+    /// null for this parameter.
+    /// </summary>
+    private void EmitClassPrototypeMarkerInterface(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime)
+    {
+        var typeBuilder = moduleBuilder.DefineType(
+            "$IClassPrototypeMarker",
+            TypeAttributes.Public | TypeAttributes.Interface | TypeAttributes.Abstract,
+            null);
+
+        runtime.ClassPrototypeMarkerType = typeBuilder.CreateType()!;
+    }
+
+    /// <summary>
     /// Emits the $Undefined singleton class.
     /// This is used instead of referencing SharpTS.Runtime.Types.SharpTSUndefined
     /// so that compiled assemblies are standalone.

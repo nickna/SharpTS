@@ -318,6 +318,7 @@ public partial class ILCompiler
         );
         _classExprs.Constructors[classExpr] = ctorBuilder;
         _classes.Constructors[className] = ctorBuilder;
+        DefineClassPrototypeConstructor(typeBuilder);
 
         // Define static methods (computed symbol-keyed methods are handled by
         // DefineClassExpressionSymbolMethods below, like the class-declaration path).
@@ -438,7 +439,10 @@ public partial class ILCompiler
         string className = _classExprs.Names[classExpr];
         var fieldsField = _classes.InstanceFieldsField[className];
 
-        // Emit static constructor if there are static field initializers
+        // Emit the constructor-free prototype path before the .cctor that uses it.
+        EmitClassPrototypeConstructor(typeBuilder, fieldsField);
+
+        // Emit static constructor and prototype registration.
         EmitClassExpressionStaticConstructor(classExpr, typeBuilder);
 
         // Emit instance constructor
@@ -538,8 +542,6 @@ public partial class ILCompiler
         bool hasSymbolAccessors = _classes.SymbolAccessors.ContainsKey(typeBuilder.Name);
         bool hasSymbolMethods = _classes.SymbolMethods.ContainsKey(typeBuilder.Name);
 
-        if (!hasStaticFields && !hasStaticInitializers && !hasSymbolAccessors && !hasSymbolMethods) return;
-
         var cctor = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
             CallingConventions.Standard,
@@ -550,6 +552,8 @@ public partial class ILCompiler
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, cctor);
         ctx.IsStaticConstructorContext = true;
         var emitter = new ILEmitter(ctx);
+
+        EmitClassPrototypeRegistration(il, typeBuilder);
 
         // Process StaticInitializers if available (preserves declaration order)
         if (hasStaticInitializers)

@@ -45,6 +45,7 @@ public partial class ILCompiler
         /// </summary>
         public HashSet<string> PromiseSubclasses { get; } = [];
         public Dictionary<string, ConstructorBuilder> Constructors { get; } = [];
+        public Dictionary<TypeBuilder, ConstructorBuilder> PrototypeConstructors { get; } = [];
         public Dictionary<string, List<ConstructorBuilder>> ConstructorOverloads { get; } = [];
         public Dictionary<string, Dictionary<string, FieldBuilder>> StaticFields { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> StaticMethods { get; } = [];

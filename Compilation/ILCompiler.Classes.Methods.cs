@@ -63,6 +63,12 @@ public partial class ILCompiler
         if (!_classes.Builders.TryGetValue(qualifiedClassName, out var typeBuilder))
             return;  // Skip if no TypeBuilder exists for this class
 
+        // This must precede the method-signature idempotency return below. In
+        // multi-module builds, duplicate simple class names can revisit method
+        // registration through a resolved name while still requiring a distinct
+        // prototype constructor on each module-qualified TypeBuilder.
+        DefineClassPrototypeConstructor(typeBuilder);
+
         // Skip if instance methods are already defined for this class
         if (_classes.InstanceMethods.ContainsKey(qualifiedClassName))
             return;
@@ -431,6 +437,10 @@ public partial class ILCompiler
 
         // Emit constructor
         EmitConstructor(typeBuilder, classStmt, fieldsField);
+
+        // Emit the compiler-only constructor used to create Constructor.prototype
+        // without running JavaScript constructor bodies or field initializers.
+        EmitClassPrototypeConstructor(typeBuilder, fieldsField);
 
         // Emit method bodies (skip overload signatures with no body, and computed
         // symbol-keyed methods — emitted by EmitSymbolMethods below).
