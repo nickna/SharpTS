@@ -171,6 +171,9 @@ public partial class ILEmitter
             }
         }
 
+        if (TryEmitStaticClassMethodValue(g))
+            return;
+
         // Handle static member access via class name
         if (g.Object is Expr.Variable classVar)
         {

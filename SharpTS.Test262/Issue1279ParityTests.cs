@@ -6445,6 +6445,27 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Class_async_and_generator_methods_compile_with_runtime_prototypes(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> ClassMethodForbiddenExtensionCompilerCases => new()
+    {
+        "language/statements/class/method-static/forbidden-ext/b1/cls-decl-meth-static-forbidden-ext-direct-access-prop-arguments.js",
+        "language/expressions/class/method-static/forbidden-ext/b1/cls-expr-meth-static-forbidden-ext-direct-access-prop-arguments.js",
+        "language/statements/class/method-static/forbidden-ext/b1/cls-decl-meth-static-forbidden-ext-direct-access-prop-caller.js",
+        "language/expressions/class/method-static/forbidden-ext/b1/cls-expr-meth-static-forbidden-ext-direct-access-prop-caller.js",
+        "language/statements/class/gen-method-static/forbidden-ext/b1/cls-decl-gen-meth-static-forbidden-ext-direct-access-prop-arguments.js",
+        "language/expressions/class/gen-method-static/forbidden-ext/b1/cls-expr-gen-meth-static-forbidden-ext-direct-access-prop-arguments.js",
+        "language/statements/class/gen-method-static/forbidden-ext/b1/cls-decl-gen-meth-static-forbidden-ext-direct-access-prop-caller.js",
+        "language/expressions/class/gen-method-static/forbidden-ext/b1/cls-expr-gen-meth-static-forbidden-ext-direct-access-prop-caller.js",
+        "language/statements/class/async-method-static/forbidden-ext/b1/cls-decl-async-meth-static-forbidden-ext-direct-access-prop-arguments.js",
+        "language/expressions/class/async-method-static/forbidden-ext/b1/cls-expr-async-meth-static-forbidden-ext-direct-access-prop-arguments.js",
+        "language/statements/class/async-method-static/forbidden-ext/b1/cls-decl-async-meth-static-forbidden-ext-direct-access-prop-caller.js",
+        "language/expressions/class/async-method-static/forbidden-ext/b1/cls-expr-async-meth-static-forbidden-ext-direct-access-prop-caller.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ClassMethodForbiddenExtensionCompilerCases))]
+    public void Static_class_method_function_objects_match_in_compiled_mode(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

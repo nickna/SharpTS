@@ -240,6 +240,42 @@ public class FunctionMethodsTests
         Assert.Equal("1\n1\n", output);
     }
 
+    [Theory, ModeData]
+    public void StaticClassMethodsUsedAsValuesAreFunctionObjects(ExecutionMode mode)
+    {
+        var source = """
+            class Declaration {
+                static regular() {
+                    console.log(typeof this.regular);
+                    console.log(this.regular.hasOwnProperty("caller"));
+                }
+                static *generator() {
+                    console.log(typeof this.generator);
+                    console.log(this.generator.hasOwnProperty("arguments"));
+                }
+                static async asyncMethod() {
+                    console.log(typeof this.asyncMethod);
+                    console.log(this.asyncMethod.hasOwnProperty("caller"));
+                }
+            }
+
+            const Expression = class {
+                static regular() {
+                    console.log(typeof this.regular);
+                    console.log(this.regular.hasOwnProperty("arguments"));
+                }
+            };
+
+            Declaration.regular();
+            [...Declaration.generator()];
+            Declaration.asyncMethod();
+            Expression.regular();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("function\nfalse\nfunction\nfalse\nfunction\nfalse\nfunction\nfalse\n", output);
+    }
+
     #endregion
 
     #region Function Name Tests

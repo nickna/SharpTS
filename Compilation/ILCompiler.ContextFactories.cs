@@ -69,6 +69,7 @@ public partial class ILCompiler
             BuiltInModuleMethodBindings = GetCurrentBuiltInMethodBindings(),
             ImportedNames = _importedNames,
             ClassExprBuilders = _classExprs.Builders,
+            ClassExprStaticMethods = _classExprs.StaticMethods,
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
             DotNetNamespace = _modules.CurrentDotNetNamespace,

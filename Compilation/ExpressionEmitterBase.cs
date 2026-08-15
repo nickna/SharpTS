@@ -2092,6 +2092,52 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     }
 
     /// <summary>
+    /// Emits a static class method used as a value through <c>this.method</c>.
+    /// Static CLR bodies have no arg0 receiver, so the generic property path cannot
+    /// first evaluate <c>this</c>. Resolve the current declaration or class expression
+    /// from compiler metadata and materialize its JavaScript function wrapper directly.
+    /// </summary>
+    protected bool TryEmitStaticClassMethodValue(Expr.Get g)
+    {
+        if (g.Object is not Expr.This || Ctx.IsInstanceMethod || Ctx.CurrentClassBuilder == null)
+            return false;
+
+        System.Reflection.MethodInfo? method = null;
+        if (Ctx.CurrentClassName is { } className)
+        {
+            Ctx.ClassRegistry!.TryGetCallableStaticMethod(
+                className, g.Name.Lexeme, Ctx.CurrentClassBuilder, out method);
+        }
+
+        if (method == null && Ctx.ClassExprStaticMethods != null)
+        {
+            Parsing.Expr.ClassExpr? classExpr = Ctx.CurrentClassExpr;
+            if (classExpr == null && Ctx.ClassExprBuilders != null)
+            {
+                classExpr = Ctx.ClassExprBuilders
+                    .FirstOrDefault(pair => ReferenceEquals(pair.Value, Ctx.CurrentClassBuilder))
+                    .Key;
+            }
+
+            if (classExpr != null
+                && Ctx.ClassExprStaticMethods.TryGetValue(classExpr, out var methods)
+                && methods.TryGetValue(g.Name.Lexeme, out var classExprMethod))
+            {
+                method = classExprMethod;
+            }
+        }
+
+        if (method == null)
+            return false;
+
+        IL.Emit(OpCodes.Ldnull);
+        Types.EmitLoadMethodInfoViaHandle(IL, method);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
+        SetStackUnknown();
+        return true;
+    }
+
+    /// <summary>
     /// Loads a static data field read through <paramref name="resolvedClassName"/>. For a field the
     /// class declares itself this is a plain <c>Ldsfld</c>. For an <em>inherited</em> static field
     /// (declared on a base, resolved via the superclass walk) a subclass write creates a per-subclass
@@ -2496,6 +2542,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitNamespaceVarGet(g)) return;
 
         if (TryEmitSymbolWellKnown(g)) return;
+        if (TryEmitStaticClassMethodValue(g)) return;
         if (TryEmitStaticFieldAccess(g)) return;
 
         // Static type property dispatch via registry (Math.PI, Number.MAX_VALUE, Symbol.iterator, etc.)
