@@ -825,6 +825,15 @@ public partial class ILCompiler
             DefineDeclarationFromStatement(stmt);
         }
 
+        // CLR types must be defined before any method body can reference them.
+        // Class declarations inside functions and repeating scopes were
+        // historically excluded because their ideal JavaScript identity is
+        // per-evaluation. Class expressions already use one emitted type per
+        // syntax node, however, and leaving declarations undiscovered makes
+        // them complete no-ops. Give every remaining declaration its own
+        // generated block-scoped type and evaluate it at the statement site.
+        DefineRemainingClassDeclarations(statements);
+
         // Alias namespace function import aliases to their targets now that every namespace
         // member function is in the registry (#657).
         ResolveNamespaceImportAliasFunctions();
@@ -888,6 +897,8 @@ public partial class ILCompiler
         {
             EmitMethodBodyFromStatement(stmt);
         }
+
+        EmitRemainingClassMethodBodies(statements);
 
         EmitClassExpressionBodies();
     }
@@ -1327,6 +1338,8 @@ public partial class ILCompiler
                 DefineDeclarationFromStatement(stmt);
             }
 
+            DefineRemainingClassDeclarations(module.Statements);
+
             if (_hosted && TopLevelAwaitDetector.Contains(module.Statements))
                 DefineHostedModuleRunner(module);
         }
@@ -1388,6 +1401,58 @@ public partial class ILCompiler
         return resolve
             ? ctx.ResolveClassName(classStmt.Name.Lexeme)
             : ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+    }
+
+    private void DefineRemainingClassDeclarations(IEnumerable<Stmt> statements)
+    {
+        var collector = new ClassDeclarationCollector();
+        foreach (var statement in statements)
+            collector.Visit(statement);
+
+        foreach (var classStmt in collector.Declarations)
+        {
+            if (!_classes.Declarations.Contains(classStmt))
+                DefineDeclarationFromStatement(classStmt, blockScoped: true);
+        }
+    }
+
+    private static IReadOnlyList<Stmt.Class> CollectClassDeclarations(IEnumerable<Stmt> statements)
+    {
+        var collector = new ClassDeclarationCollector();
+        foreach (var statement in statements)
+            collector.Visit(statement);
+        return collector.Declarations;
+    }
+
+    private sealed class ClassDeclarationCollector : Parsing.Visitors.AstVisitorBase
+    {
+        private readonly HashSet<Stmt.Class> _seen = new(ReferenceEqualityComparer.Instance);
+        public List<Stmt.Class> Declarations { get; } = [];
+
+        protected override void VisitClass(Stmt.Class stmt)
+        {
+            if (!_seen.Add(stmt))
+                return;
+
+            Declarations.Add(stmt);
+
+            if (stmt.SuperclassExpr != null)
+                Visit(stmt.SuperclassExpr);
+
+            foreach (var method in stmt.Methods)
+                if (method.ComputedKey != null)
+                    Visit(method.ComputedKey);
+
+            base.VisitClass(stmt);
+
+            if (stmt.AutoAccessors != null)
+                foreach (var accessor in stmt.AutoAccessors)
+                    VisitAutoAccessor(accessor);
+
+            if (stmt.StaticInitializers != null)
+                foreach (var statement in stmt.StaticInitializers)
+                    Visit(statement);
+        }
     }
 
     /// <summary>
@@ -1497,6 +1562,7 @@ public partial class ILCompiler
             {
                 EmitMethodBodyFromStatement(stmt);
             }
+            EmitRemainingClassMethodBodies(module.Statements);
         }
         _modules.CurrentPath = null;
 
@@ -1530,6 +1596,15 @@ public partial class ILCompiler
                 foreach (var child in GetNonRepeatingTopLevelChildren(stmt))
                     EmitMethodBodyFromStatement(child);
                 break;
+        }
+    }
+
+    private void EmitRemainingClassMethodBodies(IEnumerable<Stmt> statements)
+    {
+        foreach (var classStmt in CollectClassDeclarations(statements))
+        {
+            if (_classes.BlockScopedNames.ContainsKey(classStmt))
+                EmitClassMethods(classStmt);
         }
     }
 

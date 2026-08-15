@@ -745,6 +745,28 @@ public partial class ILCompiler
             }
         }
 
+        // Computed non-symbol methods use synthetic CLR names and are
+        // registered under their evaluated JavaScript property-key string.
+        // Class declarations already consult this registry; class expressions
+        // need the same fallback for `instance[key]` dispatch.
+        if (classExpr.Methods.Any(m => m.ComputedKey != null && m.Body != null))
+        {
+            var noComputedMethodLabel = il.DefineLabel();
+            var computedMethodLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, _runtime.FindSymbolMethod);
+            il.Emit(OpCodes.Stloc, computedMethodLocal);
+            il.Emit(OpCodes.Ldloc, computedMethodLocal);
+            il.Emit(OpCodes.Brfalse, noComputedMethodLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, computedMethodLocal);
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Newobj, _runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noComputedMethodLabel);
+        }
+
         // 4. Not found on this class — delegate to the base class's GetProperty
         // so inherited members resolve under dynamic dispatch (else fall back to
         // returning $Undefined).

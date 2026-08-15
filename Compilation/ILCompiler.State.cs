@@ -19,6 +19,8 @@ public partial class ILCompiler
     /// </summary>
     private sealed class ClassCompilationState
     {
+        public HashSet<Stmt.Class> Declarations { get; } = new(ReferenceEqualityComparer.Instance);
+        public HashSet<Stmt.Class> EmittedMethodBodies { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, TypeBuilder> Builders { get; } = [];
         public Dictionary<Stmt.Class, string> BlockScopedNames { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Stmt.Class, TypeBuilder> BlockScopedBuilders { get; } = new(ReferenceEqualityComparer.Instance);

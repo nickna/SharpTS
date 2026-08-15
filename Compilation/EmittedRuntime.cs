@@ -117,6 +117,11 @@ public class EmittedRuntime
     // non-hot-loop call sites (event loop, deep-recursion guard).
     public MethodBuilder BuildCancellationExceptionMethod { get; set; } = null!;
 
+    // Forces an emitted CLR class initializer at the JavaScript class
+    // definition site and unwraps TypeInitializationException so guest
+    // exceptions retain their original JavaScript identity.
+    public MethodBuilder RunClassDefinitionMethod { get; set; } = null!;
+
     // The emitted runtime helper class
     public TypeBuilder RuntimeType { get; set; } = null!;
 

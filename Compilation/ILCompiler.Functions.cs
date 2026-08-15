@@ -1009,27 +1009,6 @@ public partial class ILCompiler
         // Initialize namespace static fields before any code that might reference them
         InitializeNamespaceFields(il);
 
-        // Trigger static constructors for classes with static blocks
-        // In JavaScript/TypeScript, static blocks run when the class is defined.
-        // In .NET, static constructors are lazy, so we force them to run here.
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Class classStmt && classStmt.StaticInitializers?.Count > 0)
-            {
-                string className = _modules.CurrentDotNetNamespace != null
-                    ? $"{_modules.CurrentDotNetNamespace}.{classStmt.Name.Lexeme}"
-                    : classStmt.Name.Lexeme;
-                if (_classes.Builders.TryGetValue(className, out var classBuilder))
-                {
-                    // Emit: RuntimeHelpers.RunClassConstructor(typeof(ClassName).TypeHandle)
-                    il.Emit(OpCodes.Ldtoken, classBuilder);
-                    il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-                    il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
-                    il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
-                }
-            }
-        }
-
         var emitter = new ILEmitter(ctx);
 
         foreach (var stmt in statements)
@@ -1038,6 +1017,7 @@ public partial class ILCompiler
             // Note: Namespace statements are NOT skipped - they need to emit member storage
             if (stmt is Stmt.Class classDecl)
             {
+                emitter.EmitStatement(classDecl);
                 // Emit runtime decorator execution if decorators are present
                 if (_decoratorMode != DecoratorMode.None && HasAnyRuntimeDecorators(classDecl))
                 {
@@ -1176,33 +1156,21 @@ public partial class ILCompiler
         // Initialize namespace static fields before any code
         InitializeNamespaceFields(il);
 
-        // Trigger static constructors for classes with static blocks
-        // In JavaScript/TypeScript, static blocks run when the class is defined.
-        // In .NET, static constructors are lazy, so we force them to run here.
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Class classStmt && classStmt.StaticInitializers?.Count > 0)
-            {
-                string className = _modules.CurrentDotNetNamespace != null
-                    ? $"{_modules.CurrentDotNetNamespace}.{classStmt.Name.Lexeme}"
-                    : classStmt.Name.Lexeme;
-                if (_classes.Builders.TryGetValue(className, out var classBuilder))
-                {
-                    il.Emit(OpCodes.Ldtoken, classBuilder);
-                    il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
-                    il.Emit(OpCodes.Callvirt, typeof(Type).GetProperty("TypeHandle")!.GetGetMethod()!);
-                    il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
-                }
-            }
-        }
-
         var emitter = new ILEmitter(ctx);
 
         // Execute top-level statements (module initialization), excluding the main function
         foreach (var stmt in statements)
         {
-            // Skip declarations (handled in earlier phases), including main()
-            if (stmt is Stmt.Class or Stmt.Function or Stmt.Interface or Stmt.Enum)
+            // Class declarations still have runtime definition work (static
+            // elements and computed keys) at this exact source position.
+            if (stmt is Stmt.Class classDecl)
+            {
+                emitter.EmitStatement(classDecl);
+                continue;
+            }
+
+            // Skip the remaining declarations (handled in earlier phases), including main().
+            if (stmt is Stmt.Function or Stmt.Interface or Stmt.Enum)
             {
                 continue;
             }

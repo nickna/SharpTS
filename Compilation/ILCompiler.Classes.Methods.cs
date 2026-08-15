@@ -16,27 +16,8 @@ public partial class ILCompiler
     /// </summary>
     private void DefineAllClassMethods(IEnumerable<Stmt> statements)
     {
-        foreach (var stmt in statements)
-        {
-            if (stmt is Stmt.Class classStmt)
-            {
-                DefineClassMethodsOnly(classStmt);
-            }
-            else if (stmt is Stmt.Namespace nsStmt)
-            {
-                // Recursively handle classes in namespaces
-                DefineAllClassMethods(nsStmt.Members);
-            }
-            else if (stmt is Stmt.Export { Declaration: not null } exportStmt)
-            {
-                // Unwrap exported declarations (e.g., export class Foo { })
-                DefineAllClassMethods([exportStmt.Declaration]);
-            }
-            else
-            {
-                DefineAllClassMethods(GetNonRepeatingTopLevelChildren(stmt));
-            }
-        }
+        foreach (var classStmt in CollectClassDeclarations(statements))
+            DefineClassMethodsOnly(classStmt);
     }
 
     /// <summary>
@@ -45,37 +26,19 @@ public partial class ILCompiler
     /// </summary>
     private void EmitAllHasFieldsInterfaceMethodBodies(IEnumerable<Stmt> statements)
     {
-        foreach (var stmt in statements)
+        foreach (var classStmt in CollectClassDeclarations(statements))
         {
-            if (stmt is Stmt.Class classStmt)
-            {
-                if (classStmt.IsDeclare)
-                    continue;
+            if (classStmt.IsDeclare)
+                continue;
 
-                var ctx = GetDefinitionContext();
-                string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
+            string qualifiedClassName = GetQualifiedClassDeclarationName(classStmt);
 
-                // Skip external types
-                if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
-                    _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
-                    continue;
+            // Skip external types
+            if (_classes.ExternalTypes.ContainsKey(qualifiedClassName) ||
+                _classes.ExternalTypes.ContainsKey(classStmt.Name.Lexeme))
+                continue;
 
-                EmitHasFieldsInterfaceMethodBodies(qualifiedClassName, classStmt);
-            }
-            else if (stmt is Stmt.Namespace nsStmt)
-            {
-                // Recursively handle classes in namespaces
-                EmitAllHasFieldsInterfaceMethodBodies(nsStmt.Members);
-            }
-            else if (stmt is Stmt.Export { Declaration: not null } exportStmt)
-            {
-                // Unwrap exported declarations (e.g., export class Foo { })
-                EmitAllHasFieldsInterfaceMethodBodies([exportStmt.Declaration]);
-            }
-            else
-            {
-                EmitAllHasFieldsInterfaceMethodBodies(GetNonRepeatingTopLevelChildren(stmt));
-            }
+            EmitHasFieldsInterfaceMethodBodies(qualifiedClassName, classStmt);
         }
     }
 
@@ -430,6 +393,9 @@ public partial class ILCompiler
 
     private void EmitClassMethods(Stmt.Class classStmt)
     {
+        if (!_classes.EmittedMethodBodies.Add(classStmt))
+            return;
+
         // Skip @DotNetType external type classes - they don't have TypeBuilders
         if (classStmt.IsDeclare)
             return;

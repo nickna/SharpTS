@@ -397,7 +397,7 @@ public partial class ILEmitter
             // enum/namespace declarations bind by name via the registries and need
             // no entry-point store, so they stay no-ops here.
             if (_ctx.CurrentModulePath == null &&
-                export.Declaration is Stmt.Var or Stmt.Const or Stmt.Sequence)
+                export.Declaration is Stmt.Var or Stmt.Const or Stmt.Sequence or Stmt.Class)
             {
                 EmitStatement(export.Declaration);
             }

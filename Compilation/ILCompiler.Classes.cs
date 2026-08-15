@@ -22,6 +22,7 @@ public partial class ILCompiler
 {
     private void DefineClass(Stmt.Class classStmt)
     {
+        _classes.Declarations.Add(classStmt);
         var ctx = GetDefinitionContext();
 
         // Get qualified class name (includes module prefix and .NET namespace if set)

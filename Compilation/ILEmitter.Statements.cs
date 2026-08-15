@@ -1388,14 +1388,7 @@ public partial class ILEmitter
         // Class declarations have lexical block bindings but their CLR Types
         // are defined ahead of method emission. Predeclare an undefined local
         // for TDZ behavior; the declaration statement installs its Type token.
-        foreach (var classStmt in b.Statements.OfType<Stmt.Class>())
-        {
-            if (_ctx.BlockScopedClassBuilders?.ContainsKey(classStmt) != true)
-                continue;
-            var local = _ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);
-            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
-            IL.Emit(OpCodes.Stloc, local);
-        }
+        PredeclareBlockScopedClassLocals(b.Statements);
 
         // Check if block contains using declarations
         var usingResources = new List<LocalBuilder>();
@@ -1418,18 +1411,66 @@ public partial class ILEmitter
         _ctx.Locals.ExitScope();
     }
 
+    private void PredeclareBlockScopedClassLocals(IEnumerable<Stmt> statements)
+    {
+        foreach (var classStmt in statements.OfType<Stmt.Class>())
+        {
+            if (_ctx.BlockScopedClassBuilders?.ContainsKey(classStmt) != true)
+                continue;
+
+            var local = _ctx.Locals.DeclareLocal(
+                classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Stloc, local);
+        }
+    }
+
     private void EmitBlockScopedClassDeclaration(Stmt.Class classStmt)
     {
         var scopedClasses = _ctx.BlockScopedClassBuilders;
-        if (scopedClasses == null || !scopedClasses.TryGetValue(classStmt, out var builder))
+        TypeBuilder? builder = null;
+        bool isBlockScoped = scopedClasses != null
+            && scopedClasses.TryGetValue(classStmt, out builder);
+        if (!isBlockScoped)
+        {
+            string qualifiedName = _ctx.GetQualifiedClassName(classStmt.Name.Lexeme);
+            if (!_ctx.Classes.TryGetValue(qualifiedName, out var topLevelBuilder))
+                return;
+            builder = topLevelBuilder;
+        }
+
+        // ECMAScript evaluates static elements and computed method/accessor
+        // keys at the class declaration's exact source position. CLR type
+        // initializers are lazy, so force the emitted .cctor here rather than
+        // in an entry-point pre-pass (which ran every class too early) or at
+        // first later use (which ran block-scoped classes too late).
+        if (ClassDefinitionHasEagerWork(classStmt))
+        {
+            IL.Emit(OpCodes.Ldtoken, builder!);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+                _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
+        }
+
+        if (!isBlockScoped
+            || !_ctx.Locals.TryGetTag(classStmt.Name.Lexeme, out var tag)
+            || !ReferenceEquals(tag, classStmt))
             return;
-        if (!_ctx.Locals.TryGetTag(classStmt.Name.Lexeme, out var tag) || !ReferenceEquals(tag, classStmt))
-            return;
+
         var local = _ctx.Locals.GetLocal(classStmt.Name.Lexeme)!;
-        IL.Emit(OpCodes.Ldtoken, builder);
+        IL.Emit(OpCodes.Ldtoken, builder!);
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Stloc, local);
     }
+
+    private static bool ClassDefinitionHasEagerWork(Stmt.Class classStmt) =>
+        classStmt.StaticInitializers?.Count > 0
+        || classStmt.Fields.Any(field => field.IsStatic && field.Initializer != null)
+        || classStmt.AutoAccessors?.Any(
+            accessor => accessor.IsStatic && accessor.Initializer != null) == true
+        || classStmt.Methods.Any(method => method.ComputedKey != null && method.Body != null)
+        || classStmt.Accessors?.Any(
+            accessor => accessor.ComputedKey != null && !accessor.IsAbstract) == true;
 
     /// <summary>
     /// Emits a block that contains using declarations with proper try/finally disposal.
@@ -1515,6 +1556,12 @@ public partial class ILEmitter
     /// </summary>
     public void EmitStatements(List<Stmt> statements)
     {
+        // Function/state-machine bodies are emitted as a raw statement list,
+        // not through EmitBlock. Their direct class declarations still need
+        // lexical locals so references after the declaration resolve to the
+        // installed Type value.
+        PredeclareBlockScopedClassLocals(statements);
+
         // Check if any statement is a using declaration
         bool hasUsing = statements.Any(s => s is Stmt.Using);
 

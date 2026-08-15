@@ -283,6 +283,46 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
+        // RunClassDefinition(Type): CLR wraps exceptions escaping a type
+        // initializer in TypeInitializationException. JavaScript class
+        // evaluation must expose the original guest exception instead, so all
+        // definition-site forcing goes through this helper.
+        var runClassDefinition = typeBuilder.DefineMethod(
+            "RunClassDefinition",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Type]);
+        runtime.RunClassDefinitionMethod = runClassDefinition;
+        {
+            var il = runClassDefinition.GetILGenerator();
+            var initializationException = il.DeclareLocal(typeof(TypeInitializationException));
+            var returnLabel = il.DefineLabel();
+            var throwLabel = il.DefineLabel();
+
+            il.BeginExceptionBlock();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt,
+                typeof(Type).GetProperty(nameof(Type.TypeHandle))!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, _types.RuntimeHelpersRunClassConstructor);
+            il.Emit(OpCodes.Leave, returnLabel);
+
+            il.BeginCatchBlock(typeof(TypeInitializationException));
+            il.Emit(OpCodes.Stloc, initializationException);
+            il.Emit(OpCodes.Ldloc, initializationException);
+            il.Emit(OpCodes.Callvirt,
+                typeof(Exception).GetProperty(nameof(Exception.InnerException))!.GetGetMethod()!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, throwLabel);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldloc, initializationException);
+            il.MarkLabel(throwLabel);
+            il.Emit(OpCodes.Throw);
+            il.EndExceptionBlock();
+
+            il.MarkLabel(returnLabel);
+            il.Emit(OpCodes.Ret);
+        }
+
         // Static field for Random
         var randomField = typeBuilder.DefineField("_random", _types.Random, FieldAttributes.Private | FieldAttributes.Static);
 

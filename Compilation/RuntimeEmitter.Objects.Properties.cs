@@ -1641,6 +1641,27 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noTypePdsLabel);
 
+            // Computed static methods are emitted under synthetic CLR names
+            // and registered by their evaluated JavaScript property key. They
+            // therefore cannot be found by the ordinary name-based reflection
+            // probes below. Consult the shared registry after own descriptor
+            // storage (which may shadow the method), matching the instance
+            // $IHasFields dispatch path.
+            var noComputedStaticMethodLabel = il.DefineLabel();
+            var computedStaticMethodLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.FindSymbolMethod);
+            il.Emit(OpCodes.Stloc, computedStaticMethodLocal);
+            il.Emit(OpCodes.Ldloc, computedStaticMethodLocal);
+            il.Emit(OpCodes.Brfalse, noComputedStaticMethodLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, computedStaticMethodLocal);
+            il.Emit(OpCodes.Castclass, _types.MethodInfo);
+            il.Emit(OpCodes.Newobj, runtime.TSFunctionCtor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(noComputedStaticMethodLabel);
+
             // A configurable built-in that was deleted must stay absent. This
             // check precedes both the JS built-in table and CLR reflection,
             // either of which would otherwise synthesize it again.
