@@ -913,6 +913,7 @@ public partial class ILCompiler
         // calls — it only affects the value-call padding mask. Covers sync/async/generator
         // instance methods (they all share this builder before the kind-specific branch).
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, method.Parameters);
 
         // Apply method-level decorators as .NET attributes
         if (_decoratorMode != DecoratorMode.None)

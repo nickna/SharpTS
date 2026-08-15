@@ -38,7 +38,8 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
         _thisBound = thisBound;
         _boundThis = boundThis;
         _boundSuper = boundSuper;
-        _arity = declaration.Parameters?.Count ?? 0;
+        _arity = declaration.Parameters?.Count(
+            p => p.DefaultValue == null && !p.IsRest && !p.IsOptional) ?? 0;
     }
 
     public int Arity() => _arity;

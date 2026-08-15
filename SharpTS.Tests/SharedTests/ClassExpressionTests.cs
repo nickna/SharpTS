@@ -462,6 +462,24 @@ public class ClassExpressionTests
     }
 
     [Theory, ModeData]
+    public void ClassExpression_StaticGeneratorMethod_IgnoresExtraArguments(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                let effects = 0;
+                const C = class { static *sg(value: number) { yield value; } };
+                console.log([...C.sg(7, effects++, "ignored")].join(","));
+                console.log(effects);
+                """,
+        };
+
+        Assert.Equal(
+            "7\n1\n",
+            TestHarness.RunModules(files, "main.ts", mode, allowTypeErrors: true));
+    }
+
+    [Theory, ModeData]
     public void ClassExpression_AsyncGeneratorMethod_Works(ExecutionMode mode)
     {
         var source = """

@@ -797,6 +797,7 @@ public partial class ILCompiler
         // #703: class-expression instance method invoked as a value pads omitted optional
         // args with the `undefined` sentinel on the value-call path (covers sync + async).
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, method.Parameters);
 
         // Generator methods route through the same state-machine emitters as class declarations (#765).
         // Async generator FIRST since `async *m()` has both IsAsync and IsGenerator set.
@@ -871,6 +872,7 @@ public partial class ILCompiler
         // #703: class-expression static method invoked as a value pads omitted optional
         // args with the `undefined` sentinel on the value-call path (covers sync + async).
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, method.Parameters);
 
         var typeBuilder = _classExprs.Builders[classExpr];
 

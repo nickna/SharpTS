@@ -297,6 +297,7 @@ public partial class ILCompiler
         // `undefined` sentinel on the value-call path. Mark before the branches below so it
         // covers sync, async, and generator (#692) static methods (same builder).
         MarkPadsUndefined(_classes.StaticMethods[className][method.Name.Lexeme]);
+        MarkFunctionLength(_classes.StaticMethods[className][method.Name.Lexeme], method.Parameters);
 
         // Static async generator methods (#778) use the async generator state machine, set up like a
         // free function (no `this`). Checked FIRST since a `static async *m()` has both IsAsync and

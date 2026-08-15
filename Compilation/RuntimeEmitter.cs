@@ -73,6 +73,10 @@ public partial class RuntimeEmitter
         // can ldtoken the type for the IsDefined read in AdjustArgs caching. (#640)
         EmitPadUndefinedAttribute(moduleBuilder, runtime);
 
+        // Carries the ECMAScript Function.length of emitted user methods. This must be
+        // available before $TSFunction so its reflective constructor can cache the value.
+        EmitFunctionLengthAttribute(moduleBuilder, runtime);
+
         // Marker attribute for "this method's first parameter is the synthetic `__this` receiver".
         // Defined+created before EmitTSFunctionClass so the ctor IL can ldtoken the type for the
         // IsDefined read that backstops the (ref-asm-fragile) parameter-name check. (#738)

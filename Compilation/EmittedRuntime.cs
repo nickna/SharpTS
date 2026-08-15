@@ -343,6 +343,13 @@ public class EmittedRuntime
     public TypeBuilder PadUndefinedAttrType { get; set; } = null!;
     public ConstructorBuilder PadUndefinedAttrCtor { get; set; } = null!;
 
+    // Attribute applied to emitted user methods with their ECMAScript Function.length.
+    // CLR parameter metadata cannot represent the JS rule that arity stops at the first
+    // default initializer, so reflective class-method wrappers read this value instead.
+    public TypeBuilder FunctionLengthAttrType { get; set; } = null!;
+    public ConstructorBuilder FunctionLengthAttrCtor { get; set; } = null!;
+    public FieldBuilder FunctionLengthAttrValueField { get; set; } = null!;
+
     // Marker attribute applied to a user function-expression / `this`-bearing arrow method whose
     // first emitted parameter is the synthetic `__this` receiver slot. $TSFunction reads it back via
     // IsDefined instead of matching on the parameter name, which keeps the check independent of the

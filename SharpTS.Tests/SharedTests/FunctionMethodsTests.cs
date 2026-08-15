@@ -169,6 +169,77 @@ public class FunctionMethodsTests
         Assert.Equal("0\n", output);
     }
 
+    [Theory, ModeData]
+    public void ClassMethodLength_UsesJavaScriptParameterRules(ExecutionMode mode)
+    {
+        var source = """
+            class Methods {
+                plain(a: unknown, b: unknown,) {}
+                defaulted(a: unknown, b: unknown = 1, c: unknown = 2) {}
+                rest(a: unknown, ...values: unknown[]) {}
+
+                static plain(a: unknown, b: unknown,) {}
+                static defaulted(a: unknown, b: unknown = 1, c: unknown = 2) {}
+                static rest(a: unknown, ...values: unknown[]) {}
+            }
+
+            const value = new Methods();
+            console.log(value.plain.length);
+            console.log(value.defaulted.length);
+            console.log(value.rest.length);
+            console.log(Methods.plain.length);
+            console.log(Methods.defaulted.length);
+            console.log(Methods.rest.length);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n1\n1\n2\n1\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void ClassMethodLength_CoversAsyncAndGeneratorMethods(ExecutionMode mode)
+    {
+        var source = """
+            class Methods {
+                async asyncMethod(a: unknown, b: unknown = 1) {}
+                *generatorMethod(a: unknown, b: unknown = 1) {}
+                async *asyncGeneratorMethod(a: unknown, b: unknown = 1) {}
+
+                static async asyncMethod(a: unknown, b: unknown = 1) {}
+                static *generatorMethod(a: unknown, b: unknown = 1) {}
+                static async *asyncGeneratorMethod(a: unknown, b: unknown = 1) {}
+            }
+
+            const value = new Methods();
+            console.log(value.asyncMethod.length);
+            console.log(value.generatorMethod.length);
+            console.log(value.asyncGeneratorMethod.length);
+            console.log(Methods.asyncMethod.length);
+            console.log(Methods.generatorMethod.length);
+            console.log(Methods.asyncGeneratorMethod.length);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n1\n1\n1\n1\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void ClassExpressionMethodLength_UsesJavaScriptParameterRules(ExecutionMode mode)
+    {
+        var source = """
+            const Methods = class {
+                method(a: unknown, b: unknown = 1) {}
+                static method(a: unknown, b: unknown = 1) {}
+            };
+
+            console.log(new Methods().method.length);
+            console.log(Methods.method.length);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n1\n", output);
+    }
+
     #endregion
 
     #region Function Name Tests

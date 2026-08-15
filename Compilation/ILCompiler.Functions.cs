@@ -1390,6 +1390,29 @@ public partial class ILCompiler
     }
 
     /// <summary>
+    /// Records the ECMAScript <c>Function.length</c> for a user method. Arity counts formal
+    /// parameters only up to the first default initializer and excludes the rest parameter.
+    /// TypeScript optional markers are erased syntax, so those parameters still count.
+    /// </summary>
+    internal void MarkFunctionLength(MethodBuilder method, IReadOnlyList<Stmt.Parameter> parameters)
+    {
+        if (_runtime?.FunctionLengthAttrCtor == null)
+            return;
+
+        int length = 0;
+        foreach (var parameter in parameters)
+        {
+            if (parameter.DefaultValue != null || parameter.IsRest)
+                break;
+            length++;
+        }
+
+        method.SetCustomAttribute(
+            _runtime.FunctionLengthAttrCtor,
+            CustomAttributeEncoder.Encode(_runtime.FunctionLengthAttrCtor, length));
+    }
+
+    /// <summary>
     /// Marks a method whose first emitted parameter is the synthetic <c>__this</c> receiver slot
     /// (a user function expression or <c>this</c>-bearing arrow) with the <c>$ExpectsThis</c>
     /// attribute, so <c>$TSFunction</c> can detect that slot via <c>IsDefined</c> instead of the

@@ -84,6 +84,35 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits <c>$FunctionLength(int)</c>, which preserves an emitted method's ECMAScript
+    /// <c>Function.length</c>. CLR parameter metadata does not retain where a JavaScript default
+    /// initializer first appeared, so class methods surfaced through reflection need this value.
+    /// </summary>
+    private void EmitFunctionLengthAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = moduleBuilder.DefineType(
+            "$FunctionLength",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            typeof(System.Attribute));
+        var valueField = typeBuilder.DefineField(
+            "Length", typeof(int), FieldAttributes.Public | FieldAttributes.InitOnly);
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, [typeof(int)]);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, valueField);
+        ctorIl.Emit(OpCodes.Ret);
+        runtime.FunctionLengthAttrType = typeBuilder;
+        runtime.FunctionLengthAttrCtor = ctor;
+        runtime.FunctionLengthAttrValueField = valueField;
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
     /// Emits a minimal marker attribute <c>$ExpectsThis</c> (empty <see cref="System.Attribute"/>
     /// subclass) applied to a user function-expression / <c>this</c>-bearing arrow method, whose
     /// first emitted parameter is the synthetic <c>__this</c> receiver slot. <c>$TSFunction</c>
@@ -313,6 +342,9 @@ public partial class RuntimeEmitter
         var noMethodLabel = ctorIL.DefineLabel();
         ctorIL.Emit(OpCodes.Ldarg_2);
         ctorIL.Emit(OpCodes.Brfalse, noMethodLabel);
+        // User methods carry their ECMAScript arity explicitly because reflection cannot
+        // recover the "stop at the first default initializer" rule.
+        EmitComputeFunctionLength(ctorIL, cachedLengthField, runtime, methodArgIndex: 2);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
         EmitComputeExpectsThis(ctorIL, expectsThisField, runtime, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
@@ -1427,6 +1459,37 @@ public partial class RuntimeEmitter
         // MemberInfo.IsDefined(Type, bool) — looked up via MethodInfo (inherited).
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
         il.Emit(OpCodes.Stfld, capturesArgumentsField);
+    }
+
+    /// <summary>
+    /// Replaces the <c>-1</c> reflection fallback in <c>_cachedLength</c> when the wrapped method
+    /// carries <c>$FunctionLength</c>. Built-ins remain unmarked and retain reflection behavior.
+    /// </summary>
+    private void EmitComputeFunctionLength(ILGenerator il, FieldBuilder cachedLengthField, EmittedRuntime runtime, int methodArgIndex)
+    {
+        var done = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionLengthAttrType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Brfalse, done);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionLengthAttrType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.MethodInfo, "GetCustomAttributes", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Castclass, runtime.FunctionLengthAttrType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionLengthAttrValueField);
+        il.Emit(OpCodes.Stfld, cachedLengthField);
+
+        il.MarkLabel(done);
     }
 
     /// <summary>
