@@ -791,6 +791,65 @@ public abstract partial class ExpressionEmitterBase
     }
 
     /// <summary>
+    /// Emits arguments for a statically resolved user-class method without leaking JavaScript
+    /// surplus arguments onto the CLR evaluation stack. All supplied arguments are evaluated in
+    /// source order; only declared slots are reloaded for a fixed signature, while a trailing
+    /// <c>List&lt;object&gt;</c> rest marker receives the packed remainder.
+    /// </summary>
+    public void EmitStaticCallArguments(List<Expr> arguments, ParameterInfo[] targetParams)
+    {
+        int paramCount = targetParams.Length;
+        bool hasRestParam = paramCount > 0 &&
+            targetParams[paramCount - 1].ParameterType == typeof(List<object>);
+
+        if (hasRestParam)
+        {
+            EmitRestParameterCall(arguments, paramCount - 1, targetParams);
+            return;
+        }
+
+        // A later await/yield cannot suspend with earlier arguments on the IL stack. Spill every
+        // supplied argument first, then reload only those represented by the CLR signature.
+        if (AnyContainsSuspension(arguments))
+        {
+            var argLocals = new LocalBuilder[arguments.Count];
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                if (i < paramCount)
+                    argLocals[i] = SpillConvertedArg(arguments[i], targetParams[i].ParameterType);
+                else
+                    argLocals[i] = SpillBoxed(arguments[i]);
+            }
+
+            for (int i = 0; i < Math.Min(arguments.Count, paramCount); i++)
+            {
+                IL.Emit(OpCodes.Ldloc, argLocals[i]);
+                EmitCoerceBoxedToType(targetParams[i].ParameterType);
+            }
+        }
+        else
+        {
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                EmitExpression(arguments[i]);
+                if (i < paramCount)
+                {
+                    EmitConversionForParameter(arguments[i], targetParams[i].ParameterType);
+                }
+                else
+                {
+                    // JavaScript observes evaluation side effects but ignores the surplus value.
+                    EnsureBoxedArg(arguments[i]);
+                    IL.Emit(OpCodes.Pop);
+                }
+            }
+        }
+
+        for (int i = arguments.Count; i < paramCount; i++)
+            EmitOmittedArgument(targetParams[i].ParameterType);
+    }
+
+    /// <summary>
     /// Emits an args array and isSpread bool array from pre-spilled argument locals (a slice of
     /// <paramref name="argLocals"/> starting at <paramref name="offset"/>). Leaves both arrays
     /// on the stack (args array first, then isSpread array on top). Reads from locals rather
@@ -1131,44 +1190,7 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.ClassRegistry!.TryGetCallableStaticMethod(resolvedClassName, methodGet.Name.Lexeme, classBuilder, out var callableMethod))
         {
             var staticMethodParams = callableMethod!.GetParameters();
-            var paramCount = staticMethodParams.Length;
-
-            // When a later argument can suspend, spill each argument to a registered, boxed
-            // object local first — emitting them directly onto the IL stack would leave the
-            // earlier args (and partial evaluation) stacked across the await/yield, which is
-            // invalid IL and loses values across the MoveNext re-entry (#439). Await-free calls
-            // (all of synchronous mode) keep the direct on-stack emission.
-            if (AnyContainsSuspension(c.Arguments))
-            {
-                var argLocals = new LocalBuilder[c.Arguments.Count];
-                for (int i = 0; i < c.Arguments.Count; i++)
-                {
-                    Type pType = i < staticMethodParams.Length ? staticMethodParams[i].ParameterType : Types.Object;
-                    argLocals[i] = i < staticMethodParams.Length
-                        ? SpillConvertedArg(c.Arguments[i], pType)
-                        : SpillBoxed(c.Arguments[i]);
-                }
-                for (int i = 0; i < c.Arguments.Count; i++)
-                {
-                    IL.Emit(OpCodes.Ldloc, argLocals[i]);
-                    EmitCoerceBoxedToType(i < staticMethodParams.Length ? staticMethodParams[i].ParameterType : Types.Object);
-                }
-            }
-            else
-            {
-                for (int i = 0; i < c.Arguments.Count; i++)
-                {
-                    EmitExpression(c.Arguments[i]);
-                    if (i < staticMethodParams.Length)
-                        EmitConversionForParameter(c.Arguments[i], staticMethodParams[i].ParameterType);
-                    else
-                        EnsureBoxedArg(c.Arguments[i]);
-                }
-            }
-
-            for (int i = c.Arguments.Count; i < paramCount; i++)
-                EmitOmittedArgument(staticMethodParams[i].ParameterType);
-
+            EmitStaticCallArguments(c.Arguments, staticMethodParams);
             IL.Emit(OpCodes.Call, callableMethod);
             SetStackUnknown();
             return true;

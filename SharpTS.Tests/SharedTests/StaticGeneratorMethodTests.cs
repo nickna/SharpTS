@@ -34,6 +34,82 @@ public class StaticGeneratorMethodTests
     }
 
     [Theory, ModeData]
+    public void StaticGenerator_ExtraArguments_AreEvaluatedAndIgnored(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                let effects = 0;
+                class C { static *gen(value: number) { yield value; } }
+                console.log([...C.gen(7, effects++, "ignored")].join(","));
+                console.log(effects);
+                """,
+        };
+
+        Assert.Equal(
+            "7\n1\n",
+            TestHarness.RunModules(files, "main.ts", mode, allowTypeErrors: true));
+    }
+
+    [Theory, ModeData]
+    public void StaticGenerator_RestParameterCollectsExtraArguments(ExecutionMode mode)
+    {
+        var source = """
+            class C {
+              static *gen(first: number, ...rest: any[]) {
+                yield first;
+                yield rest.join(",");
+              }
+            }
+            console.log([...C.gen(1, 2, 3)].join("|"));
+            """;
+
+        Assert.Equal("1|2,3\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StaticGenerator_ExtraArgumentsThroughStaticThis_AreIgnored(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                let effects = 0;
+                class C {
+                  static *gen(value: number) { yield value; }
+                  static run() { return [...this.gen(4, effects++)].join(","); }
+                }
+                console.log(C.run());
+                console.log(effects);
+                """,
+        };
+
+        Assert.Equal(
+            "4\n1\n",
+            TestHarness.RunModules(files, "main.ts", mode, allowTypeErrors: true));
+    }
+
+    [Theory, ModeData]
+    public void ImportedStaticGenerator_ExtraArguments_AreIgnored(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["lib.ts"] = """
+                export class C { static *gen(value: number) { yield value; } }
+                """,
+            ["main.ts"] = """
+                import { C } from "./lib";
+                let effects = 0;
+                console.log([...C.gen(6, effects++)].join(","));
+                console.log(effects);
+                """,
+        };
+
+        Assert.Equal(
+            "6\n1\n",
+            TestHarness.RunModules(files, "main.ts", mode, allowTypeErrors: true));
+    }
+
+    [Theory, ModeData]
     public void StaticGenerator_ReadsStaticField_Works(ExecutionMode mode)
     {
         var source = """
@@ -98,6 +174,28 @@ public class StaticGeneratorMethodTests
             """;
 
         Assert.Equal("5\n10\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StaticAsyncGenerator_ExtraArguments_AreEvaluatedAndIgnored(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                let effects = 0;
+                class C { static async *gen(value: number) { yield value; } }
+                async function extra() { effects++; return "ignored"; }
+                async function main() {
+                  for await (const value of C.gen(9, await extra(), "ignored")) console.log(value);
+                  console.log(effects);
+                }
+                main();
+                """,
+        };
+
+        Assert.Equal(
+            "9\n1\n",
+            TestHarness.RunModules(files, "main.ts", mode, allowTypeErrors: true));
     }
 
     [Theory, ModeData]

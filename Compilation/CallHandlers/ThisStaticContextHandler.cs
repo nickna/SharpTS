@@ -33,20 +33,7 @@ public class ThisStaticContextHandler : ICallHandler
 
         var il = emitter.IL;
         var methodParams = thisStaticMethod!.GetParameters();
-        var paramCount = methodParams.Length;
-
-        for (int i = 0; i < call.Arguments.Count; i++)
-        {
-            emitter.EmitExpression(call.Arguments[i]);
-            if (i < methodParams.Length)
-                emitter.EmitConversionForParameter(call.Arguments[i], methodParams[i].ParameterType);
-            else
-                emitter.EmitBoxIfNeeded(call.Arguments[i]);
-        }
-
-        for (int i = call.Arguments.Count; i < paramCount; i++)
-            emitter.EmitOmittedArgument(methodParams[i].ParameterType);
-
+        emitter.EmitStaticCallArguments(call.Arguments, methodParams);
         il.Emit(OpCodes.Call, thisStaticMethod);
         emitter.SetStackUnknown();
         return true;
