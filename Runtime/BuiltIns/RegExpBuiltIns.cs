@@ -1202,33 +1202,10 @@ public static class RegExpBuiltIns
         RequireObject(recv, "[Symbol.matchAll]");
         var s = ToStr(interp, args.Length > 0 ? args[0].ToObject() : null);
 
-        bool receiverIsRegExp = IsRegExp(interp, recv);
-        object? speciesCtor = receiverIsRegExp
-            ? SpeciesConstructor(interp, recv)
-            : null;
-
-        string flags = receiverIsRegExp
-            ? ToStr(interp, interp.GetProperty(recv, "flags"))
-            : "g";
-
-        object? matcher;
-        if (speciesCtor is not null)
-        {
-            matcher = interp.Construct(speciesCtor, [recv, flags]);
-        }
-        else if (receiverIsRegExp && recv is SharpTSRegExp rx)
-        {
-            matcher = new SharpTSRegExp(rx.Source, flags);
-        }
-        else if (receiverIsRegExp)
-        {
-            var source = ToStr(interp, interp.GetProperty(recv, "source"));
-            matcher = new SharpTSRegExp(source, flags);
-        }
-        else
-        {
-            matcher = new SharpTSRegExp(ToStr(interp, recv), flags);
-        }
+        object? speciesCtor = SpeciesConstructor(interp, recv)
+            ?? Interpreter.RegExpConstructorObject;
+        string flags = ToStr(interp, interp.GetProperty(recv, "flags"));
+        object? matcher = interp.Construct(speciesCtor!, [recv, flags]);
 
         int lastIndex = ToLengthAsInt(
             interp, interp.GetPropertyValue(recv, "lastIndex"));

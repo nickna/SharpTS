@@ -222,7 +222,7 @@ public partial class Interpreter
     // properties are realm-local and mutable. Keep expandos here so assignments
     // such as `Promise.resolve = replacement` are observable without leaking to
     // another interpreter running in the same process.
-    private Dictionary<SharpTSBuiltInConstructor, Dictionary<string, object?>>?
+    private Dictionary<SharpTSBuiltInConstructor, Dictionary<string, SharpTSPropertyDescriptor>>?
         _builtInConstructorProperties;
     private Dictionary<SharpTSBuiltInConstructor, HashSet<string>>?
         _deletedBuiltInConstructorProperties;
@@ -233,15 +233,68 @@ public partial class Interpreter
         out object? value)
     {
         value = null;
-        return _builtInConstructorProperties != null
-            && _builtInConstructorProperties.TryGetValue(constructor, out var properties)
-            && properties.TryGetValue(name, out value);
+        if (_builtInConstructorProperties == null
+            || !_builtInConstructorProperties.TryGetValue(constructor, out var properties)
+            || !properties.TryGetValue(name, out var descriptor))
+        {
+            return false;
+        }
+
+        value = descriptor.Get is { } getter
+            ? FunctionBuiltIns.CallWithThis(this, getter, constructor, [])
+            : descriptor.Value;
+        return true;
     }
 
     private void SetBuiltInConstructorProperty(
         SharpTSBuiltInConstructor constructor,
         string name,
         object? value)
+    {
+        if (_builtInConstructorProperties != null
+            && _builtInConstructorProperties.TryGetValue(constructor, out var existingProperties)
+            && existingProperties.TryGetValue(name, out var existing))
+        {
+            if (existing.Set is { } setter)
+            {
+                FunctionBuiltIns.CallWithThis(this, setter, constructor, [value]);
+                return;
+            }
+            if (!existing.Writable)
+                return;
+            existing.Value = value;
+            existing.HasValue = true;
+            return;
+        }
+
+        if (_deletedBuiltInConstructorProperties != null
+            && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
+        {
+            deleted.Remove(name);
+        }
+        _builtInConstructorProperties ??= [];
+        if (!_builtInConstructorProperties.TryGetValue(constructor, out var properties))
+        {
+            properties = [];
+            _builtInConstructorProperties[constructor] = properties;
+        }
+        properties[name] = new SharpTSPropertyDescriptor
+        {
+            Value = value,
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = constructor.GetMember(name) is null,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        };
+    }
+
+    internal bool DefineBuiltInConstructorProperty(
+        SharpTSBuiltInConstructor constructor,
+        string name,
+        SharpTSPropertyDescriptor descriptor)
     {
         if (_deletedBuiltInConstructorProperties != null
             && _deletedBuiltInConstructorProperties.TryGetValue(constructor, out var deleted))
@@ -254,7 +307,8 @@ public partial class Interpreter
             properties = [];
             _builtInConstructorProperties[constructor] = properties;
         }
-        properties[name] = value;
+        properties[name] = descriptor;
+        return true;
     }
 
     internal bool HasBuiltInConstructorOwnProperty(
@@ -274,19 +328,11 @@ public partial class Interpreter
     internal SharpTSPropertyDescriptor? GetBuiltInConstructorOverlayDescriptor(
         SharpTSBuiltInConstructor constructor, string name)
     {
-        if (!TryGetBuiltInConstructorProperty(constructor, name, out var value))
+        if (_builtInConstructorProperties == null
+            || !_builtInConstructorProperties.TryGetValue(constructor, out var properties)
+            || !properties.TryGetValue(name, out var descriptor))
             return null;
-        return new SharpTSPropertyDescriptor
-        {
-            Value = value,
-            HasValue = true,
-            Writable = true,
-            HasWritable = true,
-            Enumerable = constructor.GetMember(name) is null,
-            HasEnumerable = true,
-            Configurable = true,
-            HasConfigurable = true,
-        };
+        return descriptor;
     }
 
     internal bool DeleteBuiltInConstructorProperty(
@@ -295,6 +341,9 @@ public partial class Interpreter
         if (_builtInConstructorProperties != null
             && _builtInConstructorProperties.TryGetValue(constructor, out var properties))
         {
+            if (properties.TryGetValue(name, out var descriptor)
+                && !descriptor.Configurable)
+                return false;
             properties.Remove(name);
         }
         if (constructor.GetMember(name) is null)

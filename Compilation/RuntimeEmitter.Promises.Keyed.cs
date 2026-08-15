@@ -120,8 +120,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(valuesDone);
 
         // ContinueWith's state overload carries the key list without an
-        // emitted closure allocation. GetAwaiter().GetResult() in the mapper
-        // preserves the original rejection exception rather than wrapping it.
+        // emitted closure allocation. ExecuteSynchronously is essential here:
+        // a default-scheduled ThreadPool hop is invisible to $EventLoop, which
+        // can otherwise drain after settlement but before this mapper runs.
+        // GetAwaiter().GetResult() in the mapper preserves the original
+        // rejection exception rather than wrapping it.
         var callbackType = _types.MakeGenericType(
             typeof(Func<,,>), _types.TaskOfObject, _types.Object, _types.Object);
         var continueDefinition = typeof(Task<object>).GetMethods()
@@ -131,11 +134,12 @@ public partial class RuntimeEmitter
                     !candidate.IsGenericMethodDefinition)
                     return false;
                 var parameters = candidate.GetParameters();
-                return parameters.Length == 2 &&
+                return parameters.Length == 3 &&
                     parameters[0].ParameterType.IsGenericType &&
                     parameters[0].ParameterType.GetGenericTypeDefinition() == typeof(Func<,,>) &&
                     parameters[0].ParameterType.GetGenericArguments()[0] == typeof(Task<object>) &&
-                    parameters[1].ParameterType == typeof(object);
+                    parameters[1].ParameterType == typeof(object) &&
+                    parameters[2].ParameterType == typeof(TaskContinuationOptions);
             });
         var continueMethod = EmitGenerics.MakeGenericMethod(
             continueDefinition, _types.Object);
@@ -150,6 +154,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, _types.GetConstructor(
             callbackType, _types.Object, _types.IntPtr));
         il.Emit(OpCodes.Ldloc, keys);
+        il.Emit(OpCodes.Ldc_I4, (int)TaskContinuationOptions.ExecuteSynchronously);
         il.Emit(OpCodes.Callvirt, continueMethod);
         il.Emit(OpCodes.Ret);
     }

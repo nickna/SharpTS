@@ -160,6 +160,17 @@ public partial class Interpreter : IDisposable
     // resumable async statement path in Interpreter.Hosting.cs instead.
     private bool _waitForTopLevelPromises = true;
 
+    /// <summary>
+    /// Controls the legacy console convention that awaits promise-valued
+    /// expression statements. Script hosts such as Test262 disable this for
+    /// ordinary scripts because ECMAScript does not implicitly await them.
+    /// </summary>
+    public bool WaitForTopLevelPromises
+    {
+        get => _waitForTopLevelPromises;
+        set => _waitForTopLevelPromises = value;
+    }
+
     // Track all pending timers for cleanup on disposal
     private readonly System.Collections.Concurrent.ConcurrentBag<Runtime.Types.SharpTSTimeout> _pendingTimers = new();
 
@@ -1189,7 +1200,9 @@ public partial class Interpreter : IDisposable
                     {
                         object? result = Evaluate(exprStmt.Expr);
                         // Wait for top-level Promises to complete before continuing
-                        if (result is SharpTSPromise promise)
+                        if (_waitForTopLevelPromises
+                            && result is SharpTSPromise promise
+                            && !promise.SuppressImplicitTopLevelWait)
                         {
                             WaitForPromise(promise);
                         }

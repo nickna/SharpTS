@@ -312,6 +312,14 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is string) return "[object String]";
         if (target is double or int) return "[object Number]";
         if (target is bool) return "[object Boolean]";
+        if (target is SharpTSBigInt or System.Numerics.BigInteger)
+        {
+            object? tag = interpreter?.GetSymbolPropertyValue(
+                interpreter.GetBigIntPrototype(), SharpTSSymbol.ToStringTag);
+            return tag is string text
+                ? $"[object {text}]"
+                : "[object Object]";
+        }
         if (target is SharpTSArguments) return "[object Arguments]";
         if (target is SharpTSArray) return "[object Array]";
         if (target is SharpTSDate) return "[object Date]";
@@ -322,11 +330,20 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
         if (target is SharpTSObject boxed
             && boxed.GetProperty("__primitiveType") is string primitiveType)
         {
+            if (primitiveType == "BigInt")
+            {
+                object? tag = interpreter?.GetSymbolPropertyValue(
+                    interpreter.GetBigIntPrototype(), SharpTSSymbol.ToStringTag);
+                return tag is string text
+                    ? $"[object {text}]"
+                    : "[object Object]";
+            }
             return primitiveType switch
             {
                 "Number" => "[object Number]",
                 "String" => "[object String]",
                 "Boolean" => "[object Boolean]",
+                "BigInt" => "[object BigInt]",
                 _ => "[object Object]",
             };
         }
@@ -470,6 +487,8 @@ public sealed class SharpTSObjectUnboundMethod : ISharpTSCallable, IBuiltInFunct
                 => regex.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSObjectNamespace objectNamespace
                 => objectNamespace.GetOwnPropertyDescriptor(key) is { Enumerable: true },
+            SharpTSGlobalThis globalThis
+                => globalThis.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSFunctionPrototype functionPrototype
                 => functionPrototype.GetOwnPropertyDescriptor(key) is { Enumerable: true },
             SharpTSArrayPrototype arrayPrototype

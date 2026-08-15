@@ -58,6 +58,28 @@ public sealed class SharpTSGlobalThis : ISharpTSPropertyAccessor
     internal bool DefineProperty(string name, SharpTSPropertyDescriptor descriptor)
     {
         _deletedProperties.Remove(name);
+        // Global object properties use the same ValidateAndApplyPropertyDescriptor
+        // merge as ordinary objects. Preserve omitted attributes explicitly here;
+        // global declarations can pre-populate the backing slot before a later
+        // Object.defineProperties attribute-only update reaches this facade.
+        if (_properties.GetOwnPropertyDescriptor(name) is { } current)
+        {
+            if (!descriptor.HasWritable && !current.HasGet && !current.HasSet)
+            {
+                descriptor.Writable = current.Writable;
+                descriptor.HasWritable = true;
+            }
+            if (!descriptor.HasEnumerable)
+            {
+                descriptor.Enumerable = current.Enumerable;
+                descriptor.HasEnumerable = true;
+            }
+            if (!descriptor.HasConfigurable)
+            {
+                descriptor.Configurable = current.Configurable;
+                descriptor.HasConfigurable = true;
+            }
+        }
         return _properties.DefineProperty(name, descriptor);
     }
 

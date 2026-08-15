@@ -53,6 +53,8 @@ public class SharpTSDate : ITypeCategorized
         return deleted || isPrototypeMethod;
     }
     internal IEnumerable<string> OwnEnumerableKeys() => _extras.OwnEnumerableKeys();
+    internal bool IsExtensible => _extras.IsExtensible;
+    internal void PreventExtensions() => _extras.PreventExtensions();
     internal void FreezeOwnProperties() => _extras.Freeze();
     internal void SealOwnProperties() => _extras.Seal();
 

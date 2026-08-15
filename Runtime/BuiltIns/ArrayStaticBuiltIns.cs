@@ -12,11 +12,17 @@ public static class ArrayStaticBuiltIns
     {
         return name switch
         {
-            "isArray" => BuiltInMethod.CreateV2("isArray", 1, static (_, _, args) =>
+            "isArray" => BuiltInMethod.CreateV2("isArray", 1, int.MaxValue, static (_, _, args) =>
             {
-                return RuntimeValue.FromBoolean(
-                    args[0].ToObject() is SharpTSArray and not SharpTSArguments
-                        or SharpTSArrayPrototype);
+                object? candidate = args[0].ToObject();
+                bool isArray = candidate switch
+                {
+                    SharpTSProxy proxy => proxy.HasArrayTarget(),
+                    SharpTSArray and not SharpTSArguments => true,
+                    SharpTSArrayPrototype => true,
+                    _ => false,
+                };
+                return RuntimeValue.FromBoolean(isArray);
             }).AsNonConstructor(),
             "from" => BuiltInMethod.CreateV2("from", 1, 3, static (interpreter, _, args) =>
             {

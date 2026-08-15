@@ -71,8 +71,32 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
         // Start async execution and wrap in Promise
-        var task = CallAsync(interpreter, arguments);
+        var task = NormalizePromiseRejection(CallAsync(interpreter, arguments), interpreter);
         return new SharpTSPromise(task);
+    }
+
+    internal static async Task<object?> NormalizePromiseRejection(
+        Task<object?> task,
+        Interpreter interpreter)
+    {
+        try
+        {
+            return await task;
+        }
+        catch (SharpTSPromiseRejectedException)
+        {
+            throw;
+        }
+        catch (ThrowException thrown)
+        {
+            throw new SharpTSPromiseRejectedException(thrown.Value);
+        }
+        catch (Exception ex)
+        {
+            object? reason = interpreter.CoerceCaughtValueForBinding(
+                interpreter.TranslateException(ex));
+            throw new SharpTSPromiseRejectedException(reason);
+        }
     }
 
     /// <summary>
@@ -208,7 +232,8 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable, ITypeCategorized
     /// </summary>
     public object? Call(Interpreter interpreter, List<object?> arguments)
     {
-        var task = CallAsync(interpreter, arguments);
+        var task = SharpTSAsyncFunction.NormalizePromiseRejection(
+            CallAsync(interpreter, arguments), interpreter);
         return new SharpTSPromise(task);
     }
 

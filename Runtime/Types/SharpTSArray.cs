@@ -271,22 +271,19 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     /// </remarks>
     public IEnumerator<object?> GetEnumerator()
     {
-        int denseCount = _dense.Count;
-        int cap = _length > denseCount ? denseCount : (int)_length;
-        for (int i = 0; i < cap; i++)
-            yield return UnholeForRead(_dense[i]);
-        if (_sparse != null || _length > denseCount)
+        // %ArrayIteratorPrototype%.next reads the array's current length on
+        // every step. Mutations during iteration are therefore observable:
+        // shrinking stops the iterator early, while appended elements can be
+        // visited. Do not snapshot _dense.Count/_length here.
+        for (long i = 0; i < _length; i++)
         {
-            // Use long iteration so arrays with length > int.MaxValue enumerate
-            // correctly. Most built-ins go through HasIndex / indexed access and
-            // never hit this path with a huge _length.
-            for (long i = denseCount; i < _length; i++)
-            {
-                if (_sparse != null && i <= uint.MaxValue && _sparse.TryGetValue((uint)i, out var v))
-                    yield return v;
-                else
-                    yield return SharpTSUndefined.Instance;
-            }
+            if (i < _dense.Count)
+                yield return UnholeForRead(_dense[(int)i]);
+            else if (_sparse != null && i <= uint.MaxValue
+                && _sparse.TryGetValue((uint)i, out var value))
+                yield return UnholeForRead(value);
+            else
+                yield return SharpTSUndefined.Instance;
         }
     }
 

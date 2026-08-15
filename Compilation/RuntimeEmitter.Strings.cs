@@ -1763,10 +1763,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, lengthLocal);
         il.Emit(OpCodes.Brfalse, emptyLabel);
 
-        // Use Char.ConvertFromUtf32 + String.Concat in a loop via StringBuilder-like approach
-        // We'll build a string result by concatenating
-        var resultLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldstr, "");
+        // Build in amortized linear time. The generated RegExp conformance
+        // corpus calls fromCodePoint with 10,000 arguments per chunk; repeated
+        // String.Concat here made each chunk quadratic and pushed otherwise
+        // trivial compiled tests beyond the worker timeout.
+        var resultLocal = il.DeclareLocal(_types.StringBuilder);
+        il.Emit(OpCodes.Newobj, _types.StringBuilderDefaultCtor);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1827,7 +1829,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(validLabel);
 
-        // result = string.Concat(result, <UTF16-encoded codePoint>)
+        // result.Append(<UTF16-encoded codePoint>)
         // ECMA-262 §11.1.3: char.ConvertFromUtf32 rejects lone surrogates
         // (0xD800–0xDFFF), but fromCodePoint must emit them as single UTF-16
         // code units. Code points <= 0xFFFF (incl. lone surrogates) become one
@@ -1849,8 +1851,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, codePointLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "ConvertFromUtf32", _types.Int32));
         il.MarkLabel(segmentReadyLabel);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
-        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderAppendString);
+        il.Emit(OpCodes.Pop);
 
         // i++
         il.Emit(OpCodes.Ldloc, iLocal);
@@ -1861,6 +1863,7 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(loopEnd);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Callvirt, _types.StringBuilderToString);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(emptyLabel);

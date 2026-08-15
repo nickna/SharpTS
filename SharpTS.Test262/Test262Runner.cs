@@ -371,6 +371,10 @@ public sealed class Test262Runner
         {
             var sw = new StringWriter();
             using var interpreter = new Interpreter(stdout: sw, stderr: TextWriter.Null);
+            // Plain scripts do not implicitly await promise-valued expression
+            // statements. Async Test262 cases still use the legacy wait so their
+            // terminal .then($DONE, $DONE) chain completes before classification.
+            interpreter.WaitForTopLevelPromises = isAsync;
             interpreter.SetVmTimeoutToken(cts.Token);
             if (doneCallback is not null)
                 interpreter.RegisterGlobal("$DONE", doneCallback);
@@ -680,7 +684,8 @@ public sealed class Test262Runner
         if (isAsync && result is { Outcome: Test262Outcome.Pass } && capturedStdout is not null)
         {
             var sentinel = ParseDoneSentinel(capturedStdout.ToString());
-            return sentinel ?? new Test262Result(Test262Outcome.Fail, "async test ended without invoking $DONE", null);
+            return sentinel ?? new Test262Result(
+                Test262Outcome.Fail, "async test ended without invoking $DONE", null);
         }
 
         return result ?? new Test262Result(Test262Outcome.RuntimeError, "runner produced no result", null);

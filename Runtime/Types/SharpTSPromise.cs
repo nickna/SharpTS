@@ -22,6 +22,15 @@ public class SharpTSPromise : ITypeCategorized
 
     private readonly Task<object?> _task;
 
+    /// <summary>
+    /// Suppresses SharpTS's legacy implicit wait for a promise-valued top-level
+    /// expression. ECMAScript never performs that wait; this flag is needed for
+    /// promises returned by custom combinator capabilities so an ignored result
+    /// does not become a synchronous host throw. Explicit <c>await</c> is
+    /// unaffected.
+    /// </summary>
+    internal bool SuppressImplicitTopLevelWait { get; set; }
+
     // Own properties installed on a promise instance via Object.defineProperty
     // (and, for subclass instances, declared fields). Base promises have none
     // until user code adds one — a poisoned `constructor` getter

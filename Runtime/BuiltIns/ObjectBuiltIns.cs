@@ -277,6 +277,39 @@ public static partial class ObjectBuiltIns
         for (int i = 1; i < args.Count; i++)
         {
             if (args[i] is null or SharpTSUndefined) continue;
+
+            if (args[i] is SharpTSProxy proxySource)
+            {
+                foreach (object? key in proxySource.TrapOwnPropertyKeys(interpreter))
+                {
+                    if (key is null) continue;
+                    object? descriptor = key is SharpTSSymbol symbolKey
+                        ? proxySource.TrapGetOwnPropertyDescriptor(symbolKey, interpreter)
+                        : proxySource.TrapGetOwnPropertyDescriptor(key.ToString()!, interpreter);
+                    if (descriptor is null or SharpTSUndefined) continue;
+                    if (!Compilation.RuntimeTypes.IsTruthy(
+                            interpreter.GetProperty(descriptor, "enumerable")))
+                    {
+                        continue;
+                    }
+
+                    if (key is SharpTSSymbol symbol)
+                    {
+                        SetAssignedSymbol(
+                            interpreter, target, symbol,
+                            interpreter.GetSymbolPropertyValue(proxySource, symbol));
+                    }
+                    else
+                    {
+                        string name = key.ToString()!;
+                        SetAssignedProperty(
+                            interpreter, target, name,
+                            proxySource.TrapGet(name, interpreter));
+                    }
+                }
+                continue;
+            }
+
             foreach (var entry in EnumerateOwnEnumerable(interpreter, args[i], "Object.assign"))
                 SetAssignedProperty(interpreter, target, entry.Key, entry.Value);
             switch (args[i])
@@ -287,13 +320,13 @@ public static partial class ObjectBuiltIns
                         var descriptor = source.GetOwnPropertyDescriptor(symbol);
                         if (descriptor?.Enumerable != true) continue;
                         SetAssignedSymbol(
-                            target, symbol,
+                            interpreter, target, symbol,
                             interpreter.GetSymbolPropertyValue(source, symbol));
                     }
                     break;
                 case SharpTSInstance source:
                     foreach (var symbol in source.GetSymbolPropertyNames())
-                        SetAssignedSymbol(target, symbol, source.GetBySymbol(symbol));
+                        SetAssignedSymbol(interpreter, target, symbol, source.GetBySymbol(symbol));
                     break;
             }
         }
@@ -302,36 +335,19 @@ public static partial class ObjectBuiltIns
 
     private static void SetAssignedProperty(
         Interpreter interpreter, object target, string name, object? value)
-    {
-        switch (target)
-        {
-            case SharpTSObject obj: obj.SetPropertyStrict(name, value, strictMode: true); break;
-            case SharpTSInstance instance: instance.SetRawFieldStrict(name, value, strictMode: true); break;
-            case SharpTSArray array when name == "length":
-                array.SetLength((long)ArrayBuiltIns.CoerceArrayLength(interpreter, value));
-                break;
-            case SharpTSArray array when long.TryParse(name, out long index)
-                && index >= 0 && index <= SharpTSArray.MaxWriteIndex
-                && index.ToString(System.Globalization.CultureInfo.InvariantCulture) == name:
-                array.Set(index, value);
-                break;
-            case SharpTSArray array: array.SetNamedProperty(name, value); break;
-            case SharpTSFunction function: function.SetProperty(name, value); break;
-            case SharpTSArrowFunction function: function.SetProperty(name, value); break;
-            case SharpTSAsyncFunction function: function.SetProperty(name, value); break;
-            case SharpTSAsyncArrowFunction function: function.SetProperty(name, value); break;
-            case SharpTSRegExp regex: regex.SetProperty(name, value); break;
-            case SharpTSError error: error.SetProperty(name, value); break;
-            case IDictionary<string, object?> dict: dict[name] = value; break;
-            default: throw new ThrowException(new SharpTSTypeError(
-                $"Object.assign target does not support properties ({target.GetType().Name})"));
-        }
-    }
+        => interpreter.SetProperty(target, name, value);
 
-    private static void SetAssignedSymbol(object target, SharpTSSymbol symbol, object? value)
+    private static void SetAssignedSymbol(
+        Interpreter interpreter, object target, SharpTSSymbol symbol, object? value)
     {
         switch (target)
         {
+            case SharpTSObject obj when obj.TryGetSymbolAccessor(symbol, out _, out var setter):
+                if (setter is null)
+                    throw new ThrowException(new SharpTSTypeError(
+                        $"Cannot set symbol property '{symbol}' which has only a getter"));
+                FunctionBuiltIns.CallWithThis(interpreter, setter, obj, [value]);
+                break;
             case SharpTSObject obj: obj.SetBySymbolStrict(symbol, value, strictMode: true); break;
             case SharpTSInstance instance: instance.SetBySymbolStrict(symbol, value, strictMode: true); break;
             default: throw new ThrowException(new SharpTSTypeError(
@@ -645,6 +661,10 @@ public static partial class ObjectBuiltIns
                 break;
             case SharpTSClass klass:
                 success = klass.DefineStaticProperty(propertyKey, descriptor);
+                break;
+            case SharpTSBuiltInConstructor constructor:
+                success = interpreter.DefineBuiltInConstructorProperty(
+                    constructor, propertyKey, descriptor);
                 break;
             case Dictionary<string, object?> dict:
                 // Compiled mode: Dictionary<string, object?> for any-typed object literals
@@ -1600,6 +1620,9 @@ public static partial class ObjectBuiltIns
             case SharpTSRegExp regex:
                 regex.PreventExtensions();
                 return regex;
+            case SharpTSDate date:
+                date.PreventExtensions();
+                return date;
             case ISharpTSCallable callable:
                 PropertyDescriptorStore.PreventExtensions(callable);
                 return callable;
@@ -1665,6 +1688,7 @@ public static partial class ObjectBuiltIns
             SharpTSFunction function => function.IsExtensible,
             SharpTSArrowFunction arrow => arrow.IsExtensible,
             SharpTSRegExp regex => regex.IsExtensible,
+            SharpTSDate date => date.IsExtensible,
             ISharpTSCallable callable => PropertyDescriptorStore.IsExtensible(callable),
             Dictionary<string, object?> dict => PropertyDescriptorStore.IsExtensible(dict),
             System.Collections.IDictionary idict => PropertyDescriptorStore.IsExtensible(idict),
@@ -1741,6 +1765,7 @@ public static partial class ObjectBuiltIns
         // per-realm RegExp.prototype object, so `Object.getPrototypeOf(/x/)
         // === RegExp.prototype` (the from-regexp-like tests assert this).
         SharpTSRegExp => interp?.GetRegExpPrototype(),
+        SharpTSDate => interp?.GetDatePrototype(),
         SharpTSMath => interp?.GetObjectPrototype(),
         SharpTSJSON => interp?.GetObjectPrototype(),
         string => interp?.GetStringPrototype(),
@@ -1877,20 +1902,23 @@ public static partial class ObjectBuiltIns
 
     private static object? GroupBy(Interpreter interp, List<object?> args)
     {
-        var iterable = args[0] as SharpTSArray
-            ?? throw new Exception("TypeError: Object.groupBy requires an iterable as first argument");
+        if (args.Count == 0 || args[0] is null or SharpTSUndefined)
+            throw new ThrowException(new SharpTSTypeError(
+                "Object.groupBy requires an iterable as first argument"));
         var callback = args[1] as ISharpTSCallable
-            ?? throw new Exception("TypeError: Object.groupBy requires a function as second argument");
+            ?? throw new ThrowException(new SharpTSTypeError(
+                "Object.groupBy requires a function as second argument"));
 
         var groups = new Dictionary<string, object?>();
         var callbackArgs = new List<object?> { null, null };
 
-        for (int i = 0; i < iterable.Length; i++)
+        long i = 0;
+        foreach (var element in interp.GetIterableElements(args[0]))
         {
-            var element = iterable[i];
             callbackArgs[0] = element;
             callbackArgs[1] = (double)i;
-            var key = callback.Call(interp, callbackArgs);
+            var key = FunctionBuiltIns.CallWithThis(
+                interp, callback, SharpTSUndefined.Instance, callbackArgs);
             var keyStr = key?.ToString() ?? "undefined";
 
             if (!groups.TryGetValue(keyStr, out var existing))
@@ -1899,6 +1927,7 @@ public static partial class ObjectBuiltIns
                 groups[keyStr] = existing;
             }
             ((SharpTSArray)existing!).Add(element);
+            i++;
         }
 
         // ECMA-262 §20.1.2.13: the result is OrdinaryObjectCreate(null) — a

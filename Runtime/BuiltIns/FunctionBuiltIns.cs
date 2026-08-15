@@ -351,6 +351,10 @@ public class BoundFunction : ISharpTSCallable
     public SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(string name)
         => _ownProperties?.GetOwnPropertyDescriptor(name);
 
+    public void SetProperty(string name, object? value, bool strictMode)
+        => (_ownProperties ??= new SharpTSObject([]))
+            .SetPropertyStrict(name, value, strictMode);
+
     public bool TryGetProperty(string name, out object? value)
     {
         if (_ownProperties != null && _ownProperties.HasProperty(name))

@@ -8,12 +8,10 @@ namespace SharpTS.Test262;
 /// Milestone 2: subset coverage with a committed baseline.
 ///
 /// Split into two classes (<see cref="Test262InterpretedTests"/>,
-/// <see cref="Test262CompiledTests"/>) so xUnit treats them as separate
-/// collections that can run concurrently. The earlier
-/// <c>[CollectionDefinition(DisableParallelization = true)]</c> existed to
-/// serialize a process-wide <c>Console.SetOut/restore</c> window; the
-/// AsyncLocal-scoped redirector in <see cref="Test262Runner"/> removed that
-/// constraint.
+/// <see cref="Test262CompiledTests"/>) but placed in one non-parallel
+/// collection. Each fact owns an internal worker pool; serializing the facts
+/// prevents their pools from oversubscribing the machine and turning generated
+/// allocation-heavy tests into wall-clock timeout flakes.
 ///
 /// Flow:
 ///   1. Enumerate every <c>.js</c> under the subset folders.
@@ -242,6 +240,10 @@ public abstract class Test262TestsBase
 
 }
 
+[CollectionDefinition("Test262 baselines", DisableParallelization = true)]
+public sealed class Test262BaselineCollection;
+
+[Collection("Test262 baselines")]
 public class Test262InterpretedTests : Test262TestsBase
 {
     public Test262InterpretedTests(ITestOutputHelper output) : base(output) { }
@@ -250,6 +252,7 @@ public class Test262InterpretedTests : Test262TestsBase
     public void InterpretedBaseline() => RunBaseline(Test262ExecutionMode.Interpreted);
 }
 
+[Collection("Test262 baselines")]
 public class Test262CompiledTests : Test262TestsBase
 {
     public Test262CompiledTests(ITestOutputHelper output) : base(output) { }

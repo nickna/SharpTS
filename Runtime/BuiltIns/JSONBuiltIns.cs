@@ -134,6 +134,25 @@ public static class JSONBuiltIns
                     });
             }
         }
+        else if (val is SharpTSProxy arrayProxy && arrayProxy.HasArrayTarget())
+        {
+            // IsArray follows proxy targets recursively. Array proxies are walked
+            // by their captured length and integer indices, never by OwnPropertyKeys.
+            long len = ArrayBuiltIns.ToLength(
+                interp.GetPropertyValue(arrayProxy, "length"), interp);
+            for (long i = 0; i < len; i++)
+            {
+                var prop = i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                var newElement = InternalizeJSONProperty(interp, val, prop, reviver);
+                if (IsUndefinedRevive(newElement))
+                    arrayProxy.TrapDeleteProperty(prop, interp);
+                else
+                    arrayProxy.TrapDefineProperty(
+                        prop,
+                        CreateDataPropertyDescriptor(newElement).ToObject(),
+                        interp);
+            }
+        }
         else if (val is SharpTSProxy proxy)
         {
             // Snapshot keys before the loop — spec captures
@@ -146,7 +165,10 @@ public static class JSONBuiltIns
                 if (IsUndefinedRevive(newElement))
                     proxy.TrapDeleteProperty(prop, interp);
                 else
-                    proxy.TrapSet(prop, newElement, interp);
+                    proxy.TrapDefineProperty(
+                        prop,
+                        CreateDataPropertyDescriptor(newElement).ToObject(),
+                        interp);
             }
         }
         else if (val is SharpTSObject obj)
@@ -161,7 +183,7 @@ public static class JSONBuiltIns
                 if (IsUndefinedRevive(newElement))
                     obj.DeleteProperty(prop);
                 else
-                    obj.SetProperty(prop, newElement);
+                    obj.DefineProperty(prop, CreateDataPropertyDescriptor(newElement));
             }
         }
         else if (val is SharpTSInstance inst)
@@ -220,7 +242,20 @@ public static class JSONBuiltIns
     /// pre-existing behavior of this path (an explicit <c>return null</c>
     /// is indistinguishable from no return here — out of scope to refine).
     /// </summary>
-    private static bool IsUndefinedRevive(object? v) => v is null or SharpTSUndefined;
+    private static bool IsUndefinedRevive(object? v) => v is SharpTSUndefined;
+
+    private static SharpTSPropertyDescriptor CreateDataPropertyDescriptor(object? value)
+        => new()
+        {
+            Value = value,
+            HasValue = true,
+            Writable = true,
+            HasWritable = true,
+            Enumerable = true,
+            HasEnumerable = true,
+            Configurable = true,
+            HasConfigurable = true,
+        };
 
     private static object? InvokeReviverWithHolder(Interpreter interp, ISharpTSCallable reviver, object? holder, string key, object? val)
     {

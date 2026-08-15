@@ -35,6 +35,9 @@ public partial class Interpreter
             case SharpTSObject simpleObj:
                 value = simpleObj.GetProperty(name.Lexeme);
                 return true;
+            case SharpTSGlobalThis globalThis:
+                value = ResolveGlobalThisRead(globalThis, name.Lexeme);
+                return true;
             case DotNetInstance external:
                 value = external.GetMember(name.Lexeme);
                 return true;
@@ -97,6 +100,9 @@ public partial class Interpreter
                 return true;
             case SharpTSObject simpleObj:
                 simpleObj.SetProperty(name.Lexeme, value);
+                return true;
+            case SharpTSGlobalThis globalThis:
+                globalThis.SetProperty(name.Lexeme, value);
                 return true;
             case DotNetInstance external:
                 external.SetMember(name.Lexeme, value, this);

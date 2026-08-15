@@ -164,6 +164,116 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
         il.Emit(OpCodes.Stloc, proxyTypeLocal);
 
+        // IsArray(proxy) recursively follows the proxy target. Array proxies
+        // use the array branch of InternalizeJSONProperty: capture length and
+        // visit only integer indices. Treating them as ordinary proxies would
+        // enumerate the non-configurable "length" property and then attempt to
+        // redefine it as configurable, producing a spurious TypeError.
+        var ordinaryProxyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, proxyTypeLocal);
+        il.Emit(OpCodes.Ldstr, "HasArrayTarget");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, ordinaryProxyLabel);
+
+        // len = ToLength(Get(proxy, "length")). This must go through [[Get]]:
+        // a proxy get trap can observe or abruptly complete the length read.
+        var proxyArrayLength = il.DeclareLocal(_types.Int32);
+        EmitHolderGet(il, runtime,
+            ldHolder: () => il.Emit(OpCodes.Ldloc, valLocal),
+            ldKey: () => il.Emit(OpCodes.Ldstr, "length"));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.ToIntegerOrInfinity);
+        il.Emit(OpCodes.Stloc, proxyArrayLength);
+
+        var arrayDeleteMethod = il.DeclareLocal(_types.MethodInfo);
+        il.Emit(OpCodes.Ldloc, proxyTypeLocal);
+        il.Emit(OpCodes.Ldstr, "TrapDeleteProperty");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Stloc, arrayDeleteMethod);
+
+        var arrayIndex = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, arrayIndex);
+        var arrayLoopStart = il.DefineLabel();
+        var arrayLoopEnd = il.DefineLabel();
+        il.MarkLabel(arrayLoopStart);
+        il.Emit(OpCodes.Ldloc, arrayIndex);
+        il.Emit(OpCodes.Ldloc, proxyArrayLength);
+        il.Emit(OpCodes.Bge, arrayLoopEnd);
+
+        var arrayProp = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloca, arrayIndex);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes));
+        il.Emit(OpCodes.Stloc, arrayProp);
+
+        var arrayElement = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, arrayProp);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, applyReviverMethod);
+        il.Emit(OpCodes.Stloc, arrayElement);
+
+        var arrayDeleteLabel = il.DefineLabel();
+        var arrayElementDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, arrayElement);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, arrayDeleteLabel);
+
+        var arrayDescriptor = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, arrayDescriptor);
+        void SetArrayDescriptorField(string name, Action emitValue)
+        {
+            il.Emit(OpCodes.Ldloc, arrayDescriptor);
+            il.Emit(OpCodes.Ldstr, name);
+            emitValue();
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        }
+        SetArrayDescriptorField("value", () => il.Emit(OpCodes.Ldloc, arrayElement));
+        foreach (var attribute in new[] { "writable", "enumerable", "configurable" })
+        {
+            SetArrayDescriptorField(attribute, () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Box, _types.Boolean);
+            });
+        }
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldloc, arrayProp);
+        il.Emit(OpCodes.Ldloc, arrayDescriptor);
+        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Br, arrayElementDone);
+
+        il.MarkLabel(arrayDeleteLabel);
+        il.Emit(OpCodes.Ldloc, arrayDeleteMethod);
+        il.Emit(OpCodes.Ldloc, valLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, arrayProp);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodUnwrapped);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(arrayElementDone);
+        il.Emit(OpCodes.Ldloc, arrayIndex);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, arrayIndex);
+        il.Emit(OpCodes.Br, arrayLoopStart);
+
+        il.MarkLabel(arrayLoopEnd);
+        il.Emit(OpCodes.Br, afterIterLabel);
+        il.MarkLabel(ordinaryProxyLabel);
+
         // keys = (List<string>)proxyType.GetMethod("TrapOwnKeys").Invoke(val, [null])
         var keysLocal = il.DeclareLocal(_types.ListOfString);
         il.Emit(OpCodes.Ldloc, proxyTypeLocal);

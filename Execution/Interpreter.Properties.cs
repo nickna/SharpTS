@@ -1203,6 +1203,13 @@ public partial class Interpreter
         // Function.prototype. Own metadata/properties above still win.
         if (obj is ISharpTSCallable
             && memberName is not ("name" or "length" or "prototype")
+            && GetFunctionPrototype().GetExtraGetter(memberName) is { } functionGetter)
+        {
+            return RuntimeValue.FromBoxed(
+                FunctionBuiltIns.CallWithThis(this, functionGetter, obj, []));
+        }
+        if (obj is ISharpTSCallable
+            && memberName is not ("name" or "length" or "prototype")
             && GetFunctionPrototype().HasExtra(memberName))
         {
             return RuntimeValue.FromBoxed(GetFunctionPrototype().TryGetExtra(memberName));
@@ -1213,8 +1220,26 @@ public partial class Interpreter
         // Date instances are ordinary extensible objects. Their built-in
         // methods remain registry-backed, while guest-defined own fields live
         // in the instance overlay.
-        if (obj is SharpTSDate date && date.HasExtra(memberName))
-            return RuntimeValue.FromBoxed(date.TryGetExtra(memberName));
+        if (obj is SharpTSDate date)
+        {
+            if (TryReadDescriptor(date.GetOwnPropertyDescriptor(memberName), date, out var ownDateValue))
+                return RuntimeValue.FromBoxed(ownDateValue);
+
+            var datePrototype = GetDatePrototype();
+            if (!ReferenceEquals(date, datePrototype)
+                && TryReadDescriptor(datePrototype.GetOwnPropertyDescriptor(memberName), date, out var inheritedDateValue))
+            {
+                return RuntimeValue.FromBoxed(inheritedDateValue);
+            }
+        }
+
+        if (obj is SharpTSJSON json)
+        {
+            if (TryReadDescriptor(json.GetOwnPropertyDescriptor(memberName), json, out var ownJsonValue))
+                return RuntimeValue.FromBoxed(ownJsonValue);
+            if (TryReadDescriptor(GetObjectPrototype().GetOwnPropertyDescriptor(memberName), json, out var inheritedJsonValue))
+                return RuntimeValue.FromBoxed(inheritedJsonValue);
+        }
 
         // RegExp instance: user-installed accessor (Object.defineProperty)
         // wins over the built-in slot. ECMA-262 §22.2 declares
@@ -1906,11 +1931,83 @@ public partial class Interpreter
         return accessor;
     }
 
+    private bool TryReadDescriptor(
+        SharpTSPropertyDescriptor? descriptor,
+        object receiver,
+        out object? value)
+    {
+        if (descriptor is null)
+        {
+            value = null;
+            return false;
+        }
+
+        if (descriptor.HasGet || descriptor.HasSet)
+        {
+            value = descriptor.Get is null
+                ? SharpTSUndefined.Instance
+                : FunctionBuiltIns.CallWithThis(this, descriptor.Get, receiver, []);
+            return true;
+        }
+
+        value = descriptor.HasValue ? descriptor.Value : SharpTSUndefined.Instance;
+        return true;
+    }
+
+    private bool TryAssignThroughDescriptor(
+        SharpTSPropertyDescriptor? descriptor,
+        object receiver,
+        string propertyName,
+        object? value,
+        bool strictMode)
+    {
+        if (descriptor is null) return false;
+
+        if (descriptor.HasGet || descriptor.HasSet)
+        {
+            if (descriptor.Set is not null)
+            {
+                FunctionBuiltIns.CallWithThis(this, descriptor.Set, receiver, [value]);
+            }
+            else if (strictMode)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot set property '{propertyName}' which has only a getter"));
+            }
+            return true;
+        }
+
+        if (descriptor.HasWritable && !descriptor.Writable)
+        {
+            if (strictMode)
+            {
+                throw new ThrowException(new SharpTSTypeError(
+                    $"Cannot assign to read only property '{propertyName}'"));
+            }
+            return true;
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Fallback for property access on built-in types and ISharpTSPropertyAccessor.
     /// </summary>
     private object? EvaluateGetOnFallback(object? obj, string memberName)
     {
+        if (obj is SharpTSJSON json)
+        {
+            if (TryReadDescriptor(json.GetOwnPropertyDescriptor(memberName), json, out var ownJsonValue))
+                return ownJsonValue;
+            if (TryReadDescriptor(
+                    GetObjectPrototype().GetOwnPropertyDescriptor(memberName),
+                    json,
+                    out var inheritedJsonValue))
+            {
+                return inheritedJsonValue;
+            }
+        }
+
         if (obj is BoundFunction boundFunction)
         {
             if (boundFunction.TryGetAccessor(memberName, out var getter, out _)
@@ -2095,7 +2192,6 @@ public partial class Interpreter
         {
             return gtIntrinsic;
         }
-
         // Handle objects that implement ISharpTSPropertyAccessor (e.g., SharpTSTemplateStringsArray)
         // Only return if the accessor has this property, otherwise fall through to built-ins
         if (obj is ISharpTSPropertyAccessor accessor && accessor.HasProperty(memberName))
@@ -2350,6 +2446,31 @@ public partial class Interpreter
             asyncArrowFn.SetProperty(set.Name.Lexeme, value);
             return value;
         }
+        if (obj is BoundFunction boundFunction)
+        {
+            var ownDescriptor = boundFunction.GetOwnPropertyDescriptor(set.Name.Lexeme);
+            if (TryAssignThroughDescriptor(
+                    ownDescriptor, boundFunction, set.Name.Lexeme, value, strictMode))
+            {
+                return value;
+            }
+            if (ownDescriptor is not null)
+            {
+                boundFunction.SetProperty(set.Name.Lexeme, value, strictMode);
+                return value;
+            }
+
+            var inheritedDescriptor = GetFunctionPrototype()
+                .GetOwnPropertyDescriptor(set.Name.Lexeme);
+            if (TryAssignThroughDescriptor(
+                    inheritedDescriptor, boundFunction, set.Name.Lexeme, value, strictMode))
+            {
+                return value;
+            }
+
+            boundFunction.SetProperty(set.Name.Lexeme, value, strictMode);
+            return value;
+        }
 
         // Math is an extensible object per ECMA-262 — user code is allowed
         // to attach arbitrary properties to it (Test262 tests exercise this
@@ -2363,6 +2484,19 @@ public partial class Interpreter
         }
         if (obj is SharpTSJSON json)
         {
+            var ownDescriptor = json.GetOwnPropertyDescriptor(set.Name.Lexeme);
+            if (TryAssignThroughDescriptor(
+                    ownDescriptor, json, set.Name.Lexeme, value, strictMode))
+            {
+                return value;
+            }
+            if (ownDescriptor is null
+                && TryAssignThroughDescriptor(
+                    GetObjectPrototype().GetOwnPropertyDescriptor(set.Name.Lexeme),
+                    json, set.Name.Lexeme, value, strictMode))
+            {
+                return value;
+            }
             json.SetExtra(set.Name.Lexeme, value);
             return value;
         }
@@ -2392,6 +2526,20 @@ public partial class Interpreter
         }
         if (obj is SharpTSDate date)
         {
+            var ownDescriptor = date.GetOwnPropertyDescriptor(set.Name.Lexeme);
+            if (TryAssignThroughDescriptor(
+                    ownDescriptor, date, set.Name.Lexeme, value, strictMode))
+            {
+                return value;
+            }
+            if (ownDescriptor is null
+                && !ReferenceEquals(date, GetDatePrototype())
+                && TryAssignThroughDescriptor(
+                    GetDatePrototype().GetOwnPropertyDescriptor(set.Name.Lexeme),
+                    date, set.Name.Lexeme, value, strictMode))
+            {
+                return value;
+            }
             date.SetExtra(set.Name.Lexeme, value);
             return value;
         }

@@ -1459,14 +1459,12 @@ public partial class Interpreter
                 math.SetExtra(index?.ToString() ?? "", value);
             return RuntimeValue.FromBoxed(value);
         }
-        if (obj is SharpTSJSON json)
+        if (obj is SharpTSJSON or SharpTSDate or BoundFunction)
         {
-            json.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
-            return RuntimeValue.FromBoxed(value);
-        }
-        if (obj is SharpTSDate date)
-        {
-            date.SetExtra(PropertyKeyConverter.ToPropertyKeyString(index), value);
+            string propertyName = PropertyKeyConverter.ToPropertyKeyString(index);
+            var name = new Token(TokenType.IDENTIFIER, propertyName, null, 0);
+            var set = new Expr.Set(null!, name, null!);
+            EvaluateSetOnObject(set, obj, value);
             return RuntimeValue.FromBoxed(value);
         }
         if (obj is SharpTSObjectNamespace objectNamespace)

@@ -350,6 +350,18 @@ internal sealed class ArrayPrototypeMethodWrapper : ISharpTSCallable, IBuiltInFu
                 interpreter, receiver!, arguments);
         }
 
+        // Array.prototype.toSorted validates compareFn before performing
+        // LengthOfArrayLike. A poisoned length getter must therefore remain
+        // unobserved when the comparator itself is invalid.
+        if (_name == "toSorted"
+            && arguments.Count > 0
+            && arguments[0] is not SharpTSUndefined
+            && arguments[0] is not ISharpTSCallable)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Array.prototype.toSorted compareFn must be a function"));
+        }
+
         // Fast path: receiver is a real array (ToObject is identity for objects).
         bool requiresObservableIndexedGet = _name == "toSorted";
         if (receiver is SharpTSArray arr && !requiresObservableIndexedGet)

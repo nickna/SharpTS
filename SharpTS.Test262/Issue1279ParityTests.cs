@@ -6063,7 +6063,7 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     [InlineData("built-ins/Promise/race/invoke-resolve-get-error-reject.js")]
     [InlineData("built-ins/Promise/race/invoke-resolve-get-error.js")]
     public void Promise_combinators_use_constructor_capability_and_observable_then(string relativePath)
-        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+        => AssertPassInBothModes(relativePath);
 
     [Theory]
     [InlineData("built-ins/Promise/all/resolve-element-function-length.js")]
@@ -6079,7 +6079,160 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     [InlineData("built-ins/Promise/any/reject-element-function-name.js")]
     [InlineData("built-ins/Promise/any/reject-element-function-property-order.js")]
     public void Promise_combinator_callbacks_expose_builtin_metadata(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    public static TheoryData<string> ExposedPromiseInterpreterDeficitCases => new()
+    {
+        "built-ins/Promise/all/capability-resolve-throws-reject.js",
+        "built-ins/Promise/all/invoke-resolve-get-error-reject.js",
+        "built-ins/Promise/all/invoke-resolve-get-error.js",
+        "built-ins/Promise/all/invoke-resolve-get-once-no-calls.js",
+        "built-ins/Promise/all/invoke-then-get-error-reject.js",
+        "built-ins/Promise/all/invoke-then.js",
+        "built-ins/Promise/all/resolve-element-function-length.js",
+        "built-ins/Promise/all/resolve-element-function-name.js",
+        "built-ins/Promise/all/resolve-element-function-property-order.js",
+        "built-ins/Promise/allSettled/capability-resolve-throws-reject.js",
+        "built-ins/Promise/allSettled/invoke-resolve-get-error-reject.js",
+        "built-ins/Promise/allSettled/invoke-resolve-get-error.js",
+        "built-ins/Promise/allSettled/invoke-resolve-get-once-multiple-calls.js",
+        "built-ins/Promise/allSettled/invoke-resolve-get-once-no-calls.js",
+        "built-ins/Promise/allSettled/invoke-then.js",
+        "built-ins/Promise/allSettled/reject-element-function-length.js",
+        "built-ins/Promise/allSettled/reject-element-function-multiple-calls.js",
+        "built-ins/Promise/allSettled/reject-element-function-name.js",
+        "built-ins/Promise/allSettled/reject-element-function-property-order.js",
+        "built-ins/Promise/allSettled/resolve-element-function-length.js",
+        "built-ins/Promise/allSettled/resolve-element-function-name.js",
+        "built-ins/Promise/allSettled/resolve-element-function-property-order.js",
+        "built-ins/Promise/any/invoke-resolve-error-close.js",
+        "built-ins/Promise/any/invoke-resolve-get-error-reject.js",
+        "built-ins/Promise/any/invoke-resolve-get-error.js",
+        "built-ins/Promise/any/invoke-resolve-get-once-multiple-calls.js",
+        "built-ins/Promise/any/invoke-resolve-get-once-no-calls.js",
+        "built-ins/Promise/any/invoke-then.js",
+        "built-ins/Promise/any/iter-next-val-err-no-close.js",
+        "built-ins/Promise/any/iter-step-err-no-close.js",
+        "built-ins/Promise/any/reject-element-function-length.js",
+        "built-ins/Promise/any/reject-element-function-name.js",
+        "built-ins/Promise/any/reject-element-function-property-order.js",
+        "built-ins/Promise/exec-args.js",
+        "built-ins/Promise/race/invoke-resolve-get-error-reject.js",
+        "built-ins/Promise/race/invoke-resolve-get-error.js",
+        "built-ins/Promise/race/invoke-resolve-get-once-multiple-calls.js",
+        "built-ins/Promise/race/invoke-resolve-get-once-no-calls.js",
+        "built-ins/Promise/race/invoke-then-get-error-reject.js",
+        "built-ins/Promise/race/invoke-then.js",
+        "built-ins/Promise/race/reject-from-same-thenable.js",
+        "built-ins/Promise/race/resolve-from-same-thenable.js",
+        "built-ins/Promise/reject-function-length.js",
+        "built-ins/Promise/reject-function-name.js",
+        "built-ins/Promise/reject-function-property-order.js",
+        "built-ins/Promise/resolve-function-length.js",
+        "built-ins/Promise/resolve-function-name.js",
+        "built-ins/Promise/resolve-function-property-order.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ExposedPromiseInterpreterDeficitCases))]
+    public void Exposed_Promise_interpreter_deficits_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    public static TheoryData<string> ExposedNonPromiseInterpreterDeficitCases => new()
+    {
+        "built-ins/Array/from/elements-deleted-after.js",
+        "built-ins/Array/from/source-array-boundary.js",
+        "built-ins/Array/isArray/proxy-revoked.js",
+        "built-ins/Array/isArray/proxy.js",
+        "built-ins/Array/prototype/toSorted/comparefn-not-a-function.js",
+        "built-ins/JSON/parse/reviver-object-define-prop-err.js",
+        "built-ins/JSON/parse/reviver-object-non-configurable-prop-create.js",
+        "built-ins/Object/assign/strings-and-symbol-order-proxy.js",
+        "built-ins/Object/assign/target-is-non-extensible-existing-accessor-property.js",
+        "built-ins/Object/assign/target-is-sealed-existing-accessor-property.js",
+        "built-ins/Object/assign/target-set-user-error.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-24.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-145-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-171-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-224-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-254-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-39-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-92-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-410.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-584.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-586.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-594.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-596.js",
+        "built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-187.js",
+        "built-ins/Object/getOwnPropertyDescriptor/15.2.3.3-4-188.js",
+        "built-ins/Object/getPrototypeOf/15.2.3.2-2-25.js",
+        "built-ins/Object/groupBy/iterator-next-throws.js",
+        "built-ins/Object/preventExtensions/15.2.3.10-3-18.js",
+        "built-ins/Object/preventExtensions/15.2.3.10-3-8.js",
+        "built-ins/Object/prototype/toString/Object.prototype.toString.call-bigint.js",
+        "built-ins/Object/prototype/toString/symbol-tag-override-bigint.js",
+        "built-ins/RegExp/CharacterClassEscapes/character-class-word-class-escape-negative-cases.js",
+        "built-ins/RegExp/prototype/Symbol.matchAll/isregexp-called-once.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ExposedNonPromiseInterpreterDeficitCases))]
+    public void Exposed_non_Promise_interpreter_deficits_pass_in_both_modes(string relativePath)
+    {
+        // This generated RegExp case builds a million-code-point string. Its
+        // compiled coverage remains in the pooled committed-baseline run; doing
+        // a second in-process compiled execution inside this interpreter-gap
+        // theory becomes allocation-bound when all 81 rows execute together.
+        if (relativePath.EndsWith(
+                "character-class-word-class-escape-negative-cases.js",
+                StringComparison.Ordinal))
+        {
+            AssertPass(
+                relativePath,
+                Test262ExecutionMode.Interpreted,
+                TimeSpan.FromSeconds(60));
+            return;
+        }
+
+        AssertPassInBothModes(relativePath);
+    }
+
+    [Theory]
+    [InlineData("built-ins/Promise/all/iter-arg-is-number-reject.js")]
+    [InlineData("built-ins/Promise/any/iter-returns-number-reject.js")]
+    [InlineData("built-ins/Promise/any/iter-returns-null-reject.js")]
+    [InlineData("built-ins/Promise/all/capability-resolve-throws-no-close.js")]
+    [InlineData("built-ins/Promise/allSettled/capability-resolve-throws-no-close.js")]
+    [InlineData("built-ins/Promise/all/resolve-from-same-thenable.js")]
+    [InlineData("built-ins/JSON/parse/revived-proxy.js")]
+    [InlineData("built-ins/JSON/parse/reviver-array-delete-err.js")]
+    [InlineData("built-ins/JSON/parse/reviver-array-length-get-err.js")]
+    [InlineData("built-ins/Object/prototype/toString/symbol-tag-non-str-bigint.js")]
+    [InlineData("built-ins/Promise/allKeyed/symbol-keys.js")]
+    [InlineData("built-ins/Promise/allKeyed/arg-is-function.js")]
+    [InlineData("built-ins/Promise/allSettledKeyed/prototype-keys-ignored.js")]
+    public void Issue1279_regression_guards_pass_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    public static TheoryData<string> Issue1279CompiledRegExpTimeoutCases => new()
+    {
+        "built-ins/RegExp/CharacterClassEscapes/character-class-digit-class-escape-negative-cases.js",
+        "built-ins/RegExp/CharacterClassEscapes/character-class-non-digit-class-escape-positive-cases.js",
+        "built-ins/RegExp/CharacterClassEscapes/character-class-non-whitespace-class-escape-positive-cases.js",
+        "built-ins/RegExp/CharacterClassEscapes/character-class-non-word-class-escape-positive-cases.js",
+        "built-ins/RegExp/CharacterClassEscapes/character-class-whitespace-class-escape-negative-cases.js",
+        "built-ins/RegExp/CharacterClassEscapes/character-class-word-class-escape-negative-cases.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(Issue1279CompiledRegExpTimeoutCases))]
+    public void Issue1279_compiled_RegExp_timeout_guards_pass(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    [Theory]
+    [MemberData(nameof(Issue1279CompiledRegExpTimeoutCases))]
+    public void Issue1279_interpreted_RegExp_timeout_guards_pass(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Interpreted, TimeSpan.FromSeconds(60));
 
     public static TheoryData<string> RemainingArrayCompilerParityCases => new()
     {
@@ -6261,7 +6414,10 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Remaining_RegExp_compiler_parity(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
-    private void AssertPass(string relativePath, Test262ExecutionMode mode)
+    private void AssertPass(
+        string relativePath,
+        Test262ExecutionMode mode,
+        TimeSpan? timeout = null)
     {
         var root = Test262Paths.TryFindRoot();
         if (root is null)
@@ -6273,7 +6429,10 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
         var testPath = Path.Combine(Test262Paths.TestDir(root), relativePath);
         Assert.True(File.Exists(testPath), $"Expected Test262 file at {testPath}");
 
-        var runner = new Test262Runner(root, TimeSpan.FromSeconds(15), useNonCollectibleLoad: true);
+        var runner = new Test262Runner(
+            root,
+            timeout ?? TimeSpan.FromSeconds(15),
+            useNonCollectibleLoad: true);
         var result = runner.RunOne(testPath, mode);
 
         _output.WriteLine($"{mode} {relativePath} -> {result.Outcome}: {result.Message}");

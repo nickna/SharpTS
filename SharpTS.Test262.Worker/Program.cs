@@ -122,7 +122,12 @@ while ((path = Console.In.ReadLine()) != null)
     count++;
     if (trace is not null)
     {
-        TraceLog("test #{0} {1}ms {2} :: {3}", count, swTest.ElapsedMilliseconds, bucket, Path.GetFileName(path));
+        TraceLog("test #{0} {1}ms {2} :: {3}{4}",
+            count,
+            swTest.ElapsedMilliseconds,
+            bucket,
+            Path.GetFileName(path),
+            result.Message is null ? "" : $" :: {result.Message}");
         if (count % 100 == 0)
         {
             using var proc = System.Diagnostics.Process.GetCurrentProcess();
@@ -131,6 +136,17 @@ while ((path = Console.In.ReadLine()) != null)
                 proc.WorkingSet64 / 1_048_576,
                 proc.PrivateMemorySize64 / 1_048_576);
         }
+    }
+
+    // A timed-out test may leave an orphan execution thread behind after the
+    // runner's one-second cancellation grace period. Reusing this process lets
+    // those orphans accumulate until the watchdog later blames an unrelated
+    // in-flight test as worker-stalled. Exit cleanly immediately after reporting
+    // the Timeout; the parent respawns this slot and requeues pipe-buffered work.
+    if (result.Outcome == Test262Outcome.Timeout)
+    {
+        TraceLog("timeout at #{0}; recycling worker to terminate orphan threads", count);
+        break;
     }
 
     // Non-collectible mode bounds: every Nth test, check working set. If

@@ -136,7 +136,13 @@ public static class ArrayBuiltIns
 
     private static object? ToSorted(Interpreter interp, SharpTSArray arr, List<object?> args)
     {
-        ISharpTSCallable? compareFn = args.Count > 0 ? args[0] as ISharpTSCallable : null;
+        ISharpTSCallable? compareFn = null;
+        if (args.Count > 0 && args[0] is not SharpTSUndefined)
+        {
+            compareFn = args[0] as ISharpTSCallable
+                ?? throw new ThrowException(new SharpTSTypeError(
+                    "Array.prototype.toSorted compareFn must be a function"));
+        }
 
         // Same logic but returns NEW array
         var defined = new List<(object? Element, long Index)>();

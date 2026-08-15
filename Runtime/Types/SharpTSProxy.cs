@@ -263,10 +263,10 @@ public class SharpTSProxy : ISharpTSCallable
     /// Implements the proxy branch of ECMA-262 IsArray. Revoked proxies throw;
     /// otherwise classification recursively follows the final proxy target.
     /// </summary>
-    internal bool HasArrayTarget()
+    public bool HasArrayTarget()
     {
         EnsureNotRevoked();
-        return _target is SharpTSArray
+        return _target is SharpTSArray or List<object?>
             || _target is SharpTSProxy proxy && proxy.HasArrayTarget();
     }
 
@@ -1472,6 +1472,18 @@ public class SharpTSProxy : ISharpTSCallable
             if (member is BuiltInAsyncMethod am) return am.Bind(arr);
             return member;
         }
+        if (_target is System.Collections.IList list)
+        {
+            if (prop == "length") return (double)list.Count;
+            if (int.TryParse(prop, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out int index)
+                && index >= 0)
+            {
+                return index < list.Count
+                    ? list[index]
+                    : SharpTSUndefined.Instance;
+            }
+        }
         if (_target is SharpTSFunction function)
         {
             if (function.TryGetProperty(prop, out var value)) return value;
@@ -1523,6 +1535,16 @@ public class SharpTSProxy : ISharpTSCallable
                 array.Set(index, value);
             else
                 array.SetNamedProperty(prop, value);
+            return value;
+        }
+        if (_target is System.Collections.IList list
+            && int.TryParse(prop, System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out int listIndex)
+            && listIndex >= 0)
+        {
+            while (list.Count <= listIndex)
+                list.Add(SharpTSUndefined.Instance);
+            list[listIndex] = value;
             return value;
         }
         if (_target is SharpTSRegExp regex)

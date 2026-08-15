@@ -828,12 +828,18 @@ public partial class Interpreter
                 ? fn.Call(this, [])
                 : null;
 
-        if (iterator == null) return false;
+        if (iterator == null)
+            throw new ThrowException(new SharpTSTypeError(
+                "[Symbol.iterator]() must return an object"));
 
         // A generator returned by [Symbol.iterator]() is driven directly (it doesn't
         // expose a data-property next()); let the caller fall through to GetIterableElements.
         if (iterator is IEnumerable<object?> and not SharpTSObject and not SharpTSInstance)
             return false;
+
+        if (iterator is not (SharpTSObject or SharpTSInstance))
+            throw new ThrowException(new SharpTSTypeError(
+                "[Symbol.iterator]() must return an object"));
 
         // Extract and bind the 'next' method from the iterator object.
         object? nextMethod = null;
@@ -856,7 +862,9 @@ public partial class Interpreter
         else if (nextMethod is SharpTSFunction nfn && iterator is SharpTSInstance nInst)
             nextMethod = nfn.Bind(nInst);
 
-        if (nextMethod is not ISharpTSCallable callable) return false;
+        if (nextMethod is not ISharpTSCallable callable)
+            throw new ThrowException(new SharpTSTypeError(
+                "Iterator next property must be callable"));
 
         iteratorObj = iterator;
         nextFn = callable;
@@ -1138,6 +1146,12 @@ public partial class Interpreter
             // replace the completion that triggered it.
         }
     }
+
+    /// <summary>
+    /// Runs IteratorClose for a raw iterator record owned by a spec-level
+    /// built-in algorithm (not by the C# enumerable adapter).
+    /// </summary>
+    internal void CloseIterator(object? iterator) => TryCallIteratorReturn(iterator);
 
     /// <summary>
     /// Reads a member from a class instance the way the iterator protocol does:

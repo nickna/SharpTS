@@ -43,8 +43,11 @@ public sealed class BatchedSubprocessRunner
     /// flattens the curve. Capped to keep memory under control: each worker
     /// is ~100 MB resident, so N=4 ≈ 400 MB peak. Env var
     /// <c>SHARPTS_TEST262_WORKERS</c> overrides; <c>=1</c> reproduces the old
-    /// single-worker semantics for bisecting flakes. Default is half the
-    /// logical CPUs (clamped to [1, 8]).
+    /// single-worker semantics for bisecting flakes. The interpreted and
+    /// compiled baseline facts run concurrently, so each pool defaults to one
+    /// third of the logical CPUs (clamped to [1, 8]); this leaves headroom for
+    /// the testhost/JIT and prevents wall-clock timeout flakes in allocation-
+    /// heavy generated tests when both modes are active.
     /// </summary>
     public int WorkerCount { get; init; } = ResolveDefaultWorkerCount();
 
@@ -65,7 +68,7 @@ public sealed class BatchedSubprocessRunner
         var env = Environment.GetEnvironmentVariable("SHARPTS_TEST262_WORKERS");
         if (!string.IsNullOrEmpty(env) && int.TryParse(env, out var n) && n > 0)
             return Math.Clamp(n, 1, 16);
-        return Math.Clamp(Environment.ProcessorCount / 2, 1, 8);
+        return Math.Clamp(Environment.ProcessorCount / 3, 1, 8);
     }
 
     public string Test262Root { get; }

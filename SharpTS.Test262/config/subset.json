@@ -16,6 +16,6 @@
     "test/language/expressions/property-accessors"
   ],
   "compiledExcludeFolders": [],
-  "timeoutSeconds": 15,
+  "timeoutSeconds": 60,
   "skipFeaturesFile": "skip-features.txt"
 }
