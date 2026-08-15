@@ -499,8 +499,8 @@ public partial class ILEmitter
 
     /// <summary>
     /// Expects a Type on the stack. Emits IL to invoke the Type's first public constructor,
-    /// padding the argument array to the ctor's declared arity with nulls so JS-style
-    /// under-application still finds a matching overload.
+    /// padding omitted object-typed parameters with the JavaScript undefined sentinel so
+    /// under-application remains distinguishable from an explicit null.
     /// </summary>
     private void EmitReflectionConstructFromType(Expr.New n)
     {
@@ -595,20 +595,56 @@ public partial class ILEmitter
         var ctorLocal = IL.DeclareLocal(typeof(ConstructorInfo));
         IL.Emit(OpCodes.Stloc, ctorLocal);
 
-        // arity = ctor.GetParameters().Length
+        // parameters = ctor.GetParameters(); arity = parameters.Length
         var getParametersMethod = typeof(MethodBase).GetMethod("GetParameters", Type.EmptyTypes)!;
         IL.Emit(OpCodes.Ldloc, ctorLocal);
         IL.Emit(OpCodes.Callvirt, getParametersMethod);
+        var parametersLocal = IL.DeclareLocal(typeof(ParameterInfo[]));
+        IL.Emit(OpCodes.Stloc, parametersLocal);
+        IL.Emit(OpCodes.Ldloc, parametersLocal);
         IL.Emit(OpCodes.Ldlen);
         IL.Emit(OpCodes.Conv_I4);
         var arityLocal = IL.DeclareLocal(typeof(int));
         IL.Emit(OpCodes.Stloc, arityLocal);
 
-        // args = new object[arity]; default-initialized to null.
+        // args = new object[arity]. Object slots can carry $Undefined; strict CLR slots cannot,
+        // so leave the latter at null (reflection supplies the CLR default for value types).
         IL.Emit(OpCodes.Ldloc, arityLocal);
         IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
         var argsArrayLocal = IL.DeclareLocal(_ctx.Types.ObjectArray);
         IL.Emit(OpCodes.Stloc, argsArrayLocal);
+
+        var padIndexLocal = IL.DeclareLocal(typeof(int));
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, padIndexLocal);
+        var padCheckLabel = IL.DefineLabel();
+        var padNextLabel = IL.DefineLabel();
+        IL.Emit(OpCodes.Br, padCheckLabel);
+
+        IL.MarkLabel(padNextLabel);
+        IL.Emit(OpCodes.Ldloc, parametersLocal);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldelem_Ref);
+        IL.Emit(OpCodes.Callvirt, typeof(ParameterInfo).GetProperty(nameof(ParameterInfo.ParameterType))!.GetMethod!);
+        IL.Emit(OpCodes.Ldtoken, _ctx.Types.Object);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+            _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        var skipUndefinedLabel = IL.DefineLabel();
+        IL.Emit(OpCodes.Bne_Un, skipUndefinedLabel);
+        IL.Emit(OpCodes.Ldloc, argsArrayLocal);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+        IL.Emit(OpCodes.Stelem_Ref);
+        IL.MarkLabel(skipUndefinedLabel);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, padIndexLocal);
+
+        IL.MarkLabel(padCheckLabel);
+        IL.Emit(OpCodes.Ldloc, padIndexLocal);
+        IL.Emit(OpCodes.Ldloc, arityLocal);
+        IL.Emit(OpCodes.Blt, padNextLabel);
 
         for (int i = 0; i < argTemps.Count; i++)
         {

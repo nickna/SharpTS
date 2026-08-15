@@ -491,7 +491,7 @@ public partial class ILCompiler
     /// This emits, for each shorter ancestor signature of the method, a synthetic <c>virtual</c>
     /// (non-newslot, so it auto-overrides) bridge matching that ancestor's exact CLR signature,
     /// forwarding to the derived full method with the missing trailing params filled by the
-    /// <c>$Undefined</c>/null sentinel. The full method's existing default prologue then fires the
+    /// <c>$Undefined</c> sentinel. The full method's existing default prologue then fires the
     /// defaults in order — identical to what a direct call site does via <c>EmitOmittedArgument</c>,
     /// so a default may reference an earlier param (#698). Forwarding via <c>callvirt</c> means a
     /// base-/mid-typed call lands on the most-derived implementation in deeper chains.
@@ -578,8 +578,9 @@ public partial class ILCompiler
     /// <c>EmitOmittedArgument</c>: an <c>object</c> slot (every widened optional/defaulted param) gets
     /// the emitted runtime's <c>$Undefined</c> sentinel — which fires the default prologue and is
     /// observable through <c>typeof</c>/<c>=== undefined</c>; a value-type slot gets its CLR default;
-    /// a not-widened reference-typed default (e.g. <c>string</c>) gets <c>null</c>, on which the
-    /// prologue still fires. Standalone-safe: references the emitted <c>UndefinedInstance</c> field,
+    /// non-object slots receive their CLR default. Defaulted and optional slots are widened to
+    /// <c>object</c> hierarchy-consistently by <see cref="ParameterTypeResolver"/>. Standalone-safe:
+    /// references the emitted <c>UndefinedInstance</c> field,
     /// not SharpTS.dll.
     /// </summary>
     private void EmitOmittedBridgeArgument(System.Reflection.Emit.ILGenerator il, Type slotType)
@@ -1053,7 +1054,7 @@ public partial class ILCompiler
         // Apply parameter defaults (JS: a default fires when the argument is missing or
         // explicit `undefined`). Class declarations historically skipped this entirely, so
         // defaults never fired in compiled mode (omit → null/0, explicit undefined → NaN/cast
-        // error). ParameterTypeResolver widens value-type-defaulted params to an object slot
+        // error). ParameterTypeResolver widens defaulted params to an object slot
         // so the prologue can observe the `$Undefined` sentinel and fire the default. (#705)
         var defaultParamTypes = methodBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
         emitter.EmitDefaultParameters(method.Parameters, isInstanceMethod: true, paramTypes: defaultParamTypes);

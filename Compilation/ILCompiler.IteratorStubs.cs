@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -27,6 +28,10 @@ public partial class ILCompiler
         string qualifiedName)
     {
         var il = methodBuilder.GetILGenerator();
+
+        // Parameter initialization belongs to the generator call, before the
+        // iterator is returned, rather than to its first MoveNext invocation.
+        EmitIteratorStubDefaults(methodBuilder, funcStmt, isInstanceMethod: false);
 
         il.Emit(OpCodes.Newobj, smBuilder.Constructor);
 
@@ -85,10 +90,19 @@ public partial class ILCompiler
         IIteratorStateMachineBuilder smBuilder,
         Stmt.Function method,
         bool isInstanceMethod,
-        string? funcDCKey)
+        string? funcDCKey,
+        FieldInfo? fieldsField,
+        string? currentClassName)
     {
         var parameters = method.Parameters;
         var il = methodBuilder.GetILGenerator();
+
+        EmitIteratorStubDefaults(
+            methodBuilder,
+            method,
+            isInstanceMethod,
+            fieldsField,
+            currentClassName);
 
         il.Emit(OpCodes.Newobj, smBuilder.Constructor);
 
@@ -121,5 +135,44 @@ public partial class ILCompiler
             EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, method, funcDCKey, paramOffset, paramTypes);
 
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits generator and async-generator parameter initialization into their eager
+    /// creation stub. Defaults update the argument slots before those values are copied
+    /// into the state machine and any function display class.
+    /// </summary>
+    private void EmitIteratorStubDefaults(
+        MethodBuilder methodBuilder,
+        Stmt.Function function,
+        bool isInstanceMethod,
+        FieldInfo? fieldsField = null,
+        string? currentClassName = null)
+    {
+        if (!function.Parameters.Any(p => p.DefaultValue != null))
+            return;
+
+        var ctx = CreateModuleMemberContext(methodBuilder.GetILGenerator(), methodBuilder);
+        ctx.FieldsField = fieldsField;
+        ctx.IsInstanceMethod = isInstanceMethod;
+        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(function.Body);
+        ctx.CurrentClassName = currentClassName;
+        ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        ctx.EmittingTypeBuilder = methodBuilder.DeclaringType as TypeBuilder;
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ApplyCommonJsModuleAccess(ctx);
+
+        var methodParams = methodBuilder.GetParameters();
+        int paramOffset = isInstanceMethod ? 1 : 0;
+        for (int i = 0; i < function.Parameters.Count; i++)
+        {
+            Type? paramType = i < methodParams.Length ? methodParams[i].ParameterType : null;
+            ctx.DefineParameter(function.Parameters[i].Name.Lexeme, i + paramOffset, paramType);
+        }
+
+        new ILEmitter(ctx).EmitDefaultParameters(
+            function.Parameters,
+            isInstanceMethod,
+            paramTypes: methodParams.Select(p => p.ParameterType).ToArray());
     }
 }

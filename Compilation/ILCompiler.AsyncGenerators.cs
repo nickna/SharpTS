@@ -171,7 +171,7 @@ public partial class ILCompiler
 
         // Use the new emitter for full async generator body emission
         var emitter = new AsyncGeneratorMoveNextEmitter(smBuilder, analysis, _types);
-        emitter.EmitMoveNextAsync(funcStmt.Body, ctx, funcStmt.Parameters);
+        emitter.EmitMoveNextAsync(funcStmt.Body, ctx);
     }
 
     /// <summary>
@@ -219,7 +219,14 @@ public partial class ILCompiler
         // (#778) has no `this` and no function-DC write-capture support (it is not registered in
         // RegisterGeneratorMethodFunctionDisplayClasses, so methodDCKey is null), mirroring the sync
         // static generator (#692).
-        EmitIteratorMethodStub(methodBuilder, smBuilder, method, isInstanceMethod, isInstanceMethod ? methodDCKey : null);
+        EmitIteratorMethodStub(
+            methodBuilder,
+            smBuilder,
+            method,
+            isInstanceMethod,
+            isInstanceMethod ? methodDCKey : null,
+            fieldsField,
+            currentClassName);
 
         // Create context for MoveNextAsync emission
         var il = smBuilder.MoveNextAsyncMethod.GetILGenerator();
@@ -249,7 +256,7 @@ public partial class ILCompiler
 
         // Emit MoveNextAsync body
         var moveNextEmitter = new AsyncGeneratorMoveNextEmitter(smBuilder, analysis, _types);
-        moveNextEmitter.EmitMoveNextAsync(method.Body, ctx, method.Parameters);
+        moveNextEmitter.EmitMoveNextAsync(method.Body, ctx);
 
         // Finalize the state machine type
         smBuilder.CreateType();

@@ -550,6 +550,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Brtrue, foundInLocalLabel);
 
+        // An emitted class instance inherits from the stable object surfaced
+        // as Constructor.prototype. Prototype objects themselves have an
+        // explicit PDS entry installed by GetClassPrototype, so they return
+        // their base class's prototype through the earlier branch instead of
+        // cycling back to themselves here.
+        var notUserClassInstanceLabel = il.DefineLabel();
+        var userClassTypeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Stloc, userClassTypeLocal);
+        il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, userClassTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.Type, "IsAssignableFrom", [_types.Type])!);
+        il.Emit(OpCodes.Brfalse, notUserClassInstanceLabel);
+        il.Emit(OpCodes.Ldloc, userClassTypeLocal);
+        il.Emit(OpCodes.Call, runtime.GetClassPrototypeMethod);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notUserClassInstanceLabel);
+
         // Default-prototype fallback per ECMA-262: plain objects/arrays/dicts
         // have %Object.prototype% as their [[Prototype]] unless overridden.
         // Without this, Object.getPrototypeOf({}) returns null instead of

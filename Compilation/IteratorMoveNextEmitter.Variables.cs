@@ -24,6 +24,9 @@ public partial class IteratorMoveNextEmitter
 
     protected override void EmitVariable(Expr.Variable v)
     {
+        if (TryEmitDefaultParameterTdz(v.Name.Lexeme))
+            return;
+
         // Resolve a shadowing block-scoped binding to its own storage before any DC routing (#711/#766);
         // a renamed binding is never a captured/DC name, so the DC check below correctly falls through.
         if (BlockScopeRenames.TryGetValue(v, out var renamed))

@@ -39,7 +39,7 @@ public abstract partial class StateMachineExitRoutingEmitter
     /// <summary>
     /// Applies parameter defaults at state-machine entry (#646/#737). A defaulted parameter whose
     /// argument was omitted or explicitly <c>undefined</c> arrives in its hoisted state-machine field
-    /// as null / the <c>$Undefined</c> sentinel; this replaces it with the evaluated default
+    /// as the <c>$Undefined</c> sentinel; this replaces it with the evaluated default
     /// expression — the state-machine analogue of <see cref="ILEmitter.EmitDefaultParameters"/>.
     /// Defaults are evaluated in declaration order, so a later default may reference an earlier
     /// (already-defaulted) parameter via its field. The generators mirror an applied default into the
@@ -53,32 +53,32 @@ public abstract partial class StateMachineExitRoutingEmitter
         if (!parameters.Any(p => p.DefaultValue != null))
             return;
 
-        foreach (var param in parameters)
+        for (int i = 0; i < parameters.Count; i++)
         {
+            var param = parameters[i];
             if (param.DefaultValue == null) continue;
 
             var field = GetHoistedVariableField(param.Name.Lexeme);
             if (field == null) continue; // Parameter not hoisted (unused in body) — default is moot.
 
             var applyDefault = IL.DefineLabel();
-            var checkUndefined = IL.DefineLabel();
             var skipDefault = IL.DefineLabel();
 
-            // if (field == null) apply; else if (field is $Undefined) apply; else keep.
+            // JavaScript null is an ordinary supplied argument. Only the runtime's
+            // $Undefined sentinel (used for both omitted and explicit undefined) fires.
             IL.Emit(OpCodes.Ldarg_0);
             IL.Emit(OpCodes.Ldfld, field);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Brtrue, checkUndefined);
-            IL.Emit(OpCodes.Pop);                       // pop the null
-            IL.Emit(OpCodes.Br, applyDefault);
-
-            IL.MarkLabel(checkUndefined);
             IL.Emit(OpCodes.Isinst, Ctx!.Runtime!.UndefinedType);
             IL.Emit(OpCodes.Brtrue, applyDefault);
             IL.Emit(OpCodes.Br, skipDefault);
 
             IL.MarkLabel(applyDefault);
+            Ctx.DefaultParameterTdzNames = parameters
+                .Skip(i)
+                .Select(p => p.Name.Lexeme)
+                .ToHashSet(StringComparer.Ordinal);
             EmitExpression(param.DefaultValue);
+            Ctx.DefaultParameterTdzNames = null;
             EnsureBoxed();
             var temp = IL.DeclareLocal(Types.Object);
             IL.Emit(OpCodes.Stloc, temp);

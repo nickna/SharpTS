@@ -125,10 +125,9 @@ public static class ParameterTypeResolver
     /// (<see cref="ILEmitter.EmitDefaultParameters"/>): arrow functions and function expressions
     /// (which get no overloads), and — since #705 — function declarations, class methods, and
     /// constructors. The prologue detects a missing/undefined argument by comparing the slot against
-    /// null and the <c>$Undefined</c> sentinel, and value-call padding (<c>$TSFunction.AdjustArgs</c>)
+    /// the <c>$Undefined</c> sentinel, and value-call padding (<c>$TSFunction.AdjustArgs</c>)
     /// fills omitted slots with that sentinel. Only an <c>object</c> slot can hold it: a value-type
-    /// slot can never be null (and emits invalid <c>ldarg; brfalse</c> IL — so the prologue skips it
-    /// and the default never fires), and a typed reference slot (e.g. <c>string</c>) coerces the
+    /// slot cannot hold the sentinel, and a typed reference slot (e.g. <c>string</c>) coerces the
     /// sentinel to a real value (the string <c>"undefined"</c>) before the prologue can observe it.
     /// Either way the default could never fire. Applied centrally in <see cref="ResolveParameters"/>,
     /// <see cref="ResolveMethodParameters"/>, and <see cref="ResolveConstructorParameters"/> so the
@@ -361,21 +360,18 @@ public static class ParameterTypeResolver
     /// Resolves parameter types for a class method.
     /// </summary>
     /// <remarks>
-    /// A parameter with a <b>value-type default</b> (<c>x: number = N</c>) needs an <c>object</c>
-    /// slot so the entry prologue can observe the <c>$Undefined</c> sentinel and fire the default
-    /// (a <c>double</c>/<c>bool</c> slot cannot — it coerces the sentinel to <c>NaN</c>/<c>false</c>).
+    /// A parameter with a default needs an <c>object</c> slot so the entry prologue can observe the
+    /// <c>$Undefined</c> sentinel while preserving an explicitly supplied JavaScript <c>null</c>.
     /// <list type="bullet">
-    /// <item><b>Static methods</b> are non-virtual, so widening such a param is always safe — done
+    /// <item><b>Static methods</b> are non-virtual, so widening a defaulted param is always safe — done
     /// directly (#705/#723).</item>
     /// <item><b>Instance methods</b> are virtual: widening one override's slot would change its CLR
     /// signature and silently break override matching (the derived method lands in a new vtable
     /// slot). So the decision is made <i>hierarchy-consistently</i> — a position is widened across
-    /// the WHOLE override group when any member makes it an optional value-type parameter, keeping
+    /// the WHOLE override group when any member makes it an optional parameter, keeping
     /// every override's signature identical (see <see cref="ComputeInstanceMethodWidenMask"/>).
     /// (#737)</item>
     /// </list>
-    /// Reference-type defaults need no slot change (a reference slot already holds null, which the
-    /// prologue treats as undefined), so they are left alone in both cases.
     /// </remarks>
     public static Type[] ResolveMethodParameters(
         string className,
@@ -452,54 +448,54 @@ public static class ParameterTypeResolver
                 .ToArray();
         }
 
-        WidenValueTypeDefaultedMethodParams(resolved, parameters, className, methodName, isStatic, typeMapper, typeMap);
+        WidenDefaultedMethodParams(resolved, parameters, className, methodName, isStatic, typeMap);
         ForceRestParamsToListMarker(resolved, parameters);
         return resolved;
     }
 
     /// <summary>
-    /// Widens a method parameter slot to <c>object</c> wherever a value-type default needs to be able
-    /// to hold the <c>$Undefined</c> sentinel — non-virtually for static methods, and
-    /// hierarchy-consistently for (virtual) instance methods. No-op when no value-type defaults are
+    /// Widens a method parameter slot to <c>object</c> wherever a default needs to distinguish the
+    /// <c>$Undefined</c> sentinel from JavaScript <c>null</c> — non-virtually for static methods, and
+    /// hierarchy-consistently for (virtual) instance methods. No-op when no defaults are
     /// involved, so the common method keeps its fast unboxed slots. (#705/#723/#737)
     /// </summary>
-    private static void WidenValueTypeDefaultedMethodParams(
+    private static void WidenDefaultedMethodParams(
         Type[] resolved,
         List<Stmt.Parameter> parameters,
         string className,
         string methodName,
         bool isStatic,
-        TypeMapper typeMapper,
         TypeMap typeMap)
     {
         if (isStatic)
         {
-            // Non-virtual: widening a value-type-defaulted param can never break override matching.
+            // Non-virtual: widening a defaulted param can never break override matching.
             for (int i = 0; i < parameters.Count && i < resolved.Length; i++)
-                if (parameters[i].DefaultValue != null && !parameters[i].IsRest && resolved[i].IsValueType)
+                if (parameters[i].DefaultValue != null && !parameters[i].IsRest)
                     resolved[i] = typeof(object);
             return;
         }
 
-        // Virtual: widen each value-type slot the override group needs as object, so every override
+        // Virtual: widen each optional slot the override group needs as object, so every override
         // keeps an identical CLR signature (preserving vtable dispatch).
-        var mask = ComputeInstanceMethodWidenMask(className, methodName, resolved.Length, typeMapper, typeMap);
+        var mask = ComputeInstanceMethodWidenMask(className, methodName, resolved.Length, typeMap);
         for (int i = 0; i < resolved.Length; i++)
-            if (mask[i] && resolved[i].IsValueType)
+            if (mask[i])
                 resolved[i] = typeof(object);
     }
 
     /// <summary>
     /// Computes, for an instance (virtual) method, which parameter positions must use an
-    /// <c>object</c> slot so a value-type default can fire via the entry prologue. The decision is
+    /// <c>object</c> slot so a default can fire only for <c>undefined</c>, while preserving an
+    /// explicitly supplied <c>null</c>. The decision is
     /// <b>hierarchy-consistent</b>: a position is flagged when ANY member of the method's override
     /// group (its root declaration plus every class that overrides it) makes that position an
-    /// optional value-type parameter. Flagging the whole group keeps every override's CLR signature
+    /// optional parameter. Flagging the whole group keeps every override's CLR signature
     /// identical, so a derived override that adds a default still lands in the base's vtable slot
     /// and a base-typed call dispatches to it correctly. (#737)
     /// </summary>
     private static bool[] ComputeInstanceMethodWidenMask(
-        string className, string methodName, int paramCount, TypeMapper typeMapper, TypeMap typeMap)
+        string className, string methodName, int paramCount, TypeMap typeMap)
     {
         var mask = new bool[paramCount];
         if (paramCount == 0)
@@ -509,7 +505,7 @@ public static class ParameterTypeResolver
         if (root == null)
             return mask;
 
-        // Union the optional-value-type positions over every class whose method shares this root
+        // Union the optional positions over every class whose method shares this root
         // declaration (i.e. the override group). A class only declares the method if it is a key in
         // its OWN Methods map (lookup walks the chain, but Methods holds own-declared entries only).
         foreach (var (otherName, otherClass) in typeMap.ClassTypes)
@@ -529,8 +525,7 @@ public static class ParameterTypeResolver
                 // supplied, so it never needs an undefined-capable slot on this member's behalf.
                 if (i < minArity)
                     continue;
-                if (IsValueTypeParamSlot(typeMapper, f.ParamTypes[i]))
-                    mask[i] = true;
+                mask[i] = true;
             }
         }
 
@@ -585,26 +580,8 @@ public static class ParameterTypeResolver
     };
 
     /// <summary>
-    /// True when a parameter's TS type maps to an unboxed CLR value-type slot (e.g. <c>number</c> →
-    /// <c>double</c>, <c>boolean</c> → <c>bool</c>) — the slots that cannot hold the <c>$Undefined</c>
-    /// sentinel and so must be widened to <c>object</c> when defaulted. Maps defensively (a mapping
-    /// can throw during early definition) and treats failures as non-value-type (do not widen).
-    /// </summary>
-    private static bool IsValueTypeParamSlot(TypeMapper typeMapper, TSTypeInfo paramType)
-    {
-        try
-        {
-            return typeMapper.MapTypeInfoStrict(paramType).IsValueType;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Resolves constructor parameter types for a class, widening value-type-defaulted params to
-    /// <c>object</c> so the entry prologue can fire their defaults (#705).
+    /// Resolves constructor parameter types for a class, widening defaulted params to
+    /// <c>object</c> so the entry prologue can distinguish undefined from null (#705).
     /// </summary>
     public static Type[] ResolveConstructorParameters(
         string className,

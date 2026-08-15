@@ -753,9 +753,12 @@ public abstract partial class ExpressionEmitterBase
                 EmitCoerceBoxedToType(targetParams[i].ParameterType);
         }
 
-        // Pad regular args with nulls if needed
+        // Pad omitted regular args with the JavaScript undefined sentinel whenever
+        // the slot can represent it. This is especially important for a defaulted
+        // parameter before a rest parameter: the rest-call path bypasses lower-arity
+        // overloads and invokes the full method directly.
         for (int i = arguments.Count; i < regularCount; i++)
-            IL.Emit(OpCodes.Ldnull);
+            EmitOmittedArgument(targetParams[i].ParameterType);
 
         // Build rest parameter array from remaining arguments
         int restArgsCount = Math.Max(0, arguments.Count - regularCount);
@@ -2173,10 +2176,9 @@ public abstract partial class ExpressionEmitterBase
     /// value-type-defaulted parameter uses after widening (#705/#739) — is padded with the
     /// <c>$Undefined</c> sentinel. That is observable through <c>typeof</c>/<c>=== undefined</c> for a
     /// plain optional (#739) and fires the default-parameter prologue for a defaulted one
-    /// (#705/#723/#737). A non-<c>object</c> slot (a required value-type slot, or a not-widened
-    /// reference-typed default such as <c>string</c>) takes its CLR default — for a defaulted
-    /// reference slot the prologue still fires on the resulting null. Mirrors the existing
-    /// $TSFunction.Invoke value-call padding and <see cref="EmitPrivateCallUndefinedPadding"/>.
+    /// (#705/#723/#737). A non-<c>object</c> slot is required and takes its CLR default. Mirrors
+    /// the existing $TSFunction.Invoke value-call padding and
+    /// <see cref="EmitPrivateCallUndefinedPadding"/>.
     /// Public (unlike the sibling <see cref="EmitDefaultForType"/>) so the ILCompiler can pad an
     /// implicit base-constructor call directly; also satisfies <see cref="IEmitterContext"/>.
     /// </summary>

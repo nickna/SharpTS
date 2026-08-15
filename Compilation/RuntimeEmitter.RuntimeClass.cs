@@ -238,6 +238,15 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
 
+        var classPrototypeCacheType = _types.MakeGenericType(
+            _types.DictionaryOpen, _types.Type, _types.Object);
+        var classPrototypeCacheField = typeBuilder.DefineField(
+            "_classPrototypeCache",
+            classPrototypeCacheType,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
+        runtime.ClassPrototypeCacheField = classPrototypeCacheField;
+        EmitClassPrototypeSupport(typeBuilder, runtime, classPrototypeCacheField);
+
         // CheckCancellation(): if (_cancelRequested) throw new
         //   OperationCanceledException("Compiled execution cancelled.");
         // Called by loop emitters at each backedge. Method body is emitted
@@ -565,6 +574,9 @@ public partial class RuntimeEmitter
         // EmitPromisePrototypePopulate on first `Promise.prototype` read.
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, runtime.PromisePrototypeField);
+
+        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(classPrototypeCacheType));
+        cctorIL.Emit(OpCodes.Stsfld, classPrototypeCacheField);
 
         // Initialize _symbolStorage = new ConditionalWeakTable<object, Dictionary<object, object?>>()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(symbolStorageType));

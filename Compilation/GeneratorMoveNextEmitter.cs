@@ -61,10 +61,7 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
     /// <summary>
     /// Emits the complete MoveNext method body.
     /// </summary>
-    /// <param name="parameters">The generator's declared parameters. When supplied, a default-parameter
-    /// prologue runs on initial entry so an omitted or explicit-<c>undefined</c> argument fires its
-    /// default (#737). Null skips it (callers with no params).</param>
-    public void EmitMoveNext(List<Stmt>? body, CompilationContext ctx, List<Stmt.Parameter>? parameters = null)
+    public void EmitMoveNext(List<Stmt>? body, CompilationContext ctx)
     {
         if (body == null) return;
 
@@ -98,15 +95,6 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
 
         // Emit state dispatch switch
         EmitStateSwitch(_builder.StateField, _analysis.YieldPointCount, _stateLabels);
-
-        // Apply parameter defaults on initial entry. The state switch jumps every resume state
-        // (>= 0) to its yield label and the completed state (-2) short-circuits above, so only the
-        // initial entry (state -1) falls through to here — the defaults run exactly once, before the
-        // body, with no extra guard field needed. (#737)
-        if (parameters != null)
-        {
-            EmitDefaultParameters(parameters);
-        }
 
         // Emit the function body (will emit yield points inline)
         foreach (var stmt in body)

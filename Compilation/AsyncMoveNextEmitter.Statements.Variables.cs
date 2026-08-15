@@ -81,6 +81,9 @@ public partial class AsyncMoveNextEmitter
     /// </summary>
     protected override void EmitVariable(Expr.Variable v)
     {
+        if (TryEmitDefaultParameterTdz(v.Name.Lexeme))
+            return;
+
         if (BlockScopeRenames.TryGetValue(v, out var renamed))
             v = v with { Name = RenameToken(v.Name, renamed) };
 

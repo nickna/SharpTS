@@ -88,7 +88,7 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
     /// <summary>
     /// Emits the complete MoveNextAsync method body.
     /// </summary>
-    public void EmitMoveNextAsync(List<Stmt>? body, CompilationContext ctx, List<Stmt.Parameter>? parameters = null)
+    public void EmitMoveNextAsync(List<Stmt>? body, CompilationContext ctx)
     {
         if (body == null)
         {
@@ -127,13 +127,6 @@ public partial class AsyncGeneratorMoveNextEmitter : IteratorMoveNextEmitter
 
         // Emit state dispatch switch
         EmitStateSwitch(_builder.StateField, _analysis.SuspensionPointCount, _stateLabels);
-
-        // Apply parameter defaults on initial entry only (state -1 falls through here; resume
-        // states jump past via the switch, the completed state short-circuits above). (#737)
-        if (parameters != null)
-        {
-            EmitDefaultParameters(parameters);
-        }
 
         // Emit the function body (will emit yield/await points inline)
         foreach (var stmt in body)

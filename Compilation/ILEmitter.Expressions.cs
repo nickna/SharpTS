@@ -55,6 +55,9 @@ public partial class ILEmitter
     {
         var name = v.Name.Lexeme;
 
+        if (TryEmitDefaultParameterTdz(name))
+            return;
+
         // Block-scoped class locals start as undefined and are initialized at
         // the declaration statement. Observe the class TDZ before ordinary
         // local resolution.

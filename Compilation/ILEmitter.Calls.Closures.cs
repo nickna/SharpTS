@@ -466,6 +466,17 @@ public partial class ILEmitter
                 // Variable is a top-level static var
                 IL.Emit(OpCodes.Ldsfld, topLevelField);
             }
+            else if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(capturedVar), out var capturedClass))
+            {
+                // A top-level class declaration is represented by its emitted Type.
+                // Closure analysis can still classify the lexical reference as an
+                // ordinary capture; seed that capture with the class value instead
+                // of leaving its display-class field null. Block-scoped classes use
+                // a real local and therefore continue through the local branch below.
+                IL.Emit(OpCodes.Ldtoken, capturedClass);
+                IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+                    _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            }
             else if (_ctx.Functions.TryGetValue(_ctx.ResolveFunctionName(capturedVar), out var capturedFuncMethod))
             {
                 // Variable references an outer function declaration. Use the

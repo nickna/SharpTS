@@ -29,7 +29,8 @@ public partial class ILEmitter
 
     /// <summary>
     /// Emit default parameter value checks at function entry.
-    /// For each parameter with a default value, checks if arg is null and assigns default.
+    /// For each parameter with a default value, checks if arg is the JavaScript
+    /// <c>undefined</c> sentinel and assigns the default.
     /// </summary>
     /// <param name="parameters">The parameter list</param>
     /// <param name="isInstanceMethod">True if this is an instance method (has implicit this at arg 0)</param>
@@ -63,16 +64,11 @@ public partial class ILEmitter
 
             int argIndex = i + argOffset;
 
-            // JS spec: defaults fire when the argument is `undefined` — missing or
-            // explicit. Callers pad missing args with the $Undefined singleton (see
-            // the direct-call emitter in ExpressionEmitterBase.CallHelpers.cs), which
-            // is a non-null reference — so a plain `brtrue` would skip the default.
-            // Treat both null and the $Undefined singleton as "fire the default."
+            // JS spec: defaults fire only when the argument is `undefined` — missing
+            // arguments are padded with the $Undefined singleton by call emitters.
+            // CLR null represents the JavaScript null value and must be preserved.
             var fireDefault = builder.DefineLabel($"fire_default_{i}");
             var skipDefault = builder.DefineLabel($"skip_default_{i}");
-
-            IL.Emit(OpCodes.Ldarg, argIndex);
-            builder.Emit_Brfalse(fireDefault);
 
             if (_ctx.Runtime?.UndefinedInstance != null)
             {
@@ -84,7 +80,12 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, skipDefault);
 
             builder.MarkLabel(fireDefault);
+            _ctx.DefaultParameterTdzNames = parameters
+                .Skip(i)
+                .Select(p => p.Name.Lexeme)
+                .ToHashSet(StringComparer.Ordinal);
             EmitExpression(param.DefaultValue);
+            _ctx.DefaultParameterTdzNames = null;
             EmitBoxIfNeeded(param.DefaultValue);
             IL.Emit(OpCodes.Starg, argIndex);
 

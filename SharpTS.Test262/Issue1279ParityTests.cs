@@ -6414,6 +6414,31 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Remaining_RegExp_compiler_parity(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> ClassAsyncAndGeneratorMethodCompilerCases => new()
+    {
+        "language/statements/class/async-method/dflt-params-arg-val-not-undefined.js",
+        "language/expressions/class/async-method/dflt-params-arg-val-not-undefined.js",
+        "language/statements/class/async-method-static/dflt-params-arg-val-not-undefined.js",
+        "language/expressions/class/async-method-static/dflt-params-arg-val-not-undefined.js",
+        "language/statements/class/gen-method-static/dflt-params-abrupt.js",
+        "language/expressions/class/gen-method-static/dflt-params-abrupt.js",
+        "language/statements/class/gen-method/dflt-params-ref-later.js",
+        "language/expressions/class/gen-method/dflt-params-ref-later.js",
+        "language/statements/class/async-method/params-trailing-comma-single.js",
+        "language/expressions/class/async-method/params-trailing-comma-single.js",
+        "language/statements/class/gen-method/params-trailing-comma-single.js",
+        "language/expressions/class/gen-method/params-trailing-comma-single.js",
+        "language/statements/class/gen-method/yield-spread-obj.js",
+        "language/expressions/class/gen-method/yield-spread-obj.js",
+        "language/statements/class/async-method/forbidden-ext/b2/cls-decl-async-meth-forbidden-ext-indirect-access-prop-caller.js",
+        "language/expressions/class/async-method/forbidden-ext/b2/cls-expr-async-meth-forbidden-ext-indirect-access-prop-caller.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ClassAsyncAndGeneratorMethodCompilerCases))]
+    public void Class_async_and_generator_methods_compile_with_runtime_prototypes(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

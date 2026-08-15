@@ -1611,6 +1611,25 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ret);
                 il.MarkLabel(notRegExpLabel);
             }
+
+            // Emitted user classes implement $IHasFields. Their prototype is
+            // a stable constructor-free instance whose normal GetProperty
+            // implementation exposes declared methods/accessors.
+            var notUserClassPrototypeLabel = il.DefineLabel();
+            var prototypeClassTypeLocal = il.DeclareLocal(_types.Type);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Stloc, prototypeClassTypeLocal);
+            il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+            il.Emit(OpCodes.Ldloc, prototypeClassTypeLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.Type, "IsAssignableFrom", [_types.Type])!);
+            il.Emit(OpCodes.Brfalse, notUserClassPrototypeLabel);
+            il.Emit(OpCodes.Ldloc, prototypeClassTypeLocal);
+            il.Emit(OpCodes.Call, runtime.GetClassPrototypeMethod);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notUserClassPrototypeLabel);
             il.MarkLabel(notProtoNameLabel);
 
             var typePdsDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);

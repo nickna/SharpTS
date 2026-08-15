@@ -660,6 +660,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     {
         string name = v.Name.Lexeme;
 
+        if (TryEmitDefaultParameterTdz(name))
+            return;
+
         var stackType = Resolver.TryLoadVariable(name);
         if (stackType != null)
         {
@@ -674,6 +677,20 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         IL.Emit(OpCodes.Ldnull);
         SetStackUnknown();
+    }
+
+    /// <summary>Emits the runtime ReferenceError required for a read from a parameter TDZ.</summary>
+    protected bool TryEmitDefaultParameterTdz(string name)
+    {
+        if (Ctx.DefaultParameterTdzNames?.Contains(name) != true)
+            return false;
+
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+        // Unreachable, but keeps the evaluation stack valid for the expression path.
+        IL.Emit(OpCodes.Ldnull);
+        SetStackUnknown();
+        return true;
     }
 
     /// <summary>

@@ -122,6 +122,12 @@ public class EmittedRuntime
     // exceptions retain their original JavaScript identity.
     public MethodBuilder RunClassDefinitionMethod { get; set; } = null!;
 
+    // Constructor-free prototype objects for emitted user classes. The cache
+    // is keyed by the emitted CLR Type; GetClassPrototype initializes each
+    // class's private dynamic-field dictionaries and wires its prototype chain.
+    public FieldBuilder ClassPrototypeCacheField { get; set; } = null!;
+    public MethodBuilder GetClassPrototypeMethod { get; set; } = null!;
+
     // The emitted runtime helper class
     public TypeBuilder RuntimeType { get; set; } = null!;
 

@@ -173,6 +173,13 @@ public partial class CompilationContext
     public bool IsStaticConstructorContext { get; set; }
 
     /// <summary>
+    /// Parameter bindings that are still uninitialized while a default initializer is
+    /// being evaluated. Reads must throw ReferenceError instead of observing the raw
+    /// argument slot; the current and all later parameters are in this TDZ.
+    /// </summary>
+    internal IReadOnlySet<string>? DefaultParameterTdzNames { get; set; }
+
+    /// <summary>
     /// True only when emitting the module's top-level statements (entry-point Main,
     /// module/script <c>$Initialize</c>). A <c>var</c>/<c>let</c>/<c>const</c> declared
     /// here is a genuine module-level binding and is routed to its static field

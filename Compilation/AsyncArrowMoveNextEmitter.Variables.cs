@@ -13,6 +13,9 @@ public partial class AsyncArrowMoveNextEmitter
 
     protected override void EmitVariable(Expr.Variable v)
     {
+        if (TryEmitDefaultParameterTdz(v.Name.Lexeme))
+            return;
+
         // Resolve a shadowing block-scoped binding to its own storage before resolution (#766); a renamed
         // binding is never a captured/DC name, so the capture checks below correctly fall through.
         if (BlockScopeRenames.TryGetValue(v, out var renamed))

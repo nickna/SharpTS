@@ -419,7 +419,7 @@ public partial class ILCompiler
 
         // Use the new emitter for full generator body emission
         var emitter = new GeneratorMoveNextEmitter(smBuilder, analysis, _types);
-        emitter.EmitMoveNext(funcStmt.Body, ctx, funcStmt.Parameters);
+        emitter.EmitMoveNext(funcStmt.Body, ctx);
     }
 
     /// <summary>
@@ -469,7 +469,14 @@ public partial class ILCompiler
         // (#692) has no function-DC write-capture support (it is not registered in
         // RegisterGeneratorMethodFunctionDisplayClasses, so methodDCKey is null) and a write-capture
         // inside one still fail-fasts safely via the CapturedWriteAnalysis guard.
-        EmitIteratorMethodStub(methodBuilder, smBuilder, method, isInstanceMethod, isInstanceMethod ? methodDCKey : null);
+        EmitIteratorMethodStub(
+            methodBuilder,
+            smBuilder,
+            method,
+            isInstanceMethod,
+            isInstanceMethod ? methodDCKey : null,
+            fieldsField,
+            currentClassName);
 
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -500,7 +507,7 @@ public partial class ILCompiler
 
         // Emit MoveNext body
         var moveNextEmitter = new GeneratorMoveNextEmitter(smBuilder, analysis, _types);
-        moveNextEmitter.EmitMoveNext(method.Body, ctx, method.Parameters);
+        moveNextEmitter.EmitMoveNext(method.Body, ctx);
 
         // Finalize the state machine type
         smBuilder.CreateType();
