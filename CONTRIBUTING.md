@@ -92,6 +92,12 @@ Tests are xUnit tests in the `SharpTS.Tests/` directory:
 dotnet test
 ```
 
+On Windows, the filesystem tests create real symbolic links. Enable Developer
+Mode (`ms-settings:developers`) and restart the terminal or IDE that runs the
+tests. Running the tests elevated or granting the account the **Create symbolic
+links** (`SeCreateSymbolicLinkPrivilege`) user right are alternatives. The tests
+fail with setup guidance when this prerequisite is missing; they are not skipped.
+
 ### Writing Tests: The Dual-Mode Contract
 
 Almost every feature must behave identically in the interpreter and the IL

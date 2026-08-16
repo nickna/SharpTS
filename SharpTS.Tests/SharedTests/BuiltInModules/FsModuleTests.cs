@@ -9,6 +9,48 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 public class FsModuleTests
 {
     private static string Uid() => Guid.NewGuid().ToString("N")[..8];
+
+    private static void RequireSymbolicLinkSupport()
+    {
+        var tempDir = Path.Combine(Path.GetTempPath(), $"sharpts_symlink_probe_{Guid.NewGuid():N}");
+        var targetPath = Path.Combine(tempDir, "target.txt");
+        var linkPath = Path.Combine(tempDir, "link.txt");
+
+        Directory.CreateDirectory(tempDir);
+        try
+        {
+            File.WriteAllText(targetPath, "probe");
+            try
+            {
+                File.CreateSymbolicLink(linkPath, targetPath);
+            }
+            catch (Exception ex) when (IsMissingWindowsSymlinkPrivilege(ex))
+            {
+                throw new Xunit.Sdk.XunitException(
+                    "Symbolic-link tests require permission to create symbolic links.\n\n" +
+                    "On Windows, enable Developer Mode (open 'ms-settings:developers'), then " +
+                    "restart the terminal or IDE running the tests. Alternatively, run the " +
+                    "tests elevated or grant the account the 'Create symbolic links' " +
+                    "(SeCreateSymbolicLinkPrivilege) user right.\n\n" +
+                    "The SharpTS symlink assertions were not reached.\n" +
+                    $"Original Windows error: {ex.Message}");
+            }
+
+            if (new FileInfo(linkPath).LinkTarget is null)
+                throw new Xunit.Sdk.XunitException("The symbolic-link prerequisite probe did not create a symbolic link.");
+        }
+        finally
+        {
+            try { Directory.Delete(tempDir, recursive: true); }
+            catch { /* Best-effort cleanup; the harness follows the same test cleanup policy. */ }
+        }
+    }
+
+    private static bool IsMissingWindowsSymlinkPrivilege(Exception exception) =>
+        OperatingSystem.IsWindows() &&
+        exception is IOException or UnauthorizedAccessException &&
+        (exception.HResult & 0xFFFF) == 1314; // ERROR_PRIVILEGE_NOT_HELD
+
     [Theory, ModeData]
     public void Fs_ExistsSync_ReturnsTrueForExistingFile(ExecutionMode mode)
     {
@@ -432,14 +474,14 @@ public class FsModuleTests
     [Theory, ModeData]
     public void Fs_SymlinkSync_CreatesSymbolicLink(ExecutionMode mode)
     {
+        RequireSymbolicLinkSupport();
         var uid = Uid();
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = $$"""
                 import * as fs from 'fs';
-                import * as os from 'os';
-                const testFile = os.tmpdir() + '/test_symlink_target_{{uid}}.txt';
-                const linkPath = os.tmpdir() + '/test_symlink_link_{{uid}}.txt';
+                const testFile = __dirname + '/test_symlink_target_{{uid}}.txt';
+                const linkPath = __dirname + '/test_symlink_link_{{uid}}.txt';
 
                 fs.writeFileSync(testFile, 'content');
                 fs.symlinkSync(testFile, linkPath);
@@ -515,14 +557,14 @@ public class FsModuleTests
     [Theory, ModeData]
     public void Fs_LstatSync_ReturnsSymlinkInfo(ExecutionMode mode)
     {
+        RequireSymbolicLinkSupport();
         var uid = Uid();
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = $$"""
                 import * as fs from 'fs';
-                import * as os from 'os';
-                const testFile = os.tmpdir() + '/test_lstat_target_{{uid}}.txt';
-                const linkPath = os.tmpdir() + '/test_lstat_link_{{uid}}.txt';
+                const testFile = __dirname + '/test_lstat_target_{{uid}}.txt';
+                const linkPath = __dirname + '/test_lstat_link_{{uid}}.txt';
 
                 fs.writeFileSync(testFile, 'content');
                 fs.symlinkSync(testFile, linkPath);
