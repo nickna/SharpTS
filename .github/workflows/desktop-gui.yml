@@ -85,7 +85,7 @@ jobs:
           "package_file_name=$($info.PackageFileName)" >> $env:GITHUB_OUTPUT
       - name: Build and audit the exact GUI SDK candidate
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -PackageOnly
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: sharpts-gui-sdk-candidate
@@ -115,7 +115,7 @@ jobs:
         run: scripts/test-gui-distribution.ps1
       - name: Packaged x64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -147,7 +147,7 @@ jobs:
           path: artifacts/desktop-gui/candidate
       - name: Cross-publish packaged ARM64 outputs
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -PublishOnly -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -177,7 +177,7 @@ jobs:
           path: artifacts/desktop-gui/candidate
       - name: Packaged ARM64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
@@ -211,12 +211,12 @@ jobs:
         shell: pwsh
         run: scripts/test-gui-macos-package.ps1
       - name: Hosted scheduler and lifecycle conformance
-        run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests|FullyQualifiedName~Parse_Compile_Hosted"
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj -c Release --filter "FullyQualifiedName~HostedInterpreterRuntimeTests|FullyQualifiedName~Parse_Compile_Hosted"
       - name: Renderer, diagnostics, and productization conformance
-        run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
+        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release
       - name: Native packaged SDK, CLI, Headless, and real-window gates
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -RealWindow -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -RealWindow -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
       - name: Validate and archive unsigned app bundle
         shell: pwsh
         run: >-

@@ -41,14 +41,14 @@ $projections = @(
     @{ Path = 'eng/GuiVersion.props'; Pattern = '<SharpTSGuiSdkVersion>[^<]+</SharpTSGuiSdkVersion>'; Replacement = "<SharpTSGuiSdkVersion>$version</SharpTSGuiSdkVersion>" },
     @{ Path = 'eng/GuiVersion.props'; Pattern = '<SharpTSGuiMarketingVersion>[^<]+</SharpTSGuiMarketingVersion>'; Replacement = "<SharpTSGuiMarketingVersion>$marketingVersion</SharpTSGuiMarketingVersion>" },
     @{ Path = 'Cli/GuiVersion.g.cs'; Pattern = 'internal const string Value = "[^"]+";'; Replacement = "internal const string Value = `"$version`";" },
-    @{ Path = 'SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
-    @{ Path = 'SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
-    @{ Path = 'SharpTS.Gui.Sdk/GuiPackage/package.json'; Pattern = '"version"\s*:\s*"[^"]+"'; Replacement = "`"version`": `"$version`"" },
-    @{ Path = 'Examples/Calculator/Calculator.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
-    @{ Path = 'Examples/Calculator/run-local.ps1'; Pattern = '\$sdkVersion\s*=\s*''[^'']+'''; Replacement = "`$sdkVersion = '$version'" }
+    @{ Path = 'src/SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
+    @{ Path = 'tests/fixtures/SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
+    @{ Path = 'src/SharpTS.Gui.Sdk/GuiPackage/package.json'; Pattern = '"version"\s*:\s*"[^"]+"'; Replacement = "`"version`": `"$version`"" },
+    @{ Path = 'samples/Calculator/Calculator.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
+    @{ Path = 'samples/Calculator/run-local.ps1'; Pattern = '\$sdkVersion\s*=\s*''[^'']+'''; Replacement = "`$sdkVersion = '$version'" }
 )
 if ($isReleaseStaging) {
-    $projections += @{ Path = 'SharpTS.Gui.Sdk/readme.md'; Pattern = 'SharpTS\.Gui\.Sdk::(?:<version>|[0-9A-Za-z][0-9A-Za-z.-]*)'; Replacement = "SharpTS.Gui.Sdk::$version" }
+    $projections += @{ Path = 'src/SharpTS.Gui.Sdk/readme.md'; Pattern = 'SharpTS\.Gui\.Sdk::(?:<version>|[0-9A-Za-z][0-9A-Za-z.-]*)'; Replacement = "SharpTS.Gui.Sdk::$version" }
 }
 
 foreach ($projection in $projections) {

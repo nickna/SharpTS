@@ -46,14 +46,14 @@ jobs:
 
       - name: Run benchmarks
         shell: pwsh
-        run: ./benchmarks/run-benchmarks.ps1
+        run: ./benchmarks/cross-runtime/run-benchmarks.ps1
 
       - name: Publish results to job summary
         shell: pwsh
         run: |
           $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results'
           "BENCH_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
-          ./benchmarks/format-results.ps1 `
+          ./benchmarks/cross-runtime/format-results.ps1 `
             -ResultsFile (Join-Path $resultsDir 'results.txt') `
             -DotNetVersion (dotnet --version) `
             -NodeVersion (node -v) `

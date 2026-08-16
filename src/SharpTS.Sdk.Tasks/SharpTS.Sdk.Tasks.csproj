@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- TargetFramework / Nullable / LangVersion inherited from Directory.Build.props. -->
+
+    <!-- This is an MSBuild tasks assembly, not a standalone app -->
+    <OutputType>Library</OutputType>
+
+    <!-- Opt out of the repo-wide ImplicitUsings: the implicit `global using
+         System.Threading.Tasks;` would make the unqualified `Task` base class
+         (Microsoft.Build.Utilities.Task) ambiguous in ReadTsConfigTask. -->
+    <ImplicitUsings>disable</ImplicitUsings>
+
+    <!-- Sign the assembly for use in MSBuild -->
+    <SignAssembly>false</SignAssembly>
+
+    <!-- Don't include as a separate NuGet package -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- MSBuild task framework -->
+    <PackageReference Include="Microsoft.Build.Framework" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!--
+      Single source of truth for the tsconfig.json JSON contract, owned by the main SharpTS
+      project. Source-linked rather than <ProjectReference>d on purpose: SharpTS.Sdk packs
+      SharpTS.Sdk.Tasks.dll as ONE loose file into build\ and loads it via
+      <UsingTask AssemblyFile=...>, so a second assembly on this project's reference graph
+      would also have to be packed there. Linking a single .cs keeps the contract shared with
+      zero packaging impact and keeps Microsoft.Build.* out of the SharpTS CLI.
+
+      Only the shared compiler-option subset is linked. The CLI-only members (extends, strictness,
+      include/exclude, [JsonExtensionData]) live in the sibling TsConfigJson.Cli.cs partial,
+      which is intentionally NOT linked.
+    -->
+    <Compile Include="..\SharpTS\Configuration\TsConfigJson.cs" Link="TsConfigJson.cs" />
+  </ItemGroup>
+</Project>

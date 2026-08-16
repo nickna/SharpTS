@@ -108,7 +108,7 @@ both locate `app.pdb` beside `app.dll` and open the `.ts` files it names.
 
 ## Manual smoke checklist
 
-`SharpTS.Tests/Compilation/DebugSymbolsTests.cs` asserts the symbol *metadata* thoroughly —
+`tests/SharpTS.Tests/Compilation/DebugSymbolsTests.cs` asserts the symbol *metadata* thoroughly —
 documents and checksums, sequence points and the lines they land on, named locals, lexical scope
 nesting, state-machine mappings, async suspension/resume records, generated-code attributes, and a
 CodeView identity that still matches after the reference rewriter. What no automated test covers is

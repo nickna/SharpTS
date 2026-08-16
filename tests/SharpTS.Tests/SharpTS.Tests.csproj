@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- TargetFramework / ImplicitUsings / Nullable inherited from Directory.Build.props. -->
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Server + Concurrent GC: the test workload is heavily multi-threaded (xUnit parallel
+         collections doing real CPU work after the in-process module port). Workstation GC
+         pauses every thread on every Gen0/Gen1 collection; server GC has per-core heaps and
+         scales much better. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+    <!-- VSTHRD002 (don't sync-block on tasks) flows in transitively from the
+         LanguageServer's OmniSharp dependency (vs-threading analyzers). The test
+         harness deliberately runs interpreter work on dedicated threads and compiler
+         work on tasks, then blocks with a hard timeout so hung guest code fails the
+         test instead of hanging the run; xUnit workers have no blocking
+         SynchronizationContext, so the deadlock this rule guards against cannot occur. -->
+    <NoWarn>$(NoWarn);VSTHRD002</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pre-warm the ThreadPool so xUnit doesn't pay thread-creation lag at the start of
+         each parallel batch. ProcessorCount worker threads is a sane floor on a 16-core box. -->
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MinThreads" Value="16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Microsoft.ILVerification" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="Xunit.SkippableFact" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\SharpTS\SharpTS.csproj" />
+    <ProjectReference Include="..\..\src\SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj" />
+    <ProjectReference Include="..\..\src\SharpTS.LanguageServer\SharpTS.LanguageServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

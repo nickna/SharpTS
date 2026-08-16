@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone Test262 conformance runner.
+    NOT included in SharpTS.sln: solution-level dotnet build and dotnet test
+    (what CI runs) does not pick it up. Invoke explicitly:
+        dotnet test tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj
+    Requires the Test262 submodule at external/test262/:
+        git submodule update init external/test262
+  -->
+
+  <PropertyGroup>
+    <!-- TargetFramework / ImplicitUsings / Nullable inherited from Directory.Build.props. -->
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Server GC: per-test compile + ALC unload churn benefits from per-core heaps and
+         concurrent collection vs. workstation GC's stop-the-world pauses. Pure-throughput
+         wins, no behavior change. -->
+    <ServerGarbageCollection>true</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>true</ConcurrentGarbageCollection>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Pre-warm the ThreadPool: avoids per-test thread-creation lag when xUnit
+         dispatches collections in parallel. -->
+    <RuntimeHostConfigurationOption Include="System.Threading.ThreadPool.MinThreads" Value="16" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\SharpTS\SharpTS.csproj" />
+    <!-- Build the worker subprocess before tests run so TryFindWorkerDll()
+         always succeeds. ReferenceOutputAssembly=false: we spawn it as a
+         child process, not a compile-time assembly reference. Without this,
+         a `dotnet clean` without rebuild silently re-activates the
+         crash-prone in-process collectible-ALC path (issue #964). -->
+    <ProjectReference Include="..\SharpTS.Test262.Worker\SharpTS.Test262.Worker.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

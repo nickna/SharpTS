@@ -147,6 +147,6 @@ and the consumer's dependency graph. Do not assume every failure means `SharpTS.
 - Exercise the compiled assembly from C# in integration tests; interpreter tests do not validate
   the emitted CLR surface.
 
-The complete runnable solution is in [`Examples/Interop`](../Examples/Interop/README.md). To call
+The complete runnable solution is in [`samples/Interop`](../samples/Interop/README.md). To call
 .NET libraries in the opposite direction—from TypeScript—use
 [.NET types from TypeScript](dotnet-types.md).

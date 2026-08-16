@@ -72,15 +72,15 @@ jobs:
         run: dotnet build --no-restore --configuration Release
 
       # The conformance harnesses live outside SharpTS.sln (running them needs the
-      # external/ submodules, absent here), but each references SharpTS.csproj — so
+      # external/ submodules, absent here), but each references src/SharpTS/SharpTS.csproj — so
       # compile them to catch API rot that would otherwise only surface when someone
       # runs them manually.
       - name: Build conformance harnesses (compile-only)
         shell: bash
         run: |
-          dotnet build SharpTS.Test262/SharpTS.Test262.csproj --configuration Release
-          dotnet build SharpTS.Test262.Worker/SharpTS.Test262.Worker.csproj --configuration Release
-          dotnet build SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj --configuration Release
+          dotnet build tests/conformance/SharpTS.Test262/SharpTS.Test262.csproj --configuration Release
+          dotnet build tests/conformance/SharpTS.Test262.Worker/SharpTS.Test262.Worker.csproj --configuration Release
+          dotnet build tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj --configuration Release
 
       # Category!=LiveNetwork excludes the opt-in tests that make real outbound
       # DNS/HTTP calls (tagged [Trait("Category","LiveNetwork")]); those depend on
@@ -99,11 +99,11 @@ jobs:
       # LiveNetwork; the host-literal guardrail can't see package-name installs.
       # Run them on demand locally: dotnet test --filter "Category=npm"
       - name: Test core
-        run: dotnet test SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+        run: dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
       - name: Test GUI conformance
-        run: dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
+        run: dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj --no-build --configuration Release --verbosity normal --filter "Category!=LiveNetwork&Category!=LoadSensitive&Category!=npm"
         timeout-minutes: 10
 
       - name: Test NuGet release helper
@@ -121,7 +121,7 @@ jobs:
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
 
-  # AOT-compatibility ratchet (#1324 Track 0). Builds SharpTS.csproj with the
+  # AOT-compatibility ratchet (#1324 Track 0). Builds src/SharpTS/SharpTS.csproj with the
   # AOT/trim/single-file analyzers compare the distinct IL#### inventory against
   # .github/aot-warning-baseline.json. The structured baseline pins total,
   # per-code, per-area, and per-file/code counts, so replacing a fixed warning
@@ -181,19 +181,19 @@ jobs:
       # compiled.
       - name: Build managed runtime payload
         run: |
-          dotnet publish SharpTS.csproj --configuration Release \
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release \
             -p:PlatformTarget=AnyCPU \
             -p:DebugType=None \
             -p:DebugSymbols=false \
             -o artifacts/managed-runtime
 
       # TrimMode/IlcTrimMetadata/IlcGenerateCompleteTypeMetadata/StackTraceSupport
-      # are owned by SharpTS.csproj behind PublishAot=true so local publishes get
+      # are owned by src/SharpTS/SharpTS.csproj behind PublishAot=true so local publishes get
       # the same mandatory configuration as CI.
       - name: Publish Native AOT SharpTS
         run: |
           set -o pipefail
-          dotnet publish SharpTS.csproj --configuration Release -r linux-x64 \
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release -r linux-x64 \
             -p:PublishAot=true \
             -p:DebugType=None \
             -p:DebugSymbols=false \
@@ -219,7 +219,7 @@ jobs:
           native="$PWD/artifacts/native-aot/SharpTS"
           scratch="$(mktemp -d)"
 
-          if "$native" --compile Examples/AotCompileGate/main.ts --target dll --hosted \
+          if "$native" --compile samples/AotCompileGate/main.ts --target dll --hosted \
               -o "$scratch/hosted.dll" > "$scratch/hosted-error.txt" 2>&1; then
             echo "Native AOT compiler unexpectedly accepted --hosted" >&2
             exit 1
@@ -228,14 +228,14 @@ jobs:
             "$scratch/hosted-error.txt"
           test ! -e "$scratch/hosted.dll"
 
-          "$native" Examples/AotCompileGate/main.ts > "$scratch/interpreted.txt"
+          "$native" samples/AotCompileGate/main.ts > "$scratch/interpreted.txt"
           grep -qx '42' "$scratch/interpreted.txt"
 
           # An empty DOTNET_ROOT proves reference rewriting uses PE-Packer's embedded
           # net10 index rather than an installed reference pack.
           empty_dotnet_root="$(mktemp -d)"
           DOTNET_ROOT="$empty_dotnet_root" "$native" --compile \
-            Examples/AotCompileGate/main.ts --ref-asm -o "$scratch/modules.dll"
+            samples/AotCompileGate/main.ts --ref-asm -o "$scratch/modules.dll"
           dotnet "$scratch/modules.dll" > "$scratch/modules.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/modules.txt"
 
@@ -244,7 +244,7 @@ jobs:
           # The generic class/array/Promise<UserClass> section closes runtime open
           # generics over TypeBuilder args, forcing the TypeBuilderInstantiation
           # fallback — without it, only the async path's fallback ever executes.
-          "$native" --compile Examples/AotCompileGate/features.ts --ref-asm \
+          "$native" --compile samples/AotCompileGate/features.ts --ref-asm \
             -o "$scratch/features.dll"
           dotnet "$scratch/features.dll" > "$scratch/features.txt"
           grep -qx '2 2 33 7 11 0 prototype async generator' "$scratch/features.txt"
@@ -252,7 +252,7 @@ jobs:
           # Known CLR attribute mappings use closed constructor metadata and remain
           # available in the native compiler; only arbitrary @attribute("Type")
           # discovery belongs to the managed interop boundary.
-          "$native" --compile Examples/AotCompileGate/known-attribute.ts \
+          "$native" --compile samples/AotCompileGate/known-attribute.ts \
             --experimentalDecorators --ref-asm -o "$scratch/known-attribute.dll"
           dotnet "$scratch/known-attribute.dll" > "$scratch/known-attribute.txt"
           grep -qx 'true' "$scratch/known-attribute.txt"
@@ -261,7 +261,7 @@ jobs:
           # Running eval proves this is a usable managed payload, not merely a
           # resource/copy assertion.
           mkdir "$scratch/softdep"
-          "$native" --compile Examples/AotCompileGate/softdep.ts --ref-asm \
+          "$native" --compile samples/AotCompileGate/softdep.ts --ref-asm \
             -o "$scratch/softdep/softdep.dll"
           test -f "$scratch/softdep/SharpTS.dll" || {
             echo "dynamic eval compile did not extract SharpTS.dll" >&2
@@ -272,7 +272,7 @@ jobs:
 
           # fork needs a second compiler process and is deliberately absent from
           # the native SKU. Fail before writing a misleading output assembly.
-          if "$native" --compile Examples/AotCompileGate/fork.ts \
+          if "$native" --compile samples/AotCompileGate/fork.ts \
               -o "$scratch/fork.dll" 2> "$scratch/fork-error.txt"; then
             echo "child_process.fork unexpectedly compiled under Native AOT"
             exit 1
@@ -282,7 +282,7 @@ jobs:
           test ! -f "$scratch/fork.dll"
 
           # Managed-only public boundaries must fail before their reflection/loader paths.
-          if "$native" Examples/AotCompileGate/main.ts \
+          if "$native" samples/AotCompileGate/main.ts \
               -r "$PWD/artifacts/managed-runtime/SharpTS.dll" \
               > "$scratch/reference-error.txt" 2>&1; then
             echo "third-party reference loading unexpectedly ran under Native AOT"
@@ -294,15 +294,15 @@ jobs:
           # The official native SKU exposes a curated, linker-rooted BCL catalog
           # through both execution paths. The universe remains closed: an import
           # outside that catalog must fail before arbitrary reflection.
-          "$native" Examples/AotCompileGate/dotnet-interop.ts \
+          "$native" samples/AotCompileGate/dotnet-interop.ts \
             > "$scratch/dotnet-interop.txt"
           grep -qx 'native-dotnet-42' "$scratch/dotnet-interop.txt"
-          "$native" --compile Examples/AotCompileGate/dotnet-interop.ts --ref-asm \
+          "$native" --compile samples/AotCompileGate/dotnet-interop.ts --ref-asm \
             -o "$scratch/dotnet-interop.dll"
           dotnet "$scratch/dotnet-interop.dll" > "$scratch/dotnet-interop-compiled.txt"
           diff -u "$scratch/dotnet-interop.txt" "$scratch/dotnet-interop-compiled.txt"
 
-          if "$native" Examples/AotCompileGate/dotnet-interop-unknown.ts \
+          if "$native" samples/AotCompileGate/dotnet-interop-unknown.ts \
               > "$scratch/dotnet-interop-error.txt" 2>&1; then
             echo "an unregistered .NET type unexpectedly ran under Native AOT"
             exit 1
@@ -318,7 +318,7 @@ jobs:
           bash scripts/assert-managed-build-required.sh \
             "$scratch/gen-decl-error.txt" '--gen-decl'
 
-          if "$native" --compile Examples/AotCompileGate/main.ts --verify \
+          if "$native" --compile samples/AotCompileGate/main.ts --verify \
               -o "$scratch/verify.dll" \
               > "$scratch/verify-error.txt" 2>&1; then
             echo "IL verification unexpectedly ran under Native AOT"
@@ -332,7 +332,7 @@ jobs:
           # The same empty DOTNET_ROOT used above also proves executable creation
           # comes from PE-Packer's embedded apphost rather than the runner's SDK.
           DOTNET_ROOT="$empty_dotnet_root" "$native" --compile \
-            Examples/AotCompileGate/main.ts -t exe \
+            samples/AotCompileGate/main.ts -t exe \
             -o "$scratch/modules"
           "$scratch/modules" > "$scratch/bundled.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/bundled.txt"
@@ -343,7 +343,7 @@ jobs:
       - name: Drive Examples corpus from the native host
         shell: pwsh
         run: |
-          ./Examples/test-examples.ps1 `
+          ./samples/test-examples.ps1 `
             -SharpTSExe "$PWD/artifacts/native-aot/SharpTS" `
             -NativeSku `
             -Mode all `
@@ -355,18 +355,18 @@ jobs:
         run: |
           set -euo pipefail
           scratch="$(mktemp -d)"
-          dotnet publish Examples/NativeInteropHost/NativeInteropHost.csproj \
+          dotnet publish samples/NativeInteropHost/NativeInteropHost.csproj \
             --configuration Release -r linux-x64 \
             -o "$scratch/host"
           "$scratch/host/NativeInteropHost" \
-            Examples/NativeInteropHost/custom-interop.ts > "$scratch/interpreted.txt"
+            samples/NativeInteropHost/custom-interop.ts > "$scratch/interpreted.txt"
           grep -qx 'changed' "$scratch/interpreted.txt"
           grep -qx '42 42 counter' "$scratch/interpreted.txt"
           grep -qx '3' "$scratch/interpreted.txt"
 
           mkdir "$scratch/output"
           "$scratch/host/NativeInteropHost" --compile \
-            Examples/NativeInteropHost/custom-interop.ts --ref-asm \
+            samples/NativeInteropHost/custom-interop.ts --ref-asm \
             -o "$scratch/output/custom.dll"
           test -f "$scratch/output/NativeInteropExample.dll"
           test ! -f "$scratch/output/System.Runtime.dll"

@@ -6,7 +6,7 @@ This is the user API reference. Implementation location and capability status be
 from an internal class with a similar name.
 
 The reference is aligned with the embedded TypeScript declarations, `BuiltInModuleTypes`, and the
-dual-mode tests under `SharpTS.Tests/SharedTests/BuiltInModules`.
+dual-mode tests under `tests/SharpTS.Tests/SharedTests/BuiltInModules`.
 
 ## Imports and conventions
 

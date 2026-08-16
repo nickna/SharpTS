@@ -57,8 +57,8 @@ return SharpTSCli.Run(
 ```
 
 The generated catalog roots constructors, methods, properties, fields, events, and declared
-closed generics. See [`Examples/NativeInteropHost`](../Examples/NativeInteropHost/README.md) and
-the [`SharpTS.Hosting` package guide](../SharpTS.Hosting/README.md) for a complete project.
+closed generics. See [`samples/NativeInteropHost`](../samples/NativeInteropHost/README.md) and
+the [`SharpTS.Hosting` package guide](../src/SharpTS.Hosting/README.md) for a complete project.
 
 ## Operational guidance
 

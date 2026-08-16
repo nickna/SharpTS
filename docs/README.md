@@ -8,7 +8,7 @@ known gaps, use [STATUS.md](../STATUS.md).
 
 - [Execution modes and CLI](execution-modes.md) — interpret, compile, type-check projects, emit
   declarations, debug, inspect timings, and choose deployment output
-- [Runnable examples](../Examples/README.md) — the canonical cookbook, including modules, npm,
+- [Runnable examples](../samples/README.md) — the canonical cookbook, including modules, npm,
   interop, GUI, and hosting examples
 - [npm compatibility](npm-compatibility.md) — the currently tested real-package matrix and how to
   run it
@@ -22,14 +22,14 @@ known gaps, use [STATUS.md](../STATUS.md).
   delegates, events, exceptions, and deployment boundaries
 - [Embedding SharpTS](embedding.md) — managed compilation and bounded source-execution APIs
 - [Native AOT](native-aot.md) — native binaries, the closed interop catalog, and custom hosts
-- [`SharpTS.Hosting`](../SharpTS.Hosting/README.md) — package-level Native AOT host setup
+- [`SharpTS.Hosting`](../src/SharpTS.Hosting/README.md) — package-level Native AOT host setup
 
 ## Node and JavaScript APIs
 
 - [Node built-in API reference](node-modules-api.md) — supported user-facing module exports
 - [Node capability status](../STATUS.md#4-nodejs-built-in-modules) — implementation breadth,
   deviations, and current gaps
-- [Embedded standard-library contribution guide](../stdlib/CONTRIBUTING.md) — maintaining the
+- [Embedded standard-library contribution guide](../src/SharpTS/stdlib/CONTRIBUTING.md) — maintaining the
   TypeScript implementations shipped inside SharpTS
 
 ## Desktop GUI
@@ -47,8 +47,8 @@ known gaps, use [STATUS.md](../STATUS.md).
 
 - [Debug compiled TypeScript](debugging-typescript.md)
 - [Language server](language-server.md)
-- [External benchmark harness](../benchmarks/README.md)
-- [Managed microbenchmarks](../SharpTS.Microbenchmarks/README.md)
+- [External benchmark harness](../benchmarks/cross-runtime/README.md)
+- [Managed microbenchmarks](../benchmarks/micro/SharpTS.Microbenchmarks/README.md)
 
 ## Contributor and maintainer material
 
@@ -56,11 +56,11 @@ known gaps, use [STATUS.md](../STATUS.md).
 - [Architecture](../ARCHITECTURE.md)
 - [Claude Code operating notes](../CLAUDE.md)
 - [Release operations](releasing.md) and [release incident history](release-incidents.md)
-- [Test262 runner](../SharpTS.Test262/README.md)
-- [TypeScript conformance runner](../SharpTS.TypeScriptConformance/README.md)
-- [TypeScript declaration resources](../Modules/TypeScriptLibResources/README.md)
-- [GUI SDK package README](../SharpTS.Gui.Sdk/readme.md)
-- [Core MSBuild SDK package README](../SharpTS.Sdk/readme.md)
+- [Test262 runner](../tests/conformance/SharpTS.Test262/README.md)
+- [TypeScript conformance runner](../tests/conformance/SharpTS.TypeScriptConformance/README.md)
+- [TypeScript declaration resources](../src/SharpTS/Modules/TypeScriptLibResources/README.md)
+- [GUI SDK package README](../src/SharpTS.Gui.Sdk/readme.md)
+- [Core MSBuild SDK package README](../src/SharpTS.Sdk/readme.md)
 
 ### Design and planning records
 

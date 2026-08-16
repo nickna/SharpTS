@@ -17,13 +17,13 @@ dotnet run -- --compile script.ts --verify
 ```
 
 The Test262 and TypeScript-conformance projects are not part of the solution-level test run. Follow
-[`SharpTS.Test262/README.md`](SharpTS.Test262/README.md) and
-[`SharpTS.TypeScriptConformance/README.md`](SharpTS.TypeScriptConformance/README.md) when a change
+[`tests/conformance/SharpTS.Test262/README.md`](tests/conformance/SharpTS.Test262/README.md) and
+[`tests/conformance/SharpTS.TypeScriptConformance/README.md`](tests/conformance/SharpTS.TypeScriptConformance/README.md) when a change
 affects their domains.
 
 ## Working rules
 
-- Add normal language/library behavior tests to `SharpTS.Tests/SharedTests` so interpreter and
+- Add normal language/library behavior tests to `tests/SharpTS.Tests/SharedTests` so interpreter and
   compiled modes both run. Use backend-only data only for a documented backend boundary.
 - When adding an AST node, update the explicit node catalog and every applicable parser/checker/
   interpreter/emitter dispatch site; registry tests name omissions.
@@ -36,10 +36,10 @@ affects their domains.
 - Preserve structured diagnostics in core services; console formatting and exit codes belong in
   the CLI.
 - Keep embedded Node module declarations, interpreter values, compiled emitters, and dual-mode
-  tests synchronized. Follow [`stdlib/CONTRIBUTING.md`](stdlib/CONTRIBUTING.md).
+  tests synchronized. Follow [`src/SharpTS/stdlib/CONTRIBUTING.md`](src/SharpTS/stdlib/CONTRIBUTING.md).
 - Benchmark changes with the harness appropriate to the question; see
-  [`benchmarks/README.md`](benchmarks/README.md) and
-  [`SharpTS.Microbenchmarks/README.md`](SharpTS.Microbenchmarks/README.md).
+  [`benchmarks/cross-runtime/README.md`](benchmarks/cross-runtime/README.md) and
+  [`benchmarks/micro/SharpTS.Microbenchmarks/README.md`](benchmarks/micro/SharpTS.Microbenchmarks/README.md).
 
 Before handing off a change, run the narrow relevant tests, `git diff --check`, and inspect the
 worktree for generated or unrelated edits.

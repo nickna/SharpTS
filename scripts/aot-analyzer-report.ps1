@@ -1,5 +1,5 @@
 param(
-    [string]$ProjectPath = "SharpTS.csproj",
+    [string]$ProjectPath = "src/SharpTS/SharpTS.csproj",
     [string]$LogPath = "aot-analyzer.log",
     [string]$SummaryPath = "aot-analyzer-summary.json",
     [string]$BaselinePath = ".github/aot-warning-baseline.json",

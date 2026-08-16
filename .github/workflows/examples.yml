@@ -1,6 +1,6 @@
 name: Examples
 
-# The Examples/ showcase has zero automated coverage otherwise — a broken flagship
+# The samples/ showcase has zero automated coverage otherwise — a broken flagship
 # example is a first-impression bug. Manual trigger only (the harness runs every
 # example end-to-end, which is too slow and too network-adjacent for every push).
 on:
@@ -29,8 +29,8 @@ jobs:
         with:
           global-json-file: global.json
       - name: Build (Release)
-        run: dotnet build SharpTS.csproj --configuration Release
+        run: dotnet build src/SharpTS/SharpTS.csproj --configuration Release
 
       - name: Run examples
         shell: pwsh
-        run: ./Examples/test-examples.ps1 -Mode ${{ inputs.mode || 'interpreted' }}
+        run: ./samples/test-examples.ps1 -Mode ${{ inputs.mode || 'interpreted' }}

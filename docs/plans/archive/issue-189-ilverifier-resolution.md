@@ -61,7 +61,7 @@ universe — this is exactly the spike's 0-error reference implementation,
      "Cannot verify IL - SDK reference assemblies not found" early-return —
      the runtime dir always exists.
 
-3. **`SharpTS.Tests/Infrastructure/TestHarness.cs` (`VerifyIL`, ~line 1103)**
+3. **`tests/SharpTS.Tests/Infrastructure/TestHarness.cs` (`VerifyIL`, ~line 1103)**
    - Drop the `FindReferenceAssembliesPath()` lookup + throw; construct
      `ILVerifier()` with no SDK path.
 
@@ -96,7 +96,7 @@ universe — this is exactly the spike's 0-error reference implementation,
   passed.", and the DLL still runs (`[2, 4, 6]`). Explicit `--sdk-path`
   re-checked and still passes.
 - Bonus: the `KnownRuntimeErrors` allowlist in
-  `SharpTS.Tests/CompilerTests/ILVerificationTests.cs` (URL/CookieJar/Headers/
+  `tests/SharpTS.Tests/CompilerTests/ILVerificationTests.cs` (URL/CookieJar/Headers/
   Web Streams "known IL errors") was entirely an artifact of the same mixed
   resolution universe — removed, and all IL-verification tests now assert
   zero errors unfiltered.

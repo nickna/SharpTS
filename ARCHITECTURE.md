@@ -4,6 +4,17 @@ SharpTS is one TypeScript front end with two execution backends: a tree-walking 
 .NET IL compiler. This document records stable subsystem boundaries, data flow, and invariants.
 Per-file catalogs and current feature coverage belong in source, tests, and [STATUS.md](STATUS.md).
 
+## Repository layout
+
+- `src/` contains shipping projects and the bounded `src/SharpTS/` core source tree.
+- `tests/` contains the normal unit suite, opt-in external-corpus conformance harnesses,
+  GUI conformance infrastructure, and packaging fixtures.
+- `benchmarks/cross-runtime/` and `benchmarks/micro/` remain separate because they measure
+  cross-engine workloads and BenchmarkDotNet microbenchmarks respectively.
+- `samples/` contains runnable applications and scripts; `extensions/` contains editor integrations.
+- Repository infrastructure stays at the root under `.github/`, `docs/`, `scripts/`, `eng/`,
+  `distribution/`, and `external/`.
+
 ## System data flow
 
 ```text
@@ -30,7 +41,7 @@ they are not interpreter features.
 
 | Subsystem | Responsibility | Must not own |
 | --- | --- | --- |
-| `Parsing/` | Tokens, source locations, AST records, TypeScript/TSX grammar, syntactic lowering | Runtime values or CLR emission |
+| `src/SharpTS/Parsing/` | Tokens, source locations, AST records, TypeScript/TSX grammar, syntactic lowering | Runtime values or CLR emission |
 | `TypeSystem/` | `TypeInfo`, environments, checking, compatibility, narrowing, built-in module type surfaces | Executing guest effects |
 | `Configuration/`, `Projects/` | `tsconfig` discovery/merge, roots, references, build/watch/incremental state | Backend semantics |
 | `Modules/` | Module/package resolution, declarations, embedded stdlib provider chain, module graph | User-visible execution policy |
@@ -80,13 +91,13 @@ declarations, and external references. A provider chain resolves:
 
 1. source files and npm packages;
 2. embedded npm fallbacks such as the JSX runtime;
-3. embedded TypeScript implementations under `stdlib/`;
+3. embedded TypeScript implementations under `src/SharpTS/stdlib/`;
 4. internal `primitive:` host seams used only by the embedded standard library; and
 5. C#/IL-backed built-in modules.
 
 User code imports only public specifiers. `primitive:` modules are private implementation seams.
 The user-facing declaration, interpreter export, and compiled emitter for a built-in must describe
-the same surface. See [`stdlib/CONTRIBUTING.md`](stdlib/CONTRIBUTING.md).
+the same surface. See [`src/SharpTS/stdlib/CONTRIBUTING.md`](src/SharpTS/stdlib/CONTRIBUTING.md).
 
 ## Interpreter architecture
 
@@ -212,4 +223,4 @@ Changes should preserve these rules:
 - [Implementation status](STATUS.md)
 - [Execution modes](docs/execution-modes.md)
 - [MSBuild SDK](docs/msbuild-sdk.md)
-- [Benchmark methodology](benchmarks/README.md)
+- [Benchmark methodology](benchmarks/cross-runtime/README.md)

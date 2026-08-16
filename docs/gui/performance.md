@@ -10,13 +10,13 @@ allocations, and input-to-render latency. Direct Avalonia construction and the s
 Run a Release baseline from the repository root:
 
 ```powershell
-dotnet run -c Release --project SharpTS.Gui.Benchmarks -- --exporters JSON CSV GitHub
+dotnet run -c Release --project benchmarks/micro/SharpTS.Gui.Benchmarks -- --exporters JSON CSV GitHub
 ```
 
 Verify the generated CSV against the versioned timing and allocation limits:
 
 ```powershell
-./SharpTS.Gui.Benchmarks/Verify-PerformanceBudgets.ps1
+./benchmarks/micro/SharpTS.Gui.Benchmarks/Verify-PerformanceBudgets.ps1
 ```
 
 BenchmarkDotNet results are sensitive to hardware, runtime, power state, and machine load. Record
@@ -30,7 +30,7 @@ mounts, updates, and disposes 1,000 roots, then verifies that roots, native cont
 targets, refs, and subscriptions are released:
 
 ```powershell
-dotnet test SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release `
+dotnet test tests/gui-conformance/SharpTS.Gui.Conformance.Tests/SharpTS.Gui.Conformance.Tests.csproj -c Release `
   --filter "FullyQualifiedName~ThousandMountUpdateUnmountCyclesReleaseRootsControlsCallbacksRefsAndSubscriptions"
 ```
 
@@ -39,7 +39,7 @@ fail deterministically without depending on shared-runner timing.
 
 ## Release budgets
 
-`SharpTS.Gui.Benchmarks/PerformanceBudgets.json` is the release budget contract. It limits mean
+`benchmarks/micro/SharpTS.Gui.Benchmarks/PerformanceBudgets.json` is the release budget contract. It limits mean
 time and managed allocation for initial mount, scalar and batched updates, keyed reconciliation,
 and input-to-render latency. The keyed timing limit corresponds to a minimum throughput of about
 1,428 complete insert/move/remove cycles per second. The verifier reads BenchmarkDotNet CSV output

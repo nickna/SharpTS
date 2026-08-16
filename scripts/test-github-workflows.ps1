@@ -74,7 +74,7 @@ foreach ($forbiddenText in @(
     'windows-desktop-preview',
     'macos-desktop-preview',
     'self-hosted',
-    'Hosted scheduler and lifecycle conformance`n        run: dotnet test SharpTS.Tests'
+    'Hosted scheduler and lifecycle conformance`n        run: dotnet test tests/SharpTS.Tests'
 )) {
     if ($desktop.Contains($forbiddenText, [StringComparison]::Ordinal)) {
         $errors.Add("desktop-gui.yml retains duplicated or obsolete text: $forbiddenText")
@@ -84,12 +84,12 @@ $windowsJobStart = $desktop.IndexOf('  windows-x64:', [StringComparison]::Ordina
 $windowsJobEnd = $desktop.IndexOf('  windows-arm64-cross-publish:', [StringComparison]::Ordinal)
 $windowsJob = $desktop.Substring($windowsJobStart, $windowsJobEnd - $windowsJobStart)
 if ($windowsJob -match 'FullyQualifiedName~HostedInterpreterRuntimeTests' -or
-    $windowsJob -match 'dotnet test SharpTS\.Gui\.Conformance\.Tests') {
+    $windowsJob -match 'dotnet test tests/gui-conformance/SharpTS\.Gui\.Conformance\.Tests') {
     $errors.Add('desktop-gui.yml duplicates Windows tests already executed by CI.')
 }
 
 $scopeScript = Join-Path $repositoryRoot 'scripts\get-desktop-gui-ci-scope.ps1'
-$commonScope = & $scopeScript -ChangedPath 'SharpTS.Gui/runtime.ts'
+$commonScope = & $scopeScript -ChangedPath 'src/SharpTS.Gui/runtime.ts'
 $windowsScope = & $scopeScript -ChangedPath 'distribution/windows/AppxManifest.xml'
 $macScope = & $scopeScript -ChangedPath 'distribution/macos/Entitlements.plist'
 $irrelevantScope = & $scopeScript -ChangedPath 'docs/README.md'

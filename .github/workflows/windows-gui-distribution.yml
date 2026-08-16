@@ -38,7 +38,7 @@ jobs:
 
       - name: Build and execute warning-clean x64 Native AOT candidate
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -NativeAot -EnforcePerformanceBudgets
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -NativeAot -EnforcePerformanceBudgets
 
       - name: Stage reusable distribution input
         shell: pwsh

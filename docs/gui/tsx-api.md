@@ -192,4 +192,4 @@ Typed item templates, a windowed virtual grid, native list/tree hosts, rich text
 resources, class/type selectors, styles, theme variants, and resource lookup are supported.
 Multi-window orchestration is available through `createDesktopApplication`. Incompatible GUI API
 and descriptor contracts fail before payload loading. The complete proof application is in
-`Examples/Calculator`.
+`samples/Calculator`.

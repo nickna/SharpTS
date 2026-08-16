@@ -38,7 +38,7 @@ jobs:
 
       - name: Build and execute the native candidate
         shell: pwsh
-        run: SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -RealWindow
+        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier osx-arm64 -RealWindow
 
       - name: Stage reusable distribution input
         shell: pwsh

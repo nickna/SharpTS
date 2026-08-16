@@ -9,12 +9,12 @@ $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "sharpts-gui-version-$([guid
 $projectionFiles = @(
     'eng/GuiVersion.props',
     'Cli/GuiVersion.g.cs',
-    'SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj',
-    'SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj',
-    'SharpTS.Gui.Sdk/GuiPackage/package.json',
-    'SharpTS.Gui.Sdk/readme.md',
-    'Examples/Calculator/Calculator.csproj',
-    'Examples/Calculator/run-local.ps1'
+    'src/SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj',
+    'tests/fixtures/SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj',
+    'src/SharpTS.Gui.Sdk/GuiPackage/package.json',
+    'src/SharpTS.Gui.Sdk/readme.md',
+    'samples/Calculator/Calculator.csproj',
+    'samples/Calculator/run-local.ps1'
 )
 
 try {
@@ -31,12 +31,12 @@ try {
     $expectedText = @{
         'eng/GuiVersion.props' = @($version, '<SharpTSGuiMarketingVersion>9.8.7</SharpTSGuiMarketingVersion>')
         'Cli/GuiVersion.g.cs' = @("Value = `"$version`"")
-        'SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj' = @("SharpTS.Gui.Sdk/$version")
-        'SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj' = @("SharpTS.Gui.Sdk/$version")
-        'SharpTS.Gui.Sdk/GuiPackage/package.json' = @("`"version`": `"$version`"")
-        'SharpTS.Gui.Sdk/readme.md' = @("SharpTS.Gui.Sdk::$version")
-        'Examples/Calculator/Calculator.csproj' = @("SharpTS.Gui.Sdk/$version")
-        'Examples/Calculator/run-local.ps1' = @("`$sdkVersion = '$version'")
+        'src/SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj' = @("SharpTS.Gui.Sdk/$version")
+        'tests/fixtures/SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj' = @("SharpTS.Gui.Sdk/$version")
+        'src/SharpTS.Gui.Sdk/GuiPackage/package.json' = @("`"version`": `"$version`"")
+        'src/SharpTS.Gui.Sdk/readme.md' = @("SharpTS.Gui.Sdk::$version")
+        'samples/Calculator/Calculator.csproj' = @("SharpTS.Gui.Sdk/$version")
+        'samples/Calculator/run-local.ps1' = @("`$sdkVersion = '$version'")
     }
     foreach ($relativePath in $expectedText.Keys) {
         $content = Get-Content -LiteralPath (Join-Path $fixtureRoot $relativePath) -Raw

@@ -83,9 +83,9 @@ Modules absent from the maintained surface include `module`, `v8`, `http2`,
 `diagnostics_channel`, and `node:test`. Per-export signatures and examples are in the
 [Node API guide](docs/node-modules-api.md).
 
-Several user-facing modules are TypeScript sources embedded from `stdlib/node`; host I/O remains
+Several user-facing modules are TypeScript sources embedded from `src/SharpTS/stdlib/node`; host I/O remains
 behind narrow primitives or C#/IL implementations. The provider chain and contribution rules are
-documented in [`stdlib/CONTRIBUTING.md`](stdlib/CONTRIBUTING.md).
+documented in [`src/SharpTS/stdlib/CONTRIBUTING.md`](src/SharpTS/stdlib/CONTRIBUTING.md).
 
 ## 5. .NET integration and hosting
 
@@ -138,7 +138,7 @@ implementation for the other. Any disagreement can identify a bug in either back
 interpreter parity effort is recorded in [#1279](https://github.com/nickna/SharpTS/issues/1279);
 ongoing harness and coverage work is tracked in
 [#1280](https://github.com/nickna/SharpTS/issues/1280). See the
-[Test262 runner guide](SharpTS.Test262/README.md).
+[Test262 runner guide](tests/conformance/SharpTS.Test262/README.md).
 
 ### TypeScript conformance
 
@@ -146,13 +146,13 @@ The pinned TypeScript 6.0.3 subset contains 514 entries: 151 `Pass`, 214 `Fail`,
 `ParseError`, and 8 `Skipped`. That is 29.38% of all selected entries or 29.84% excluding skips.
 The result is subset-relative, not whole-language coverage. Work and corpus growth are tracked on
 [#1281](https://github.com/nickna/SharpTS/issues/1281); see the
-[runner guide](SharpTS.TypeScriptConformance/README.md).
+[runner guide](tests/conformance/SharpTS.TypeScriptConformance/README.md).
 
 ## 8. Performance
 
 SharpTS maintains two complementary suites: an external whole-program comparison against Node/Bun
 and managed BenchmarkDotNet microbenchmarks against C# ceilings. Current measurements and exact
-reproduction commands live in [`benchmarks/README.md`](benchmarks/README.md); this status page does
+reproduction commands live in [`benchmarks/cross-runtime/README.md`](benchmarks/cross-runtime/README.md); this status page does
 not freeze historical benchmark magnitudes.
 
 ## 9. Current known gaps

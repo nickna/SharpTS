@@ -88,25 +88,25 @@ jobs:
         run: ./scripts/test-nuget-release.ps1
 
       - name: Publish SharpTS for SDK bundling
-        run: dotnet publish SharpTS.csproj --configuration Release --no-build
+        run: dotnet publish src/SharpTS/SharpTS.csproj --configuration Release --no-build
 
       - name: Publish Windows GUI host payload
-        run: dotnet publish SharpTS.Gui.Host/SharpTS.Gui.Host.csproj --configuration Release --self-contained false --no-build
+        run: dotnet publish src/SharpTS.Gui.Host/SharpTS.Gui.Host.csproj --configuration Release --self-contained false --no-build
 
       - name: Publish Windows GUI AOT host payload
         run: >-
-          dotnet publish SharpTS.Gui.Host/SharpTS.Gui.Host.csproj
+          dotnet publish src/SharpTS.Gui.Host/SharpTS.Gui.Host.csproj
           --configuration Release
           --self-contained false
           --no-restore
           -p:SharpTSGuiHostLibrary=true
-          -o SharpTS.Gui.Host/bin/Release/net10.0/aot-publish
+          -o src/SharpTS.Gui.Host/bin/Release/net10.0/aot-publish
 
       - name: Verify SDK dependencies exist
         run: |
           echo "Checking SDK package dependencies..."
-          test -f "SharpTS.Sdk.Tasks/bin/Release/net10.0/SharpTS.Sdk.Tasks.dll" || { echo "❌ Tasks.dll not found"; exit 1; }
-          test -d "bin/Release/net10.0/publish" || { echo "❌ Publish directory not found"; exit 1; }
+          test -f "src/SharpTS.Sdk.Tasks/bin/Release/net10.0/SharpTS.Sdk.Tasks.dll" || { echo "❌ Tasks.dll not found"; exit 1; }
+          test -d "src/SharpTS/bin/Release/net10.0/publish" || { echo "❌ Publish directory not found"; exit 1; }
           echo "✓ All SDK dependencies found"
 
       - name: Pack packages
@@ -126,7 +126,7 @@ jobs:
       - name: Audit tagged GUI SDK package
         shell: pwsh
         run: >-
-          ./SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1
+          ./tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1
           -CandidatePackage "./nupkg/SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg"
           -PackageVersion "${{ steps.version.outputs.VERSION }}"
           -PackageOnly
@@ -211,7 +211,7 @@ jobs:
       - name: Publish self-contained single-file
         shell: bash
         run: |
-          dotnet publish SharpTS.csproj --configuration Release \
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release \
             -r ${{ matrix.rid }} --self-contained \
             -p:PublishSingleFile=true \
             -p:IncludeAllContentForSelfExtract=true \
@@ -333,7 +333,7 @@ jobs:
       - name: Build managed runtime payload
         shell: bash
         run: |
-          dotnet publish SharpTS.csproj --configuration Release \
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release \
             -p:PlatformTarget=AnyCPU \
             -p:DebugType=None \
             -p:DebugSymbols=false \
@@ -341,14 +341,14 @@ jobs:
             -o ./sku/managed-runtime
 
       # The mandatory Native AOT metadata properties (TrimMode, IlcTrimMetadata,
-      # IlcGenerateCompleteTypeMetadata, StackTraceSupport) live in SharpTS.csproj
+      # IlcGenerateCompleteTypeMetadata, StackTraceSupport) live in src/SharpTS/SharpTS.csproj
       # behind PublishAot=true — a local `dotnet publish -p:PublishAot=true` gets
       # the same working configuration as CI.
       - name: Publish Native AOT binary
         shell: bash
         run: |
           set -o pipefail
-          dotnet publish SharpTS.csproj --configuration Release \
+          dotnet publish src/SharpTS/SharpTS.csproj --configuration Release \
             -r ${{ matrix.rid }} \
             -p:PublishAot=true \
             -p:DebugType=None \
@@ -380,28 +380,28 @@ jobs:
           # Interpreter + embedded stdlib/lib.d.ts resources. tr -d '\r':
           # Windows console output is CRLF, which breaks grep -qx exact-line
           # matches and would make every capture differ from the POSIX RIDs.
-          "$native" Examples/AotCompileGate/main.ts | tr -d '\r' > "$scratch/interpreted.txt"
+          "$native" samples/AotCompileGate/main.ts | tr -d '\r' > "$scratch/interpreted.txt"
           grep -qx '42' "$scratch/interpreted.txt"
 
           # An empty DOTNET_ROOT proves compile-time reference rewriting does not
           # borrow an installed reference pack.
           empty_dotnet_root="$(mktemp -d)"
           DOTNET_ROOT="$empty_dotnet_root" "$native" --compile \
-            Examples/AotCompileGate/main.ts --ref-asm -o "$scratch/modules.dll"
+            samples/AotCompileGate/main.ts --ref-asm -o "$scratch/modules.dll"
           dotnet "$scratch/modules.dll" | tr -d '\r' > "$scratch/modules.txt"
           diff -u "$scratch/interpreted.txt" "$scratch/modules.txt"
 
           # Accessors, generators and generic shapes exercise raw custom-attribute
           # blobs plus the TypeBuilderInstantiation and MethodBuilderInstantiation
           # emit fallbacks on this RID's ILC closure.
-          "$native" --compile Examples/AotCompileGate/features.ts --ref-asm \
+          "$native" --compile samples/AotCompileGate/features.ts --ref-asm \
             -o "$scratch/features.dll"
           dotnet "$scratch/features.dll" | tr -d '\r' > "$scratch/features.txt"
           grep -qx '2 2 33 7 11 0 prototype async generator' "$scratch/features.txt"
 
           # Prove the embedded AnyCPU managed runtime is extractable and usable.
           mkdir "$scratch/softdep"
-          "$native" --compile Examples/AotCompileGate/softdep.ts --ref-asm \
+          "$native" --compile samples/AotCompileGate/softdep.ts --ref-asm \
             -o "$scratch/softdep/softdep.dll"
           test -f "$scratch/softdep/SharpTS.dll" || {
             echo "dynamic eval compile did not extract SharpTS.dll" >&2
@@ -412,7 +412,7 @@ jobs:
 
           # The Managed-SKU-only boundaries must refuse identically on every RID —
           # same assertions as ci.yml's linux-x64 gate.
-          if "$native" --compile Examples/AotCompileGate/fork.ts \
+          if "$native" --compile samples/AotCompileGate/fork.ts \
               -o "$scratch/fork.dll" 2> "$scratch/fork-error.txt"; then
             echo "child_process.fork unexpectedly compiled under Native AOT"
             exit 1
@@ -421,7 +421,7 @@ jobs:
             "$scratch/fork-error.txt" 'child_process.fork'
           test ! -f "$scratch/fork.dll"
 
-          if "$native" Examples/AotCompileGate/main.ts \
+          if "$native" samples/AotCompileGate/main.ts \
               -r "$PWD/sku/managed-runtime/SharpTS.dll" \
               > "$scratch/reference-error.txt" 2>&1; then
             echo "third-party reference loading unexpectedly ran under Native AOT"
@@ -430,16 +430,16 @@ jobs:
           bash scripts/assert-managed-build-required.sh \
             "$scratch/reference-error.txt" 'loading .NET reference assemblies'
 
-          "$native" Examples/AotCompileGate/dotnet-interop.ts \
+          "$native" samples/AotCompileGate/dotnet-interop.ts \
             | tr -d '\r' > "$scratch/dotnet-interop.txt"
           grep -qx 'native-dotnet-42' "$scratch/dotnet-interop.txt"
-          "$native" --compile Examples/AotCompileGate/dotnet-interop.ts --ref-asm \
+          "$native" --compile samples/AotCompileGate/dotnet-interop.ts --ref-asm \
             -o "$scratch/dotnet-interop.dll"
           dotnet "$scratch/dotnet-interop.dll" | tr -d '\r' \
             > "$scratch/dotnet-interop-compiled.txt"
           diff -u "$scratch/dotnet-interop.txt" "$scratch/dotnet-interop-compiled.txt"
 
-          if "$native" Examples/AotCompileGate/dotnet-interop-unknown.ts \
+          if "$native" samples/AotCompileGate/dotnet-interop-unknown.ts \
               > "$scratch/dotnet-interop-error.txt" 2>&1; then
             echo "an unregistered .NET type unexpectedly ran under Native AOT"
             exit 1
@@ -455,7 +455,7 @@ jobs:
           bash scripts/assert-managed-build-required.sh \
             "$scratch/gen-decl-error.txt" '--gen-decl'
 
-          if "$native" --compile Examples/AotCompileGate/main.ts --verify \
+          if "$native" --compile samples/AotCompileGate/main.ts --verify \
               -o "$scratch/verify.dll" \
               > "$scratch/verify-error.txt" 2>&1; then
             echo "IL verification unexpectedly ran under Native AOT"
@@ -469,7 +469,7 @@ jobs:
             osx-*)
               # The built-in bundler intentionally refuses unsigned/unadjusted
               # Mach-O output; keep that loss explicit in the native SKU.
-              if "$native" --compile Examples/AotCompileGate/main.ts -t exe \
+              if "$native" --compile samples/AotCompileGate/main.ts -t exe \
                   -o "$scratch/bundled" 2> "$scratch/bundle-error.txt"; then
                 echo "built-in macOS bundle unexpectedly succeeded"
                 exit 1
@@ -479,7 +479,7 @@ jobs:
             *)
               # PE-Packer's embedded apphost must make bundle creation SDK-free.
               DOTNET_ROOT="$empty_dotnet_root" "$native" --compile \
-                Examples/AotCompileGate/main.ts -t exe -o "$scratch/bundled"
+                samples/AotCompileGate/main.ts -t exe -o "$scratch/bundled"
               [ -f "$scratch/bundled.exe" ] && bundled="$scratch/bundled.exe" \
                 || bundled="$scratch/bundled"
               "$bundled" | tr -d '\r' > "$scratch/bundled.txt"

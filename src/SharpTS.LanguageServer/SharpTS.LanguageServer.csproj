@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- TargetFramework / ImplicitUsings / Nullable inherited from Directory.Build.props. -->
+
+    <!-- Distributed as its own dotnet tool (separate from the `sharpts` compiler tool),
+         so OmniSharp lives only here and never in the core SharpTS package/tool. -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>sharpts-lsp</ToolCommandName>
+    <PackageId>SharpTS.LanguageServer</PackageId>
+    <IsPackable>true</IsPackable>
+    <Description>LSP language server for SharpTS (.NET interop diagnostics, completion, and standalone navigation).</Description>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <!-- Directory.Build.props sets PackageLicenseFile=LICENSE for all packages; include the
+       repo-root LICENSE so `dotnet pack` doesn't fail NU5030 (same as SharpTS.Sdk). -->
+  <ItemGroup>
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="\" />
+    <None Include="..\..\docs\language-server.md" Pack="true" PackagePath="README.md" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpTS\SharpTS.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SharpTS.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="OmniSharp.Extensions.LanguageServer" />
+  </ItemGroup>
+
+</Project>

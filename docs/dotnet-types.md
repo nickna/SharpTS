@@ -886,4 +886,4 @@ loaded before the script runs — e.g., reference it from the host app or
 
 - [.NET Integration Guide](dotnet-integration.md) - Compiling TypeScript for C# consumption
 - [Execution Modes](execution-modes.md) - Interpreted vs compiled mode details
-- [Runnable examples](../Examples/README.md) - Canonical cookbook for both execution modes
+- [Runnable examples](../samples/README.md) - Canonical cookbook for both execution modes

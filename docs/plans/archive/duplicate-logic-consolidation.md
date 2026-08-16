@@ -581,13 +581,13 @@ feature work.
 Run targeted tests during each phase, then the full suite:
 
 ```powershell
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~JSONTests|FullyQualifiedName~HttpModuleTests"
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~EnumTests"
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~WeakMapSetTests|FullyQualifiedName~WeakRefTests"
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~TsConfigLoaderTests|FullyQualifiedName~PackageJsonLoaderTests|FullyQualifiedName~SharpTsManifestLoaderTests"
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~ArrowFunctionTests|FullyQualifiedName~FunctionTypeAnnotationTests"
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~ILVerificationTests|FullyQualifiedName~StandaloneDllTests"
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~JSONTests|FullyQualifiedName~HttpModuleTests"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~EnumTests"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~WeakMapSetTests|FullyQualifiedName~WeakRefTests"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~TsConfigLoaderTests|FullyQualifiedName~PackageJsonLoaderTests|FullyQualifiedName~SharpTsManifestLoaderTests"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~ArrowFunctionTests|FullyQualifiedName~FunctionTypeAnnotationTests"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "FullyQualifiedName~ILVerificationTests|FullyQualifiedName~StandaloneDllTests"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj
 ```
 
 Also run:

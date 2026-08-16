@@ -3,7 +3,7 @@
        repo (including the conformance harnesses outside SharpTS.sln). Individual
        csproj files declare only <PackageReference Include="..."/> with no Version.
        This also replaces the former floating PrettyPrompt "4.1.*" pin, which broke
-       restore determinism (<Deterministic>true</> in SharpTS.csproj). -->
+       restore determinism (<Deterministic>true</> in src/SharpTS/SharpTS.csproj). -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>

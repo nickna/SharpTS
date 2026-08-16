@@ -68,7 +68,7 @@ contracts. `CLAUDE.md` contains only tool-specific operating guidance.
 
 2. Make your changes following the [code style guidelines](#code-style-guidelines)
 
-3. Add tests for new functionality in the `SharpTS.Tests/` directory
+3. Add tests for new functionality in the `tests/SharpTS.Tests/` directory
 
 4. Ensure all tests pass in both interpreter and compiler modes
 
@@ -84,9 +84,14 @@ contracts. `CLAUDE.md` contains only tool-specific operating guidance.
 dotnet build
 ```
 
+Place new shipping projects under `src/`, normal tests under `tests/`, performance suites under
+`benchmarks/`, runnable examples under `samples/`, and editor integrations under `extensions/`.
+External-corpus conformance projects belong in `tests/conformance/` and stay outside the default
+solution test loop unless that policy is changed deliberately.
+
 ### Running Tests
 
-Tests are xUnit tests in the `SharpTS.Tests/` directory:
+Tests are xUnit tests in the `tests/SharpTS.Tests/` directory:
 
 ```bash
 dotnet test
@@ -102,7 +107,7 @@ fail with setup guidance when this prerequisite is missing; they are not skipped
 
 Almost every feature must behave identically in the interpreter and the IL
 compiler, and the test suite enforces that mechanically. The convention (used
-by `SharpTS.Tests/SharedTests/`, ~60% of the suite) is a theory parameterized
+by `tests/SharpTS.Tests/SharedTests/`, ~60% of the suite) is a theory parameterized
 over both modes:
 
 ```csharp
@@ -132,12 +137,12 @@ public class MyFeatureTests
   for tests of one engine's internals.
 
 Manual verification of both modes:
-1. Interpretation: `dotnet run -- file.ts`
-2. Compilation: `dotnet run -- --compile file.ts` then `dotnet file.dll`
+1. Interpretation: `dotnet run --project src/SharpTS -- file.ts`
+2. Compilation: `dotnet run --project src/SharpTS -- --compile file.ts` then `dotnet file.dll`
 
 Two conformance suites (not in `SharpTS.sln`, run explicitly) pin SharpTS
-against external corpora: `SharpTS.Test262/` (ECMA-262) and
-`SharpTS.TypeScriptConformance/` (type checker vs `tsc`). If your change could
+against external corpora: `tests/conformance/SharpTS.Test262/` (ECMA-262) and
+`tests/conformance/SharpTS.TypeScriptConformance/` (type checker vs `tsc`). If your change could
 affect JS semantics or checker behavior, run the relevant suite — CI compiles
 them but does not execute them.
 
@@ -165,7 +170,7 @@ Dispatch is reflection-free (a Native AOT requirement): the node universe is
 the explicit, declaration-ordered list in `Parsing/Visitors/AstNodeCatalog.cs`,
 and each phase dispatches through a hand-ordered type switch
 (`AstVisitorBase`, `Interpreter.Dispatch.cs`, `TypeChecker.Dispatch.cs`).
-`SharpTS.Tests/RegistryTests/AstDispatchTests.cs` reflectively re-derives the
+`tests/SharpTS.Tests/RegistryTests/AstDispatchTests.cs` reflectively re-derives the
 true node set and drives every switch — so adding a node without extending the
 catalog and each dispatch site fails those tests with a message naming exactly
 what to edit.
@@ -192,7 +197,7 @@ families, not single files. A new feature typically touches, in order:
    codegen; `RuntimeEmitter.*.cs` if the emitted runtime needs new surface).
    Read the standalone-DLL constraint in CLAUDE.md first: compiled output must
    never gain a metadata reference to SharpTS.dll.
-7. **`SharpTS.Tests/SharedTests/`** — dual-mode tests (see above)
+7. **`tests/SharpTS.Tests/SharedTests/`** — dual-mode tests (see above)
 
 ## Areas Needing Help
 

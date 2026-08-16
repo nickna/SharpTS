@@ -8,7 +8,7 @@ param(
 )
 
 $iteration = 0
-$resultDir = "SharpTS.Tests/TestResults"
+$resultDir = "tests/SharpTS.Tests/TestResults"
 
 # Clean old results so we only see fresh blame output
 if (Test-Path $resultDir) {

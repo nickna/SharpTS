@@ -1,0 +1,98 @@
+{
+  "name": "vscode-sharpts",
+  "displayName": "SharpTS",
+  "description": "SharpTS language support for TypeScript (.NET interop diagnostics, compile/run)",
+  "version": "0.2.0",
+  "publisher": "sharpts",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nickna/SharpTS"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "activationEvents": [
+    "onLanguage:typescript",
+    "onLanguage:typescriptreact"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "SharpTS",
+      "properties": {
+        "sharpts.dotnetPath": {
+          "type": "string",
+          "default": "dotnet",
+          "description": "Path to the dotnet executable used to launch the language server."
+        },
+        "sharpts.projectFile": {
+          "type": "string",
+          "default": "",
+          "description": "Path to a .csproj file; its referenced assemblies are used to resolve @DotNetType targets."
+        },
+        "sharpts.additionalReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional assembly paths to load for @DotNetType resolution."
+        },
+        "sharpts.diagnostics": {
+          "type": "string",
+          "enum": [
+            "sharpts-only",
+            "all",
+            "off"
+          ],
+          "default": "sharpts-only",
+          "description": "Diagnostics published by SharpTS. The default avoids duplicating tsserver diagnostics."
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "sharpts.restartServer",
+        "title": "SharpTS: Restart Language Server"
+      },
+      {
+        "command": "sharpts.compile",
+        "title": "SharpTS: Compile Current File"
+      },
+      {
+        "command": "sharpts.debug",
+        "title": "SharpTS: Debug Current File"
+      },
+      {
+        "command": "sharpts.run",
+        "title": "SharpTS: Run Current File"
+      },
+      {
+        "command": "sharpts.compileAndRun",
+        "title": "SharpTS: Compile and Run"
+      }
+    ]
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "bundle-server": "dotnet publish ../../src/SharpTS.LanguageServer/SharpTS.LanguageServer.csproj -c Release -o ./bin/server",
+    "prebuild": "npm run bundle-server",
+    "build": "npm run compile",
+    "prepackage": "npm run build",
+    "package": "vsce package"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.3.0"
+  }
+}

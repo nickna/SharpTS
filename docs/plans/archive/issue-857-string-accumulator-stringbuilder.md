@@ -2,7 +2,7 @@
 
 ## STATUS: Phase 1 implemented (2026-06-20)
 
-Implemented and validated. Files: new `Compilation/StringAccumulatorPromotionAnalyzer.cs`; `TypeSystem/TypeMap.cs`, `Compilation/CompilationContext.cs` (`TryGetPromotedStringAccumulator`), `ILCompiler.cs` (wired at both single- and multi-module sites), `ILEmitter.Statements.cs` (StringBuilder slot), `ILEmitter.Expressions.cs` (`=` append), `ILEmitter.Operators.cs` (`+=` append), `ILEmitter.Properties.cs` (`.length` + `charCodeAt` helper), `ILEmitter.Calls.MethodDispatch.cs` (`charCodeAt` hook); tests `SharpTS.Tests/SharedTests/StringAccumulatorPromotionTests.cs` (16 cases, both modes, green).
+Implemented and validated. Files: new `Compilation/StringAccumulatorPromotionAnalyzer.cs`; `TypeSystem/TypeMap.cs`, `Compilation/CompilationContext.cs` (`TryGetPromotedStringAccumulator`), `ILCompiler.cs` (wired at both single- and multi-module sites), `ILEmitter.Statements.cs` (StringBuilder slot), `ILEmitter.Expressions.cs` (`=` append), `ILEmitter.Operators.cs` (`+=` append), `ILEmitter.Properties.cs` (`.length` + `charCodeAt` helper), `ILEmitter.Calls.MethodDispatch.cs` (`charCodeAt` hook); tests `tests/SharpTS.Tests/SharedTests/StringAccumulatorPromotionTests.cs` (16 cases, both modes, green).
 
 **Result:** bundled `strings.ts` @10k **17.3 ms → 0.265 ms (65×)**, O(n²)→O(n), now ~2.3× Node (was 149×). IL verifies. Full xUnit suite green except pre-existing flaky network + the 2 documented stale Test262 baselines (drift is `Array.isArray`/`proxy`, present in interpreter mode too → unrelated to this compile-only change).
 

@@ -53,7 +53,7 @@ dotnet clean
 
 ## Public properties
 
-This table is derived from `SharpTS.Sdk/Sdk/Sdk.props` and `Sdk.targets`. It lists the supported
+This table is derived from `src/SharpTS.Sdk/Sdk/Sdk.props` and `Sdk.targets`. It lists the supported
 consumer properties; underscore-prefixed values and tool/task paths are implementation details.
 
 | Property | Default | Effect |
@@ -179,4 +179,4 @@ Extend the build with ordinary target ordering instead of replacing `SharpTSComp
 
 For CLI-only workflows and project-reference checking, see
 [Execution modes](execution-modes.md). Runnable projects live in the
-[Examples cookbook](../Examples/README.md).
+[Examples cookbook](../samples/README.md).

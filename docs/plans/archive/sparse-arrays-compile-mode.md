@@ -197,7 +197,7 @@ Already handled correctly by the interpreter (stage C). Port the same logic into
 ### Step 10 — Remove compile-mode guards
 
 - `$Runtime.ArrayConstructor`'s 1M RangeError guard (added in Stage D) comes out: sparse storage handles large N natively.
-- `SharpTS.Test262/config/subset.json::compiledExcludeFolders` clears `test/built-ins/Array`.
+- `tests/conformance/SharpTS.Test262/config/subset.json::compiledExcludeFolders` clears `test/built-ins/Array`.
 
 ## Milestones / merge cadence
 

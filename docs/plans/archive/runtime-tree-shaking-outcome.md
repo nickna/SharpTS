@@ -45,7 +45,7 @@ is intentionally kept in source and tests rather than duplicated here.
 When a feature gains a new emitted dependency, update its detection and gate mapping in the same
 change. Prefer over-emission to a false negative, add a focused compile-and-load test, and run the
 dual-mode suite. Performance and artifact-size comparisons belong in the benchmark documentation,
-not this decision record; see the [benchmark harness](../../../benchmarks/README.md).
+not this decision record; see the [benchmark harness](../../../benchmarks/cross-runtime/README.md).
 
 Future representation work that affects runtime emission is tracked in the
 [active shaped-object plan](../shaped-objects-representation.md).

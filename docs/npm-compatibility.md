@@ -1,7 +1,7 @@
 # npm package compatibility
 
 SharpTS runs a pinned smoke matrix against real packages in
-`SharpTS.Tests/IntegrationTests/RealPackageSmokeTests.cs`. Each maintained scenario executes in
+`tests/SharpTS.Tests/IntegrationTests/RealPackageSmokeTests.cs`. Each maintained scenario executes in
 the interpreter and compiled mode; the UUID package also covers ESM named imports.
 
 | Package | Tested version | Exercised surface |
@@ -22,7 +22,7 @@ package is compatible.
 Install Node.js/npm, then run:
 
 ```bash
-dotnet test SharpTS.Tests/SharpTS.Tests.csproj --filter "Category=npm"
+dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj --filter "Category=npm"
 ```
 
 The fixture installs the exact versions above into a temporary package directory. Tests skip when

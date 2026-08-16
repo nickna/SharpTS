@@ -77,15 +77,15 @@ try {
     else {
         Invoke-DotNet -WorkingDirectory $repoRoot -Arguments @("restore")
         Invoke-DotNet -WorkingDirectory $repoRoot -Arguments @(
-            "build", "SharpTS.Sdk.Tasks/SharpTS.Sdk.Tasks.csproj",
+            "build", "src/SharpTS.Sdk.Tasks/SharpTS.Sdk.Tasks.csproj",
             "--configuration", "Release", "--no-restore"
         )
         Invoke-DotNet -WorkingDirectory $repoRoot -Arguments @(
-            "publish", "SharpTS.csproj",
+            "publish", "src/SharpTS/SharpTS.csproj",
             "--configuration", "Release", "--no-restore"
         )
         Invoke-DotNet -WorkingDirectory $repoRoot -Arguments @(
-            "pack", "SharpTS.Sdk/SharpTS.Sdk.csproj",
+            "pack", "src/SharpTS.Sdk/SharpTS.Sdk.csproj",
             "--configuration", "Release", "--no-restore",
             "-p:MinVerVersionOverride=$PackageVersion",
             "--output", $feedPath

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Headless" />
+    <PackageReference Include="BenchmarkDotNet" />
+    <ProjectReference Include="..\..\..\src\SharpTS.Gui\SharpTS.Gui.csproj" />
+  </ItemGroup>
+</Project>
