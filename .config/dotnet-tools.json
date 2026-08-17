@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "martincostello.waitfornugetpackage": {
+      "version": "1.3.2",
+      "commands": [
+        "dotnet-wait-for-package"
+      ],
+      "rollForward": false
+    }
+  }
+}

@@ -99,12 +99,106 @@ if ($macScope.Windows -or -not $macScope.MacOS) { $errors.Add('macOS-only distri
 if ($irrelevantScope.Windows -or $irrelevantScope.MacOS) { $errors.Add('Unrelated changes must skip desktop platform jobs.') }
 
 $publish = Get-Content -LiteralPath (Join-Path $workflowRoot 'publish.yml') -Raw
-foreach ($requiredText in @('./scripts/sync-gui-version.ps1 -Version','./scripts/sync-gui-version.ps1 -Check -Version','MinVerVersionOverride=$VERSION','environment: nuget-release','id-token: write','NuGet/login@8d196754b4036150537f80ac539e15c2f1028841','user: nbn','steps.nuget_login.outputs.NUGET_API_KEY','-p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }}','-p:SharpTSGuiHostLibrary=true','SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg','-PackageVersion "${{ steps.version.outputs.VERSION }}"','SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg')) {
+foreach ($requiredText in @('./scripts/sync-gui-version.ps1 -Version','./scripts/sync-gui-version.ps1 -Check -Version','MinVerVersionOverride=$VERSION','NuGet/login@8d196754b4036150537f80ac539e15c2f1028841','user: nbn','steps.nuget_login.outputs.NUGET_API_KEY','-p:MinVerVersionOverride=${{ steps.version.outputs.VERSION }}','-p:SharpTSGuiHostLibrary=true','SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg','-PackageVersion "${{ steps.version.outputs.VERSION }}"','SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg')) {
     if (-not $publish.Contains($requiredText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml is missing unified GUI release contract text: $requiredText") }
 }
 foreach ($forbiddenText in @('SharpTSGuiSkipPack','Invoke-WebRequest','gui_package_filename','PACKAGE_FILE_NAME','sync-gui-preview-version','secrets.NUGET_API_KEY')) {
     if ($publish.Contains($forbiddenText, [StringComparison]::Ordinal)) { $errors.Add("publish.yml retains fixed or obsolete GUI publication logic: $forbiddenText") }
 }
+
+function Get-PublishJob([string] $Name) {
+    $escapedName = [regex]::Escape($Name)
+    $match = [regex]::Match($publish, "(?ms)^  ${escapedName}:\r?\n.*?(?=^  [A-Za-z0-9_-]+:\r?\n|\z)")
+    if (-not $match.Success) {
+        $errors.Add("publish.yml is missing the '$Name' job.")
+        return ''
+    }
+    return $match.Value
+}
+
+$publishNuGetJob = Get-PublishJob 'publish-nuget'
+$verifyNuGetJob = Get-PublishJob 'verify-nuget'
+$releaseJob = Get-PublishJob 'release'
+
+foreach ($requiredText in @(
+    'needs: [build, binaries, native-binaries]',
+    "if: startsWith(github.ref, 'refs/tags/v')",
+    'contents: read',
+    'id-token: write',
+    'timeout-minutes: 15',
+    'environment: nuget-release',
+    'name: nupkg',
+    '-Action Publish'
+)) {
+    if (-not $publishNuGetJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("publish-nuget is missing publication boundary text: $requiredText")
+    }
+}
+foreach ($forbiddenText in @("pattern: 'managed-*'", "pattern: 'native-*'", 'contents: write')) {
+    if ($publishNuGetJob.Contains($forbiddenText, [StringComparison]::Ordinal)) {
+        $errors.Add("publish-nuget must download only packages and retain only publication permissions: $forbiddenText")
+    }
+}
+
+foreach ($requiredText in @(
+    'needs: publish-nuget',
+    'contents: read',
+    'timeout-minutes: 75',
+    'dotnet tool restore',
+    'name: nupkg',
+    'dotnet wait-for-package --directory ./nupkg --timeout 01:00:00',
+    'if ($LASTEXITCODE -ne 0)'
+)) {
+    if (-not $verifyNuGetJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("verify-nuget is missing availability gate text: $requiredText")
+    }
+}
+foreach ($forbiddenText in @('id-token:', 'contents: write', 'environment:', 'secrets.', 'NUGET_API_KEY', 'NuGet/login@')) {
+    if ($verifyNuGetJob.Contains($forbiddenText, [StringComparison]::Ordinal)) {
+        $errors.Add("verify-nuget must remain read-only and secret-free: $forbiddenText")
+    }
+}
+
+foreach ($requiredText in @(
+    'needs: [build, binaries, native-binaries, verify-nuget]',
+    'contents: write',
+    'timeout-minutes: 20',
+    "pattern: 'managed-*'",
+    "pattern: 'native-*'",
+    'softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228'
+)) {
+    if (-not $releaseJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("release is missing the post-verification release contract text: $requiredText")
+    }
+}
+foreach ($forbiddenText in @('id-token:', 'environment:', 'NUGET_API_KEY', 'NuGet/login@')) {
+    if ($releaseJob.Contains($forbiddenText, [StringComparison]::Ordinal)) {
+        $errors.Add("release must retain only GitHub Release permissions: $forbiddenText")
+    }
+}
+
+if ([regex]::Matches($publish, '(?m)^\s+id-token:\s*write\s*$').Count -ne 1) {
+    $errors.Add('publish.yml must isolate OIDC write permission to publish-nuget.')
+}
+if ([regex]::Matches($publish, '(?m)^\s+environment:\s*nuget-release\s*$').Count -ne 1) {
+    $errors.Add('publish.yml must isolate the nuget-release environment to publish-nuget.')
+}
+
+$toolManifestPath = Join-Path $repositoryRoot '.config\dotnet-tools.json'
+if (-not (Test-Path -LiteralPath $toolManifestPath -PathType Leaf)) {
+    $errors.Add('The root local-tool manifest is missing.')
+}
+else {
+    $toolManifest = Get-Content -LiteralPath $toolManifestPath -Raw | ConvertFrom-Json
+    $waiter = $toolManifest.tools.'martincostello.waitfornugetpackage'
+    if ($toolManifest.version -ne 1 -or -not $toolManifest.isRoot -or
+        $null -eq $waiter -or $waiter.version -cne '1.3.2' -or
+        $waiter.rollForward -ne $false -or
+        @($waiter.commands).Count -ne 1 -or $waiter.commands[0] -cne 'dotnet-wait-for-package') {
+        $errors.Add('The root tool manifest must pin MartinCostello.WaitForNuGetPackage 1.3.2 with roll-forward disabled.')
+    }
+}
+
 $wingetRequiredText = @(
     'is_stable: ${{ steps.version.outputs.IS_STABLE }}',
     'IS_STABLE=false',
@@ -139,7 +233,13 @@ else {
     }
 }
 $releaseCommand = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\nuget-release.ps1') -Raw
-if ($releaseCommand -notmatch '\$VerificationAttempts\s*=\s*30' -or $releaseCommand -notmatch '\$VerificationDelaySeconds\s*=\s*20') { $errors.Add('nuget-release.ps1 must poll NuGet 30 times at 20-second intervals by default.') }
+$releaseModule = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\NuGetRelease.psm1') -Raw
+foreach ($obsoleteText in @('VerificationAttempts', 'VerificationDelaySeconds')) {
+    if ($releaseCommand.Contains($obsoleteText, [StringComparison]::Ordinal) -or
+        $releaseModule.Contains($obsoleteText, [StringComparison]::Ordinal)) {
+        $errors.Add("NuGet publication retains the old 30x20-second polling contract: $obsoleteText")
+    }
+}
 
 if ($errors.Count -gt 0) {
     throw "GitHub workflow policy failed:`n - $($errors -join "`n - ")"

@@ -10,9 +10,7 @@ param(
     [string] $PackageDirectory = './nupkg',
     [string] $ManifestPath,
     [string] $NuGetSource = 'https://api.nuget.org/v3/index.json',
-    [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
-    [ValidateRange(1, 100)][int] $VerificationAttempts = 30,
-    [ValidateRange(0, 300)][int] $VerificationDelaySeconds = 20
+    [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -45,7 +43,4 @@ Publish-NuGetPackages `
     -PackageDirectory $PackageDirectory `
     -Version $Version `
     -ApiKey $apiKey `
-    -NuGetSource $NuGetSource `
-    -FlatContainerBaseUri $FlatContainerBaseUri `
-    -VerificationAttempts $VerificationAttempts `
-    -VerificationDelaySeconds $VerificationDelaySeconds
+    -NuGetSource $NuGetSource

@@ -167,12 +167,7 @@ function Publish-NuGetPackages {
         [Parameter(Mandatory)][string] $Version,
         [Parameter(Mandatory)][string] $ApiKey,
         [string] $NuGetSource = 'https://api.nuget.org/v3/index.json',
-        [string] $FlatContainerBaseUri = 'https://api.nuget.org/v3-flatcontainer',
-        [ValidateRange(1, 100)][int] $VerificationAttempts = 30,
-        [ValidateRange(0, 300)][int] $VerificationDelaySeconds = 20,
-        [scriptblock] $PushPackage,
-        [scriptblock] $FetchPackageVersions,
-        [scriptblock] $Sleep
+        [scriptblock] $PushPackage
     )
 
     if ($null -eq $PushPackage) {
@@ -184,89 +179,40 @@ function Publish-NuGetPackages {
             }
         }
     }
-    if ($null -eq $FetchPackageVersions) {
-        $FetchPackageVersions = { param($PackageId, $BaseUri) Get-NuGetPackageVersions -PackageId $PackageId -FlatContainerBaseUri $BaseUri }
-    }
-    if ($null -eq $Sleep) {
-        $Sleep = { param($Seconds) Start-Sleep -Seconds $Seconds }
-    }
-
-    $pushFailures = @{}
+    $pushResults = [System.Collections.Generic.List[object]]::new()
     $packages = @($Manifest.packages)
     foreach ($package in $packages) {
         $packageId = [string]$package.id
         $packagePath = Join-Path $PackageDirectory "$packageId.$Version.nupkg"
-        $alreadyPublished = $false
-        try { $alreadyPublished = @(& $FetchPackageVersions $packageId $FlatContainerBaseUri) -contains $Version }
-        catch { Write-Warning "Could not check whether $packageId $Version is already visible before push: $($_.Exception.Message)" }
-        if ($alreadyPublished) {
-            Write-Host "SKIP PUSH: $packageId $Version is already visible on NuGet."
-            continue
-        }
         Write-Host "::group::Push $packageId $Version"
         try {
             & $PushPackage $packagePath $packageId $Version $ApiKey $NuGetSource
+            $pushResults.Add([pscustomobject]@{ Id = $packageId; Version = $Version; Succeeded = $true; Message = $null })
             Write-Host "PUSH SUCCEEDED: $packageId $Version"
         }
         catch {
-            $pushFailures[$packageId] = $_.Exception.Message
-            Write-Warning "PUSH FAILED: $packageId ${Version}: $($_.Exception.Message)"
+            $message = $_.Exception.Message
+            $pushResults.Add([pscustomobject]@{ Id = $packageId; Version = $Version; Succeeded = $false; Message = $message })
+            Write-Warning "PUSH FAILED: $packageId ${Version}: $message"
         }
         finally {
             Write-Host '::endgroup::'
         }
     }
 
-    $inventory = @{}
-    for ($attempt = 1; $attempt -le $VerificationAttempts; $attempt++) {
-        $missing = [System.Collections.Generic.List[string]]::new()
-        foreach ($package in $packages) {
-            $packageId = [string]$package.id
-            try {
-                $versions = @(& $FetchPackageVersions $packageId $FlatContainerBaseUri)
-                $isPublished = $versions -contains $Version
-                $inventory[$packageId] = if ($isPublished) { 'published' } else { 'missing' }
-                if (-not $isPublished) {
-                    $missing.Add("$packageId $Version")
-                }
-            }
-            catch {
-                $inventory[$packageId] = "query failed: $($_.Exception.Message)"
-                $missing.Add("$packageId $Version")
-            }
-        }
-
-        if ($missing.Count -eq 0) {
-            break
-        }
-
-        Write-Host "NuGet verification attempt $attempt/$VerificationAttempts missing: $($missing -join ', ')"
-        if ($attempt -lt $VerificationAttempts) {
-            & $Sleep $VerificationDelaySeconds
-        }
+    Write-Host 'NuGet push inventory:'
+    foreach ($result in $pushResults) {
+        $status = if ($result.Succeeded) { 'succeeded' } else { "failed: $($result.Message)" }
+        Write-Host " - $($result.Id) $($result.Version): $status"
     }
 
-    Write-Host 'NuGet inventory:'
-    foreach ($package in $packages) {
-        $packageId = [string]$package.id
-        Write-Host " - $packageId $Version`: $($inventory[$packageId])"
+    $pushFailures = @($pushResults | Where-Object { -not $_.Succeeded })
+    if ($pushFailures.Count -gt 0) {
+        $failureMessages = @($pushFailures | ForEach-Object { "$($_.Id) $($_.Version): $($_.Message)" })
+        throw "NuGet package publication failed:`n - $($failureMessages -join "`n - ")"
     }
 
-    $failureMessages = [System.Collections.Generic.List[string]]::new()
-    foreach ($package in $packages) {
-        $packageId = [string]$package.id
-        if ($inventory[$packageId] -eq 'published') { continue }
-        if ($pushFailures.ContainsKey($packageId)) {
-            $failureMessages.Add("Push failed: $packageId ${Version}: $($pushFailures[$packageId])")
-        }
-        $failureMessages.Add("Version $Version is not visible for $packageId")
-    }
-
-    if ($failureMessages.Count -gt 0) {
-        throw "NuGet release did not complete:`n - $($failureMessages -join "`n - ")"
-    }
-
-    Write-Host "All expected NuGet packages expose release version $Version."
+    Write-Host "All expected NuGet packages were accepted for publication at version $Version."
 }
 
 Export-ModuleMember -Function @(

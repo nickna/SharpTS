@@ -164,80 +164,77 @@ Invoke-Test 'preflight rejects unexpected package artifacts' {
 Invoke-Test 'publication uses one version and all five filenames' {
     $fixture = New-TestFixture
     try {
-        $versions = New-VersionMap
-        $files = [Collections.Generic.List[string]]::new()
+        $pushes = [Collections.Generic.List[object]]::new()
         $push = {
             param($Path, $Id, $Version, $Key, $Source)
-            $files.Add([IO.Path]::GetFileName($Path))
-            [void]$versions[$Id].Add($Version)
+            $pushes.Add([pscustomobject]@{
+                File = [IO.Path]::GetFileName($Path)
+                Id = $Id
+                Version = $Version
+                Key = $Key
+                Source = $Source
+            })
         }.GetNewClosure()
-        $fetch = { param($Id, $Uri) @($versions[$Id]) }.GetNewClosure()
-        Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -VerificationAttempts 1 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch
+        $source = 'https://packages.example.test/v3/index.json'
+        Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -NuGetSource $source -PushPackage $push
         $expected = @($packageIds | ForEach-Object { "$($_).$releaseVersion.nupkg" } | Sort-Object)
-        Assert-True (-not (Compare-Object $expected @($files | Sort-Object) -SyncWindow 0)) 'Expected filenames differ.'
+        Assert-True ($pushes.Count -eq 5) 'Expected each package to be pushed once.'
+        Assert-True (-not (Compare-Object $expected @($pushes.File | Sort-Object) -SyncWindow 0)) 'Expected filenames differ.'
+        $versions = @($pushes.Version | Select-Object -Unique)
+        $keys = @($pushes.Key | Select-Object -Unique)
+        $sources = @($pushes.Source | Select-Object -Unique)
+        Assert-True ($versions.Count -eq 1 -and $versions[0] -ceq $releaseVersion) 'Pushes did not share the release version.'
+        Assert-True ($keys.Count -eq 1 -and $keys[0] -ceq 'key') 'Pushes did not share the API key.'
+        Assert-True ($sources.Count -eq 1 -and $sources[0] -ceq $source) 'Pushes did not share the NuGet source.'
     }
     finally { Remove-Item $fixture.Root -Recurse -Force }
 }
 
-Invoke-Test 'publication waits for delayed NuGet indexing' {
+Invoke-Test 'publication attempts every package after a push failure' {
     $fixture = New-TestFixture
     try {
-        $versions = New-VersionMap
-        $counts = @{}
-        $sleeps = [pscustomobject]@{ Value = 0 }
-        $expected = $releaseVersion
-        $push = { param($Path, $Id, $Version, $Key, $Source) }
-        $fetch = {
-            param($Id, $Uri)
-            $counts[$Id] = 1 + ($counts[$Id] ?? 0)
-            if ($counts[$Id] -ge 3 -and $versions[$Id] -notcontains $expected) { [void]$versions[$Id].Add($expected) }
-            @($versions[$Id])
-        }.GetNewClosure()
-        $sleep = { param($Seconds) $sleeps.Value++ }.GetNewClosure()
-        Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -VerificationAttempts 2 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch -Sleep $sleep
-        Assert-True ($sleeps.Value -eq 1) 'Expected one indexing wait.'
-    }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
-}
-
-Invoke-Test 'push error is nonfatal after final inventory visibility' {
-    $fixture = New-TestFixture
-    try {
-        $versions = New-VersionMap
-        $push = {
-            param($Path, $Id, $Version, $Key, $Source)
-            [void]$versions[$Id].Add($Version)
-            if ($Id -eq 'SharpTS.Gui.Sdk') { throw 'response lost' }
-        }.GetNewClosure()
-        $fetch = { param($Id, $Uri) @($versions[$Id]) }.GetNewClosure()
-        Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -VerificationAttempts 1 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch
-    }
-    finally { Remove-Item $fixture.Root -Recurse -Force }
-}
-
-Invoke-Test 'partial publish rerun pushes only the missing version' {
-    $fixture = New-TestFixture
-    try {
-        $versions = New-VersionMap
         $attempts = [Collections.Generic.List[string]]::new()
-        $first = [pscustomobject]@{ Value = $true }
         $push = {
             param($Path, $Id, $Version, $Key, $Source)
             $attempts.Add($Id)
-            if ($first.Value -and $Id -eq 'SharpTS.Hosting') { throw 'permission failure' }
-            if ($versions[$Id] -notcontains $Version) { [void]$versions[$Id].Add($Version) }
+            if ($Id -eq 'SharpTS.Hosting') { throw 'permission failure' }
         }.GetNewClosure()
-        $fetch = { param($Id, $Uri) @($versions[$Id]) }.GetNewClosure()
         Assert-ThrowsContaining {
-            Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -VerificationAttempts 1 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch
-        } 'permission failure'
-        $first.Value = $false
-        $before = $attempts.Count
-        Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -VerificationAttempts 1 -VerificationDelaySeconds 0 -PushPackage $push -FetchPackageVersions $fetch
-        $rerun = @($attempts | Select-Object -Skip $before)
-        Assert-True ($rerun.Count -eq 1 -and $rerun[0] -eq 'SharpTS.Hosting') 'Rerun did not skip visible versions.'
+            Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -PushPackage $push
+        } 'SharpTS.Hosting 2.0.0: permission failure'
+        Assert-True ($attempts.Count -eq 5) 'A failed push stopped the package inventory early.'
+        Assert-True (-not (Compare-Object ($packageIds | Sort-Object) ($attempts | Sort-Object) -SyncWindow 0)) 'Not every package was attempted.'
     }
     finally { Remove-Item $fixture.Root -Recurse -Force }
+}
+
+Invoke-Test 'publication reports multiple push failures together' {
+    $fixture = New-TestFixture
+    try {
+        $push = {
+            param($Path, $Id, $Version, $Key, $Source)
+            if ($Id -eq 'SharpTS.LanguageServer') { throw 'first failure' }
+            if ($Id -eq 'SharpTS.Gui.Sdk') { throw 'second failure' }
+        }.GetNewClosure()
+        $message = $null
+        try { Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -PushPackage $push }
+        catch { $message = $_.Exception.Message }
+        Assert-True ($null -ne $message) 'Expected publication to fail.'
+        Assert-True ($message -like '*SharpTS.LanguageServer 2.0.0: first failure*') 'First push failure was omitted.'
+        Assert-True ($message -like '*SharpTS.Gui.Sdk 2.0.0: second failure*') 'Second push failure was omitted.'
+    }
+    finally { Remove-Item $fixture.Root -Recurse -Force }
+}
+
+Invoke-Test 'publication contains no availability polling or sleeping' {
+    $command = Get-Command Publish-NuGetPackages
+    foreach ($removedParameter in @('FlatContainerBaseUri', 'VerificationAttempts', 'VerificationDelaySeconds', 'FetchPackageVersions', 'Sleep')) {
+        Assert-True (-not $command.Parameters.ContainsKey($removedParameter)) "Publish-NuGetPackages still exposes $removedParameter."
+    }
+    $functionSource = $command.ScriptBlock.ToString()
+    Assert-True (-not $functionSource.Contains('Get-NuGetPackageVersions', [StringComparison]::Ordinal)) 'Publication still queries package availability.'
+    Assert-True (-not $functionSource.Contains('Start-Sleep', [StringComparison]::Ordinal)) 'Publication still sleeps for package availability.'
+    Assert-True ($functionSource.Contains('--skip-duplicate', [StringComparison]::Ordinal)) 'Publication reruns must use --skip-duplicate.'
 }
 
 Write-Host "NuGet release helper tests: $script:passed passed, $script:failed failed."
