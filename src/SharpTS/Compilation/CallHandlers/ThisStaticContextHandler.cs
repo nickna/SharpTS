@@ -32,9 +32,9 @@ public class ThisStaticContextHandler : ICallHandler
             return false;
 
         var il = emitter.IL;
-        var methodParams = thisStaticMethod!.GetParameters();
-        emitter.EmitStaticCallArguments(call.Arguments, methodParams);
-        il.Emit(OpCodes.Call, thisStaticMethod);
+        var targetMethod = thisStaticMethod!;
+        emitter.EmitStaticCallArguments(call.Arguments, targetMethod);
+        il.Emit(OpCodes.Call, targetMethod);
         emitter.SetStackUnknown();
         return true;
     }

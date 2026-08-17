@@ -26,8 +26,7 @@ public class ClassExprStaticHandler : ICallHandler
             return false;
 
         var il = emitter.IL;
-        var methodParams = exprStaticMethod.GetParameters();
-        emitter.EmitStaticCallArguments(call.Arguments, methodParams);
+        emitter.EmitStaticCallArguments(call.Arguments, exprStaticMethod);
         il.Emit(OpCodes.Call, exprStaticMethod);
         emitter.SetStackUnknown();
         return true;

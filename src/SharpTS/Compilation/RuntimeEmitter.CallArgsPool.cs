@@ -22,8 +22,8 @@ public partial class RuntimeEmitter
     /// through <c>$TSFunction.Invoke → MethodInvoker.Invoke(target, Span&lt;object?&gt;)</c>.
     /// MethodInvoker reads values into the call frame and does not retain
     /// a reference. Compiled function bodies build their own
-    /// <c>arguments</c> object from declared parameters (see
-    /// <c>EmitArgumentsLocalPrologue</c>) rather than aliasing the args
+    /// <c>arguments</c> object through the shared function-environment prologue
+    /// rather than aliasing the args
     /// array, so cross-call reuse is sound.
     ///
     /// Arity ceiling: 1..4 covers the vast majority of real call sites.

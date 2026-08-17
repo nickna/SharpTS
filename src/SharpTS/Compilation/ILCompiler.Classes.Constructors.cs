@@ -342,7 +342,14 @@ public partial class ILCompiler
             // Value-type-defaulted params are widened to object by ParameterTypeResolver so the
             // prologue can observe the `$Undefined` sentinel. (#705)
             var ctorDefaultParamTypes = ctorBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
-            emitter.EmitDefaultParameters(constructor.Parameters, isInstanceMethod: true, paramTypes: ctorDefaultParamTypes);
+            EmitFunctionEnvironmentPrologue(
+                il,
+                ctx,
+                emitter,
+                constructor.Parameters,
+                constructor.Body,
+                ctorDefaultParamTypes,
+                argumentOffset: 1);
 
             if (constructor.Body != null)
             {

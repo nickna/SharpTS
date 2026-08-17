@@ -146,6 +146,18 @@ public partial class ILEmitter
             targetCtor = EmitterTypeHelpers.ResolveConstructor(targetType, ctorBuilder);
         }
 
+        if (!isGeneric)
+        {
+            // Constructors are ordinary ECMAScript function environments too:
+            // reuse the class-call argument lowering so surplus values remain
+            // observable through `arguments`, spreads expand once, and omitted
+            // parameter slots receive the undefined sentinel before defaults run.
+            EmitStaticCallArguments(n.Arguments, ctorBuilder);
+            IL.Emit(OpCodes.Newobj, targetCtor);
+            SetStackUnknown();
+            return;
+        }
+
         var ctorParams = ctorBuilder.GetParameters();
         int expectedParamCount = ctorParams.Length;
 
@@ -281,33 +293,20 @@ public partial class ILEmitter
             Type[] typeArgs = n.TypeArgs.Select(ResolveTypeArg).ToArray();
             Type closedType = EmitGenerics.MakeGenericType(classExprTypeBuilder, typeArgs);
             ConstructorInfo closedCtor = EmitterTypeHelpers.ResolveConstructor(closedType, classExprCtor);
-            EmitClassExprCtorCall(closedCtor, closedCtor.GetParameters(), n);
+            EmitClassExprCtorCall(closedCtor, n);
             return;
         }
 
-        EmitClassExprCtorCall(classExprCtor, classExprCtor.GetParameters(), n);
+        EmitClassExprCtorCall(classExprCtor, n);
     }
 
     /// <summary>
     /// Emits argument conversion, default-fill, and the <c>Newobj</c> for a (possibly closed)
     /// class-expression constructor.
     /// </summary>
-    private void EmitClassExprCtorCall(ConstructorInfo ctor, ParameterInfo[] ctorParams, Expr.New n)
+    private void EmitClassExprCtorCall(ConstructorInfo ctor, Expr.New n)
     {
-        int expectedParamCount = ctorParams.Length;
-
-        for (int i = 0; i < n.Arguments.Count; i++)
-        {
-            EmitExpression(n.Arguments[i]);
-            if (i < ctorParams.Length)
-                EmitConversionForParameter(n.Arguments[i], ctorParams[i].ParameterType);
-            else
-                EmitBoxIfNeeded(n.Arguments[i]);
-        }
-
-        for (int i = n.Arguments.Count; i < expectedParamCount; i++)
-            EmitOmittedArgument(ctorParams[i].ParameterType);
-
+        EmitStaticCallArguments(n.Arguments, ctor);
         IL.Emit(OpCodes.Newobj, ctor);
         SetStackUnknown();
     }

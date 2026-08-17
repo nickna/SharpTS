@@ -1500,8 +1500,24 @@ public partial class ILCompiler
 
         var emitter = new ILEmitter(ctx);
 
-        // Emit default parameter checks
-        emitter.EmitDefaultParameters(arrow.Parameters, displayClass != null, arrow.HasOwnThis);
+        int environmentArgOffset = (displayClass != null ? 1 : 0) + (arrow.HasOwnThis ? 1 : 0);
+        _closures.ArrowParameterTypes.TryGetValue(arrow, out var environmentResolvedParamTypes);
+        var environmentParamTypes = new Type[arrow.Parameters.Count];
+        for (int i = 0; i < environmentParamTypes.Length; i++)
+            environmentParamTypes[i] = environmentResolvedParamTypes != null && i < environmentResolvedParamTypes.Length
+                ? environmentResolvedParamTypes[i] ?? _types.Object
+                : _types.Object;
+
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
+            arrow.Parameters,
+            arrow.BlockBody,
+            environmentParamTypes,
+            environmentArgOffset,
+            createsArgumentsBinding: arrow.HasOwnThis,
+            publishedArgsLeadingSkip: arrow.HasOwnThis ? 1 : 0);
 
         // Initialize captured parameters into the arrow scope display class.
         // This mirrors the equivalent code in ILCompiler.Functions.cs.
@@ -1534,32 +1550,6 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Stfld, arrowDCField);
                 }
             }
-        }
-
-        // Bind the `arguments` array-like for function expressions (HasOwnThis=true).
-        // True arrows don't get their own `arguments` per ECMA-262. Matches the same
-        // prologue used by Stmt.Function compilation and fixes lodash-style wrappers
-        // like `function() { return fn.apply(this, arguments); }` emitted as arrows.
-        if (arrow.HasOwnThis && arrow.BlockBody != null && ReferencesArgumentsIdentifier(arrow.BlockBody))
-        {
-            // argBase aligns with the parameter-index layout above:
-            //   displayClass != null + HasOwnThis → params start at 2 (display, __this, params...)
-            //   displayClass != null + !HasOwnThis → params start at 1 (display, params...)
-            //   displayClass == null + HasOwnThis → params start at 1 (__this, params...)
-            //   displayClass == null + !HasOwnThis → params start at 0
-            int paramArgBase = (displayClass != null ? 1 : 0) + (arrow.HasOwnThis ? 1 : 0);
-            _closures.ArrowParameterTypes.TryGetValue(arrow, out var resolvedArrowParamTypes);
-            var argParamTypes = new Type[arrow.Parameters.Count];
-            for (int i = 0; i < argParamTypes.Length; i++)
-                argParamTypes[i] = resolvedArrowParamTypes != null && i < resolvedArrowParamTypes.Length
-                    ? resolvedArrowParamTypes[i] ?? _types.Object
-                    : _types.Object;
-            // HasOwnThis methods declare __this as an explicit parameter, which means
-            // $TSFunction.InvokeWithThis prepends the receiver into the args array
-            // before calling Invoke. Strip that leading slot when reading from the
-            // thread-static so `arguments` reflects only what the user passed.
-            int leadingSkip = arrow.HasOwnThis ? 1 : 0;
-            EmitArgumentsLocalPrologueCore(il, ctx, arrow.Parameters, argParamTypes, paramArgBase, leadingSkip);
         }
 
         if (arrow.ExpressionBody != null)

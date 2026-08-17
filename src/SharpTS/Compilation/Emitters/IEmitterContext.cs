@@ -109,7 +109,7 @@ public interface IEmitterContext
     /// evaluated and discarded, omitted slots are padded with JavaScript undefined when
     /// representable, and a trailing rest slot is packed into its runtime list marker.
     /// </summary>
-    void EmitStaticCallArguments(List<Expr> arguments, ParameterInfo[] targetParams);
+    void EmitStaticCallArguments(List<Expr> arguments, MethodBase targetMethod);
 
     /// <summary>
     /// True when evaluating any of <paramref name="args"/> can suspend the enclosing state machine

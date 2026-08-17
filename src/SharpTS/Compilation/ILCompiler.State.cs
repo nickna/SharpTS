@@ -118,6 +118,13 @@ public partial class ILCompiler
         /// during phase 7 (body emission).
         /// </summary>
         public HashSet<string> CapturingArguments { get; } = [];
+
+        /// <summary>
+        /// Class/constructor MethodBuilders whose JavaScript body needs an
+        /// <c>arguments</c> environment binding. Kept by builder identity so all
+        /// statically resolved class-call paths share the same decision.
+        /// </summary>
+        public HashSet<MethodBase> MethodsCapturingArguments { get; } = [];
     }
 
     /// <summary>
