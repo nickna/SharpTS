@@ -62,6 +62,8 @@ public partial class ILCompiler
         string methodName = accessor.Kind.Type == TokenType.GET
             ? $"get_{pascalName}"
             : $"set_{pascalName}";
+        if (accessor.IsStatic)
+            methodName = $"$static_{methodName}";
 
         string className = typeBuilder.Name;
         MethodBuilder methodBuilder;
@@ -166,6 +168,7 @@ public partial class ILCompiler
 
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, methodBuilder);
+        ctx.IsStrictMode = true;
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = !accessor.IsStatic;
         ctx.CurrentClassName = className;

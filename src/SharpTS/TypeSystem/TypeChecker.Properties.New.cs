@@ -768,16 +768,20 @@ public partial class TypeChecker
 
             if (newExpr.Arguments.Count < ctorType.MinArity)
                 throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.", tsCode: "TS2554");
-            if (newExpr.Arguments.Count > ctorType.ParamTypes.Count)
+            if (!ctorType.HasRestParam && newExpr.Arguments.Count > ctorType.ParamTypes.Count)
                 throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at most {ctorType.ParamTypes.Count} arguments but got {newExpr.Arguments.Count}.", tsCode: "TS2554");
 
             for (int i = 0; i < newExpr.Arguments.Count; i++)
             {
                 TypeInfo argType = CheckExpr(newExpr.Arguments[i]);
+                // Rest arguments are validated by their enclosing call shape; the
+                // stored final parameter is the rest-array type, not an element slot.
+                if (ctorType.HasRestParam && i >= paramTypes.Count - 1)
+                    continue;
                 // Optional/default constructor params accept an explicit `undefined` (#668);
                 // a rest parameter's elements are not optional in that sense.
                 bool optional = i >= ctorType.MinArity &&
-                                !(ctorType.HasRestParam && i >= paramTypes.Count - 1);
+                                 !(ctorType.HasRestParam && i >= paramTypes.Count - 1);
                 if (!IsArgumentCompatible(paramTypes[i], argType, optional))
                     throw new TypeCheckException($" Constructor argument {i + 1} expected type '{paramTypes[i]}' but got '{argType}'.", tsCode: "TS2345");
             }

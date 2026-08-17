@@ -15,7 +15,8 @@ public partial class ILCompiler
     {
         foreach (var classExpr in _classExprs.ToDefine)
         {
-            DefineClassExpression(classExpr);
+            if (!_classExprs.Builders.ContainsKey(classExpr))
+                DefineClassExpression(classExpr);
         }
     }
 
@@ -39,6 +40,20 @@ public partial class ILCompiler
             className,
             typeAttrs
         );
+
+        var lexicalCaptures = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var method in classExpr.Methods)
+            lexicalCaptures.UnionWith(_closures.Analyzer.GetCaptures(method));
+        if (classExpr.Name != null)
+            lexicalCaptures.Remove(classExpr.Name.Lexeme);
+        var captureFields = new Dictionary<string, FieldBuilder>(StringComparer.Ordinal);
+        foreach (var capture in lexicalCaptures)
+        {
+            captureFields[capture] = typeBuilder.DefineField(
+                $"$lex_{capture}", _types.Object,
+                FieldAttributes.Public | FieldAttributes.Static);
+        }
+        _classExprs.CaptureFields[classExpr] = captureFields;
 
         // Track superclass name for inheritance resolution
         string? superclassName = Expr.GetSuperclassLeafName(classExpr.SuperclassExpr);
@@ -120,6 +135,19 @@ public partial class ILCompiler
                 {
                     baseType = superTypeBuilder;
                 }
+            }
+            else if (Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(superclassName))
+            {
+                baseType = GetEmittedErrorType(superclassName);
+                _classes.ErrorSubclasses.Add(className);
+            }
+            else if (superclassName == "Array")
+            {
+                baseType = _runtime.TSArrayType;
+            }
+            else if (superclassName == "Promise")
+            {
+                baseType = _runtime.TSPromiseType;
             }
         }
 
@@ -308,14 +336,26 @@ public partial class ILCompiler
         string className = _classExprs.Names[classExpr];
 
         // Find user-defined constructor or use default
-        var constructor = classExpr.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
-        var ctorParamTypes = constructor?.Parameters.Select(_ => typeof(object)).ToArray() ?? [];
+        var constructor = classExpr.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
+        var superclassName = _classExprs.Superclass.GetValueOrDefault(classExpr);
+        var ctorParamTypes = constructor?.Parameters.Select(_ => typeof(object)).ToArray()
+            ?? (superclassName == "Array"
+                ? [typeof(object[])]
+                : Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(superclassName ?? "")
+                    ? superclassName == "AggregateError"
+                        ? [typeof(object), typeof(object)]
+                        : [typeof(object)]
+                    : superclassName == "Promise"
+                        ? [typeof(object)]
+                        : []);
 
         var ctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Public,
             CallingConventions.Standard,
             ctorParamTypes
         );
+        if (constructor == null && superclassName == "Array")
+            MarkJsVariadicConstructor(ctorBuilder);
         _classExprs.Constructors[classExpr] = ctorBuilder;
         _classes.Constructors[className] = ctorBuilder;
         RegisterArgumentsCapturingMethod(ctorBuilder, constructor?.Body);
@@ -323,7 +363,8 @@ public partial class ILCompiler
 
         // Define static methods (computed symbol-keyed methods are handled by
         // DefineClassExpressionSymbolMethods below, like the class-declaration path).
-        foreach (var method in classExpr.Methods.Where(m => m.Body != null && m.IsStatic && m.Name.Lexeme != "constructor" && m.ComputedKey == null))
+        foreach (var method in classExpr.Methods.Where(m =>
+                     m.Body != null && m.IsStatic && !m.IsPrivate && m.ComputedKey == null))
         {
             var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
             // Match the method kind to its state machine's return type (#765), mirroring
@@ -345,7 +386,9 @@ public partial class ILCompiler
 
         // Define instance methods (computed symbol-keyed methods are handled by
         // DefineClassExpressionSymbolMethods below, like the class-declaration path).
-        foreach (var method in classExpr.Methods.Where(m => m.Body != null && !m.IsStatic && m.Name.Lexeme != "constructor" && m.ComputedKey == null))
+        foreach (var method in classExpr.Methods.Where(m =>
+                     m.Body != null && !m.IsStatic && !m.IsPrivate &&
+                     m.Name.Lexeme != "constructor" && m.ComputedKey == null))
         {
             var paramTypes = method.Parameters.Select(_ => typeof(object)).ToArray();
 
@@ -452,13 +495,16 @@ public partial class ILCompiler
         EmitClassExpressionConstructor(classExpr, typeBuilder, fieldsField);
 
         // Emit instance method bodies (computed symbol-keyed methods are emitted below).
-        foreach (var method in classExpr.Methods.Where(m => m.Body != null && !m.IsStatic && m.Name.Lexeme != "constructor" && m.ComputedKey == null))
+        foreach (var method in classExpr.Methods.Where(m =>
+                     m.Body != null && !m.IsStatic && !m.IsPrivate &&
+                     m.Name.Lexeme != "constructor" && m.ComputedKey == null))
         {
             EmitClassExpressionMethod(classExpr, typeBuilder, method, fieldsField);
         }
 
         // Emit static method bodies (computed symbol-keyed methods are emitted below).
-        foreach (var method in classExpr.Methods.Where(m => m.Body != null && m.IsStatic && m.ComputedKey == null))
+        foreach (var method in classExpr.Methods.Where(m =>
+                     m.Body != null && m.IsStatic && !m.IsPrivate && m.ComputedKey == null))
         {
             EmitClassExpressionStaticMethodBody(classExpr, method);
         }
@@ -501,8 +547,14 @@ public partial class ILCompiler
         string className = _classExprs.Names[classExpr];
 
         var ctx = CreateModuleMemberContext(il, method);
+        ctx.IsStrictMode = true;
         ctx.FieldsField = fieldsField;
         ctx.CurrentClassBuilder = typeBuilder;
+        ctx.EmittingTypeBuilder = typeBuilder;
+        ctx.CurrentClassName = className;
+        if (_classExprs.EnclosingClass.TryGetValue(classExpr, out var enclosingClassName))
+            ctx.EnclosingClassNames = [enclosingClassName];
+        ctx.CurrentSuperclassName = _classExprs.Superclass.GetValueOrDefault(classExpr);
         ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
         ctx.ClassProperties = _typedInterop.ClassProperties;
         ctx.DeclaredPropertyNames = _typedInterop.DeclaredPropertyNames;
@@ -530,6 +582,15 @@ public partial class ILCompiler
         // binding throws ReferenceError at runtime (same omission #300 fixed
         // for class-declaration accessor bodies).
         ApplyCapturedTopLevelVariableAccess(ctx, memberBodyExports: true);
+        if (_classExprs.CaptureFields.TryGetValue(classExpr, out var captureFields)
+            && captureFields.Count > 0)
+        {
+            ctx.TopLevelStaticVars = ctx.TopLevelStaticVars == null
+                ? new Dictionary<string, FieldBuilder>(captureFields, StringComparer.Ordinal)
+                : new Dictionary<string, FieldBuilder>(ctx.TopLevelStaticVars, StringComparer.Ordinal);
+            foreach (var (name, field) in captureFields)
+                ctx.TopLevelStaticVars[name] = field;
+        }
         return ctx;
     }
 
@@ -556,7 +617,8 @@ public partial class ILCompiler
         ctx.IsStaticConstructorContext = true;
         var emitter = new ILEmitter(ctx);
 
-        EmitClassPrototypeRegistration(il, typeBuilder);
+        EmitClassPrototypeRegistration(
+            il, typeBuilder, GetClassConstructorLength(classExpr.Methods));
 
         // Process StaticInitializers if available (preserves declaration order)
         if (hasStaticInitializers)
@@ -608,7 +670,7 @@ public partial class ILCompiler
     {
         string className = _classExprs.Names[classExpr];
         var ctorBuilder = _classExprs.Constructors[classExpr];
-        var constructor = classExpr.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
+        var constructor = classExpr.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
 
         var il = ctorBuilder.GetILGenerator();
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, ctorBuilder);
@@ -632,6 +694,7 @@ public partial class ILCompiler
         // Determine if we need to call base constructor automatically
         // If there's an explicit constructor body, it should contain super() call
         bool hasExplicitSuperCall = constructor?.Body?.Any(stmt => ContainsSuperCall(stmt)) ?? false;
+        bool initializersEmitted = false;
 
         if (!hasExplicitSuperCall)
         {
@@ -644,8 +707,54 @@ public partial class ILCompiler
             // ConstructorBuilder from the registries instead (#287 family). The
             // implicit derived constructor forwards no args, so supply defaults
             // for any base ctor parameters (parameterless in the common case).
-            var baseCtor = ResolveClassExprImplicitBaseConstructor(classExpr);
-            if (baseCtor != null)
+            var superclassName = _classExprs.Superclass.GetValueOrDefault(classExpr);
+            if (superclassName == "Array")
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, _runtime.TSArrayCtorFromCtorArgs);
+            }
+            else if (superclassName == "Promise")
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, _runtime.PromiseFromExecutor);
+                il.Emit(OpCodes.Call, _runtime.TSPromiseCtor);
+            }
+            else if (Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(superclassName ?? ""))
+            {
+                bool aggregate = superclassName == "AggregateError";
+                var messageLocal = il.DeclareLocal(_types.String);
+                var hasMessageLocal = il.DeclareLocal(_types.Boolean);
+                var convertMessage = il.DefineLabel();
+                var haveMessage = il.DefineLabel();
+                il.Emit(aggregate ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                il.Emit(OpCodes.Brfalse, convertMessage);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Stloc, hasMessageLocal);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Br, haveMessage);
+                il.MarkLabel(convertMessage);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Stloc, hasMessageLocal);
+                il.Emit(aggregate ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, _runtime.ToJsString);
+                il.MarkLabel(haveMessage);
+                il.Emit(OpCodes.Stloc, messageLocal);
+
+                if (aggregate)
+                    il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldloc, messageLocal);
+                il.Emit(OpCodes.Call, GetEmittedErrorConstructor(superclassName!));
+
+                var skipMessageDescriptor = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, hasMessageLocal);
+                il.Emit(OpCodes.Brfalse, skipMessageDescriptor);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldloc, messageLocal);
+                il.Emit(OpCodes.Call, _runtime.ErrorDefineMessageProperty);
+                il.MarkLabel(skipMessageDescriptor);
+            }
+            else if (ResolveClassExprImplicitBaseConstructor(classExpr) is { } baseCtor)
             {
                 foreach (var p in baseCtor.GetParameters())
                     emitter.EmitOmittedArgument(p.ParameterType);
@@ -678,59 +787,79 @@ public partial class ILCompiler
                 constructorParamTypes,
                 argumentOffset: 1);
 
+            // Base-class fields are initialized before the constructor body. Derived-class
+            // fields are initialized immediately after the explicit super() establishes this.
+            if (!hasExplicitSuperCall)
+            {
+                EmitInstanceFieldInitializers();
+                initializersEmitted = true;
+            }
+
             if (constructor.Body != null)
             {
                 foreach (var stmt in constructor.Body)
                 {
                     emitter.EmitStatement(stmt);
+                    if (!initializersEmitted && ContainsSuperCall(stmt))
+                    {
+                        EmitInstanceFieldInitializers();
+                        initializersEmitted = true;
+                    }
                 }
             }
         }
 
-        // Emit instance field initializers to backing fields AFTER super() call
-        foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && f.Initializer != null))
+        if (!initializersEmitted)
+            EmitInstanceFieldInitializers();
+
+        emitter.FinalizeReturns();
+
+        il.Emit(OpCodes.Ret);
+
+        void EmitInstanceFieldInitializers()
         {
-            string fieldName = field.Name.Lexeme;
-            string pascalName = NamingConventions.ToPascalCase(fieldName);
-
-            if (_classExprs.BackingFields[classExpr].TryGetValue(pascalName, out var backingField))
+            foreach (var field in classExpr.Fields.Where(f => !f.IsStatic && f.Initializer != null))
             {
-                // Store in backing field
-                il.Emit(OpCodes.Ldarg_0);
-                emitter.EmitExpression(field.Initializer!);
+                string fieldName = field.Name.Lexeme;
+                string pascalName = NamingConventions.ToPascalCase(fieldName);
 
-                Type targetType = _classExprs.PropertyTypes[classExpr][pascalName];
-                EmitTypeConversion(il, emitter, field.Initializer!, targetType);
+                if (_classExprs.BackingFields[classExpr].TryGetValue(pascalName, out var backingField))
+                {
+                    // Store in backing field
+                    il.Emit(OpCodes.Ldarg_0);
+                    emitter.EmitExpression(field.Initializer!);
 
-                il.Emit(OpCodes.Stfld, backingField);
+                    Type targetType = _classExprs.PropertyTypes[classExpr][pascalName];
+                    EmitTypeConversion(il, emitter, field.Initializer!, targetType);
+
+                    il.Emit(OpCodes.Stfld, backingField);
+                }
+                else
+                {
+                    // Fallback to _fields dictionary
+                    il.Emit(OpCodes.Ldarg_0);
+                    il.Emit(OpCodes.Ldfld, fieldsField);
+                    il.Emit(OpCodes.Ldstr, fieldName);
+                    emitter.EmitExpression(field.Initializer!);
+                    emitter.EmitBoxIfNeeded(field.Initializer!);
+                    il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
+                }
             }
-            else
+
+            // Initialize instance declare fields (without initializers) to null in _fields dictionary
+            // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
+            foreach (var field in classExpr.Fields.Where(f =>
+                !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null))
             {
-                // Fallback to _fields dictionary
+                string fieldName = field.Name.Lexeme;
+                // Store null in _fields dictionary
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, fieldsField);
                 il.Emit(OpCodes.Ldstr, fieldName);
-                emitter.EmitExpression(field.Initializer!);
-                emitter.EmitBoxIfNeeded(field.Initializer!);
+                il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
             }
         }
-
-        // Initialize instance declare fields (without initializers) to null in _fields dictionary
-        // TypeScript semantics: uninitialized fields return null/undefined, not CLR defaults
-        foreach (var field in classExpr.Fields.Where(f =>
-            !f.IsStatic && !f.IsPrivate && f.IsDeclare && f.Initializer == null && f.ComputedKey == null))
-        {
-            string fieldName = field.Name.Lexeme;
-            // Store null in _fields dictionary
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, fieldsField);
-            il.Emit(OpCodes.Ldstr, fieldName);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
-        }
-
-        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -824,7 +953,8 @@ public partial class ILCompiler
         // produced a raw value (breaking `.then`) and an `await` in the body emitted invalid IL.
         if (method.IsAsync)
         {
-            EmitAsyncMethodBody(methodBuilder, method, fieldsField);
+            EmitAsyncMethodBody(methodBuilder, method, fieldsField,
+                currentClassName: _classExprs.Names[classExpr]);
             return;
         }
 
@@ -838,6 +968,7 @@ public partial class ILCompiler
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, fieldsField, methodBuilder);
         ctx.IsInstanceMethod = true;
+        SetupSyncMethodFunctionDisplayClass(ctx, il, method);
 
         // Define parameters with typed parameter types from method signature
         var methodParams = methodBuilder.GetParameters();
@@ -857,6 +988,8 @@ public partial class ILCompiler
             method.Body,
             environmentParamTypes,
             argumentOffset: 1);
+        InitializeSyncMethodCapturedParameters(
+            ctx, il, method, methodBuilder, argumentOffset: 1);
 
         if (method.Body != null)
         {
@@ -910,7 +1043,8 @@ public partial class ILCompiler
         // EmitStaticAsyncMethodBody, which re-resolves from the declaration registry.
         if (method.IsAsync)
         {
-            EmitAsyncMethodBody(methodBuilder, method, fieldsField: null, isInstanceMethod: false);
+            EmitAsyncMethodBody(methodBuilder, method, fieldsField: null, isInstanceMethod: false,
+                currentClassName: _classExprs.Names[classExpr]);
             return;
         }
 
@@ -923,6 +1057,7 @@ public partial class ILCompiler
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateClassExpressionContext(il, classExpr, typeBuilder, null, methodBuilder);
         ctx.IsInstanceMethod = false;
+        SetupSyncMethodFunctionDisplayClass(ctx, il, method);
 
         // Define parameters with typed parameter types from method signature (starting at index 0 for static)
         var methodParams = methodBuilder.GetParameters();
@@ -942,6 +1077,8 @@ public partial class ILCompiler
             method.Body,
             environmentParamTypes,
             argumentOffset: 0);
+        InitializeSyncMethodCapturedParameters(
+            ctx, il, method, methodBuilder, argumentOffset: 0);
 
         if (method.Body != null)
         {
@@ -1027,7 +1164,8 @@ public partial class ILCompiler
         if (_classes.SymbolMethods.ContainsKey(className))
             return;  // already defined (idempotent across multi-module pre-define/emit passes)
 
-        var computed = classExpr.Methods.Where(m => m.ComputedKey != null && m.Body != null).ToList();
+        var computed = classExpr.Methods.Where(m =>
+            !m.IsPrivate && m.ComputedKey != null && m.Body != null).ToList();
         if (computed.Count == 0)
             return;
 
@@ -1064,6 +1202,8 @@ public partial class ILCompiler
             list.Add((renamed, method.ComputedKey!, mb));
         }
         _classes.SymbolMethods[className] = list;
+        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder) is { } deferred)
+            _classExprs.DeferredComputedKeys[classExpr] = deferred;
     }
 
     /// <summary>

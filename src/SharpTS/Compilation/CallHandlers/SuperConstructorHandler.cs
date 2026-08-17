@@ -59,6 +59,24 @@ public class SuperConstructorHandler : ICallHandler
             return true;
         }
 
+        // `class Derived extends class {} { constructor() { super(); } }` has no
+        // identifier to resolve through ClassRegistry. The emitted CLR class derives
+        // directly from Object and its constructor prologue has already chained to
+        // Object..ctor (the CLR verifier cannot accept a conditional/finally-only base
+        // call). Preserve argument side effects here, then produce super()'s undefined.
+        if (ctx.CurrentSuperclassIsAnonymousEmptyClass)
+        {
+            foreach (var argument in call.Arguments)
+            {
+                emitter.EmitExpression(argument);
+                emitter.EmitBoxIfNeeded(argument);
+                emitter.IL.Emit(OpCodes.Pop);
+            }
+            emitter.IL.Emit(OpCodes.Ldnull);
+            emitter.SetStackUnknown();
+            return true;
+        }
+
         // Try class expression constructors
         if (ctx.CurrentClassExpr != null &&
             ctx.ClassExprSuperclass?.TryGetValue(ctx.CurrentClassExpr, out var superclassName) == true &&
@@ -124,37 +142,56 @@ public class SuperConstructorHandler : ICallHandler
             return;
         }
 
+        var messageLocal = il.DeclareLocal(typeof(string));
+        var hasMessageLocal = il.DeclareLocal(typeof(bool));
+        if (arguments.Count > 0)
+        {
+            var rawMessageLocal = il.DeclareLocal(typeof(object));
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+            il.Emit(OpCodes.Stloc, rawMessageLocal);
+
+            var convertMessageLabel = il.DefineLabel();
+            var haveMessageLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, rawMessageLocal);
+            il.Emit(OpCodes.Isinst, ctx.Runtime!.UndefinedType);
+            il.Emit(OpCodes.Brfalse, convertMessageLabel);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, hasMessageLocal);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Br, haveMessageLabel);
+            il.MarkLabel(convertMessageLabel);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, hasMessageLocal);
+            il.Emit(OpCodes.Ldloc, rawMessageLocal);
+            il.Emit(OpCodes.Call, ctx.Runtime.ToJsString);
+            il.MarkLabel(haveMessageLabel);
+            il.Emit(OpCodes.Stloc, messageLocal);
+        }
+
         il.Emit(OpCodes.Ldarg_0); // this
 
         if (baseCtor.GetParameters().Length == 1)
         {
             // (string? message) constructor
-            if (arguments.Count > 0)
-            {
-                emitter.EmitExpression(arguments[0]);
-                emitter.EmitConversionForParameter(arguments[0], typeof(string));
-            }
-            else
-            {
-                il.Emit(OpCodes.Ldnull);
-            }
+            il.Emit(OpCodes.Ldloc, messageLocal);
         }
         else
         {
             // (string name, string? message) constructor
             il.Emit(OpCodes.Ldstr, errorTypeName);
-            if (arguments.Count > 0)
-            {
-                emitter.EmitExpression(arguments[0]);
-                emitter.EmitConversionForParameter(arguments[0], typeof(string));
-            }
-            else
-            {
-                il.Emit(OpCodes.Ldnull);
-            }
+            il.Emit(OpCodes.Ldloc, messageLocal);
         }
 
         il.Emit(OpCodes.Call, baseCtor);
+
+        var skipMessageDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, hasMessageLocal);
+        il.Emit(OpCodes.Brfalse, skipMessageDescriptorLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, messageLocal);
+        il.Emit(OpCodes.Call, ctx.Runtime!.ErrorDefineMessageProperty);
+        il.MarkLabel(skipMessageDescriptorLabel);
 
         il.Emit(OpCodes.Ldnull); // super() returns undefined
         emitter.SetStackUnknown();
@@ -222,19 +259,10 @@ public class SuperConstructorHandler : ICallHandler
         var ctx = emitter.Context;
 
         il.Emit(OpCodes.Ldarg_0);
-
-        var ctorParams = parentCtor.GetParameters();
-        for (int i = 0; i < arguments.Count; i++)
-        {
-            emitter.EmitExpression(arguments[i]);
-            if (i < ctorParams.Length)
-                emitter.EmitConversionForParameter(arguments[i], ctorParams[i].ParameterType);
-            else
-                emitter.EmitBoxIfNeeded(arguments[i]);
-        }
-
-        for (int i = arguments.Count; i < ctorParams.Length; i++)
-            emitter.EmitOmittedArgument(ctorParams[i].ParameterType);
+        // Reuse ordinary statically-resolved method argument lowering. Besides
+        // evaluating and discarding surplus values safely, it publishes the
+        // exact caller list when the base constructor binds `arguments`.
+        emitter.EmitStaticCallArguments(arguments, parentCtor);
 
         System.Reflection.ConstructorInfo ctorToCall = parentCtor;
         Type? baseType = ctx.CurrentClassBuilder?.BaseType;

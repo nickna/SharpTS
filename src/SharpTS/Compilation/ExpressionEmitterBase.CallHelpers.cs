@@ -30,6 +30,9 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitCall(Expr.Call c)
     {
+        if (TryEmitStaticIndirectEvalGlobal(c))
+            return;
+
         // CommonJS: literal require('./literal') → direct $GetExports() call.
         // Placed at the top so it works in async/generator state machine emitters too
         // (which inherit this method without overriding the prefix dispatch).
@@ -351,6 +354,70 @@ public abstract partial class ExpressionEmitterBase
 
         // Function value call with spread support
         EmitFunctionValueCall(c);
+    }
+
+    /// <summary>
+    /// Lowers a constant indirect eval of a single global identifier to the emitted
+    /// script-global field. The runtime eval bridge has a separate interpreter scope and
+    /// therefore cannot otherwise observe globals stored on the compiled Program type.
+    /// Kept in the shared emitter because field initializers can be emitted by state-machine
+    /// variants as well as the ordinary IL emitter.
+    /// </summary>
+    protected bool TryEmitStaticIndirectEvalGlobal(Expr.Call call)
+    {
+        Expr callee = call.Callee;
+        while (callee is Expr.Grouping grouping)
+            callee = grouping.Expression;
+
+        if (callee is not Expr.Comma comma
+            || comma.Right is not Expr.Variable evalVar
+            || evalVar.Name.Lexeme != "eval"
+            || call.Arguments.Count != 1
+            || call.Arguments[0] is not Expr.Literal { Value: string source })
+        {
+            return false;
+        }
+
+        List<Stmt> statements;
+        try
+        {
+            statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        }
+        catch
+        {
+            return false;
+        }
+
+        if (statements is not [Stmt.Expression { Expr: Expr.Variable identifier }])
+        {
+            return false;
+        }
+
+        FieldBuilder? globalField = null;
+        FieldBuilder? capturedField = null;
+        bool isStaticGlobal = Ctx.TopLevelStaticVars?.TryGetValue(
+            identifier.Name.Lexeme, out globalField) == true;
+        bool isCapturedGlobal = Ctx.CapturedTopLevelVars?.Contains(identifier.Name.Lexeme) == true
+            && Ctx.EntryPointDisplayClassFields?.TryGetValue(
+                identifier.Name.Lexeme, out capturedField) == true
+            && Ctx.EntryPointDisplayClassStaticField != null;
+        if (!isStaticGlobal && !isCapturedGlobal)
+            return false;
+
+        EmitExpression(comma.Left);
+        EnsureBoxed();
+        IL.Emit(OpCodes.Pop);
+        if (isStaticGlobal)
+        {
+            IL.Emit(OpCodes.Ldsfld, globalField!);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldsfld, Ctx.EntryPointDisplayClassStaticField!);
+            IL.Emit(OpCodes.Ldfld, capturedField!);
+        }
+        SetStackUnknown();
+        return true;
     }
 
     /// <summary>
@@ -808,6 +875,19 @@ public abstract partial class ExpressionEmitterBase
     {
         var targetParams = targetMethod.GetParameters();
         int paramCount = targetParams.Length;
+
+        // Implicit `extends Array` constructors are represented by one internal
+        // params object[] slot so their CLR signature can carry an arbitrary JS
+        // argument list. Pack spreads and ordinary arguments through the normal
+        // JS argument-array helper instead of treating the first value as object[].
+        if (paramCount == 1
+            && targetParams[0].ParameterType == Types.ObjectArray
+            && targetParams[0].Name == "__jsArgs")
+        {
+            EmitArgsArrayWithSpread(arguments);
+            return;
+        }
+
         bool hasRestParam = paramCount > 0 &&
             targetParams[paramCount - 1].ParameterType == typeof(List<object>);
 
@@ -1270,7 +1350,32 @@ public abstract partial class ExpressionEmitterBase
         {
             var targetMethod = callableMethod!;
             EmitStaticCallArguments(c.Arguments, targetMethod);
+
+            // A direct Class.method() call bypasses $TSFunction.InvokeWithThis,
+            // so publish the lexical class as the receiver while the static body
+            // runs. Private static brand checks can then distinguish this valid
+            // path from a value call whose receiver is a Proxy or another object.
+            // Preserve the enclosing dynamic receiver for nested calls.
+            var previousThis = IL.DeclareLocal(Types.Object);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.CurrentFunctionThisField);
+            IL.Emit(OpCodes.Stloc, previousThis);
+            IL.Emit(OpCodes.Ldtoken, classBuilder);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentFunctionThisField);
+
             IL.Emit(OpCodes.Call, targetMethod);
+
+            LocalBuilder? result = null;
+            if (targetMethod.ReturnType != Types.Void)
+            {
+                result = IL.DeclareLocal(targetMethod.ReturnType);
+                IL.Emit(OpCodes.Stloc, result);
+            }
+            IL.Emit(OpCodes.Ldloc, previousThis);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentFunctionThisField);
+            if (result != null)
+                IL.Emit(OpCodes.Ldloc, result);
+
             SetStackUnknown();
             return true;
         }

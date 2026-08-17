@@ -18,6 +18,7 @@ public partial class ILCompiler
     private readonly Dictionary<Stmt.Function, TypeBuilder> _innerFunctionDisplayClasses = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, Dictionary<string, FieldBuilder>> _innerFunctionDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, ConstructorBuilder> _innerFunctionDCCtors = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Function> _strictInnerFunctions = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionEntryPointDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, FieldBuilder> _innerFunctionFunctionDCFields = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, Type[]> _innerFunctionParamTypes = new(ReferenceEqualityComparer.Instance);
@@ -68,6 +69,12 @@ public partial class ILCompiler
     /// </summary>
     private void CollectInnerFunction(Stmt.Function funcStmt)
     {
+        // All code in a class body is strict, including ordinary functions nested
+        // inside methods. Record that lexical fact while the class collection cursor
+        // is available; body emission happens later, after the cursor is gone.
+        if (_currentCollectClassName != null)
+            _strictInnerFunctions.Add(funcStmt);
+
         var captures = new HashSet<string>(_closures.Analyzer.GetCaptures(funcStmt));
         // Remove self-reference: the function's own name is not a true capture.
         // Self-calls are handled via InnerFunctionMethodsByName direct dispatch.
@@ -445,6 +452,9 @@ public partial class ILCompiler
             _innerFunctionParamTypes.TryGetValue(func, out var innerParamTypes);
 
             var ctx = CreateModuleMemberContext(il, ((MethodBuilder)method));
+            ctx.IsStrictMode = _strictInnerFunctions.Contains(func)
+                || _isStrictMode
+                || BodyDeclaresUseStrict(func.Body);
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
             ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0 ? _closures.ArrowFunctionDCFields : null;
@@ -894,6 +904,16 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Ldarg_0);
                 il.Emit(OpCodes.Ldfld, capturedField);
+            }
+            else if (ctx.Classes.TryGetValue(ctx.ResolveClassName(capturedVar), out var capturedClass))
+            {
+                // A nested declaration may be the first closure level that actually
+                // reads a module class (the enclosing callback only contains the
+                // declaration). Such a transitive capture has no enclosing value field
+                // to copy; materialize the class's canonical emitted Type directly.
+                il.Emit(OpCodes.Ldtoken, capturedClass);
+                il.Emit(OpCodes.Call, ctx.Types.GetMethod(
+                    ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
             }
             else if (ctx.CapturedTopLevelVars?.Contains(capturedVar) == true &&
                      ctx.EntryPointDisplayClassFields?.TryGetValue(capturedVar, out var epField) == true)

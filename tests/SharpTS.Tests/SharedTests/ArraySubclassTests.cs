@@ -30,6 +30,36 @@ public class ArraySubclassTests
     }
 
     [Theory, ModeData]
+    public void ExtendsArray_ImplicitConstructorForwardsArguments(ExecutionMode mode)
+    {
+        var source = """
+            class Values extends Array {}
+            const values: any = new Values(42, "foo");
+            const holes: any = new Values(3);
+            console.log(values.length, values[0], values[1]);
+            console.log(holes.length, 0 in holes);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2 42 foo\n3 false\n", output);
+    }
+
+    [Theory, ModeData]
+    public void ClassExpressionExtendsArray_UsesArrayBaseAndForwardsArguments(ExecutionMode mode)
+    {
+        var source = """
+            const Values = class extends Array {};
+            const values: any = new Values();
+            values.push("x", "y");
+            console.log(values.length, values[0], values[1]);
+            console.log(values instanceof Values, values instanceof Array, Array.isArray(values));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2 x y\ntrue true true\n", output);
+    }
+
+    [Theory, ModeData]
     public void ExtendsArray_MethodsFieldsAndIteration(ExecutionMode mode)
     {
         var source = """

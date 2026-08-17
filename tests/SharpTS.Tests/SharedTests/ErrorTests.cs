@@ -692,6 +692,19 @@ public class ErrorTests
         Assert.Equal("hello\ntrue\ntrue\n", output);
     }
 
+    [Theory, ModeData]
+    public void ClassExpressionExtendsNativeError(ExecutionMode mode)
+    {
+        var source = """
+            const Custom = class extends TypeError {};
+            const error: any = new Custom();
+            console.log(error instanceof Custom, error instanceof TypeError, error instanceof Error);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true true true\n", output);
+    }
+
     #endregion
 
     #region Built-in error parity (#694)

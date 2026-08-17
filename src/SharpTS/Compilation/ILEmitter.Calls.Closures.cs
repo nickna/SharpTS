@@ -209,7 +209,6 @@ public partial class ILEmitter
     /// </summary>
     private void EmitDisplayInstanceFieldPopulation(Expr.ArrowFunction af, TypeBuilder displayClass)
     {
-
         // Populate $entryPointDC field if this arrow captures top-level variables
         if (_ctx.ArrowEntryPointDCFields?.TryGetValue(af, out var entryPointDCField) == true)
         {

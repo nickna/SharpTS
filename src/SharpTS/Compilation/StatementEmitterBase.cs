@@ -267,6 +267,10 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 EmitConstDeclaration(c);
                 break;
 
+            case Stmt.Class classStmt:
+                EmitStateMachineClassDeclaration(classStmt);
+                break;
+
             case Stmt.If i:
                 EmitIf(i);
                 break;
@@ -1368,6 +1372,63 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
     #region Class Expressions
 
+    private void EmitStateMachineClassDeclaration(Stmt.Class classStmt)
+    {
+        TypeBuilder? builder = null;
+        if (Ctx.BlockScopedClassBuilders?.TryGetValue(classStmt, out var scopedBuilder) == true)
+            builder = scopedBuilder;
+        else
+            Ctx.Classes.TryGetValue(Ctx.GetQualifiedClassName(classStmt.Name.Lexeme), out builder);
+        if (builder == null)
+            return;
+
+        EmitClassHeritageExpression(classStmt.SuperclassExpr, classStmt.Name.Lexeme);
+        IL.Emit(OpCodes.Ldtoken, builder);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.RunClassDefinitionMethod);
+
+        if (Ctx.DeferredComputedClassKeys?.TryGetValue(classStmt, out var deferred) == true)
+            EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
+
+        var field = GetHoistedVariableField(classStmt.Name.Lexeme);
+        if (field != null)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldtoken, builder);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            IL.Emit(OpCodes.Stfld, field);
+            return;
+        }
+
+        var local = Ctx.Locals.GetLocal(classStmt.Name.Lexeme)
+            ?? Ctx.Locals.DeclareLocal(classStmt.Name.Lexeme, Types.Object, classStmt);
+        IL.Emit(OpCodes.Ldtoken, builder);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.Emit(OpCodes.Stloc, local);
+    }
+
+    private void EmitDeferredComputedKeys(MethodBuilder method, IReadOnlyList<Expr> keys)
+    {
+        var values = new List<LocalBuilder>(keys.Count);
+        foreach (var key in keys)
+        {
+            EmitExpression(key);
+            EnsureBoxed();
+            values.Add(_helpers.SpillStoreObject());
+        }
+
+        IL.Emit(OpCodes.Ldc_I4, values.Count);
+        IL.Emit(OpCodes.Newarr, Types.Object);
+        for (int i = 0; i < values.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldloc, values[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+        IL.Emit(OpCodes.Call, method);
+    }
+
     /// <summary>
     /// Default implementation for class expressions.
     /// Loads the pre-defined TypeBuilder as a Type object at runtime.
@@ -1376,6 +1437,12 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     {
         if (Ctx?.ClassExprBuilders != null && Ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
         {
+            EmitClassHeritageExpression(ce.SuperclassExpr, ce.Name?.Lexeme);
+            IL.Emit(OpCodes.Ldtoken, typeBuilder);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.RunClassDefinitionMethod);
+            if (Ctx.DeferredComputedClassExprKeys?.TryGetValue(ce, out var deferred) == true)
+                EmitDeferredComputedKeys(deferred.Method, deferred.Keys);
             IL.Emit(OpCodes.Ldtoken, typeBuilder);
             IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
             SetStackUnknown();

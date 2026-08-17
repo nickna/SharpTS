@@ -12,6 +12,82 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
+    private readonly Dictionary<Stmt.Function, string> _syncMethodFunctionDCKeys =
+        new(ReferenceEqualityComparer.Instance);
+
+    private void RegisterSyncMethodFunctionDisplayClasses(
+        IReadOnlyList<Stmt.Function> methods, string qualifiedClassName)
+    {
+        foreach (var method in methods)
+        {
+            if (method.Body == null || method.IsAsync || method.IsGenerator)
+                continue;
+
+            string infix = method.IsStatic ? "::static::" : "::";
+            string key = $"{qualifiedClassName}{infix}{method.Name.Lexeme}";
+            _closures.FunctionAstNodes[key] = method;
+            DefineFunctionDisplayClass(method, key);
+            if (_closures.FunctionDisplayClasses.ContainsKey(key))
+                _syncMethodFunctionDCKeys[method] = key;
+        }
+    }
+
+    private void SetupSyncMethodFunctionDisplayClass(
+        CompilationContext ctx, ILGenerator il, Stmt.Function method)
+    {
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0
+            ? _closures.ArrowEntryPointDCFields : null;
+        ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0
+            ? _closures.ArrowFunctionDCFields : null;
+        ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0
+            ? _closures.ArrowScopeDCFields : null;
+        ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0
+            ? _arrowScopeDCExtraFields : null;
+
+        if (!_syncMethodFunctionDCKeys.TryGetValue(method, out var key)
+            || !_closures.FunctionDisplayClasses.TryGetValue(key, out var dcType)
+            || !_closures.FunctionDisplayClassCtors.TryGetValue(key, out var dcCtor)
+            || !_closures.FunctionDisplayClassFields.TryGetValue(key, out var dcFields))
+            return;
+
+        var displayLocal = il.DeclareLocal(dcType);
+        il.Emit(OpCodes.Newobj, dcCtor);
+        il.Emit(OpCodes.Stloc, displayLocal);
+        ctx.FunctionDisplayClassLocal = displayLocal;
+        ctx.FunctionDisplayClassFields = dcFields;
+        ctx.CapturedFunctionLocals = new HashSet<string>(dcFields.Keys);
+    }
+
+    private void InitializeSyncMethodCapturedParameters(
+        CompilationContext ctx,
+        ILGenerator il,
+        Stmt.Function method,
+        MethodBase emittedMethod,
+        int argumentOffset)
+    {
+        if (ctx.FunctionDisplayClassLocal == null
+            || !_syncMethodFunctionDCKeys.TryGetValue(method, out var key)
+            || !_closures.FunctionDisplayClassFields.TryGetValue(key, out var fields))
+            return;
+
+        var emittedParameters = emittedMethod.GetParameters();
+        for (int i = 0; i < method.Parameters.Count; i++)
+        {
+            string name = method.Parameters[i].Name.Lexeme;
+            if (!fields.TryGetValue(name, out var field))
+                continue;
+
+            il.Emit(OpCodes.Ldloc, ctx.FunctionDisplayClassLocal);
+            il.Emit(OpCodes.Ldarg, i + argumentOffset);
+            Type parameterType = i < emittedParameters.Length
+                ? emittedParameters[i].ParameterType
+                : typeof(object);
+            if (parameterType.IsValueType)
+                il.Emit(OpCodes.Box, parameterType);
+            il.Emit(OpCodes.Stfld, field);
+        }
+    }
+
     private void DefineFunction(Stmt.Function funcStmt)
     {
         // Check if this is an async generator function - use combined state machine

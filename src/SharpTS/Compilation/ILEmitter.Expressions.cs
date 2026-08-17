@@ -78,6 +78,19 @@ public partial class ILEmitter
             return;
         }
 
+        // A class body's lexical self-binding shadows every outer binding with the same
+        // spelling. Class expressions are emitted as Types rather than ordinary locals, so
+        // resolve that binding before the general variable/capture resolver.
+        if (_ctx.CurrentClassBuilder != null
+            && (name == _ctx.CurrentClassName || name == _ctx.CurrentClassShortName))
+        {
+            IL.Emit(OpCodes.Ldtoken, _ctx.CurrentClassBuilder);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+                _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            SetStackUnknown();
+            return;
+        }
+
         // Try resolver first (user-defined variables: parameters, locals, captured)
         var stackType = _resolver.TryLoadVariable(name);
         if (stackType.HasValue)
@@ -227,20 +240,22 @@ public partial class ILEmitter
             return;
         }
 
-        // Check if it's an imported value (from another module) - must check BEFORE Functions
-        // because cross-module function references need to go through the import field
-        if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
-        {
-            IL.Emit(OpCodes.Ldsfld, topLevelField);
-            SetStackUnknown();
-            return;
-        }
-
         // Check if it's a class - load the Type object
         if (_ctx.Classes.TryGetValue(_ctx.ResolveClassName(name), out var classType))
         {
             IL.Emit(OpCodes.Ldtoken, classType);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+            SetStackUnknown();
+            return;
+        }
+
+        // Check if it's an imported/captured value. Class declarations must win
+        // above: closure analysis can include a class name referenced by a later
+        // callback, but class declarations are represented by their Type token and
+        // are not initialized into a top-level value field.
+        if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            IL.Emit(OpCodes.Ldsfld, topLevelField);
             SetStackUnknown();
             return;
         }
@@ -656,9 +671,21 @@ public partial class ILEmitter
         }
         else
         {
-            // Unknown target - box for safety
+            // Class bodies and other strict contexts must reject creation of an
+            // unresolvable binding. Evaluate the RHS first, then throw the same
+            // guest ReferenceError used by an unknown identifier read.
             EmitBoxIfNeeded(a.Value);
-            IL.Emit(OpCodes.Dup);
+            if (_ctx.IsStrictMode)
+            {
+                IL.Emit(OpCodes.Pop);
+                IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Dup);
+            }
             SetStackUnknown();
         }
     }
@@ -923,18 +950,24 @@ public partial class ILEmitter
         // The type has been pre-defined during collection phase.
         if (_ctx.ClassExprBuilders != null && _ctx.ClassExprBuilders.TryGetValue(ce, out var typeBuilder))
         {
-            // JavaScript evaluates static elements and computed method/accessor
-            // keys when the class expression itself is evaluated, not lazily
-            // when the emitted CLR Type is first used.
-            if (ce.StaticInitializers?.Count > 0
-                || ce.Fields.Any(f => f.IsStatic && f.Initializer != null)
-                || ce.Methods.Any(m => m.ComputedKey != null && m.Body != null)
-                || ce.Accessors?.Any(a => a.ComputedKey != null && !a.IsAbstract) == true)
+            EmitClassHeritageExpression(ce.SuperclassExpr, ce.Name?.Lexeme);
+
+            if (_ctx.ClassExprCaptureFields?.TryGetValue(ce, out var captureFields) == true)
             {
-                IL.Emit(OpCodes.Ldtoken, typeBuilder);
-                IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
+                foreach (var (name, field) in captureFields)
+                {
+                    EmitVariable(new Expr.Variable(
+                        new Token(TokenType.IDENTIFIER, name, null, 0)));
+                    EnsureBoxed();
+                    IL.Emit(OpCodes.Stsfld, field);
+                }
             }
+
+            // Class-expression evaluation always creates its constructor prototype;
+            // static elements and computed keys share the same emitted .cctor.
+            IL.Emit(OpCodes.Ldtoken, typeBuilder);
+            IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
 
             // Load the Type object using ldtoken + GetTypeFromHandle
             IL.Emit(OpCodes.Ldtoken, typeBuilder);

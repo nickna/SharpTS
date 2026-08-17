@@ -96,6 +96,14 @@ public partial class GeneratorMoveNextEmitter : IteratorMoveNextEmitter
         // Emit state dispatch switch
         EmitStateSwitch(_builder.StateField, _analysis.YieldPointCount, _stateLabels);
 
+        // A running generator has no resumable suspension point. Mark it completed before
+        // executing the initial body; every yield overwrites this with its resume state.
+        // Consequently an uncaught abrupt completion leaves -2 behind and a later next()
+        // returns done instead of entering the body a second time (ECMA-262 GeneratorResume).
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4, -2);
+        _il.Emit(OpCodes.Stfld, _builder.StateField);
+
         // Emit the function body (will emit yield points inline)
         foreach (var stmt in body)
         {

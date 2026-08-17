@@ -1514,21 +1514,48 @@ public partial class ILEmitter
             builder = topLevelBuilder;
         }
 
+        EmitClassHeritageExpression(classStmt.SuperclassExpr, classStmt.Name.Lexeme);
+
         // ECMAScript evaluates static elements and computed method/accessor
         // keys at the class declaration's exact source position. CLR type
         // initializers are lazy, so force the emitted .cctor here rather than
         // in an entry-point pre-pass (which ran every class too early) or at
         // first later use (which ran block-scoped classes too late).
-        if (ClassDefinitionHasEagerWork(classStmt))
+        // Prototype creation is itself eager class-definition work and lives in
+        // the emitted .cctor alongside static fields/blocks/computed keys. Force
+        // every class definition, including classes whose only members are methods
+        // or private instance fields, so `C.prototype` exists immediately.
+        IL.Emit(OpCodes.Ldtoken, builder!);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+            _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
+
+        // Top-level classes are lexical declarations, so they may also be present
+        // in BlockScopedClassBuilders. Regardless of that implementation detail,
+        // a captured module binding must be published to the entry-point display
+        // class at its declaration position.
+        if (_ctx.IsModuleTopLevel
+            && _ctx.CapturedTopLevelVars?.Contains(classStmt.Name.Lexeme) == true
+            && _ctx.EntryPointDisplayClassFields?.TryGetValue(classStmt.Name.Lexeme, out var displayField) == true)
         {
+            if (_ctx.EntryPointDisplayClassLocal != null)
+                IL.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+                IL.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            else
+                goto skipCapturedClassStore;
+
             IL.Emit(OpCodes.Ldtoken, builder!);
             IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
                 _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.RunClassDefinitionMethod);
+            IL.Emit(OpCodes.Stfld, displayField);
         }
+        skipCapturedClassStore:
 
-        if (!isBlockScoped
-            || !_ctx.Locals.TryGetTag(classStmt.Name.Lexeme, out var tag)
+        if (!isBlockScoped)
+            return;
+
+        if (!_ctx.Locals.TryGetTag(classStmt.Name.Lexeme, out var tag)
             || !ReferenceEquals(tag, classStmt))
             return;
 
@@ -1537,15 +1564,6 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
         IL.Emit(OpCodes.Stloc, local);
     }
-
-    private static bool ClassDefinitionHasEagerWork(Stmt.Class classStmt) =>
-        classStmt.StaticInitializers?.Count > 0
-        || classStmt.Fields.Any(field => field.IsStatic && field.Initializer != null)
-        || classStmt.AutoAccessors?.Any(
-            accessor => accessor.IsStatic && accessor.Initializer != null) == true
-        || classStmt.Methods.Any(method => method.ComputedKey != null && method.Body != null)
-        || classStmt.Accessors?.Any(
-            accessor => accessor.ComputedKey != null && !accessor.IsAbstract) == true;
 
     /// <summary>
     /// Emits a block that contains using declarations with proper try/finally disposal.
@@ -1808,12 +1826,16 @@ public partial class ILEmitter
 
         if (_abruptCompletionScopes.TryPeek(out var completion))
         {
-            if (_ctx.ReturnValueLocal == null)
+            if (_ctx.ReturnValueLocal == null && !_ctx.HasDeferredVoidReturn)
             {
-                _ctx.ReturnValueLocal = IL.DeclareLocal(returnType);
                 _ctx.ReturnLabel = _ctx.ILBuilder.DefineLabel("deferred_return");
+                if (returnType == typeof(void))
+                    _ctx.HasDeferredVoidReturn = true;
+                else
+                    _ctx.ReturnValueLocal = IL.DeclareLocal(returnType);
             }
-            IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);
+            if (returnType != typeof(void))
+                IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal!);
             IL.Emit(OpCodes.Ldc_I4_1); // return completion
             IL.Emit(OpCodes.Stloc, completion.Kind);
             _ctx.ILBuilder.Emit_Leave(completion.RunFinally);
@@ -1823,12 +1845,16 @@ public partial class ILEmitter
             // Inside exception block: store value and leave
             // Use builder for Leave validation (ensures we're inside exception block)
             var builder = _ctx.ILBuilder;
-            if (_ctx.ReturnValueLocal == null)
+            if (_ctx.ReturnValueLocal == null && !_ctx.HasDeferredVoidReturn)
             {
-                _ctx.ReturnValueLocal = IL.DeclareLocal(returnType);
                 _ctx.ReturnLabel = builder.DefineLabel("deferred_return");
+                if (returnType == typeof(void))
+                    _ctx.HasDeferredVoidReturn = true;
+                else
+                    _ctx.ReturnValueLocal = IL.DeclareLocal(returnType);
             }
-            IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);
+            if (returnType != typeof(void))
+                IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal!);
             builder.Emit_Leave(_ctx.ReturnLabel);
         }
         else

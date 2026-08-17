@@ -76,7 +76,7 @@ public partial class ILCompiler
         // Pre-define constructor (if not already defined)
         if (!_classes.Constructors.ContainsKey(qualifiedClassName))
         {
-            var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
+            var constructor = classStmt.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
             // Use typed parameters from TypeMap
             Type[] ctorParamTypes;
             if (constructor != null)
@@ -105,6 +105,12 @@ public partial class ILCompiler
                     // Promise subclass with no constructor — accept the executor arg (#242)
                     ctorParamTypes = [typeof(object)];
                 }
+                else if (_classes.ArraySubclasses.Contains(qualifiedClassName))
+                {
+                    // The implicit derived constructor forwards the complete JS
+                    // argument list to Array, whose arity is unbounded.
+                    ctorParamTypes = [typeof(object[])];
+                }
                 else
                 {
                     ctorParamTypes = [];
@@ -121,8 +127,24 @@ public partial class ILCompiler
                 ctorParamTypes
             );
 
+            if (constructor == null && _classes.ArraySubclasses.Contains(qualifiedClassName))
+                MarkJsVariadicConstructor(ctorBuilder);
+
             _classes.Constructors[qualifiedClassName] = ctorBuilder;
             RegisterArgumentsCapturingMethod(ctorBuilder, constructor?.Body);
+            if (constructor == null && classStmt.SuperclassExpr != null)
+            {
+                string qualifiedSuperclass = ctx.ResolveClassName(
+                    Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
+                if (_classes.Constructors.TryGetValue(qualifiedSuperclass, out var parentCtor)
+                    && _functions.MethodsCapturingArguments.Contains(parentCtor))
+                {
+                    // The implicit derived constructor forwards the original
+                    // caller list to super(...args). Keep the published snapshot
+                    // alive until the first base constructor that binds arguments.
+                    _functions.MethodsCapturingArguments.Add(ctorBuilder);
+                }
+            }
         }
 
         // Initialize static methods dictionary for this class
@@ -140,7 +162,8 @@ public partial class ILCompiler
         // EmitStaticMethodBody fills the new one, and the abandoned first MethodBuilder
         // shows up via reflection with no body — surface as BadImageFormatException at any
         // reflective Invoke. Tracked as #58.
-        foreach (var method in classStmt.Methods.Where(m => m.Body != null && m.IsStatic && m.Name.Lexeme != "constructor" && m.ComputedKey == null))
+        foreach (var method in classStmt.Methods.Where(m =>
+                     m.Body != null && m.IsStatic && !m.IsPrivate && m.ComputedKey == null))
         {
             if (_classes.StaticMethods[qualifiedClassName].ContainsKey(method.Name.Lexeme))
                 continue;
@@ -168,7 +191,8 @@ public partial class ILCompiler
 
         // Define instance methods (skip overload signatures with no body, and computed
         // symbol-keyed methods — handled by DefineSymbolMethods below).
-        foreach (var method in classStmt.Methods.Where(m => m.Body != null && m.ComputedKey == null))
+        foreach (var method in classStmt.Methods.Where(m =>
+                     m.Body != null && !m.IsPrivate && m.ComputedKey == null))
         {
             if (method.IsStatic || method.Name.Lexeme == "constructor")
                 continue;
@@ -243,6 +267,8 @@ public partial class ILCompiler
                 string methodName = accessor.Kind.Type == TokenType.GET
                     ? $"get_{pascalName}"
                     : $"set_{pascalName}";
+                if (accessor.IsStatic)
+                    methodName = $"$static_{methodName}";
 
                 // Explicit accessors use object types (their bodies work with dynamic field storage)
                 Type[] paramTypes = accessor.Kind.Type == TokenType.SET
@@ -323,25 +349,23 @@ public partial class ILCompiler
                 }
                 preDefinedAcc[methodName] = methodBuilder;
 
-                // Track for PropertyBuilder creation
-                if (!_typedInterop.ExplicitAccessors.TryGetValue(className, out var accessors))
+                // Only instance accessors become CLR PropertyBuilder members.
+                // Static JS accessors live on the constructor object (the Type
+                // value) and are dispatched through StaticGetters/Setters.
+                if (!accessor.IsStatic)
                 {
-                    accessors = [];
-                    _typedInterop.ExplicitAccessors[className] = accessors;
-                }
+                    if (!_typedInterop.ExplicitAccessors.TryGetValue(className, out var accessors))
+                    {
+                        accessors = [];
+                        _typedInterop.ExplicitAccessors[className] = accessors;
+                    }
 
-                if (!accessors.TryGetValue(pascalName, out var accessorInfo))
-                {
-                    accessorInfo = (null, null, typeof(object));
-                }
+                    if (!accessors.TryGetValue(pascalName, out var accessorInfo))
+                        accessorInfo = (null, null, typeof(object));
 
-                if (accessor.Kind.Type == TokenType.GET)
-                {
-                    accessors[pascalName] = (methodBuilder, accessorInfo.Setter, typeof(object));
-                }
-                else
-                {
-                    accessors[pascalName] = (accessorInfo.Getter, methodBuilder, typeof(object));
+                    accessors[pascalName] = accessor.Kind.Type == TokenType.GET
+                        ? (methodBuilder, accessorInfo.Setter, typeof(object))
+                        : (accessorInfo.Getter, methodBuilder, typeof(object));
                 }
             }
 
@@ -430,9 +454,10 @@ public partial class ILCompiler
         // Define static methods first (so we can reference them in the static constructor).
         // Skip overload signatures (no body) and computed symbol-keyed methods (handled by
         // DefineSymbolMethods / EmitSymbolMethods).
-        foreach (var method in classStmt.Methods.Where(m => m.Body != null && m.ComputedKey == null))
+        foreach (var method in classStmt.Methods.Where(m =>
+                     m.Body != null && !m.IsPrivate && m.ComputedKey == null))
         {
-            if (method.IsStatic && method.Name.Lexeme != "constructor")
+            if (method.IsStatic)
             {
                 DefineStaticMethod(typeBuilder, qualifiedClassName, method);
             }
@@ -448,18 +473,16 @@ public partial class ILCompiler
         // Emit method bodies (skip overload signatures with no body, and computed
         // symbol-keyed methods — emitted by EmitSymbolMethods below).
         // This must happen BEFORE static constructor so static blocks can call static methods
-        foreach (var method in classStmt.Methods.Where(m => m.Body != null && m.ComputedKey == null))
+        foreach (var method in classStmt.Methods.Where(m =>
+                     m.Body != null && !m.IsPrivate && m.ComputedKey == null))
         {
-            if (method.Name.Lexeme != "constructor")
+            if (method.IsStatic)
             {
-                if (method.IsStatic)
-                {
-                    EmitStaticMethodBody(qualifiedClassName, method);
-                }
-                else
-                {
-                    EmitMethod(typeBuilder, method, fieldsField);
-                }
+                EmitStaticMethodBody(qualifiedClassName, method);
+            }
+            else if (method.Name.Lexeme != "constructor")
+            {
+                EmitMethod(typeBuilder, method, fieldsField);
             }
         }
 
@@ -709,6 +732,7 @@ public partial class ILCompiler
 
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, methodBuilder);
+        ctx.IsStrictMode = true;
         ctx.FieldsField = isStatic ? null : fieldsField;
         ctx.IsInstanceMethod = !isStatic;
         ctx.CurrentClassBuilder = typeBuilder;
@@ -791,7 +815,8 @@ public partial class ILCompiler
         if (_classes.SymbolMethods.ContainsKey(className))
             return;  // already defined (idempotent across multi-module pre-define/emit passes)
 
-        var computed = classStmt.Methods.Where(m => m.ComputedKey != null && m.Body != null).ToList();
+        var computed = classStmt.Methods.Where(m =>
+            !m.IsPrivate && m.ComputedKey != null && m.Body != null).ToList();
         if (computed.Count == 0)
             return;
 
@@ -803,6 +828,12 @@ public partial class ILCompiler
             // `<computed>` lexeme is not a dispatchable name.
             string uniqueName = $"$symmethod_{i}";
             var renamed = method with { Name = new Token(TokenType.IDENTIFIER, uniqueName, null, method.Name.Line) };
+
+            // Display-class analysis/registration ran against the original computed-method AST.
+            // Body emission uses the renamed copy so it can resolve the synthetic MethodBuilder;
+            // carry the identity-keyed environment registration across that copy as well.
+            if (_syncMethodFunctionDCKeys.TryGetValue(method, out var syncMethodDCKey))
+                _syncMethodFunctionDCKeys[renamed] = syncMethodDCKey;
 
             // Param types resolve from each parameter's annotation (the type map is keyed by the @@name,
             // not the synthetic IL name) — fine: computed iterator methods are typically parameterless.
@@ -847,6 +878,8 @@ public partial class ILCompiler
             list.Add((renamed, method.ComputedKey!, mb));
         }
         _classes.SymbolMethods[className] = list;
+        if (DefineDeferredComputedMethodKeyRegistrar(typeBuilder) is { } deferred)
+            _classes.DeferredComputedClassKeys[classStmt] = deferred;
     }
 
     /// <summary>
@@ -965,11 +998,12 @@ public partial class ILCompiler
         ctx.AsyncArrowParentBuilders = _async.ArrowParentBuilders;
         ApplyLockDecoratorFields(ctx);
         // Check for method-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(method.Body);
+        ctx.IsStrictMode = true;
         // ES2022 Private Class Elements support
         ctx.CurrentClassName = typeBuilder.Name;
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;
+        SetupSyncMethodFunctionDisplayClass(ctx, il, method);
         // Module-level variable access. For class method bodies we augment
         // TopLevelStaticVars with this module's ESM export fields so bare
         // identifiers like `braceExpand` inside a class method resolve to
@@ -1061,6 +1095,8 @@ public partial class ILCompiler
             method.Body,
             defaultParamTypes,
             argumentOffset: 1);
+        InitializeSyncMethodCapturedParameters(
+            ctx, il, method, methodBuilder, argumentOffset: 1);
 
         // Abstract methods have no body to emit
         if (method.Body != null)

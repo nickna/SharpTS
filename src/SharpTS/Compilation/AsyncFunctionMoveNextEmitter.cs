@@ -103,6 +103,27 @@ public abstract partial class AsyncFunctionMoveNextEmitter : StateMachineExitRou
         {
             EmitExpression(r.Value);
             EnsureBoxed();
+
+            // Async-function return performs PromiseResolve-style adoption. Private async
+            // methods have a statically identifiable call node and return Task<object>, so
+            // consume the synthetic analyzer state and await it before completing the outer
+            // function. This prevents a nested host Task from becoming the JavaScript result.
+            if (r.Value is Expr.CallPrivate privateCall)
+            {
+                int returnState = NextAwaitState();
+                if (PrivateCallReturnsTask(privateCall))
+                    EmitAwaitFromValueOnStack(returnState);
+                else
+                {
+                    // Analysis conservatively reserves a synthetic state for every private call.
+                    // A synchronous private method does not suspend, but its unreachable dispatch
+                    // label must still be materialized with the dispatcher's empty-stack shape.
+                    var synchronousResult = IL.DeclareLocal(typeof(object));
+                    IL.Emit(OpCodes.Stloc, synchronousResult);
+                    MarkAwaitResumeLabel(returnState);
+                    IL.Emit(OpCodes.Ldloc, synchronousResult);
+                }
+            }
         }
         else
         {
@@ -128,6 +149,23 @@ public abstract partial class AsyncFunctionMoveNextEmitter : StateMachineExitRou
         }
 
         EmitCompleteWithReturnValueOnStack();
+    }
+
+    private bool PrivateCallReturnsTask(Expr.CallPrivate call)
+    {
+        string methodName = call.Name.Lexeme.TrimStart('#');
+        string? className = Ctx.CurrentClassName;
+        if (className == null || Ctx.ClassRegistry == null)
+            return false;
+
+        className = Ctx.ResolvePrivateMethodOwner(className, methodName);
+        if (Ctx.ClassRegistry.TryGetPrivateMethod(className, methodName, out var instanceMethod)
+            && instanceMethod?.ReturnType == Ctx.Types.TaskOfObject)
+            return true;
+        if (Ctx.ClassRegistry.TryGetStaticPrivateMethod(className, methodName, out var staticMethod)
+            && staticMethod?.ReturnType == Ctx.Types.TaskOfObject)
+            return true;
+        return false;
     }
 
     /// <summary>

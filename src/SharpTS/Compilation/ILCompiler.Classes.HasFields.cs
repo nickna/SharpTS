@@ -262,13 +262,19 @@ public partial class ILCompiler
         {
             foreach (var (propName, backingField) in backingFields)
             {
-                // Convert PascalCase property name to camelCase for JS-style access
-                var camelName = NamingConventions.ToCamelCase(propName);
+                // Preserve the exact JavaScript spelling. The backing-field map is
+                // keyed by PascalCase for .NET interop, but an already-uppercase JS
+                // name (for example `B = class {}`) must not become `b` on dynamic
+                // access when type checking is disabled.
+                var jsName = classStmt.Fields
+                    .FirstOrDefault(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare
+                        && NamingConventions.ToPascalCase(f.Name.Lexeme) == propName)
+                    ?.Name.Lexeme ?? NamingConventions.ToCamelCase(propName);
                 var nextLabel = il.DefineLabel();
 
-                // if (name == "camelName") return this.backingField;
+                // if (name == "jsName") return this.backingField;
                 il.Emit(OpCodes.Ldarg_1);
-                il.Emit(OpCodes.Ldstr, camelName);
+                il.Emit(OpCodes.Ldstr, jsName);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
                 il.Emit(OpCodes.Brfalse, nextLabel);
 
@@ -296,6 +302,7 @@ public partial class ILCompiler
 
         // 2b. If this class extends Error, fall back to Error base class properties
         il.MarkLabel(tryMethodsLabel);
+        EmitClassPrototypeFieldFallback(il);
         if (IsErrorSubclass(className))
         {
             EmitErrorPropertyFallback(il, "name", _runtime.ErrorGetName);
@@ -657,6 +664,15 @@ public partial class ILCompiler
         // become dead branches here — matching the class-declaration registry's behavior.
         il.MarkLabel(tryMethodsLabel);
 
+        EmitClassPrototypeFieldFallback(il);
+
+        if (_classes.ErrorSubclasses.Contains(className))
+        {
+            EmitErrorPropertyFallback(il, "name", _runtime.ErrorGetName);
+            EmitErrorPropertyFallback(il, "message", _runtime.ErrorGetMessage);
+            EmitErrorPropertyFallback(il, "stack", _runtime.ErrorGetStack);
+        }
+
         // 2d. `instance.constructor` → the class (a System.Type value). See
         // EmitConstructorPropertyBranch; after own fields so they can shadow it.
         EmitConstructorPropertyBranch(il, _classExprs.Builders[classExpr]);
@@ -804,8 +820,59 @@ public partial class ILCompiler
             return;
         }
 
-        il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+        // Every ordinary class ultimately inherits Object.prototype. Return
+        // its shared methods (hasOwnProperty, toString, valueOf, ...) when no
+        // emitted base-class stub claimed the property.
+        il.Emit(OpCodes.Call, _runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, _runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _runtime.GetProperty);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Reads properties assigned directly to a generated class's stable
+    /// prototype object (for example <c>Err.prototype.message = "custom"</c>).
+    /// The prototype itself is an instance of the generated class, so guard
+    /// against looking it up from itself before probing its own fields.
+    /// </summary>
+    private void EmitClassPrototypeFieldFallback(ILGenerator il)
+    {
+        var prototypeLocal = il.DeclareLocal(_types.Object);
+        var prototypeFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var prototypeValueLocal = il.DeclareLocal(_types.Object);
+        var skipLabel = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
+        il.Emit(OpCodes.Call, _runtime.GetClassPrototypeMethod);
+        il.Emit(OpCodes.Stloc, prototypeLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, skipLabel);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Isinst, _runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Brfalse, skipLabel);
+        il.Emit(OpCodes.Ldloc, prototypeLocal);
+        il.Emit(OpCodes.Castclass, _runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, _runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Stloc, prototypeFieldsLocal);
+        il.Emit(OpCodes.Ldloc, prototypeFieldsLocal);
+        il.Emit(OpCodes.Brfalse, skipLabel);
+        il.Emit(OpCodes.Ldloc, prototypeFieldsLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, prototypeValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, skipLabel);
+        il.Emit(OpCodes.Ldloc, prototypeValueLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(skipLabel);
     }
 
     /// <summary>
