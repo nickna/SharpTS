@@ -636,6 +636,8 @@ public abstract partial class ExpressionEmitterBase
         IL.Emit(OpCodes.Ldstr, Ctx.CurrentModulePath ?? "");
         IL.Emit(OpCodes.Call, Ctx.Runtime!.DynamicImportModule);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.WrapTaskAsPromise);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.MarkNonAutoAwaitPromiseMethod);
         SetStackUnknown();
     }
 

@@ -690,7 +690,7 @@ public partial class AsyncGeneratorMoveNextEmitter
             {
                 _il.Emit(OpCodes.Ldloc, local);
             }
-            else
+            else if (!TryEmitGlobalVariable(sourceVar))
             {
                 _il.Emit(OpCodes.Ldnull);
             }

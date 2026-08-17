@@ -2485,6 +2485,30 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpInstance);
         }
 
+        // Function objects have an intrinsic Function.prototype relationship
+        // that is not represented by a per-instance PDS prototype. Generic
+        // array algorithms call HasProperty before Get, so explicitly walk
+        // the function prototype to observe inherited indexed properties.
+        var notFunctionInstance = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, notFunctionInstance);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(notFunctionInstance);
+
+        var notBoundFunctionInstance = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brfalse, notBoundFunctionInstance);
+        il.Emit(OpCodes.Call, runtime.FunctionPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.FunctionPrototypeField);
+        il.Emit(OpCodes.Stloc, currentLocal);
+        il.Emit(OpCodes.Br, loopStart);
+        il.MarkLabel(notBoundFunctionInstance);
+
         // Other object shapes can still carry an explicit PDS prototype.
         // Continue that chain before falling back to Object.prototype.
         il.Emit(OpCodes.Ldloc, currentLocal);

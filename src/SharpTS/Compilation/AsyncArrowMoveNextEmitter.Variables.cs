@@ -429,9 +429,15 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
-        // Fallback: null
-        _il.Emit(OpCodes.Ldnull);
-        SetStackType(StackType.Null);
+        // A closure created inside an async arrow may capture a top-level
+        // function, class, or variable. Use normal global resolution so a
+        // function capture receives its canonical wrapper (and expandos), not
+        // a null snapshot.
+        if (!TryEmitGlobalVariable(name))
+        {
+            _il.Emit(OpCodes.Ldnull);
+            SetStackType(StackType.Null);
+        }
     }
 
     /// <summary>

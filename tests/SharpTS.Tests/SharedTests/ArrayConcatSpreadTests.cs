@@ -19,6 +19,35 @@ namespace SharpTS.Tests.SharedTests;
 public class ArrayConcatSpreadTests
 {
     [Theory, ModeData]
+    public void Concat_SpreadableFunction_ObservesInheritedIndexes(ExecutionMode mode)
+    {
+        var source = @"
+            const first: any = function(a, b, c) {};
+            first[Symbol.isConcatSpreadable] = true;
+            first[0] = 1;
+            first[1] = 2;
+            first[2] = 3;
+            console.log(JSON.stringify([].concat(first)));
+
+            (Function.prototype as any)[Symbol.isConcatSpreadable] = true;
+            const second: any = function(a, b, c) {};
+            console.log(JSON.stringify([].concat(second)));
+
+            (Function.prototype as any)[0] = 4;
+            (Function.prototype as any)[1] = 5;
+            (Function.prototype as any)[2] = 6;
+            console.log(JSON.stringify([].concat(function(a, b, c) {})));
+
+            delete (Function.prototype as any)[Symbol.isConcatSpreadable];
+            delete (Function.prototype as any)[0];
+            delete (Function.prototype as any)[1];
+            delete (Function.prototype as any)[2];
+        ";
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("[1,2,3]\n[null,null,null]\n[4,5,6]\n", output);
+    }
+
+    [Theory, ModeData]
     public void Concat_SpreadOfArrayOfArrays_FlattensOneLevel(ExecutionMode mode)
     {
         // The issue repro: ...[[1, 2]] spreads into concat([1, 2]), which then

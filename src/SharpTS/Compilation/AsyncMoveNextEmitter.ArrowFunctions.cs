@@ -125,8 +125,11 @@ public partial class AsyncMoveNextEmitter
             {
                 _il.Emit(OpCodes.Ldloc, local);
             }
-            else
+            else if (!TryEmitGlobalVariable(sourceVar))
             {
+                // Preserve the historical unresolved-name fallback. Resolvable
+                // globals (notably function declarations with expando state)
+                // are loaded through the same canonical path as a normal read.
                 _il.Emit(OpCodes.Ldnull);
             }
 

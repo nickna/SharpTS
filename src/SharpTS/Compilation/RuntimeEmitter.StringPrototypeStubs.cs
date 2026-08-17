@@ -573,6 +573,32 @@ public partial class RuntimeEmitter
         // so the toString tag must agree (#314).
         EmitFunctionBranch(_types.Type);
 
+        // A Proxy whose target is callable has its own [[Call]] internal
+        // method and therefore uses the Function builtin tag. The proxy
+        // carrier itself is not one of the concrete callable CLR wrappers
+        // above, so consult its runtime IsCallable slot explicitly. This also
+        // handles proxies whose targets are themselves callable proxies.
+        if (_features.UsesProxy)
+        {
+            var notProxyLabel = il.DefineLabel();
+            var proxyLabel = il.DefineLabel();
+            EmitProxyTypeCheck(
+                il, () => il.Emit(OpCodes.Ldarg_0),
+                proxyLabel, notProxyLabel);
+            il.MarkLabel(proxyLabel);
+            var proxyNotCallableLabel = il.DefineLabel();
+            EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0), "get_IsCallable", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Newarr, _types.Object);
+            });
+            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+            il.Emit(OpCodes.Brfalse, proxyNotCallableLabel);
+            EmitTag("[object Function]");
+            il.MarkLabel(proxyNotCallableLabel);
+            il.MarkLabel(notProxyLabel);
+        }
+
         // $Date — ECMA-262 §21.4.4.42 brand check via [[DateValue]] slot.
         if (runtime.TSDateType != null)
         {
