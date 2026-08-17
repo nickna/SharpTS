@@ -827,11 +827,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Br, doneLabel);
 
             il.MarkLabel(scheduleLabel);
+            var continuationType = _types.ActionTaskOfObjectAndObject;
+            var continuationCtor = _types.GetConstructor(
+                continuationType, _types.Object, _types.IntPtr);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Ldftn, settle);
-            il.Emit(OpCodes.Newobj, _types.ActionTaskOfObjectAndObject
-                .GetConstructor([_types.Object, _types.IntPtr])!);
+            il.Emit(OpCodes.Newobj, continuationCtor);
             il.Emit(OpCodes.Ldloc, callbacksLocal);
             il.Emit(OpCodes.Call, _types.GetProperty(
                 _types.CancellationToken, "None").GetGetMethod()!);
@@ -841,7 +843,7 @@ public partial class RuntimeEmitter
                 _types.TaskScheduler, "Default").GetGetMethod()!);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(
                 _types.TaskOfObject, "ContinueWith",
-                [_types.ActionTaskOfObjectAndObject, _types.Object,
+                [continuationType, _types.Object,
                     _types.CancellationToken, _types.TaskContinuationOptions,
                     _types.TaskScheduler]));
             il.Emit(OpCodes.Pop);

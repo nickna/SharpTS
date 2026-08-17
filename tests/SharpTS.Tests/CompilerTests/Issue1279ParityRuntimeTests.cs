@@ -366,4 +366,34 @@ public sealed class Issue1279ParityRuntimeTests
 
         Assert.Equal("A false\n2 false\nundefined true\n", TestHarness.RunCompiled(source));
     }
+
+    [Fact]
+    public void Promise_combinator_adopts_a_pending_result_array_thenable()
+    {
+        const string source = """
+            var arrayPrototype: any = Array.prototype;
+            Object.defineProperty(arrayPrototype, "then", {
+                value: function(resolve: any) {
+                    resolve("adopted:" + this[0]);
+                },
+                configurable: true
+            });
+
+            async function main(): Promise<void> {
+                try {
+                    var pending = new Promise(function(resolve: any) {
+                        setTimeout(function() { resolve(42); }, 5);
+                    });
+                    var result: any = await Promise.all([pending]);
+                    console.log(result);
+                } finally {
+                    delete arrayPrototype.then;
+                }
+            }
+
+            main();
+            """;
+
+        Assert.Equal("adopted:42\n", TestHarness.RunCompiled(source));
+    }
 }
