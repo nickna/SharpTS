@@ -98,6 +98,75 @@ public partial class RuntimeEmitter
     /// </summary>
     internal void EmitNormalizePromiseList(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
+        EmitPromiseCombinatorResultAdoption(runtime);
+
+        // PerformPromiseAll/Race/AllSettled/Any invoke nextPromise.then
+        // synchronously while the iterator record is still open. Adapt that
+        // observable invocation to the host Task representation only after
+        // Get(nextPromise, "then") and Call have both completed successfully.
+        // An abrupt getter/call must escape this helper so the incremental
+        // iterator loop below can perform IteratorClose immediately.
+        var invokeThenMethod = runtimeType.DefineMethod(
+            "InvokePromiseCombinatorThen",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [_types.Object, _types.Object, _types.Object]
+        );
+        {
+            var thenIl = invokeThenMethod.GetILGenerator();
+            var tcsLocal = thenIl.DeclareLocal(_types.TaskCompletionSourceOfObject);
+            var settledLocal = thenIl.DeclareLocal(_types.Object);
+            var resolveLocal = thenIl.DeclareLocal(runtime.PromiseResolveCallbackType);
+            var rejectLocal = thenIl.DeclareLocal(runtime.PromiseRejectCallbackType);
+
+            thenIl.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(
+                _types.TaskCompletionSourceOfObject));
+            thenIl.Emit(OpCodes.Stloc, tcsLocal);
+
+            thenIl.Emit(OpCodes.Newobj,
+                typeof(System.Runtime.CompilerServices.StrongBox<bool>)
+                    .GetConstructor(Type.EmptyTypes)!);
+            thenIl.Emit(OpCodes.Stloc, settledLocal);
+
+            thenIl.Emit(OpCodes.Ldloc, tcsLocal);
+            thenIl.Emit(OpCodes.Ldloc, settledLocal);
+            thenIl.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            thenIl.Emit(OpCodes.Stloc, resolveLocal);
+
+            thenIl.Emit(OpCodes.Ldloc, tcsLocal);
+            thenIl.Emit(OpCodes.Ldloc, settledLocal);
+            thenIl.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+            thenIl.Emit(OpCodes.Stloc, rejectLocal);
+
+            thenIl.Emit(OpCodes.Ldarg_0);
+            thenIl.Emit(OpCodes.Ldarg_1);
+            thenIl.Emit(OpCodes.Ldc_I4_2);
+            thenIl.Emit(OpCodes.Newarr, _types.Object);
+            thenIl.Emit(OpCodes.Dup);
+            thenIl.Emit(OpCodes.Ldc_I4_0);
+            var useGeneratedResolveLabel = thenIl.DefineLabel();
+            var haveResolveLabel = thenIl.DefineLabel();
+            thenIl.Emit(OpCodes.Ldarg_2);
+            thenIl.Emit(OpCodes.Brfalse, useGeneratedResolveLabel);
+            thenIl.Emit(OpCodes.Ldarg_2);
+            thenIl.Emit(OpCodes.Br, haveResolveLabel);
+            thenIl.MarkLabel(useGeneratedResolveLabel);
+            thenIl.Emit(OpCodes.Ldloc, resolveLocal);
+            thenIl.MarkLabel(haveResolveLabel);
+            thenIl.Emit(OpCodes.Stelem_Ref);
+            thenIl.Emit(OpCodes.Dup);
+            thenIl.Emit(OpCodes.Ldc_I4_1);
+            thenIl.Emit(OpCodes.Ldloc, rejectLocal);
+            thenIl.Emit(OpCodes.Stelem_Ref);
+            thenIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            thenIl.Emit(OpCodes.Pop);
+
+            thenIl.Emit(OpCodes.Ldloc, tcsLocal);
+            thenIl.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+            thenIl.Emit(OpCodes.Ret);
+        }
+
         // IteratorClose(iterator, throwCompletion) for the narrow abrupt path
         // owned by Promise combinators. GetMethod(iterator, "return") can
         // replace the original completion (for example when return is not
@@ -446,8 +515,29 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Pop);
             var ordinaryCapabilityLabel = targetIl.DefineLabel();
+            var invokeObservableThenLabel = targetIl.DefineLabel();
             var useOrdinaryCoercionLabel = targetIl.DefineLabel();
             var normalizedLabel = targetIl.DefineLabel();
+
+            // A directly wired intrinsic race capability still receives
+            // nextPromise (the result of %Promise%.resolve), not the raw
+            // iterable value. Preserve native Promise identity/overrides, but
+            // wrap primitives and foreign thenables before invoking `then`.
+            var capabilityResolutionReadyLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Ldarg_2);
+            targetIl.Emit(OpCodes.Brfalse, capabilityResolutionReadyLabel);
+            targetIl.Emit(OpCodes.Ldloc, invokeResolveLocal);
+            targetIl.Emit(OpCodes.Brtrue, capabilityResolutionReadyLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            targetIl.Emit(OpCodes.Brtrue, capabilityResolutionReadyLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            targetIl.Emit(OpCodes.Brtrue, capabilityResolutionReadyLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Call, runtime.PromiseResolveValueMethod);
+            targetIl.Emit(OpCodes.Stloc, resolvedElementLocal);
+            targetIl.MarkLabel(capabilityResolutionReadyLabel);
 
             // Promise.race with a custom constructor must pass the SAME result
             // capability resolve/reject functions to every nextPromise.then.
@@ -455,6 +545,37 @@ public partial class RuntimeEmitter
             // resolving callbacks and violate observable callback identity.
             targetIl.Emit(OpCodes.Ldarg_2);
             targetIl.Emit(OpCodes.Brfalse, ordinaryCapabilityLabel);
+
+            // Promise.any likewise passes its result capability's Resolve
+            // directly, while each Reject element remains independently
+            // guarded and feeds the host aggregation task.
+            var raceCapabilityLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Ldarg_3);
+            targetIl.Emit(OpCodes.Ldc_I4_2);
+            targetIl.Emit(OpCodes.Bne_Un, raceCapabilityLabel);
+
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Ldstr, "function");
+            targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
+            var anyThenCallableLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Brtrue, anyThenCallableLabel);
+            GuestErrorEmitter.ThrowTypeError(targetIl, runtime,
+                "Promise.any resolved element then is not callable");
+            targetIl.MarkLabel(anyThenCallableLabel);
+            targetIl.Emit(OpCodes.Ldloc, resultLocal);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldarg_2);
+            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityResolveMethod);
+            targetIl.Emit(OpCodes.Call, invokeThenMethod);
+            targetIl.Emit(OpCodes.Br, normalizedLabel);
+
+            targetIl.MarkLabel(raceCapabilityLabel);
 
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
@@ -499,6 +620,38 @@ public partial class RuntimeEmitter
 
             targetIl.MarkLabel(ordinaryCapabilityLabel);
             targetIl.Emit(OpCodes.Ldloc, resultLocal);
+
+            // A custom C.resolve result is already nextPromise, so Perform*
+            // must Invoke its then method directly. The intrinsic fast path
+            // also returns an existing native Promise unchanged; if that
+            // promise has an own observable then override, invoke it directly
+            // rather than feeding it through PromiseResolveValue (which would
+            // turn a synchronous abrupt completion into a rejected Task and
+            // allow an infinite iterator to keep running).
+            targetIl.Emit(OpCodes.Ldloc, invokeResolveLocal);
+            targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
+
+            var checkNativePromiseObjectLabel = targetIl.DefineLabel();
+            var ordinaryResolutionLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            targetIl.Emit(OpCodes.Brfalse, checkNativePromiseObjectLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
+            targetIl.Emit(OpCodes.Br, ordinaryResolutionLabel);
+
+            targetIl.MarkLabel(checkNativePromiseObjectLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            targetIl.Emit(OpCodes.Brfalse, ordinaryResolutionLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
+
+            targetIl.MarkLabel(ordinaryResolutionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
             targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
@@ -509,9 +662,198 @@ public partial class RuntimeEmitter
             targetIl.MarkLabel(useOrdinaryCoercionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Call, runtime.CoerceAwaitableToTaskMethod);
+            targetIl.Emit(OpCodes.Br, normalizedLabel);
+
+            targetIl.MarkLabel(invokeObservableThenLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Ldstr, "function");
+            targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
+            var observableThenCallableLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Brtrue, observableThenCallableLabel);
+            GuestErrorEmitter.ThrowTypeError(targetIl, runtime,
+                "Promise combinator resolved element then is not callable");
+            targetIl.MarkLabel(observableThenCallableLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldnull);
+            targetIl.Emit(OpCodes.Call, invokeThenMethod);
             targetIl.MarkLabel(normalizedLabel);
         }
 
+    }
+
+    /// <summary>
+    /// Promise.all/allSettled settle their capability through its resolve
+    /// function. In particular, the newly-created result array can inherit a
+    /// callable or poisoned <c>then</c> from Array.prototype. Async method
+    /// builders do not assimilate an object result, so bridge the state-machine
+    /// task through the emitted Promise resolving functions.
+    /// </summary>
+    private void EmitPromiseCombinatorResultAdoption(EmittedRuntime runtime)
+    {
+        var settle = runtime.SettlePromiseCombinatorResultMethod;
+        {
+            var il = settle.GetILGenerator();
+            var callbacksLocal = il.DeclareLocal(_types.ObjectArray);
+            var exceptionLocal = il.DeclareLocal(_types.Exception);
+            var successLabel = il.DefineLabel();
+            var haveExceptionLabel = il.DefineLabel();
+            var invokeRejectLabel = il.DefineLabel();
+            var doneLabel = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, _types.ObjectArray);
+            il.Emit(OpCodes.Stloc, callbacksLocal);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.Task, "IsCompletedSuccessfully").GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, successLabel);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.Task, "Exception").GetGetMethod()!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, haveExceptionLabel);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldstr, "Promise combinator task was canceled");
+            il.Emit(OpCodes.Newobj, typeof(TaskCanceledException)
+                .GetConstructor([typeof(string)])!);
+            il.Emit(OpCodes.Br, invokeRejectLabel);
+
+            il.MarkLabel(haveExceptionLabel);
+            il.Emit(OpCodes.Stloc, exceptionLocal);
+            il.Emit(OpCodes.Ldloc, exceptionLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.Exception, "InnerException").GetGetMethod()!);
+            il.Emit(OpCodes.Dup);
+            var haveInnerLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, haveInnerLabel);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldloc, exceptionLocal);
+            il.MarkLabel(haveInnerLabel);
+
+            il.MarkLabel(invokeRejectLabel);
+            il.Emit(OpCodes.Call, runtime.WrapException);
+            var reasonLocal = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, reasonLocal);
+            il.Emit(OpCodes.Ldloc, callbacksLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Castclass, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, reasonLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(successLabel);
+            il.Emit(OpCodes.Ldloc, callbacksLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Castclass, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.TaskOfObject, "Result").GetGetMethod()!);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Callvirt, runtime.PromiseResolveCallbackInvoke);
+            il.Emit(OpCodes.Pop);
+
+            il.MarkLabel(doneLabel);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var adopt = runtime.AdoptPromiseCombinatorResultMethod;
+        {
+            var il = adopt.GetILGenerator();
+            var tcsLocal = il.DeclareLocal(_types.TaskCompletionSourceOfObject);
+            var settledLocal = il.DeclareLocal(_types.Object);
+            var resolveLocal = il.DeclareLocal(runtime.PromiseResolveCallbackType);
+            var rejectLocal = il.DeclareLocal(runtime.PromiseRejectCallbackType);
+            var callbacksLocal = il.DeclareLocal(_types.ObjectArray);
+            var scheduleLabel = il.DefineLabel();
+            var doneLabel = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldc_I4,
+                (int)TaskCreationOptions.RunContinuationsAsynchronously);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                _types.TaskCompletionSourceOfObject, typeof(TaskCreationOptions)));
+            il.Emit(OpCodes.Stloc, tcsLocal);
+            il.Emit(OpCodes.Newobj,
+                typeof(System.Runtime.CompilerServices.StrongBox<bool>)
+                    .GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, settledLocal);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Ldloc, settledLocal);
+            il.Emit(OpCodes.Newobj, runtime.PromiseResolveCallbackCtor);
+            il.Emit(OpCodes.Stloc, resolveLocal);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Ldloc, settledLocal);
+            il.Emit(OpCodes.Newobj, runtime.PromiseRejectCallbackCtor);
+            il.Emit(OpCodes.Stloc, rejectLocal);
+
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, resolveLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldloc, rejectLocal);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Stloc, callbacksLocal);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.Task, "IsCompleted").GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, scheduleLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, callbacksLocal);
+            il.Emit(OpCodes.Call, settle);
+            il.Emit(OpCodes.Br, doneLabel);
+
+            il.MarkLabel(scheduleLabel);
+            var continuationType = _types.ActionTaskOfObjectAndObject;
+            var continuationCtor = _types.GetConstructor(
+                continuationType, _types.Object, _types.IntPtr);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldftn, settle);
+            il.Emit(OpCodes.Newobj, continuationCtor);
+            il.Emit(OpCodes.Ldloc, callbacksLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(
+                _types.CancellationToken, "None").GetGetMethod()!);
+            il.Emit(OpCodes.Ldc_I4,
+                (int)TaskContinuationOptions.ExecuteSynchronously);
+            il.Emit(OpCodes.Call, _types.GetProperty(
+                _types.TaskScheduler, "Default").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskOfObject, "ContinueWith",
+                [continuationType, _types.Object,
+                    _types.CancellationToken, _types.TaskContinuationOptions,
+                    _types.TaskScheduler]));
+            il.Emit(OpCodes.Pop);
+
+            il.MarkLabel(doneLabel);
+            il.Emit(OpCodes.Ldloc, tcsLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(
+                _types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+            il.Emit(OpCodes.Ret);
+        }
     }
 
     /// <summary>

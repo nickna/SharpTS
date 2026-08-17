@@ -331,21 +331,43 @@ public partial class RuntimeEmitter
         var funcType = _types.FuncObjectArrayToObject;
         var capabilityLocal = il.DeclareLocal(capabilityType);
         var instanceLocal = il.DeclareLocal(_types.Object);
+        var executorLocal = il.DeclareLocal(funcType);
 
         il.Emit(OpCodes.Newobj, runtime.PromiseCapabilityCtor);
         il.Emit(OpCodes.Stloc, capabilityLocal);
 
+        il.Emit(OpCodes.Ldloc, capabilityLocal);
+        il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilityCaptureMethod);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, [_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Stloc, executorLocal);
+
+        // The intrinsic Promise constructor is represented by
+        // Task<object>. It is not activatable through reflection; construct
+        // its host promise capability through PromiseFromExecutor instead.
+        var constructGeneralLabel = il.DefineLabel();
+        var haveInstanceLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Bne_Un, constructGeneralLabel);
+        il.Emit(OpCodes.Ldloc, executorLocal);
+        il.Emit(OpCodes.Call, runtime.PromiseFromExecutor);
+        il.Emit(OpCodes.Stloc, instanceLocal);
+        il.Emit(OpCodes.Br, haveInstanceLabel);
+
+        il.MarkLabel(constructGeneralLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, capabilityLocal);
-        il.Emit(OpCodes.Ldftn, runtime.PromiseCapabilityCaptureMethod);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(funcType, [_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Ldloc, executorLocal);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Call, runtime.ConstructDynamicValue);
         il.Emit(OpCodes.Stloc, instanceLocal);
+        il.MarkLabel(haveInstanceLabel);
 
         EmitRequireCallableCapabilitySlot(il, runtime, capabilityLocal,
             runtime.PromiseCapabilityResolveField);
@@ -422,6 +444,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, runtime.PromiseCapabilityInstanceField);
         il.Emit(OpCodes.Ret);
     }
+
 
     /// <summary>
     /// Settles an already-completed source inline, preserving the synchronous

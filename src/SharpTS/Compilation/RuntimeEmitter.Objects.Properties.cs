@@ -851,6 +851,32 @@ public partial class RuntimeEmitter
         var arrayProtoFallbackLabel = il.DefineLabel();
         var objectProtoFallbackLabel = il.DefineLabel();
         il.Emit(OpCodes.Call, runtime.ArrayPrototypePopulateMethod);
+        // Accessor descriptors live in the descriptor store rather than the
+        // prototype dictionary's data-value slot. Invoke an inherited
+        // Array.prototype getter with the original array as receiver before
+        // consulting ordinary prototype values (notably a poisoned `then`
+        // observed by Promise resolving functions).
+        var arrayProtoGetterLocal = il.DeclareLocal(_types.Object);
+        var noArrayProtoGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, arrayProtoGetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+        il.Emit(OpCodes.Brfalse, noArrayProtoGetterLabel);
+        il.Emit(OpCodes.Ldloc, arrayProtoGetterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var invokeArrayProtoGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, invokeArrayProtoGetterLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(invokeArrayProtoGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, arrayProtoGetterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noArrayProtoGetterLabel);
         var arrayProtoValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
         il.Emit(OpCodes.Ldarg_1);

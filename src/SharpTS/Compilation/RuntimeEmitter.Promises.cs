@@ -124,6 +124,14 @@ internal class AnyStateClass
     public MethodBuilder? HandleCompletionShim { get; set; }          // Shim for ContinueWith
 }
 
+internal class AnyElementStateClass
+{
+    public required TypeBuilder Type { get; init; }
+    public required FieldBuilder StateField { get; init; }
+    public required FieldBuilder IndexField { get; init; }
+    public required ConstructorBuilder Constructor { get; init; }
+}
+
 /// <summary>
 /// Holds information about the PromiseAny state machine.
 /// </summary>
@@ -134,6 +142,7 @@ internal class PromiseAnyStateMachine
     public required FieldBuilder BuilderField { get; init; }         // <>t__builder
     public required FieldBuilder IterableField { get; init; }        // iterable parameter
     public required FieldBuilder ConstructorField { get; init; }     // C parameter
+    public required FieldBuilder CapabilityField { get; init; }      // prepared custom capability
     public required FieldBuilder StateObjField { get; init; }        // $AnyState instance
     public required FieldBuilder AwaiterField { get; init; }         // TaskAwaiter<object?> for Tcs.Task
     public required MethodBuilder MoveNextMethod { get; init; }
@@ -515,7 +524,17 @@ public partial class RuntimeEmitter
             "NormalizePromiseList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, _types.Object, _types.Object]);
+            [_types.Object, _types.Object, _types.Object, _types.Int32]);
+        runtime.AdoptPromiseCombinatorResultMethod = typeBuilder.DefineMethod(
+            "AdoptPromiseCombinatorResult",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [_types.TaskOfObject]);
+        runtime.SettlePromiseCombinatorResultMethod = typeBuilder.DefineMethod(
+            "SettlePromiseCombinatorResult",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [_types.TaskOfObject, _types.Object]);
 
         // Promise.all(iterable) - async state machine using Task.WhenAll
         var promiseAllSM = DefinePromiseAllStateMachine(moduleBuilder);
@@ -584,16 +603,18 @@ public partial class RuntimeEmitter
         // Promise.any(iterable) - pure IL implementation with state machine
         // Define the $AnyState class and helper methods
         var anyState = DefineAnyStateClass(moduleBuilder);
+        var anyElementState = DefineAnyElementStateClass(moduleBuilder, anyState);
 
         // Define HandleAnyCompletion(Task<object?>, $AnyState) method on runtime type
         var handleAnyCompletion = typeBuilder.DefineMethod(
             "HandleAnyCompletion",
             MethodAttributes.Public | MethodAttributes.Static,
             typeof(void),
-            [typeof(Task<object?>), anyState.Type]
+            [typeof(Task<object?>), anyElementState.Type]
         );
         anyState.HandleCompletionMethod = handleAnyCompletion;
-        EmitHandleAnyCompletion(handleAnyCompletion.GetILGenerator(), anyState, runtime);
+        EmitHandleAnyCompletion(handleAnyCompletion.GetILGenerator(), anyState,
+            anyElementState, runtime);
 
         // Define HandleAnyCompletionShim(Task<object?>, object?) - casts and calls the real method
         var handleAnyCompletionShim = typeBuilder.DefineMethod(
@@ -603,10 +624,12 @@ public partial class RuntimeEmitter
             [typeof(Task<object?>), typeof(object)]
         );
         anyState.HandleCompletionShim = handleAnyCompletionShim;
-        EmitHandleAnyCompletionShim(handleAnyCompletionShim.GetILGenerator(), anyState, handleAnyCompletion);
+        EmitHandleAnyCompletionShim(handleAnyCompletionShim.GetILGenerator(),
+            anyElementState, handleAnyCompletion);
 
         // Create the $AnyState type
         anyState.Type.CreateType();
+        anyElementState.Type.CreateType();
 
         // Define Promise.any wrapper and state machine
         var promiseAnySM = DefinePromiseAnyStateMachine(moduleBuilder, anyState);
@@ -614,11 +637,12 @@ public partial class RuntimeEmitter
             "PromiseAny",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.PromiseAny = any;
         EmitPromiseAnyWrapper(any.GetILGenerator(), promiseAnySM, runtime);
-        EmitPromiseAnyMoveNext(promiseAnySM, anyState, handleAnyCompletionShim, runtime);
+        EmitPromiseAnyMoveNext(promiseAnySM, anyState, anyElementState,
+            handleAnyCompletionShim, runtime);
         promiseAnySM.Type.CreateType();
 
         // Value-form wrappers for all/race/allSettled/any — validate `this` is
@@ -639,7 +663,8 @@ public partial class RuntimeEmitter
                 $"Promise.{jsName} called on non-Object");
             EmitPromiseStaticCapabilityResult(il, runtime, target,
                 passConstructorToIntrinsic: jsName is "all" or "race" or "allSettled" or "any",
-                passCapabilityToIntrinsic: jsName == "race");
+                passCapabilityToIntrinsic: jsName is "race" or "any",
+                prepareIntrinsicCapability: jsName == "race");
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);
         EmitAllRaceVariantStaticWrapper("PromiseAllKeyedStatic", "allKeyed", runtime.PromiseAllKeyed, m => runtime.PromiseAllKeyedStatic = m);
@@ -753,7 +778,8 @@ public partial class RuntimeEmitter
     private void EmitPromiseStaticCapabilityResult(
         ILGenerator il, EmittedRuntime runtime, MethodInfo intrinsic,
         bool passConstructorToIntrinsic = false,
-        bool passCapabilityToIntrinsic = false)
+        bool passCapabilityToIntrinsic = false,
+        bool prepareIntrinsicCapability = false)
     {
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var capabilityLocal = il.DeclareLocal(_types.Object);
@@ -765,12 +791,19 @@ public partial class RuntimeEmitter
         // capability executor before Promise.all/any/etc. reads C.resolve or
         // begins iteration. The intrinsic %Promise% representation needs no
         // materialized holder and keeps its direct Task fast path.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Type);
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Bne_Un, customConstructorLabel);
-        il.Emit(OpCodes.Br, invokeIntrinsicLabel);
+        if (prepareIntrinsicCapability)
+        {
+            il.Emit(OpCodes.Br, customConstructorLabel);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.Type);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, customConstructorLabel);
+            il.Emit(OpCodes.Br, invokeIntrinsicLabel);
+        }
 
         il.MarkLabel(customConstructorLabel);
         il.Emit(OpCodes.Ldarg_0);
