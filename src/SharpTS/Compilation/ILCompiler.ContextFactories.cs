@@ -71,6 +71,9 @@ public partial class ILCompiler
             ImportedNames = _importedNames,
             ClassExprBuilders = _classExprs.Builders,
             ClassExprStaticMethods = _classExprs.StaticMethods,
+            ClassExprCaptureFields = _classExprs.CaptureFields,
+            DeferredComputedClassKeys = _classes.DeferredComputedClassKeys,
+            DeferredComputedClassExprKeys = _classExprs.DeferredComputedKeys,
             BlockScopedClassBuilders = _classes.BlockScopedBuilders,
             ClassRegistry = GetClassRegistry(),
             DotNetNamespace = _modules.CurrentDotNetNamespace,
@@ -236,6 +239,7 @@ public partial class ILCompiler
             EnumToModule = parentCtx.EnumToModule,
             TypeEmitterRegistry = parentCtx.TypeEmitterRegistry,
             ClassExprBuilders = parentCtx.ClassExprBuilders,
+            ClassExprCaptureFields = parentCtx.ClassExprCaptureFields,
             BlockScopedClassBuilders = parentCtx.BlockScopedClassBuilders,
             IsStrictMode = parentCtx.IsStrictMode,
             // ES2022 Private Class Elements support - inherit from parent context

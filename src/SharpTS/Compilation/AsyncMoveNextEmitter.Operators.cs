@@ -130,10 +130,12 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Throw);
             return;
         }
+        className = _ctx!.ResolvePrivateFieldOwner(className, fieldName);
 
         // Static private field: ClassName.#field
-        if (gp.Object is Expr.Variable classVar &&
-            classVar.Name.Lexeme == _ctx!.CurrentClassShortName &&
+        if (((gp.Object is Expr.Variable classVar &&
+              classVar.Name.Lexeme == _ctx!.CurrentClassShortName)
+             || (gp.Object is Expr.This && !_ctx!.IsInstanceMethod)) &&
             _ctx!.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
         {
             _il.Emit(OpCodes.Ldsfld, staticField!);
@@ -159,9 +161,8 @@ public partial class AsyncMoveNextEmitter
 
             var successLabel = _il.DefineLabel();
             _il.Emit(OpCodes.Brtrue, successLabel);
-            _il.Emit(OpCodes.Ldstr, $"TypeError: Cannot read private member #{fieldName} from an object whose class did not declare it");
-            _il.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-            _il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime!,
+                $"Cannot read private member #{fieldName} from an object whose class did not declare it");
             _il.MarkLabel(successLabel);
 
             _il.Emit(OpCodes.Ldloc, dictLocal);
@@ -179,9 +180,8 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
-        _il.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        _il.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        _il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime!,
+            $"Private field '#{fieldName}' not found in class '{className}'");
     }
 
     protected override void EmitSetPrivate(Expr.SetPrivate sp)
@@ -199,10 +199,12 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Throw);
             return;
         }
+        className = _ctx!.ResolvePrivateFieldOwner(className, fieldName);
 
         // Static private field assignment: ClassName.#field = value
-        if (sp.Object is Expr.Variable classVar &&
-            classVar.Name.Lexeme == _ctx!.CurrentClassShortName &&
+        if (((sp.Object is Expr.Variable classVar &&
+              classVar.Name.Lexeme == _ctx!.CurrentClassShortName)
+             || (sp.Object is Expr.This && !_ctx!.IsInstanceMethod)) &&
             _ctx!.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
         {
             EmitExpression(sp.Value);
@@ -232,9 +234,8 @@ public partial class AsyncMoveNextEmitter
 
             var successLabel = _il.DefineLabel();
             _il.Emit(OpCodes.Brtrue, successLabel);
-            _il.Emit(OpCodes.Ldstr, $"TypeError: Cannot write private member #{fieldName} to an object whose class did not declare it");
-            _il.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-            _il.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime!,
+                $"Cannot write private member #{fieldName} to an object whose class did not declare it");
             _il.MarkLabel(successLabel);
 
             EmitExpression(sp.Value);
@@ -261,9 +262,8 @@ public partial class AsyncMoveNextEmitter
             return;
         }
 
-        _il.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        _il.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        _il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime!,
+            $"Private field '#{fieldName}' not found in class '{className}'");
     }
 
     protected override void EmitCallPrivate(Expr.CallPrivate cp)
@@ -281,10 +281,12 @@ public partial class AsyncMoveNextEmitter
             _il.Emit(OpCodes.Throw);
             return;
         }
+        className = _ctx!.ResolvePrivateMethodOwner(className, methodName);
 
         // Static private method: ClassName.#method(...)
-        if (cp.Object is Expr.Variable classVar &&
-            classVar.Name.Lexeme == _ctx!.CurrentClassShortName &&
+        if (((cp.Object is Expr.Variable classVar &&
+              classVar.Name.Lexeme == _ctx!.CurrentClassShortName)
+             || (cp.Object is Expr.This && !_ctx!.IsInstanceMethod)) &&
             _ctx!.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
         {
             // Spill args so an await inside one doesn't suspend with earlier args on the stack.
@@ -320,9 +322,8 @@ public partial class AsyncMoveNextEmitter
 
                 var validLabel = _il.DefineLabel();
                 _il.Emit(OpCodes.Brtrue, validLabel);
-                _il.Emit(OpCodes.Ldstr, $"TypeError: Cannot call private method #{methodName} on an object whose class did not declare it");
-                _il.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-                _il.Emit(OpCodes.Throw);
+                GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime!,
+                    $"Cannot call private method #{methodName} on an object whose class did not declare it");
                 _il.MarkLabel(validLabel);
 
                 // Spill args so an await inside one doesn't suspend with the receiver on the stack.
@@ -361,9 +362,8 @@ public partial class AsyncMoveNextEmitter
             }
         }
 
-        _il.Emit(OpCodes.Ldstr, $"Private method '#{methodName}' not found in class '{className}'");
-        _il.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        _il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(_il, _ctx.Runtime!,
+            $"Private method '#{methodName}' not found in class '{className}'");
     }
 
 }

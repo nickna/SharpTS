@@ -28,13 +28,17 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Throw);
             return;
         }
+        className = _ctx.ResolvePrivateFieldOwner(className, fieldName);
 
         // Check if it's a static private field access (ClassName.#field)
-        if (gp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
+        if ((gp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
+            || (gp.Object is Expr.This && !_ctx.IsInstanceMethod))
         {
             // Try static private field
             if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
             {
+                if (gp.Object is Expr.This)
+                    EmitStaticPrivateReceiverBrandCheck(className, fieldName);
                 IL.Emit(OpCodes.Ldsfld, staticField!);
                 SetStackUnknown();
                 return;
@@ -74,9 +78,8 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brtrue, successLabel);
 
             // Brand check failed - throw TypeError
-            IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot read private member #{fieldName} from an object whose class did not declare it");
-            IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime!,
+                $"Cannot read private member #{fieldName} from an object whose class did not declare it");
 
             IL.MarkLabel(successLabel);
 
@@ -98,9 +101,8 @@ public partial class ILEmitter
         }
 
         // No private field found
-        IL.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        IL.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime!,
+            $"Private field '#{fieldName}' not found in class '{className}'");
     }
 
     /// <summary>
@@ -121,12 +123,16 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Throw);
             return;
         }
+        className = _ctx.ResolvePrivateFieldOwner(className, fieldName);
 
         // Check if it's a static private field
-        if (sp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
+        if ((sp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
+            || (sp.Object is Expr.This && !_ctx.IsInstanceMethod))
         {
             if (_ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
             {
+                if (sp.Object is Expr.This)
+                    EmitStaticPrivateReceiverBrandCheck(className, fieldName);
                 // Emit value, box, store, but also leave value on stack for expression result
                 EmitExpression(sp.Value);
                 EmitBoxIfNeeded(sp.Value);
@@ -144,16 +150,24 @@ public partial class ILEmitter
             var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));
             var dictType = typeof(Dictionary<string, object?>);
 
-            // Declare local for dictionary and value
+            // Evaluate the private reference's base first, then the RHS, and only then perform
+            // the brand check/PutValue.  The brand check is part of assignment, not reference
+            // creation, so an abrupt RHS must win over a bad receiver (ECMA evaluation order).
             var dictLocal = IL.DeclareLocal(dictType);
+            var objectLocal = IL.DeclareLocal(typeof(object));
             var valueLocal = IL.DeclareLocal(typeof(object));
+
+            EmitExpression(sp.Object);
+            EmitBoxIfNeeded(sp.Object);
+            IL.Emit(OpCodes.Stloc, objectLocal);
+
+            EmitExpression(sp.Value);
+            EmitBoxIfNeeded(sp.Value);
+            IL.Emit(OpCodes.Stloc, valueLocal);
 
             // Load __privateFields static field
             IL.Emit(OpCodes.Ldsfld, setStorageField);
-
-            // Emit the object expression
-            EmitExpression(sp.Object);
-            EmitBoxIfNeeded(sp.Object);
+            IL.Emit(OpCodes.Ldloc, objectLocal);
 
             // Load address of dictLocal for out parameter
             IL.Emit(OpCodes.Ldloca, dictLocal);
@@ -171,16 +185,10 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Brtrue, successLabel);
 
             // Brand check failed
-            IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot write private member #{fieldName} to an object whose class did not declare it");
-            IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime!,
+                $"Cannot write private member #{fieldName} to an object whose class did not declare it");
 
             IL.MarkLabel(successLabel);
-
-            // Emit value and store in local (for expression result)
-            EmitExpression(sp.Value);
-            EmitBoxIfNeeded(sp.Value);
-            IL.Emit(OpCodes.Stloc, valueLocal);
 
             // Set dictionary: dictLocal[fieldName] = value
             IL.Emit(OpCodes.Ldloc, dictLocal);
@@ -206,9 +214,8 @@ public partial class ILEmitter
         }
 
         // No private field found
-        IL.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        IL.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime!,
+            $"Private field '#{fieldName}' not found in class '{className}'");
     }
 
     /// <summary>
@@ -229,12 +236,16 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Throw);
             return;
         }
+        className = _ctx.ResolvePrivateMethodOwner(className, methodName);
 
         // Check for static private method (ClassName.#method())
-        if (cp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
+        if ((cp.Object is Expr.Variable classVar && classVar.Name.Lexeme == _ctx.CurrentClassShortName)
+            || (cp.Object is Expr.This && !_ctx.IsInstanceMethod))
         {
             if (_ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
             {
+                if (cp.Object is Expr.This)
+                    EmitStaticPrivateReceiverBrandCheck(className, methodName);
                 // Emit arguments
                 foreach (var arg in cp.Arguments)
                 {
@@ -287,17 +298,17 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Brtrue, validLabel);
 
                 // Brand check failed
-                IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot call private method #{methodName} on an object whose class did not declare it");
-                IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-                IL.Emit(OpCodes.Throw);
+                GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime!,
+                    $"Cannot call private method #{methodName} on an object whose class did not declare it");
 
                 IL.MarkLabel(validLabel);
 
                 // Load receiver (cast to class type)
                 IL.Emit(OpCodes.Ldloc, objLocal);
-                if (_ctx.CurrentClassBuilder != null)
+                if (_ctx.ClassRegistry.TryGetClass(className, out var privateOwnerBuilder)
+                    && privateOwnerBuilder != null)
                 {
-                    IL.Emit(OpCodes.Castclass, _ctx.CurrentClassBuilder);
+                    IL.Emit(OpCodes.Castclass, privateOwnerBuilder);
                 }
 
                 // Emit arguments
@@ -320,9 +331,10 @@ public partial class ILEmitter
                 // No private fields, so no brand check needed (class has only private methods)
                 EmitExpression(cp.Object);
                 EmitBoxIfNeeded(cp.Object);
-                if (_ctx.CurrentClassBuilder != null)
+                if (_ctx.ClassRegistry.TryGetClass(className, out var privateOwnerBuilder)
+                    && privateOwnerBuilder != null)
                 {
-                    IL.Emit(OpCodes.Castclass, _ctx.CurrentClassBuilder);
+                    IL.Emit(OpCodes.Castclass, privateOwnerBuilder);
                 }
 
                 foreach (var arg in cp.Arguments)
@@ -355,9 +367,38 @@ public partial class ILEmitter
         }
 
         // No private method found
-        IL.Emit(OpCodes.Ldstr, $"Private method '#{methodName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        IL.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime!,
+            $"Private method '#{methodName}' not found in class '{className}'");
+    }
+
+    private void EmitStaticPrivateReceiverBrandCheck(string className, string memberName)
+    {
+        if (_ctx.Runtime?.CurrentFunctionThisField == null
+            || _ctx.ClassRegistry?.TryGetClass(className, out var ownerBuilder) != true
+            || ownerBuilder == null)
+            return;
+
+        var receiverReady = IL.DefineLabel();
+        var valid = IL.DefineLabel();
+
+        // Direct statically-bound calls do not publish a dynamic receiver; use the
+        // lexical owner in that case. Value calls (including through Proxy) publish
+        // their actual receiver through InvokeWithThis and must pass the private brand.
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.CurrentFunctionThisField);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Brtrue, receiverReady);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldtoken, ownerBuilder);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.MarkLabel(receiverReady);
+
+        IL.Emit(OpCodes.Ldtoken, ownerBuilder);
+        IL.Emit(OpCodes.Call, Types.TypeGetTypeFromHandle);
+        IL.Emit(OpCodes.Ceq);
+        IL.Emit(OpCodes.Brtrue, valid);
+        GuestErrorEmitter.ThrowTypeError(IL, _ctx.Runtime,
+            $"Cannot access private member #{memberName} from an object whose class did not declare it");
+        IL.MarkLabel(valid);
     }
 
     #endregion

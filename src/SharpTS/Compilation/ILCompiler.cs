@@ -816,6 +816,12 @@ public partial class ILCompiler
     /// </summary>
     private void Phase4_DefineDeclarations(List<Stmt> statements)
     {
+        // A declaration can extend a class expression bound by an earlier top-level
+        // variable (`var Base = class {}; class Derived extends Base {}`).  CLR base
+        // types must be fixed while Derived's TypeBuilder is defined, before the normal
+        // phase-5 class-expression pass, so predefine just those heritage types now.
+        PredefineTopLevelClassExpressionTypes(statements);
+
         // Define all declarations. Delegates to the shared per-statement helper so
         // single-file (script) mode unwraps `export`-wrapped declarations exactly like
         // the module path does — without it, `export function f() {}` never defines its
@@ -846,6 +852,27 @@ public partial class ILCompiler
 
         // Initialize type emitter registries
         InitializeTypeEmitterRegistries();
+    }
+
+    private void PredefineTopLevelClassExpressionTypes(IEnumerable<Stmt> statements)
+    {
+        foreach (var stmt in statements)
+        {
+            Expr.ClassExpr? classExpr = stmt switch
+            {
+                Stmt.Var { Initializer: Expr.ClassExpr ce } => ce,
+                Stmt.Const { Initializer: Expr.ClassExpr ce } => ce,
+                _ => null
+            };
+            if (classExpr == null)
+                continue;
+
+            string bindingName = stmt is Stmt.Var v ? v.Name.Lexeme : ((Stmt.Const)stmt).Name.Lexeme;
+            _classExprs.VarToClassExpr[bindingName] = classExpr;
+            CollectClassExpression(classExpr);
+            if (!_classExprs.Builders.ContainsKey(classExpr))
+                DefineClassExpression(classExpr);
+        }
     }
 
     /// <summary>

@@ -378,6 +378,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringTypeLabel);
 
+        // Emitted ECMAScript classes implement $IHasFields and, unlike legacy
+        // function constructors, are never callable.  This path is reached by
+        // indirect calls such as `Derived.apply(receiver, args)`.
+        var notEmittedClassLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
+            [_types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "IsAssignableFrom", [_types.Type])!);
+        il.Emit(OpCodes.Brfalse, notEmittedClassLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Class constructor cannot be invoked without 'new'");
+        il.MarkLabel(notEmittedClassLabel);
+
         // A built-in constructor Type without a call-form helper. These ARE
         // callable in JS, so the #260 throwing fallback must not fire here;
         // unwired ones keep returning null until their call forms are wired

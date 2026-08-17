@@ -376,6 +376,7 @@ public partial class CompilationContext
     public int ExceptionBlockDepth { get; set; } = 0;
     public LocalBuilder? ReturnValueLocal { get; set; }
     public Label ReturnLabel { get; set; }
+    public bool HasDeferredVoidReturn { get; set; }
 
     // ============================================
     // Constructor and Core Methods

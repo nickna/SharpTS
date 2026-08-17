@@ -66,6 +66,7 @@ public partial class ILCompiler
         // machinery (incl. generator/async state machines); the key drives the .cctor
         // RegisterSymbolMethod call.
         public Dictionary<string, List<(Parsing.Stmt.Function Method, Parsing.Expr Key, MethodBuilder Builder)>> SymbolMethods { get; } = [];
+        public Dictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedClassKeys { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
         public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
 
@@ -411,6 +412,9 @@ public partial class ILCompiler
         public Dictionary<Expr.ClassExpr, ConstructorBuilder> Constructors { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, GenericTypeParameterBuilder[]> GenericParams { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<Expr.ClassExpr, string?> Superclass { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, string> EnclosingClass { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>> CaptureFields { get; } = new(ReferenceEqualityComparer.Instance);
+        public Dictionary<Expr.ClassExpr, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedKeys { get; } = new(ReferenceEqualityComparer.Instance);
     }
 
     /// <summary>

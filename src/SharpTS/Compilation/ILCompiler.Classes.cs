@@ -20,6 +20,14 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
+    private static void MarkJsVariadicConstructor(ConstructorBuilder constructor)
+    {
+        var parameter = constructor.DefineParameter(
+            1, ParameterAttributes.None, "__jsArgs");
+        var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
+        parameter.SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
+    }
+
     private void DefineClass(Stmt.Class classStmt)
     {
         _classes.Declarations.Add(classStmt);
@@ -70,6 +78,10 @@ public partial class ILCompiler
             return;
         }
 
+        // Plain methods need the same shared function environment as free functions when a nested
+        // closure captures a method-local binding.
+        RegisterSyncMethodFunctionDisplayClasses(classStmt.Methods, qualifiedClassName);
+
         // #724: register function display classes for instance generator methods whose arrows write a
         // captured method local, before Phase 5's PropagateFunctionDCRequirements runs. Skipped for
         // external (@DotNetType) classes, which return above without an emitted body.
@@ -90,7 +102,9 @@ public partial class ILCompiler
         string? qualifiedSuperclassName = null;
         if (classStmt.SuperclassExpr != null)
         {
-            qualifiedSuperclassName = ctx.ResolveClassName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
+            string? superclassLeaf = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr);
+            if (superclassLeaf != null)
+                qualifiedSuperclassName = ctx.ResolveClassName(superclassLeaf);
         }
 
         // Create TypeBuilder initially without parent - we'll set it after defining generic params
@@ -146,6 +160,12 @@ public partial class ILCompiler
             {
                 baseType = superBuilder;
             }
+        }
+        else if (Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) is { } classExprBinding
+            && _classExprs.VarToClassExpr.TryGetValue(classExprBinding, out var superclassExpr)
+            && _classExprs.Builders.TryGetValue(superclassExpr, out var superclassExprBuilder))
+        {
+            baseType = superclassExprBuilder;
         }
         else if (qualifiedSuperclassName != null && classStmt.SuperclassExpr != null
             && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!))
@@ -403,8 +423,10 @@ public partial class ILCompiler
         _classes.PrivateMethods[className] = [];
         _classes.StaticPrivateMethods[className] = [];
 
-        // Define ConditionalWeakTable storage for instance private fields
-        if (instancePrivateFields.Count > 0)
+        // The table is also the per-instance brand for private methods.  A class with only
+        // private methods still needs an entry for each constructed instance so brand checks
+        // reject access before super() and access through an unrelated receiver.
+        if (instancePrivateFields.Count > 0 || instancePrivateMethods.Count > 0)
         {
             // Define: private static readonly ConditionalWeakTable<object, Dictionary<string, object?>> __privateFields
             var cwtType = EmitGenerics.MakeGenericType(typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>), typeof(object), typeof(Dictionary<string, object?>));

@@ -269,6 +269,8 @@ public abstract record Expr
     {
         Variable v => v.Name.Lexeme,
         Get g => GetSuperclassName(g.Object) + "." + g.Name.Lexeme,
+        Grouping g => GetSuperclassName(g.Expression),
+        Comma c => GetSuperclassName(c.Right),
         _ => null
     };
 
@@ -279,6 +281,8 @@ public abstract record Expr
     {
         Variable v => v.Name.Lexeme,
         Get g => g.Name.Lexeme,
+        Grouping g => GetSuperclassLeafName(g.Expression),
+        Comma c => GetSuperclassLeafName(c.Right),
         _ => null
     };
 

@@ -51,6 +51,7 @@ public partial class CompilationContext
 
     // For inheritance: current class's superclass name (if any)
     public string? CurrentSuperclassName { get; set; }
+    public bool CurrentSuperclassIsAnonymousEmptyClass { get; set; }
 
     // Current class name being compiled (needed for private member access)
     private string? _currentClassName;
@@ -71,6 +72,53 @@ public partial class CompilationContext
     /// Cached to avoid repeated string allocations in private member access checks.
     /// </summary>
     public string? CurrentClassShortName => _currentClassShortName;
+
+    /// <summary>Lexically enclosing classes whose private names remain visible.</summary>
+    public IReadOnlyList<string>? EnclosingClassNames { get; set; }
+
+    public string ResolvePrivateFieldOwner(string fallbackClassName, string fieldName)
+    {
+        if (ClassRegistry?.GetPrivateFieldNames(fallbackClassName)?.Contains(fieldName) == true
+            || ClassRegistry?.TryGetStaticPrivateField(fallbackClassName, fieldName, out _) == true)
+        {
+            return fallbackClassName;
+        }
+
+        if (EnclosingClassNames != null)
+        {
+            foreach (var className in EnclosingClassNames)
+            {
+                if (ClassRegistry?.GetPrivateFieldNames(className)?.Contains(fieldName) == true
+                    || ClassRegistry?.TryGetStaticPrivateField(className, fieldName, out _) == true)
+                {
+                    return className;
+                }
+            }
+        }
+        return fallbackClassName;
+    }
+
+    public string ResolvePrivateMethodOwner(string fallbackClassName, string methodName)
+    {
+        if (ClassRegistry?.TryGetPrivateMethod(fallbackClassName, methodName, out _) == true
+            || ClassRegistry?.TryGetStaticPrivateMethod(fallbackClassName, methodName, out _) == true)
+        {
+            return fallbackClassName;
+        }
+
+        if (EnclosingClassNames != null)
+        {
+            foreach (var className in EnclosingClassNames)
+            {
+                if (ClassRegistry?.TryGetPrivateMethod(className, methodName, out _) == true
+                    || ClassRegistry?.TryGetStaticPrivateMethod(className, methodName, out _) == true)
+                {
+                    return className;
+                }
+            }
+        }
+        return fallbackClassName;
+    }
 
     // ============================================
     // @lock Decorator Support: Thread-safe Method Execution

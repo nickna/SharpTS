@@ -78,7 +78,8 @@ public partial class ILCompiler
 
         // ECMAScript creates Constructor.prototype as part of class evaluation.
         // Register it before user static fields/blocks so they can observe it.
-        EmitClassPrototypeRegistration(il, typeBuilder);
+        EmitClassPrototypeRegistration(
+            il, typeBuilder, GetClassConstructorLength(classStmt.Methods));
 
         // Initialize static @lock decorator fields
         if (_locks.StaticSyncLockFields.TryGetValue(qualifiedClassName, out var staticSyncLockField))
@@ -228,9 +229,9 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ldtoken, typeBuilder);
             il.Emit(OpCodes.Call, getTypeFromHandle);
 
-            // symbol: evaluate the computed key expression
-            emitter.EmitExpression(accessor.ComputedKey!);
-            emitter.EmitBoxIfNeeded(accessor.ComputedKey!);
+            // property key: preserve Symbols; coerce every other value exactly as bracket
+            // access does (notably null -> "null") before using it as a registry key.
+            EmitComputedPropertyKey(emitter, il, accessor.ComputedKey!);
 
             // getter MethodInfo (or null)
             if (isGetter)
@@ -265,13 +266,15 @@ public partial class ILCompiler
 
         foreach (var (method, key, builder) in list)
         {
+            if (ExpressionContainsYield(key))
+                continue;
             // owner: typeof(ThisClass)
             il.Emit(OpCodes.Ldtoken, typeBuilder);
             il.Emit(OpCodes.Call, getTypeFromHandle);
 
-            // symbol: evaluate the computed key expression (e.g. Symbol.iterator)
-            emitter.EmitExpression(key);
-            emitter.EmitBoxIfNeeded(key);
+            // property key: preserve Symbols; coerce every other value exactly as bracket
+            // access does (notably null -> "null") before using it as a registry key.
+            EmitComputedPropertyKey(emitter, il, key);
 
             // method MethodInfo
             EmitMethodInfoLiteral(il, builder, typeBuilder);
@@ -281,6 +284,78 @@ public partial class ILCompiler
 
             il.Emit(OpCodes.Call, _runtime.RegisterSymbolMethod);
         }
+    }
+
+    private (MethodBuilder Method, IReadOnlyList<Expr> Keys)? DefineDeferredComputedMethodKeyRegistrar(TypeBuilder typeBuilder)
+    {
+        if (!_classes.SymbolMethods.TryGetValue(typeBuilder.Name, out var methods))
+            return null;
+
+        var deferred = methods.Where(entry => ExpressionContainsYield(entry.Key)).ToList();
+        if (deferred.Count == 0)
+            return null;
+
+        var registrar = typeBuilder.DefineMethod(
+            "$registerDeferredComputedKeys",
+            MethodAttributes.Assembly | MethodAttributes.Static,
+            _types.Void,
+            [_types.ObjectArray]);
+        var il = registrar.GetILGenerator();
+        var getTypeFromHandle = _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
+
+        for (int i = 0; i < deferred.Count; i++)
+        {
+            var (method, _key, builder) = deferred[i];
+            il.Emit(OpCodes.Ldtoken, typeBuilder);
+            il.Emit(OpCodes.Call, getTypeFromHandle);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4, i);
+            il.Emit(OpCodes.Ldelem_Ref);
+            EmitMethodInfoLiteral(il, builder, typeBuilder);
+            il.Emit(method.IsStatic ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, _runtime.RegisterSymbolMethod);
+        }
+
+        il.Emit(OpCodes.Ret);
+        return (registrar, deferred.Select(entry => entry.Key).ToArray());
+    }
+
+    private static bool ExpressionContainsYield(Expr expression)
+    {
+        var visitor = new YieldPresenceVisitor();
+        visitor.Visit(expression);
+        return visitor.Found;
+    }
+
+    private sealed class YieldPresenceVisitor : Parsing.Visitors.AstVisitorBase
+    {
+        public bool Found { get; private set; }
+
+        protected override void VisitYield(Expr.Yield expr)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
+    }
+
+    private void EmitComputedPropertyKey(ILEmitter emitter, ILGenerator il, Expr key)
+    {
+        var keyLocal = il.DeclareLocal(_types.Object);
+        var isSymbol = il.DefineLabel();
+
+        emitter.EmitExpression(key);
+        emitter.EmitBoxIfNeeded(key);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Isinst, _runtime.TSSymbolType);
+        il.Emit(OpCodes.Brtrue, isSymbol);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, _runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        il.MarkLabel(isSymbol);
+        il.Emit(OpCodes.Ldloc, keyLocal);
     }
 
     private void EmitMethodInfoLiteral(ILGenerator il, MethodBuilder method, TypeBuilder declaringType)
@@ -333,12 +408,14 @@ public partial class ILCompiler
 
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, methodBuilder);
+        ctx.IsStrictMode = true;
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;
         ApplyLockDecoratorFields(ctx);
         // ES2022 Private Class Elements support
         ctx.CurrentClassName = className;
         ApplyCapturedTopLevelVariableAccess(ctx);
+        SetupSyncMethodFunctionDisplayClass(ctx, il, method);
 
         // Define parameters with types (starting at index 0, not 1 since no 'this')
         var methodParams = methodBuilder.GetParameters();
@@ -364,6 +441,8 @@ public partial class ILCompiler
             method.Body,
             staticDefaultParamTypes,
             argumentOffset: 0);
+        InitializeSyncMethodCapturedParameters(
+            ctx, il, method, methodBuilder, argumentOffset: 0);
 
         // Variables for @lock decorator support
         LocalBuilder? prevReentrancyLocal = null;
@@ -540,6 +619,7 @@ public partial class ILCompiler
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
+        ctx.IsStrictMode = true;
         // Static method: IsInstanceMethod stays false (the default).
         ctx.CurrentClassBuilder = typeBuilder;
         ctx.EmittingTypeBuilder = typeBuilder;

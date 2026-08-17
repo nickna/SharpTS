@@ -412,6 +412,26 @@ public class GeneratorTests
     }
 
     [Theory, ModeData]
+    public void Generator_UncaughtThrowClosesIterator(ExecutionMode mode)
+    {
+        var source = """
+            let runs = 0;
+            function* fail() {
+                runs++;
+                throw new Error("boom");
+            }
+
+            const gen = fail();
+            try { gen.next(); } catch (_) {}
+            const result = gen.next();
+            console.log(result.value === undefined, result.done, runs);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true true 1\n", output);
+    }
+
+    [Theory, ModeData]
     public void Generator_IteratorResult_HasCorrectStructure(ExecutionMode mode)
     {
         var source = """

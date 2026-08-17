@@ -16,7 +16,7 @@ public partial class ILCompiler
         string className = GetQualifiedClassDeclarationName(classStmt);
 
         // Find constructor implementation (with body), not overload signatures
-        var constructor = classStmt.Methods.FirstOrDefault(m => m.Name.Lexeme == "constructor" && m.Body != null);
+        var constructor = classStmt.Methods.FirstOrDefault(m => !m.IsStatic && m.Name.Lexeme == "constructor" && m.Body != null);
 
         // Reuse pre-defined constructor if available (from DefineClassMethodsOnly)
         ConstructorBuilder ctorBuilder;
@@ -37,18 +37,31 @@ public partial class ILCompiler
                         : [typeof(object)]  // Accept any value; converted to string by base Error constructor
                     : _classes.PromiseSubclasses.Contains(className)
                         ? [typeof(object)]  // Executor arg, forwarded to PromiseFromExecutor (#242)
-                        : [];
+                    : _classes.ArraySubclasses.Contains(className)
+                        ? [typeof(object[])] // Complete argument list, forwarded to Array
+                    : [];
             ctorBuilder = typeBuilder.DefineConstructor(
                 MethodAttributes.Public,
                 CallingConventions.Standard,
                 paramTypes
             );
             _classes.Constructors[className] = ctorBuilder;
+            if (constructor == null && _classes.ArraySubclasses.Contains(className))
+                MarkJsVariadicConstructor(ctorBuilder);
         }
 
         var il = ctorBuilder.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, ctorBuilder);
+        ctx.IsStrictMode = true;
         ctx.CurrentSuperclassName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr);
+        ctx.CurrentSuperclassIsAnonymousEmptyClass = classStmt.SuperclassExpr is Expr.ClassExpr
+        {
+            Methods.Count: 0,
+            Fields.Count: 0,
+            Accessors: null or { Count: 0 },
+            AutoAccessors: null or { Count: 0 },
+            StaticInitializers: null or { Count: 0 }
+        };
         // Typed interop support
         ctx.PropertyBackingFields = _typedInterop.PropertyBackingFields;
         ctx.ClassProperties = _typedInterop.ClassProperties;
@@ -120,7 +133,8 @@ public partial class ILCompiler
         // If the class has an explicit constructor with super(), the super() in body will handle it.
         // If the class has no explicit constructor but has a superclass, we must call the parent constructor.
         // If the class has no superclass, we call Object constructor.
-        string? qualifiedSuperclass = classStmt.SuperclassExpr != null ? defCtx.ResolveClassName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!) : null;
+        string? superclassLeaf = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr);
+        string? qualifiedSuperclass = superclassLeaf != null ? defCtx.ResolveClassName(superclassLeaf) : null;
         bool isErrorSubclass = classStmt.SuperclassExpr != null
             && Runtime.BuiltIns.BuiltInNames.IsErrorTypeName(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
         bool isDirectAggregateErrorSubclass = constructor == null
@@ -137,13 +151,16 @@ public partial class ILCompiler
         bool isDirectPromiseSubclass = classStmt.SuperclassExpr != null
             && Expr.GetSuperclassLeafName(classStmt.SuperclassExpr) == "Promise"
             && (qualifiedSuperclass == null || !_classes.Builders.ContainsKey(qualifiedSuperclass));
+        ConstructorBuilder? classExprParentCtor = null;
+        if (superclassLeaf != null
+            && _classExprs.VarToClassExpr.TryGetValue(superclassLeaf, out var parentClassExpr))
+            _classExprs.Constructors.TryGetValue(parentClassExpr, out classExprParentCtor);
         if (constructor == null && isDirectArraySubclass)
         {
-            // No explicit constructor, extends Array — empty array per
-            // implicit `constructor(...args) { super(...args) }` with no args.
+            // No explicit constructor, extends Array — forward the complete
+            // implicit `constructor(...args) { super(...args) }` argument list.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Newarr, typeof(object));
+            il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _runtime.TSArrayCtorFromCtorArgs);
         }
         else if (constructor == null && isDirectPromiseSubclass)
@@ -159,22 +176,39 @@ public partial class ILCompiler
         {
             // No explicit constructor, extends a native Error — the implicit
             // derived constructor forwards the native constructor's arguments.
-            il.Emit(OpCodes.Ldarg_0);
-            if (isDirectAggregateErrorSubclass)
-                il.Emit(OpCodes.Ldarg_1); // errors
+            var errorMessageLocal = il.DeclareLocal(_types.String);
+            var hasErrorMessageLocal = il.DeclareLocal(_types.Boolean);
             var convertErrorMessageLabel = il.DefineLabel();
             var haveErrorMessageLabel = il.DefineLabel();
             il.Emit(isDirectAggregateErrorSubclass ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
             il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
             il.Emit(OpCodes.Brfalse, convertErrorMessageLabel);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, hasErrorMessageLocal);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Br, haveErrorMessageLabel);
             il.MarkLabel(convertErrorMessageLabel);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, hasErrorMessageLocal);
             il.Emit(isDirectAggregateErrorSubclass ? OpCodes.Ldarg_2 : OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, _runtime.ToJsString);
             il.MarkLabel(haveErrorMessageLabel);
+            il.Emit(OpCodes.Stloc, errorMessageLocal);
+
+            il.Emit(OpCodes.Ldarg_0);
+            if (isDirectAggregateErrorSubclass)
+                il.Emit(OpCodes.Ldarg_1); // errors
+            il.Emit(OpCodes.Ldloc, errorMessageLocal);
             var baseCtor = GetEmittedErrorConstructor(Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!);
             il.Emit(OpCodes.Call, (System.Reflection.ConstructorInfo)baseCtor);
+
+            var skipMessageDescriptorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, hasErrorMessageLocal);
+            il.Emit(OpCodes.Brfalse, skipMessageDescriptorLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, errorMessageLocal);
+            il.Emit(OpCodes.Call, _runtime.ErrorDefineMessageProperty);
+            il.MarkLabel(skipMessageDescriptorLabel);
         }
         else if (constructor == null && qualifiedSuperclass != null && _classes.Constructors.TryGetValue(qualifiedSuperclass, out var parentCtor))
         {
@@ -198,6 +232,13 @@ public partial class ILCompiler
 
             il.Emit(OpCodes.Call, ctorToCall);
         }
+        else if (constructor == null && classExprParentCtor != null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            foreach (var parameter in classExprParentCtor.GetParameters())
+                new ILEmitter(ctx).EmitOmittedArgument(parameter.ParameterType);
+            il.Emit(OpCodes.Call, classExprParentCtor);
+        }
         else if (constructor != null && qualifiedSuperclass != null && _classes.Constructors.ContainsKey(qualifiedSuperclass))
         {
             // Explicit constructor with a user-class superclass: the super(...)
@@ -219,7 +260,9 @@ public partial class ILCompiler
 
         // Emit instance field initializers to backing fields (before constructor body)
         // Note: Declare fields are excluded - they have no initialization
-        var instanceFieldsWithInit = classStmt.Fields.Where(f => !f.IsStatic && !f.IsPrivate && !f.IsDeclare && f.Initializer != null).ToList();
+        var instanceFieldsWithInit = classStmt.Fields.Where(f =>
+            !f.IsStatic && !f.IsPrivate && !f.IsDeclare &&
+            (f.Initializer != null || f.ComputedKey != null)).ToList();
         if (instanceFieldsWithInit.Count > 0)
         {
             ctx.FieldsField = fieldsField;
@@ -237,9 +280,17 @@ public partial class ILCompiler
                     // Evaluate computed key expression (e.g., the Symbol)
                     initEmitter.EmitExpression(field.ComputedKey);
                     initEmitter.EmitBoxIfNeeded(field.ComputedKey);
-                    // Emit initializer value
-                    initEmitter.EmitExpression(field.Initializer!);
-                    initEmitter.EmitBoxIfNeeded(field.Initializer!);
+                    // Emit initializer value; a field with no initializer is still an own
+                    // property whose value is undefined.
+                    if (field.Initializer != null)
+                    {
+                        initEmitter.EmitExpression(field.Initializer);
+                        initEmitter.EmitBoxIfNeeded(field.Initializer);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Ldsfld, _runtime.UndefinedInstance);
+                    }
                     // Call Runtime.SetIndex(object, key, value)
                     il.Emit(OpCodes.Call, _runtime.SetIndex);
                     continue;
@@ -297,9 +348,20 @@ public partial class ILCompiler
             il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
         }
 
-        // ES2022: Initialize instance private fields
-        // Private fields use a ConditionalWeakTable for GC-friendly per-instance storage
-        EmitPrivateFieldInitialization(il, className, classStmt, ctx);
+        // A derived class does not install its private brand until super() returns. Deferring
+        // this prevents a base field initializer that dispatches into the derived instance from
+        // observing derived private elements prematurely.
+        bool deferPrivateInitialization = constructor?.Body != null
+            && classStmt.SuperclassExpr != null
+            && constructor.Body.Any(ContainsSuperCall);
+        bool privateInitializationEmitted = false;
+        if (!deferPrivateInitialization)
+        {
+            // ES2022: Initialize instance private fields. Private fields use a
+            // ConditionalWeakTable for GC-friendly per-instance storage.
+            EmitPrivateFieldInitialization(il, className, classStmt, ctx);
+            privateInitializationEmitted = true;
+        }
 
         // TypeScript 4.9+: Initialize instance auto-accessor backing fields
         if (classStmt.AutoAccessors != null)
@@ -323,6 +385,7 @@ public partial class ILCompiler
         {
             ctx.FieldsField = fieldsField;
             ctx.IsInstanceMethod = true;
+            SetupSyncMethodFunctionDisplayClass(ctx, il, constructor);
 
             // Define parameters with types
             var ctorParams = ctorBuilder.GetParameters();
@@ -350,14 +413,23 @@ public partial class ILCompiler
                 constructor.Body,
                 ctorDefaultParamTypes,
                 argumentOffset: 1);
+            InitializeSyncMethodCapturedParameters(
+                ctx, il, constructor, ctorBuilder, argumentOffset: 1);
 
             if (constructor.Body != null)
             {
                 foreach (var stmt in constructor.Body)
                 {
                     emitter.EmitStatement(stmt);
+                    if (!privateInitializationEmitted && ContainsSuperCall(stmt))
+                    {
+                        EmitPrivateFieldInitialization(il, className, classStmt, ctx);
+                        privateInitializationEmitted = true;
+                    }
                 }
             }
+
+            emitter.FinalizeReturns();
         }
 
         il.Emit(OpCodes.Ret);
@@ -378,8 +450,8 @@ public partial class ILCompiler
             return;
 
         // Get the list of private field names
-        if (!_classes.PrivateFieldNames.TryGetValue(className, out var fieldNames) || fieldNames.Count == 0)
-            return;
+        if (!_classes.PrivateFieldNames.TryGetValue(className, out var fieldNames))
+            fieldNames = [];
 
         var instancePrivateFields = classStmt.Fields
             .Where(f => f.IsPrivate && !f.IsStatic)

@@ -1389,6 +1389,7 @@ public class EmittedRuntime
     public MethodBuilder ErrorGetStack { get; set; } = null!;
     public MethodBuilder ErrorSetName { get; set; } = null!;
     public MethodBuilder ErrorSetMessage { get; set; } = null!;
+    public MethodBuilder ErrorDefineMessageProperty { get; set; } = null!;
     public MethodBuilder ErrorSetStack { get; set; } = null!;
     public MethodBuilder ErrorGetCause { get; set; } = null!;
     public MethodBuilder ErrorSetCause { get; set; } = null!;

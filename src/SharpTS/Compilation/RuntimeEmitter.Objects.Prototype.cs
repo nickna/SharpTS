@@ -740,6 +740,35 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notDelegateForProtoLabel);
 
+        // Emitted user classes are represented by CLR Type objects. Their CLR
+        // BaseType mirrors the JavaScript constructor [[Prototype]] chain, so a
+        // derived constructor must expose its emitted base constructor rather
+        // than falling straight through to Function.prototype.
+        var notUserClassCtorForProtoLabel = il.DefineLabel();
+        var userClassCtorTypeLocal = il.DeclareLocal(_types.Type);
+        var userClassBaseTypeLocal = il.DeclareLocal(_types.Type);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Type);
+        il.Emit(OpCodes.Stloc, userClassCtorTypeLocal);
+        il.Emit(OpCodes.Ldloc, userClassCtorTypeLocal);
+        il.Emit(OpCodes.Brfalse, notUserClassCtorForProtoLabel);
+        il.Emit(OpCodes.Ldtoken, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ldloc, userClassCtorTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.Type, "IsAssignableFrom", [_types.Type])!);
+        il.Emit(OpCodes.Brfalse, notUserClassCtorForProtoLabel);
+        il.Emit(OpCodes.Ldloc, userClassCtorTypeLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "BaseType").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Ldtoken, _types.Object);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Beq, notUserClassCtorForProtoLabel);
+        il.Emit(OpCodes.Ldloc, userClassBaseTypeLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notUserClassCtorForProtoLabel);
+
         // Native error constructors form an actual constructor inheritance
         // chain: TypeError/RangeError/etc. have Error as [[Prototype]]. Their
         // compiled identities are CLR Type objects whose BaseType mirrors that

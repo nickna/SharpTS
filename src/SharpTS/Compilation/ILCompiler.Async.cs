@@ -500,6 +500,15 @@ public partial class ILCompiler
             case Stmt.Return r:
                 if (r.Value != null)
                     AnalyzeArrowExprForAwaits(r.Value, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
+                // Keep the custom async-arrow analyzer in lockstep with AsyncStateAnalyzer.VisitReturn:
+                // private calls may return the emitted Task<object> for an async private method. The
+                // emitter decides from the resolved MethodBuilder whether adoption is actually needed;
+                // reserving an unused state for a synchronous private call is harmless.
+                if (r.Value is Expr.CallPrivate)
+                {
+                    awaitCount++;
+                    seenAwait = true;
+                }
                 break;
             case Stmt.If i:
                 AnalyzeArrowExprForAwaits(i.Condition, ref awaitCount, ref seenAwait, declaredVariables, usedAfterAwait, declaredBeforeAwait);
@@ -1060,6 +1069,9 @@ public partial class ILCompiler
         // Create context for MoveNext emission
         var il = smBuilder.MoveNextMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
+        ctx.IsStrictMode = currentClassName != null
+            || _isStrictMode
+            || Parsing.DirectivePrologue.HasUseStrict(method.Body);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders;

@@ -33,8 +33,48 @@ public partial class RuntimeEmitter
         EmitErrorGetCause(typeBuilder, runtime);
         EmitErrorSetCause(typeBuilder, runtime);
         EmitAggregateErrorGetErrors(typeBuilder, runtime);
+        EmitErrorDefineMessageProperty(typeBuilder, runtime);
         // CreateError must come last - it references ErrorSetCause and other helpers
         EmitCreateError(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Installs the spec-created own <c>message</c> data property after an
+    /// emitted class constructor chains directly to a native Error base ctor.
+    /// The ordinary Error factory performs the same operation inline, but a
+    /// CLR base-constructor call otherwise bypasses that factory.
+    /// </summary>
+    private void EmitErrorDefineMessageProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ErrorDefineMessageProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.String]);
+        runtime.ErrorDefineMessageProperty = method;
+
+        var il = method.GetILGenerator();
+        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "message");
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Call, runtime.PDSDefineProperty);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitCreateError(TypeBuilder typeBuilder, EmittedRuntime runtime)

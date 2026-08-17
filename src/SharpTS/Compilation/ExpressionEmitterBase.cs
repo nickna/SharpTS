@@ -845,9 +845,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Throw);
             return;
         }
+        className = Ctx.ResolvePrivateFieldOwner(className, fieldName);
 
-        if (gp.Object is Expr.Variable classVar &&
-            classVar.Name.Lexeme == Ctx.CurrentClassShortName &&
+        if (((gp.Object is Expr.Variable classVar &&
+              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
+             || (gp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
             Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
         {
             IL.Emit(OpCodes.Ldsfld, staticField!);
@@ -871,9 +873,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
             var successLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Brtrue, successLabel);
-            IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot read private member #{fieldName} from an object whose class did not declare it");
-            IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!,
+                $"Cannot read private member #{fieldName} from an object whose class did not declare it");
             IL.MarkLabel(successLabel);
 
             IL.Emit(OpCodes.Ldloc, dictLocal);
@@ -890,9 +891,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        IL.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        IL.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!,
+            $"Private field '#{fieldName}' not found in class '{className}'");
     }
 
     /// <summary>
@@ -913,9 +913,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Throw);
             return;
         }
+        className = Ctx.ResolvePrivateFieldOwner(className, fieldName);
 
-        if (sp.Object is Expr.Variable classVar &&
-            classVar.Name.Lexeme == Ctx.CurrentClassShortName &&
+        if (((sp.Object is Expr.Variable classVar &&
+              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
+             || (sp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
             Ctx.ClassRegistry!.TryGetStaticPrivateField(className, fieldName, out var staticField))
         {
             EmitExpression(sp.Value);
@@ -943,9 +945,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
             var successLabel = IL.DefineLabel();
             IL.Emit(OpCodes.Brtrue, successLabel);
-            IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot write private member #{fieldName} to an object whose class did not declare it");
-            IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-            IL.Emit(OpCodes.Throw);
+            GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!,
+                $"Cannot write private member #{fieldName} to an object whose class did not declare it");
             IL.MarkLabel(successLabel);
 
             EmitExpression(sp.Value);
@@ -970,9 +971,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        IL.Emit(OpCodes.Ldstr, $"Private field '#{fieldName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        IL.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!,
+            $"Private field '#{fieldName}' not found in class '{className}'");
     }
 
     /// <summary>
@@ -993,9 +993,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Throw);
             return;
         }
+        className = Ctx.ResolvePrivateMethodOwner(className, methodName);
 
-        if (cp.Object is Expr.Variable classVar &&
-            classVar.Name.Lexeme == Ctx.CurrentClassShortName &&
+        if (((cp.Object is Expr.Variable classVar &&
+              classVar.Name.Lexeme == Ctx.CurrentClassShortName)
+             || (cp.Object is Expr.This && !Ctx.IsInstanceMethod)) &&
             Ctx.ClassRegistry!.TryGetStaticPrivateMethod(className, methodName, out var staticMethod))
         {
             foreach (var arg in cp.Arguments)
@@ -1031,14 +1033,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
                 var validLabel = IL.DefineLabel();
                 IL.Emit(OpCodes.Brtrue, validLabel);
-                IL.Emit(OpCodes.Ldstr, $"TypeError: Cannot call private method #{methodName} on an object whose class did not declare it");
-                IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-                IL.Emit(OpCodes.Throw);
+                GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!,
+                    $"Cannot call private method #{methodName} on an object whose class did not declare it");
                 IL.MarkLabel(validLabel);
 
                 IL.Emit(OpCodes.Ldloc, objLocal);
-                if (Ctx.CurrentClassBuilder != null)
-                    IL.Emit(OpCodes.Castclass, Ctx.CurrentClassBuilder);
+                if (Ctx.ClassRegistry.TryGetClass(className, out var privateOwnerBuilder)
+                    && privateOwnerBuilder != null)
+                    IL.Emit(OpCodes.Castclass, privateOwnerBuilder);
 
                 foreach (var arg in cp.Arguments)
                 {
@@ -1056,8 +1058,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 // No private field storage — skip brand check
                 EmitExpression(cp.Object);
                 EnsureBoxed();
-                if (Ctx.CurrentClassBuilder != null)
-                    IL.Emit(OpCodes.Castclass, Ctx.CurrentClassBuilder);
+                if (Ctx.ClassRegistry.TryGetClass(className, out var privateOwnerBuilder)
+                    && privateOwnerBuilder != null)
+                    IL.Emit(OpCodes.Castclass, privateOwnerBuilder);
 
                 foreach (var arg in cp.Arguments)
                 {
@@ -1072,9 +1075,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             }
         }
 
-        IL.Emit(OpCodes.Ldstr, $"Private method '#{methodName}' not found in class '{className}'");
-        IL.Emit(OpCodes.Newobj, Types.ExceptionCtorString);
-        IL.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowTypeError(IL, Ctx.Runtime!,
+            $"Private method '#{methodName}' not found in class '{className}'");
     }
 
     /// <summary>
@@ -1501,8 +1503,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 argTemps.Add(temp);
             }
 
-            // Load arguments with proper type conversions
-            for (int i = 0; i < argTemps.Count; i++)
+            PublishConstructorArgumentsIfNeeded(targetCtor, argTemps);
+
+            // Load only arguments represented by the fixed CLR signature.
+            // JavaScript surplus arguments were evaluated above and, when the
+            // constructor observes `arguments`, published as the exact caller list.
+            for (int i = 0; i < Math.Min(argTemps.Count, ctorParams.Length); i++)
             {
                 IL.Emit(OpCodes.Ldloc, argTemps[i]);
                 if (i < ctorParams.Length)
@@ -1615,7 +1621,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             argTemps.Add(temp);
         }
 
-        for (int i = 0; i < argTemps.Count; i++)
+        PublishConstructorArgumentsIfNeeded(classExprCtor, argTemps);
+
+        for (int i = 0; i < Math.Min(argTemps.Count, ctorParams.Length); i++)
         {
             IL.Emit(OpCodes.Ldloc, argTemps[i]);
             if (i < ctorParams.Length)
@@ -1633,6 +1641,28 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         IL.Emit(OpCodes.Newobj, classExprCtor);
         SetStackUnknown();
+    }
+
+    private void PublishConstructorArgumentsIfNeeded(
+        MethodBase constructor,
+        IReadOnlyList<LocalBuilder> argumentTemps)
+    {
+        if (Ctx.MethodsCapturingArguments?.Contains(constructor) != true
+            || Ctx.Runtime?.CurrentArgumentsField == null)
+        {
+            return;
+        }
+
+        IL.Emit(OpCodes.Ldc_I4, argumentTemps.Count);
+        IL.Emit(OpCodes.Newarr, Types.Object);
+        for (int i = 0; i < argumentTemps.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldloc, argumentTemps[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+        IL.Emit(OpCodes.Stsfld, Ctx.Runtime.CurrentArgumentsField);
     }
 
     /// <summary>
@@ -2217,6 +2247,50 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// Emits a grouping expression by evaluating its inner expression.
     /// </summary>
     protected virtual void EmitGrouping(Expr.Grouping g) => EmitExpression(g.Expression);
+
+    /// <summary>
+    /// Evaluates a class heritage expression at the class definition's source
+    /// position and discards its value. The emitted CLR base type is selected
+    /// statically, but ECMAScript still requires the expression's side effects
+    /// and abrupt completions to occur at runtime.
+    /// </summary>
+    protected void EmitClassHeritageExpression(Expr? heritage, string? innerClassName)
+    {
+        if (heritage == null)
+            return;
+
+        EmitClassHeritageValue(heritage, innerClassName);
+        EnsureBoxed();
+        IL.Emit(OpCodes.Pop);
+    }
+
+    private void EmitClassHeritageValue(Expr heritage, string? innerClassName)
+    {
+        switch (heritage)
+        {
+            case Expr.Grouping grouping:
+                EmitClassHeritageValue(grouping.Expression, innerClassName);
+                return;
+            case Expr.Comma comma:
+                EmitExpression(comma.Left);
+                EnsureBoxed();
+                IL.Emit(OpCodes.Pop);
+                EmitClassHeritageValue(comma.Right, innerClassName);
+                return;
+            case Expr.Variable variable when innerClassName != null
+                && variable.Name.Lexeme == innerClassName:
+                // A class's inner name is in TDZ while its extends expression is
+                // evaluated, even if an outer binding has the same spelling.
+                IL.Emit(OpCodes.Ldstr, innerClassName);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+                IL.Emit(OpCodes.Ldnull); // unreachable stack balance
+                SetStackUnknown();
+                return;
+            default:
+                EmitExpression(heritage);
+                return;
+        }
+    }
 
     /// <summary>
     /// Emits a type assertion. Type assertions are compile-time only, just emit the inner expression.

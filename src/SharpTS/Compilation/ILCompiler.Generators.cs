@@ -285,11 +285,16 @@ public partial class ILCompiler
     {
         foreach (var method in methods)
         {
-            if (method.Body == null || !method.IsGenerator || method.IsStatic)
+            if (method.Body == null || !method.IsGenerator)
                 continue;
 
-            var mutatedCaptured = ComputeMutatedCapturedGeneratorVars(method);
-            if (mutatedCaptured.Count == 0)
+            // Generator methods need a function display class for every captured local, not only
+            // write-captures.  Their body runs later in MoveNext, so a by-value arrow snapshot can
+            // otherwise observe the enclosing/global binding instead of the method-local binding.
+            var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(method));
+            capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(method));
+            ApplyWriteCaptureRenames(capturedLocals, GeneratorBlockScopeRenamer.Compute(method));
+            if (capturedLocals.Count == 0)
                 continue;
 
             // Method names with bodies are unique within a class (overload signatures have no body),
@@ -297,7 +302,7 @@ public partial class ILCompiler
             // unique and disjoint from free-function registry keys (which never contain "::").
             string key = $"{qualifiedClassName}::{method.Name.Lexeme}";
             _closures.FunctionAstNodes[key] = method;
-            RegisterFunctionDisplayClass(key, mutatedCaptured);
+            RegisterFunctionDisplayClass(key, capturedLocals);
             (method.IsAsync ? _asyncGeneratorMethodFunctionDCKeys : _generatorMethodFunctionDCKeys)[method] = key;
         }
     }
@@ -474,7 +479,7 @@ public partial class ILCompiler
             smBuilder,
             method,
             isInstanceMethod,
-            isInstanceMethod ? methodDCKey : null,
+            methodDCKey,
             fieldsField,
             currentClassName);
 
@@ -483,7 +488,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
-        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(method.Body);
+        ctx.IsStrictMode = true;
         // ES2022 Private Class Elements support for generator methods (a private generator threads
         // its QUALIFIED class name so nested private member access resolves under modules — #720).
         ctx.CurrentClassName = currentClassName ?? methodBuilder.DeclaringType?.Name;

@@ -12,12 +12,13 @@ public partial class ILEmitter
     /// </summary>
     public void FinalizeReturns()
     {
-        if (_ctx.ReturnValueLocal != null)
+        if (_ctx.ReturnValueLocal != null || _ctx.HasDeferredVoidReturn)
         {
             // Mark the return label and emit the actual return
             // Use builder's MarkLabel since ReturnLabel was defined with builder
             _ctx.ILBuilder.MarkLabel(_ctx.ReturnLabel);
-            IL.Emit(OpCodes.Ldloc, _ctx.ReturnValueLocal);
+            if (_ctx.ReturnValueLocal != null)
+                IL.Emit(OpCodes.Ldloc, _ctx.ReturnValueLocal);
             IL.Emit(OpCodes.Ret);
         }
     }
@@ -25,7 +26,7 @@ public partial class ILEmitter
     /// <summary>
     /// Check if the method had returns inside exception blocks that need finalization.
     /// </summary>
-    public bool HasDeferredReturns => _ctx.ReturnValueLocal != null;
+    public bool HasDeferredReturns => _ctx.ReturnValueLocal != null || _ctx.HasDeferredVoidReturn;
 
     /// <summary>
     /// Emit default parameter value checks at function entry.

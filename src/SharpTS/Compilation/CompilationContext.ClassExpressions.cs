@@ -26,10 +26,14 @@ public partial class CompilationContext
     public Dictionary<Expr.ClassExpr, ConstructorBuilder>? ClassExprConstructors { get; set; }
     public Dictionary<Expr.ClassExpr, GenericTypeParameterBuilder[]>? ClassExprGenericParams { get; set; }
     public Dictionary<Expr.ClassExpr, string?>? ClassExprSuperclass { get; set; }
+    public Dictionary<Expr.ClassExpr, Dictionary<string, FieldBuilder>>? ClassExprCaptureFields { get; set; }
 
     // Current class expression being compiled
     public Expr.ClassExpr? CurrentClassExpr { get; set; }
 
     // Variable name to class expression mapping (for static member access)
     public Dictionary<string, Expr.ClassExpr>? VarToClassExpr { get; set; }
+
+    public IReadOnlyDictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)>? DeferredComputedClassKeys { get; set; }
+    public IReadOnlyDictionary<Expr.ClassExpr, (MethodBuilder Method, IReadOnlyList<Expr> Keys)>? DeferredComputedClassExprKeys { get; set; }
 }

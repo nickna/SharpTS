@@ -53,6 +53,12 @@ public partial class ILEmitter
 
     protected override void EmitCall(Expr.Call c)
     {
+        // A constant, expression-only indirect eval of a global identifier can bind directly
+        // to the emitted script-global field. The interpreter bridge has its own global scope
+        // and cannot see fields in the compiled assembly, so `(0, eval)('arguments;')` would
+        // otherwise throw even though the binding exists in this script.
+        if (TryEmitStaticIndirectEvalGlobal(c)) return;
+
         // CommonJS require() lowering is handled by ExpressionEmitterBase.EmitCall
         // (called via base.EmitCall below), so it works in async/generator emitters too.
 

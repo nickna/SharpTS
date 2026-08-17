@@ -10,6 +10,8 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private readonly List<(Expr.ArrowFunction Arrow, HashSet<string> Captures)> _collectedArrows = [];
+    private readonly HashSet<Expr.ArrowFunction> _strictArrows = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.ArrowFunction> _arrowsInAnonymousEmptyDerivedClass = new(ReferenceEqualityComparer.Instance);
     // Maps each collected arrow to the module path that owns it (null = script/single-file
     // scope). Set during collection so body emission can restore the correct
     // per-module view of TopLevelStaticVars / captured-top-level-var fields —
@@ -539,6 +541,22 @@ public partial class ILCompiler
                     if (method.Body != null)
                         CollectArrowsFromStmt(method);
                 }
+                // Field initializers are evaluated in the class's lexical context, but are
+                // not part of a method body. Walk them explicitly so function/arrow values
+                // get MethodBuilders instead of EmitArrowFunction's null fallback.
+                foreach (var field in c.Fields)
+                {
+                    if (field.ComputedKey != null)
+                        CollectArrowsFromExpr(field.ComputedKey);
+                    if (field.Initializer != null)
+                        CollectArrowsFromExpr(field.Initializer);
+                }
+                if (c.Accessors != null)
+                {
+                    foreach (var accessor in c.Accessors)
+                        foreach (var statement in accessor.Body)
+                            CollectArrowsFromStmt(statement);
+                }
                 _currentCollectClassName = previousClassName;
                 break;
             case Stmt.If i:
@@ -662,6 +680,8 @@ public partial class ILCompiler
             case Expr.ArrowFunction af:
                 var captures = _closures.Analyzer.GetCaptures(af);
                 _collectedArrows.Add((af, captures));
+                if (_currentCollectClassName != null)
+                    _strictArrows.Add(af);
                 // Only record a module mapping when collection is under a real
                 // module context. Single-file compile runs without setting
                 // _modules.CurrentPath, and entering a null key would cause
@@ -682,6 +702,17 @@ public partial class ILCompiler
                 if (_currentCollectClassName != null)
                 {
                     _async.ArrowEnclosingClassNames[af] = GetDefinitionContext().GetQualifiedClassName(_currentCollectClassName);
+                    if (_classes.Declarations.Any(c =>
+                        c.Name.Lexeme == _currentCollectClassName
+                        && c.SuperclassExpr is Expr.ClassExpr
+                        {
+                            Methods.Count: 0,
+                            Fields.Count: 0,
+                            Accessors: null or { Count: 0 },
+                            AutoAccessors: null or { Count: 0 },
+                            StaticInitializers: null or { Count: 0 }
+                        }))
+                        _arrowsInAnonymousEmptyDerivedClass.Add(af);
                 }
 
                 // Track the immediately enclosing top-level function so we can
@@ -881,6 +912,14 @@ public partial class ILCompiler
             case Expr.ClassExpr ce:
                 // Collect the class expression for later definition
                 CollectClassExpression(ce);
+                var previousClassNameCE = _currentCollectClassName;
+                if (previousClassNameCE != null)
+                {
+                    _classExprs.EnclosingClass[ce] = previousClassNameCE.StartsWith("$ClassExpr_", StringComparison.Ordinal)
+                        ? previousClassNameCE
+                        : GetDefinitionContext().GetQualifiedClassName(previousClassNameCE);
+                }
+                _currentCollectClassName = _classExprs.Names[ce];
                 // Method/accessor bodies are separate callables — an inner function
                 // declaration inside them is NOT hoisted into the enclosing arrow's
                 // body, so clear the immediate-callable marker while walking them.
@@ -903,6 +942,7 @@ public partial class ILCompiler
                     foreach (var accessor in ce.Accessors)
                         foreach (var s in accessor.Body)
                             CollectArrowsFromStmt(s);
+                _currentCollectClassName = previousClassNameCE;
                 _currentEnclosingCallable = prevCallableCE;
                 break;
         }
@@ -921,6 +961,7 @@ public partial class ILCompiler
         foreach (var classExpr in _classExprs.ToDefine)
             if (_classExprs.Names.TryGetValue(classExpr, out var name))
             {
+                RegisterSyncMethodFunctionDisplayClasses(classExpr.Methods, name);
                 RegisterGeneratorMethodFunctionDisplayClasses(classExpr.Methods, name);
                 RegisterAsyncMethodFunctionDisplayClasses(classExpr.Methods, name);
             }
@@ -1320,7 +1361,9 @@ public partial class ILCompiler
         // "use strict" is an ordinary string expression statement rather than a
         // Stmt.Directive — BodyDeclaresUseStrict handles both forms (plain
         // CheckForUseStrict only matches Directive).
-        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(arrow.BlockBody);
+        ctx.IsStrictMode = _strictArrows.Contains(arrow)
+            || _isStrictMode
+            || BodyDeclaresUseStrict(arrow.BlockBody);
         // Propagate the enclosing class name so private-member dispatch (#field / #method
         // access, `super` lookups) works inside arrow bodies nested in class methods.
         // Without this, `this.#parseGlob()` inside an arrow throws "class context not
@@ -1328,6 +1371,7 @@ public partial class ILCompiler
         ctx.CurrentClassName = _async.ArrowEnclosingClassNames.TryGetValue(arrow, out var enclosingClassName)
             ? enclosingClassName
             : null;
+        ctx.CurrentSuperclassIsAnonymousEmptyClass = _arrowsInAnonymousEmptyDerivedClass.Contains(arrow);
         // Entry-point display class for accessing captured top-level variables
         ApplyCapturedTopLevelVariableAccess(ctx);
         ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;

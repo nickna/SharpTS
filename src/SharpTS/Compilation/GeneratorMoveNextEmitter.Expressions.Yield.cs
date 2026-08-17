@@ -53,6 +53,13 @@ public partial class GeneratorMoveNextEmitter
         // 5. Mark the resume label (jumped to from state switch)
         _il.MarkLabel(resumeLabel);
 
+        // The suspension has now been consumed. Keep the state completed while the
+        // resumed body runs; a later yield installs its own resume state. If evaluation
+        // throws before then, subsequent next() calls must observe a closed generator.
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4, -2);
+        _il.Emit(OpCodes.Stfld, _builder.StateField);
+
         // Restore spill temps from their fields on the resumed path.
         _helpers.RehydrateLiveSpillsAfterResume();
 
@@ -233,6 +240,12 @@ public partial class GeneratorMoveNextEmitter
 
         // This label is where we resume from state dispatch (and the per-element loop top).
         _il.MarkLabel(resumeLabel);
+
+        // As with an ordinary yield, consuming the suspension makes -2 the active
+        // execution state until the next delegated value is yielded.
+        _il.Emit(OpCodes.Ldarg_0);
+        _il.Emit(OpCodes.Ldc_I4, -2);
+        _il.Emit(OpCodes.Stfld, _builder.StateField);
 
         // Restore operand spill temps. Safe on the first fall-through too: they were persisted
         // before the setup above, so the field already holds the live value (#400/#414).

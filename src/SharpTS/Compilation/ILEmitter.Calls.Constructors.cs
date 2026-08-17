@@ -81,7 +81,16 @@ public partial class ILEmitter
         if (namespaceParts.Count > 0 && TryEmitNamespaceClassConstruction(namespaceParts, className, n.Arguments, n.TypeArgs))
             return;
 
-        // 9. Fallback: local variable or resolver
+        // 9. An unresolved member/index callee is a runtime value, not the leaf
+        // identifier. Preserve the complete expression for cases such as
+        // `new instance.ClassStoredInAField()`.
+        if (n.Callee is not Expr.Variable)
+        {
+            EmitCalleeExprConstruction(n);
+            return;
+        }
+
+        // 10. Fallback: local variable or resolver
         EmitFallbackConstruction(className, n);
     }
 
