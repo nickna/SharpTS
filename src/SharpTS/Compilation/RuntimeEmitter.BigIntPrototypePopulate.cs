@@ -34,7 +34,7 @@ public partial class RuntimeEmitter
         });
 
         EmitWirePrototypeMethod(il, runtime, runtime.BigIntPrototypeField, descLocal,
-            setItem, "toString", toStringHelper, 1);
+            setItem, "toString", toStringHelper, 0);
         EmitWirePrototypeMethod(il, runtime, runtime.BigIntPrototypeField, descLocal,
             setItem, "valueOf", valueOfHelper, 0);
 
@@ -118,18 +118,25 @@ public partial class RuntimeEmitter
             "BigIntPrototypeToString",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.Object, _types.Object]);
+            [_types.Object, _types.ObjectArray]);
+        method.DefineParameter(2, ParameterAttributes.None, "args");
         var il = method.GetILGenerator();
         var radixLocal = il.DeclareLocal(_types.Double);
         var useDefault = il.DefineLabel();
         var radixReady = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
         il.Emit(OpCodes.Brfalse, useDefault);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, useDefault);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
         il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Stloc, radixLocal);
         il.Emit(OpCodes.Br, radixReady);

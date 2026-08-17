@@ -140,12 +140,13 @@ public sealed class RuntimeFeatureDetector
             _set.TypedArrays |= RuntimeFeatureSet.TypedArrayKinds.ArrayBuffer
                               | RuntimeFeatureSet.TypedArrayKinds.TypedArrayBase;
         }
-        // BigInt64Array / BigUint64Array store BigInteger values. Even without
-        // a `123n` literal in the source, arithmetic on their elements lowers
-        // to BigInt helpers in the type-checker. Imply UsesBigInt to keep them
-        // emitted.
+        // BigInt64Array / BigUint64Array store BigInteger values, and DataView
+        // exposes get/setBigInt64 plus get/setBigUint64. Even without a `123n`
+        // literal in the source, those surfaces require strict ToBigInt and
+        // the BigInt helpers. Imply UsesBigInt to keep them emitted.
         if ((_set.TypedArrays & (RuntimeFeatureSet.TypedArrayKinds.BigInt64
-                              | RuntimeFeatureSet.TypedArrayKinds.BigUint64)) != 0)
+                              | RuntimeFeatureSet.TypedArrayKinds.BigUint64
+                              | RuntimeFeatureSet.TypedArrayKinds.DataView)) != 0)
         {
             _set.UsesBigInt = true;
         }

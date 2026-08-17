@@ -307,6 +307,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayValues { get; set; } = null!;
     public TypeBuilder ArrayIteratorType { get; set; } = null!;
     public ConstructorBuilder ArrayIteratorCtor { get; set; } = null!;
+    public TypeBuilder MapCollectionIteratorType { get; set; } = null!;
+    public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterialize { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via
@@ -520,6 +522,7 @@ public class EmittedRuntime
     public FieldBuilder BigIntPrototypeField { get; set; } = null!;
     /// <summary>Symbol.prototype singleton used by value-position Symbol prototype access.</summary>
     public FieldBuilder SymbolPrototypeField { get; set; } = null!;
+    public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
     public FieldBuilder JsonSingletonField { get; set; } = null!;
     /// <summary>
@@ -912,6 +915,9 @@ public class EmittedRuntime
 
     // Symbol.description instance property getter
     public MethodBuilder SymbolDescriptionGetter { get; set; } = null!;
+    public MethodBuilder SymbolPrototypeDescription { get; set; } = null!;
+    public MethodBuilder SymbolPrototypeToString { get; set; } = null!;
+    public MethodBuilder SymbolPrototypeValueOf { get; set; } = null!;
 
     // Symbol storage for compiled objects (symbol as object key)
     public MethodBuilder GetSymbolDictMethod { get; set; } = null!;
@@ -919,6 +925,10 @@ public class EmittedRuntime
 
     // BigInt support
     public MethodBuilder CreateBigInt { get; set; } = null!;
+    public MethodBuilder BigIntAsIntN { get; set; } = null!;
+    public MethodBuilder BigIntAsUintN { get; set; } = null!;
+    /// <summary>$Runtime.ToBigInt(object) -> boxed BigInteger — strict ECMA-262 ToBigInt (unlike the callable BigInt conversion, Number primitives are rejected).</summary>
+    public MethodBuilder ToBigInt { get; set; } = null!;
     /// <summary>$Runtime.BigIntToNumber(BigInteger) -> double — ECMA-262 NumberFromBigInt with ties-to-even binary64 rounding.</summary>
     public MethodBuilder BigIntToNumber { get; set; } = null!;
     public MethodBuilder BigIntAdd { get; set; } = null!;
@@ -943,6 +953,7 @@ public class EmittedRuntime
     public MethodBuilder BigIntLessThanOrEqual { get; set; } = null!;
     public MethodBuilder BigIntGreaterThan { get; set; } = null!;
     public MethodBuilder BigIntGreaterThanOrEqual { get; set; } = null!;
+    public MethodBuilder UpdateNumeric { get; set; } = null!;
 
     // Promise support
     public MethodBuilder PromiseResolve { get; set; } = null!;
@@ -1636,6 +1647,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayBufferByteLengthGetter { get; set; } = null!;
     public MethodBuilder ArrayBufferGetBuffer { get; set; } = null!;
     public MethodBuilder ArrayBufferSlice { get; set; } = null!;
+    public MethodBuilder ArrayBufferSliceDynamic { get; set; } = null!;
 
     // $SharedArrayBuffer type (pure-IL for standalone DLLs)
     public TypeBuilder SharedArrayBufferType { get; set; } = null!;

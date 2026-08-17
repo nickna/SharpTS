@@ -42,7 +42,6 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
                 EmitByteOffsetArg(emitter, arguments, 0);
                 EmitValueArg(emitter, arguments, 1);
                 il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
-                il.Emit(OpCodes.Ldnull); // setters return undefined
                 return true;
 
             // 16-bit, 32-bit, float getters (with endianness)
@@ -79,7 +78,6 @@ public sealed class DataViewEmitter : ITypeEmitterStrategy
                 EmitValueArg(emitter, arguments, 1);
                 EmitLittleEndianArg(emitter, arguments, 2);
                 il.Emit(OpCodes.Call, GetDataViewMethod(ctx, methodName));
-                il.Emit(OpCodes.Ldnull); // setters return undefined
                 return true;
         }
 

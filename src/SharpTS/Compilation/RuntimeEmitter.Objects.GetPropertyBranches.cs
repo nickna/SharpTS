@@ -800,6 +800,22 @@ public partial class RuntimeEmitter
         // behavior delegates to the wrapped Symbol rather than Object.prototype.
         // Resolve this after own properties/descriptors so an own override still
         // wins, while hasOwnProperty continues to report false for the method.
+        var notBoxedSymbolDescription = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "description");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notBoxedSymbolDescription);
+        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
+        il.Emit(OpCodes.Ldstr, "__primitiveType");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Ldstr, "Symbol");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+        il.Emit(OpCodes.Brfalse, notBoxedSymbolDescription);
+        il.Emit(OpCodes.Ldloc, tsObjectInstanceLocal);
+        il.Emit(OpCodes.Call, runtime.SymbolPrototypeDescription);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBoxedSymbolDescription);
+
         var notBoxedSymbolToString = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "toString");

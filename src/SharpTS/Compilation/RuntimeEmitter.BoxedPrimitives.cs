@@ -198,7 +198,8 @@ public partial class RuntimeEmitter
         il.MarkLabel(descriptorLoopEnd);
         il.MarkLabel(skipStringDescriptors);
 
-        // Set prototype based on typeTag (Boolean/Number/String/BigInt → matching singleton).
+        // Set prototype based on typeTag (Boolean/Number/String/BigInt/Symbol
+        // → matching singleton).
         // Populate is called to ensure the prototype singleton has the right
         // methods (e.g. toString stub) before we link.
         void LinkProto(string tag, FieldBuilder protoField, MethodBuilder populate)
@@ -219,6 +220,7 @@ public partial class RuntimeEmitter
         LinkProto("String",  runtime.StringPrototypeField,  runtime.StringPrototypePopulateMethod);
         if (_features.UsesBigInt)
             LinkProto("BigInt", runtime.BigIntPrototypeField, runtime.BigIntPrototypePopulateMethod);
+        LinkProto("Symbol", runtime.SymbolPrototypeField, runtime.SymbolPrototypePopulateMethod);
 
         il.Emit(OpCodes.Ldloc, objLocal);
         il.Emit(OpCodes.Ret);

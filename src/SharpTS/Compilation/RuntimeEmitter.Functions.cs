@@ -1244,11 +1244,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, callArgsLocal);
         il.MarkLabel(afterCallArgsLabel);
 
-        // Check target type and invoke. TSFunction/BoundTSFunction honor the thisArg
-        // via InvokeWithThis; bound methods already capture their receiver so thisArg
-        // is ignored for them (per JS spec for bound callables).
+        // Check target type and invoke. TSFunction/BoundTSFunction honor the
+        // thisArg via InvokeWithThis. Collection/array method wrappers capture
+        // the receiver only as an implementation detail; Function.prototype.call
+        // must rebind them to its explicit thisArg just like native methods.
         var isTSFunctionLabel = il.DefineLabel();
         var isBoundTSFunctionLabel = il.DefineLabel();
+        var isBoundArrayMethodLabel = il.DefineLabel();
+        var isBoundMapMethodLabel = il.DefineLabel();
+        var isBoundSetMethodLabel = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, targetField);
@@ -1260,7 +1264,44 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
-        // Non-TSFunction callables, including proxies, retain thisArg.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        var notBoundArrayMethodLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, notBoundArrayMethodLabel);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, isBoundArrayMethodLabel);
+        il.MarkLabel(notBoundArrayMethodLabel);
+
+        if (_features.UsesMap)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+            il.Emit(OpCodes.Isinst, runtime.BoundMapMethodType);
+            var notBoundMapMethodLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, notBoundMapMethodLabel);
+            il.Emit(OpCodes.Ldloc, thisArgLocal);
+            il.Emit(OpCodes.Isinst, _types.DictionaryObjectObject);
+            il.Emit(OpCodes.Brtrue, isBoundMapMethodLabel);
+            il.MarkLabel(notBoundMapMethodLabel);
+        }
+
+        if (_features.UsesSet)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+            il.Emit(OpCodes.Isinst, runtime.BoundSetMethodType);
+            var notBoundSetMethodLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, notBoundSetMethodLabel);
+            il.Emit(OpCodes.Ldloc, thisArgLocal);
+            il.Emit(OpCodes.Isinst, _types.HashSetOfObject);
+            il.Emit(OpCodes.Brtrue, isBoundSetMethodLabel);
+            il.MarkLabel(notBoundSetMethodLabel);
+        }
+
+        // Remaining non-TSFunction callables, including proxies, retain the
+        // explicit thisArg through the shared dispatch fallback.
         EmitDispatchToTarget(
             il, runtime, targetField, callArgsLocal, thisArgLocal);
 
@@ -1287,6 +1328,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, callArgsLocal);
         il.Emit(OpCodes.Callvirt, runtime.BoundTSFunctionInvokeWithThis);
         il.Emit(OpCodes.Ret);
+
+        // Recreate the lightweight method wrapper with call's explicit
+        // receiver, preserving the captured JavaScript method name.
+        il.MarkLabel(isBoundArrayMethodLabel);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Castclass, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundArrayMethodNameField);
+        il.Emit(OpCodes.Newobj, runtime.BoundArrayMethodCtor);
+        il.Emit(OpCodes.Ldloc, callArgsLocal);
+        il.Emit(OpCodes.Callvirt, runtime.BoundArrayMethodInvoke);
+        il.Emit(OpCodes.Ret);
+
+        if (_features.UsesMap)
+        {
+            il.MarkLabel(isBoundMapMethodLabel);
+            il.Emit(OpCodes.Ldloc, thisArgLocal);
+            il.Emit(OpCodes.Castclass, _types.DictionaryObjectObject);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+            il.Emit(OpCodes.Castclass, runtime.BoundMapMethodType);
+            il.Emit(OpCodes.Ldfld, runtime.BoundMapMethodNameField);
+            il.Emit(OpCodes.Newobj, runtime.BoundMapMethodCtor);
+            il.Emit(OpCodes.Ldloc, callArgsLocal);
+            il.Emit(OpCodes.Callvirt, runtime.BoundMapMethodInvoke);
+            il.Emit(OpCodes.Ret);
+        }
+
+        if (_features.UsesSet)
+        {
+            il.MarkLabel(isBoundSetMethodLabel);
+            il.Emit(OpCodes.Ldloc, thisArgLocal);
+            il.Emit(OpCodes.Castclass, _types.HashSetOfObject);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+            il.Emit(OpCodes.Castclass, runtime.BoundSetMethodType);
+            il.Emit(OpCodes.Ldfld, runtime.BoundSetMethodNameField);
+            il.Emit(OpCodes.Newobj, runtime.BoundSetMethodCtor);
+            il.Emit(OpCodes.Ldloc, callArgsLocal);
+            il.Emit(OpCodes.Callvirt, runtime.BoundSetMethodInvoke);
+            il.Emit(OpCodes.Ret);
+        }
 
         // InvokeWithThis
         var iwtBuilder = typeBuilder.DefineMethod(

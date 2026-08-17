@@ -42,7 +42,7 @@ public sealed class SetEmitter : ITypeEmitterStrategy
 
             case "clear":
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetClear);
-                il.Emit(OpCodes.Ldnull); // clear returns undefined
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
                 return true;
 
             case "keys":
@@ -59,6 +59,15 @@ public sealed class SetEmitter : ITypeEmitterStrategy
 
             case "forEach":
                 EmitterArgumentHelpers.EmitBoxedArgumentOrNull(emitter, arguments, 0);
+                if (arguments.Count > 1)
+                {
+                    emitter.EmitExpression(arguments[1]);
+                    emitter.EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                }
                 il.Emit(OpCodes.Call, ctx.Runtime!.SetForEach);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 return true;

@@ -318,7 +318,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(typeNoPdsDescLabel);
-            // "prototype"/"name"/"length" are non-configurable on every built-in.
+            // Constructor `prototype` is non-configurable. Function `name`
+            // and `length` are configurable per ECMA-262 §17 and therefore
+            // use the synthetic built-in deletion ledger below.
             var typeBuiltinNameTrueLabel = il.DefineLabel();
             void EmitTypeBuiltinNameCheck(string n)
             {
@@ -328,8 +330,20 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Brtrue, typeBuiltinNameTrueLabel);
             }
             EmitTypeBuiltinNameCheck("prototype");
-            EmitTypeBuiltinNameCheck("name");
-            EmitTypeBuiltinNameCheck("length");
+            foreach (var configurableFunctionKey in new[] { "name", "length" })
+            {
+                var nextKey = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Ldstr, configurableFunctionKey);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+                il.Emit(OpCodes.Brfalse, nextKey);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, runtime.MarkBuiltinDeletedMethod);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(nextKey);
+            }
 
             // Number Type-specific non-configurable constants. Reflection
             // probe below would miss these because JS names (UPPER_SNAKE_CASE)

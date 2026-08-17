@@ -23,7 +23,8 @@ public partial class RuntimeEmitter
         {
             EmitSharedArrayBufferHelper(runtimeType, runtime);
             EmitArrayBufferHelper(runtimeType, runtime);
-            EmitDataViewHelper(runtimeType, runtime);
+            // DataView adapters are emitted before GetProperty in
+            // EmitRuntimeClass because dynamic method values bind them.
             EmitTypedArrayHelpers(runtimeType, runtime);
             // Atomics static methods (pure-IL with reflection fallback for SharpTS types)
             EmitAtomicsHelpersPure(runtimeType, runtime);
@@ -555,7 +556,7 @@ public partial class RuntimeEmitter
         var method = runtimeType.DefineMethod(
             $"DataView{runtimeMethodName}",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
+            _types.Object,
             paramTypes
         );
 
@@ -579,6 +580,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.DataViewType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
+        if (runtimeMethodName is "SetBigInt64" or "SetBigUint64")
+        {
+            // BigInt helpers are feature-gated. A DataView-only program still
+            // emits these adapters, so preserve the raw value when the BigInt
+            // conversion helper is absent (the methods are unreachable there).
+            if (runtime.ToBigInt is not null)
+                il.Emit(OpCodes.Call, runtime.ToBigInt);
+        }
+        else
+        {
+            // DataView numeric setters perform ToNumber before converting to
+            // their element representation. This supplies NaN for undefined
+            // and raises the guest TypeError for Symbol values.
+            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Box, _types.Double);
+        }
         if (hasEndianness)
             il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Callvirt, target);

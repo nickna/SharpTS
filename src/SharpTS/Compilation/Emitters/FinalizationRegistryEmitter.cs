@@ -55,7 +55,6 @@ public sealed class FinalizationRegistryEmitter : ITypeEmitterStrategy
                 }
 
                 il.Emit(OpCodes.Call, ctx.Runtime!.FinalizationRegistryRegister);
-                il.Emit(OpCodes.Ldnull); // register returns undefined
                 return true;
 
             case "unregister":

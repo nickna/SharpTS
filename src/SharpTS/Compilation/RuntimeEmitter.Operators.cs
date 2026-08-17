@@ -9,6 +9,56 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     /// <summary>
+    /// ToNumeric update helper used by ++/-- on object-typed storage. BigInt
+    /// remains BigInt; all other values follow ToNumber and return a Number.
+    /// </summary>
+    private void EmitUpdateNumeric(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "UpdateNumeric",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Boolean]);
+        runtime.UpdateNumeric = method;
+        var il = method.GetILGenerator();
+        var numberPath = il.DefineLabel();
+        var subtractBigInt = il.DefineLabel();
+        var subtractNumber = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, numberPath);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.BigInteger, "One")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, subtractBigInt);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_Addition",
+            _types.BigInteger, _types.BigInteger));
+        il.Emit(OpCodes.Box, _types.BigInteger);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(subtractBigInt);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_Subtraction",
+            _types.BigInteger, _types.BigInteger));
+        il.Emit(OpCodes.Box, _types.BigInteger);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(numberPath);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, subtractNumber);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(subtractNumber);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits <c>$Runtime.JsLessThan(object x, object y) -&gt; bool</c>:
     /// ECMA-262 7.2.13 IsLessThan abstract algorithm (LeftFirst=true).
     /// If both operands are strings, lexicographic comparison.
@@ -25,6 +75,152 @@ public partial class RuntimeEmitter
         runtime.JsLessThan = method;
 
         var il = method.GetILGenerator();
+
+        // Native integer loop counters are an internal optimization, but they
+        // are still JavaScript Numbers. Normalize them before the runtime type
+        // dispatch so mixed BigInt/Number comparisons take the same path as a
+        // boxed double instead of falling through to ToNumber(BigInt).
+        var leftCounterNormalized = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Int64);
+        il.Emit(OpCodes.Brfalse, leftCounterNormalized);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Int64);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Starg_S, 0);
+        il.MarkLabel(leftCounterNormalized);
+
+        var rightCounterNormalized = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Int64);
+        il.Emit(OpCodes.Brfalse, rightCounterNormalized);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Int64);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Starg_S, 1);
+        il.MarkLabel(rightCounterNormalized);
+
+        // Mixed BigInt/Number relational comparison is permitted by
+        // IsLessThan (unlike arithmetic mixing). Handle the boxed CLR shapes
+        // before the ordinary ToNumber path, which correctly rejects BigInt.
+        // Comparing against the truncated integer first preserves the result
+        // around negative fractional Numbers without converting the BigInt to
+        // an imprecise double.
+        var normalComparison = il.DefineLabel();
+        var leftBigIntNumber = il.DefineLabel();
+        var rightBigIntNumber = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        var leftNotBigInt = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, leftNotBigInt);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, leftBigIntNumber);
+        il.Emit(OpCodes.Br, normalComparison);
+        il.MarkLabel(leftNotBigInt);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, normalComparison);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, rightBigIntNumber);
+        il.Emit(OpCodes.Br, normalComparison);
+
+        var bigIntegerCtorDouble = _types.GetConstructor(_types.BigInteger, _types.Double);
+        var bigIntegerLess = _types.GetMethod(_types.BigInteger, "op_LessThan",
+            _types.BigInteger, _types.BigInteger);
+        var bigIntegerGreater = _types.GetMethod(_types.BigInteger, "op_GreaterThan",
+            _types.BigInteger, _types.BigInteger);
+        var mixedBigInt = il.DeclareLocal(_types.BigInteger);
+        var mixedNumber = il.DeclareLocal(_types.Double);
+        var truncatedBigInt = il.DeclareLocal(_types.BigInteger);
+
+        // BigInt < Number
+        il.MarkLabel(leftBigIntNumber);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        il.Emit(OpCodes.Stloc, mixedBigInt);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, mixedNumber);
+        var leftFinite = il.DefineLabel();
+        var mixedReturnFalse = il.DefineLabel();
+        var mixedReturnTrue = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brtrue, mixedReturnFalse);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", _types.Double));
+        il.Emit(OpCodes.Brtrue, mixedReturnTrue);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", _types.Double));
+        il.Emit(OpCodes.Brfalse, leftFinite);
+        il.Emit(OpCodes.Br, mixedReturnFalse);
+        il.MarkLabel(leftFinite);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Newobj, bigIntegerCtorDouble);
+        il.Emit(OpCodes.Stloc, truncatedBigInt);
+        il.Emit(OpCodes.Ldloc, mixedBigInt);
+        il.Emit(OpCodes.Ldloc, truncatedBigInt);
+        il.Emit(OpCodes.Call, bigIntegerLess);
+        il.Emit(OpCodes.Brtrue, mixedReturnTrue);
+        il.Emit(OpCodes.Ldloc, mixedBigInt);
+        il.Emit(OpCodes.Ldloc, truncatedBigInt);
+        il.Emit(OpCodes.Call, bigIntegerGreater);
+        il.Emit(OpCodes.Brtrue, mixedReturnFalse);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Clt);
+        il.Emit(OpCodes.Ret);
+
+        // Number < BigInt
+        il.MarkLabel(rightBigIntNumber);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        il.Emit(OpCodes.Stloc, mixedBigInt);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, mixedNumber);
+        var rightFinite = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brtrue, mixedReturnFalse);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNegativeInfinity", _types.Double));
+        il.Emit(OpCodes.Brtrue, mixedReturnTrue);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsPositiveInfinity", _types.Double));
+        il.Emit(OpCodes.Brfalse, rightFinite);
+        il.Emit(OpCodes.Br, mixedReturnFalse);
+        il.MarkLabel(rightFinite);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Newobj, bigIntegerCtorDouble);
+        il.Emit(OpCodes.Stloc, truncatedBigInt);
+        il.Emit(OpCodes.Ldloc, truncatedBigInt);
+        il.Emit(OpCodes.Ldloc, mixedBigInt);
+        il.Emit(OpCodes.Call, bigIntegerLess);
+        il.Emit(OpCodes.Brtrue, mixedReturnTrue);
+        il.Emit(OpCodes.Ldloc, truncatedBigInt);
+        il.Emit(OpCodes.Ldloc, mixedBigInt);
+        il.Emit(OpCodes.Call, bigIntegerGreater);
+        il.Emit(OpCodes.Brtrue, mixedReturnFalse);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Ldloc, mixedNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Clt);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(mixedReturnTrue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(mixedReturnFalse);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(normalComparison);
 
         // If both args are strings, do lexicographic comparison (CompareOrdinal < 0).
         var notBothStrings = il.DefineLabel();
@@ -951,6 +1147,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Brtrue, stringConcatLabel);
+
+        // ToNumeric preserves BigInt. Runtime-typed BigInt expressions (for
+        // example a loop variable plus a BigInt literal in Test262) do not
+        // reach the statically specialized emitter, so handle them here too.
+        // Mixing BigInt and Number is a TypeError; two BigInts add exactly.
+        var leftNotBigInt = il.DefineLabel();
+        var addBigInts = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, leftLocal);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, leftNotBigInt);
+        il.Emit(OpCodes.Ldloc, rightLocal);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brtrue, addBigInts);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot mix BigInt and other types");
+
+        il.MarkLabel(leftNotBigInt);
+        var neitherBigInt = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rightLocal);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
+        il.Emit(OpCodes.Brfalse, neitherBigInt);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot mix BigInt and other types");
+
+        il.MarkLabel(addBigInts);
+        il.Emit(OpCodes.Ldloc, leftLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        il.Emit(OpCodes.Ldloc, rightLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_Addition",
+            _types.BigInteger, _types.BigInteger));
+        il.Emit(OpCodes.Box, _types.BigInteger);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(neitherBigInt);
 
         // Either operand $Undefined → NaN (ECMA-262 12.8.3: ToNumber(undefined) = NaN,
         // and any arithmetic with NaN yields NaN). Convert.ToDouble($Undefined) throws

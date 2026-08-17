@@ -27,8 +27,13 @@ public sealed class ArrayBufferStaticEmitter : IStaticTypeEmitterStrategy
     /// </summary>
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // ArrayBuffer has no static properties
-        return false;
+        if (propertyName != "isView") return false;
+        var ctx = emitter.Context;
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.TSArrayBufferIsView);
+        ctx.IL.Emit(OpCodes.Ldstr, "isView");
+        ctx.IL.Emit(OpCodes.Ldc_I4_1);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        return true;
     }
 
     private static bool EmitIsView(IEmitterContext emitter, List<Expr> arguments)

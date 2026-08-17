@@ -420,7 +420,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapKeys",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
+            _types.Object,
             [_types.Object]
         );
         runtime.MapKeys = method;
@@ -466,11 +466,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
-        // result.Add(DenormalizeMapKey(current.Key));
+        // Keep normalized keys so the live iterator can re-check membership.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.DenormalizeMapKey);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Br, loopStartLabel);
@@ -480,13 +479,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
-        // return result;
+        // return new $MapIterator(dict, initialKeys, keysKind);
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -495,7 +500,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapValues",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
+            _types.Object,
             [_types.Object]
         );
         runtime.MapValues = method;
@@ -541,10 +546,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
-        // result.Add(current.Value);
+        // Keep the key snapshot; values are read from the live map by MoveNext.
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Br, loopStartLabel);
@@ -554,13 +559,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
-        // return result;
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -569,7 +579,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "MapEntries",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
+            _types.Object,
             [_types.Object]
         );
         runtime.MapEntries = method;
@@ -616,25 +626,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentLocal);
 
-        // var pair = new List<object?> { current.Key, current.Value };
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, pairLocal);
-
-        // pair.Add(DenormalizeMapKey(current.Key))
-        il.Emit(OpCodes.Ldloc, pairLocal);
+        // Keep the normalized key. The live iterator constructs [key, value]
+        // when it advances, after confirming the entry still exists.
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldloca, currentLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, runtime.DenormalizeMapKey);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
-
-        il.Emit(OpCodes.Ldloc, pairLocal);
-        il.Emit(OpCodes.Ldloca, currentLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
-
-        // result.Add(pair);
-        il.Emit(OpCodes.Ldloc, resultLocal);
-        il.Emit(OpCodes.Ldloc, pairLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
 
         il.Emit(OpCodes.Br, loopStartLabel);
@@ -644,14 +640,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, enumeratorLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
-        // return result;
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newobj, runtime.MapCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
+    }
+
+    // Shared by Set iterator factories, whose materialized values use the
+    // ArrayIterator value mode.
+    private static void EmitArrayIteratorWrapper(ILGenerator il, EmittedRuntime runtime)
+    {
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newobj, runtime.ArrayIteratorCtor);
     }
 
     private void EmitMapForEach(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -660,7 +669,7 @@ public partial class RuntimeEmitter
             "MapForEach",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [_types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.MapForEach = method;
 
@@ -731,10 +740,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stelem_Ref);
 
-        // InvokeValue(callback, args)
+        // Call(callback, thisArg, args)
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Pop);  // Discard return value
 
         il.Emit(OpCodes.Br, loopStartLabel);
@@ -847,6 +857,24 @@ public partial class RuntimeEmitter
             il.MarkLabel(doneLabel);
         }
 
+        void EmitArgOrUndefined(int index)
+        {
+            var missing = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ble, missing);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Br, done);
+            il.MarkLabel(missing);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.MarkLabel(done);
+        }
+
         // Each case loads _map then arg(s), calls the helper, and leaves one value on stack.
 
         // get(key) -> value
@@ -894,7 +922,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
             il.Emit(OpCodes.Call, runtime.MapClear);
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         });
 
         // keys() -> iterator
@@ -927,8 +955,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, mapField);
             EmitArgOrNull(0);
+            EmitArgOrUndefined(1);
             il.Emit(OpCodes.Call, runtime.MapForEach);
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         });
 
         // Fallthrough: return null

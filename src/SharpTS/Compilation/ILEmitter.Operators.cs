@@ -1322,9 +1322,40 @@ public partial class ILEmitter
                 return;
             }
 
+            // Update expressions use ToNumeric, so a BigInt operand remains
+            // BigInt and adds/subtracts 1n. The ordinary path below unboxes to
+            // double and therefore cannot consume boxed BigInteger values.
+            if (IsBigIntExpr(pi.Operand))
+            {
+                EmitVariable(v);
+                IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(_ctx.Types.BigInteger, "One")!.GetGetMethod()!);
+                IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
+                IL.Emit(OpCodes.Call, pi.Operator.Type == TokenType.PLUS_PLUS
+                    ? _ctx.Runtime!.BigIntAdd
+                    : _ctx.Runtime!.BigIntSubtract);
+                IL.Emit(OpCodes.Dup);
+                EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
+                    resultIsUnboxedDouble: false);
+                return;
+            }
+
             // Check if this is a typed double local
             var localType = _ctx.Locals.GetLocalType(v.Name.Lexeme);
             bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
+
+            if (!isTypedDouble)
+            {
+                EmitVariable(v);
+                EmitBoxIfNeeded(v);
+                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS
+                    ? OpCodes.Ldc_I4_1
+                    : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.UpdateNumeric);
+                IL.Emit(OpCodes.Dup);
+                EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
+                    resultIsUnboxedDouble: false);
+                return;
+            }
 
             EmitVariable(v);
 
@@ -1518,9 +1549,37 @@ public partial class ILEmitter
                 return;
             }
 
+            if (IsBigIntExpr(pi.Operand))
+            {
+                EmitVariable(v);
+                IL.Emit(OpCodes.Dup); // postfix expression keeps the old BigInt
+                IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(_ctx.Types.BigInteger, "One")!.GetGetMethod()!);
+                IL.Emit(OpCodes.Box, _ctx.Types.BigInteger);
+                IL.Emit(OpCodes.Call, pi.Operator.Type == TokenType.PLUS_PLUS
+                    ? _ctx.Runtime!.BigIntAdd
+                    : _ctx.Runtime!.BigIntSubtract);
+                EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
+                    resultIsUnboxedDouble: false);
+                return;
+            }
+
             // Check if this is a typed double local
             var localType = _ctx.Locals.GetLocalType(v.Name.Lexeme);
             bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
+
+            if (!isTypedDouble)
+            {
+                EmitVariable(v);
+                EmitBoxIfNeeded(v);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS
+                    ? OpCodes.Ldc_I4_1
+                    : OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.UpdateNumeric);
+                EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
+                    resultIsUnboxedDouble: false);
+                return;
+            }
 
             EmitVariable(v);
 
