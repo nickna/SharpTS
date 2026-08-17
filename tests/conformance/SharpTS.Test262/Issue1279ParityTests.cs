@@ -6687,6 +6687,60 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Remaining_committed_built_in_tail_matches_in_compiled_mode(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> Issue1374ReproducedInterpreterRegressionCases => new()
+    {
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-202.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-280.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-286.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-287.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-360-1.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-360-2.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-360-5.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-360-6.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-531-15.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-531-16.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-540-4.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-540-5.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-540-9.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-540-10.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(Issue1374ReproducedInterpreterRegressionCases))]
+    public void Issue_1374_reproduced_accessor_descriptor_regressions_match_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
+    public static TheoryData<string> Issue1374ReproducedCompilerRegressionCases => new()
+    {
+        "built-ins/Array/prototype/reverse/length-exceeding-integer-limit-with-proxy.js",
+        "built-ins/Promise/all/same-reject-function.js",
+        "built-ins/Promise/any/invoke-then-on-promises-every-iteration.js",
+        "language/expressions/new/S11.2.2_A3_T5.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(Issue1374ReproducedCompilerRegressionCases))]
+    public void Issue_1374_reproduced_compiler_regressions_pass(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    public static TheoryData<string> Issue1380ResidualCompilerCases => new()
+    {
+        "built-ins/DataView/byteOffset-validated-against-initial-buffer-length.js",
+        "built-ins/Set/prototype/difference/receiver-not-set.js",
+        "built-ins/Set/prototype/intersection/receiver-not-set.js",
+        "built-ins/Set/prototype/isDisjointFrom/receiver-not-set.js",
+        "built-ins/Set/prototype/isSubsetOf/receiver-not-set.js",
+        "built-ins/Set/prototype/isSupersetOf/receiver-not-set.js",
+        "built-ins/Set/prototype/symmetricDifference/receiver-not-set.js",
+        "built-ins/Set/prototype/union/receiver-not-set.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(Issue1380ResidualCompilerCases))]
+    public void Issue_1380_residuals_match_in_compiled_mode(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

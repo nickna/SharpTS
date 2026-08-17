@@ -61,6 +61,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
                 EmitBasePromiseConstructor(ctx);
+                il.Emit(OpCodes.Ldnull); // no materialized capability on intrinsic Promise.all
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAll);
                 return true;
 

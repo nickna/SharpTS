@@ -14,6 +14,7 @@ internal class EmittedStateMachine
     public required FieldBuilder BuilderField { get; init; }
     public required FieldBuilder IterableField { get; init; }
     public required FieldBuilder ConstructorField { get; init; }
+    public FieldBuilder? CapabilityField { get; init; }
     public required FieldBuilder AwaiterField { get; init; }
     public required MethodBuilder MoveNextMethod { get; init; }
     public required Type BuilderType { get; init; }
@@ -542,7 +543,7 @@ public partial class RuntimeEmitter
             "PromiseAll",
             MethodAttributes.Public | MethodAttributes.Static,
             taskType,
-            [_types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.PromiseAll = all;
         EmitPromiseAllWrapper(all.GetILGenerator(), promiseAllSM, runtime);
@@ -663,7 +664,7 @@ public partial class RuntimeEmitter
                 $"Promise.{jsName} called on non-Object");
             EmitPromiseStaticCapabilityResult(il, runtime, target,
                 passConstructorToIntrinsic: jsName is "all" or "race" or "allSettled" or "any",
-                passCapabilityToIntrinsic: jsName is "race" or "any",
+                passCapabilityToIntrinsic: jsName is "all" or "race" or "any",
                 prepareIntrinsicCapability: jsName == "race");
         }
         EmitAllRaceVariantStaticWrapper("PromiseAllStatic", "all", all, m => runtime.PromiseAllStatic = m);

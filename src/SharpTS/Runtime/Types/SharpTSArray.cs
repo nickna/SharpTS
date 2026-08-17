@@ -1448,6 +1448,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 {
                     Get = getter,
                     Set = setter,
+                    RawGet = getter,
+                    RawSet = setter,
                     HasGet = true,
                     HasSet = true,
                     Enumerable = accessorFlags.Enumerable,
@@ -1488,6 +1490,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             {
                 Get = accessor.Get,
                 Set = accessor.Set,
+                RawGet = accessor.Get,
+                RawSet = accessor.Set,
                 HasGet = true,
                 HasSet = true,
                 Enumerable = flags.Enumerable,

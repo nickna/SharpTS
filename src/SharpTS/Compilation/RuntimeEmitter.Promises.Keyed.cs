@@ -148,6 +148,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
         il.Emit(OpCodes.Call, _types.GetMethod(
             _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        if (settlementMethod == runtime.PromiseAll)
+            il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, settlementMethod);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ldftn, runtime.PromiseKeyedMapResult);

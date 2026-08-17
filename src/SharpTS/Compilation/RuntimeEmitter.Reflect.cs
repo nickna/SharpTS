@@ -411,18 +411,9 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(receiverMissingLabel);
 
-        // Creating a new Receiver property is rejected when Receiver is not
-        // extensible. Return the OrdinarySet boolean rather than routing into
-        // Object.defineProperty and turning this normal false result into a
-        // thrown TypeError (Reflect.set must expose the boolean).
-        il.Emit(OpCodes.Ldarg_3);
-        il.Emit(OpCodes.Call, runtime.ObjectIsExtensible);
-        var receiverExtensibleLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, receiverExtensibleLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(receiverExtensibleLabel);
-
+        // CreateDataProperty performs Receiver.[[DefineOwnProperty]] directly.
+        // Do not preflight [[IsExtensible]]: a Proxy receiver must observe only
+        // its defineProperty trap here, and that trap owns the invariant check.
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         void EmitTrueDescriptorField(string name)
@@ -1059,14 +1050,17 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notTSFunctionLabel);
 
-        // $BoundTSFunction → not constructable in our model (bound functions
-        // technically inherit [[Construct]] from target, but compiled mode
-        // doesn't track that. Conservative: false.)
+        // $BoundTSFunction has [[Construct]] exactly when its target does.
+        // The emitted wrapper retains that target, so recurse through it just
+        // like the Proxy case above (ECMA-262 BoundFunctionCreate).
         var notBoundLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brfalse, notBoundLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
+        il.Emit(OpCodes.Call, runtime.IsConstructorMethod);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBoundLabel);
 
@@ -1215,6 +1209,114 @@ public partial class RuntimeEmitter
 
         // Is a Type - use Activator.CreateInstance(type, args)
         il.MarkLabel(isTypeLabel);
+
+        // %Promise% also has a JavaScript-facing adapter rather than a CLR
+        // constructor that accepts its executor. Most importantly, the missing
+        // executor must throw before GetPrototypeFromConstructor(newTarget), so
+        // a bound newTarget with an abrupt prototype getter cannot mask the
+        // required TypeError (ECMA-262 Promise constructor steps 2-3).
+        if (runtime.PromiseFromExecutor is not null)
+        {
+            var notPromiseTypeLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            // The value-position %Promise% token is Task<object?>; $TSPromise
+            // is the wrapper used for subclass instances.
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "op_Equality", _types.Type, _types.Type));
+            il.Emit(OpCodes.Brfalse, notPromiseTypeLabel);
+
+            var promiseHasExecutorLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Bgt, promiseHasExecutorLabel);
+            GuestErrorEmitter.ThrowTypeError(il, runtime, "Promise executor is not callable");
+            il.MarkLabel(promiseHasExecutorLabel);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Call, runtime.PromiseFromExecutor);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(notPromiseTypeLabel);
+        }
+
+        // Built-in DataView uses a JavaScript-facing constructor adapter rather
+        // than a CLR constructor whose signature Activator can bind directly.
+        // Dispatch through that adapter so ToNumber/default-argument handling and,
+        // critically, the offset-vs-buffer validation happen before any eventual
+        // GetPrototypeFromConstructor(newTarget) work (ECMA-262 DataView steps 3-10).
+        if (runtime.DataViewType is not null && runtime.TSDataViewCtor is not null)
+        {
+            var notDataViewTypeLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, _types.Type);
+            il.Emit(OpCodes.Ldtoken, runtime.DataViewType);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "op_Equality", _types.Type, _types.Type));
+            il.Emit(OpCodes.Brfalse, notDataViewTypeLabel);
+
+        var dataViewHasBufferLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bgt, dataViewHasBufferLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "DataView constructor requires a buffer");
+        il.MarkLabel(dataViewHasBufferLabel);
+
+        // buffer
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+
+        // byteOffset (default 0, otherwise ToNumber)
+        var dataViewDefaultOffsetLabel = il.DefineLabel();
+        var dataViewHaveOffsetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ble, dataViewDefaultOffsetLabel);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Br, dataViewHaveOffsetLabel);
+        il.MarkLabel(dataViewDefaultOffsetLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.MarkLabel(dataViewHaveOffsetLabel);
+
+        // byteLength (missing/undefined is represented as null by the adapter)
+        var dataViewNoLengthLabel = il.DefineLabel();
+        var dataViewHaveLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ble, dataViewNoLengthLabel);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, dataViewHaveLengthLabel);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(dataViewNoLengthLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.MarkLabel(dataViewHaveLengthLabel);
+            il.Emit(OpCodes.Call, runtime.TSDataViewCtor);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(notDataViewTypeLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.Type);
         il.Emit(OpCodes.Ldloc, argsLocal);

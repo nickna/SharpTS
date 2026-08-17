@@ -191,6 +191,8 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
         {
             Get = getter,
             Set = setter,
+            RawGet = getter,
+            RawSet = setter,
             HasGet = true,
             HasSet = true,
             Configurable = true,
@@ -535,6 +537,8 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         {
             Get = getter,
             Set = setter,
+            RawGet = getter,
+            RawSet = setter,
             HasGet = true,
             HasSet = true,
             Configurable = true,

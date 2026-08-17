@@ -169,6 +169,8 @@ public class SharpTSRegExp : ITypeCategorized
         {
             Get = getter,
             Set = setter,
+            RawGet = getter,
+            RawSet = setter,
             HasGet = true,
             HasSet = true,
             Enumerable = false,

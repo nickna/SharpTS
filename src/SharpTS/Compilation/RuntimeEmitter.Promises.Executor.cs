@@ -110,7 +110,7 @@ public partial class RuntimeEmitter
             "InvokePromiseCombinatorThen",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
-            [_types.Object, _types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object, _types.Object]
         );
         {
             var thenIl = invokeThenMethod.GetILGenerator();
@@ -156,7 +156,15 @@ public partial class RuntimeEmitter
             thenIl.Emit(OpCodes.Stelem_Ref);
             thenIl.Emit(OpCodes.Dup);
             thenIl.Emit(OpCodes.Ldc_I4_1);
+            var useGeneratedRejectLabel = thenIl.DefineLabel();
+            var haveRejectLabel = thenIl.DefineLabel();
+            thenIl.Emit(OpCodes.Ldarg_3);
+            thenIl.Emit(OpCodes.Brfalse, useGeneratedRejectLabel);
+            thenIl.Emit(OpCodes.Ldarg_3);
+            thenIl.Emit(OpCodes.Br, haveRejectLabel);
+            thenIl.MarkLabel(useGeneratedRejectLabel);
             thenIl.Emit(OpCodes.Ldloc, rejectLocal);
+            thenIl.MarkLabel(haveRejectLabel);
             thenIl.Emit(OpCodes.Stelem_Ref);
             thenIl.Emit(OpCodes.Call, runtime.InvokeMethodValue);
             thenIl.Emit(OpCodes.Pop);
@@ -572,10 +580,42 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
             targetIl.Emit(OpCodes.Ldarg_2);
             targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityResolveMethod);
+            targetIl.Emit(OpCodes.Ldnull);
             targetIl.Emit(OpCodes.Call, invokeThenMethod);
             targetIl.Emit(OpCodes.Br, normalizedLabel);
 
             targetIl.MarkLabel(raceCapabilityLabel);
+
+            // Promise.all uses a fresh resolve-element function for each
+            // nextPromise, but passes the SAME result capability reject
+            // function to every then invocation.
+            var raceDirectCapabilityLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Ldarg_3);
+            targetIl.Emit(OpCodes.Ldc_I4_3);
+            targetIl.Emit(OpCodes.Bne_Un, raceDirectCapabilityLabel);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldstr, "then");
+            targetIl.Emit(OpCodes.Call, runtime.GetProperty);
+            targetIl.Emit(OpCodes.Stloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Call, runtime.TypeOf);
+            targetIl.Emit(OpCodes.Ldstr, "function");
+            targetIl.Emit(OpCodes.Call, _types.StringOpEquality);
+            var allThenCallableLabel = targetIl.DefineLabel();
+            targetIl.Emit(OpCodes.Brtrue, allThenCallableLabel);
+            GuestErrorEmitter.ThrowTypeError(targetIl, runtime,
+                "Promise.all resolved element then is not callable");
+            targetIl.MarkLabel(allThenCallableLabel);
+            targetIl.Emit(OpCodes.Ldloc, resultLocal);
+            targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
+            targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldnull);
+            targetIl.Emit(OpCodes.Ldarg_2);
+            targetIl.Emit(OpCodes.Call, runtime.GetPromiseCapabilityRejectMethod);
+            targetIl.Emit(OpCodes.Call, invokeThenMethod);
+            targetIl.Emit(OpCodes.Br, normalizedLabel);
+
+            targetIl.MarkLabel(raceDirectCapabilityLabel);
 
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldstr, "then");
@@ -680,6 +720,7 @@ public partial class RuntimeEmitter
             targetIl.MarkLabel(observableThenCallableLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
             targetIl.Emit(OpCodes.Ldloc, thenFunctionLocal);
+            targetIl.Emit(OpCodes.Ldnull);
             targetIl.Emit(OpCodes.Ldnull);
             targetIl.Emit(OpCodes.Call, invokeThenMethod);
             targetIl.MarkLabel(normalizedLabel);

@@ -23,7 +23,9 @@ public partial class RuntimeEmitter
     /// <param name="notProxyLabel">Label to jump to if obj is not a proxy.</param>
     private void EmitProxyTypeCheck(ILGenerator il, Action emitLoadObj, Label proxyLabel, Label notProxyLabel)
     {
-        // obj.GetType().FullName == "SharpTS.Runtime.Types.SharpTSProxy"
+        // obj != null && obj.GetType().FullName == "SharpTS.Runtime.Types.SharpTSProxy"
+        emitLoadObj();
+        il.Emit(OpCodes.Brfalse, notProxyLabel);
         emitLoadObj();
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "GetType"));
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "FullName").GetGetMethod()!);

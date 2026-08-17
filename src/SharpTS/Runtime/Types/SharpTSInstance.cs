@@ -768,6 +768,8 @@ public class SharpTSInstance(SharpTSClass klass) : ISharpTSPropertyAccessor, ITy
             {
                 Get = _getters?.GetValueOrDefault(name),
                 Set = _setters?.GetValueOrDefault(name),
+                RawGet = _getters?.GetValueOrDefault(name),
+                RawSet = _setters?.GetValueOrDefault(name),
                 HasGet = true,
                 HasSet = true,
                 Enumerable = flags.Enumerable,

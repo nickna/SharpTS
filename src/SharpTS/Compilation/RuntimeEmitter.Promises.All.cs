@@ -16,6 +16,7 @@ public partial class RuntimeEmitter
         var shell = DefineCombinatorStateMachineShell(moduleBuilder, "$PromiseAll_SM", "iterable",
             MethodAttributes.Public);
         var awaiterField = shell.Type.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
+        var capabilityField = shell.Type.DefineField("capability", _types.Object, FieldAttributes.Public);
 
         return new EmittedStateMachine
         {
@@ -24,6 +25,7 @@ public partial class RuntimeEmitter
             BuilderField = shell.BuilderField,
             IterableField = shell.InputField,
             ConstructorField = shell.ConstructorField,
+            CapabilityField = capabilityField,
             AwaiterField = awaiterField,
             MoveNextMethod = shell.MoveNextMethod,
             BuilderType = shell.BuilderType,
@@ -42,6 +44,7 @@ public partial class RuntimeEmitter
                 // MoveNext's try block so an abrupt Promise.resolve call rejects.
                 il.Emit(OpCodes.Ldarg_0);
             }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
+            sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2),
             markNonAutoAwaitMethod: runtime.MarkNonAutoAwaitPromiseMethod,
             adoptResultMethod: runtime.AdoptPromiseCombinatorResultMethod);
 
@@ -75,7 +78,8 @@ public partial class RuntimeEmitter
 
         // ========== STATE -1: Initial execution ==========
 
-        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField);
+        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField,
+            sm.CapabilityField, combinatorKind: 3);
 
         // ECMA-262 §27.2.4.1 Promise.all: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws

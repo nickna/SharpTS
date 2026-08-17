@@ -256,6 +256,7 @@ internal sealed class GeneratorArrowLifter
             Stmt.Switch sw => RewriteSwitch(sw),
             Stmt.TryCatch tc => RewriteTryCatch(tc),
             Stmt.Function fn => RewriteFunction(fn),
+            Stmt.Class cls => RewriteClass(cls),
             Stmt.Namespace ns => RewriteNamespace(ns),
             Stmt.Export ex => RewriteExport(ex),
             _ => stmt,
@@ -441,6 +442,105 @@ internal sealed class GeneratorArrowLifter
         var rewrittenBody = RewriteFunctionBody(f.Parameters, f.Body);
         if (ReferenceEquals(newParams, f.Parameters) && ReferenceEquals(rewrittenBody, f.Body)) return f;
         return f with { Parameters = newParams, Body = rewrittenBody };
+    }
+
+    private Stmt RewriteClass(Stmt.Class cls)
+    {
+        var newSuperclass = cls.SuperclassExpr is null ? null : RewriteExpr(cls.SuperclassExpr);
+        var newMethods = RewriteListIfChanged(cls.Methods, RewriteClassMethod);
+        var newFields = RewriteListIfChanged(cls.Fields, RewriteClassField);
+        var newAccessors = cls.Accessors is null
+            ? null
+            : RewriteListIfChanged(cls.Accessors, RewriteClassAccessor);
+        var newAutoAccessors = cls.AutoAccessors is null
+            ? null
+            : RewriteListIfChanged(cls.AutoAccessors, RewriteAutoAccessor);
+
+        // StaticInitializers repeats the static Field nodes held in Fields. Reuse the
+        // corresponding rewritten node so a generator in a static field initializer is
+        // lifted exactly once, while still descending into static blocks.
+        List<Stmt>? newStaticInitializers = cls.StaticInitializers;
+        if (cls.StaticInitializers is not null)
+        {
+            var rewrittenFields = new Dictionary<Stmt.Field, Stmt.Field>(ReferenceEqualityComparer.Instance);
+            for (int i = 0; i < cls.Fields.Count; i++)
+                rewrittenFields[cls.Fields[i]] = newFields[i];
+
+            newStaticInitializers = RewriteListIfChanged(cls.StaticInitializers, initializer =>
+                initializer is Stmt.Field field && rewrittenFields.TryGetValue(field, out var rewrittenField)
+                    ? rewrittenField
+                    : initializer is Stmt.StaticBlock block
+                        ? RewriteStaticBlock(block)
+                        : RewriteStmt(initializer));
+        }
+
+        if ((cls.SuperclassExpr is null || ReferenceEquals(newSuperclass, cls.SuperclassExpr))
+            && ReferenceEquals(newMethods, cls.Methods)
+            && ReferenceEquals(newFields, cls.Fields)
+            && (cls.Accessors is null || ReferenceEquals(newAccessors, cls.Accessors))
+            && (cls.AutoAccessors is null || ReferenceEquals(newAutoAccessors, cls.AutoAccessors))
+            && (cls.StaticInitializers is null || ReferenceEquals(newStaticInitializers, cls.StaticInitializers)))
+            return cls;
+
+        return cls with
+        {
+            SuperclassExpr = newSuperclass,
+            Methods = newMethods,
+            Fields = newFields,
+            Accessors = newAccessors,
+            AutoAccessors = newAutoAccessors,
+            StaticInitializers = newStaticInitializers,
+        };
+    }
+
+    private Stmt.Function RewriteClassMethod(Stmt.Function method)
+    {
+        // A computed method key is evaluated in the surrounding class-definition
+        // scope, while defaults and the body use the method's function scope.
+        var newKey = method.ComputedKey is null ? null : RewriteExpr(method.ComputedKey);
+        var rewritten = (Stmt.Function)RewriteFunction(method);
+        return method.ComputedKey is null || ReferenceEquals(newKey, method.ComputedKey)
+            ? rewritten
+            : rewritten with { ComputedKey = newKey };
+    }
+
+    private Stmt.Field RewriteClassField(Stmt.Field field)
+    {
+        var newKey = field.ComputedKey is null ? null : RewriteExpr(field.ComputedKey);
+        var newInitializer = field.Initializer is null ? null : RewriteExpr(field.Initializer);
+        return (field.ComputedKey is null || ReferenceEquals(newKey, field.ComputedKey))
+            && (field.Initializer is null || ReferenceEquals(newInitializer, field.Initializer))
+                ? field
+                : field with { ComputedKey = newKey, Initializer = newInitializer };
+    }
+
+    private Stmt.Accessor RewriteClassAccessor(Stmt.Accessor accessor)
+    {
+        var newKey = accessor.ComputedKey is null ? null : RewriteExpr(accessor.ComputedKey);
+        List<Stmt.Parameter> parameters = accessor.SetterParam is null ? [] : [accessor.SetterParam];
+        var newParameters = RewriteParameters(parameters);
+        var newBody = RewriteFunctionBody(parameters, accessor.Body);
+        var newSetterParam = newParameters.Count == 0 ? null : newParameters[0];
+        return (accessor.ComputedKey is null || ReferenceEquals(newKey, accessor.ComputedKey))
+            && ReferenceEquals(newBody, accessor.Body)
+            && ReferenceEquals(newSetterParam, accessor.SetterParam)
+                ? accessor
+                : accessor with { ComputedKey = newKey, SetterParam = newSetterParam, Body = newBody };
+    }
+
+    private Stmt.AutoAccessor RewriteAutoAccessor(Stmt.AutoAccessor accessor)
+    {
+        if (accessor.Initializer is null) return accessor;
+        var newInitializer = RewriteExpr(accessor.Initializer);
+        return ReferenceEquals(newInitializer, accessor.Initializer)
+            ? accessor
+            : accessor with { Initializer = newInitializer };
+    }
+
+    private Stmt.StaticBlock RewriteStaticBlock(Stmt.StaticBlock block)
+    {
+        var newBody = RewriteBlockScoped(block.Body);
+        return ReferenceEquals(newBody, block.Body) ? block : block with { Body = newBody };
     }
 
     private Stmt RewriteNamespace(Stmt.Namespace ns)

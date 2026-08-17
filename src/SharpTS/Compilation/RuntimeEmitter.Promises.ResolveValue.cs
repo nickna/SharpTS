@@ -43,9 +43,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, thenCallableLabel);
 
         il.MarkLabel(wrapValueLabel);
+        // A JavaScript promise has unique object identity. Task.FromResult may
+        // return a cached completed Task (notably for null/undefined), which
+        // would make distinct Promise.resolve calls share own properties.
+        il.Emit(OpCodes.Ldc_I4, (int)TaskCreationOptions.RunContinuationsAsynchronously);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(tcsType, typeof(TaskCreationOptions)));
+        il.Emit(OpCodes.Stloc, tcsLocal);
+        il.Emit(OpCodes.Ldloc, tcsLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
-            typeof(Task).GetMethod("FromResult")!, _types.Object));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(tcsType, "TrySetResult", _types.Object));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, tcsLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(tcsType, "Task").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, doneLabel);
 
