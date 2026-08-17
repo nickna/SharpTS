@@ -169,6 +169,20 @@ public partial class ILEmitter
             return;
         }
 
+        if (name == "Proxy")
+        {
+            // Value form of the %Proxy% constructor. Direct `new Proxy(...)`
+            // remains handled by the constructor emitter; this identity-stable
+            // wrapper supplies function branding and standard name/length
+            // metadata for reflection and aliases.
+            _ctx.Types.EmitLoadMethodInfo(IL, _ctx.Runtime!.CreateProxy);
+            IL.Emit(OpCodes.Ldstr, "Proxy");
+            IL.Emit(OpCodes.Ldc_I4_2);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.TSFunctionGetOrCreate);
+            SetStackUnknown();
+            return;
+        }
+
         // JavaScript global constants (NaN/Infinity/undefined)
         if (TryEmitJsGlobalConstant(name)) return;
 

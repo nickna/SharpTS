@@ -22,7 +22,8 @@ public static partial class RuntimeTypes
     /// <summary>
     /// Creates a revocable Proxy. Returns a Dictionary with "proxy" and "revoke" keys.
     /// </summary>
-    public static object CreateRevocableProxy(object? target, object? handler)
+    public static object CreateRevocableProxy(
+        object? target, object? handler, object? undefined)
     {
         if (target == null)
             throw new Exception("Runtime Error: Cannot create proxy with a non-object as target.");
@@ -38,7 +39,7 @@ public static partial class RuntimeTypes
                 revoked = true;
                 proxy.Revoke();
             }
-            return null;
+            return undefined;
         };
 
         return new Dictionary<string, object?>

@@ -110,7 +110,11 @@ public class SharpTSProxy : ISharpTSCallable
     {
         EnsureNotRevoked();
         object? value = _handler is SharpTSProxy proxy
-            ? proxy.TrapGetCompiled(trapName, ordinaryGet)
+            ? proxy.TrapGetCompiled(
+                trapName, proxy,
+                (target, key, _) => ordinaryGet(target, key),
+                ordinaryGet, ordinaryGet,
+                (_, _) => SharpTSUndefined.Instance)
             : ordinaryGet(_handler!, trapName);
 
         if (value == null || IsUndefinedLike(value)) return null;
@@ -133,7 +137,8 @@ public class SharpTSProxy : ISharpTSCallable
                 interp, callable, _handler, args);
 
         if (RuntimeCallableDispatcher.IsCallable(trap))
-            return RuntimeCallableDispatcher.Invoke(interp, trap, args.ToArray());
+            return RuntimeCallableDispatcher.InvokeWithThis(
+                interp, trap, _handler, args.ToArray());
 
         // Managed .NET interop fallback for arbitrary Invoke-shaped objects.
         // The emitted function path above no longer needs to inspect its
@@ -159,19 +164,60 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     public object? TrapGetCompiled(
         string prop,
-        Func<object, string, object?> ordinaryGet)
+        object? receiver,
+        Func<object, string, object, object?> ordinaryGet,
+        Func<object, string, object?> ordinaryHandlerGet,
+        Func<object, string, object?> ordinaryFunctionGet,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor)
     {
-        var trap = GetTrapCallable("get", null);
+        var trap = GetTrapCallableCompiled("get", ordinaryHandlerGet);
         if (trap == null)
         {
             return _target is SharpTSProxy targetProxy
-                ? targetProxy.TrapGetCompiled(prop, ordinaryGet)
-                : ordinaryGet(_target, prop);
+                ? targetProxy.TrapGetCompiled(
+                    prop, receiver, ordinaryGet, ordinaryHandlerGet,
+                    ordinaryFunctionGet,
+                    ordinaryGetOwnPropertyDescriptor)
+                : prop is "call" or "apply" or "bind"
+                    && IsCallable
+                    ? ordinaryFunctionGet(this, prop)
+                    : ordinaryGet(_target, prop, receiver!);
         }
 
-        object? result = InvokeTrap(trap, null, [_target, prop, this]);
-        ValidateGetTrapResult(prop, result, null);
+        object? result = InvokeTrap(
+            trap, null, [_target, prop, receiver]);
+        ValidateGetTrapResultCompiled(
+            prop, result, ordinaryGetOwnPropertyDescriptor);
         return result;
+    }
+
+    private void ValidateGetTrapResultCompiled(
+        object propertyKey,
+        object? result,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor)
+    {
+        object? targetDescriptor = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapGetOwnPropertyDescriptorCompiled(
+                propertyKey, ordinaryGetOwnPropertyDescriptor,
+                _ => true, (_, _) => SharpTSUndefined.Instance)
+            : ordinaryGetOwnPropertyDescriptor(_target, propertyKey);
+        if (targetDescriptor == null || IsUndefinedLike(targetDescriptor)) return;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (descriptor.Configurable) return;
+        if (descriptor.HasValue && !descriptor.Writable
+            && !SharpTSObject.SameValue(result, descriptor.Value))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy get trap must return the value of a fixed data property"));
+        }
+        if ((descriptor.HasGet || descriptor.HasSet)
+            && IsUndefinedLike(descriptor.RawGet)
+            && !IsUndefinedLike(result))
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy get trap must return undefined for a fixed accessor without a getter"));
+        }
     }
 
     /// <summary>
@@ -181,23 +227,28 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     public object? TrapGetIndexCompiled(
         object? prop,
-        Func<object, object, object?> ordinaryGet)
+        Func<object, object, object?> ordinaryGet,
+        Func<object, string, object?> ordinaryHandlerGet,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor)
     {
         object propertyKey = prop is SharpTSSymbol
             || prop?.GetType().Name == "$TSSymbol"
                 ? prop
                 : prop?.ToString() ?? "";
 
-        var trap = GetTrapCallable("get", null);
+        var trap = GetTrapCallableCompiled("get", ordinaryHandlerGet);
         if (trap == null)
         {
             return _target is SharpTSProxy targetProxy
-                ? targetProxy.TrapGetIndexCompiled(propertyKey, ordinaryGet)
+                ? targetProxy.TrapGetIndexCompiled(
+                    propertyKey, ordinaryGet, ordinaryHandlerGet,
+                    ordinaryGetOwnPropertyDescriptor)
                 : ordinaryGet(_target, propertyKey);
         }
 
         object? result = InvokeTrap(trap, null, [_target, propertyKey, this]);
-        ValidateGetTrapResult(propertyKey, result, null);
+        ValidateGetTrapResultCompiled(
+            propertyKey, result, ordinaryGetOwnPropertyDescriptor);
         return result;
     }
 
@@ -251,7 +302,8 @@ public class SharpTSProxy : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy get trap must return the value of a fixed data property"));
         }
-        if ((descriptor.HasGet || descriptor.HasSet) && descriptor.Get == null
+        if ((descriptor.HasGet || descriptor.HasSet)
+            && (descriptor.RawGet == null || IsUndefinedLike(descriptor.RawGet))
             && result is not SharpTSUndefined)
         {
             throw new ThrowException(new SharpTSTypeError(
@@ -308,14 +360,15 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     public object? TrapGetPrototypeOfCompiled(
         Func<object, object?> ordinaryGetPrototypeOf,
-        Func<object, bool> ordinaryIsExtensible)
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet)
     {
-        var trap = GetTrapCallable("getPrototypeOf", null);
+        var trap = GetTrapCallableCompiled("getPrototypeOf", ordinaryGet);
         if (trap == null)
         {
             return _target is SharpTSProxy proxy
                 ? proxy.TrapGetPrototypeOfCompiled(
-                    ordinaryGetPrototypeOf, ordinaryIsExtensible)
+                    ordinaryGetPrototypeOf, ordinaryIsExtensible, ordinaryGet)
                 : ordinaryGetPrototypeOf(_target);
         }
 
@@ -334,7 +387,7 @@ public class SharpTSProxy : ISharpTSCallable
 
         object? targetPrototype = _target is SharpTSProxy targetProxy
             ? targetProxy.TrapGetPrototypeOfCompiled(
-                ordinaryGetPrototypeOf, ordinaryIsExtensible)
+                ordinaryGetPrototypeOf, ordinaryIsExtensible, ordinaryGet)
             : ordinaryGetPrototypeOf(_target);
         if (!ReferenceEquals(result, targetPrototype))
         {
@@ -391,6 +444,32 @@ public class SharpTSProxy : ISharpTSCallable
         return result;
     }
 
+    public bool TrapIsExtensibleCompiled(
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallableCompiled("isExtensible", ordinaryGet);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapIsExtensibleCompiled(
+                    ordinaryIsExtensible, ordinaryGet)
+                : ordinaryIsExtensible(_target);
+        }
+
+        bool result = ToBoolean(InvokeTrap(trap, null, [_target]));
+        bool targetResult = _target is SharpTSProxy targetProxy
+            ? targetProxy.TrapIsExtensibleCompiled(
+                ordinaryIsExtensible, ordinaryGet)
+            : ordinaryIsExtensible(_target);
+        if (result != targetResult)
+        {
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy isExtensible trap result does not match the target"));
+        }
+        return result;
+    }
+
     /// <summary>ECMA-262 §10.5.4 [[PreventExtensions]].</summary>
     internal bool TrapPreventExtensions(Interpreter interpreter)
     {
@@ -417,14 +496,15 @@ public class SharpTSProxy : ISharpTSCallable
     /// </summary>
     public bool TrapPreventExtensionsCompiled(
         Func<object, object?> ordinaryPreventExtensions,
-        Func<object, bool> ordinaryIsExtensible)
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet)
     {
-        var trap = GetTrapCallable("preventExtensions", null);
+        var trap = GetTrapCallableCompiled("preventExtensions", ordinaryGet);
         if (trap == null)
         {
             if (_target is SharpTSProxy proxy)
                 return proxy.TrapPreventExtensionsCompiled(
-                    ordinaryPreventExtensions, ordinaryIsExtensible);
+                    ordinaryPreventExtensions, ordinaryIsExtensible, ordinaryGet);
             _ = ordinaryPreventExtensions(_target);
             return true;
         }
@@ -488,7 +568,8 @@ public class SharpTSProxy : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy set trap cannot change a fixed data property"));
         }
-        if ((descriptor.HasGet || descriptor.HasSet) && descriptor.Set == null)
+        if ((descriptor.HasGet || descriptor.HasSet)
+            && (descriptor.RawSet == null || IsUndefinedLike(descriptor.RawSet)))
         {
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy set trap cannot assign to a fixed accessor without a setter"));
@@ -639,7 +720,8 @@ public class SharpTSProxy : ISharpTSCallable
         => value is not (null or SharpTSUndefined or string or bool or byte
             or sbyte or short or ushort or int or uint or long or ulong or float
             or double or decimal or System.Numerics.BigInteger or SharpTSBigInt
-            or SharpTSSymbol);
+            or SharpTSSymbol)
+            && value.GetType().Name is not ("$Undefined" or "$TSSymbol" or "$TSBigInt");
 
     public bool TrapHas(string prop, Interpreter? interp)
         => TrapHasCore(prop, interp);
@@ -650,29 +732,39 @@ public class SharpTSProxy : ISharpTSCallable
     /// carriers such as <c>List&lt;object?&gt;</c> retain their indexed semantics.
     /// </summary>
     public bool TrapHasCompiled(
-        string prop,
-        Func<object, string, bool> ordinaryHas)
+        object prop,
+        Func<object, object, bool> ordinaryHas,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet)
     {
-        var trap = GetTrapCallable("has", null);
+        var trap = GetTrapCallableCompiled("has", ordinaryGet);
         if (trap == null)
         {
             return _target is SharpTSProxy targetProxy
-                ? targetProxy.TrapHasCompiled(prop, ordinaryHas)
+                ? targetProxy.TrapHasCompiled(
+                    prop, ordinaryHas, ordinaryGetOwnPropertyDescriptor,
+                    ordinaryIsExtensible, ordinaryGet)
                 : ordinaryHas(_target, prop);
         }
 
         bool result = ToBoolean(InvokeTrap(trap, null, [_target, prop]));
         if (result) return true;
 
-        object? targetDescriptor = GetTargetOwnPropertyDescriptor(prop, null);
-        if (targetDescriptor is null or SharpTSUndefined) return false;
+        object? targetDescriptor = _target is SharpTSProxy descriptorProxy
+            ? descriptorProxy.TrapGetOwnPropertyDescriptorCompiled(
+                prop, ordinaryGetOwnPropertyDescriptor,
+                ordinaryIsExtensible, ordinaryGet)
+            : ordinaryGetOwnPropertyDescriptor(_target, prop);
+        if (targetDescriptor == null || IsUndefinedLike(targetDescriptor))
+            return false;
 
         var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
         if (!descriptor.Configurable)
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy has trap cannot hide a non-configurable property"));
 
-        if (!TargetIsExtensible(_target))
+        if (!ordinaryIsExtensible(_target))
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy has trap cannot hide a property on a non-extensible target"));
 
@@ -739,6 +831,44 @@ public class SharpTSProxy : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy deleteProperty trap cannot hide a property on a non-extensible target"));
 
+        return true;
+    }
+
+    public bool TrapDeletePropertyCompiled(
+        string prop,
+        Func<object, string, bool> ordinaryDelete,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallableCompiled("deleteProperty", ordinaryGet);
+        if (trap == null)
+        {
+            return _target is SharpTSProxy proxy
+                ? proxy.TrapDeletePropertyCompiled(
+                    prop, ordinaryDelete, ordinaryGetOwnPropertyDescriptor,
+                    ordinaryIsExtensible, ordinaryGet)
+                : ordinaryDelete(_target, prop);
+        }
+
+        bool result = ToBoolean(InvokeTrap(trap, null, [_target, prop]));
+        if (!result) return false;
+
+        object? targetDescriptor = _target is SharpTSProxy descriptorProxy
+            ? descriptorProxy.TrapGetOwnPropertyDescriptorCompiled(
+                prop, ordinaryGetOwnPropertyDescriptor,
+                ordinaryIsExtensible, ordinaryGet)
+            : ordinaryGetOwnPropertyDescriptor(_target, prop);
+        if (targetDescriptor == null || IsUndefinedLike(targetDescriptor))
+            return true;
+
+        var descriptor = SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor);
+        if (!descriptor.Configurable)
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy deleteProperty trap cannot delete a non-configurable property"));
+        if (!ordinaryIsExtensible(_target))
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy deleteProperty trap cannot hide a property on a non-extensible target"));
         return true;
     }
 
@@ -1015,16 +1145,17 @@ public class SharpTSProxy : ISharpTSCallable
         object? prototype,
         Func<object, object?, object?> ordinarySetPrototypeOf,
         Func<object, bool> ordinaryIsExtensible,
-        Func<object, object?> ordinaryGetPrototypeOf)
+        Func<object, object?> ordinaryGetPrototypeOf,
+        Func<object, string, object?> ordinaryGet)
     {
-        var trap = GetTrapCallable("setPrototypeOf", null);
+        var trap = GetTrapCallableCompiled("setPrototypeOf", ordinaryGet);
         if (trap == null)
         {
             if (_target is SharpTSProxy proxy)
             {
                 return proxy.TrapSetPrototypeOfCompiled(
                     prototype, ordinarySetPrototypeOf,
-                    ordinaryIsExtensible, ordinaryGetPrototypeOf);
+                    ordinaryIsExtensible, ordinaryGetPrototypeOf, ordinaryGet);
             }
             _ = ordinarySetPrototypeOf(_target, prototype);
             return true;
@@ -1036,7 +1167,7 @@ public class SharpTSProxy : ISharpTSCallable
 
         object? targetPrototype = _target is SharpTSProxy targetProxy
             ? targetProxy.TrapGetPrototypeOfCompiled(
-                ordinaryGetPrototypeOf, ordinaryIsExtensible)
+                ordinaryGetPrototypeOf, ordinaryIsExtensible, ordinaryGet)
             : ordinaryGetPrototypeOf(_target);
         if (!ReferenceEquals(prototype, targetPrototype))
         {
@@ -1055,13 +1186,20 @@ public class SharpTSProxy : ISharpTSCallable
     public bool TrapDefinePropertyCompiled(
         string prop,
         object descriptor,
-        Func<object, object, object, object?> ordinaryDefine)
+        Func<object, object, object, object?> ordinaryDefine,
+        Func<object, object, object?> ordinaryGetOwnPropertyDescriptor,
+        Func<object, bool> ordinaryIsExtensible,
+        Func<object, string, object?> ordinaryGet,
+        Func<object, string, bool> ordinaryHasOwn)
     {
-        var trap = GetTrapCallable("defineProperty", null);
+        var trap = GetTrapCallableCompiled("defineProperty", ordinaryGet);
         if (trap == null)
         {
             if (_target is SharpTSProxy proxy)
-                return proxy.TrapDefinePropertyCompiled(prop, descriptor, ordinaryDefine);
+                return proxy.TrapDefinePropertyCompiled(
+                    prop, descriptor, ordinaryDefine,
+                    ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
+                    ordinaryGet, ordinaryHasOwn);
             ordinaryDefine(_target, prop, descriptor);
             return true;
         }
@@ -1071,13 +1209,22 @@ public class SharpTSProxy : ISharpTSCallable
         if (!trapResult) return false;
 
         object? targetDescriptor = _target is SharpTSProxy targetProxy
-            ? targetProxy.TrapGetOwnPropertyDescriptor(prop, null)
-            : ObjectBuiltIns.RuntimeGetOwnPropertyDescriptor(_target, prop);
-        bool targetHasProperty = targetDescriptor is not (null or SharpTSUndefined);
+            ? targetProxy.TrapGetOwnPropertyDescriptorCompiled(
+                prop, ordinaryGetOwnPropertyDescriptor,
+                ordinaryIsExtensible, ordinaryGet)
+            : ordinaryGetOwnPropertyDescriptor(_target, prop);
+        bool targetHasProperty = targetDescriptor != null
+            && !IsUndefinedLike(targetDescriptor);
         var requested = SharpTSPropertyDescriptor.FromAnyObject(descriptor);
+        // Compiler-emitted descriptor carriers cross this late-bound boundary
+        // without sharing a CLR type identity with SharpTS.dll. Preserve field
+        // presence through emitted callbacks so an explicit false is not
+        // confused with an omitted boolean attribute.
+        HydrateRequestedDescriptor(
+            requested, descriptor, ordinaryGet, ordinaryHasOwn);
         if (!targetHasProperty)
         {
-            if (!TargetIsExtensible(_target))
+            if (!ordinaryIsExtensible(_target))
                 throw new ThrowException(new SharpTSTypeError(
                     "Proxy defineProperty trap cannot add a property to a non-extensible target"));
             if (requested.HasConfigurable && !requested.Configurable)
@@ -1086,11 +1233,52 @@ public class SharpTSProxy : ISharpTSCallable
         }
         else
         {
+            var targetRecord =
+                SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!);
+            HydrateRequestedDescriptor(
+                targetRecord, targetDescriptor!, ordinaryGet, ordinaryHasOwn);
             ValidateDefinePropertyInvariant(
-                requested,
-                SharpTSPropertyDescriptor.FromAnyObject(targetDescriptor!));
+                requested, targetRecord);
         }
         return true;
+    }
+
+    private static void HydrateRequestedDescriptor(
+        SharpTSPropertyDescriptor descriptor,
+        object source,
+        Func<object, string, object?> get,
+        Func<object, string, bool> hasOwn)
+    {
+        if (hasOwn(source, "value"))
+        {
+            descriptor.HasValue = true;
+            descriptor.Value = get(source, "value");
+        }
+        if (hasOwn(source, "get"))
+        {
+            descriptor.HasGet = true;
+            descriptor.RawGet = get(source, "get");
+        }
+        if (hasOwn(source, "set"))
+        {
+            descriptor.HasSet = true;
+            descriptor.RawSet = get(source, "set");
+        }
+        if (hasOwn(source, "writable"))
+        {
+            descriptor.HasWritable = true;
+            descriptor.Writable = ToBoolean(get(source, "writable"));
+        }
+        if (hasOwn(source, "enumerable"))
+        {
+            descriptor.HasEnumerable = true;
+            descriptor.Enumerable = ToBoolean(get(source, "enumerable"));
+        }
+        if (hasOwn(source, "configurable"))
+        {
+            descriptor.HasConfigurable = true;
+            descriptor.Configurable = ToBoolean(get(source, "configurable"));
+        }
     }
 
     private static void ValidateDefinePropertyInvariant(
@@ -1119,10 +1307,10 @@ public class SharpTSProxy : ISharpTSCallable
         if (targetAccessor)
         {
             if (requested.HasGet
-                && !SharpTSObject.SameValue(requested.Get, target.Get))
+                && !SharpTSObject.SameValue(requested.RawGet, target.RawGet))
                 ThrowInvariant();
             if (requested.HasSet
-                && !SharpTSObject.SameValue(requested.Set, target.Set))
+                && !SharpTSObject.SameValue(requested.RawSet, target.RawSet))
                 ThrowInvariant();
             return;
         }
@@ -1397,13 +1585,12 @@ public class SharpTSProxy : ISharpTSCallable
                 return FunctionBuiltIns.CallWithThis(
                     interp, callable, thisArg, args);
 
-            // Compiled mode: target is a TSFunction, not ISharpTSCallable
+            // Compiled mode: target is an emitted callable shape.
             if (interp == null)
             {
-                var invokeMethod = ManagedStructuralClrReflection.TryGetPublicMethodByName(
-                    _target.GetType(), "Invoke");
-                if (invokeMethod != null)
-                    return invokeMethod.Invoke(_target, [args.ToArray()]);
+                if (RuntimeCallableDispatcher.IsCallable(_target))
+                    return RuntimeCallableDispatcher.InvokeWithThis(
+                        null, _target, thisArg, args.ToArray());
             }
 
             throw new Exception("Runtime Error: Proxy target is not callable.");
@@ -1413,6 +1600,33 @@ public class SharpTSProxy : ISharpTSCallable
         object argsArg = interp != null ? new SharpTSArray(args) : (object)args;
         return InvokeTrap(trap, interp, [_target, thisArg, argsArg]);
     }
+
+    public object? TrapApplyCompiled(
+        object? thisArg,
+        object?[] args,
+        Func<object, object, object?[], object?> ordinaryCall,
+        Func<object, string, object?> ordinaryGet)
+    {
+        var trap = GetTrapCallableCompiled("apply", ordinaryGet);
+        if (trap == null)
+        {
+            if (_target is SharpTSProxy targetProxy)
+                return targetProxy.TrapApplyCompiled(
+                    thisArg, args, ordinaryCall, ordinaryGet);
+            return ordinaryCall(thisArg!, _target, args);
+        }
+
+        return InvokeTrap(
+            trap, null, [_target, thisArg, new List<object?>(args)]);
+    }
+
+    /// <summary>
+    /// Late-bound callable contract used by compiler-emitted Function.prototype
+    /// call/apply wrappers. Keeping this method on the proxy avoids a hard
+    /// SharpTS.dll reference in emitted programs while preserving [[Call]].
+    /// </summary>
+    public object? InvokeWithThis(object? thisArg, object?[] args)
+        => TrapApply(thisArg, args.ToList(), null);
 
     public object? TrapConstruct(
         List<object?> args, Interpreter? interp, object? newTarget = null)
@@ -1437,6 +1651,39 @@ public class SharpTSProxy : ISharpTSCallable
             throw new ThrowException(new SharpTSTypeError(
                 "Proxy construct trap must return an object"));
         return result;
+    }
+
+    public object? TrapConstructCompiled(
+        object?[] args,
+        object? newTarget,
+        Func<object, object?[], object?> ordinaryConstruct,
+        Func<object, string, object?> ordinaryGet)
+    {
+        object effectiveNewTarget = newTarget ?? this;
+        var trap = GetTrapCallableCompiled("construct", ordinaryGet);
+        if (trap == null)
+        {
+            if (_target is SharpTSProxy targetProxy)
+                return targetProxy.TrapConstructCompiled(
+                    args, effectiveNewTarget, ordinaryConstruct, ordinaryGet);
+            return ordinaryConstruct(_target, args);
+        }
+
+        object? result = InvokeTrap(
+            trap, null,
+            [_target, new List<object?>(args), effectiveNewTarget]);
+        if (!IsObjectValue(result))
+            throw new ThrowException(new SharpTSTypeError(
+                "Proxy construct trap must return an object"));
+        return result;
+    }
+
+    public bool HasConstructableTarget(Func<object, bool> isConstructor)
+    {
+        EnsureNotRevoked();
+        return _target is SharpTSProxy proxy
+            ? proxy.HasConstructableTarget(isConstructor)
+            : isConstructor(_target);
     }
 
     #endregion
@@ -1651,9 +1898,11 @@ public class SharpTSProxy : ISharpTSCallable
     /// <summary>
     /// Converts a trap result to boolean using JavaScript truthiness rules.
     /// </summary>
-    private static bool ToBoolean(object? value) => value switch
+    private static bool ToBoolean(object? value)
     {
-        null or SharpTSUndefined => false,
+        if (value == null || IsUndefinedLike(value)) return false;
+        return value switch
+        {
         bool b => b,
         double d => d != 0 && !double.IsNaN(d),
         float f => f != 0 && !float.IsNaN(f),
@@ -1664,5 +1913,6 @@ public class SharpTSProxy : ISharpTSCallable
         SharpTSBigInt bigInt => !bigInt.Value.IsZero,
         string s => s.Length > 0,
         _ => true
-    };
+        };
+    }
 }

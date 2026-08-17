@@ -273,6 +273,46 @@ public partial class RuntimeEmitter
         var foundLabel = il.DefineLabel();
         var noGetterLabel = il.DefineLabel();
 
+        // Object.defineProperty descriptors are authoritative over the fast
+        // field/accessor maps. Probe PDS first so an ordering placeholder left
+        // in _fields after a data-to-accessor transition is never observable.
+        var noPdsGetterLabel = il.DefineLabel();
+        var noPdsDescriptorLabel = il.DefineLabel();
+        var pdsGetterLocal = il.DeclareLocal(_types.Object);
+        var pdsDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, pdsGetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetGetter);
+        il.Emit(OpCodes.Brfalse, noPdsGetterLabel);
+        il.Emit(OpCodes.Ldloc, pdsGetterLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+            _types.GetMethod(typeof(Array), "Empty"), _types.Object));
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noPdsGetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, pdsDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, pdsDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noPdsDescriptorLabel);
+        var pdsDataDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, pdsDescriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, pdsDataDescriptorLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(pdsDataDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, pdsDescriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noPdsDescriptorLabel);
+
         // First, check for a getter
         // if (_getters != null && _getters.TryGetValue(name, out getter))
         //     return ((TSFunction)getter).InvokeWithThis(this, Array.Empty<object>())
@@ -650,17 +690,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _tsObjectIsSealedField);
         il.Emit(OpCodes.Brtrue, falseReturnLabel);
 
-        // return _fields.Remove(name)
+        // Remove every representation of the ordinary own property. Object
+        // literal accessors are stored separately from data fields, and a
+        // getter/setter pair still denotes one property.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsObjectFieldsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", [_types.String])!);
+        il.Emit(OpCodes.Pop);
+        EmitRemoveAccessorEntry(il, _tsObjectGettersField);
+        EmitRemoveAccessorEntry(il, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
         // return false for frozen/sealed
         il.MarkLabel(falseReturnLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
+
+        void EmitRemoveAccessorEntry(ILGenerator generator, FieldBuilder field)
+        {
+            var noMapLabel = generator.DefineLabel();
+            generator.Emit(OpCodes.Ldarg_0);
+            generator.Emit(OpCodes.Ldfld, field);
+            generator.Emit(OpCodes.Brfalse, noMapLabel);
+            generator.Emit(OpCodes.Ldarg_0);
+            generator.Emit(OpCodes.Ldfld, field);
+            generator.Emit(OpCodes.Ldarg_1);
+            generator.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "Remove", [_types.String])!);
+            generator.Emit(OpCodes.Pop);
+            generator.MarkLabel(noMapLabel);
+        }
     }
 
     private void EmitTSObjectDeletePropertyStrict(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -722,13 +783,33 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
-        // Not frozen/sealed - return _fields.Remove(name)
+        // Not frozen/sealed - remove data/accessor storage and report success
+        // even when the property was already absent.
         il.MarkLabel(notSealedLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsObjectFieldsField);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", [_types.String])!);
+        il.Emit(OpCodes.Pop);
+        EmitRemoveStrictAccessorEntry(il, _tsObjectGettersField);
+        EmitRemoveStrictAccessorEntry(il, _tsObjectSettersField);
+        il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
+
+        void EmitRemoveStrictAccessorEntry(ILGenerator generator, FieldBuilder field)
+        {
+            var noMapLabel = generator.DefineLabel();
+            generator.Emit(OpCodes.Ldarg_0);
+            generator.Emit(OpCodes.Ldfld, field);
+            generator.Emit(OpCodes.Brfalse, noMapLabel);
+            generator.Emit(OpCodes.Ldarg_0);
+            generator.Emit(OpCodes.Ldfld, field);
+            generator.Emit(OpCodes.Ldarg_1);
+            generator.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "Remove", [_types.String])!);
+            generator.Emit(OpCodes.Pop);
+            generator.MarkLabel(noMapLabel);
+        }
     }
 
     /// <summary>

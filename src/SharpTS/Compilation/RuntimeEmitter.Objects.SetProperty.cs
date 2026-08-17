@@ -592,11 +592,19 @@ public partial class RuntimeEmitter
 
         EmitGlobalThisSetRedirect(il, runtime);
 
-        // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
-        var notProxyLabel = il.DefineLabel();
-        EmitProxySetPropertyCheck(il, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1), () => il.Emit(OpCodes.Ldarg_2), notProxyLabel);
-
-        il.MarkLabel(notProxyLabel);
+        // Proxy dispatch is omitted entirely from assemblies that do not use
+        // Proxy. Its receiver-aware ordinary-set helper is feature-gated too.
+        if (_features.UsesProxy)
+        {
+            var notProxyLabel = il.DefineLabel();
+            EmitProxySetPropertyCheck(
+                il, runtime,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldarg_1),
+                () => il.Emit(OpCodes.Ldarg_2),
+                notProxyLabel);
+            il.MarkLabel(notProxyLabel);
+        }
 
         // OrdinarySetWithOwnDescriptor consults an inherited descriptor before
         // creating a new own property. This shared check covers intrinsic CLR
@@ -614,6 +622,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, inheritedSetPrototypeLocal);
         il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
         il.Emit(OpCodes.Brfalse, inheritedSetContinueLabel);
+        // An inherited Proxy supplies [[Set]] itself; dispatch before probing
+        // the emitted descriptor store so its trap observes the original
+        // receiver (the object on which assignment began).
+        if (_features.UsesProxy)
+        {
+            var inheritedProxyLabel = il.DefineLabel();
+            var inheritedNotProxyLabel = il.DefineLabel();
+            EmitProxyTypeCheck(
+                il, () => il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal),
+                inheritedProxyLabel, inheritedNotProxyLabel);
+            il.MarkLabel(inheritedProxyLabel);
+            EmitProxySetCompiledCall(
+                il, runtime,
+                () => il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal),
+                () => il.Emit(OpCodes.Ldarg_1),
+                () => il.Emit(OpCodes.Ldarg_2),
+                () => il.Emit(OpCodes.Ldarg_0));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(inheritedNotProxyLabel);
+        }
         var inheritedSetDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         il.Emit(OpCodes.Ldloc, inheritedSetPrototypeLocal);
         il.Emit(OpCodes.Ldarg_1);

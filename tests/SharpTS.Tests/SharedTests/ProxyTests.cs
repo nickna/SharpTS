@@ -10,6 +10,124 @@ namespace SharpTS.Tests.SharedTests;
 public class ProxyTests
 {
     [Theory, ModeData]
+    public void Proxy_MissingGetOwnPropertyDescriptorTrap_ForwardsCompleteDescriptor(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = { attr: 1 };
+            const proxy: any = new Proxy(target, {});
+            const descriptor: any = Object.getOwnPropertyDescriptor(proxy, "attr");
+            console.log(descriptor.value);
+            console.log(descriptor.writable);
+            console.log(descriptor.enumerable);
+            console.log(descriptor.configurable);
+            console.log(proxy.hasOwnProperty("attr"));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Proxy_MissingSetAndDeleteTraps_ForwardWithTheProxyAsReceiver(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = { attr: 1 };
+            const proxy: any = new Proxy(target, {});
+            proxy.attr = "changed";
+            console.log(proxy.attr);
+            console.log(target.attr);
+            proxy.attr = 1;
+            console.log(delete proxy.attr);
+            console.log(proxy.hasOwnProperty("attr"));
+            console.log(target.hasOwnProperty("attr"));
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("changed\nchanged\ntrue\nfalse\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Proxy_MissingGetAndSetTraps_PreserveAccessorReceiver(ExecutionMode mode)
+    {
+        var source = """
+            let setterReceiver: any;
+            const target: any = {
+                get attr() { return this; },
+                set value(next: any) { setterReceiver = this; }
+            };
+            const proxy: any = new Proxy(target, {});
+            console.log(proxy.attr === proxy);
+            proxy.value = 1;
+            console.log(setterReceiver === proxy);
+            const child: any = Object.create(proxy);
+            console.log(child.attr === child);
+            child.value = 2;
+            console.log(setterReceiver === child);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Proxy_MissingSetTrap_UsesIntrinsicTargetDescriptors(ExecutionMode mode)
+    {
+        var source = """
+            let setterValue: any;
+            const object: any = {
+                get getterOnly() {},
+                set setterOnly(value: any) { setterValue = value; }
+            };
+            const objectProxy: any = new Proxy(new Proxy(object, {}), {});
+            objectProxy.setterOnly = 1;
+            console.log(setterValue);
+            console.log(Reflect.set(objectProxy, "getterOnly", 2));
+
+            const regexp: any = /(?:)/g;
+            const regexpProxy: any = new Proxy(new Proxy(regexp, {}), {});
+            console.log(Reflect.set(regexpProxy, "global", true));
+            regexpProxy.lastIndex = 1;
+            console.log(regexp.lastIndex);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\nfalse\nfalse\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Proxy_DefinePropertyTrap_RejectsReportedWritableTransition(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = {};
+            let sawWritableField = false;
+            let sawWritableValue: any;
+            const proxy: any = new Proxy(target, {
+                defineProperty(inner: any, key: string, descriptor: any) {
+                    sawWritableField = Object.prototype.hasOwnProperty.call(
+                        descriptor, "writable");
+                    sawWritableValue = descriptor.writable;
+                    Object.defineProperty(inner, key, {
+                        configurable: false,
+                        writable: true
+                    });
+                    return true;
+                }
+            });
+            try {
+                Reflect.defineProperty(proxy, "prop", { writable: false });
+                console.log(false);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            console.log(sawWritableField);
+            console.log(sawWritableValue);
+            const descriptor: any = Object.getOwnPropertyDescriptor(target, "prop");
+            console.log(descriptor.writable);
+            console.log(descriptor.configurable);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\nfalse\ntrue\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void Proxy_ArrayConcat_PreservesSymbolKeysAndArrayClassification(ExecutionMode mode)
     {
         var source = """

@@ -28,12 +28,7 @@ public partial class RuntimeEmitter
         // runtime.CurrentFunctionThisField below.
         var currentThisField = runtime.CurrentFunctionThisField;
 
-        var method = typeBuilder.DefineMethod(
-            "NewOnFunction",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.ObjectArray]);
-        runtime.NewOnFunction = method;
+        var method = runtime.NewOnFunction;
 
         var il = method.GetILGenerator();
 
@@ -41,6 +36,45 @@ public partial class RuntimeEmitter
         var resultLocal = il.DeclareLocal(_types.Object);
         var prevThisLocal = il.DeclareLocal(_types.Object);
         var notCallableLocal = il.DeclareLocal(_types.Boolean);
+
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapConstructCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_4);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.NewOnFunction);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object?[], object?>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_3);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyLabel);
 
         // ECMA-262 §7.3.14 Construct: throw TypeError if callee is a $TSFunction
         // wrapping a built-in helper (declaring type == $Runtime). Catches

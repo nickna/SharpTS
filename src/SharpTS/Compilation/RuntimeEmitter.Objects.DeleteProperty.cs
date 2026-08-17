@@ -143,7 +143,23 @@ public partial class RuntimeEmitter
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
-        EmitProxyDeleteCheck(il, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1), notProxyLabel);
+        EmitProxyDeleteCheck(
+            il, runtime,
+            () => il.Emit(OpCodes.Ldarg_0),
+            () => il.Emit(OpCodes.Ldarg_1),
+            notProxyLabel);
+        if (strict)
+        {
+            // The proxy [[Delete]] boolean is subject to the surrounding
+            // delete expression's strictness. A false result becomes the
+            // required TypeError in strict code rather than escaping as false.
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            EmitDeleteFail("' of proxy");
+        }
+        else
+        {
+            il.Emit(OpCodes.Ret);
+        }
 
         il.MarkLabel(notProxyLabel);
 
@@ -204,6 +220,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, trueLabel);
         il.MarkLabel(notGlobalObjectLabel);
 
+        // Consult the complete own descriptor before carrier-specific removal.
+        // Intrinsic properties such as array/string length, string indices,
+        // RegExp.lastIndex, and function prototype are synthesized by
+        // ObjectGetOwnPropertyDescriptor rather than necessarily living in PDS.
+        // Their non-configurable bit must still make [[Delete]] fail.
+        var ordinaryDeleteDescriptorLocal = il.DeclareLocal(_types.Object);
+        var ordinaryDeleteDescriptorAllowedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, ordinaryDeleteDescriptorAllowedLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, ordinaryDeleteDescriptorAllowedLabel);
+        il.Emit(OpCodes.Ldloc, ordinaryDeleteDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "configurable");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brtrue, ordinaryDeleteDescriptorAllowedLabel);
+        EmitDeleteFail("' of object");
+        il.MarkLabel(ordinaryDeleteDescriptorAllowedLabel);
+
         // Check if $TSObject
         var sharpTSObjectLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -217,6 +257,9 @@ public partial class RuntimeEmitter
         var tsFunctionDelLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionDelLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
         il.Emit(OpCodes.Brtrue, tsFunctionDelLabel);
 
         // $Array — `delete arr[i]` turns the slot into a hole. Must come
@@ -531,6 +574,28 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
             var tsArrDelNonNumericLabel = il.DefineLabel();
             il.Emit(OpCodes.Brfalse, tsArrDelNonNumericLabel);
+
+            // A write routed through Proxy/Reflect can install attributes for
+            // an indexed element in PDS. Delete both representations so a
+            // later [[GetOwnProperty]] cannot resurrect the removed index.
+            var tsArrIndexDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            var tsArrIndexDescriptorConfigurableLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsArrIndexDescLocal);
+            il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
+            il.Emit(OpCodes.Brfalse, tsArrIndexDescriptorConfigurableLabel);
+            il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, tsArrIndexDescriptorConfigurableLabel);
+            EmitDeleteFail("' of array");
+            il.MarkLabel(tsArrIndexDescriptorConfigurableLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+            il.Emit(OpCodes.Pop);
 
             // arr.DeleteAt(idx); return true;
             il.Emit(OpCodes.Ldarg_0);

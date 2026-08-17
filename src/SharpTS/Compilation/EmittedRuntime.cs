@@ -184,6 +184,7 @@ public class EmittedRuntime
     public MethodBuilder TypeOf { get; set; } = null!;
     public MethodBuilder InstanceOf { get; set; } = null!;
     public MethodBuilder HasIn { get; set; } = null!;
+    public MethodBuilder ProxyOrdinaryHas { get; set; } = null!;
 
     // Reflect metadata API
     public MethodBuilder ReflectDefineMetadata { get; set; } = null!;
@@ -718,6 +719,9 @@ public class EmittedRuntime
     public MethodBuilder ReflectApply { get; set; } = null!;
     public MethodBuilder ReflectConstruct { get; set; } = null!;
     public MethodBuilder ReflectSet { get; set; } = null!;
+    public MethodBuilder ReflectGet { get; set; } = null!;
+    public MethodBuilder ReflectDeleteProperty { get; set; } = null!;
+    public MethodBuilder ReflectPreventExtensions { get; set; } = null!;
     public MethodBuilder IsConstructorMethod { get; set; } = null!;
 
     // Resource disposal for using declarations

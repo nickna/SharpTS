@@ -1122,7 +1122,9 @@ public static partial class ObjectBuiltIns
             {
                 Value = compiledDesc.Value,
                 Get = compiledDesc.Getter as ISharpTSCallable,
+                RawGet = compiledDesc.Getter,
                 Set = compiledDesc.Setter as ISharpTSCallable,
+                RawSet = compiledDesc.Setter,
                 Writable = compiledDesc.Writable,
                 Enumerable = compiledDesc.Enumerable,
                 Configurable = compiledDesc.Configurable
@@ -1499,6 +1501,7 @@ public static partial class ObjectBuiltIns
         if (interpreter.TryGetDescriptorField(descObj, "get", out var g))
         {
             descriptor.HasGet = true;
+            descriptor.RawGet = g;
             descriptor.Get = g switch
             {
                 SharpTSUndefined => null,
@@ -1510,6 +1513,7 @@ public static partial class ObjectBuiltIns
         if (interpreter.TryGetDescriptorField(descObj, "set", out var s))
         {
             descriptor.HasSet = true;
+            descriptor.RawSet = s;
             descriptor.Set = s switch
             {
                 SharpTSUndefined => null,

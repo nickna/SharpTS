@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
@@ -406,6 +407,14 @@ public partial class RuntimeEmitter
             EmitFsWatcherClass(moduleBuilder, runtime);
             EmitStatWatcherClass(moduleBuilder, runtime);
         }
+
+        // Reflect.construct and Proxy [[Construct]] need this token while the
+        // main $Runtime body is emitted. Its body is filled after $Runtime.
+        runtime.NewOnFunction = _runtimeTypeBuilder!.DefineMethod(
+            "NewOnFunction",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.ObjectArray]);
 
         // Emit $Runtime class with all helper methods
         EmitRuntimeClass(moduleBuilder, runtime);

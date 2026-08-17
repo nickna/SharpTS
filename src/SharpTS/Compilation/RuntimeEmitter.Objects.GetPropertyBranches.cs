@@ -1322,10 +1322,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, protoLocal);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
-        // Recursively call GetProperty(prototype, name) to check prototype chain
+        // Continue ordinary [[Get]] with the original dictionary as Receiver.
+        // This is observable when the prototype is a Proxy or accessor.
         il.Emit(OpCodes.Ldloc, protoLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, method);  // Recursive call to GetProperty
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ReflectGet);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnUndefinedLabel);

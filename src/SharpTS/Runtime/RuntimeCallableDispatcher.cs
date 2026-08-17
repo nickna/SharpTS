@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.Types;
 using Interp = SharpTS.Execution.Interpreter;
@@ -56,13 +57,27 @@ public static class RuntimeCallableDispatcher
     /// or no recognised shape matches.
     /// </summary>
     public static object? Invoke(Interp? interpreter, object? callable, params object?[] args)
+        => InvokeWithThis(interpreter, callable, null, args);
+
+    /// <summary>
+    /// Invokes a callable with an explicit JavaScript receiver. This is the
+    /// cross-runtime equivalent of Call(F, thisArgument, argumentsList).
+    /// </summary>
+    public static object? InvokeWithThis(
+        Interp? interpreter,
+        object? callable,
+        object? thisArg,
+        params object?[] args)
     {
         if (callable is null) return null;
 
         switch (callable)
         {
             case ISharpTSCallable tsCallable:
-                return tsCallable.Call(interpreter!, args.ToList());
+                return interpreter != null
+                    ? FunctionBuiltIns.CallWithThis(
+                        interpreter, tsCallable, thisArg, args.ToList())
+                    : tsCallable.Call(null!, args.ToList());
 
             case SharpTS.Compilation.TSFunction tsFunc:
                 return tsFunc.Invoke(args);
@@ -88,7 +103,8 @@ public static class RuntimeCallableDispatcher
                     [typeof(object), typeof(object[])]));
             if (invokeWithThis != null)
             {
-                return invokeWithThis.Invoke(callable, new object?[] { null, args });
+                return InvokeReflected(
+                    invokeWithThis, callable, [thisArg, args]);
             }
 
             var invoke = _invokeCache.GetOrAdd(type, t =>
@@ -96,16 +112,39 @@ public static class RuntimeCallableDispatcher
                     t, ManagedEmittedShape.Function, "Invoke", [typeof(object[])]));
             if (invoke != null)
             {
-                return invoke.Invoke(callable, new object?[] { args });
+                return InvokeReflected(invoke, callable, [args]);
             }
         }
 
         if (callable is Delegate del)
         {
-            return del.DynamicInvoke(new object[] { args });
+            try
+            {
+                return del.DynamicInvoke(new object[] { args });
+            }
+            catch (TargetInvocationException exception)
+                when (exception.InnerException != null)
+            {
+                ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            }
         }
 
         return null;
+    }
+
+    private static object? InvokeReflected(
+        MethodInfo method, object target, object?[] arguments)
+    {
+        try
+        {
+            return method.Invoke(target, arguments);
+        }
+        catch (TargetInvocationException exception)
+            when (exception.InnerException != null)
+        {
+            ExceptionDispatchInfo.Capture(exception.InnerException).Throw();
+            throw;
+        }
     }
 
     /// <summary>

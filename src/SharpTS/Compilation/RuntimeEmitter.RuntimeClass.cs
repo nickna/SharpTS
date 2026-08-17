@@ -784,6 +784,12 @@ public partial class RuntimeEmitter
         // hasOwnProperty + isPrototypeOf helpers — must come before
         // GetFunctionMethod so the corresponding arms can return $TSFunction
         // wrappers.
+        runtime.ObjectIsExtensible = typeBuilder.DefineMethod(
+            "ObjectIsExtensible",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
         EmitHasOwnPropertyHelper(typeBuilder, runtime);
         // propertyIsEnumerable shares HasOwn's plumbing (PDS lookup + dict
         // fallback) so emit it immediately after.
@@ -830,6 +836,16 @@ public partial class RuntimeEmitter
         // their normalization path consumes arbitrary iterables. Reserve the
         // method token now and fill its body in EmitIteratorMethodsAdvanced.
         DeclareIterateToList(typeBuilder, runtime);
+        runtime.InvokeMethodValue = typeBuilder.DefineMethod(
+            "InvokeMethodValue",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object, _types.ObjectArray]);
+        runtime.ReflectGet = typeBuilder.DefineMethod(
+            "ReflectGet",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.String, _types.Object]);
         EmitInvokeValue(typeBuilder, runtime);
         EmitInvokeMethodValue(typeBuilder, runtime);
         EmitGetFieldsProperty(typeBuilder, runtime);
@@ -901,9 +917,6 @@ public partial class RuntimeEmitter
         // String.raw lives here so its body can read `template.raw` via
         // GetProperty and ToString-coerce substitutions via ToJsString.
         EmitStringRaw(typeBuilder, runtime);
-        // Strict Proxy [[Set]] captures this descriptor callback before the
-        // public Object descriptor APIs receive their bodies below.
-        DeclareObjectGetOwnPropertyDescriptor(typeBuilder, runtime);
         EmitSetProperty(typeBuilder, runtime);
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
@@ -1012,10 +1025,18 @@ public partial class RuntimeEmitter
         // the already-defined shared helper here.
         // Proxy [[Set]] forwarding also uses the receiver-aware ordinary-set
         // helper even when guest code never names the Reflect object.
+        // ReflectGet is also the receiver-preserving ordinary [[Get]] helper
+        // used by prototype recursion in GetProperty, so its reserved method
+        // must always receive a body even when guest code never names Reflect.
+        EmitReflectGet(typeBuilder, runtime);
         if (_features.UsesReflect || _features.UsesProxy)
+        {
             EmitReflectSet(typeBuilder, runtime);
+        }
         if (_features.UsesReflect)
         {
+            EmitReflectDeleteProperty(typeBuilder, runtime);
+            EmitReflectPreventExtensions(typeBuilder, runtime);
             EmitReflectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
             EmitReflectDefineProperty(typeBuilder, runtime);
             EmitReflectOwnKeys(typeBuilder, runtime);

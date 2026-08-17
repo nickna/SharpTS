@@ -54,9 +54,6 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
 
             case "deleteProperty":
             {
-                // Reflect.deleteProperty(target, propertyKey) → bool
-                // Store target in local for frozen check after delete
-                var targetLocal = il.DeclareLocal(typeof(object));
                 if (arguments.Count > 0)
                 {
                     emitter.EmitExpression(arguments[0]);
@@ -64,7 +61,30 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                     il.Emit(OpCodes.Ldnull);
-                il.Emit(OpCodes.Dup);
+
+                if (arguments.Count > 1)
+                {
+                    emitter.EmitExpression(arguments[1]);
+                    emitter.EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                    il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectDeleteProperty);
+                il.Emit(OpCodes.Box, typeof(bool));
+                return true;
+            }
+
+            case "get":
+            {
+                // Reflect.get(target, propertyKey, receiver?) → value
+                var targetLocal = il.DeclareLocal(ctx.Types.Object);
+                if (arguments.Count > 0)
+                {
+                    emitter.EmitExpression(arguments[0]);
+                    emitter.EmitBoxIfNeeded(arguments[0]);
+                }
+                else
+                    il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Stloc, targetLocal);
 
                 if (arguments.Count > 1)
@@ -75,66 +95,21 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                // Convert key to string and call DeleteProperty
-                il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
-                il.Emit(OpCodes.Call, ctx.Runtime!.DeleteProperty);
-                // DeleteProperty returns false for both frozen objects AND missing dict keys.
-                // For Reflect.deleteProperty, missing keys should return true (only frozen returns false).
-                var deleteResultLocal = il.DeclareLocal(typeof(bool));
-                il.Emit(OpCodes.Stloc, deleteResultLocal);
-
-                // If DeleteProperty returned true, just return true
-                var deleteTrueLabel = il.DefineLabel();
-                var deleteEndLabel = il.DefineLabel();
-                il.Emit(OpCodes.Ldloc, deleteResultLocal);
-                il.Emit(OpCodes.Brtrue, deleteTrueLabel);
-
-                // DeleteProperty returned false. Check if object is frozen or sealed.
-                // If frozen/sealed → return false; if neither → return true (key just didn't exist)
+                il.Emit(OpCodes.Call, ctx.Runtime!.ToJsString);
+                var keyLocal = il.DeclareLocal(ctx.Types.String);
+                il.Emit(OpCodes.Stloc, keyLocal);
                 il.Emit(OpCodes.Ldloc, targetLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.PDSIsFrozen);
-                var isFrozenOrSealedLabel = il.DefineLabel();
-                il.Emit(OpCodes.Brtrue, isFrozenOrSealedLabel);
-                il.Emit(OpCodes.Ldloc, targetLocal);
-                il.Emit(OpCodes.Call, ctx.Runtime!.PDSIsSealed);
-                il.Emit(OpCodes.Brtrue, isFrozenOrSealedLabel);
-                // Not frozen/sealed: missing key → return true
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.Emit(OpCodes.Br, deleteEndLabel);
-                il.MarkLabel(isFrozenOrSealedLabel);
-                // Frozen or sealed → return false
-                il.Emit(OpCodes.Ldc_I4_0);
-                il.Emit(OpCodes.Br, deleteEndLabel);
-
-                il.MarkLabel(deleteTrueLabel);
-                il.Emit(OpCodes.Ldc_I4_1);
-                il.MarkLabel(deleteEndLabel);
-                il.Emit(OpCodes.Box, typeof(bool));
-                return true;
-            }
-
-            case "get":
-            {
-                // Reflect.get(target, propertyKey, receiver?) → value
-                if (arguments.Count > 0)
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                if (arguments.Count > 2)
                 {
-                    emitter.EmitExpression(arguments[0]);
-                    emitter.EmitBoxIfNeeded(arguments[0]);
+                    emitter.EmitExpression(arguments[2]);
+                    emitter.EmitBoxIfNeeded(arguments[2]);
                 }
                 else
-                    il.Emit(OpCodes.Ldnull);
-
-                if (arguments.Count > 1)
                 {
-                    emitter.EmitExpression(arguments[1]);
-                    emitter.EmitBoxIfNeeded(arguments[1]);
+                    il.Emit(OpCodes.Ldloc, targetLocal);
                 }
-                else
-                    il.Emit(OpCodes.Ldnull);
-
-                // Convert key to string, then use GetProperty(target, key)
-                il.Emit(OpCodes.Callvirt, typeof(object).GetMethod("ToString")!);
-                il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+                il.Emit(OpCodes.Call, ctx.Runtime.ReflectGet);
                 return true;
             }
 
@@ -247,9 +222,7 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
                 else
                     il.Emit(OpCodes.Ldnull);
 
-                il.Emit(OpCodes.Call, ctx.Runtime!.ObjectPreventExtensions);
-                il.Emit(OpCodes.Pop); // discard the returned object
-                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Call, ctx.Runtime!.ReflectPreventExtensions);
                 il.Emit(OpCodes.Box, typeof(bool));
                 return true;
             }

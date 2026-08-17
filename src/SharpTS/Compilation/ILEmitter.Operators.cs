@@ -468,7 +468,11 @@ public partial class ILEmitter
 
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (u.Right is Expr.Variable tv && !IsKnownVariable(tv.Name.Lexeme))
+                if (u.Right is Expr.Variable { Name.Lexeme: "Proxy" })
+                {
+                    IL.Emit(OpCodes.Ldstr, "function");
+                }
+                else if (u.Right is Expr.Variable tv && !IsKnownVariable(tv.Name.Lexeme))
                 {
                     IL.Emit(OpCodes.Ldstr, "undefined");
                 }

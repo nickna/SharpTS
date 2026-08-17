@@ -438,13 +438,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, targetProtoLocal);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
-        // Walk: current = PDSGetPrototype(instance); while (current != null) {
+        // Walk through [[GetPrototypeOf]] so Proxy traps participate and their
+        // non-extensible-target invariant is enforced.
+        // current = ObjectGetPrototypeOf(instance); while (current != null) {
         //   if (current === F.prototype) return true;
         //   current = PDSGetPrototype(current); }
         // return false
         var currentLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
 
         var loopLabel = il.DefineLabel();
@@ -457,9 +459,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, targetProtoLocal);
         il.Emit(OpCodes.Beq, trueLabel);
 
-        // current = PDSGetPrototype(current)
+        // current = current.[[GetPrototypeOf]]
         il.Emit(OpCodes.Ldloc, currentLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopLabel);
 
@@ -633,6 +635,11 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]
         );
         runtime.HasIn = method;
+        runtime.ProxyOrdinaryHas = typeBuilder.DefineMethod(
+            "ProxyOrdinaryHas",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]);
 
         var il = method.GetILGenerator();
         var falseLabel = il.DefineLabel();
@@ -655,6 +662,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        // Ask [[GetOwnProperty]] before representation-specific fallbacks.
+        // This covers intrinsic own properties such as boxed-string indices,
+        // RegExp.lastIndex, and Function name/length.
+        var noOrdinaryOwnDescriptorLabel = il.DefineLabel();
+        var hasInDescriptorLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, hasInDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, hasInDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noOrdinaryOwnDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, hasInDescriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, noOrdinaryOwnDescriptorLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noOrdinaryOwnDescriptorLabel);
 
         // Use the shared HasProperty walk first for every ordinary property
         // key.  It covers own PDS-only accessors and prototype-chain entries
@@ -854,19 +879,41 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // Symbol key path
+        // Symbol key path. Check the own symbol dictionary, then continue up
+        // [[Prototype]] so well-known symbol methods are inherited normally.
         il.MarkLabel(symbolKeyLabel);
-        // Get symbol dict and check if key exists
+        var symbolNotOwnLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetSymbolDictMethod);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "ContainsKey", _types.Object));
+        il.Emit(OpCodes.Brfalse, symbolNotOwnLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(symbolNotOwnLabel);
+        var symbolPrototypeLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, symbolPrototypeLocal);
+        il.Emit(OpCodes.Ldloc, symbolPrototypeLocal);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, symbolPrototypeLocal);
+        il.Emit(OpCodes.Call, runtime.HasIn);
         il.Emit(OpCodes.Ret);
 
         // Return false
         il.MarkLabel(falseLabel);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
+
+        // SharpTSProxy's compiled callback uses the natural (target, key)
+        // order, while the emitted `in` helper uses (key, target).
+        var proxyOrdinaryHasIl = runtime.ProxyOrdinaryHas.GetILGenerator();
+        proxyOrdinaryHasIl.Emit(OpCodes.Ldarg_1);
+        proxyOrdinaryHasIl.Emit(OpCodes.Ldarg_0);
+        proxyOrdinaryHasIl.Emit(OpCodes.Call, runtime.HasIn);
+        proxyOrdinaryHasIl.Emit(OpCodes.Ret);
     }
 
     private void EmitAdd(TypeBuilder typeBuilder, EmittedRuntime runtime)
