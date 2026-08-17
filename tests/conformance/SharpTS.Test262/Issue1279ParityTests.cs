@@ -6335,6 +6335,45 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Remaining_Promise_compiler_parity(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> PromiseCombinatorCompilerParityCases => new()
+    {
+        "built-ins/Promise/all/invoke-resolve-error-close.js",
+        "built-ins/Promise/all/invoke-resolve-get-once-multiple-calls.js",
+        "built-ins/Promise/all/invoke-then-error-close.js",
+        "built-ins/Promise/all/invoke-then-get-error-close.js",
+        "built-ins/Promise/all/iter-next-val-err-no-close.js",
+        "built-ins/Promise/all/iter-step-err-no-close.js",
+        "built-ins/Promise/all/resolve-poisoned-then.js",
+        "built-ins/Promise/all/resolve-thenable.js",
+        "built-ins/Promise/allSettled/invoke-resolve-error-close.js",
+        "built-ins/Promise/allSettled/invoke-then-error-close.js",
+        "built-ins/Promise/allSettled/invoke-then-error-reject.js",
+        "built-ins/Promise/allSettled/invoke-then-get-error-close.js",
+        "built-ins/Promise/allSettled/invoke-then-get-error-reject.js",
+        "built-ins/Promise/allSettled/iter-next-val-err-no-close.js",
+        "built-ins/Promise/allSettled/iter-step-err-no-close.js",
+        "built-ins/Promise/allSettled/resolve-poisoned-then.js",
+        "built-ins/Promise/allSettled/resolve-thenable.js",
+        "built-ins/Promise/any/invoke-then-error-close.js",
+        "built-ins/Promise/any/invoke-then-error-reject.js",
+        "built-ins/Promise/any/invoke-then-get-error-close.js",
+        "built-ins/Promise/any/invoke-then-get-error-reject.js",
+        "built-ins/Promise/any/resolve-before-loop-exit-from-same.js",
+        "built-ins/Promise/any/resolve-from-same-thenable.js",
+        "built-ins/Promise/race/invoke-resolve-error-close.js",
+        "built-ins/Promise/race/invoke-then-error-close.js",
+        "built-ins/Promise/race/invoke-then-get-error-close.js",
+        "built-ins/Promise/race/iter-next-val-err-no-close.js",
+        "built-ins/Promise/race/iter-step-err-no-close.js",
+        "built-ins/Promise/race/resolve-self.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(PromiseCombinatorCompilerParityCases))]
+    public void Promise_combinator_iterator_close_and_error_paths_match_in_compiled_mode(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     public static TheoryData<string> RemainingStringCompilerParityCases => new()
     {
         "built-ins/String/prototype/constructor/S15.5.4.1_A1_T2.js",

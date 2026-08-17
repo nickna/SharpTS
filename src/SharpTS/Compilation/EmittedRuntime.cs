@@ -970,7 +970,7 @@ public class EmittedRuntime
     public MethodBuilder PromiseWithResolvers { get; set; } = null!;
     /// <summary>$Runtime.UnwrapPromiseReceiver(object) -> Task&lt;object?&gt; — $Promise (incl. #242 subclasses) → .Task; anything else is cast to Task&lt;object?&gt;. Used by then/catch/finally emission so promise-typed receivers work regardless of representation.</summary>
     public MethodBuilder UnwrapPromiseReceiverMethod { get; set; } = null!;
-    /// <summary>$Runtime.NormalizePromiseList(object) -> object — when the arg is a List&lt;object?&gt;, returns a copy with $Promise elements (incl. #242 subclasses) replaced by their wrapped Task so the combinator state machines (which only test for Task&lt;object?&gt;) await them; non-list args pass through. Applied at every combinator entry.</summary>
+    /// <summary>$Runtime.NormalizePromiseList(object, object, object, int) -> object — incrementally resolves and wires Promise combinator elements while preserving observable iterator order.</summary>
     public MethodBuilder NormalizePromiseListMethod { get; set; } = null!;
     /// <summary>$Runtime.WrapDerivedPromiseResult(Task&lt;object?&gt; result, object receiver) -> object — completes species-based result construction for subclass then/catch/finally results after ObservePromiseConstructor has performed the synchronous own-constructor access (#242). For a $Promise SUBCLASS species, constructs a receiver-typed promise around the result task via the subclass's (object executor) constructor (PromiseFromExecutor adopts the task); for a general non-Promise species, routes to NewPromiseCapabilityResult (#349); for %Promise% (or no subclass receiver) returns the task unchanged.</summary>
     public MethodBuilder WrapDerivedPromiseResultMethod { get; set; } = null!;
@@ -987,6 +987,8 @@ public class EmittedRuntime
     public MethodBuilder GetPromiseCapabilityResolveMethod { get; set; } = null!;
     public MethodBuilder GetPromiseCapabilityRejectMethod { get; set; } = null!;
     public MethodBuilder PromiseResolveValueMethod { get; set; } = null!;
+    public MethodBuilder AdoptPromiseCombinatorResultMethod { get; set; } = null!;
+    public MethodBuilder SettlePromiseCombinatorResultMethod { get; set; } = null!;
     /// <summary>Custom NewPromiseCapability results that must not participate in SharpTS's non-standard top-level expression auto-await.</summary>
     public FieldBuilder NonAutoAwaitPromisesField { get; set; } = null!;
     public MethodBuilder MarkNonAutoAwaitPromiseMethod { get; set; } = null!;

@@ -94,7 +94,9 @@ public partial class RuntimeEmitter
     private void EmitCombinatorWrapper(ILGenerator il, TypeBuilder smType, FieldBuilder stateField,
         FieldBuilder inputField, FieldBuilder builderField, Type builderType, System.Action emitInputValue,
         FieldBuilder? constructorField = null, System.Action? emitConstructorValue = null,
-        FieldBuilder? capabilityField = null, System.Action? emitCapabilityValue = null)
+        FieldBuilder? capabilityField = null, System.Action? emitCapabilityValue = null,
+        MethodInfo? markNonAutoAwaitMethod = null,
+        MethodInfo? adoptResultMethod = null)
     {
         var smLocal = il.DeclareLocal(smType);
 
@@ -145,6 +147,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldflda, builderField);
         var taskGetter = _types.GetProperty(builderType, "Task", BindingFlags.Public | BindingFlags.Instance)!.GetGetMethod()!;
         il.Emit(OpCodes.Call, taskGetter);
+        if (adoptResultMethod is not null)
+        {
+            // Only %Promise%'s resolving function assimilates the result array
+            // here. A custom constructor's capability resolve callback must be
+            // called directly with the raw array and may be intentionally
+            // synchronous/observable.
+            var resultTaskLocal = il.DeclareLocal(_types.TaskOfObject);
+            var skipAdoptionLabel = il.DefineLabel();
+            var adoptionDoneLabel = il.DefineLabel();
+            il.Emit(OpCodes.Stloc, resultTaskLocal);
+            il.Emit(OpCodes.Ldloca, smLocal);
+            il.Emit(OpCodes.Ldfld, constructorField!);
+            il.Emit(OpCodes.Isinst, _types.Type);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, skipAdoptionLabel);
+            il.Emit(OpCodes.Ldloc, resultTaskLocal);
+            il.Emit(OpCodes.Call, adoptResultMethod);
+            il.Emit(OpCodes.Stloc, resultTaskLocal);
+            il.Emit(OpCodes.Br, adoptionDoneLabel);
+            il.MarkLabel(skipAdoptionLabel);
+            il.MarkLabel(adoptionDoneLabel);
+            il.Emit(OpCodes.Ldloc, resultTaskLocal);
+        }
+        if (markNonAutoAwaitMethod is not null)
+        {
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Call, markNonAutoAwaitMethod);
+        }
         il.Emit(OpCodes.Ret);
     }
 
@@ -156,7 +188,8 @@ public partial class RuntimeEmitter
     /// synchronously from the static method.
     /// </summary>
     private static void EmitNormalizeCombinatorIterable(ILGenerator il, EmittedRuntime runtime,
-        FieldBuilder iterableField, FieldBuilder constructorField, FieldBuilder? capabilityField = null)
+        FieldBuilder iterableField, FieldBuilder constructorField,
+        FieldBuilder? capabilityField = null, int combinatorKind = 0)
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
@@ -172,6 +205,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, capabilityField);
         }
+        il.Emit(OpCodes.Ldc_I4, combinatorKind);
         il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
         il.Emit(OpCodes.Stfld, iterableField);
     }

@@ -213,7 +213,9 @@ public partial class RuntimeEmitter
             {
                 // Normalize inside MoveNext's try block; see PromiseAll.
                 il.Emit(OpCodes.Ldarg_0);
-            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1));
+            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
+            markNonAutoAwaitMethod: runtime.MarkNonAutoAwaitPromiseMethod,
+            adoptResultMethod: runtime.AdoptPromiseCombinatorResultMethod);
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAllSettled state machine.

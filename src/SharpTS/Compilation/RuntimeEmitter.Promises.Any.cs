@@ -49,6 +49,29 @@ public partial class RuntimeEmitter
         ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         ctorIL.Emit(OpCodes.Stfld, rejectionReasonsField);
 
+        // Preallocate one slot per input so AggregateError.errors preserves
+        // iterator order rather than asynchronous completion order.
+        var initIndexLocal = ctorIL.DeclareLocal(_types.Int32);
+        var initLoopLabel = ctorIL.DefineLabel();
+        var initDoneLabel = ctorIL.DefineLabel();
+        ctorIL.Emit(OpCodes.Ldc_I4_0);
+        ctorIL.Emit(OpCodes.Stloc, initIndexLocal);
+        ctorIL.MarkLabel(initLoopLabel);
+        ctorIL.Emit(OpCodes.Ldloc, initIndexLocal);
+        ctorIL.Emit(OpCodes.Ldarg_1);
+        ctorIL.Emit(OpCodes.Bge, initDoneLabel);
+        ctorIL.Emit(OpCodes.Ldarg_0);
+        ctorIL.Emit(OpCodes.Ldfld, rejectionReasonsField);
+        ctorIL.Emit(OpCodes.Ldnull);
+        ctorIL.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "Add", [_types.Object]));
+        ctorIL.Emit(OpCodes.Ldloc, initIndexLocal);
+        ctorIL.Emit(OpCodes.Ldc_I4_1);
+        ctorIL.Emit(OpCodes.Add);
+        ctorIL.Emit(OpCodes.Stloc, initIndexLocal);
+        ctorIL.Emit(OpCodes.Br, initLoopLabel);
+        ctorIL.MarkLabel(initDoneLabel);
+
         // this.Tcs = new TaskCompletionSource<object?>()
         ctorIL.Emit(OpCodes.Ldarg_0);
         ctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.TaskCompletionSourceOfObject));
@@ -78,19 +101,53 @@ public partial class RuntimeEmitter
         };
     }
 
+    private AnyElementStateClass DefineAnyElementStateClass(
+        ModuleBuilder moduleBuilder, AnyStateClass anyState)
+    {
+        var typeBuilder = EmitTypeDefinitions.DefineType(moduleBuilder,
+            "$AnyElementState",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var stateField = typeBuilder.DefineField(
+            "State", anyState.Type, FieldAttributes.Public);
+        var indexField = typeBuilder.DefineField(
+            "Index", _types.Int32, FieldAttributes.Public);
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard,
+            [anyState.Type, _types.Int32]);
+        var il = ctor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, stateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stfld, indexField);
+        il.Emit(OpCodes.Ret);
+        return new AnyElementStateClass
+        {
+            Type = typeBuilder,
+            StateField = stateField,
+            IndexField = indexField,
+            Constructor = ctor,
+        };
+    }
+
     /// <summary>
     /// Emits the HandleAnyCompletionShim static method.
     /// This is a shim that casts the object? state parameter to $AnyState and calls HandleAnyCompletion.
     /// Signature: void HandleAnyCompletionShim(Task&lt;object?&gt; task, object? state)
     /// </summary>
-    private void EmitHandleAnyCompletionShim(ILGenerator il, AnyStateClass anyState, MethodBuilder handleAnyCompletion)
+    private void EmitHandleAnyCompletionShim(
+        ILGenerator il, AnyElementStateClass elementState,
+        MethodBuilder handleAnyCompletion)
     {
         // Load task (arg0)
         il.Emit(OpCodes.Ldarg_0);
-        // Load state (arg1) and cast to $AnyState
+        // Load state (arg1) and cast to $AnyElementState
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, anyState.Type);
-        // Call HandleAnyCompletion(task, ($AnyState)state)
+        il.Emit(OpCodes.Castclass, elementState.Type);
         il.Emit(OpCodes.Call, handleAnyCompletion);
         il.Emit(OpCodes.Ret);
     }
@@ -99,9 +156,19 @@ public partial class RuntimeEmitter
     /// Emits the HandleAnyCompletion static method.
     /// Called by ContinueWith for each task in PromiseAny.
     /// </summary>
-    private void EmitHandleAnyCompletion(ILGenerator il, AnyStateClass anyState, EmittedRuntime runtime)
+    private void EmitHandleAnyCompletion(
+        ILGenerator il, AnyStateClass anyState,
+        AnyElementStateClass elementState, EmittedRuntime runtime)
     {
-        // Parameters: arg0 = Task<object?>, arg1 = $AnyState
+        // Parameters: arg0 = Task<object?>, arg1 = $AnyElementState
+        var stateLocal = il.DeclareLocal(anyState.Type);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldfld, elementState.StateField);
+        il.Emit(OpCodes.Stloc, stateLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldfld, elementState.IndexField);
+        il.Emit(OpCodes.Stloc, indexLocal);
 
         // Check if task completed successfully
         var failedLabel = il.DefineLabel();
@@ -114,7 +181,7 @@ public partial class RuntimeEmitter
 
         // Success path: if (state.Tcs.TrySetResult(task.Result)) state.Cts.Cancel();
         // This cancels remaining pending continuations to prevent orphaned tasks.
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
@@ -125,7 +192,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, skipCancelLabel);
 
         // state.Cts.Cancel() - cancel pending continuations to allow clean process exit
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.CtsField);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.CancellationTokenSource, "Cancel"));
 
@@ -136,7 +203,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(failedLabel);
 
         // Monitor.Enter(state.Lock)
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.LockField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Enter", [_types.Object]));
 
@@ -146,8 +213,9 @@ public partial class RuntimeEmitter
         // state.RejectionReasons.Add(WrapException(task.Exception.InnerException ?? task.Exception))
         // — the guest rejection VALUE, not the AggregateException wrapper's
         // Message, so `e.errors` matches what each promise rejected with (#232).
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.RejectionReasonsField);
+        il.Emit(OpCodes.Ldloc, indexLocal);
 
         var hasExceptionLabel = il.DefineLabel();
         var unwrapDoneLabel = il.DefineLabel();
@@ -176,11 +244,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.WrapException);
 
         il.MarkLabel(afterExceptionLabel);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "set_Item", [_types.Int32, _types.Object]));
 
         // state.PendingCount--
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.PendingCountField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Sub);
@@ -188,15 +257,15 @@ public partial class RuntimeEmitter
 
         // if (state.PendingCount == 0)
         var notAllFailedLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.PendingCountField);
         il.Emit(OpCodes.Brtrue, notAllFailedLabel);
 
         // All failed: state.Tcs.TrySetException($Runtime.CreateException(new $AggregateError(errors, null)))
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.TcsField);
         // Create $AggregateError(state.RejectionReasons, null)
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.RejectionReasonsField);  // errors list
         il.Emit(OpCodes.Ldnull);  // message (use default)
         il.Emit(OpCodes.Newobj, runtime.TSAggregateErrorCtor);
@@ -206,7 +275,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);  // discard bool result
 
         // Cancel the token source for cleanup (all continuations have run, but ensures proper disposal)
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.CtsField);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.CancellationTokenSource, "Cancel"));
 
@@ -215,7 +284,7 @@ public partial class RuntimeEmitter
 
         // finally: Monitor.Exit(state.Lock)
         il.BeginFinallyBlock();
-        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, stateLocal);
         il.Emit(OpCodes.Ldfld, anyState.LockField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Monitor, "Exit", [_types.Object]));
         il.EndExceptionBlock();
@@ -233,6 +302,7 @@ public partial class RuntimeEmitter
         var shell = DefineCombinatorStateMachineShell(moduleBuilder, "$PromiseAny_StateMachine", "iterable",
             MethodAttributes.Private);
         var stateObjField = shell.Type.DefineField("anyState", anyState.Type, FieldAttributes.Public);
+        var capabilityField = shell.Type.DefineField("capability", _types.Object, FieldAttributes.Public);
         var awaiterField = shell.Type.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
 
         return new PromiseAnyStateMachine
@@ -242,6 +312,7 @@ public partial class RuntimeEmitter
             BuilderField = shell.BuilderField,
             IterableField = shell.InputField,
             ConstructorField = shell.ConstructorField,
+            CapabilityField = capabilityField,
             StateObjField = stateObjField,
             AwaiterField = awaiterField,
             MoveNextMethod = shell.MoveNextMethod,
@@ -259,13 +330,19 @@ public partial class RuntimeEmitter
             {
                 // Normalize inside MoveNext's try block; see PromiseAll.
                 il.Emit(OpCodes.Ldarg_0);
-            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1));
+            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
+            sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2),
+            runtime.MarkNonAutoAwaitPromiseMethod,
+            runtime.AdoptPromiseCombinatorResultMethod);
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAny state machine.
     /// Creates state, fires ContinueWith per element, awaits Tcs.Task.
     /// </summary>
-    private void EmitPromiseAnyMoveNext(PromiseAnyStateMachine sm, AnyStateClass anyState, MethodBuilder handleAnyCompletion, EmittedRuntime runtime)
+    private void EmitPromiseAnyMoveNext(
+        PromiseAnyStateMachine sm, AnyStateClass anyState,
+        AnyElementStateClass elementState, MethodBuilder handleAnyCompletion,
+        EmittedRuntime runtime)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = _types.ListOfObject;
@@ -289,7 +366,8 @@ public partial class RuntimeEmitter
 
         // ========== STATE -1: Initial execution ==========
 
-        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField);
+        EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField,
+            sm.CapabilityField, combinatorKind: 2);
 
         // ECMA-262 §27.2.4.2 Promise.any: non-iterable → reject with TypeError.
         var listLocal = EmitCombinatorIterableGuard(il, runtime, sm.IterableField, "any");
@@ -330,6 +408,7 @@ public partial class RuntimeEmitter
         var indexLocal = il.DeclareLocal(_types.Int32);
         var elementLocal = il.DeclareLocal(_types.Object);
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
+        var elementStateLocal = il.DeclareLocal(elementState.Type);
 
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
@@ -371,6 +450,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(isTaskLabel);
         il.Emit(OpCodes.Stloc, taskLocal);
 
+        il.Emit(OpCodes.Ldloc, stateLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Newobj, elementState.Constructor);
+        il.Emit(OpCodes.Stloc, elementStateLocal);
+
         // Set up ContinueWith: task.ContinueWith(t => HandleAnyCompletion(t, state))
         // We'll use Action<Task<object?>> delegate pointing to HandleAnyCompletion
         // But HandleAnyCompletion also needs state, so we need a closure or different approach
@@ -401,7 +485,7 @@ public partial class RuntimeEmitter
 
         // Already completed - call HandleAnyCompletion directly
         il.Emit(OpCodes.Ldloc, taskLocal);
-        il.Emit(OpCodes.Ldloc, stateLocal);
+        il.Emit(OpCodes.Ldloc, elementStateLocal);
         il.Emit(OpCodes.Call, handleAnyCompletion);
         il.Emit(OpCodes.Br, afterTaskSetupLabel);
 
@@ -423,7 +507,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, actionCtor);
 
         // Load state (already a reference type, no boxing needed)
-        il.Emit(OpCodes.Ldloc, stateLocal);
+        il.Emit(OpCodes.Ldloc, elementStateLocal);
 
         // Load state.Cts.Token for cancellation support
         il.Emit(OpCodes.Ldloc, stateLocal);

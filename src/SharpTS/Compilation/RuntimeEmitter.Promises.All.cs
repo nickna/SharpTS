@@ -41,7 +41,9 @@ public partial class RuntimeEmitter
                 // Store the raw input. NormalizePromiseList runs inside
                 // MoveNext's try block so an abrupt Promise.resolve call rejects.
                 il.Emit(OpCodes.Ldarg_0);
-            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1));
+            }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
+            markNonAutoAwaitMethod: runtime.MarkNonAutoAwaitPromiseMethod,
+            adoptResultMethod: runtime.AdoptPromiseCombinatorResultMethod);
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAll state machine.

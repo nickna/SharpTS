@@ -70,7 +70,11 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "race":
-                // Promise.race(iterable) - returns Task<object?> directly
+                // Route through NewPromiseCapability even for the intrinsic
+                // constructor. Promise.race passes that exact capability's
+                // resolve/reject functions to every nextPromise.then, which is
+                // observable and supplies the self-resolution guard.
+                EmitBasePromiseConstructor(ctx);
                 if (arguments.Count > 0)
                 {
                     emitter.EmitExpression(arguments[0]);
@@ -80,9 +84,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     il.Emit(OpCodes.Ldnull);
                 }
-                EmitBasePromiseConstructor(ctx);
-                il.Emit(OpCodes.Ldnull); // no custom capability on intrinsic Promise.race
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseRace);
+                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseRaceStatic);
                 return true;
 
             case "allSettled":
@@ -117,6 +119,7 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                     il.Emit(OpCodes.Ldnull);
                 }
                 EmitBasePromiseConstructor(ctx);
+                il.Emit(OpCodes.Ldnull); // no custom capability on intrinsic Promise.any
                 il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAny);
                 return true;
 

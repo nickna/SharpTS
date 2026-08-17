@@ -50,7 +50,8 @@ public partial class RuntimeEmitter
                 // Normalize inside MoveNext's try block; see PromiseAll.
                 il.Emit(OpCodes.Ldarg_0);
             }, sm.ConstructorField, () => il.Emit(OpCodes.Ldarg_1),
-            sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2));
+            sm.CapabilityField, () => il.Emit(OpCodes.Ldarg_2),
+            runtime.MarkNonAutoAwaitPromiseMethod);
 
     /// <summary>
     /// Emits the MoveNext body for PromiseRace state machine.
@@ -91,7 +92,7 @@ public partial class RuntimeEmitter
         // ========== STATE -1: Initial execution ==========
 
         EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField,
-            sm.CapabilityField);
+            sm.CapabilityField, combinatorKind: 1);
 
         // ECMA-262 §27.2.4.5 Promise.race: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws
