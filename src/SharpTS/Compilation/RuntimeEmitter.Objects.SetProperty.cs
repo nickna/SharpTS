@@ -1362,10 +1362,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.PDSIsWritable);
         il.Emit(OpCodes.Brfalse, nullLabel);  // Not writable, silently return
 
-        // Dictionary-backed intrinsic prototypes may also carry an
-        // authoritative PDS data descriptor for the same key. Update it in
-        // place so descriptor-aware reads do not see the stale value (for
-        // example after Function.prototype.toString = custom).
+        // Dictionary-backed objects may also carry a PDS data descriptor for
+        // the same key. Keep both stores synchronized: descriptor-aware reads
+        // observe the PDS value, while ordinary reads use the dictionary.
         var dictDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var dictRawStoreLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -1377,7 +1376,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictDescriptorLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Ret);
 
         il.MarkLabel(dictRawStoreLabel);
 
@@ -1970,7 +1968,7 @@ public partial class RuntimeEmitter
         EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(strictWritableLabel);
 
-        // Keep PDS-backed data descriptors in sync with dictionary assignment.
+        // Keep PDS-backed data descriptors and dictionary storage synchronized.
         var strictDictDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
         var strictDictRawStoreLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -1982,7 +1980,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, strictDictDescriptorLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
-        il.Emit(OpCodes.Ret);
 
         il.MarkLabel(strictDictRawStoreLabel);
 
