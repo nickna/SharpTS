@@ -599,7 +599,8 @@ public partial class ILEmitter
             }
             else
             {
-                _resolver.TryStoreVariable(ca.Name.Lexeme);
+                if (!_resolver.TryStoreVariable(ca.Name.Lexeme))
+                    IL.Emit(OpCodes.Pop);
             }
             SetStackType(StackType.String);
             return;
@@ -636,81 +637,34 @@ public partial class ILEmitter
             }
             else
             {
-                _resolver.TryStoreVariable(ca.Name.Lexeme);
+                if (!_resolver.TryStoreVariable(ca.Name.Lexeme))
+                    IL.Emit(OpCodes.Pop);
             }
             SetStackUnknown();
             return;
         }
 
-        // Numeric compound assignment
-        bool isBitwise = CompoundOperatorHelper.IsBitwise(ca.Operator.Type);
-        bool isUnsignedShift = ca.Operator.Type == TokenType.GREATER_GREATER_GREATER_EQUAL;
+        // All remaining compound operators share the same boxed reference/coercion
+        // pipeline as async and generator bodies. This prevents stack-type hints
+        // from changing ToNumeric semantics or producing invalid IL for boxed
+        // primitive objects.
+        EmitVariable(new Expr.Variable(ca.Name));
+        EmitBoxIfNeeded(new Expr.Variable(ca.Name));
+        EmitExpression(ca.Value);
+        EmitBoxIfNeeded(ca.Value);
+        _helpers.EmitCompoundOperation(ca.Operator.Type, _ctx.Runtime!.Add);
 
-        if (isUnsignedShift)
-        {
-            // `x >>>= y`: route through JsToInt32 for spec-correct ToInt32, then Shr_Un with
-            // zero-extend to uint64 before Conv_R8 so bit 31 doesn't flip the result negative.
-            EmitVariable(new Expr.Variable(ca.Name));
-            EnsureBoxed();
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
-
-            EmitExpression(ca.Value);
-            EnsureBoxed();
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
-
-            IL.Emit(OpCodes.Ldc_I4, 0x1F);
-            IL.Emit(OpCodes.And);
-            IL.Emit(OpCodes.Shr_Un);
-            IL.Emit(OpCodes.Conv_U8);
-            IL.Emit(OpCodes.Conv_R8);
-        }
-        else
-        {
-            // Get current value as double — EnsureDouble() is stack-type-aware
-            // and avoids emitting Convert.ToDouble when the value is already unboxed.
-            EmitVariable(new Expr.Variable(ca.Name));
-            EnsureDouble();
-
-            if (isBitwise)
-            {
-                // Convert to int for bitwise operations
-                IL.Emit(OpCodes.Conv_I4);
-                EmitExpressionAsDouble(ca.Value);
-                IL.Emit(OpCodes.Conv_I4);
-            }
-            else
-            {
-                // Emit right side as double
-                EmitExpressionAsDouble(ca.Value);
-            }
-
-            // Emit the operator using centralized helper
-            var opcode = CompoundOperatorHelper.GetOpcode(ca.Operator.Type);
-            if (opcode.HasValue)
-            {
-                IL.Emit(opcode.Value);
-            }
-
-            if (isBitwise)
-            {
-                // Convert back to double
-                IL.Emit(OpCodes.Conv_R8);
-            }
-        }
-
-        // Store result — keep unboxed for typed double locals
         if (isTypedDouble && local != null)
         {
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
             IL.Emit(OpCodes.Dup);
             IL.Emit(OpCodes.Stloc, local);
             SetStackType(StackType.Double);
         }
         else
         {
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
             IL.Emit(OpCodes.Dup);
 
-            // Store result
             if (local != null)
             {
                 IL.Emit(OpCodes.Stloc, local);
@@ -721,7 +675,8 @@ public partial class ILEmitter
             }
             else
             {
-                _resolver.TryStoreVariable(ca.Name.Lexeme);
+                if (!_resolver.TryStoreVariable(ca.Name.Lexeme))
+                    IL.Emit(OpCodes.Pop);
             }
             SetStackUnknown();
         }
@@ -2171,18 +2126,18 @@ public partial class ILEmitter
             }
         }
 
-        // Compound assignment on object property: obj.prop += x
-        // 1. Get current value
-        // 2. Apply operation
-        // 3. Store back
-
-        // Get current value: GetProperty(obj, name)
+        // Resolve the property reference exactly once, then read it before
+        // evaluating the RHS. Reuse the spilled receiver for PutValue.
         EmitExpression(cs.Object);
         EmitBoxIfNeeded(cs.Object);
+        var objectLocal = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, objectLocal);
+
         // Compound assignment reads first → a nullish base throws the *read*-worded
         // guest TypeError before GetProperty (which would otherwise no-op) (#733).
         if (!IsNullPlaceholderGlobal(cs.Object))
-            EmitThrowIfUndefinedReceiverOnStack(cs.Name.Lexeme);
+            EmitThrowIfReceiverUndefined(objectLocal, cs.Name.Lexeme, isWrite: false);
+        IL.Emit(OpCodes.Ldloc, objectLocal);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
 
@@ -2193,8 +2148,7 @@ public partial class ILEmitter
         var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, resultLocal);
 
-        EmitExpression(cs.Object);
-        EmitBoxIfNeeded(cs.Object);
+        IL.Emit(OpCodes.Ldloc, objectLocal);
         IL.Emit(OpCodes.Ldstr, cs.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, resultLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
@@ -2311,34 +2265,17 @@ public partial class ILEmitter
 
     private void EmitCompoundOperation(TokenType opType, Expr value)
     {
-        // Stack has current value (object). Apply the operation.
-        if (opType == TokenType.PLUS_EQUAL && IsStringExpression(value))
-        {
-            // String concatenation - we know right side is a string at compile time.
-            // StringifyCoerce both operands: JS-compatible conversion (null →
-            // "null", undefined → "undefined") that throws TypeError for Symbol
-            // operands (§7.1.17) — String.Concat(object, object) did neither.
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringifyCoerce);
-            EmitExpression(value);
-            EmitBoxIfNeeded(value);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.StringifyCoerce);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.String, "Concat", _ctx.Types.String, _ctx.Types.String));
-            return;
-        }
-
-        // For += with unknown types, use runtime Add which handles both string concat and numeric add
-        if (opType == TokenType.PLUS_EQUAL)
-        {
-            EmitExpression(value);
-            EmitBoxIfNeeded(value);
-            IL.Emit(OpCodes.Call, _ctx.Runtime!.Add);
-            return;
-        }
-
-        // Convert current value to number, apply the op in double/int space, re-box.
-        EmitUnboxToDouble();
-        EmitCompoundArithmeticDoubleOnStack(opType, value);
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        // Stack has the boxed current value. Spill both operands so variable,
+        // property, and index references all share the same coercion pipeline.
+        var left = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, left);
+        EmitExpression(value);
+        EmitBoxIfNeeded(value);
+        var right = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, right);
+        IL.Emit(OpCodes.Ldloc, left);
+        IL.Emit(OpCodes.Ldloc, right);
+        _helpers.EmitCompoundOperation(opType, _ctx.Runtime!.Add);
     }
 
     // The compound operators handled by the numeric path (arithmetic + bitwise) — i.e. those that

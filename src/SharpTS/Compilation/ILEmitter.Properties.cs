@@ -1098,12 +1098,15 @@ public partial class ILEmitter
         // globalThis[key] = value → GlobalThisSetProperty(key, value)
         if (si.Object is Expr.Variable gtSetIdx && gtSetIdx.Name.Lexeme == "globalThis")
         {
-            EmitExpression(si.Value);
+            EmitExpression(si.Index);
             EnsureBoxed();
+            var indexTemp = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, indexTemp);
+            EmitExpression(si.Value);
+            EmitBoxIfNeeded(si.Value);
             var valueTemp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, valueTemp);
-            EmitExpression(si.Index);
-            EmitBoxIfNeeded(si.Index);
+            IL.Emit(OpCodes.Ldloc, indexTemp);
             IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(_ctx.Types.Object, "ToString")!);
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
@@ -1334,12 +1337,7 @@ public partial class ILEmitter
             return;
         }
 
-        // No static type info: full generic dispatch
-        EmitExpression(si.Value);
-        EmitBoxIfNeeded(si.Value);
-        var valueLocalGeneric = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, valueLocalGeneric);
-
+        // No static type info: evaluate the complete reference before the RHS.
         EmitExpression(si.Object);
         EmitBoxIfNeeded(si.Object);
         var objLocalGeneric = IL.DeclareLocal(_ctx.Types.Object);
@@ -1349,6 +1347,11 @@ public partial class ILEmitter
         EmitBoxIfNeeded(si.Index);
         var idxLocalGeneric = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, idxLocalGeneric);
+
+        EmitExpression(si.Value);
+        EmitBoxIfNeeded(si.Value);
+        var valueLocalGeneric = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, valueLocalGeneric);
 
         // RequireObjectCoercible (PutValue): a null/undefined base throws a guest
         // TypeError ("Cannot set properties of undefined|null (setting 'X')") (#733).

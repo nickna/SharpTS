@@ -1175,26 +1175,47 @@ public class StateMachineEmitHelpers
             return;
         }
 
-        // Get the opcode for this operator
+        // Both operands have already been evaluated and boxed. Spill them before
+        // coercion so every emitter follows the spec order: GetValue(left),
+        // GetValue(right), then ToNumeric on each operand. This also avoids using
+        // the global stack-type hint to guess the CLR shape of either operand.
+        var right = _il.DeclareLocal(_types.Object);
+        _il.Emit(OpCodes.Stloc, right);
+        var left = _il.DeclareLocal(_types.Object);
+        _il.Emit(OpCodes.Stloc, left);
+
         var opcode = CompoundOperatorHelper.GetOpcode(opType);
         if (opcode.HasValue)
         {
             if (CompoundOperatorHelper.IsBitwise(opType))
             {
-                // Bitwise operations need int32 conversion
-                EmitBitwiseBinary(opcode.Value);
+                _il.Emit(OpCodes.Ldloc, left);
+                _il.Emit(OpCodes.Call, _runtime!.JsToInt32);
+                _il.Emit(OpCodes.Ldloc, right);
+                _il.Emit(OpCodes.Call, _runtime.JsToInt32);
+                _il.Emit(opcode.Value);
+                if (opType == TokenType.GREATER_GREATER_GREATER_EQUAL)
+                    _il.Emit(OpCodes.Conv_U8);
+                _il.Emit(OpCodes.Conv_R8);
+                _il.Emit(OpCodes.Box, _types.Double);
             }
             else
             {
-                // Arithmetic operations use double conversion
-                EmitArithmeticBinary(opcode.Value);
+                _il.Emit(OpCodes.Ldloc, left);
+                _il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                _il.Emit(OpCodes.Ldloc, right);
+                _il.Emit(OpCodes.Call, _runtime.ConvertToNumber);
+                _il.Emit(opcode.Value);
+                _il.Emit(OpCodes.Box, _types.Double);
             }
         }
         else
         {
-            // Fallback for unsupported operators - use Add
-            EmitArithmeticBinary(OpCodes.Add);
+            _il.Emit(OpCodes.Ldloc, left);
+            _il.Emit(OpCodes.Ldloc, right);
+            EmitCallUnknown(runtimeAdd);
         }
+        SetStackUnknown();
     }
 
     /// <summary>

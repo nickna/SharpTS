@@ -34,6 +34,32 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 {
     private readonly CompilationContext _ctx;
     private readonly LocalVariableResolver _resolver;
+    private readonly Stack<AbruptCompletionScope> _abruptCompletionScopes = [];
+    private readonly Stack<IteratorLoopCompletionScope> _iteratorLoopCompletionScopes = [];
+
+    private sealed class AbruptCompletionScope
+    {
+        private int _nextBranchCode = 3;
+
+        public required Label RunFinally { get; init; }
+        public required LocalBuilder Kind { get; init; }
+        public required LocalBuilder Exception { get; init; }
+        public required HashSet<Label> EnclosingTargets { get; init; }
+        public Dictionary<Label, int> BranchCodes { get; } = [];
+
+        public int GetBranchCode(Label target)
+        {
+            if (BranchCodes.TryGetValue(target, out int code)) return code;
+            code = _nextBranchCode++;
+            BranchCodes[target] = code;
+            return code;
+        }
+    }
+
+    private sealed record IteratorLoopCompletionScope(
+        LocalBuilder CloseNeeded,
+        Label ContinueTarget,
+        HashSet<Label> EscapingTargets);
 
     // Abstract property implementations for ExpressionEmitterBase
     protected override ILGenerator IL => _ctx.IL;
@@ -116,6 +142,36 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     {
         // Use builder for branch validation - it enforces Leave vs Br rules
         var builder = _ctx.ILBuilder;
+        if (_abruptCompletionScopes.TryPeek(out var completion))
+        {
+            // A loop/switch introduced inside this try remains inside the protected
+            // region. Only a target that existed on entry escapes and therefore
+            // needs to run the JavaScript finally block.
+            if (completion.EnclosingTargets.Contains(target))
+            {
+                IL.Emit(OpCodes.Ldc_I4, completion.GetBranchCode(target));
+                IL.Emit(OpCodes.Stloc, completion.Kind);
+                builder.Emit_Leave(completion.RunFinally);
+                return;
+            }
+        }
+        if (_iteratorLoopCompletionScopes.TryPeek(out var iteratorCompletion))
+        {
+            if (iteratorCompletion.EscapingTargets.Contains(target))
+            {
+                if (target.Equals(iteratorCompletion.ContinueTarget))
+                {
+                    IL.Emit(OpCodes.Ldc_I4_0);
+                    IL.Emit(OpCodes.Stloc, iteratorCompletion.CloseNeeded);
+                }
+                builder.Emit_Leave(target);
+                return;
+            }
+
+            // The target belongs to a loop/switch nested inside this iteration.
+            builder.Emit_Br(target);
+            return;
+        }
         if (_ctx.ExceptionBlockDepth > 0)
             builder.Emit_Leave(target);
         else

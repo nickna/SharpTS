@@ -995,46 +995,83 @@ public partial class ILEmitter
             var iteratorObjLocal = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, iteratorObjLocal);
 
-            // Create $IteratorWrapper: new $IteratorWrapper(iteratorObj, typeof($Runtime))
-            IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
-            IL.Emit(OpCodes.Ldtoken, _ctx.Runtime!.RuntimeType);
-            IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Type, "GetTypeFromHandle"));
-            IL.Emit(OpCodes.Newobj, _ctx.Runtime!.IteratorWrapperCtor);
-
-            // Cast to IEnumerator and store
-            var enumLocal = IL.DeclareLocal(_ctx.Types.IEnumerator);
-            IL.Emit(OpCodes.Castclass, _ctx.Types.IEnumerator);
-            IL.Emit(OpCodes.Stloc, enumLocal);
-
             // Loop variable
             var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
-
-            // Get MoveNext and Current methods
-            var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
-            var current = _ctx.Types.GetProperty(_ctx.Types.IEnumerator, "Current")!.GetGetMethod()!;
+            var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
+            var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
+            var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
 
             builder.MarkLabel(iterStartLabel);
             EmitCancellationCheck();
 
-            // Call MoveNext
-            IL.Emit(OpCodes.Ldloc, enumLocal);
-            IL.Emit(OpCodes.Callvirt, moveNext);
-            builder.Emit_Brfalse(iterEndLabel);
+            // IteratorStep: errors from next()/done occur before the iteration's
+            // close region and therefore do not trigger IteratorClose.
+            IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.InvokeIteratorNext);
+            IL.Emit(OpCodes.Stloc, resultLocal);
+            IL.Emit(OpCodes.Ldloc, resultLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorDone);
+            var bodyLabel = builder.DefineLabel("forof_iter_body");
+            builder.Emit_Brtrue(iterEndLabel);
+            builder.Emit_Br(bodyLabel);
 
-            // Get Current
-            IL.Emit(OpCodes.Ldloc, enumLocal);
-            IL.Emit(OpCodes.Callvirt, current);
+            // done=true is natural exhaustion and must not close the iterator.
+            builder.MarkLabel(iterEndLabel);
+            builder.Emit_Br(afterLoopLabel);
+
+            builder.MarkLabel(bodyLabel);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, closeNeeded);
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Stloc, throwing);
+
+            var escapingTargets = new HashSet<Label>();
+            foreach (var loop in _ctx.LoopLabels)
+            {
+                escapingTargets.Add(loop.BreakLabel);
+                escapingTargets.Add(loop.ContinueLabel);
+            }
+
+            _ctx.ExceptionBlockDepth++;
+            builder.BeginExceptionBlock();
+
+            // IteratorValue and binding/body evaluation are protected: every
+            // abrupt exit closes, while a continue of this loop clears the flag.
+            IL.Emit(OpCodes.Ldloc, resultLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIteratorValue);
             IL.Emit(OpCodes.Stloc, loopVar);
 
-            // Emit body
+            _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
+                closeNeeded, iterContinueLabel, escapingTargets));
             EmitStatement(f.Body);
+            _iteratorLoopCompletionScopes.Pop();
+
+            IL.Emit(OpCodes.Ldc_I4_0);
+            IL.Emit(OpCodes.Stloc, closeNeeded);
+            builder.Emit_Leave(iterContinueLabel);
+
+            builder.BeginCatchBlock(_ctx.Types.Exception);
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Stloc, throwing);
+            IL.Emit(OpCodes.Rethrow);
+
+            builder.BeginFinallyBlock();
+            var skipClose = builder.DefineLabel("forof_skip_close");
+            IL.Emit(OpCodes.Ldloc, closeNeeded);
+            builder.Emit_Brfalse(skipClose);
+            IL.Emit(OpCodes.Ldloc, iteratorObjLocal);
+            IL.Emit(OpCodes.Ldloc, throwing);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.IteratorClose);
+            builder.MarkLabel(skipClose);
+            builder.EndExceptionBlock();
+            _ctx.ExceptionBlockDepth--;
 
             builder.MarkLabel(iterContinueLabel);
             builder.Emit_Br(iterStartLabel);
 
-            builder.MarkLabel(iterEndLabel);
+            // iterEndLabel was emitted above so natural completion can bypass close.
             _ctx.ExitLoop();
-            builder.Emit_Br(afterLoopLabel); // Skip the index-based path
         }
 
         // ===== Index-based fallback (for arrays, strings, etc.) =====
@@ -1242,36 +1279,74 @@ public partial class ILEmitter
     {
         var builder = _ctx.ILBuilder;
 
-        // Use IEnumerable.GetEnumerator()/MoveNext()/Current pattern for generators
-        var getEnumerator = _ctx.Types.GetMethod(_ctx.Types.IEnumerable, "GetEnumerator");
-        var moveNext = _ctx.Types.GetMethod(_ctx.Types.IEnumerator, "MoveNext");
-        var current = _ctx.Types.GetProperty(_ctx.Types.IEnumerator, "Current")!.GetGetMethod()!;
-
-        // Stack has the iterable (generator)
-        IL.Emit(OpCodes.Castclass, _ctx.Types.IEnumerable);
-        IL.Emit(OpCodes.Callvirt, getEnumerator);
-
-        var enumLocal = IL.DeclareLocal(_ctx.Types.IEnumerator);
-        IL.Emit(OpCodes.Stloc, enumLocal);
+        // Stack has the emitted generator. Drive it through the same iterator-result
+        // protocol as a custom iterator so abrupt loop completion is routed through
+        // the shared IteratorClose primitive (including generator.return()).
+        var generatorLocal = IL.DeclareLocal(_ctx.Runtime!.GeneratorInterfaceType);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.GeneratorInterfaceType);
+        IL.Emit(OpCodes.Stloc, generatorLocal);
 
         // Loop variable
         var loopVar = _ctx.Locals.DeclareLocal(f.Variable.Lexeme, _ctx.Types.Object);
+        var resultLocal = IL.DeclareLocal(_ctx.Types.Object);
+        var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
+        var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
 
         builder.MarkLabel(startLabel);
         EmitCancellationCheck();
 
-        // Call MoveNext
-        IL.Emit(OpCodes.Ldloc, enumLocal);
-        IL.Emit(OpCodes.Callvirt, moveNext);
-        builder.Emit_Brfalse(endLabel);
+        IL.Emit(OpCodes.Ldloc, generatorLocal);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.GeneratorNextMethod);
+        IL.Emit(OpCodes.Stloc, resultLocal);
+        IL.Emit(OpCodes.Ldloc, resultLocal);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+        builder.Emit_Brtrue(endLabel);
 
-        // Get Current
-        IL.Emit(OpCodes.Ldloc, enumLocal);
-        IL.Emit(OpCodes.Callvirt, current);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, closeNeeded);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, throwing);
+
+        var escapingTargets = new HashSet<Label>();
+        foreach (var loop in _ctx.LoopLabels)
+        {
+            escapingTargets.Add(loop.BreakLabel);
+            escapingTargets.Add(loop.ContinueLabel);
+        }
+
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
+
+        IL.Emit(OpCodes.Ldloc, resultLocal);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
         IL.Emit(OpCodes.Stloc, loopVar);
 
-        // Emit body
+        _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
+            closeNeeded, continueLabel, escapingTargets));
         EmitStatement(f.Body);
+        _iteratorLoopCompletionScopes.Pop();
+
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, closeNeeded);
+        builder.Emit_Leave(continueLabel);
+
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, throwing);
+        IL.Emit(OpCodes.Rethrow);
+
+        builder.BeginFinallyBlock();
+        var skipClose = builder.DefineLabel("forof_gen_skip_close");
+        IL.Emit(OpCodes.Ldloc, closeNeeded);
+        builder.Emit_Brfalse(skipClose);
+        IL.Emit(OpCodes.Ldloc, generatorLocal);
+        IL.Emit(OpCodes.Ldloc, throwing);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorClose);
+        builder.MarkLabel(skipClose);
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
 
         builder.MarkLabel(continueLabel);
         builder.Emit_Br(startLabel);
@@ -1731,7 +1806,19 @@ public partial class ILEmitter
             }
         }
 
-        if (_ctx.ExceptionBlockDepth > 0)
+        if (_abruptCompletionScopes.TryPeek(out var completion))
+        {
+            if (_ctx.ReturnValueLocal == null)
+            {
+                _ctx.ReturnValueLocal = IL.DeclareLocal(returnType);
+                _ctx.ReturnLabel = _ctx.ILBuilder.DefineLabel("deferred_return");
+            }
+            IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);
+            IL.Emit(OpCodes.Ldc_I4_1); // return completion
+            IL.Emit(OpCodes.Stloc, completion.Kind);
+            _ctx.ILBuilder.Emit_Leave(completion.RunFinally);
+        }
+        else if (_ctx.ExceptionBlockDepth > 0)
         {
             // Inside exception block: store value and leave
             // Use builder for Leave validation (ensures we're inside exception block)
@@ -1930,6 +2017,12 @@ public partial class ILEmitter
 
     protected override void EmitTryCatch(Stmt.TryCatch t)
     {
+        if (t.FinallyBlock != null)
+        {
+            EmitTryCatchFinally(t);
+            return;
+        }
+
         // Use ValidatedILBuilder for exception block operations - it tracks depth automatically
         // and validates proper Begin/End pairing
         var builder = _ctx.ILBuilder;
@@ -1945,22 +2038,26 @@ public partial class ILEmitter
         if (t.CatchBlock != null)
         {
             builder.BeginCatchBlock(_ctx.Types.Exception);
+            _ctx.Locals.EnterScope();
+            try
+            {
+                if (t.CatchParam != null)
+                {
+                    var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, _ctx.Types.Object);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
+                    IL.Emit(OpCodes.Stloc, exLocal);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Pop);
+                }
 
-            if (t.CatchParam != null)
-            {
-                // Store exception
-                var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, _ctx.Types.Object);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
-                IL.Emit(OpCodes.Stloc, exLocal);
+                foreach (var stmt in t.CatchBlock)
+                    EmitStatement(stmt);
             }
-            else
+            finally
             {
-                IL.Emit(OpCodes.Pop);
-            }
-
-            foreach (var stmt in t.CatchBlock)
-            {
-                EmitStatement(stmt);
+                _ctx.Locals.ExitScope();
             }
         }
 
@@ -1975,6 +2072,145 @@ public partial class ILEmitter
 
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
+    }
+
+    /// <summary>
+    /// Lowers JavaScript try/catch/finally through an explicit Completion record.
+    /// CLR finally handlers cannot transfer control, while ECMAScript finally may
+    /// replace an in-flight return, break, continue, or throw. Routing the pending
+    /// completion through ordinary IL after the protected region preserves that
+    /// distinction and composes for nested finally blocks.
+    /// </summary>
+    private void EmitTryCatchFinally(Stmt.TryCatch t)
+    {
+        var builder = _ctx.ILBuilder;
+        var runFinally = builder.DefineLabel("js_finally");
+        var afterFinally = builder.DefineLabel("js_finally_done");
+        var kind = IL.DeclareLocal(_ctx.Types.Int32); // 0 normal, 1 return, 2 throw, 3+ branch
+        var exception = IL.DeclareLocal(_ctx.Types.Exception);
+
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, kind);
+
+        var enclosingTargets = new HashSet<Label>();
+        foreach (var loop in _ctx.LoopLabels)
+        {
+            enclosingTargets.Add(loop.BreakLabel);
+            enclosingTargets.Add(loop.ContinueLabel);
+        }
+
+        var completion = new AbruptCompletionScope
+        {
+            RunFinally = runFinally,
+            Kind = kind,
+            Exception = exception,
+            EnclosingTargets = enclosingTargets
+        };
+        _abruptCompletionScopes.Push(completion);
+
+        // Outer catch converts any exception escaping either the try body or
+        // the JavaScript catch clause into a pending throw completion.
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
+
+        if (t.CatchBlock != null)
+        {
+            _ctx.ExceptionBlockDepth++;
+            builder.BeginExceptionBlock();
+            foreach (var stmt in t.TryBlock)
+                EmitStatement(stmt);
+
+            builder.BeginCatchBlock(_ctx.Types.Exception);
+            _ctx.Locals.EnterScope();
+            try
+            {
+                if (t.CatchParam != null)
+                {
+                    var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, _ctx.Types.Object);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
+                    IL.Emit(OpCodes.Stloc, exLocal);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Pop);
+                }
+                foreach (var stmt in t.CatchBlock)
+                    EmitStatement(stmt);
+            }
+            finally
+            {
+                _ctx.Locals.ExitScope();
+            }
+            builder.EndExceptionBlock();
+            _ctx.ExceptionBlockDepth--;
+        }
+        else
+        {
+            foreach (var stmt in t.TryBlock)
+                EmitStatement(stmt);
+        }
+
+        builder.Emit_Leave(runFinally);
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        IL.Emit(OpCodes.Stloc, exception);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        IL.Emit(OpCodes.Stloc, kind);
+        builder.Emit_Leave(runFinally);
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
+
+        _abruptCompletionScopes.Pop();
+        builder.MarkLabel(runFinally);
+        foreach (var stmt in t.FinallyBlock!)
+            EmitStatement(stmt);
+
+        // A normal finally preserves and resumes the pending completion.
+        IL.Emit(OpCodes.Ldloc, kind);
+        builder.Emit_Brfalse(afterFinally);
+
+        if (_ctx.ReturnValueLocal != null)
+        {
+            var notReturn = builder.DefineLabel("js_finally_not_return");
+            IL.Emit(OpCodes.Ldloc, kind);
+            IL.Emit(OpCodes.Ldc_I4_1);
+            builder.Emit_Bne_Un(notReturn);
+            IL.Emit(OpCodes.Ldloc, _ctx.ReturnValueLocal);
+            if (_abruptCompletionScopes.TryPeek(out var outerCompletion))
+            {
+                IL.Emit(OpCodes.Stloc, _ctx.ReturnValueLocal);
+                IL.Emit(OpCodes.Ldc_I4_1);
+                IL.Emit(OpCodes.Stloc, outerCompletion.Kind);
+                builder.Emit_Leave(outerCompletion.RunFinally);
+            }
+            else if (_ctx.ExceptionBlockDepth > 0)
+            {
+                builder.Emit_Leave(_ctx.ReturnLabel);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ret);
+            }
+            builder.MarkLabel(notReturn);
+        }
+        var notThrow = builder.DefineLabel("js_finally_not_throw");
+        IL.Emit(OpCodes.Ldloc, kind);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        builder.Emit_Bne_Un(notThrow);
+        IL.Emit(OpCodes.Ldloc, exception);
+        IL.Emit(OpCodes.Throw);
+
+        builder.MarkLabel(notThrow);
+        foreach (var (target, code) in completion.BranchCodes)
+        {
+            var next = builder.DefineLabel("js_finally_next_branch");
+            IL.Emit(OpCodes.Ldloc, kind);
+            IL.Emit(OpCodes.Ldc_I4, code);
+            builder.Emit_Bne_Un(next);
+            EmitBranchToLabel(target);
+            builder.MarkLabel(next);
+        }
+
+        builder.MarkLabel(afterFinally);
     }
 
     protected override void EmitThrow(Stmt.Throw t)

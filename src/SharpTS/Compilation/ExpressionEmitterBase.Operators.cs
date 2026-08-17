@@ -110,23 +110,24 @@ public abstract partial class ExpressionEmitterBase
 
     /// <summary>
     /// variable += value / variable -= value / etc.
-    /// Emits value first (safe for await/yield), loads current, applies op, stores result.
+    /// Resolves and reads the reference before evaluating the RHS, then applies
+    /// the shared boxed coercion/operator path and stores the result.
     /// </summary>
     protected virtual void EmitCompoundAssign(Expr.CompoundAssign ca)
     {
         string name = ca.Name.Lexeme;
 
-        // Emit value first — it may contain await/yield which clears the stack
-        EmitExpression(ca.Value);
-        EnsureBoxed();
-        var valueTemp = IL.DeclareLocal(typeof(object));
-        IL.Emit(OpCodes.Stloc, valueTemp);
-
-        // Load current variable value
+        // GetValue(left) precedes evaluation of the RHS. Spill it so a suspension
+        // in the RHS still occurs with an empty evaluation stack.
         EmitVariable(new Expr.Variable(ca.Name));
         EnsureBoxed();
+        var currentTemp = _helpers.SpillStoreObject();
 
-        // Load the RHS value back
+        EmitExpression(ca.Value);
+        EnsureBoxed();
+        var valueTemp = _helpers.SpillStoreObject();
+
+        IL.Emit(OpCodes.Ldloc, currentTemp);
         IL.Emit(OpCodes.Ldloc, valueTemp);
 
         // Apply compound operation (stack: [current, value] → [result])

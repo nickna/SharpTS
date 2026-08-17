@@ -6505,6 +6505,27 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Static_class_method_function_objects_match_in_compiled_mode(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> ReferenceCompletionAndIteratorCloseCases => new()
+    {
+        "language/expressions/assignment/target-member-computed-reference.js",
+        "language/expressions/compound-assignment/11.13.2-1-s.js",
+        "language/expressions/compound-assignment/S11.13.2_A4.6_T1.1.js",
+        "language/expressions/compound-assignment/S11.13.2_A7.8_T1.js",
+        "language/statements/try/12.14-7.js",
+        "language/statements/try/completion-values-fn-finally-return.js",
+        "language/statements/for-of/iterator-close-via-break.js",
+        "language/statements/for-of/iterator-close-via-throw.js",
+        "language/statements/for-of/iterator-close-via-return.js",
+        "language/statements/for-of/iterator-close-non-throw-get-method-abrupt.js",
+        "language/statements/for-of/break-from-finally.js",
+        "language/statements/for-of/return-from-finally.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(ReferenceCompletionAndIteratorCloseCases))]
+    public void Reference_completion_and_iterator_close_match_in_both_modes(string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     public static TheoryData<string> FunctionEnvironmentLoweringCompilerCases => new()
     {
         "language/arguments-object/func-decl-args-trailing-comma-spread-operator.js",
