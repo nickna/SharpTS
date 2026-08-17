@@ -40,7 +40,7 @@ $errors = [System.Collections.Generic.List[string]]::new()
 $projections = @(
     @{ Path = 'eng/GuiVersion.props'; Pattern = '<SharpTSGuiSdkVersion>[^<]+</SharpTSGuiSdkVersion>'; Replacement = "<SharpTSGuiSdkVersion>$version</SharpTSGuiSdkVersion>" },
     @{ Path = 'eng/GuiVersion.props'; Pattern = '<SharpTSGuiMarketingVersion>[^<]+</SharpTSGuiMarketingVersion>'; Replacement = "<SharpTSGuiMarketingVersion>$marketingVersion</SharpTSGuiMarketingVersion>" },
-    @{ Path = 'Cli/GuiVersion.g.cs'; Pattern = 'internal const string Value = "[^"]+";'; Replacement = "internal const string Value = `"$version`";" },
+    @{ Path = 'src/SharpTS/Cli/GuiVersion.g.cs'; Pattern = 'internal const string Value = "[^"]+";'; Replacement = "internal const string Value = `"$version`";" },
     @{ Path = 'src/SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
     @{ Path = 'tests/fixtures/SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj'; Pattern = 'SharpTS\.Gui\.Sdk/[^"<]+'; Replacement = "SharpTS.Gui.Sdk/$version" },
     @{ Path = 'src/SharpTS.Gui.Sdk/GuiPackage/package.json'; Pattern = '"version"\s*:\s*"[^"]+"'; Replacement = "`"version`": `"$version`"" },

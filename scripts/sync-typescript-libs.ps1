@@ -9,8 +9,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $typescriptRoot = Join-Path $repoRoot "external/typescript"
 $typescriptLibRoot = Join-Path $typescriptRoot "lib"
-$resourcesRoot = Join-Path $repoRoot "Modules/TypeScriptLibResources"
-$providerPath = Join-Path $repoRoot "Modules/TypeScriptLibProvider.cs"
+$resourcesRoot = Join-Path $repoRoot "src/SharpTS/Modules/TypeScriptLibResources"
+$providerPath = Join-Path $repoRoot "src/SharpTS/Modules/TypeScriptLibProvider.cs"
 $manifestPath = Join-Path $resourcesRoot "SHA256SUMS"
 $licenseSource = Join-Path $typescriptRoot "LICENSE.txt"
 $licenseTarget = Join-Path $resourcesRoot "LICENSE.txt"
@@ -172,13 +172,13 @@ foreach ($embeddedFile in $embeddedFiles) {
 
 if ((Get-FileHash -Algorithm SHA256 -LiteralPath $licenseSource).Hash -ne
     (Get-FileHash -Algorithm SHA256 -LiteralPath $licenseTarget).Hash) {
-    $errors.Add("Modules/TypeScriptLibResources/LICENSE.txt differs from upstream.")
+    $errors.Add("src/SharpTS/Modules/TypeScriptLibResources/LICENSE.txt differs from upstream.")
 }
 
 $expectedManifest = Get-ExpectedManifest
 if (-not (Test-Path -LiteralPath $manifestPath) -or
     [System.IO.File]::ReadAllText($manifestPath) -ne $expectedManifest) {
-    $errors.Add("Modules/TypeScriptLibResources/SHA256SUMS is stale.")
+    $errors.Add("src/SharpTS/Modules/TypeScriptLibResources/SHA256SUMS is stale.")
 }
 
 if ($errors.Count -ne 0) {

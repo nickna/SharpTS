@@ -12,7 +12,7 @@ or verify the bundle:
 
 ```powershell
 ./scripts/sync-typescript-libs.ps1 -Update
-git add external/typescript Modules/TypeScriptLibResources Modules/TypeScriptLibProvider.cs
+git add external/typescript src/SharpTS/Modules/TypeScriptLibResources src/SharpTS/Modules/TypeScriptLibProvider.cs
 ./scripts/sync-typescript-libs.ps1
 ```
 

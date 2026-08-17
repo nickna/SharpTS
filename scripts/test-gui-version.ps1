@@ -8,7 +8,7 @@ $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $fixtureRoot = Join-Path ([IO.Path]::GetTempPath()) "sharpts-gui-version-$([guid]::NewGuid().ToString('N'))"
 $projectionFiles = @(
     'eng/GuiVersion.props',
-    'Cli/GuiVersion.g.cs',
+    'src/SharpTS/Cli/GuiVersion.g.cs',
     'src/SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj',
     'tests/fixtures/SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj',
     'src/SharpTS.Gui.Sdk/GuiPackage/package.json',
@@ -30,7 +30,7 @@ try {
 
     $expectedText = @{
         'eng/GuiVersion.props' = @($version, '<SharpTSGuiMarketingVersion>9.8.7</SharpTSGuiMarketingVersion>')
-        'Cli/GuiVersion.g.cs' = @("Value = `"$version`"")
+        'src/SharpTS/Cli/GuiVersion.g.cs' = @("Value = `"$version`"")
         'src/SharpTS.Gui.Sdk/Templates/sharpts-gui/SharpTSGuiApp.csproj' = @("SharpTS.Gui.Sdk/$version")
         'tests/fixtures/SharpTS.Gui.Sdk.Consumer/SharpTS.Gui.Sdk.Consumer.csproj' = @("SharpTS.Gui.Sdk/$version")
         'src/SharpTS.Gui.Sdk/GuiPackage/package.json' = @("`"version`": `"$version`"")
