@@ -2313,7 +2313,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 break;
             case TokenType.TYPEOF:
                 // typeof never throws on undeclared variables - returns "undefined"
-                if (u.Right is Expr.Variable tv && !IsKnownVariable(tv.Name.Lexeme))
+                if (u.Right is Expr.Variable { Name.Lexeme: "Proxy" })
+                {
+                    _helpers.IL.Emit(OpCodes.Ldstr, "function");
+                    _helpers.SetStackUnknown();
+                }
+                else if (u.Right is Expr.Variable tv && !IsKnownVariable(tv.Name.Lexeme))
                 {
                     _helpers.IL.Emit(OpCodes.Ldstr, "undefined");
                     _helpers.SetStackUnknown();

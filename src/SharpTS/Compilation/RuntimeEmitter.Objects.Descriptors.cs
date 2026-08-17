@@ -153,9 +153,11 @@ public partial class RuntimeEmitter
             proxyForDefineLabel,
             notProxyForDefineLabel);
         il.MarkLabel(proxyForDefineLabel);
-        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0), "TrapDefinePropertyCompiled", () =>
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapDefinePropertyCompiled", () =>
         {
-            il.Emit(OpCodes.Ldc_I4_3);
+            il.Emit(OpCodes.Ldc_I4_7);
             il.Emit(OpCodes.Newarr, _types.Object);
             il.Emit(OpCodes.Dup);
             il.Emit(OpCodes.Ldc_I4_0);
@@ -173,6 +175,25 @@ public partial class RuntimeEmitter
                 typeof(Func<object, object, object, object?>),
                 _types.Object, _types.IntPtr)!);
             il.Emit(OpCodes.Stelem_Ref);
+            EmitDelegateArgument(3, runtime.ObjectGetOwnPropertyDescriptor,
+                typeof(Func<object, object, object?>));
+            EmitDelegateArgument(4, runtime.ObjectIsExtensible,
+                typeof(Func<object, bool>));
+            EmitDelegateArgument(5, runtime.GetProperty,
+                typeof(Func<object, string, object?>));
+            EmitDelegateArgument(6, runtime.HasOwnPropertyHelperMethod,
+                typeof(Func<object, string, bool>));
+
+            void EmitDelegateArgument(int slot, MethodInfo target, Type delegateType)
+            {
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4, slot);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, target);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    delegateType, _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+            }
         });
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
         var proxyDefineSucceededLabel = il.DefineLabel();
@@ -763,6 +784,79 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, skipSynthExistingLabel);
         il.MarkLabel(notIntrinsicArrayLengthLabel);
 
+        // User constructor functions also have an intrinsic descriptor that
+        // is not initially stored in PDS: { writable:true, enumerable:false,
+        // configurable:false }. Preserve those attributes when OrdinarySet
+        // reaches DefineOwnProperty through a Proxy receiver.
+        var notIntrinsicFunctionPrototypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brfalse, notIntrinsicFunctionPrototypeLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldstr, "prototype");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notIntrinsicFunctionPrototypeLabel);
+        var intrinsicFunctionPrototypeValueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "prototype");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, intrinsicFunctionPrototypeValueLocal);
+        il.Emit(OpCodes.Ldloc, intrinsicFunctionPrototypeValueLocal);
+        il.Emit(OpCodes.Brfalse, notIntrinsicFunctionPrototypeLabel);
+        il.Emit(OpCodes.Ldloc, intrinsicFunctionPrototypeValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notIntrinsicFunctionPrototypeLabel);
+        il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldloc, intrinsicFunctionPrototypeValueLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+        il.Emit(OpCodes.Stloc, existingDescLocal);
+        il.Emit(OpCodes.Br, skipSynthExistingLabel);
+        il.MarkLabel(notIntrinsicFunctionPrototypeLabel);
+
+        // RegExp instances likewise expose intrinsic lastIndex outside PDS.
+        // Its descriptor is writable but non-enumerable/non-configurable.
+        if (_features.UsesRegExp)
+        {
+            var notIntrinsicRegExpLastIndexLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+            il.Emit(OpCodes.Brfalse, notIntrinsicRegExpLastIndexLabel);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldstr, "lastIndex");
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, notIntrinsicRegExpLastIndexLabel);
+            il.Emit(OpCodes.Newobj, runtime.CompiledPropertyDescriptorCtor);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, "lastIndex");
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorEnumerable.GetSetMethod()!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorConfigurable.GetSetMethod()!);
+            il.Emit(OpCodes.Stloc, existingDescLocal);
+            il.Emit(OpCodes.Br, skipSynthExistingLabel);
+            il.MarkLabel(notIntrinsicRegExpLastIndexLabel);
+        }
+
         var receiverIsSynthableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
@@ -1304,8 +1398,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Callvirt, runtime.TSObjectFieldsGetter);
         il.Emit(OpCodes.Ldloc, propNameLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "Remove", _types.String));
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "set_Item"));
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(accessorCleanupNotTSObject);
@@ -1855,6 +1950,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
         il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
+        il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
         il.Emit(OpCodes.Brfalse, notTSFunctionForDescLabel);
         il.MarkLabel(functionDescriptorCheckLabel);
@@ -1911,6 +2009,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, resultDictLocal);
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notFnLengthLabel);
+
+        // Constructor functions have an own non-configurable `prototype`
+        // property. GetProperty supplies the stable cached prototype object
+        // for user functions and $Undefined for non-constructable built-ins.
+        var notFnPrototypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldstr, "prototype");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notFnPrototypeLabel);
+        var functionPrototypeValueLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "prototype");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, functionPrototypeValueLocal);
+        il.Emit(OpCodes.Ldloc, functionPrototypeValueLocal);
+        il.Emit(OpCodes.Brfalse, returnNullLabel);
+        il.Emit(OpCodes.Ldloc, functionPrototypeValueLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, returnNullLabel);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, resultDictLocal);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Ldloc, functionPrototypeValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "set_Item"));
+        EmitDescriptorBoolField(il, resultDictLocal, "writable", true);
+        EmitDescriptorBoolField(il, resultDictLocal, "enumerable", false);
+        EmitDescriptorBoolField(il, resultDictLocal, "configurable", false);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notFnPrototypeLabel);
 
         // Other keys on a function: not own → null.
         il.Emit(OpCodes.Br, returnNullLabel);
@@ -2691,6 +2822,104 @@ public partial class RuntimeEmitter
 
         // Not a dictionary - check if it implements $IHasFields (class instances)
         il.MarkLabel(notDictLabel);
+
+        // Object-literal accessors live in $Object's getter/setter tables
+        // rather than PDS. Surface them as ordinary own accessor descriptors
+        // so Proxy [[Get]]/[[Set]] can preserve an explicit Receiver.
+        var notTSObjectAccessorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, notTSObjectAccessorLabel);
+        var literalGetterLocal = il.DeclareLocal(_types.Object);
+        var literalSetterLocal = il.DeclareLocal(_types.Object);
+        var literalGetterDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var literalSetterDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var checkLiteralSetterLabel = il.DefineLabel();
+        var literalAccessorFoundLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetGettersDict);
+        il.Emit(OpCodes.Stloc, literalGetterDictLocal);
+        il.Emit(OpCodes.Ldloc, literalGetterDictLocal);
+        il.Emit(OpCodes.Brfalse, checkLiteralSetterLabel);
+        il.Emit(OpCodes.Ldloc, literalGetterDictLocal);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, literalGetterLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "TryGetValue",
+            _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, literalAccessorFoundLabel);
+        il.MarkLabel(checkLiteralSetterLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Stloc, literalSetterDictLocal);
+        il.Emit(OpCodes.Ldloc, literalSetterDictLocal);
+        il.Emit(OpCodes.Brfalse, notTSObjectAccessorLabel);
+        il.Emit(OpCodes.Ldloc, literalSetterDictLocal);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, literalSetterLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "TryGetValue",
+            _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, notTSObjectAccessorLabel);
+
+        il.MarkLabel(literalAccessorFoundLabel);
+        // Fetch the other half when the getter-side lookup found the key.
+        var literalOtherHalfDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, literalSetterLocal);
+        il.Emit(OpCodes.Brtrue, literalOtherHalfDoneLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetSettersDict);
+        il.Emit(OpCodes.Stloc, literalSetterDictLocal);
+        il.Emit(OpCodes.Ldloc, literalSetterDictLocal);
+        il.Emit(OpCodes.Brfalse, literalOtherHalfDoneLabel);
+        il.Emit(OpCodes.Ldloc, literalSetterDictLocal);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, literalSetterLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "TryGetValue",
+            _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(literalOtherHalfDoneLabel);
+
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, resultDictLocal);
+        void EmitLiteralAccessorSlot(string name, LocalBuilder slot)
+        {
+            var haveSlotLabel = il.DefineLabel();
+            var storeSlotLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, slot);
+            il.Emit(OpCodes.Brtrue, haveSlotLabel);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Br, storeSlotLabel);
+            il.MarkLabel(haveSlotLabel);
+            il.Emit(OpCodes.Ldloc, slot);
+            il.MarkLabel(storeSlotLabel);
+            il.Emit(OpCodes.Stloc, valueLocal);
+            il.Emit(OpCodes.Ldloc, resultDictLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Ldloc, valueLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "set_Item"));
+        }
+        EmitLiteralAccessorSlot("get", literalGetterLocal);
+        EmitLiteralAccessorSlot("set", literalSetterLocal);
+        EmitDescriptorBoolField(il, resultDictLocal, "enumerable", true);
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Ldstr, "configurable");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Box, _types.Boolean);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "set_Item"));
+        il.Emit(OpCodes.Ldloc, resultDictLocal);
+        il.Emit(OpCodes.Br, endLabel);
+
+        il.MarkLabel(notTSObjectAccessorLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, returnNullLabel);

@@ -1049,16 +1049,60 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, nullLabel);
 
-        // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
-        var notProxyLabel = il.DefineLabel();
-        EmitProxySetIndexCheck(il, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1), () => il.Emit(OpCodes.Ldarg_2), notProxyLabel);
-
-        il.MarkLabel(notProxyLabel);
+        if (_features.UsesProxy)
+        {
+            var notProxyLabel = il.DefineLabel();
+            EmitProxySetIndexCheck(
+                il, runtime,
+                () => il.Emit(OpCodes.Ldarg_0),
+                () => il.Emit(OpCodes.Ldarg_1),
+                () => il.Emit(OpCodes.Ldarg_2),
+                notProxyLabel);
+            il.MarkLabel(notProxyLabel);
+        }
 
         // Check if index is a symbol first (symbols work on any object type)
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
         il.Emit(OpCodes.Brtrue, symbolKeyLabel);
+
+        // A missing indexed own property may resolve to an inherited Proxy.
+        // OrdinarySet must invoke that proxy's [[Set]] with the original
+        // receiver before any carrier-specific direct store below.
+        var noInheritedProxyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brtrue, noInheritedProxyLabel);
+        var indexPrototypeLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, indexPrototypeLocal);
+        il.Emit(OpCodes.Ldloc, indexPrototypeLocal);
+        il.Emit(OpCodes.Brfalse, noInheritedProxyLabel);
+        if (_features.UsesProxy)
+        {
+            var inheritedProxyLabel = il.DefineLabel();
+            var inheritedNotProxyLabel = il.DefineLabel();
+            EmitProxyTypeCheck(
+                il, () => il.Emit(OpCodes.Ldloc, indexPrototypeLocal),
+                inheritedProxyLabel, inheritedNotProxyLabel);
+            il.MarkLabel(inheritedProxyLabel);
+            EmitProxySetCompiledCall(
+                il, runtime,
+                () => il.Emit(OpCodes.Ldloc, indexPrototypeLocal),
+                () =>
+                {
+                    il.Emit(OpCodes.Ldarg_1);
+                    il.Emit(OpCodes.Call, runtime.ToJsString);
+                },
+                () => il.Emit(OpCodes.Ldarg_2),
+                () => il.Emit(OpCodes.Ldarg_0));
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(inheritedNotProxyLabel);
+        }
+        il.MarkLabel(noInheritedProxyLabel);
 
         // globalThis/global sentinel (#271): `root[stringKey] = v` stores into the
         // shared global-properties dictionary. Symbol keys fall through to the

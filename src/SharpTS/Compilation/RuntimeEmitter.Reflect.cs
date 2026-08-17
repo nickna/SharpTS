@@ -5,6 +5,226 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitReflectGet(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = runtime.ReflectGet;
+        var il = method.GetILGenerator();
+
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapGetCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_6);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Stelem_Ref);
+                EmitDelegate(2, runtime.ReflectGet,
+                    typeof(Func<object, string, object, object?>));
+                EmitDelegate(3, runtime.GetProperty,
+                    typeof(Func<object, string, object?>));
+                EmitDelegate(4, runtime.GetFunctionMethod,
+                    typeof(Func<object, string, object?>));
+                EmitDelegate(5, runtime.ObjectGetOwnPropertyDescriptor,
+                    typeof(Func<object, object, object?>));
+
+                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, slot);
+                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldftn, target);
+                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                        delegateType, _types.Object, _types.IntPtr)!);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            });
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notProxyLabel);
+        var descriptorLocal = il.DeclareLocal(_types.Object);
+        var ordinaryGetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, ordinaryGetLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, ordinaryGetLabel);
+
+        var noGetterFieldLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brfalse, noGetterFieldLabel);
+        var getterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, getterLocal);
+        var undefinedGetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Brfalse, undefinedGetterLabel);
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, undefinedGetterLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldloc, getterLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(undefinedGetterLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noGetterFieldLabel);
+        il.MarkLabel(ordinaryGetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitReflectDeleteProperty(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReflectDeleteProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Object]);
+        runtime.ReflectDeleteProperty = method;
+        var il = method.GetILGenerator();
+        var keyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, keyLocal);
+
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapDeletePropertyCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_5);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, keyLocal);
+                il.Emit(OpCodes.Stelem_Ref);
+                EmitDelegate(1, runtime.DeleteProperty,
+                    typeof(Func<object, string, bool>));
+                EmitDelegate(2, runtime.ObjectGetOwnPropertyDescriptor,
+                    typeof(Func<object, object, object?>));
+                EmitDelegate(3, runtime.ObjectIsExtensible,
+                    typeof(Func<object, bool>));
+                EmitDelegate(4, runtime.GetProperty,
+                    typeof(Func<object, string, object?>));
+
+                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, slot);
+                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldftn, target);
+                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                        delegateType, _types.Object, _types.IntPtr)!);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notProxyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.DeleteProperty);
+        var deletedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, deletedLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        var descriptorLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, deletedLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, deletedLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(deletedLabel);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitReflectPreventExtensions(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ReflectPreventExtensions",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.ReflectPreventExtensions = method;
+        var il = method.GetILGenerator();
+
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapPreventExtensionsCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_3);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                EmitDelegate(0, runtime.ObjectPreventExtensions,
+                    typeof(Func<object, object?>));
+                EmitDelegate(1, runtime.ObjectIsExtensible,
+                    typeof(Func<object, bool>));
+                EmitDelegate(2, runtime.GetProperty,
+                    typeof(Func<object, string, object?>));
+
+                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, slot);
+                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldftn, target);
+                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                        delegateType, _types.Object, _types.IntPtr)!);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notProxyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectPreventExtensions);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits ReflectSet: (object target, object key, object? value, object receiver) → bool.
     /// Preserves the receiver for Proxy/OrdinarySet observable operations.
@@ -43,6 +263,104 @@ public partial class RuntimeEmitter
             () => il.Emit(OpCodes.Ldarg_3));
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyTargetLabel);
+
+        // OrdinarySetWithOwnDescriptor: an own accessor on the target invokes
+        // its setter with Receiver, rather than defining a data property on
+        // Receiver. This is the forwarding path used when a Proxy has no set
+        // trap and is also observable through Object.create(proxy).
+        var targetDescriptorLocal = il.DeclareLocal(_types.Object);
+        var targetDescriptorMissingLabel = il.DefineLabel();
+        var ordinaryDataSetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, targetDescriptorMissingLabel);
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, targetDescriptorMissingLabel);
+
+        var noSetterFieldLabel = il.DefineLabel();
+        var checkTargetDataDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brfalse, noSetterFieldLabel);
+        var setterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "set");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, setterLocal);
+        var hasSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, setterLocal);
+        il.Emit(OpCodes.Brfalse, hasSetterLabel);
+        il.Emit(OpCodes.Ldloc, setterLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        var invokeSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, invokeSetterLabel);
+        il.MarkLabel(hasSetterLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(invokeSetterLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldloc, setterLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noSetterFieldLabel);
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "get");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brfalse, checkTargetDataDescriptorLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // A present, non-writable data descriptor makes OrdinarySet return
+        // false. This covers intrinsic descriptors such as RegExp.global,
+        // String wrapper indices/length, and function name/length.
+        il.MarkLabel(checkTargetDataDescriptorLabel);
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brfalse, ordinaryDataSetLabel);
+        il.Emit(OpCodes.Ldloc, targetDescriptorLocal);
+        il.Emit(OpCodes.Ldstr, "writable");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brtrue, ordinaryDataSetLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        // No own descriptor: continue OrdinarySet on the target prototype,
+        // retaining the original Receiver. This is how inherited read-only
+        // accessors such as RegExp.prototype.global reject assignment.
+        il.MarkLabel(targetDescriptorMissingLabel);
+        var targetPrototypeLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+        il.Emit(OpCodes.Stloc, targetPrototypeLocal);
+        il.Emit(OpCodes.Ldloc, targetPrototypeLocal);
+        il.Emit(OpCodes.Brfalse, ordinaryDataSetLabel);
+        il.Emit(OpCodes.Ldloc, targetPrototypeLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, ordinaryDataSetLabel);
+        il.Emit(OpCodes.Ldloc, targetPrototypeLocal);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.ReflectSet);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(ordinaryDataSetLabel);
 
         // Check if target is frozen
         il.Emit(OpCodes.Ldarg_0);
@@ -92,6 +410,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, descriptorReadyLabel);
 
         il.MarkLabel(receiverMissingLabel);
+
+        // Creating a new Receiver property is rejected when Receiver is not
+        // extensible. Return the OrdinarySet boolean rather than routing into
+        // Object.defineProperty and turning this normal false result into a
+        // thrown TypeError (Reflect.set must expose the boolean).
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.ObjectIsExtensible);
+        var receiverExtensibleLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, receiverExtensibleLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(receiverExtensibleLabel);
+
         il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
         il.Emit(OpCodes.Stloc, descriptorLocal);
         void EmitTrueDescriptorField(string name)
@@ -149,6 +480,48 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notNullLabel);
 
+        // Reflect returns the proxy [[SetPrototypeOf]] boolean directly. Do
+        // not preflight [[IsExtensible]]: the proxy algorithm calls it only
+        // after a truthy trap result, and that ordering is observable.
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapSetPrototypeOfCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_5);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Stelem_Ref);
+                EmitDelegate(1, runtime.ObjectSetPrototypeOf,
+                    typeof(Func<object, object?, object?>));
+                EmitDelegate(2, runtime.ObjectIsExtensible,
+                    typeof(Func<object, bool>));
+                EmitDelegate(3, runtime.ObjectGetPrototypeOf,
+                    typeof(Func<object, object?>));
+                EmitDelegate(4, runtime.GetProperty,
+                    typeof(Func<object, string, object?>));
+
+                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, slot);
+                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldftn, target);
+                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                        delegateType, _types.Object, _types.IntPtr)!);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyLabel);
+
         // Check if not extensible → return false
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ObjectIsExtensible);
@@ -198,6 +571,60 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Boolean);
 
+        // Proxy [[DefineOwnProperty]] returns the trap boolean directly, but
+        // invariant violations and abrupt trap completions must propagate.
+        // Do this before the ordinary Object.defineProperty wrapper below,
+        // whose catch converts only ordinary definition rejection to false.
+        var reflectDefineKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, reflectDefineKeyLocal);
+        var proxyDefineLabel = il.DefineLabel();
+        var ordinaryDefineLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0),
+            proxyDefineLabel, ordinaryDefineLabel);
+        il.MarkLabel(proxyDefineLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapDefinePropertyCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_7);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, reflectDefineKeyLocal);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldarg_2);
+                il.Emit(OpCodes.Stelem_Ref);
+                EmitDelegate(2, runtime.ObjectDefineProperty,
+                    typeof(Func<object, object, object, object?>));
+                EmitDelegate(3, runtime.ObjectGetOwnPropertyDescriptor,
+                    typeof(Func<object, object, object?>));
+                EmitDelegate(4, runtime.ObjectIsExtensible,
+                    typeof(Func<object, bool>));
+                EmitDelegate(5, runtime.GetProperty,
+                    typeof(Func<object, string, object?>));
+                EmitDelegate(6, runtime.HasOwnPropertyHelperMethod,
+                    typeof(Func<object, string, bool>));
+
+                void EmitDelegate(int slot, MethodInfo target, Type delegateType)
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Ldc_I4, slot);
+                    il.Emit(OpCodes.Ldnull);
+                    il.Emit(OpCodes.Ldftn, target);
+                    il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                        delegateType, _types.Object, _types.IntPtr)!);
+                    il.Emit(OpCodes.Stelem_Ref);
+                }
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryDefineLabel);
+
         // try { ObjectDefineProperty(target, key, descriptor); return true; }
         // catch { return false; }
         il.BeginExceptionBlock();
@@ -236,20 +663,77 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.ListOfObject);
-        var notNullLabel = il.DefineLabel();
+        var validTargetLabel = il.DefineLabel();
+        var invalidTargetLabel = il.DefineLabel();
 
         // Create result list
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
         il.Emit(OpCodes.Stloc, resultLocal);
 
-        // Check if target is null
+        // Reflect methods require an Object target; unlike Object.ownKeys-like
+        // helpers they do not apply ToObject to primitives.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brtrue, notNullLabel);
-        // Return empty list
-        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Brfalse, invalidTargetLabel);
+        Type[] primitiveTargetTypes =
+        [
+            runtime.UndefinedType, _types.String, _types.Boolean,
+            _types.Byte, _types.SByte, _types.Int16, _types.UInt16,
+            _types.Int32, _types.UInt32, _types.Int64, _types.UInt64,
+            _types.Single, _types.Double, _types.Decimal, _types.BigInteger,
+            runtime.TSSymbolType,
+        ];
+        foreach (Type primitiveType in primitiveTargetTypes)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, invalidTargetLabel);
+        }
+        il.Emit(OpCodes.Br, validTargetLabel);
+        il.MarkLabel(invalidTargetLabel);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "Reflect.ownKeys called on non-object");
+        il.MarkLabel(validTargetLabel);
+
+        // Reflect.ownKeys consumes the complete [[OwnPropertyKeys]] list. A
+        // proxy trap may freely interleave strings and Symbols, so dispatch it
+        // once and return that validated list verbatim. Splitting this through
+        // getOwnPropertyNames/getOwnPropertySymbols would both invoke the trap
+        // twice and reorder the result by key kind.
+        var notProxyLabel = il.DefineLabel();
+        var proxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyOwnKeysCompiledCall(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyLabel);
+
+        // OrdinaryOwnPropertyKeys already applies canonical array-index order,
+        // preserves chronological string order, and appends Symbols. Reuse it
+        // for every ordinary carrier instead of rebuilding dictionaries here.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetOrdinaryOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
 
-        il.MarkLabel(notNullLabel);
+        // Anonymous revocation functions are represented as Func<object[],object>.
+        // Their own-key order follows OrdinaryOwnPropertyKeys for functions:
+        // length before name.
+        var notDelegateFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
+        il.Emit(OpCodes.Brfalse, notDelegateFunctionLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldstr, "name");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notDelegateFunctionLabel);
 
         // Check if target is Dictionary<string, object?>
         var isDictLabel = il.DefineLabel();
@@ -405,27 +889,10 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(gotArgsLabel);
 
-        // Check if target is TSFunction
-        var isTsFunctionLabel = il.DefineLabel();
-        var notTsFunctionLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
-        il.Emit(OpCodes.Brtrue, isTsFunctionLabel);
-
-        // Not a TSFunction - try InvokeValue
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
-        il.Emit(OpCodes.Ret);
-
-        // Is a TSFunction - use InvokeWithThis
-        il.MarkLabel(isTsFunctionLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
         il.Emit(OpCodes.Ldarg_1); // thisArg
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Ret);
     }
 
@@ -472,6 +939,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notUndefinedLabel);
+
+        // A Proxy has [[Construct]] exactly when its (possibly nested) target
+        // does. Revocation is observable and must throw here.
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "HasConstructableTarget", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.IsConstructorMethod);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, bool>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyLabel);
 
         // System.Type (class reference) → true
         var notTypeLabel = il.DefineLabel();
@@ -666,6 +1159,46 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(gotArgsLabel);
 
+        var proxyTargetLabel = il.DefineLabel();
+        var notProxyTargetLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0),
+            proxyTargetLabel, notProxyTargetLabel);
+        il.MarkLabel(proxyTargetLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapConstructCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_4);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldloc, argsLocal);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldloc, newTargetLocal);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.NewOnFunction);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, object?[], object?>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_3);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>),
+                    _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyTargetLabel);
+
         // Check if target is a System.Type (compiled class reference)
         var isTypeLabel = il.DefineLabel();
         var notTypeLabel = il.DefineLabel();
@@ -674,10 +1207,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, _types.Type);
         il.Emit(OpCodes.Brtrue, isTypeLabel);
 
-        // Not a Type - use InvokeValue which handles TSFunction, BoundTSFunction, etc.
+        // Not a Type - use the ordinary function-construction protocol.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.NewOnFunction);
         il.Emit(OpCodes.Ret);
 
         // Is a Type - use Activator.CreateInstance(type, args)

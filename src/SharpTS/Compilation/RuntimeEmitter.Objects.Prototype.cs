@@ -176,10 +176,10 @@ public partial class RuntimeEmitter
             il, () => il.Emit(OpCodes.Ldarg_0),
             proxyForPreventExtensionsLabel, notProxyForPreventExtensionsLabel);
         il.MarkLabel(proxyForPreventExtensionsLabel);
-        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0),
+        EmitProxyMethodCallUnwrapped(il, runtime, () => il.Emit(OpCodes.Ldarg_0),
             "TrapPreventExtensionsCompiled", () =>
             {
-                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldc_I4_3);
                 il.Emit(OpCodes.Newarr, _types.Object);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
@@ -194,6 +194,13 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
             });
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);
@@ -275,13 +282,7 @@ public partial class RuntimeEmitter
     private void EmitObjectIsExtensible(TypeBuilder typeBuilder, EmittedRuntime runtime,
         FieldBuilder nonExtensibleObjectsField, FieldBuilder frozenObjectsField, FieldBuilder sealedObjectsField)
     {
-        var method = typeBuilder.DefineMethod(
-            "ObjectIsExtensible",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Boolean,
-            [_types.Object]
-        );
-        runtime.ObjectIsExtensible = method;
+        var method = runtime.ObjectIsExtensible;
 
         var il = method.GetILGenerator();
         var returnFalseLabel = il.DefineLabel();
@@ -317,6 +318,36 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Boolean);
         il.Emit(OpCodes.Brtrue, returnFalseLabel);
+
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyMethodCallUnwrapped(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            "TrapIsExtensibleCompiled", () =>
+            {
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Newarr, _types.Object);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, bool>), _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>), _types.Object, _types.IntPtr)!);
+                il.Emit(OpCodes.Stelem_Ref);
+            });
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notProxyLabel);
 
         // Check $PropertyDescriptorStore.IsExtensible(obj) - fully standalone, no reflection
         il.MarkLabel(checkPropertyStoreLabel);
@@ -505,10 +536,10 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyForGpoLabel, notProxyForGpoLabel);
         il.MarkLabel(proxyForGpoLabel);
-        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0),
+        EmitProxyMethodCallUnwrapped(il, runtime, () => il.Emit(OpCodes.Ldarg_0),
             "TrapGetPrototypeOfCompiled", () =>
             {
-                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldc_I4_3);
                 il.Emit(OpCodes.Newarr, _types.Object);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
@@ -523,6 +554,13 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldftn, runtime.ObjectIsExtensible);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, bool>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
             });
         il.Emit(OpCodes.Ret);
@@ -919,10 +957,10 @@ public partial class RuntimeEmitter
         EmitProxyTypeCheck(
             il, () => il.Emit(OpCodes.Ldarg_0), proxyForSpoLabel, notProxyForSpoLabel);
         il.MarkLabel(proxyForSpoLabel);
-        EmitProxyMethodCall(il, () => il.Emit(OpCodes.Ldarg_0),
+        EmitProxyMethodCallUnwrapped(il, runtime, () => il.Emit(OpCodes.Ldarg_0),
             "TrapSetPrototypeOfCompiled", () =>
             {
-                il.Emit(OpCodes.Ldc_I4_4);
+                il.Emit(OpCodes.Ldc_I4_5);
                 il.Emit(OpCodes.Newarr, _types.Object);
                 il.Emit(OpCodes.Dup);
                 il.Emit(OpCodes.Ldc_I4_0);
@@ -948,6 +986,13 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldftn, runtime.ObjectGetPrototypeOf);
                 il.Emit(OpCodes.Newobj, _types.GetConstructor(
                     typeof(Func<object, object?>), _types.Object, _types.IntPtr));
+                il.Emit(OpCodes.Stelem_Ref);
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldc_I4_4);
+                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Ldftn, runtime.GetProperty);
+                il.Emit(OpCodes.Newobj, _types.GetConstructor(
+                    typeof(Func<object, string, object?>), _types.Object, _types.IntPtr));
                 il.Emit(OpCodes.Stelem_Ref);
             });
         il.Emit(OpCodes.Unbox_Any, _types.Boolean);

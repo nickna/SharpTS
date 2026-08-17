@@ -48,6 +48,14 @@ public sealed class ProxyStaticEmitter : IStaticTypeEmitterStrategy
 
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        return false;
+        if (propertyName != "revocable") return false;
+        var ctx = emitter.Context;
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.CreateRevocableProxy);
+        ctx.IL.Emit(OpCodes.Ldstr, "revocable");
+        ctx.IL.Emit(OpCodes.Ldc_I4_2);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        return true;
     }
+
+    public bool HasStaticProperty(string memberName) => memberName == "revocable";
 }

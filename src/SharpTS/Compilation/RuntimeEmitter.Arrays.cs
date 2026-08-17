@@ -1155,6 +1155,18 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, addToList);
         }
 
+        // Anonymous host delegates back Proxy revocation functions.  They are
+        // ECMAScript built-ins whose own keys are created in this order.
+        var notAnonymousDelegateForNamesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
+        il.Emit(OpCodes.Brfalse, notAnonymousDelegateForNamesLabel);
+        AddName("length");
+        AddName("name");
+        il.Emit(OpCodes.Ldloc, namesLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notAnonymousDelegateForNamesLabel);
+
         // Promise combinator element callbacks are anonymous built-in
         // functions. Their own string keys are ordered length, name.
         var notResolveCallbackForNamesLabel = il.DefineLabel();
@@ -1331,6 +1343,63 @@ public partial class RuntimeEmitter
         il.MarkLabel(dictKeysLoopEnd);
 
         il.MarkLabel(noFieldsDictLabel);
+
+        // Object-literal accessors live in $TSObject's getter/setter maps rather
+        // than its fields dictionary. They are nevertheless ordinary own
+        // properties and must participate in [[OwnPropertyKeys]]. Add both maps
+        // here (deduplicating getter/setter pairs); NormalizeOwnPropertyKeys
+        // below restores the required integer-index ordering.
+        void EmitLiteralAccessorNames(MethodInfo accessorMapGetter)
+        {
+            var doneLabel = il.DefineLabel();
+            var accessorDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+            var accessorEnumeratorLocal = il.DeclareLocal(_types.IEnumeratorOfString);
+            var accessorKeyLocal = il.DeclareLocal(_types.String);
+            var accessorLoopLabel = il.DefineLabel();
+            var accessorLoopEndLabel = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+            il.Emit(OpCodes.Brfalse, doneLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+            il.Emit(OpCodes.Callvirt, accessorMapGetter);
+            il.Emit(OpCodes.Stloc, accessorDictLocal);
+            il.Emit(OpCodes.Ldloc, accessorDictLocal);
+            il.Emit(OpCodes.Brfalse, doneLabel);
+            il.Emit(OpCodes.Ldloc, accessorDictLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(
+                _types.DictionaryStringObject, "Keys"));
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(
+                _types.IEnumerableOfString, "GetEnumerator"));
+            il.Emit(OpCodes.Stloc, accessorEnumeratorLocal);
+
+            il.MarkLabel(accessorLoopLabel);
+            il.Emit(OpCodes.Ldloc, accessorEnumeratorLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(
+                _types.IEnumerator, "MoveNext"));
+            il.Emit(OpCodes.Brfalse, accessorLoopEndLabel);
+            il.Emit(OpCodes.Ldloc, accessorEnumeratorLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(
+                _types.IEnumeratorOfString, "Current"));
+            il.Emit(OpCodes.Stloc, accessorKeyLocal);
+            il.Emit(OpCodes.Ldloc, namesLocal);
+            il.Emit(OpCodes.Ldloc, accessorKeyLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ListOfObject, "Contains", _types.Object));
+            il.Emit(OpCodes.Brtrue, accessorLoopLabel);
+            il.Emit(OpCodes.Ldloc, namesLocal);
+            il.Emit(OpCodes.Ldloc, accessorKeyLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Br, accessorLoopLabel);
+
+            il.MarkLabel(accessorLoopEndLabel);
+            il.MarkLabel(doneLabel);
+        }
+
+        EmitLiteralAccessorNames(runtime.TSObjectGetGettersDict);
+        EmitLiteralAccessorNames(runtime.TSObjectGetSettersDict);
 
         // Append PDS extras (accessor-only own props + non-enumerable own
         // props installed via Object.defineProperty). Mirrors the dict path

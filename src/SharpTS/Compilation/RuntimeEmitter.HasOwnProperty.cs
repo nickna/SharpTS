@@ -53,6 +53,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, falseLabel);
 
+        // Proxy hasOwnProperty is specified in terms of [[GetOwnProperty]],
+        // so it must dispatch the getOwnPropertyDescriptor trap and validate
+        // its result rather than inspecting the proxy wrapper itself.
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il, () => il.Emit(OpCodes.Ldarg_0), proxyLabel, notProxyLabel);
+        il.MarkLabel(proxyLabel);
+        EmitProxyGetOwnPropertyDescriptorCompiledCall(
+            il, runtime, () => il.Emit(OpCodes.Ldarg_0),
+            () => il.Emit(OpCodes.Ldarg_1));
+        var proxyDescriptorLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Stloc, proxyDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, falseLabel);
+        // Ordinary callbacks return the emitted runtime's $Undefined, while
+        // the SharpTS.dll-side invariant code may return SharpTSUndefined.
+        // Both represent an absent descriptor.
+        il.Emit(OpCodes.Ldloc, proxyDescriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, falseLabel);
+        il.Emit(OpCodes.Ldloc, proxyDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.Type, "Name").GetGetMethod()!);
+        il.Emit(OpCodes.Ldstr, "SharpTSUndefined");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, falseLabel);
+        il.Emit(OpCodes.Br, trueLabel);
+        il.MarkLabel(notProxyLabel);
+
         // ECMA-262 §20.1.3.2 step 1: Let P be ? ToPropertyKey(V). For Symbol,
         // ToPropertyKey returns the symbol itself — NOT a string. Symbol keys
         // are stored in the per-object symbol dict (GetSymbolDict), so resolve
@@ -121,6 +153,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);

@@ -213,6 +213,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
         var tryMethodLabel = il.DefineLabel();
+        var errorPrototypeLookupLabel = il.DefineLabel();
 
         // Declare locals upfront
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -390,6 +391,22 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notDictLabel);
 
+        // A plain $Object has no generated typed members beyond its dynamic
+        // fields/accessor tables. Once those miss, continue through the shared
+        // receiver-aware prototype walk. Emitted subclasses still use their
+        // $IHasFields dispatch below.
+        var notPlainTSObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brfalse, notPlainTSObjectLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldtoken, runtime.TSObjectType);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Beq, errorPrototypeLookupLabel);
+        il.MarkLabel(notPlainTSObjectLabel);
+
         // Check $IHasFields interface (covers user-defined classes and $Object subclasses with typed properties)
         var notHasFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -409,7 +426,6 @@ public partial class RuntimeEmitter
         // must continue directly on the JavaScript prototype chain: exposing
         // CLR methods here (notably $Error.ToString) would shadow mutable
         // Error.prototype properties.
-        var errorPrototypeLookupLabel = il.DefineLabel();
         var notErrorLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSErrorType);
@@ -737,7 +753,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Beq, noPrototypeLabel);
         il.Emit(OpCodes.Ldloc, prototypeLocal);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ReflectGet);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(noPrototypeLabel);
@@ -1203,6 +1220,38 @@ public partial class RuntimeEmitter
             EmitStatsGetBranch(il, runtime, notStatsLabel);
             il.MarkLabel(notStatsLabel);
         }
+
+        // Host delegates are used for a handful of anonymous built-in
+        // functions (notably Proxy revocation functions).  Their CLR Invoke
+        // signature is an implementation detail: ECMAScript exposes an empty
+        // name and zero length, while call/apply/bind still use the ordinary
+        // callable wrappers.
+        var notAnonymousDelegateLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
+        il.Emit(OpCodes.Brfalse, notAnonymousDelegateLabel);
+        var anonymousDelegateNotLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, anonymousDelegateNotLengthLabel);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(anonymousDelegateNotLengthLabel);
+        var anonymousDelegateNotNameLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "name");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, anonymousDelegateNotNameLabel);
+        il.Emit(OpCodes.Ldstr, string.Empty);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(anonymousDelegateNotNameLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetFunctionMethod);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notAnonymousDelegateLabel);
 
         // $TSFunction - check for bind/call/apply
         var notTSFunctionLabel = il.DefineLabel();

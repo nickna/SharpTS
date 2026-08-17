@@ -12,8 +12,14 @@ public class SharpTSPropertyDescriptor
     /// <summary>Getter function for accessor properties</summary>
     public ISharpTSCallable? Get { get; set; }
 
+    /// <summary>The original getter value, including compiler-emitted callables.</summary>
+    public object? RawGet { get; set; }
+
     /// <summary>Setter function for accessor properties</summary>
     public ISharpTSCallable? Set { get; set; }
+
+    /// <summary>The original setter value, including compiler-emitted callables.</summary>
+    public object? RawSet { get; set; }
 
     /// <summary>Whether the property value can be changed.</summary>
     /// <remarks>
@@ -58,7 +64,9 @@ public class SharpTSPropertyDescriptor
     {
         Value = value;
         Get = getter;
+        RawGet = getter;
         Set = setter;
+        RawSet = setter;
         Writable = writable;
         Enumerable = enumerable;
         Configurable = configurable;
@@ -87,8 +95,8 @@ public class SharpTSPropertyDescriptor
         {
             // FromPropertyDescriptor returns a COMPLETE accessor descriptor:
             // both get and set are present, using undefined for an absent half.
-            obj.SetProperty("get", Get is null ? SharpTSUndefined.Instance : Get);
-            obj.SetProperty("set", Set is null ? SharpTSUndefined.Instance : Set);
+            obj.SetProperty("get", RawGet ?? SharpTSUndefined.Instance);
+            obj.SetProperty("set", RawSet ?? SharpTSUndefined.Instance);
         }
         else
         {
@@ -137,13 +145,15 @@ public class SharpTSPropertyDescriptor
         if (has("get"))
         {
             descriptor.HasGet = true;
-            if (read("get") is ISharpTSCallable getterFn) descriptor.Get = getterFn;
+            descriptor.RawGet = read("get");
+            if (descriptor.RawGet is ISharpTSCallable getterFn) descriptor.Get = getterFn;
         }
 
         if (has("set"))
         {
             descriptor.HasSet = true;
-            if (read("set") is ISharpTSCallable setterFn) descriptor.Set = setterFn;
+            descriptor.RawSet = read("set");
+            if (descriptor.RawSet is ISharpTSCallable setterFn) descriptor.Set = setterFn;
         }
 
         if (has("writable"))

@@ -340,7 +340,12 @@ public partial class RuntimeEmitter
     /// After dispatch, each branch emits <c>Ret</c>, so the caller is responsible for
     /// a fall-through path (e.g. <c>ldnull; ret</c>).
     /// </summary>
-    private void EmitDispatchToTarget(ILGenerator il, EmittedRuntime runtime, FieldBuilder targetField, LocalBuilder argsLocal)
+    private void EmitDispatchToTarget(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        FieldBuilder targetField,
+        LocalBuilder argsLocal,
+        LocalBuilder? thisArgLocal = null)
     {
         // $TSFunction → target.Invoke(args)
         var notTSFunctionLabel = il.DefineLabel();
@@ -432,6 +437,75 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notBAFLabel);
+
+        if (thisArgLocal != null)
+            EmitProxyInvokeWithThisFallback(
+                il, targetField, thisArgLocal, argsLocal);
+    }
+
+    private void EmitProxyInvokeWithThisFallback(
+        ILGenerator il,
+        FieldBuilder targetField,
+        LocalBuilder thisArgLocal,
+        LocalBuilder argsLocal)
+    {
+        var proxyLabel = il.DefineLabel();
+        var notProxyLabel = il.DefineLabel();
+        EmitProxyTypeCheck(
+            il,
+            () =>
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, targetField);
+            },
+            proxyLabel,
+            notProxyLabel);
+
+        il.MarkLabel(proxyLabel);
+        var methodLocal = il.DeclareLocal(_types.MethodInfo);
+        var resultLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldstr, "InvokeWithThis");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.Type, "GetMethod", _types.String));
+        il.Emit(OpCodes.Stloc, methodLocal);
+
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloc, methodLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, targetField);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, thisArgLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.BeginCatchBlock(_types.TargetInvocationException);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.Exception, "InnerException").GetGetMethod()!);
+        var innerLocal = il.DeclareLocal(_types.Exception);
+        il.Emit(OpCodes.Stloc, innerLocal);
+        var rethrowOriginal = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, innerLocal);
+        il.Emit(OpCodes.Brfalse, rethrowOriginal);
+        il.Emit(OpCodes.Ldloc, innerLocal);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(rethrowOriginal);
+        il.Emit(OpCodes.Rethrow);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notProxyLabel);
     }
 
     /// <summary>
@@ -1186,8 +1260,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
-        // Non-TSFunction callables: dispatch via the shared helper (ignores thisArg).
-        EmitDispatchToTarget(il, runtime, targetField, callArgsLocal);
+        // Non-TSFunction callables, including proxies, retain thisArg.
+        EmitDispatchToTarget(
+            il, runtime, targetField, callArgsLocal, thisArgLocal);
 
         // Fall-through: unknown target type → return null
         il.Emit(OpCodes.Ldnull);
@@ -1398,8 +1473,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
         il.Emit(OpCodes.Brtrue, isBoundTSFunctionLabel);
 
-        // Non-TSFunction callables: dispatch via the shared helper (ignores thisArg).
-        EmitDispatchToTarget(il, runtime, targetField, callArgsLocal);
+        // Non-TSFunction callables, including proxies, retain thisArg.
+        EmitDispatchToTarget(
+            il, runtime, targetField, callArgsLocal, thisArgLocal);
 
         // Fall-through: unknown target type → return null
         il.Emit(OpCodes.Ldnull);

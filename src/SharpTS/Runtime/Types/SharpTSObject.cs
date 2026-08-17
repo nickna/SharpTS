@@ -880,10 +880,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (isAccessor)
         {
             // Accessor property
+            var getter = GetGetter(name);
+            var setter = GetSetter(name);
             return new SharpTSPropertyDescriptor
             {
-                Get = GetGetter(name),
-                Set = GetSetter(name),
+                Get = getter,
+                RawGet = getter,
+                Set = setter,
+                RawSet = setter,
                 HasGet = true,
                 HasSet = true,
                 Enumerable = flags.Enumerable,
@@ -923,7 +927,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return new SharpTSPropertyDescriptor
             {
                 Get = getter,
+                RawGet = getter,
                 Set = setter,
+                RawSet = setter,
                 HasGet = true,
                 HasSet = true,
                 Enumerable = flags.Enumerable,

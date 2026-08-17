@@ -252,7 +252,12 @@ public partial class RuntimeEmitter
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         var notProxyLabel = il.DefineLabel();
-        EmitProxyInvokeCheck(il, () => il.Emit(OpCodes.Ldarg_0), () => il.Emit(OpCodes.Ldarg_1), notProxyLabel);
+        EmitProxyInvokeCheck(
+            il, runtime,
+            () => il.Emit(OpCodes.Ldarg_0),
+            () => il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance),
+            () => il.Emit(OpCodes.Ldarg_1),
+            notProxyLabel);
 
         // ECMA-262 §7.3.13: invoking a non-callable throws TypeError. This was
         // a silent `return null` for years, which masked dispatch regressions
@@ -537,13 +542,7 @@ public partial class RuntimeEmitter
 
     private void EmitInvokeMethodValue(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = typeBuilder.DefineMethod(
-            "InvokeMethodValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object, _types.ObjectArray]  // receiver, function, args
-        );
-        runtime.InvokeMethodValue = method;
+        var method = runtime.InvokeMethodValue;
 
         var il = method.GetILGenerator();
         EmitStackGuard(il, runtime);
@@ -843,14 +842,14 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notTypeCalleeLabel);
 
-        // Proxy apply trap check: if function is a proxy, call TrapApply
-        // TrapApply expects List<object?> so convert the object[] args
+        // Proxy apply trap check, preserving the method-call receiver.
         var notProxyLabel2 = il.DefineLabel();
-        EmitProxyInvokeCheck(il, () => il.Emit(OpCodes.Ldarg_1), () =>
-        {
-            il.Emit(OpCodes.Ldarg_2); // object[] args
-            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [typeof(IEnumerable<object>)])!);
-        }, notProxyLabel2);
+        EmitProxyInvokeCheck(
+            il, runtime,
+            () => il.Emit(OpCodes.Ldarg_1),
+            () => il.Emit(OpCodes.Ldarg_0),
+            () => il.Emit(OpCodes.Ldarg_2),
+            notProxyLabel2);
 
         il.MarkLabel(notProxyLabel2);
 
