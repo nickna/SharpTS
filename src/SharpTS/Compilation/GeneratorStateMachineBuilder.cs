@@ -82,6 +82,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
     // $IGenerator methods for return/throw support
     public MethodBuilder NextMethod { get; private set; } = null!;
+    public MethodBuilder IteratorMethod { get; private set; } = null!;
     public MethodBuilder ReturnMethod { get; private set; } = null!;
     public MethodBuilder ThrowMethod { get; private set; } = null!;
 
@@ -437,6 +438,16 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
     {
         // We need to emit an iterator result object with { value, done } properties
         // For simplicity, we'll use a Dictionary<string, object> as the result
+
+        IteratorMethod = _stateMachineType.DefineMethod(
+            "iterator",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Object,
+            Type.EmptyTypes);
+        var iteratorIL = IteratorMethod.GetILGenerator();
+        iteratorIL.Emit(OpCodes.Ldarg_0);
+        iteratorIL.Emit(OpCodes.Ret);
+        _stateMachineType.DefineMethodOverride(IteratorMethod, _runtime!.GeneratorIteratorMethod);
 
         // Re-entrancy flag: set only while the body runs inside MoveNext (see next()).
         // The single observable window for a guest call is re-entrancy — the generator

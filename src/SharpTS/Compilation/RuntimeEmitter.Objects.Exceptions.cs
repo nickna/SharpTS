@@ -181,10 +181,48 @@ public partial class RuntimeEmitter
         // `catch` sees a proper Error instance — `e instanceof Error` is true and
         // `e.name` is "Error" rather than the .NET type name. Previously this returned
         // a plain { message, name=<.NET type> } dictionary. (#700)
-        // return new $Error(ex.Message)
+        // Runtime/interpreter bridges encode guest error identity in the message
+        // (for example "Runtime Error: ReferenceError: ..."). Recover that
+        // identity here after unwrapping reflection exceptions instead of
+        // collapsing every abrupt completion to a generic Error.
         il.MarkLabel(standardFallbackLabel);
+        var messageLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, messageLocal);
+
+        var messageReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, messageLocal);
+        il.Emit(OpCodes.Ldstr, "Runtime Error: ");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
+        il.Emit(OpCodes.Brfalse, messageReady);
+        il.Emit(OpCodes.Ldloc, messageLocal);
+        il.Emit(OpCodes.Ldc_I4, "Runtime Error: ".Length);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
+        il.Emit(OpCodes.Stloc, messageLocal);
+        il.MarkLabel(messageReady);
+
+        void EmitGuestError(string name, ConstructorInfo constructor)
+        {
+            var next = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, messageLocal);
+            il.Emit(OpCodes.Ldstr, name + ":");
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
+            il.Emit(OpCodes.Brfalse, next);
+            il.Emit(OpCodes.Ldloc, messageLocal);
+            il.Emit(OpCodes.Newobj, constructor);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+        }
+
+        EmitGuestError("TypeError", runtime.TSTypeErrorCtor);
+        EmitGuestError("RangeError", runtime.TSRangeErrorCtor);
+        EmitGuestError("ReferenceError", runtime.TSReferenceErrorCtor);
+        EmitGuestError("SyntaxError", runtime.TSSyntaxErrorCtor);
+        EmitGuestError("URIError", runtime.TSURIErrorCtor);
+        EmitGuestError("EvalError", runtime.TSEvalErrorCtor);
+
+        il.Emit(OpCodes.Ldloc, messageLocal);
         il.Emit(OpCodes.Newobj, runtime.TSErrorCtorMessage);
         il.Emit(OpCodes.Ret);
     }

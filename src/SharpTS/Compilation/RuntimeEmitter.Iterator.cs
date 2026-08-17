@@ -392,6 +392,103 @@ public partial class RuntimeEmitter
         EmitInvokeIteratorNext(typeBuilder, runtime);
         EmitInvokeIteratorNextWithSent(typeBuilder, runtime);
         EmitGetIteratorFunction(typeBuilder, runtime);
+        EmitIteratorClose(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits the shared IteratorClose primitive used by every compiled consumer.
+    /// When an existing throw completion is being propagated, failures produced
+    /// while retrieving/calling <c>return</c> are suppressed as required by
+    /// ECMA-262 §7.4.11; normal completions propagate those failures.
+    /// </summary>
+    private void EmitIteratorClose(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "IteratorClose",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Boolean]);
+        runtime.IteratorClose = method;
+
+        var il = method.GetILGenerator();
+        var returnMethod = il.DeclareLocal(_types.Object);
+        var closeResult = il.DeclareLocal(_types.Object);
+        var lookupReturn = il.DefineLabel();
+        var validateResult = il.DefineLabel();
+        var finishTry = il.DefineLabel();
+        var done = il.DefineLabel();
+        var resultIsObject = il.DefineLabel();
+
+        // A throw completion wins over every abrupt completion produced by
+        // IteratorClose. A small catch around the normal algorithm preserves it.
+        il.BeginExceptionBlock();
+
+        // Emitted generators expose return through $IGenerator rather than an
+        // own-property dictionary. Keep that representation detail inside the
+        // shared close primitive so every iterator consumer observes the same
+        // GeneratorResumeAbrupt semantics.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Brfalse, lookupReturn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Callvirt, runtime.GeneratorReturnMethod);
+        il.Emit(OpCodes.Stloc, closeResult);
+        il.Emit(OpCodes.Br, validateResult);
+
+        il.MarkLabel(lookupReturn);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "return");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, returnMethod);
+
+        il.Emit(OpCodes.Ldloc, returnMethod);
+        il.Emit(OpCodes.Brfalse, finishTry);
+        il.Emit(OpCodes.Ldloc, returnMethod);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, finishTry);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, returnMethod);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, closeResult);
+
+        // IteratorClose requires the return method's result to be an Object.
+        il.MarkLabel(validateResult);
+        il.Emit(OpCodes.Ldloc, closeResult);
+        il.Emit(OpCodes.Brfalse, resultIsObject);
+        il.Emit(OpCodes.Ldloc, closeResult);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, resultIsObject);
+        il.Emit(OpCodes.Ldloc, closeResult);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, resultIsObject);
+        il.Emit(OpCodes.Ldloc, closeResult);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brtrue, resultIsObject);
+        il.Emit(OpCodes.Ldloc, closeResult);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, finishTry);
+        il.MarkLabel(resultIsObject);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Iterator .return() must return an object");
+
+        il.MarkLabel(finishTry);
+        il.Emit(OpCodes.Leave, done);
+        il.BeginCatchBlock(_types.Exception);
+        var propagateCloseError = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, propagateCloseError);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, done);
+        il.MarkLabel(propagateCloseError);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Rethrow);
+        il.EndExceptionBlock();
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -588,6 +685,21 @@ public partial class RuntimeEmitter
         // if (obj == null) return undefined;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
+
+        // Emitted generators are iterator objects, but their intrinsic
+        // @@iterator method lives on $IGenerator rather than in an own symbol
+        // dictionary. Return the interface MethodInfo; InvokeMethodValue binds
+        // the generator receiver and the method returns that receiver unchanged.
+        var notGeneratorIterator = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Bne_Un, notGeneratorIterator);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Brfalse, notGeneratorIterator);
+        EmitInstanceMethodInfoLiteral(il, runtime.GeneratorIteratorMethod, runtime.GeneratorInterfaceType);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notGeneratorIterator);
 
         // #1024: node:stream $Readable exposes [Symbol.asyncIterator] via GetAsyncIterator().
         // It carries no per-object symbol dict and isn't a user class, so hook it here:

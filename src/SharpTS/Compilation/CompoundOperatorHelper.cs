@@ -26,6 +26,7 @@ public static class CompoundOperatorHelper
         TokenType.CARET_EQUAL => OpCodes.Xor,
         TokenType.LESS_LESS_EQUAL => OpCodes.Shl,
         TokenType.GREATER_GREATER_EQUAL => OpCodes.Shr,
+        TokenType.GREATER_GREATER_GREATER_EQUAL => OpCodes.Shr_Un,
         _ => null
     };
 
@@ -37,5 +38,6 @@ public static class CompoundOperatorHelper
         TokenType.PIPE_EQUAL or
         TokenType.CARET_EQUAL or
         TokenType.LESS_LESS_EQUAL or
-        TokenType.GREATER_GREATER_EQUAL;
+        TokenType.GREATER_GREATER_EQUAL or
+        TokenType.GREATER_GREATER_GREATER_EQUAL;
 }

@@ -23,6 +23,17 @@ public partial class RuntimeEmitter
         );
         runtime.GeneratorInterfaceType = interfaceBuilder;
 
+        // @@iterator() returns the generator itself. GetIteratorFunction exposes
+        // this MethodInfo for dynamically typed generator values, allowing for-of
+        // and every other consumer to use the ordinary iterator protocol path.
+        var iteratorMethod = interfaceBuilder.DefineMethod(
+            "iterator",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Object,
+            Type.EmptyTypes
+        );
+        runtime.GeneratorIteratorMethod = iteratorMethod;
+
         // Define next(object value) method: object next(object value)
         // Wraps MoveNext + Current into a single call returning an iterator result.
         // The value argument becomes the result of the resumed yield (ECMA-262

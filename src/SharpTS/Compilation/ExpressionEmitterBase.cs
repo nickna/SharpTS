@@ -566,12 +566,17 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // globalThis[key] = value → GlobalThisSetProperty(key, value)
         if (si.Object is Expr.Variable gtSetIdx && gtSetIdx.Name.Lexeme == "globalThis")
         {
+            // Evaluate the reference (base + key expression) before the RHS;
+            // ToPropertyKey remains deferred to the runtime store.
+            EmitExpression(si.Index);
+            EnsureBoxed();
+            var indexTemp = IL.DeclareLocal(typeof(object));
+            IL.Emit(OpCodes.Stloc, indexTemp);
             EmitExpression(si.Value);
             EnsureBoxed();
             var valueTemp = IL.DeclareLocal(typeof(object));
             IL.Emit(OpCodes.Stloc, valueTemp);
-            EmitExpression(si.Index);
-            EnsureBoxed();
+            IL.Emit(OpCodes.Ldloc, indexTemp);
             IL.Emit(OpCodes.Callvirt, Types.GetMethodNoParams(Types.Object, "ToString"));
             IL.Emit(OpCodes.Ldloc, valueTemp);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GlobalThisSetProperty);
@@ -580,10 +585,11 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return;
         }
 
-        // Spill everything so an await inside any operand suspends with an empty stack.
-        var valueLocal = SpillBoxed(si.Value);
+        // Evaluate the reference before the RHS and spill each component so a
+        // suspension still occurs with an empty stack.
         var objLocal = SpillBoxed(si.Object);
         var idxLocal = SpillBoxed(si.Index);
+        var valueLocal = SpillBoxed(si.Value);
 
         // RequireObjectCoercible (PutValue): a null/undefined base throws a guest
         // TypeError ("Cannot set properties of undefined|null (setting '<key>')")

@@ -1507,11 +1507,13 @@ public class EmittedRuntime
     public MethodBuilder InvokeIteratorNextWithSent { get; set; } = null!;      // Calls next(sent) forwarding resume value (#503)
     public MethodBuilder GetIteratorDone { get; set; } = null!;                 // Extracts done from result
     public MethodBuilder GetIteratorValue { get; set; } = null!;                // Extracts value from result
+    public MethodBuilder IteratorClose { get; set; } = null!;                   // IteratorClose(iterator, preserveThrowCompletion)
     public MethodBuilder IterateToList { get; set; } = null!;                   // Converts any iterable to List<object>
     public MethodBuilder IteratorWrapperMoveNextWithSent { get; set; } = null!; // $IteratorWrapper.MoveNextWithSent(sent) (#503)
 
     // Generator interface ($IGenerator extends IEnumerator<object> with Return/Throw)
     public TypeBuilder GeneratorInterfaceType { get; set; } = null!;
+    public MethodBuilder GeneratorIteratorMethod { get; set; } = null!;
     public MethodBuilder GeneratorReturnMethod { get; set; } = null!;
     public MethodBuilder GeneratorThrowMethod { get; set; } = null!;
     public MethodBuilder GeneratorNextMethod { get; set; } = null!;
