@@ -6466,6 +6466,31 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Static_class_method_function_objects_match_in_compiled_mode(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> FunctionEnvironmentLoweringCompilerCases => new()
+    {
+        "language/arguments-object/func-decl-args-trailing-comma-spread-operator.js",
+        "language/arguments-object/cls-decl-meth-static-args-trailing-comma-multiple.js",
+        "language/arguments-object/cls-decl-meth-static-args-trailing-comma-null.js",
+        "language/arguments-object/cls-decl-meth-static-args-trailing-comma-single-args.js",
+        "language/arguments-object/cls-decl-meth-static-args-trailing-comma-spread-operator.js",
+        "language/arguments-object/cls-decl-meth-static-args-trailing-comma-undefined.js",
+        "language/arguments-object/cls-expr-meth-args-trailing-comma-multiple.js",
+        "language/arguments-object/cls-expr-meth-args-trailing-comma-null.js",
+        "language/arguments-object/cls-expr-meth-args-trailing-comma-single-args.js",
+        "language/arguments-object/cls-expr-meth-args-trailing-comma-spread-operator.js",
+        "language/arguments-object/cls-expr-meth-args-trailing-comma-undefined.js",
+        "language/arguments-object/cls-expr-meth-static-args-trailing-comma-multiple.js",
+        "language/arguments-object/cls-expr-meth-static-args-trailing-comma-null.js",
+        "language/arguments-object/cls-expr-meth-static-args-trailing-comma-single-args.js",
+        "language/arguments-object/cls-expr-meth-static-args-trailing-comma-spread-operator.js",
+        "language/arguments-object/cls-expr-meth-static-args-trailing-comma-undefined.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(FunctionEnvironmentLoweringCompilerCases))]
+    public void Function_environment_lowering_is_shared_by_function_and_class_paths(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

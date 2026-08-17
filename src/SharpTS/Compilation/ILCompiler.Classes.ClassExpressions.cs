@@ -318,6 +318,7 @@ public partial class ILCompiler
         );
         _classExprs.Constructors[classExpr] = ctorBuilder;
         _classes.Constructors[className] = ctorBuilder;
+        RegisterArgumentsCapturingMethod(ctorBuilder, constructor?.Body);
         DefineClassPrototypeConstructor(typeBuilder);
 
         // Define static methods (computed symbol-keyed methods are handled by
@@ -339,6 +340,7 @@ public partial class ILCompiler
                 paramTypes
             );
             _classExprs.StaticMethods[classExpr][method.Name.Lexeme] = methodBuilder;
+            RegisterArgumentsCapturingMethod(methodBuilder, method.Body);
         }
 
         // Define instance methods (computed symbol-keyed methods are handled by
@@ -365,6 +367,7 @@ public partial class ILCompiler
                 paramTypes
             );
             _classExprs.InstanceMethods[classExpr][method.Name.Lexeme] = methodBuilder;
+            RegisterArgumentsCapturingMethod(methodBuilder, method.Body);
         }
 
         // Computed symbol-keyed methods (`*[Symbol.iterator]()` etc.) get synthetic uniquely-named
@@ -665,7 +668,15 @@ public partial class ILCompiler
                 ctx.DefineParameter(constructor.Parameters[i].Name.Lexeme, i + 1, paramType);
             }
 
-            emitter.EmitDefaultParameters(constructor.Parameters, true);
+            var constructorParamTypes = ctorBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
+            EmitFunctionEnvironmentPrologue(
+                il,
+                ctx,
+                emitter,
+                constructor.Parameters,
+                constructor.Body,
+                constructorParamTypes,
+                argumentOffset: 1);
 
             if (constructor.Body != null)
             {
@@ -837,7 +848,15 @@ public partial class ILCompiler
         }
 
         var emitter = new ILEmitter(ctx);
-        emitter.EmitDefaultParameters(method.Parameters, true);
+        var environmentParamTypes = methodBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
+            method.Parameters,
+            method.Body,
+            environmentParamTypes,
+            argumentOffset: 1);
 
         if (method.Body != null)
         {
@@ -914,7 +933,15 @@ public partial class ILCompiler
         }
 
         var emitter = new ILEmitter(ctx);
-        emitter.EmitDefaultParameters(method.Parameters, false);
+        var environmentParamTypes = methodBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
+            method.Parameters,
+            method.Body,
+            environmentParamTypes,
+            argumentOffset: 0);
 
         if (method.Body != null)
         {

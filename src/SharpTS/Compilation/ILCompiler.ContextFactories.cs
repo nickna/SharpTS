@@ -52,6 +52,7 @@ public partial class ILCompiler
             // Function metadata
             FunctionRestParams = _functions.RestParams,
             FunctionsCapturingArguments = _functions.CapturingArguments,
+            MethodsCapturingArguments = _functions.MethodsCapturingArguments,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             // Enum tables

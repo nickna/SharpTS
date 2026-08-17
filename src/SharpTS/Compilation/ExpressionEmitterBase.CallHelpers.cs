@@ -152,7 +152,15 @@ public abstract partial class ExpressionEmitterBase
                 shadowedByLocalBinding = false;
             }
 
-            if (!shadowedByLocalBinding && !isImportedFunction && Ctx.Functions.TryGetValue(resolvedFuncName, out var methodBuilder))
+            // Fixed-signature direct CLR calls cannot represent spread expansion
+            // without first materializing the runtime argument list. Route spread
+            // calls through the ordinary function-value path, which already expands
+            // iterables and publishes the exact caller arguments for `arguments`.
+            bool hasSpreadArguments = c.Arguments.Any(arg => arg is Expr.Spread);
+            bool hasKnownRestParameter =
+                Ctx.FunctionRestParams?.ContainsKey(resolvedFuncName) == true;
+            bool directCallSupportsArguments = !hasSpreadArguments || hasKnownRestParameter;
+            if (directCallSupportsArguments && !shadowedByLocalBinding && !isImportedFunction && Ctx.Functions.TryGetValue(resolvedFuncName, out var methodBuilder))
             {
                 MethodInfo targetMethod = methodBuilder;
 
@@ -796,11 +804,82 @@ public abstract partial class ExpressionEmitterBase
     /// source order; only declared slots are reloaded for a fixed signature, while a trailing
     /// <c>List&lt;object&gt;</c> rest marker receives the packed remainder.
     /// </summary>
-    public void EmitStaticCallArguments(List<Expr> arguments, ParameterInfo[] targetParams)
+    public void EmitStaticCallArguments(List<Expr> arguments, MethodBase targetMethod)
     {
+        var targetParams = targetMethod.GetParameters();
         int paramCount = targetParams.Length;
         bool hasRestParam = paramCount > 0 &&
             targetParams[paramCount - 1].ParameterType == typeof(List<object>);
+
+        bool publishesArguments =
+            Ctx.MethodsCapturingArguments?.Contains(targetMethod) == true &&
+            Ctx.Runtime?.CurrentArgumentsField != null;
+
+        // A fixed CLR signature has nowhere to carry JavaScript surplus values.
+        // When this callee observes `arguments`, evaluate into boxed temps, publish
+        // the exact caller list, then reload only the declared CLR slots. This is
+        // the class-method counterpart of direct function call lowering.
+        if (publishesArguments && !hasRestParam && !arguments.Any(arg => arg is Expr.Spread))
+        {
+            var argumentTemps = new LocalBuilder[arguments.Count];
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                argumentTemps[i] = i < paramCount
+                    ? SpillConvertedArg(arguments[i], targetParams[i].ParameterType)
+                    : SpillBoxed(arguments[i]);
+            }
+
+            IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+            IL.Emit(OpCodes.Newarr, Types.Object);
+            for (int i = 0; i < argumentTemps.Length; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ldloc, argumentTemps[i]);
+                IL.Emit(OpCodes.Stelem_Ref);
+            }
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.CurrentArgumentsField);
+
+            for (int i = 0; i < Math.Min(arguments.Count, paramCount); i++)
+            {
+                IL.Emit(OpCodes.Ldloc, argumentTemps[i]);
+                EmitCoerceBoxedToType(targetParams[i].ParameterType);
+            }
+            for (int i = arguments.Count; i < paramCount; i++)
+                EmitOmittedArgument(targetParams[i].ParameterType);
+            return;
+        }
+
+        // Untyped/defaulted JavaScript parameters use object slots. For that
+        // common shape, a spread-expanded runtime array can feed both the
+        // `arguments` snapshot and the declared call slots without re-evaluation.
+        if (publishesArguments && !hasRestParam && targetParams.All(p => p.ParameterType == Types.Object))
+        {
+            var rawArguments = IL.DeclareLocal(Types.ObjectArray);
+            EmitArgsArrayWithSpread(arguments);
+            IL.Emit(OpCodes.Stloc, rawArguments);
+            IL.Emit(OpCodes.Ldloc, rawArguments);
+            IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.CurrentArgumentsField);
+
+            for (int i = 0; i < paramCount; i++)
+            {
+                var missing = IL.DefineLabel();
+                var loaded = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, rawArguments);
+                IL.Emit(OpCodes.Ldlen);
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ble, missing);
+                IL.Emit(OpCodes.Ldloc, rawArguments);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ldelem_Ref);
+                IL.Emit(OpCodes.Br, loaded);
+                IL.MarkLabel(missing);
+                EmitOmittedArgument(targetParams[i].ParameterType);
+                IL.MarkLabel(loaded);
+            }
+            return;
+        }
 
         if (hasRestParam)
         {
@@ -1189,9 +1268,9 @@ public abstract partial class ExpressionEmitterBase
         string resolvedClassName = Ctx.ResolveClassName(classVar.Name.Lexeme);
         if (Ctx.ClassRegistry!.TryGetCallableStaticMethod(resolvedClassName, methodGet.Name.Lexeme, classBuilder, out var callableMethod))
         {
-            var staticMethodParams = callableMethod!.GetParameters();
-            EmitStaticCallArguments(c.Arguments, staticMethodParams);
-            IL.Emit(OpCodes.Call, callableMethod);
+            var targetMethod = callableMethod!;
+            EmitStaticCallArguments(c.Arguments, targetMethod);
+            IL.Emit(OpCodes.Call, targetMethod);
             SetStackUnknown();
             return true;
         }

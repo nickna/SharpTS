@@ -10,10 +10,9 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 /// <remarks>
 /// Fix: interpreter binds <c>arguments</c> in <c>SharpTSFunction.Call</c> /
-/// <c>CallV2</c>; compiled mode emits a prologue (<c>ILCompiler.Functions
-/// .EmitArgumentsLocalPrologue</c>) that builds a <c>List&lt;object&gt;</c>
-/// from the declared parameters — spreading rest-param collections so each
-/// caller value occupies its own index. Arrow functions deliberately do NOT
+/// <c>CallV2</c>; compiled mode's shared function-environment prologue builds a
+/// <c>List&lt;object&gt;</c> from the exact caller arguments — spreading rest-param
+/// collections so each caller value occupies its own index. Arrow functions deliberately do NOT
 /// bind <c>arguments</c>: per JS spec they inherit from the enclosing
 /// non-arrow function via normal lexical scope.
 /// </remarks>
@@ -150,6 +149,81 @@ public class ArgumentsMagicVariableTests
     }
 
     [Theory, ModeData]
+    public void Arguments_ClassDeclarationAndExpressionMethodsSeeExactCallerList(ExecutionMode mode)
+    {
+        var source = @"
+            class Declared {
+                static collect() {
+                    console.log(arguments.length);
+                    console.log(arguments[0]);
+                    console.log(arguments[1]);
+                }
+            }
+            const Expressed = class {
+                collect() {
+                    console.log(arguments.length);
+                    console.log(arguments[0]);
+                    console.log(arguments[1]);
+                }
+                static collect() {
+                    console.log(arguments.length);
+                    console.log(arguments[0]);
+                    console.log(arguments[1]);
+                }
+            };
+            const tail = ['TC39'];
+            Declared.collect(42, ...tail);
+            new Expressed().collect(42, ...tail);
+            Expressed.collect(42, ...tail);
+        ";
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n42\nTC39\n2\n42\nTC39\n2\n42\nTC39\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Arguments_SnapshotsExplicitUndefinedBeforeParameterDefaults(ExecutionMode mode)
+    {
+        var source = @"
+            class C {
+                static inspect(value = 7) {
+                    console.log(arguments.length);
+                    console.log(typeof arguments[0]);
+                    console.log(value);
+                }
+            }
+            C.inspect(undefined);
+        ";
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\nundefined\n7\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Arguments_ConstructorsShareTheFunctionEnvironmentPrologue(ExecutionMode mode)
+    {
+        var source = @"
+            class Declared {
+                constructor(...unused: any[]) {
+                    console.log(arguments.length);
+                    console.log(arguments[0]);
+                }
+            }
+            const Expressed = class {
+                constructor(...unused: any[]) {
+                    console.log(arguments.length);
+                    console.log(arguments[0]);
+                }
+            };
+            new Declared(...[42]);
+            new Expressed(...['TC39']);
+        ";
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n42\n1\nTC39\n", output);
+    }
+
+    [Theory, ModeData]
     public void Arguments_IndexedTraversal(ExecutionMode mode)
     {
         // Indexed access through `arguments.length` is the legacy-JS variadic
@@ -195,14 +269,13 @@ public class ArgumentsMagicVariableTests
         Assert.Equal("7\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Arguments_VisibleToDirectEval(ExecutionMode mode)
     {
         // Direct eval runs against the live scope chain, so `arguments` must be
         // materialized even though the identifier never appears in the AST —
-        // the lazy-materialization scan treats any `eval` reference in the body
-        // as a conservative use. Interpreter-only: compiled eval is a separate
-        // soft-dependency feature.
+        // the shared environment scan treats any direct `eval` reference in the
+        // body as a conservative use in both execution modes.
         var source = @"
             function probe(a: number, b: number): any {
                 return eval('arguments.length');

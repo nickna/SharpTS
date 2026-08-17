@@ -27,9 +27,9 @@ public class ImportedClassStaticHandler : ICallHandler
             return false;
 
         var il = emitter.IL;
-        var methodParams = callableMethod!.GetParameters();
-        emitter.EmitStaticCallArguments(call.Arguments, methodParams);
-        il.Emit(OpCodes.Call, callableMethod);
+        var targetMethod = callableMethod!;
+        emitter.EmitStaticCallArguments(call.Arguments, targetMethod);
+        il.Emit(OpCodes.Call, targetMethod);
         emitter.SetStackUnknown();
         return true;
     }

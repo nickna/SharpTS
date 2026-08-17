@@ -415,11 +415,14 @@ public partial class ILCompiler
         var resolvedParamTypes = methodBuilder.GetParameters()
             .Select(p => p.ParameterType)
             .ToArray();
-        emitter.EmitDefaultParameters(
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
             funcStmt.Parameters,
-            isInstanceMethod: false,
-            hasOwnThis: false,
-            paramTypes: resolvedParamTypes);
+            funcStmt.Body,
+            resolvedParamTypes,
+            argumentOffset: 0);
 
         // Initialize captured parameters into the function display class. Runs
         // AFTER EmitDefaultParameters (which writes defaults back via Starg) so
@@ -444,16 +447,6 @@ public partial class ILCompiler
             }
         }
 
-        // If the body references `arguments`, materialize the JS-spec array-like
-        // from the declared parameters and bind it as a local. Arrow functions
-        // do NOT bind `arguments` (they inherit lexically), so we only do this
-        // for real function declarations — which is exactly what this method
-        // emits (see Phase6_EmitArrowAndStateMachineBodies for arrows).
-        if (ReferencesArgumentsIdentifier(funcStmt.Body))
-        {
-            EmitArgumentsLocalPrologue(il, ctx, funcStmt.Parameters, resolvedParamTypes);
-        }
-
         // Hoist inner function declarations (create TSFunction locals before other statements)
         EmitInnerFunctionHoisting(il, ctx, funcStmt.Body);
 
@@ -476,9 +469,9 @@ public partial class ILCompiler
 
     /// <summary>
     /// Returns true if the given statements reference the identifier
-    /// <c>arguments</c> anywhere in the AST (including nested arrow/function
-    /// bodies — since a nested arrow's <c>arguments</c> refers to the
-    /// enclosing non-arrow function's bindings per JS spec).
+    /// <c>arguments</c> anywhere in the AST, descending through nested arrows
+    /// (which inherit it) and stopping at nested non-arrow functions (which bind
+    /// their own).
     /// </summary>
     /// <remarks>
     /// Used by <see cref="EmitFunctionBody"/> to skip the prologue when the
@@ -489,7 +482,11 @@ public partial class ILCompiler
     /// </remarks>
     private static bool ReferencesArgumentsIdentifier(List<Stmt> stmts)
     {
-        var scanner = new ArgumentsReferenceScanner();
+        // Direct eval can mention `arguments` in a string literal that is absent
+        // from the surrounding AST. Stay conservative and create the binding for
+        // any function containing eval; static direct-eval lowering then resolves
+        // it through the same lexical local as an ordinary source reference.
+        var scanner = new Parsing.Visitors.ArgumentsRefScanner(treatEvalReferenceAsUse: true);
         foreach (var s in stmts)
         {
             scanner.Visit(s);
@@ -498,18 +495,42 @@ public partial class ILCompiler
         return false;
     }
 
-    private sealed class ArgumentsReferenceScanner : Parsing.Visitors.AstVisitorBase
+    private void RegisterArgumentsCapturingMethod(MethodBase method, List<Stmt>? body)
     {
-        public bool Found { get; private set; }
+        if (body != null && ReferencesArgumentsIdentifier(body))
+            _functions.MethodsCapturingArguments.Add(method);
+    }
 
-        protected override void VisitVariable(Expr.Variable expr)
+    /// <summary>
+    /// Emits the shared entry environment for an ECMAScript function-like body.
+    /// The caller argument snapshot is created before parameter defaults mutate CLR
+    /// argument slots; defaults then run in declaration order with later/current
+    /// parameters in TDZ. All synchronous function, class, constructor, and named
+    /// function-expression paths route through this method.
+    /// </summary>
+    private void EmitFunctionEnvironmentPrologue(
+        ILGenerator il,
+        CompilationContext ctx,
+        ILEmitter emitter,
+        List<Stmt.Parameter> parameters,
+        List<Stmt>? body,
+        Type[] paramTypes,
+        int argumentOffset,
+        bool createsArgumentsBinding = true,
+        int publishedArgsLeadingSkip = 0)
+    {
+        if (createsArgumentsBinding && body != null && ReferencesArgumentsIdentifier(body))
         {
-            if (expr.Name.Lexeme == "arguments")
-            {
-                Found = true;
-                ShouldContinue = false;
-            }
+            EmitArgumentsLocalPrologueCore(
+                il,
+                ctx,
+                parameters,
+                paramTypes,
+                argumentOffset,
+                publishedArgsLeadingSkip);
         }
+
+        emitter.EmitDefaultParameters(parameters, argumentOffset, paramTypes);
     }
 
     /// <summary>
@@ -520,34 +541,6 @@ public partial class ILCompiler
     /// of the <c>SharpTSFunction.Call</c> <c>environment.Define("arguments", ...)</c>
     /// binding in interpreter mode.
     /// </summary>
-    /// <remarks>
-    /// The list is populated from declared parameters only — callers that pass
-    /// more arguments than the function declares see those extras silently
-    /// dropped today (a pre-existing calling-convention limitation). Rest
-    /// parameters are inserted as a single List element per the current signature.
-    /// Real codebases already prefer <c>...rest</c> over <c>arguments</c>; this
-    /// covers the legacy-syntax compat case without adding a second call path.
-    /// </remarks>
-    private void EmitArgumentsLocalPrologue(
-        ILGenerator il,
-        CompilationContext ctx,
-        List<Stmt.Parameter> parameters,
-        Type[] paramTypes)
-        => EmitArgumentsLocalPrologueCore(il, ctx, parameters, paramTypes, argBase: 0, publishedArgsLeadingSkip: 0);
-
-    /// <summary>
-    /// Instance-method variant: `this` occupies arg slot 0, so parameters start
-    /// at slot 1. Same semantics as <see cref="EmitArgumentsLocalPrologue"/>.
-    /// </summary>
-    private void EmitArgumentsLocalPrologueForInstanceMethod(
-        ILGenerator il,
-        CompilationContext ctx,
-        List<Stmt.Parameter> parameters,
-        Type[] paramTypes)
-        // Instance methods receive `this` as the MethodInfo.Invoke target, not in the args
-        // array, so _currentArguments published by $TSFunction.Invoke has no leading skip.
-        => EmitArgumentsLocalPrologueCore(il, ctx, parameters, paramTypes, argBase: 1, publishedArgsLeadingSkip: 0);
-
     /// <param name="publishedArgsLeadingSkip">
     /// Number of leading elements of <c>$TSFunction._currentArguments</c> to skip when
     /// that thread-static is non-null. Non-zero for the function-expression / arrow-

@@ -1067,7 +1067,11 @@ public class ClosureAnalyzer : AstVisitorBase
     /// </summary>
     private static bool ReferencesArgumentsIdentifierNonArrow(List<Stmt> stmts)
     {
-        var scanner = new ArgumentsRefScanner();
+        // A direct eval inside a nested arrow may reference the enclosing
+        // function's `arguments` binding without that identifier appearing in
+        // the parsed outer AST. Match the entry-environment scanner's conservative
+        // rule so capture discovery and prologue materialization cannot drift.
+        var scanner = new ArgumentsRefScanner(treatEvalReferenceAsUse: true);
         foreach (var s in stmts)
         {
             scanner.Visit(s);

@@ -45,8 +45,22 @@ public partial class ILEmitter
         bool isInstanceMethod,
         bool hasOwnThis = false,
         Type[]? paramTypes = null)
+        => EmitDefaultParameters(
+            parameters,
+            argumentOffset: (isInstanceMethod ? 1 : 0) + (hasOwnThis ? 1 : 0),
+            paramTypes: paramTypes);
+
+    /// <summary>
+    /// Offset-based parameter-default lowering used by the shared function
+    /// environment prologue. Unlike the compatibility overload, this directly
+    /// describes the emitted signature and therefore also covers display-class
+    /// and explicit-<c>this</c> prefixes without reconstructing their shape.
+    /// </summary>
+    internal void EmitDefaultParameters(
+        List<Stmt.Parameter> parameters,
+        int argumentOffset,
+        Type[]? paramTypes = null)
     {
-        int argOffset = (isInstanceMethod ? 1 : 0) + (hasOwnThis ? 1 : 0);
         var builder = _ctx.ILBuilder;
 
         for (int i = 0; i < parameters.Count; i++)
@@ -62,7 +76,7 @@ public partial class ILEmitter
             // This only defends a genuinely value-typed slot that reached here without that widening.
             if (paramTypes != null && paramTypes[i].IsValueType) continue;
 
-            int argIndex = i + argOffset;
+            int argIndex = i + argumentOffset;
 
             // JS spec: defaults fire only when the argument is `undefined` — missing
             // arguments are padded with the $Undefined singleton by call emitters.

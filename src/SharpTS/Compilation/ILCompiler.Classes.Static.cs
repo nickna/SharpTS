@@ -356,7 +356,14 @@ public partial class ILCompiler
         // Value-type-defaulted params are widened to an object slot by ParameterTypeResolver so
         // the prologue can observe the `$Undefined` sentinel. (#705)
         var staticDefaultParamTypes = methodBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
-        emitter.EmitDefaultParameters(method.Parameters, isInstanceMethod: false, paramTypes: staticDefaultParamTypes);
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
+            method.Parameters,
+            method.Body,
+            staticDefaultParamTypes,
+            argumentOffset: 0);
 
         // Variables for @lock decorator support
         LocalBuilder? prevReentrancyLocal = null;

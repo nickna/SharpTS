@@ -122,6 +122,7 @@ public partial class ILCompiler
             );
 
             _classes.Constructors[qualifiedClassName] = ctorBuilder;
+            RegisterArgumentsCapturingMethod(ctorBuilder, constructor?.Body);
         }
 
         // Initialize static methods dictionary for this class
@@ -162,6 +163,7 @@ public partial class ILCompiler
             );
 
             _classes.StaticMethods[qualifiedClassName][method.Name.Lexeme] = methodBuilder;
+            RegisterArgumentsCapturingMethod(methodBuilder, method.Body);
         }
 
         // Define instance methods (skip overload signatures with no body, and computed
@@ -202,6 +204,7 @@ public partial class ILCompiler
                 _classes.InstanceMethods[qualifiedClassName] = classMethods;
             }
             classMethods[method.Name.Lexeme] = methodBuilder;
+            RegisterArgumentsCapturingMethod(methodBuilder, method.Body);
 
             // Store the method builder for body emission later
             // Use typeBuilder.Name to match the lookup in EmitMethod
@@ -1049,26 +1052,15 @@ public partial class ILCompiler
             ctx.ILBuilder.BeginExceptionBlock();
         }
 
-        // If the body references `arguments`, emit the prologue that binds it
-        // to a List<object> of the declared parameters. Class methods have `this`
-        // at arg slot 0 and actual params at 1..N, which the prologue respects
-        // through the paramTypes array we already built (see EmitMethod above).
-        if (method.Body != null && ReferencesArgumentsIdentifier(method.Body))
-        {
-            // Use the method's param types (without the implicit `this`).
-            var resolvedParamTypes = methodBuilder.GetParameters()
-                .Select(p => p.ParameterType)
-                .ToArray();
-            EmitArgumentsLocalPrologueForInstanceMethod(il, ctx, method.Parameters, resolvedParamTypes);
-        }
-
-        // Apply parameter defaults (JS: a default fires when the argument is missing or
-        // explicit `undefined`). Class declarations historically skipped this entirely, so
-        // defaults never fired in compiled mode (omit → null/0, explicit undefined → NaN/cast
-        // error). ParameterTypeResolver widens defaulted params to an object slot
-        // so the prologue can observe the `$Undefined` sentinel and fire the default. (#705)
         var defaultParamTypes = methodBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
-        emitter.EmitDefaultParameters(method.Parameters, isInstanceMethod: true, paramTypes: defaultParamTypes);
+        EmitFunctionEnvironmentPrologue(
+            il,
+            ctx,
+            emitter,
+            method.Parameters,
+            method.Body,
+            defaultParamTypes,
+            argumentOffset: 1);
 
         // Abstract methods have no body to emit
         if (method.Body != null)

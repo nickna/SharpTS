@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
@@ -42,6 +43,14 @@ public partial class CompilationContext
     /// publish automatically — this set only matters for in-module direct dispatch.
     /// </summary>
     public HashSet<string>? FunctionsCapturingArguments { get; set; }
+
+    /// <summary>
+    /// Statically emitted class methods whose body observes the ECMAScript
+    /// <c>arguments</c> binding (including through a direct eval or nested arrow).
+    /// Static call lowering uses this to publish the untrimmed caller argument list
+    /// before invoking the fixed-arity CLR method.
+    /// </summary>
+    public HashSet<MethodBase>? MethodsCapturingArguments { get; set; }
 
     /// <summary>
     /// Applies the namespace prefix to an already module-qualified function name. A namespace
