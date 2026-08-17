@@ -833,7 +833,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             methodName,
             MethodAttributes.Public,
-            _types.Void,
+            _types.Object,
             [_types.Int32, _types.Object]
         );
 
@@ -856,6 +856,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Conv_U1);
 
         il.Emit(OpCodes.Stelem_I1);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (methodName == "SetInt8") runtime.DataViewSetInt8 = method;
@@ -870,7 +871,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             methodName,
             MethodAttributes.Public,
-            _types.Void,
+            _types.Object,
             [_types.Int32, _types.Object, _types.Boolean]
         );
 
@@ -911,6 +912,7 @@ public partial class RuntimeEmitter
         EmitStoreByte(il, bufferField, offsetLocal, 1, valueLocal, 8); // high byte
 
         il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (methodName == "SetInt16") runtime.DataViewSetInt16 = method;
@@ -959,7 +961,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             methodName,
             MethodAttributes.Public,
-            _types.Void,
+            _types.Object,
             [_types.Int32, _types.Object, _types.Boolean]
         );
 
@@ -987,10 +989,13 @@ public partial class RuntimeEmitter
         }
         else
         {
-            // For unsigned, must go through uint64 first to handle values > Int32.MaxValue
-            // Conv_I4 on doubles > Int32.MaxValue has undefined behavior per ECMA-335
-            il.Emit(OpCodes.Conv_U8);  // double -> uint64 (handles values up to 2^64)
-            il.Emit(OpCodes.Conv_I4);  // uint64 -> int32 (truncates to low 32 bits)
+            // ToUint32 keeps the low 32 bits for both negative inputs and
+            // positive inputs above Int32.MaxValue.  Convert through signed
+            // 64-bit first (all finite Uint32 source values fit) and then
+            // truncate to the low word. Conv_U8 turns negative values into
+            // zero/unspecified overflow on the CLR and corrupted their bytes.
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Conv_I4);
         }
         il.Emit(OpCodes.Stloc, valueLocal);
 
@@ -1015,6 +1020,7 @@ public partial class RuntimeEmitter
         EmitStoreByte(il, bufferField, offsetLocal, 3, valueLocal, 24);
 
         il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (methodName == "SetInt32") runtime.DataViewSetInt32 = method;
@@ -1028,7 +1034,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetFloat32",
             MethodAttributes.Public,
-            _types.Void,
+            _types.Object,
             [_types.Int32, _types.Object, _types.Boolean]
         );
 
@@ -1073,6 +1079,7 @@ public partial class RuntimeEmitter
         EmitStoreByte(il, bufferField, offsetLocal, 3, valueLocal, 24);
 
         il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         runtime.DataViewSetFloat32 = method;
@@ -1085,7 +1092,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetFloat64",
             MethodAttributes.Public,
-            _types.Void,
+            _types.Object,
             [_types.Int32, _types.Object, _types.Boolean]
         );
 
@@ -1138,6 +1145,7 @@ public partial class RuntimeEmitter
         EmitStoreByte64(il, bufferField, offsetLocal, 7, valueLocal, 56);
 
         il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         runtime.DataViewSetFloat64 = method;
@@ -1152,7 +1160,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             methodName,
             MethodAttributes.Public,
-            _types.Void,
+            _types.Object,
             [_types.Int32, _types.Object, _types.Boolean]
         );
 
@@ -1215,6 +1223,7 @@ public partial class RuntimeEmitter
         EmitStoreByte64(il, bufferField, offsetLocal, 7, valueLocal, 56);
 
         il.MarkLabel(endLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
 
         if (signed)

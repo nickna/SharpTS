@@ -20,7 +20,8 @@ public partial class RuntimeEmitter
             "$ArrayIterator",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object,
-            [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable]);
+            [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
+             _types.IEnumerableOfObject, _types.IEnumerable]);
         runtime.ArrayIteratorType = typeBuilder;
 
         var arrayField = typeBuilder.DefineField(
@@ -198,6 +199,212 @@ public partial class RuntimeEmitter
             _types.Void,
             Type.EmptyTypes);
         dispose.GetILGenerator().Emit(OpCodes.Ret);
+
+        // JavaScript iterator objects are iterable themselves. The CLR
+        // interfaces keep yield* and generic for-of delegation compatible.
+        EmitGetEnumeratorReturnsSelf(typeBuilder);
+
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Emits a Map iterator backed by the original dictionary plus its initial
+    /// ordered key list. Each MoveNext re-reads the key from the live map, so
+    /// entries deleted or cleared after iterator creation are skipped instead
+    /// of leaking snapshot values. Kind: 0=keys, 1=values, 2=entries.
+    /// </summary>
+    private void EmitMapCollectionIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$MapCollectionIterator",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object,
+            [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
+             _types.IEnumerableOfObject, _types.IEnumerable]);
+        runtime.MapCollectionIteratorType = typeBuilder;
+
+        var mapField = typeBuilder.DefineField("_map", _types.DictionaryObjectObject,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var keysField = typeBuilder.DefineField("_keys", _types.ListOfObject,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var kindField = typeBuilder.DefineField("_kind", _types.Int32,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var indexField = typeBuilder.DefineField("_index", _types.Int32, FieldAttributes.Private);
+        var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
+
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.DictionaryObjectObject, _types.ListOfObject, _types.Int32]);
+        runtime.MapCollectionIteratorCtor = ctor;
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, mapField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_2);
+        ctorIl.Emit(OpCodes.Stfld, keysField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_3);
+        ctorIl.Emit(OpCodes.Stfld, kindField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldc_I4_M1);
+        ctorIl.Emit(OpCodes.Stfld, indexField);
+        ctorIl.Emit(OpCodes.Ret);
+
+        var currentProperty = typeBuilder.DefineProperty(
+            "Current", PropertyAttributes.None, _types.Object, Type.EmptyTypes);
+        var currentGetter = typeBuilder.DefineMethod("get_Current",
+            MethodAttributes.Public | MethodAttributes.Virtual |
+            MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            _types.Object, Type.EmptyTypes);
+        var currentIl = currentGetter.GetILGenerator();
+        currentIl.Emit(OpCodes.Ldarg_0);
+        currentIl.Emit(OpCodes.Ldfld, currentField);
+        currentIl.Emit(OpCodes.Ret);
+        currentProperty.SetGetMethod(currentGetter);
+
+        var nongenericCurrent = typeBuilder.DefineMethod(
+            "System.Collections.IEnumerator.get_Current",
+            MethodAttributes.Private | MethodAttributes.Virtual |
+            MethodAttributes.SpecialName | MethodAttributes.HideBySig |
+            MethodAttributes.NewSlot | MethodAttributes.Final,
+            _types.Object, Type.EmptyTypes);
+        var nongenericIl = nongenericCurrent.GetILGenerator();
+        nongenericIl.Emit(OpCodes.Ldarg_0);
+        nongenericIl.Emit(OpCodes.Ldfld, currentField);
+        nongenericIl.Emit(OpCodes.Ret);
+        typeBuilder.DefineMethodOverride(nongenericCurrent,
+            _types.GetProperty(_types.IEnumerator, "Current")!.GetGetMethod()!);
+
+        var moveNext = typeBuilder.DefineMethod("MoveNext",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Boolean, Type.EmptyTypes);
+        var il = moveNext.GetILGenerator();
+        var nextIndex = il.DeclareLocal(_types.Int32);
+        var key = il.DeclareLocal(_types.Object);
+        var value = il.DeclareLocal(_types.Object);
+        var output = il.DeclareLocal(_types.Object);
+        var pair = il.DeclareLocal(_types.ListOfObject);
+        var loop = il.DefineLabel();
+        var inRange = il.DefineLabel();
+        var emitValue = il.DefineLabel();
+        var emitEntry = il.DefineLabel();
+        var denormalized = il.DefineLabel();
+        var storeCurrent = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, completedField);
+        il.Emit(OpCodes.Brfalse, loop);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, indexField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, nextIndex);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, keysField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, inRange);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completedField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(inRange);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Stfld, indexField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, keysField);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, key);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, mapField);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldloca, value);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryObjectObject, "TryGetValue")!);
+        il.Emit(OpCodes.Brfalse, loop);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, kindField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Beq, emitValue);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, kindField);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Beq, emitEntry);
+
+        // keys(): denormalize the internal null sentinel.
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+        var keyNotNullSentinel = il.DefineLabel();
+        il.Emit(OpCodes.Bne_Un, keyNotNullSentinel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Br, denormalized);
+        il.MarkLabel(keyNotNullSentinel);
+        il.Emit(OpCodes.Ldloc, key);
+        il.MarkLabel(denormalized);
+        il.Emit(OpCodes.Stloc, output);
+        il.Emit(OpCodes.Br, storeCurrent);
+
+        il.MarkLabel(emitValue);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Stloc, output);
+        il.Emit(OpCodes.Br, storeCurrent);
+
+        il.MarkLabel(emitEntry);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, pair);
+        il.Emit(OpCodes.Ldloc, pair);
+        il.Emit(OpCodes.Ldloc, key);
+        il.Emit(OpCodes.Ldsfld, runtime.MapNullSentinel);
+        var entryKeyNotNull = il.DefineLabel();
+        var entryKeyReady = il.DefineLabel();
+        il.Emit(OpCodes.Bne_Un, entryKeyNotNull);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Br, entryKeyReady);
+        il.MarkLabel(entryKeyNotNull);
+        il.Emit(OpCodes.Ldloc, key);
+        il.MarkLabel(entryKeyReady);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.Emit(OpCodes.Ldloc, pair);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+        il.Emit(OpCodes.Ldloc, pair);
+        il.Emit(OpCodes.Stloc, output);
+
+        il.MarkLabel(storeCurrent);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, output);
+        il.Emit(OpCodes.Stfld, currentField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        var reset = typeBuilder.DefineMethod("Reset",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Void, Type.EmptyTypes);
+        var resetIl = reset.GetILGenerator();
+        resetIl.Emit(OpCodes.Ldstr, "Reset is not supported for map iterators");
+        resetIl.Emit(OpCodes.Newobj,
+            typeof(NotSupportedException).GetConstructor([typeof(string)])!);
+        resetIl.Emit(OpCodes.Throw);
+
+        var dispose = typeBuilder.DefineMethod("Dispose",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Void, Type.EmptyTypes);
+        dispose.GetILGenerator().Emit(OpCodes.Ret);
+
+        EmitGetEnumeratorReturnsSelf(typeBuilder);
 
         typeBuilder.CreateType();
     }
@@ -993,13 +1200,43 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
             il.Emit(OpCodes.Bge, strLoopEnd);
 
-            // result.Add(str[idx].ToString())
+            // String iteration advances by Unicode code point, so a surrogate
+            // pair is yielded as one string rather than two lone UTF-16 chars.
             var charLocal = il.DeclareLocal(_types.Char);
-            il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloc, strLocal);
             il.Emit(OpCodes.Ldloc, idxLocal);
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
             il.Emit(OpCodes.Stloc, charLocal);
+            var singleChar = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, charLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsHighSurrogate", _types.Char));
+            il.Emit(OpCodes.Brfalse, singleChar);
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldloc, strLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+            il.Emit(OpCodes.Bge, singleChar);
+            il.Emit(OpCodes.Ldloc, strLocal);
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Char, "IsLowSurrogate", _types.Char));
+            il.Emit(OpCodes.Brfalse, singleChar);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, strLocal);
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32, _types.Int32));
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Ldloc, idxLocal);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, idxLocal);
+            il.Emit(OpCodes.Br, strLoopStart);
+            il.MarkLabel(singleChar);
+            il.Emit(OpCodes.Ldloc, resultLocal);
             il.Emit(OpCodes.Ldloca, charLocal);
             il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Char, "ToString"));
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));

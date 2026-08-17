@@ -81,7 +81,8 @@ public sealed class SymbolStaticEmitter : IStaticTypeEmitterStrategy
         switch (propertyName)
         {
             case "prototype":
-                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolPrototypeField);
+                il.Emit(OpCodes.Call, ctx.Runtime!.SymbolPrototypePopulateMethod);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime.SymbolPrototypeField);
                 return true;
             case "iterator":
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);

@@ -174,6 +174,14 @@ public partial class RuntimeEmitter
         EmitLookup(runtime.TSSymbolType, "for", runtime.SymbolFor, 1);
         EmitLookup(runtime.TSSymbolType, "keyFor", runtime.SymbolKeyFor, 1);
 
+        // BigInt.asIntN/asUintN — BigInt resolves to System.Numerics.BigInteger
+        // in emitted value form; the BCL type has no JavaScript truncation APIs.
+        if (runtime.BigIntAsIntN != null)
+        {
+            EmitLookup(_types.BigInteger, "asIntN", runtime.BigIntAsIntN, 2);
+            EmitLookup(_types.BigInteger, "asUintN", runtime.BigIntAsUintN, 2);
+        }
+
         // Promise.* and Error.isError are emitted on $Runtime rather than as
         // CLR statics on their constructor Type tokens. Route value-form and
         // descriptor reads through the same identity-cached wrappers used by

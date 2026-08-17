@@ -6,6 +6,119 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private void EmitBigIntStaticMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        runtime.BigIntAsIntN = EmitBigIntTruncate(typeBuilder, runtime, "BigIntAsIntN", signed: true);
+        runtime.BigIntAsUintN = EmitBigIntTruncate(typeBuilder, runtime, "BigIntAsUintN", signed: false);
+    }
+
+    private MethodBuilder EmitBigIntTruncate(
+        TypeBuilder typeBuilder, EmittedRuntime runtime, string name, bool signed)
+    {
+        var method = typeBuilder.DefineMethod(
+            name,
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object]);
+
+        var il = method.GetILGenerator();
+        var bitsNumber = il.DeclareLocal(_types.Double);
+        var bits = il.DeclareLocal(_types.Int32);
+        var value = il.DeclareLocal(_types.BigInteger);
+        var modulus = il.DeclareLocal(_types.BigInteger);
+        var truncated = il.DeclareLocal(_types.BigInteger);
+
+        // ToIndex(bits): NaN => +0; otherwise truncate and reject negative,
+        // infinite, or widths outside the emitted implementation's int range.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Stloc, bitsNumber);
+        var notNaN = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, bitsNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brfalse, notNaN);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, bitsNumber);
+        il.MarkLabel(notNaN);
+        il.Emit(OpCodes.Ldloc, bitsNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Stloc, bitsNumber);
+
+        var invalidBits = il.DefineLabel();
+        var validBits = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, bitsNumber);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Blt, invalidBits);
+        il.Emit(OpCodes.Ldloc, bitsNumber);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", _types.Double));
+        il.Emit(OpCodes.Brtrue, invalidBits);
+        il.Emit(OpCodes.Ldloc, bitsNumber);
+        il.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
+        il.Emit(OpCodes.Ble, validBits);
+        il.MarkLabel(invalidBits);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSRangeErrorCtor,
+            "BigInt bit width is outside the supported index range");
+        il.MarkLabel(validBits);
+        il.Emit(OpCodes.Ldloc, bitsNumber);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, bits);
+
+        // ToBigInt(value), including observable object-to-primitive coercion.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToBigInt);
+        il.Emit(OpCodes.Unbox_Any, _types.BigInteger);
+        il.Emit(OpCodes.Stloc, value);
+
+        var nonZeroWidth = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, bits);
+        il.Emit(OpCodes.Brtrue, nonZeroWidth);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.BigInteger, "Zero")!.GetGetMethod()!);
+        il.Emit(OpCodes.Box, _types.BigInteger);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nonZeroWidth);
+
+        // modulus = 1n << bits; truncated = ((value % modulus) + modulus) % modulus.
+        var shiftLeft = _types.GetMethod(_types.BigInteger, "op_LeftShift", _types.BigInteger, _types.Int32);
+        var remainder = _types.GetMethod(_types.BigInteger, "op_Modulus", _types.BigInteger, _types.BigInteger);
+        var add = _types.GetMethod(_types.BigInteger, "op_Addition", _types.BigInteger, _types.BigInteger);
+        var subtract = _types.GetMethod(_types.BigInteger, "op_Subtraction", _types.BigInteger, _types.BigInteger);
+        il.Emit(OpCodes.Call, _types.GetProperty(_types.BigInteger, "One")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, bits);
+        il.Emit(OpCodes.Call, shiftLeft);
+        il.Emit(OpCodes.Stloc, modulus);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Ldloc, modulus);
+        il.Emit(OpCodes.Call, remainder);
+        il.Emit(OpCodes.Ldloc, modulus);
+        il.Emit(OpCodes.Call, add);
+        il.Emit(OpCodes.Ldloc, modulus);
+        il.Emit(OpCodes.Call, remainder);
+        il.Emit(OpCodes.Stloc, truncated);
+
+        if (signed)
+        {
+            var returnValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, truncated);
+            il.Emit(OpCodes.Call, _types.GetProperty(_types.BigInteger, "One")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldloc, bits);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Call, shiftLeft);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.BigInteger, "op_LessThan", _types.BigInteger, _types.BigInteger));
+            il.Emit(OpCodes.Brtrue, returnValue);
+            il.Emit(OpCodes.Ldloc, truncated);
+            il.Emit(OpCodes.Ldloc, modulus);
+            il.Emit(OpCodes.Call, subtract);
+            il.Emit(OpCodes.Stloc, truncated);
+            il.MarkLabel(returnValue);
+        }
+
+        il.Emit(OpCodes.Ldloc, truncated);
+        il.Emit(OpCodes.Box, _types.BigInteger);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
     /// <summary>
     /// Emits ECMA-262 NumberFromBigInt. <see cref="BigInteger"/>'s direct
     /// conversion to <see cref="double"/> truncates some halfway-adjacent
@@ -168,6 +281,11 @@ public partial class RuntimeEmitter
         );
         runtime.CreateBigInt = method;
 
+        // Both BigInt(value) and ToBigInt(value) use ToPrimitive(value,
+        // number). Keep it separate because their Number handling differs:
+        // BigInt(1) accepts an integral Number while ToBigInt(1) rejects it.
+        var toPrimitive = EmitBigIntToPrimitive(typeBuilder, runtime);
+
         var il = method.GetILGenerator();
         var bigIntType = _types.BigInteger;
 
@@ -181,15 +299,52 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notBigIntLabel);
 
+        // ToBigInt accepts booleans.
+        var notBooleanLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Boolean);
+        il.Emit(OpCodes.Brfalse, notBooleanLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        var booleanFalse = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, booleanFalse);
+        il.Emit(OpCodes.Call, _types.GetProperty(bigIntType, "One")!.GetGetMethod()!);
+        il.Emit(OpCodes.Box, bigIntType);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(booleanFalse);
+        il.Emit(OpCodes.Call, _types.GetProperty(bigIntType, "Zero")!.GetGetMethod()!);
+        il.Emit(OpCodes.Box, bigIntType);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notBooleanLabel);
+
         // If double, convert to BigInteger
         var notDoubleLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
         il.Emit(OpCodes.Brfalse, notDoubleLabel);
+        var numberLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
-        il.Emit(OpCodes.Conv_I8);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(bigIntType, _types.Int64));
+        il.Emit(OpCodes.Stloc, numberLocal);
+        var invalidNumber = il.DefineLabel();
+        var validNumber = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brtrue, invalidNumber);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsInfinity", _types.Double));
+        il.Emit(OpCodes.Brtrue, invalidNumber);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, validNumber);
+        il.MarkLabel(invalidNumber);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSRangeErrorCtor,
+            "The number cannot be converted to a BigInt because it is not an integer");
+        il.MarkLabel(validNumber);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(bigIntType, _types.Double));
         il.Emit(OpCodes.Box, bigIntType);
         il.Emit(OpCodes.Ret);
 
@@ -202,38 +357,310 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notStringLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.String);
-        // Handle hex prefix "0x" or "0X"
         var hexCheckLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.String, "Trim"));
         il.Emit(OpCodes.Stloc, hexCheckLocal);
+
+        // Empty/whitespace-only strings convert to 0n.
+        var nonEmptyString = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, hexCheckLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.String, "Length"));
+        il.Emit(OpCodes.Brtrue, nonEmptyString);
+        il.Emit(OpCodes.Call, _types.GetProperty(bigIntType, "Zero")!.GetGetMethod()!);
+        il.Emit(OpCodes.Box, bigIntType);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nonEmptyString);
+
+        var startsWithIgnoreCase = typeof(string).GetMethod(
+            nameof(string.StartsWith), [typeof(string), typeof(StringComparison)])!;
+
+        void EmitRadixParser(string prefix, int radix)
+        {
+            var nextPrefix = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, hexCheckLocal);
+            il.Emit(OpCodes.Ldstr, prefix);
+            il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
+            il.Emit(OpCodes.Callvirt, startsWithIgnoreCase);
+            il.Emit(OpCodes.Brfalse, nextPrefix);
+
+            var hasDigits = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, hexCheckLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.String, "Length"));
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Bgt, hasDigits);
+            GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+                "Cannot convert string to BigInt");
+            il.MarkLabel(hasDigits);
+
+            var resultLocal = il.DeclareLocal(bigIntType);
+            var indexLocal = il.DeclareLocal(_types.Int32);
+            var digitLocal = il.DeclareLocal(_types.Int32);
+            il.Emit(OpCodes.Call, _types.GetProperty(bigIntType, "Zero")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            var check = il.DefineLabel();
+            var body = il.DefineLabel();
+            il.Emit(OpCodes.Br, check);
+            il.MarkLabel(body);
+            il.Emit(OpCodes.Ldloc, hexCheckLocal);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Chars")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldc_I4, (int)'0');
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Stloc, digitLocal);
+            var invalidDigit = il.DefineLabel();
+            var validDigit = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, digitLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Blt, invalidDigit);
+            il.Emit(OpCodes.Ldloc, digitLocal);
+            il.Emit(OpCodes.Ldc_I4, radix);
+            il.Emit(OpCodes.Blt, validDigit);
+            il.MarkLabel(invalidDigit);
+            GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+                "Cannot convert string to BigInt");
+            il.MarkLabel(validDigit);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldc_I4, radix);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(bigIntType, _types.Int32));
+            il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "op_Multiply", bigIntType, bigIntType));
+            il.Emit(OpCodes.Ldloc, digitLocal);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(bigIntType, _types.Int32));
+            il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "op_Addition", bigIntType, bigIntType));
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, indexLocal);
+            il.MarkLabel(check);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldloc, hexCheckLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.String, "Length"));
+            il.Emit(OpCodes.Blt, body);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Box, bigIntType);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(nextPrefix);
+        }
+
+        EmitRadixParser("0b", 2);
+        EmitRadixParser("0o", 8);
+
+        // Handle hex prefix "0x" or "0X".
         il.Emit(OpCodes.Ldloc, hexCheckLocal);
         il.Emit(OpCodes.Ldstr, "0x");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "StartsWith", _types.String));
+        il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
+        il.Emit(OpCodes.Callvirt, startsWithIgnoreCase);
         var notHexLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, notHexLabel);
-        // Parse hex - prepend "0" to ensure positive interpretation
+        var numberStylesType = _types.Resolve("System.Globalization.NumberStyles");
+        var parsedStringLocal = il.DeclareLocal(bigIntType);
+        var parsedHex = il.DefineLabel();
+        il.BeginExceptionBlock();
+        // Parse hex - prepend "0" to ensure positive interpretation.
         il.Emit(OpCodes.Ldstr, "0");
         il.Emit(OpCodes.Ldloc, hexCheckLocal);
         il.Emit(OpCodes.Ldc_I4_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Substring", _types.Int32));
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", _types.String, _types.String));
         il.Emit(OpCodes.Ldc_I4, (int)System.Globalization.NumberStyles.HexNumber);
-        var numberStylesType = _types.Resolve("System.Globalization.NumberStyles");
         il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "Parse", _types.String, numberStylesType));
+        il.Emit(OpCodes.Stloc, parsedStringLocal);
+        il.Emit(OpCodes.Leave, parsedHex);
+        il.BeginCatchBlock(_types.Resolve("System.FormatException"));
+        il.Emit(OpCodes.Pop);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+            "Cannot convert string to BigInt");
+        il.EndExceptionBlock();
+        il.MarkLabel(parsedHex);
+        il.Emit(OpCodes.Ldloc, parsedStringLocal);
         il.Emit(OpCodes.Box, bigIntType);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notHexLabel);
-        // Parse decimal
+        // Parse decimal, translating BCL FormatException into the guest
+        // SyntaxError required by StringToBigInt.
+        var parsedDecimal = il.DefineLabel();
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, hexCheckLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(bigIntType, "Parse", _types.String));
+        il.Emit(OpCodes.Stloc, parsedStringLocal);
+        il.Emit(OpCodes.Leave, parsedDecimal);
+        il.BeginCatchBlock(_types.Resolve("System.FormatException"));
+        il.Emit(OpCodes.Pop);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSSyntaxErrorCtor,
+            "Cannot convert string to BigInt");
+        il.EndExceptionBlock();
+        il.MarkLabel(parsedDecimal);
+        il.Emit(OpCodes.Ldloc, parsedStringLocal);
         il.Emit(OpCodes.Box, bigIntType);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notStringLabel);
-        // Default: throw or return 0n
-        il.Emit(OpCodes.Ldstr, "Cannot convert to BigInt");
-        var invalidOpException = _types.Resolve("System.InvalidOperationException");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(invalidOpException, _types.String));
-        il.Emit(OpCodes.Throw);
+
+        // Arrays use their ordinary primitive string conversion ([], [1],
+        // [10n], ...), then re-enter the string parser above.
+        var notArrayLikeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.IListOfObject);
+        il.Emit(OpCodes.Brfalse, notArrayLikeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notArrayLikeLabel);
+
+        // Ordinary objects undergo ToPrimitive(number) once, then re-enter
+        // the callable BigInt conversion with the resulting primitive.
+        var primitiveLocal = il.DeclareLocal(_types.Object);
+        var objectLike = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, objectLike);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brtrue, objectLike);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert value to BigInt");
+        il.MarkLabel(objectLike);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, toPrimitive);
+        il.Emit(OpCodes.Stloc, primitiveLocal);
+        il.Emit(OpCodes.Ldloc, primitiveLocal);
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ret);
+
+        EmitStrictToBigInt(typeBuilder, runtime, toPrimitive);
+    }
+
+    private MethodBuilder EmitBigIntToPrimitive(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "BigIntToPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        var il = method.GetILGenerator();
+        var emptyArgs = il.DeclareLocal(_types.ObjectArray);
+        var hintArgs = il.DeclareLocal(_types.ObjectArray);
+        var candidate = il.DeclareLocal(_types.Object);
+        var result = il.DeclareLocal(_types.Object);
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, emptyArgs);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldstr, "number");
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Stloc, hintArgs);
+
+        bool EmitReturnIfPrimitive(LocalBuilder value)
+        {
+            var next = il.DefineLabel();
+            var returnValue = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Brfalse, returnValue);
+            foreach (var primitiveType in new[]
+                     {
+                         runtime.UndefinedType, _types.String, _types.Double,
+                         _types.Boolean, _types.BigInteger, runtime.TSSymbolType
+                     })
+            {
+                il.Emit(OpCodes.Ldloc, value);
+                il.Emit(OpCodes.Isinst, primitiveType);
+                il.Emit(OpCodes.Brtrue, returnValue);
+            }
+            il.Emit(OpCodes.Br, next);
+            il.MarkLabel(returnValue);
+            il.Emit(OpCodes.Ldloc, value);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+            return true;
+        }
+
+        // ExoticToPrim: GetMethod(input, @@toPrimitive).
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolToPrimitive);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, candidate);
+        var ordinary = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Brfalse, ordinary);
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, ordinary);
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        var exoticCallable = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, exoticCallable);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive is not callable");
+        il.MarkLabel(exoticCallable);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, candidate);
+        il.Emit(OpCodes.Ldloc, hintArgs);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, result);
+        EmitReturnIfPrimitive(result);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive must return a primitive value");
+
+        il.MarkLabel(ordinary);
+        foreach (var name in new[] { "valueOf", "toString" })
+        {
+            var nextMethod = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, runtime.GetProperty);
+            il.Emit(OpCodes.Stloc, candidate);
+            il.Emit(OpCodes.Ldloc, candidate);
+            il.Emit(OpCodes.Call, runtime.TypeOf);
+            il.Emit(OpCodes.Ldstr, "function");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, nextMethod);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, candidate);
+            il.Emit(OpCodes.Ldloc, emptyArgs);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.Emit(OpCodes.Stloc, result);
+            EmitReturnIfPrimitive(result);
+            il.MarkLabel(nextMethod);
+        }
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        return method;
+    }
+
+    private void EmitStrictToBigInt(
+        TypeBuilder typeBuilder, EmittedRuntime runtime, MethodBuilder toPrimitive)
+    {
+        var method = runtime.ToBigInt;
+        var il = method.GetILGenerator();
+        var notNumber = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, notNumber);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "BigInt value is required");
+        il.MarkLabel(notNumber);
+
+        var convertPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, convertPrimitive);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        var direct = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, direct);
+        il.MarkLabel(convertPrimitive);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, toPrimitive);
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(direct);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.CreateBigInt);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitBigIntArithmetic(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -480,9 +907,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(throwRange);
-        il.Emit(OpCodes.Ldstr, "toString() radix must be between 2 and 36");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Resolve("System.Exception"), _types.String));
-        il.Emit(OpCodes.Throw);
+        GuestErrorEmitter.ThrowError(il, runtime, runtime.TSRangeErrorCtor,
+            "toString() radix must be between 2 and 36");
     }
 
     /// <summary>

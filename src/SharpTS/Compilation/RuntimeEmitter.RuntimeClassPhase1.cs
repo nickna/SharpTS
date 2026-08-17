@@ -137,6 +137,19 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.Object]);
 
+        // Reserve strict ToBigInt for DataView's BigInt setter adapters. The
+        // adapters must be emitted before GetProperty can bind method values;
+        // EmitStrictToBigInt fills this body later after observable
+        // object-to-primitive helpers are available.
+        if (_features.UsesBigInt)
+        {
+            runtime.ToBigInt = typeBuilder.DefineMethod(
+                "ToBigInt",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object]);
+        }
+
         // Reserve ToJsString(object) → string. Stringify (which $RegExp's
         // Symbol.* helpers currently call) doesn't run @@toPrimitive on
         // objects; ToJsString does (ECMA-262 §7.1.1). Forward-declared so

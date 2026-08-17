@@ -203,6 +203,15 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
+        var callbackCallable = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, callbackCallable);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Map.groupBy: callback is not callable");
+        il.MarkLabel(callbackCallable);
+
         // Locals
         var mapLocal = il.DeclareLocal(_types.Object);                      // result map
         var listLocal = il.DeclareLocal(_types.ListOfObject);               // array elements
@@ -217,30 +226,43 @@ public partial class RuntimeEmitter
         var hasExistingLabel = il.DefineLabel();
         var addElementLabel = il.DefineLabel();
 
-        var isTSArrayLabel = il.DefineLabel();
-        var afterUnwrapLabel = il.DefineLabel();
-
         // map = CreateMap() — creates Dictionary<object, object?> with ReferenceEqualityComparer
         il.Emit(OpCodes.Call, runtime.CreateMap);
         il.Emit(OpCodes.Stloc, mapLocal);
 
-        // list = unwrap iterable (handle both List<object?> and $Array)
+        // GroupBy consumes the iterator protocol, not only array storage.
+        // Validate a nullish/absent @@iterator before the shared materializer's
+        // host-IEnumerable compatibility fallback can accept the value.
+        var materialize = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
-        il.Emit(OpCodes.Brtrue, isTSArrayLabel);
-
+        il.Emit(OpCodes.Brtrue, materialize);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.ListOfObject);
-        il.Emit(OpCodes.Stloc, listLocal);
-        il.Emit(OpCodes.Br, afterUnwrapLabel);
-
-        il.MarkLabel(isTSArrayLabel);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Brtrue, materialize);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayElementsGetter);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brtrue, materialize);
+        var iteratorFn = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+        il.Emit(OpCodes.Stloc, iteratorFn);
+        var invalidIterable = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, iteratorFn);
+        il.Emit(OpCodes.Brfalse, invalidIterable);
+        il.Emit(OpCodes.Ldloc, iteratorFn);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brfalse, materialize);
+        il.MarkLabel(invalidIterable);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Map.groupBy: items is not iterable");
+        il.MarkLabel(materialize);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolIterator);
+        il.Emit(OpCodes.Ldtoken, runtime.RuntimeType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle")!);
+        il.Emit(OpCodes.Call, runtime.IterateToList);
         il.Emit(OpCodes.Stloc, listLocal);
-
-        il.MarkLabel(afterUnwrapLabel);
 
         // i = 0
         il.Emit(OpCodes.Ldc_I4_0);

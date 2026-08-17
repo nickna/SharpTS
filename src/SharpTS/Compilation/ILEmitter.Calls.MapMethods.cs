@@ -109,7 +109,7 @@ public partial class ILEmitter
             case "clear":
                 IL.Emit(OpCodes.Ldloc, objLocal);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.MapClear);
-                IL.Emit(OpCodes.Ldnull); // clear returns undefined
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.UndefinedInstance);
                 break;
 
             case "keys":
@@ -138,8 +138,17 @@ public partial class ILEmitter
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }
+                if (arguments.Count > 1)
+                {
+                    EmitExpression(arguments[1]);
+                    EmitBoxIfNeeded(arguments[1]);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                }
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.MapForEach);
-                IL.Emit(OpCodes.Ldnull); // forEach returns undefined
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 break;
 
             default:

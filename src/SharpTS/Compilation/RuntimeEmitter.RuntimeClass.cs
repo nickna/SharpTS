@@ -486,6 +486,7 @@ public partial class RuntimeEmitter
         DefineStringPrototypePopulateShell(typeBuilder, runtime);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime);
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime);
+        DefineSymbolPrototypePopulateShell(typeBuilder, runtime);
         DefineBooleanPrototypePopulateShell(typeBuilder, runtime);
         DefineDatePrototypePopulateShell(typeBuilder, runtime);
         DefineErrorPrototypePopulateShell(typeBuilder, runtime);
@@ -666,6 +667,7 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Call, runtime.NumberPrototypePopulateMethod);
         if (_features.UsesBigInt)
             cctorIL.Emit(OpCodes.Call, runtime.BigIntPrototypePopulateMethod);
+        cctorIL.Emit(OpCodes.Call, runtime.SymbolPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.BooleanPrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.StringPrototypePopulateMethod);
@@ -730,6 +732,7 @@ public partial class RuntimeEmitter
         EmitJsToInt32(typeBuilder, runtime);
         EmitJsLessThan(typeBuilder, runtime);
         EmitJsLessOrEqual(typeBuilder, runtime);
+        EmitUpdateNumeric(typeBuilder, runtime);
         EmitIsTruthy(typeBuilder, runtime);
         // Promise resolving callbacks need the adoption helper token before
         // EmitPromiseMethods fills in its body later in this method.
@@ -885,6 +888,25 @@ public partial class RuntimeEmitter
             if (_features.UsesNodeStreams)
                 EmitStreamAddAbortSignalMethod(typeBuilder, runtime);
         }
+        // DataView method values are bound by GetProperty below. Emit the
+        // constructor/property/method adapters now so those wrappers can use
+        // their MethodInfo tokens; the remaining Worker helpers stay in their
+        // usual late block.
+        if (_features.HasAnyTypedArray)
+            EmitDataViewHelper(typeBuilder, runtime);
+        // Weak collections/references and FinalizationRegistry are represented
+        // by BCL types, so generic property access cannot discover their
+        // JavaScript method names. Emit their helpers before GetProperty so its
+        // receiver branches can bind them into $TSFunction wrappers.
+        if (_features.UsesWeakMap)
+            EmitWeakMapMethods(typeBuilder, runtime);
+        if (_features.UsesWeakSet)
+            EmitWeakSetMethods(typeBuilder, runtime);
+        if (_features.UsesWeakRef)
+            EmitWeakRefMethods(typeBuilder, runtime);
+        EmitFinalizationRegistryMethods(typeBuilder, runtime);
+        // Boxed Symbol property access binds these helpers directly.
+        EmitSymbolPrototypePopulate(typeBuilder, runtime);
         // String/Number/Boolean populate shells already defined above
         // (before cctor) so the cctor can call them eagerly.
         EmitGetProperty(typeBuilder, runtime);
@@ -949,6 +971,8 @@ public partial class RuntimeEmitter
         // but BEFORE IterateToList (which needs IteratorWrapperCtor)
         EmitIteratorWrapperType(moduleBuilder, runtime);
         EmitArrayIteratorType(moduleBuilder, runtime);
+        if (_features.UsesMap)
+            EmitMapCollectionIteratorType(moduleBuilder, runtime);
         EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
         // but its incremental custom-iterator body needs both the basic
@@ -1241,6 +1265,7 @@ public partial class RuntimeEmitter
         if (_features.UsesBigInt)
         {
             EmitCreateBigInt(typeBuilder, runtime);
+            EmitBigIntStaticMethods(typeBuilder, runtime);
             EmitBigIntArithmetic(typeBuilder, runtime);
             EmitBigIntComparison(typeBuilder, runtime);
             EmitBigIntBitwise(typeBuilder, runtime);
@@ -1310,17 +1335,8 @@ public partial class RuntimeEmitter
         // Set methods — gated on UsesSet.
         if (_features.UsesSet)
             EmitSetMethods(typeBuilder, runtime);
-        // WeakMap methods — gated on UsesWeakMap (`new WeakMap()` / bare `WeakMap`).
-        if (_features.UsesWeakMap)
-            EmitWeakMapMethods(typeBuilder, runtime);
-        // WeakSet methods — gated on UsesWeakSet.
-        if (_features.UsesWeakSet)
-            EmitWeakSetMethods(typeBuilder, runtime);
-        // WeakRef methods — gated on UsesWeakRef.
-        if (_features.UsesWeakRef)
-            EmitWeakRefMethods(typeBuilder, runtime);
-        // FinalizationRegistry methods
-        EmitFinalizationRegistryMethods(typeBuilder, runtime);
+        // WeakMap/WeakSet/WeakRef/FinalizationRegistry helpers are emitted
+        // before GetProperty, which binds their BCL-backed receiver methods.
         // Proxy methods — gated on UsesProxy (`new Proxy()` / bare `Proxy`).
         // Proxy trap dispatch late-binds to SharpTSProxy on its normal path, so the
         // compiled output needs SharpTS.dll present at runtime when Proxy is used.

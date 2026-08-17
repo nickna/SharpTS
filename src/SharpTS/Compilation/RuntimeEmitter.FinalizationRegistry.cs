@@ -203,7 +203,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "FinalizationRegistryRegister",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
+            _types.Object,
             [_types.Object, _types.Object, _types.Object, _types.Object]
         );
         runtime.FinalizationRegistryRegister = method;
@@ -337,6 +337,7 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
 
         il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

@@ -48,6 +48,13 @@ public partial class RuntimeEmitter
         ctorIl.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
 
         // _buffer = new byte[byteLength]
+        var validLength = ctorIl.DefineLabel();
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Ldc_I4_0);
+        ctorIl.Emit(OpCodes.Bge, validLength);
+        GuestErrorEmitter.ThrowError(ctorIl, runtime, runtime.TSRangeErrorCtor,
+            "Invalid ArrayBuffer length");
+        ctorIl.MarkLabel(validLength);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Newarr, typeof(byte));
@@ -66,6 +73,7 @@ public partial class RuntimeEmitter
 
         // Method: public $ArrayBuffer Slice(int begin, int end)
         EmitArrayBufferSlice(typeBuilder, runtime, bufferField, ctor);
+        EmitArrayBufferSliceDynamic(typeBuilder, runtime);
 
         // Finalize the type
         typeBuilder.CreateType();
@@ -187,12 +195,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, bufLenLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, beginLocal);
         var afterBeginLabel = il.DefineLabel();
         il.Emit(OpCodes.Br, afterBeginLabel);
 
         il.MarkLabel(beginPositiveLabel);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, bufLenLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, beginLocal);
 
         il.MarkLabel(afterBeginLabel);
@@ -210,6 +222,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, bufLenLocal);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, endLocal);
         il.Emit(OpCodes.Br, afterEndLabel);
 
@@ -232,6 +246,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, endLocal);
         il.Emit(OpCodes.Ldloc, beginLocal);
         il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32));
         il.Emit(OpCodes.Stloc, lengthLocal);
 
         // var result = new $ArrayBuffer(length)
@@ -253,6 +269,49 @@ public partial class RuntimeEmitter
 
         // return result
         il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitArrayBufferSliceDynamic(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SliceDynamic",
+            MethodAttributes.Public,
+            typeBuilder,
+            [_types.Object, _types.Object]);
+        runtime.ArrayBufferSliceDynamic = method;
+        var il = method.GetILGenerator();
+        var begin = il.DeclareLocal(_types.Int32);
+        var end = il.DeclareLocal(_types.Int32);
+
+        void EmitIndexOrDefault(int arg, LocalBuilder target, int defaultValue)
+        {
+            var useDefault = il.DefineLabel();
+            var ready = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg, arg);
+            il.Emit(OpCodes.Brfalse, useDefault);
+            il.Emit(OpCodes.Ldarg, arg);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, useDefault);
+            il.Emit(OpCodes.Ldarg, arg);
+            il.Emit(OpCodes.Call, runtime.ToNumber);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Stloc, target);
+            il.Emit(OpCodes.Br, ready);
+            il.MarkLabel(useDefault);
+            il.Emit(OpCodes.Ldc_I4, defaultValue);
+            il.Emit(OpCodes.Stloc, target);
+            il.MarkLabel(ready);
+        }
+
+        EmitIndexOrDefault(1, begin, 0);
+        EmitIndexOrDefault(2, end, int.MaxValue);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, begin);
+        il.Emit(OpCodes.Ldloc, end);
+        il.Emit(OpCodes.Callvirt, runtime.ArrayBufferSlice);
         il.Emit(OpCodes.Ret);
     }
 

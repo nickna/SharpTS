@@ -312,7 +312,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetKeys",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
+            _types.Object,
             [_types.Object]
         );
         runtime.SetKeys = method;
@@ -326,7 +326,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetValues",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
+            _types.Object,
             [_types.Object]
         );
         runtime.SetValues = method;
@@ -393,11 +393,13 @@ public partial class RuntimeEmitter
 
         // return result;
         il.Emit(OpCodes.Ldloc, resultLocal);
+        EmitArrayIteratorWrapper(il, runtime);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        EmitArrayIteratorWrapper(il, runtime);
         il.Emit(OpCodes.Ret);
     }
 
@@ -406,7 +408,7 @@ public partial class RuntimeEmitter
         var method = typeBuilder.DefineMethod(
             "SetEntries",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.ListOfObject,
+            _types.Object,
             [_types.Object]
         );
         runtime.SetEntries = method;
@@ -478,11 +480,13 @@ public partial class RuntimeEmitter
 
         // return result;
         il.Emit(OpCodes.Ldloc, resultLocal);
+        EmitArrayIteratorWrapper(il, runtime);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();
         il.MarkLabel(returnEmptyLabel);
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, Type.EmptyTypes)!);
+        EmitArrayIteratorWrapper(il, runtime);
         il.Emit(OpCodes.Ret);
     }
 
@@ -492,7 +496,7 @@ public partial class RuntimeEmitter
             "SetForEach",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
-            [_types.Object, _types.Object]
+            [_types.Object, _types.Object, _types.Object]
         );
         runtime.SetForEach = method;
 
@@ -559,10 +563,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stelem_Ref);
 
-        // InvokeValue(callback, args)
+        // Call(callback, thisArg, args)
+        il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeValue);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
         il.Emit(OpCodes.Pop); // Discard return value
 
         il.Emit(OpCodes.Br, loopStartLabel);
@@ -578,6 +583,17 @@ public partial class RuntimeEmitter
 
     #region ES2025 Set Operations
 
+    private void EmitRequireSetReceiver(ILGenerator il, EmittedRuntime runtime)
+    {
+        var valid = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.HashSetOfObject);
+        il.Emit(OpCodes.Brtrue, valid);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Set operation called on an incompatible receiver");
+        il.MarkLabel(valid);
+    }
+
     private void EmitSetUnion(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -589,6 +605,7 @@ public partial class RuntimeEmitter
         runtime.SetUnion = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
@@ -679,6 +696,7 @@ public partial class RuntimeEmitter
         runtime.SetIntersection = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
@@ -761,6 +779,7 @@ public partial class RuntimeEmitter
         runtime.SetDifference = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
@@ -846,6 +865,7 @@ public partial class RuntimeEmitter
         runtime.SetSymmetricDifference = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var ctorWithComparer = _types.GetConstructor(setType, [_types.IEqualityComparerOfObject])!;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
@@ -978,6 +998,7 @@ public partial class RuntimeEmitter
         runtime.SetIsSubsetOf = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
@@ -1064,6 +1085,7 @@ public partial class RuntimeEmitter
         runtime.SetIsSupersetOf = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
@@ -1150,6 +1172,7 @@ public partial class RuntimeEmitter
         runtime.SetIsDisjointFrom = method;
 
         var il = method.GetILGenerator();
+        EmitRequireSetReceiver(il, runtime);
         var setType = _types.HashSetOfObject;
         var enumeratorType = _types.MakeGenericType(typeof(HashSet<>.Enumerator).GetGenericTypeDefinition(), _types.Object);
 
@@ -1343,6 +1366,24 @@ public partial class RuntimeEmitter
             il.MarkLabel(doneLabel);
         }
 
+        void EmitArgOrUndefined(int index)
+        {
+            var missing = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ble, missing);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Br, done);
+            il.MarkLabel(missing);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.MarkLabel(done);
+        }
+
         // add(value) -> set (chainable)
         EmitCase("add", () =>
         {
@@ -1378,7 +1419,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, setField);
             il.Emit(OpCodes.Call, runtime.SetClear);
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         });
 
         // keys() -> iterator
@@ -1411,8 +1452,9 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, setField);
             EmitArgOrNull(0);
+            EmitArgOrUndefined(1);
             il.Emit(OpCodes.Call, runtime.SetForEach);
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         });
 
         // ES2025 set operations: union, intersection, difference, symmetricDifference

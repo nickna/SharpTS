@@ -2000,6 +2000,12 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             "Set" => Types.HashSetOfObject,
             "WeakMap" => Types.ConditionalWeakTableObjectObject,
             "WeakSet" => Types.ConditionalWeakTableObjectObject,
+            // WeakRef and FinalizationRegistry are backed by BCL containers in
+            // standalone output.  Their Type tokens provide the constructor
+            // object in value position (typeof/isConstructor/prototype), while
+            // `new` remains routed through the dedicated emitted factories.
+            "WeakRef" => Types.WeakReferenceObject,
+            "FinalizationRegistry" => Types.ObjectArray,
             "Promise" => Types.TaskOfObject,
             "Function" => Ctx.Runtime!.TSFunctionType,
             // Symbol (#234): the value-form $TSSymbol token. ILEmitter handles
@@ -2388,7 +2394,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // without this, `typeof Array` returns `"undefined"` in compiled mode even though
         // these names resolve fine everywhere else via TryEmitBuiltInClassType.
         if (name is "Array" or "Date" or "RegExp" or "Map" or "Set"
-            or "WeakMap" or "WeakSet" or "Promise" or "Buffer" or "Function"
+            or "WeakMap" or "WeakSet" or "WeakRef" or "FinalizationRegistry"
+            or "Promise" or "Buffer" or "Function"
             or "Object" or "String" or "Number" or "Boolean"
             or "TextEncoder" or "TextDecoder") return true;
         // Typed-array / buffer constructors as values (#331) — without this,

@@ -45,6 +45,12 @@ public sealed class MapStaticEmitter : IStaticTypeEmitterStrategy
 
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        return false;
+        if (propertyName != "groupBy") return false;
+        var ctx = emitter.Context;
+        ctx.Types.EmitLoadMethodInfo(ctx.IL, ctx.Runtime!.MapGroupBy);
+        ctx.IL.Emit(OpCodes.Ldstr, "groupBy");
+        ctx.IL.Emit(OpCodes.Ldc_I4_2);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        return true;
     }
 }
