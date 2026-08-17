@@ -160,6 +160,7 @@ public partial class RuntimeEmitter
         var tcsLocal = il.DeclareLocal(tcsType);
         var exceptionLocal = il.DeclareLocal(_types.Exception);
         var lookupPathLocal = il.DeclareLocal(_types.String);
+        var importerDirectoryLocal = il.DeclareLocal(_types.String);
 
         // Labels
         var notFoundLabel = il.DefineLabel();
@@ -175,9 +176,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, typeof(string).GetMethod(
             nameof(string.StartsWith), [typeof(string)])!);
         il.Emit(OpCodes.Brfalse, lookupReadyLabel);
+
+        // Single-file compilation has no owning module path. Keep the raw
+        // relative specifier in that case: Path.GetDirectoryName("") returns
+        // null, and passing it to Path.Combine used to throw synchronously
+        // instead of returning import()'s required rejected Promise.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, typeof(Path).GetMethod(
             nameof(Path.GetDirectoryName), [typeof(string)])!);
+        il.Emit(OpCodes.Stloc, importerDirectoryLocal);
+        il.Emit(OpCodes.Ldloc, importerDirectoryLocal);
+        il.Emit(OpCodes.Brfalse, lookupReadyLabel);
+        il.Emit(OpCodes.Ldloc, importerDirectoryLocal);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, typeof(Path).GetMethod(
             nameof(Path.Combine), [typeof(string), typeof(string)])!);

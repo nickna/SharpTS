@@ -10,6 +10,24 @@ namespace SharpTS.Tests.SharedTests;
 public class AsyncArrowFunctionTests
 {
     [Theory, ModeData]
+    public void AsyncFunction_SyncArrowCapturesCanonicalTopLevelFunctionObject(ExecutionMode mode)
+    {
+        var source = """
+            function helper() {}
+            helper.extra = 42;
+
+            async function run() {
+                const callback = () => helper.extra;
+                return callback();
+            }
+
+            run().then(value => console.log(value));
+            """;
+
+        Assert.Equal("42\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void AsyncArrow_BasicReturn(ExecutionMode mode)
     {
         var source = """

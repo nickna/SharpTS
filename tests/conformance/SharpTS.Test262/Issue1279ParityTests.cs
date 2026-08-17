@@ -6551,6 +6551,37 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Function_environment_lowering_is_shared_by_function_and_class_paths(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> DynamicImportCompilerCases => new()
+    {
+        "language/expressions/dynamic-import/always-create-new-promise.js",
+        "language/expressions/dynamic-import/assignment-expression/unary-expr.js",
+        "language/expressions/dynamic-import/catch/top-level-import-catch-file-does-not-exist.js",
+        "language/expressions/dynamic-import/catch/nested-async-function-await-file-does-not-exist.js",
+        "language/expressions/dynamic-import/catch/nested-async-function-file-does-not-exist.js",
+        "language/expressions/dynamic-import/catch/nested-async-function-return-await-file-does-not-exist.js",
+        "language/expressions/dynamic-import/syntax/valid/callexpression-arguments.js",
+        "language/expressions/dynamic-import/syntax/valid/nested-block-nested-imports.js",
+        "language/expressions/dynamic-import/syntax/valid/top-level-script-code-valid.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(DynamicImportCompilerCases))]
+    public void Dynamic_import_call_shapes_and_rejections_match_in_compiled_mode(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
+    public static TheoryData<string> RemainingBuiltInTailCompilerCases => new()
+    {
+            "built-ins/Array/prototype/concat/Array.prototype.concat_spreadable-function.js",
+        "built-ins/Object/assign/target-is-frozen-accessor-property-set-succeeds.js",
+        "built-ins/Object/prototype/toString/symbol-tag-non-str-proxy-function.js",
+        "built-ins/String/S15.5.2.1_A1_T8.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(RemainingBuiltInTailCompilerCases))]
+    public void Remaining_committed_built_in_tail_matches_in_compiled_mode(string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

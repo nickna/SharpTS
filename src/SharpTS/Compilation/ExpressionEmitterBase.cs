@@ -1777,7 +1777,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 {
                     IL.Emit(OpCodes.Ldloc, local);
                 }
-                else
+                else if (!TryEmitGlobalVariable(sourceVar))
                 {
                     IL.Emit(OpCodes.Ldnull);
                 }

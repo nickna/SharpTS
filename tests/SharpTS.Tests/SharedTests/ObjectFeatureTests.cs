@@ -1734,6 +1734,31 @@ public class ObjectFeatureTests
     }
 
     [Theory, ModeData]
+    public void Object_DefineProperty_WritableProperty_SynchronizesDescriptorAndStorage(ExecutionMode mode)
+    {
+        var source = """
+            let sloppyObject: any = {};
+            Object.defineProperty(sloppyObject, "x", { value: 42, writable: true });
+            sloppyObject.x = 100;
+            console.log(sloppyObject.x);
+            console.log(Object.getOwnPropertyDescriptor(sloppyObject, "x").value);
+
+            let strictObject: any = {};
+            Object.defineProperty(strictObject, "x", { value: 42, writable: true });
+            function assignStrict() {
+                "use strict";
+                strictObject.x = 200;
+            }
+            assignStrict();
+            console.log(strictObject.x);
+            console.log(Object.getOwnPropertyDescriptor(strictObject, "x").value);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("100\n100\n200\n200\n", output);
+    }
+
+    [Theory, ModeData]
     public void Object_DefineProperty_MultipleProperties(ExecutionMode mode)
     {
         var source = """

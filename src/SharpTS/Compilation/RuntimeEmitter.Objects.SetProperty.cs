@@ -1391,6 +1391,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.PDSIsWritable);
         il.Emit(OpCodes.Brfalse, nullLabel);  // Not writable, silently return
 
+        // Dictionary-backed objects may also carry a PDS data descriptor for
+        // the same key. Keep both stores synchronized: descriptor-aware reads
+        // observe the PDS value, while ordinary reads use the dictionary.
+        var dictDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var dictRawStoreLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, dictDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, dictDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, dictRawStoreLabel);
+        il.Emit(OpCodes.Ldloc, dictDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+
+        il.MarkLabel(dictRawStoreLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldarg_1);
@@ -1847,6 +1864,16 @@ public partial class RuntimeEmitter
         EmitInvokePdsSetterWithValueAndReturn(il, runtime, sharpSetterLocal);
         il.MarkLabel(sharpNoSetterLabel);
 
+        // Object-literal accessors are stored in $Object's native _setters
+        // dictionary rather than PDS. They remain callable after freeze, so
+        // delegate before the receiver-wide PDSIsWritable integrity check.
+        var sharpDelegateToObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectHasSetter);
+        il.Emit(OpCodes.Brtrue, sharpDelegateToObjectLabel);
+
         var sharpWritableLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
@@ -1856,6 +1883,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel);
         EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(sharpWritableLabel);
+        il.MarkLabel(sharpDelegateToObjectLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldarg_1);
@@ -1880,6 +1908,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ConditionalWeakTable, "TryGetValue", _types.Object, _types.Object.MakeByRefType()));
         il.Emit(OpCodes.Brfalse, sealedCheckLabel); // Not frozen, check sealed
+
+        // Frozen data properties reject writes, but accessor setters remain
+        // callable after Object.freeze.
+        var strictFrozenSetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, strictFrozenSetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+        il.Emit(OpCodes.Brtrue, doSetLabel);
 
         // Object is frozen - check strict mode
         il.Emit(OpCodes.Ldarg_3); // strictMode
@@ -1959,6 +1996,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, nullLabel); // sloppy → silent return
         EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of object");
         il.MarkLabel(strictWritableLabel);
+
+        // Keep PDS-backed data descriptors and dictionary storage synchronized.
+        var strictDictDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var strictDictRawStoreLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, strictDictDescriptorLocal);
+        il.Emit(OpCodes.Ldloc, strictDictDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, strictDictRawStoreLabel);
+        il.Emit(OpCodes.Ldloc, strictDictDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+
+        il.MarkLabel(strictDictRawStoreLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
@@ -2046,7 +2098,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, strictSymNoSetterLabel);
         il.Emit(OpCodes.Ldloc, strictSymSetterLocal);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brfalse, symCheckObjectStateLabel); // callable setter
+        // A callable accessor setter remains writable after freeze. Route
+        // directly to invocation, bypassing the receiver integrity-level
+        // checks that apply only to data writes.
+        var strictSymInvokeSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictSymInvokeSetterLabel);
         il.MarkLabel(strictSymNoSetterLabel);
         il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
@@ -2056,6 +2112,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, strictSymDescriptorLocal);
         il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, symThrowLabel);
+        il.Emit(OpCodes.Br, symCheckObjectStateLabel);
+
+        il.MarkLabel(strictSymInvokeSetterLabel);
+        EmitInvokePdsSetterWithValueAndReturn(il, runtime, strictSymSetterLocal);
 
         il.MarkLabel(symCheckObjectStateLabel);
 

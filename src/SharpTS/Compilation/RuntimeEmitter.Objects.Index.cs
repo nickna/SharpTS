@@ -294,6 +294,11 @@ public partial class RuntimeEmitter
         // already passed it to il.Emit, which throws on null. A redundant != null guard here
         // would only poison nullable flow analysis for the unconditional casts further down.
         EmitProtoSymbolFallback(runtime.TSArrayType, runtime.ArrayPrototypeField, runtime.ArrayPrototypePopulateMethod);
+        // Functions inherit symbol-keyed properties from Function.prototype,
+        // including Symbol.isConcatSpreadable. The own symbol dictionary was
+        // already checked above; only a miss reaches this fallback.
+        EmitProtoSymbolFallback(runtime.TSFunctionType, runtime.FunctionPrototypeField, runtime.FunctionPrototypePopulateMethod);
+        EmitProtoSymbolFallback(runtime.BoundTSFunctionType, runtime.FunctionPrototypeField, runtime.FunctionPrototypePopulateMethod);
 
         // Ordinary symbol-keyed [[Get]] walks the receiver's explicit PDS
         // prototype chain just like string-keyed GetProperty. This is needed
