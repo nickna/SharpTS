@@ -82,16 +82,11 @@ public partial class RuntimeEmitter
         var endLoopLabel = il.DefineLabel();
         var returnResultLabel = il.DefineLabel();
 
-        // Get string from arg
+        // Apply ECMAScript ToString before parsing. In particular, JavaScript
+        // stringifies negative zero as "0" (where Double.ToString() yields
+        // "-0"), and object arguments must observe their coercion hooks.
         il.Emit(OpCodes.Ldarg_0);
-        var notNullStrLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, notNullStrLabel);
-        il.Emit(OpCodes.Ldc_R8, double.NaN);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(notNullStrLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, strLocal);
 

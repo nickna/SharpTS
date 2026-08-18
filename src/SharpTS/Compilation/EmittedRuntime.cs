@@ -1115,6 +1115,8 @@ public class EmittedRuntime
     public MethodBuilder NumberIsSafeInteger { get; set; } = null!;
     public MethodBuilder GlobalIsNaN { get; set; } = null!;
     public MethodBuilder GlobalIsFinite { get; set; } = null!;
+    public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
+    public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
     public MethodBuilder NumberToFixed { get; set; } = null!;
     public MethodBuilder NumberToPrecision { get; set; } = null!;
     public MethodBuilder NumberToExponential { get; set; } = null!;

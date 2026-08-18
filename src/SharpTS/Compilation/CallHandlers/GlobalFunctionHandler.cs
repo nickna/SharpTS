@@ -245,19 +245,16 @@ public class GlobalFunctionHandler : ICallHandler
 
     private static bool EmitEncodeURIComponent(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
-        // JS: encodeURIComponent() throws; encodeURIComponent(undefined) returns "undefined".
-        // We match the "undefined" coercion and let the runtime throw if truly missing.
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "undefined");
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         else
         {
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Stringify);
         }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Types.UriEscapeDataString);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalEncodeURIComponent);
         emitter.SetStackType(StackType.String);
         return true;
     }
@@ -266,15 +263,14 @@ public class GlobalFunctionHandler : ICallHandler
     {
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "undefined");
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         else
         {
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Stringify);
         }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Types.UriUnescapeDataString);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalDecodeURIComponent);
         emitter.SetStackType(StackType.String);
         return true;
     }

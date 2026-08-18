@@ -153,7 +153,10 @@ public partial class Interpreter
         {
             if (!globals.ContainsKey(name))
                 globals[name] = new SharpTSGlobalFunction(
-                    name, name is BuiltInNames.BigInt or BuiltInNames.Eval ? 1 : 0);
+                    name, name is BuiltInNames.BigInt or BuiltInNames.Eval
+                        or BuiltInNames.EncodeURIComponent or BuiltInNames.DecodeURIComponent
+                        ? 1
+                        : 0);
         }
 
         // Bind value-position globals for built-ins that were previously only

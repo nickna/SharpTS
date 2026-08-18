@@ -63,4 +63,25 @@ public class UriGlobalsTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n", output);
     }
+
+    [Theory, ModeData]
+    public void UriGlobals_AreFirstClassFunctionsWithBuiltinMetadata(ExecutionMode mode)
+    {
+        var source = """
+            const encode = encodeURIComponent;
+            const decode = decodeURIComponent;
+            console.log(encode.name, encode.length, encode.prototype === undefined);
+            console.log(decode.name, decode.length, decode.prototype === undefined);
+            console.log(encode.propertyIsEnumerable("length"));
+            console.log(decode.propertyIsEnumerable("length"));
+            console.log(decode(encode("hello world")));
+            console.log(encode());
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "encodeURIComponent 1 true\n" +
+            "decodeURIComponent 1 true\n" +
+            "false\nfalse\nhello world\nundefined\n",
+            output);
+    }
 }
