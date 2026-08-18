@@ -12,6 +12,11 @@ public partial class ILCompiler
     private readonly List<(Expr.ArrowFunction Arrow, HashSet<string> Captures)> _collectedArrows = [];
     private readonly Dictionary<Expr.Call, List<Stmt>> _staticDirectEvalStatements =
         new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<string> _staticIndirectEvalAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<Expr.Call> _staticIndirectEvalCalls =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<string, List<Expr.Call>> _staticIndirectEvalCallsByAlias =
+        new(StringComparer.Ordinal);
     private readonly HashSet<Expr.ArrowFunction> _strictArrows = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _arrowsInAnonymousEmptyDerivedClass = new(ReferenceEqualityComparer.Instance);
     // Maps each collected arrow to the module path that owns it (null = script/single-file
@@ -498,6 +503,11 @@ public partial class ILCompiler
             case Stmt.Var v:
                 if (v.Initializer != null)
                 {
+                    if (_functionNestingDepth == 0 && _topLevelBlockDepth == 0
+                        && v.Initializer is Expr.Variable { Name.Lexeme: "eval" })
+                    {
+                        _staticIndirectEvalAliases.Add(v.Name.Lexeme);
+                    }
                     // If initializing with a class expression, track variable name → class expr mapping
                     if (v.Initializer is Expr.ClassExpr classExpr)
                     {
@@ -507,6 +517,11 @@ public partial class ILCompiler
                 }
                 break;
             case Stmt.Const c:
+                if (_functionNestingDepth == 0 && _topLevelBlockDepth == 0
+                    && c.Initializer is Expr.Variable { Name.Lexeme: "eval" })
+                {
+                    _staticIndirectEvalAliases.Add(c.Name.Lexeme);
+                }
                 // If initializing with a class expression, track variable name → class expr mapping
                 if (c.Initializer is Expr.ClassExpr classExprConst)
                 {
@@ -847,6 +862,18 @@ public partial class ILCompiler
                 {
                     Right: Expr.Variable { Name.Lexeme: "eval" }
                 };
+                if (evalCallee is Expr.Variable alias
+                    && _staticIndirectEvalAliases.Contains(alias.Name.Lexeme))
+                {
+                    isIndirectEval = true;
+                    _staticIndirectEvalCalls.Add(c);
+                    if (!_staticIndirectEvalCallsByAlias.TryGetValue(alias.Name.Lexeme, out var calls))
+                    {
+                        calls = [];
+                        _staticIndirectEvalCallsByAlias[alias.Name.Lexeme] = calls;
+                    }
+                    calls.Add(c);
+                }
                 if ((isDirectEval || isIndirectEval)
                     && c.Arguments.Count > 0
                     && c.Arguments[0] is Expr.Literal { Value: string evalSource })
@@ -923,6 +950,13 @@ public partial class ILCompiler
                 break;
             case Expr.Assign a:
                 CollectArrowsFromExpr(a.Value);
+                if (_functionNestingDepth == 0 && _topLevelBlockDepth == 0
+                    && _staticIndirectEvalAliases.Remove(a.Name.Lexeme)
+                    && _staticIndirectEvalCallsByAlias.Remove(a.Name.Lexeme, out var aliasCalls))
+                {
+                    foreach (var aliasCall in aliasCalls)
+                        _staticIndirectEvalCalls.Remove(aliasCall);
+                }
                 break;
             case Expr.New n:
                 CollectArrowsFromExpr(n.Callee);

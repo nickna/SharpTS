@@ -66,6 +66,7 @@ public partial class ILCompiler
             RuntimeFeatures = _features,
             LexicalTdzNames = _lexicalBindingNames,
             StaticDirectEvalStatements = _staticDirectEvalStatements,
+            StaticIndirectEvalCalls = _staticIndirectEvalCalls,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             TypeEmitterRegistry = _typeEmitterRegistry,

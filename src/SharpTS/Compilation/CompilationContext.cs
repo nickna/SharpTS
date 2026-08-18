@@ -92,6 +92,9 @@ public partial class CompilationContext
     internal Dictionary<SharpTS.Parsing.Expr.Call, List<SharpTS.Parsing.Stmt>>?
         StaticDirectEvalStatements { get; set; }
 
+    /// <summary>Calls proven during discovery to use an unchanged top-level eval alias.</summary>
+    internal HashSet<SharpTS.Parsing.Expr.Call>? StaticIndirectEvalCalls { get; set; }
+
     // Type emitter registry for type-first method dispatch
     public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
 

@@ -26,7 +26,8 @@ public partial class RuntimeEmitter
         var targetField = typeBuilder.DefineField("_target", runtime.TSFunctionType, FieldAttributes.Assembly);
         runtime.BoundTSFunctionTargetField = targetField;
         var thisArgField = typeBuilder.DefineField("_thisArg", _types.Object, FieldAttributes.Private);
-        var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Private);
+        var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Assembly);
+        runtime.BoundTSFunctionBoundArgsField = boundArgsField;
 
         // Constructor: public $BoundTSFunction($TSFunction target, object thisArg, object[] boundArgs)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -200,8 +201,10 @@ public partial class RuntimeEmitter
         );
         runtime.BoundAnyFunctionType = typeBuilder;
 
-        var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Private);
-        var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Private);
+        var targetField = typeBuilder.DefineField("_target", _types.Object, FieldAttributes.Assembly);
+        runtime.BoundAnyFunctionTargetField = targetField;
+        var boundArgsField = typeBuilder.DefineField("_boundArgs", _types.ObjectArray, FieldAttributes.Assembly);
+        runtime.BoundAnyFunctionBoundArgsField = boundArgsField;
 
         // ctor(object target, object[] boundArgs)
         var ctorBuilder = typeBuilder.DefineConstructor(
@@ -782,7 +785,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
         il.Emit(OpCodes.Stloc, methodKeyLocal);
 
-        // Arrow/async/generator methods carry $NonConstructible. They do not
+        // Arrow and async methods carry $NonConstructible. They do not
         // have an own `prototype` property even though their callable wrapper
         // is the same $TSFunction representation used by ordinary functions.
         var constructiblePrototypeLabel = il.DefineLabel();
@@ -923,10 +926,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newobj, runtime.FunctionApplyWrapperCtor);
         il.Emit(OpCodes.Ret);
 
-        // length: check if func is $TSFunction and call get_Length
+        // length: ordinary functions expose their declared arity; bound
+        // functions subtract the number of pre-applied arguments; the three
+        // Function.prototype method wrappers expose their spec arities.
         il.MarkLabel(lengthLabel);
         var lengthNotTSFunctionLabel = il.DefineLabel();
-        var lengthEndLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brfalse, lengthNotTSFunctionLabel);
@@ -946,12 +950,87 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Br, lengthEndLabel);
-        // Not a TSFunction - return 0.0
+        il.Emit(OpCodes.Ret);
+
         il.MarkLabel(lengthNotTSFunctionLabel);
+        var lengthNotBoundTSFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brfalse, lengthNotBoundTSFunctionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionTargetField);
+        il.Emit(OpCodes.Call, runtime.TSFunctionLengthGetter);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundTSFunctionBoundArgsField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Sub);
+        var boundTSLengthNonNegative = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, boundTSLengthNonNegative);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.MarkLabel(boundTSLengthNonNegative);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(lengthNotBoundTSFunctionLabel);
+        var lengthNotBoundAnyFunctionLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brfalse, lengthNotBoundAnyFunctionLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundAnyFunctionTargetField);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Ldfld, runtime.BoundAnyFunctionBoundArgsField);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Sub);
+        var boundAnyLengthNonNegative = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bge, boundAnyLengthNonNegative);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.MarkLabel(boundAnyLengthNonNegative);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(lengthNotBoundAnyFunctionLabel);
+        var lengthNotApplyWrapperLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Brfalse, lengthNotApplyWrapperLabel);
+        il.Emit(OpCodes.Ldc_R8, 2.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(lengthNotApplyWrapperLabel);
+
+        var lengthIsOneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Brtrue, lengthIsOneLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.FunctionCallWrapperType);
+        var lengthUnknownLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, lengthUnknownLabel);
+        il.MarkLabel(lengthIsOneLabel);
+        il.Emit(OpCodes.Ldc_R8, 1.0);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(lengthUnknownLabel);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Box, _types.Double);
-        il.MarkLabel(lengthEndLabel);
         il.Emit(OpCodes.Ret);
 
         // name: check if func is $TSFunction or $BoundTSFunction
@@ -1191,6 +1270,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(_types.GetMethod(typeof(Array), "Empty"), _types.Object));
         il.Emit(OpCodes.Stloc, boundArgsLocal);
         il.MarkLabel(afterBoundArgsLabel);
+
+        // Function.prototype.bind requires a callable receiver. This wrapper
+        // type is finalized before the runtime TypeOf helper exists, so use the
+        // callable representations already defined at this emission phase.
+        var callableTargetLabel = il.DefineLabel();
+        void AcceptCallable(Type callableType)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, targetField);
+            il.Emit(OpCodes.Isinst, callableType);
+            il.Emit(OpCodes.Brtrue, callableTargetLabel);
+        }
+        AcceptCallable(runtime.TSFunctionType);
+        AcceptCallable(runtime.BoundTSFunctionType);
+        AcceptCallable(runtime.BoundAnyFunctionType);
+        AcceptCallable(runtime.BoundArrayMethodType);
+        if (_features.UsesMap)
+            AcceptCallable(runtime.BoundMapMethodType);
+        if (_features.UsesSet)
+            AcceptCallable(runtime.BoundSetMethodType);
+        AcceptCallable(_types.Type);
+        AcceptCallable(_types.FuncObjectArrayToObject);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Function.prototype.bind called on incompatible receiver");
+        il.MarkLabel(callableTargetLabel);
 
         // Dispatch based on target type:
         //   $TSFunction → $BoundTSFunction (keeps thisArg + boundArgs)

@@ -1656,6 +1656,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, callableWrapperLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.FunctionBindWrapperType);
+        il.Emit(OpCodes.Brtrue, callableWrapperLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.FunctionCallWrapperType);
+        il.Emit(OpCodes.Brtrue, callableWrapperLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
+        il.Emit(OpCodes.Brtrue, callableWrapperLabel);
 
         // System.Type (a class reference used as a value, e.g. `Scalar.PLAIN = 'x'` then
         // reading `Scalar.PLAIN`). JS allows arbitrary static property assignment on classes;

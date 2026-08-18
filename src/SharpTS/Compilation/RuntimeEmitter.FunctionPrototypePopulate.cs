@@ -381,6 +381,18 @@ public partial class RuntimeEmitter
             [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(afterBoundLabel);
 
+        // Inheriting from Function.prototype does not grant [[Call]]. Validate
+        // the actual receiver before creating a bound wrapper.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        var callableTargetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, callableTargetLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Function.prototype.bind called on incompatible receiver");
+        il.MarkLabel(callableTargetLabel);
+
         // $BoundTSFunction's ctor expects target as $TSFunction. For non-
         // $TSFunction __this (e.g. a $FunctionBindWrapper from the previous
         // bind layer), we wrap via $FunctionBindWrapper so InvokeMethodValue

@@ -59,6 +59,36 @@ public class FunctionMethodsTests
         Assert.Equal("first\n", output);
     }
 
+    [Theory, ModeData]
+    public void Bind_Rejects_NonCallable_FunctionPrototype_Inheritor(ExecutionMode mode)
+    {
+        var source = """
+            const value: any = Object.create(Function.prototype);
+            try {
+                value.bind();
+                console.log(false);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void BoundFunction_Length_And_ExpandoProperties_ArePreserved(ExecutionMode mode)
+    {
+        var source = """
+            function target(a: unknown, b: unknown, c: unknown) {}
+            const bound: any = target.bind(null, 1);
+            bound.property = 12;
+            console.log(bound.length);
+            console.log(bound.property);
+            """;
+
+        Assert.Equal("2\n12\n", TestHarness.Run(source, mode));
+    }
+
     #endregion
 
     #region Call Tests
@@ -88,6 +118,19 @@ public class FunctionMethodsTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n", output);
+    }
+
+    [Theory, ModeData]
+    public void FunctionPrototype_MethodWrappers_Expose_SpecLengths(ExecutionMode mode)
+    {
+        var source = """
+            function f() {}
+            console.log(f.bind.length);
+            console.log(f.call.length);
+            console.log(f.apply.length);
+            """;
+
+        Assert.Equal("1\n1\n2\n", TestHarness.Run(source, mode));
     }
 
     #endregion
@@ -274,6 +317,30 @@ public class FunctionMethodsTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("function\nfalse\nfunction\nfalse\nfunction\nfalse\nfunction\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
+    public void AsyncFunctions_DoNotExpose_APrototypeProperty(ExecutionMode mode)
+    {
+        var source = """
+            async function f() {}
+            console.log((f as any).prototype === undefined);
+            """;
+
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GeneratorFunctionConstructor_CallForm_ReturnsAnonymousFunction(ExecutionMode mode)
+    {
+        var source = """
+            const GeneratorFunction: any = Object.getPrototypeOf(function* () {}).constructor;
+            const generated: any = GeneratorFunction();
+            console.log(generated instanceof GeneratorFunction);
+            console.log(generated.name);
+            """;
+
+        Assert.Equal("true\nanonymous\n", TestHarness.Run(source, mode));
     }
 
     #endregion

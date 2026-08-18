@@ -770,6 +770,7 @@ public class EmittedRuntime
     public MethodBuilder BoundTSFunctionInvoke { get; set; } = null!;
     public MethodBuilder BoundTSFunctionInvokeWithThis { get; set; } = null!;
     public FieldBuilder BoundTSFunctionTargetField { get; set; } = null!;
+    public FieldBuilder BoundTSFunctionBoundArgsField { get; set; } = null!;
     public TypeBuilder FunctionBindWrapperType { get; set; } = null!;
     public ConstructorBuilder FunctionBindWrapperCtor { get; set; } = null!;
     public MethodBuilder FunctionBindWrapperInvoke { get; set; } = null!;
@@ -823,6 +824,8 @@ public class EmittedRuntime
     public TypeBuilder BoundAnyFunctionType { get; set; } = null!;
     public ConstructorBuilder BoundAnyFunctionCtor { get; set; } = null!;
     public MethodBuilder BoundAnyFunctionInvoke { get; set; } = null!;
+    public FieldBuilder BoundAnyFunctionTargetField { get; set; } = null!;
+    public FieldBuilder BoundAnyFunctionBoundArgsField { get; set; } = null!;
 
     // Method callable wrapper for GetMember results (BuiltInMethod etc.)
     public TypeBuilder MethodCallableType { get; set; } = null!;

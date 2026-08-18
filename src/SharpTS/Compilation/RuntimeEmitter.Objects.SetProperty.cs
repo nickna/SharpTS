@@ -703,6 +703,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
 
         // $CJSModule — `module.exports = X` (or any aliased write) goes through here.
         // Only emit when UsesCjsRequire is on (matching the type emission gate).
@@ -1650,6 +1656,12 @@ public partial class RuntimeEmitter
         var tsFunctionSetStrictLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
 
         // $CJSModule — mirror the non-strict branch. Gated on UsesCjsRequire.

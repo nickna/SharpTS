@@ -369,9 +369,23 @@ public abstract partial class ExpressionEmitterBase
         while (callee is Expr.Grouping grouping)
             callee = grouping.Expression;
 
-        if (callee is not Expr.Comma comma
-            || comma.Right is not Expr.Variable evalVar
-            || evalVar.Name.Lexeme != "eval"
+        Expr? calleeSideEffect = null;
+        bool isKnownEval = false;
+        if (callee is Expr.Comma
+            {
+                Right: Expr.Variable { Name.Lexeme: "eval" }
+            } comma)
+        {
+            calleeSideEffect = comma.Left;
+            isKnownEval = true;
+        }
+        else if (callee is Expr.Variable
+            && Ctx.StaticIndirectEvalCalls?.Contains(call) == true)
+        {
+            isKnownEval = true;
+        }
+
+        if (!isKnownEval
             || call.Arguments.Count != 1
             || call.Arguments[0] is not Expr.Literal { Value: string source })
         {
@@ -391,13 +405,14 @@ public abstract partial class ExpressionEmitterBase
         if (Ctx.IsScriptTopLevel && this is ILEmitter syncEmitter
             && statements.Any(statement => statement is Stmt.Function))
         {
-            EmitExpression(comma.Left);
-            EnsureBoxed();
-            IL.Emit(OpCodes.Pop);
+            EmitCalleeSideEffect();
             return syncEmitter.TryEmitStaticDirectEval(call, source);
         }
 
-        if (statements is not [Stmt.Expression { Expr: var expression }])
+        var executableStatements = statements
+            .Where(statement => statement is not Stmt.Directive)
+            .ToList();
+        if (executableStatements is not [Stmt.Expression { Expr: var expression }])
         {
             return false;
         }
@@ -407,12 +422,10 @@ public abstract partial class ExpressionEmitterBase
         // both completion values and updates to globals without pretending that
         // the interpreter bridge shares the compiled assembly's environment.
         if (Ctx.IsScriptTopLevel
-            && expression is Expr.Literal or Expr.Assign
+            && expression is Expr.Literal or Expr.Variable or Expr.Assign or Expr.Call
                 or Expr.PrefixIncrement or Expr.PostfixIncrement)
         {
-            EmitExpression(comma.Left);
-            EnsureBoxed();
-            IL.Emit(OpCodes.Pop);
+            EmitCalleeSideEffect();
             EmitExpression(expression);
             EnsureBoxed();
             return true;
@@ -432,9 +445,7 @@ public abstract partial class ExpressionEmitterBase
         if (!isStaticGlobal && !isCapturedGlobal)
             return false;
 
-        EmitExpression(comma.Left);
-        EnsureBoxed();
-        IL.Emit(OpCodes.Pop);
+        EmitCalleeSideEffect();
         if (isStaticGlobal)
         {
             IL.Emit(OpCodes.Ldsfld, globalField!);
@@ -446,6 +457,15 @@ public abstract partial class ExpressionEmitterBase
         }
         SetStackUnknown();
         return true;
+
+        void EmitCalleeSideEffect()
+        {
+            if (calleeSideEffect is null)
+                return;
+            EmitExpression(calleeSideEffect);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Pop);
+        }
     }
 
     /// <summary>

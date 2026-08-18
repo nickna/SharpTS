@@ -61,6 +61,7 @@ public partial class ILCompiler
         MarkPadsUndefined(stubMethod);
         MarkFunctionLength(stubMethod, funcStmt.Parameters);
         MarkFunctionName(stubMethod, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
+        MarkNonConstructible(stubMethod);
 
         // Create function-level display class for captured locals (same as sync functions).
         // This enables closure mutation sharing between the async state machine and sync inner arrows.
