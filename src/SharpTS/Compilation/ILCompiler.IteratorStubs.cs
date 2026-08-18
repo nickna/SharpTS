@@ -31,7 +31,8 @@ public partial class ILCompiler
 
         // Parameter initialization belongs to the generator call, before the
         // iterator is returned, rather than to its first MoveNext invocation.
-        EmitIteratorStubDefaults(methodBuilder, funcStmt, isInstanceMethod: false);
+        var precreatedFunctionDC = EmitIteratorStubDefaults(
+            methodBuilder, funcStmt, isInstanceMethod: false, funcDCKey: qualifiedName);
 
         il.Emit(OpCodes.Newobj, smBuilder.Constructor);
 
@@ -71,7 +72,9 @@ public partial class ILCompiler
         // so nested closures share the iterator's live storage. Captured outer-scope variables
         // are NOT copied here — snapshotting them at creation hid later mutations (#541); MoveNext reads
         // them live from their enclosing storage instead.
-        EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, funcStmt, qualifiedName, paramOffset: 0);
+        EmitGeneratorFunctionDCInit(
+            il, smBuilder.FunctionDCField, funcStmt, qualifiedName, paramOffset: 0,
+            precreatedFunctionDC: precreatedFunctionDC);
 
         il.Emit(OpCodes.Ret);
     }
@@ -97,12 +100,13 @@ public partial class ILCompiler
         var parameters = method.Parameters;
         var il = methodBuilder.GetILGenerator();
 
-        EmitIteratorStubDefaults(
+        var precreatedFunctionDC = EmitIteratorStubDefaults(
             methodBuilder,
             method,
             isInstanceMethod,
             fieldsField,
-            currentClassName);
+            currentClassName,
+            funcDCKey);
 
         il.Emit(OpCodes.Newobj, smBuilder.Constructor);
 
@@ -132,7 +136,9 @@ public partial class ILCompiler
         // Seed captured parameters into the function DC (typed stub params → value types are boxed
         // before the store). No-op when the method has no function DC.
         if (funcDCKey != null)
-            EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, method, funcDCKey, paramOffset, paramTypes);
+            EmitGeneratorFunctionDCInit(
+                il, smBuilder.FunctionDCField, method, funcDCKey, paramOffset, paramTypes,
+                precreatedFunctionDC);
 
         il.Emit(OpCodes.Ret);
     }
@@ -142,15 +148,16 @@ public partial class ILCompiler
     /// creation stub. Defaults update the argument slots before those values are copied
     /// into the state machine and any function display class.
     /// </summary>
-    private void EmitIteratorStubDefaults(
+    private LocalBuilder? EmitIteratorStubDefaults(
         MethodBuilder methodBuilder,
         Stmt.Function function,
         bool isInstanceMethod,
         FieldInfo? fieldsField = null,
-        string? currentClassName = null)
+        string? currentClassName = null,
+        string? funcDCKey = null)
     {
         if (!function.Parameters.Any(p => p.DefaultValue != null))
-            return;
+            return null;
 
         var ctx = CreateModuleMemberContext(methodBuilder.GetILGenerator(), methodBuilder);
         ctx.FieldsField = fieldsField;
@@ -161,6 +168,23 @@ public partial class ILCompiler
         ctx.EmittingTypeBuilder = methodBuilder.DeclaringType as TypeBuilder;
         ApplyCapturedTopLevelVariableAccess(ctx);
         ApplyCommonJsModuleAccess(ctx);
+
+        LocalBuilder? functionDCLocal = null;
+        if (funcDCKey != null
+            && _closures.FunctionDisplayClasses.TryGetValue(funcDCKey, out var functionDCType)
+            && _closures.FunctionDisplayClassCtors.TryGetValue(funcDCKey, out var functionDCCtor)
+            && _closures.FunctionDisplayClassFields.TryGetValue(funcDCKey, out var functionDCFields))
+        {
+            functionDCLocal = methodBuilder.GetILGenerator().DeclareLocal(functionDCType);
+            methodBuilder.GetILGenerator().Emit(OpCodes.Newobj, functionDCCtor);
+            methodBuilder.GetILGenerator().Emit(OpCodes.Stloc, functionDCLocal);
+            ctx.FunctionDisplayClassLocal = functionDCLocal;
+            ctx.FunctionDisplayClassFields = functionDCFields;
+            ctx.CapturedFunctionLocals = [.. functionDCFields.Keys];
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0
+                ? _closures.ArrowFunctionDCFields
+                : null;
+        }
 
         var methodParams = methodBuilder.GetParameters();
         int paramOffset = isInstanceMethod ? 1 : 0;
@@ -174,5 +198,7 @@ public partial class ILCompiler
             function.Parameters,
             isInstanceMethod,
             paramTypes: methodParams.Select(p => p.ParameterType).ToArray());
+
+        return functionDCLocal;
     }
 }

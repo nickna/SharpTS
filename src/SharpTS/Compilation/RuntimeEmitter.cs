@@ -77,6 +77,8 @@ public partial class RuntimeEmitter
         // Carries the ECMAScript Function.length of emitted user methods. This must be
         // available before $TSFunction so its reflective constructor can cache the value.
         EmitFunctionLengthAttribute(moduleBuilder, runtime);
+        EmitFunctionNameAttribute(moduleBuilder, runtime);
+        EmitNonConstructibleAttribute(moduleBuilder, runtime);
 
         // Marker attribute for "this method's first parameter is the synthetic `__this` receiver".
         // Defined+created before EmitTSFunctionClass so the ctor IL can ldtoken the type for the

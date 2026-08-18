@@ -495,15 +495,8 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                 }
                 IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-                int arity = 0;
-                foreach (var param in capturedFuncMethod.GetParameters())
-                {
-                    if (param.IsOptional) continue;
-                    if (param.ParameterType == typeof(List<object>)) continue;
-                    if (param.Name?.StartsWith("__") == true) continue;
-                    arity++;
-                }
-                IL.Emit(OpCodes.Ldstr, capturedVar);
+                int arity = _ctx.GetFunctionLength(capturedFuncMethod);
+                IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(capturedFuncMethod, capturedVar));
                 IL.Emit(OpCodes.Ldc_I4, arity);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
             }

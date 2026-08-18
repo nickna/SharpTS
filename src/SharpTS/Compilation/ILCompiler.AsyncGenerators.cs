@@ -73,6 +73,8 @@ public partial class ILCompiler
         // callback → $TSFunction.Invoke) must pad omitted trailing optional args with the `undefined`
         // sentinel, not CLR null — matching the other function kinds (see DefineGeneratorFunction).
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, funcStmt.Parameters);
+        MarkFunctionName(methodBuilder, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
 
         // Track rest parameter info (keyed by the qualified name so ResolveFunctionName-based
         // call-site lookups in ExpressionEmitterBase find it).

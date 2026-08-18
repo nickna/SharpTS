@@ -285,15 +285,8 @@ public partial class ILEmitter
             // Compute function arity at compile time. name/length are used only
             // on first create (subsequent cache hits return the existing wrapper
             // whose name/length are already set).
-            int arity = 0;
-            foreach (var param in methodBuilder.GetParameters())
-            {
-                if (param.IsOptional) continue;
-                if (param.ParameterType == typeof(List<object>)) continue;
-                if (param.Name?.StartsWith("__") == true) continue;
-                arity++;
-            }
-            IL.Emit(OpCodes.Ldstr, name);  // function name
+            int arity = _ctx.GetFunctionLength(methodBuilder);
+            IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(methodBuilder, name));
             IL.Emit(OpCodes.Ldc_I4, arity);  // function length
             IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
             SetStackUnknown();
@@ -629,6 +622,7 @@ public partial class ILEmitter
             // Captured top-level variable in entry-point display class
             EmitBoxIfNeeded(a.Value);
             IL.Emit(OpCodes.Dup);
+            _ctx.EmitTopLevelLexicalTdzCheck(IL, a.Name.Lexeme);
             // Store to field: need temp since value is on top of stack
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -666,6 +660,7 @@ public partial class ILEmitter
             // Top-level static variable
             EmitBoxIfNeeded(a.Value);
             IL.Emit(OpCodes.Dup);
+            _ctx.EmitTopLevelLexicalTdzCheck(IL, a.Name.Lexeme);
             IL.Emit(OpCodes.Stsfld, topLevelField);
             SetStackUnknown();
         }
@@ -684,7 +679,16 @@ public partial class ILEmitter
             }
             else
             {
+                // Sloppy PutValue creates a property on the global object and
+                // still evaluates to the assigned value.  Preserve one copy
+                // as the expression result while the other is consumed by
+                // the runtime setter.
+                var value = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Stloc, value);
+                IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
             }
             SetStackUnknown();
         }
@@ -988,7 +992,10 @@ public partial class ILEmitter
         // - delete obj.prop: removes property, returns true (or throws TypeError if frozen/sealed in strict mode)
         // - delete obj[key]: removes computed property, returns true (or throws TypeError if frozen/sealed in strict mode)
         // - delete variable: throws SyntaxError in strict mode, returns false in sloppy mode
-        switch (del.Operand)
+        Expr operand = del.Operand;
+        while (operand is Expr.Grouping grouping)
+            operand = grouping.Expression;
+        switch (operand)
         {
             case Expr.Get get:
                 // delete obj.prop - use static runtime helper with strict mode
@@ -1036,9 +1043,15 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    // Sloppy mode: warn and return false
-                    IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                    EmitCallUnknown(_ctx.Runtime!.WarnSloppyDeleteVariable);
+                    // Deleting an unresolvable reference succeeds; deleting a
+                    // resolvable environment binding returns false.
+                    if (!IsKnownVariable(v.Name.Lexeme))
+                        EmitBoolConstant(true);
+                    else
+                    {
+                        IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
+                        EmitCallUnknown(_ctx.Runtime!.WarnSloppyDeleteVariable);
+                    }
                 }
                 SetStackType(StackType.Boolean);
                 break;
@@ -1046,7 +1059,7 @@ public partial class ILEmitter
             default:
                 // delete on other expressions: returns true but does nothing
                 // Still need to evaluate for side effects
-                EmitExpression(del.Operand);
+                EmitExpression(operand);
                 IL.Emit(OpCodes.Pop);
                 EmitBoolConstant(true);
                 break;

@@ -507,6 +507,14 @@ public partial class RuntimeEmitter
         moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
         moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorDone);
 
+        // Preserve IteratorValue(result) even when done is true.  `yield*` reads
+        // Current after MoveNext returns false to obtain the delegated iterator's
+        // completion value; ordinary iterator consumers simply ignore Current.
+        moveNextIl.Emit(OpCodes.Ldarg_0);
+        moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
+        moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        moveNextIl.Emit(OpCodes.Stfld, currentField);
+
         // if (done) return false;
         var notDoneLabel = moveNextIl.DefineLabel();
         moveNextIl.Emit(OpCodes.Brfalse, notDoneLabel);
@@ -514,12 +522,6 @@ public partial class RuntimeEmitter
         moveNextIl.Emit(OpCodes.Ret);
 
         moveNextIl.MarkLabel(notDoneLabel);
-
-        // _current = GetIteratorValue(result);  -- DIRECT CALL
-        moveNextIl.Emit(OpCodes.Ldarg_0);
-        moveNextIl.Emit(OpCodes.Ldloc, resultLocal);
-        moveNextIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
-        moveNextIl.Emit(OpCodes.Stfld, currentField);
 
         // return true;
         moveNextIl.Emit(OpCodes.Ldc_I4_1);
@@ -549,16 +551,19 @@ public partial class RuntimeEmitter
         mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
         mwsIl.Emit(OpCodes.Call, runtime.GetIteratorDone);
 
+        // As above, retain the completion record's value for `yield*` when
+        // this call reports done.
+        mwsIl.Emit(OpCodes.Ldarg_0);
+        mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
+        mwsIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
+        mwsIl.Emit(OpCodes.Stfld, currentField);
+
         var mwsNotDoneLabel = mwsIl.DefineLabel();
         mwsIl.Emit(OpCodes.Brfalse, mwsNotDoneLabel);
         mwsIl.Emit(OpCodes.Ldc_I4_0);
         mwsIl.Emit(OpCodes.Ret);
 
         mwsIl.MarkLabel(mwsNotDoneLabel);
-        mwsIl.Emit(OpCodes.Ldarg_0);
-        mwsIl.Emit(OpCodes.Ldloc, mwsResultLocal);
-        mwsIl.Emit(OpCodes.Call, runtime.GetIteratorValue);
-        mwsIl.Emit(OpCodes.Stfld, currentField);
         mwsIl.Emit(OpCodes.Ldc_I4_1);
         mwsIl.Emit(OpCodes.Ret);
 

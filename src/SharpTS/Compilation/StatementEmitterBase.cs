@@ -337,6 +337,17 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 // Module/global augmentations are type-only - no IL emission needed
                 break;
 
+            case Stmt.Directive:
+            case Stmt.FileDirective:
+            case Stmt.Field:
+            case Stmt.Accessor:
+            case Stmt.AutoAccessor:
+            case Stmt.StaticBlock:
+                // Directive effects (notably strictness) are established when
+                // the function body is analyzed. These nodes and class-member
+                // declarations do not emit executable state-machine IL.
+                break;
+
             case Stmt.Using u:
                 EmitUsingDeclaration(u);
                 break;
@@ -1469,7 +1480,10 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         // - delete obj.prop: removes property, returns true (or throws TypeError if frozen/sealed in strict mode)
         // - delete obj[key]: removes computed property, returns true (or throws TypeError if frozen/sealed in strict mode)
         // - delete variable: throws SyntaxError in strict mode, returns false in sloppy mode
-        switch (del.Operand)
+        Expr operand = del.Operand;
+        while (operand is Expr.Grouping grouping)
+            operand = grouping.Expression;
+        switch (operand)
         {
             case Expr.Get get:
                 // delete obj.prop - use static runtime helper with strict mode
@@ -1517,9 +1531,13 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 }
                 else
                 {
-                    // Sloppy mode: warn and return false
-                    IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                    IL.Emit(OpCodes.Call, Ctx.Runtime!.WarnSloppyDeleteVariable);
+                    if (!IsKnownVariable(v.Name.Lexeme))
+                        EmitBoolConstant(true);
+                    else
+                    {
+                        IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
+                        IL.Emit(OpCodes.Call, Ctx.Runtime!.WarnSloppyDeleteVariable);
+                    }
                 }
                 SetStackType(StackType.Boolean);
                 break;
@@ -1527,7 +1545,7 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             default:
                 // delete on other expressions: returns true but does nothing
                 // Still need to evaluate for side effects
-                EmitExpression(del.Operand);
+                EmitExpression(operand);
                 IL.Emit(OpCodes.Pop);
                 EmitBoolConstant(true);
                 break;

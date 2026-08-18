@@ -10,6 +10,8 @@ namespace SharpTS.Compilation;
 public partial class ILCompiler
 {
     private readonly List<(Expr.ArrowFunction Arrow, HashSet<string> Captures)> _collectedArrows = [];
+    private readonly Dictionary<Expr.Call, List<Stmt>> _staticDirectEvalStatements =
+        new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _strictArrows = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrowFunction> _arrowsInAnonymousEmptyDerivedClass = new(ReferenceEqualityComparer.Instance);
     // Maps each collected arrow to the module path that owns it (null = script/single-file
@@ -50,6 +52,7 @@ public partial class ILCompiler
     private Expr.ArrowFunction? _currentEnclosingAsyncArrow;
     private Expr.ArrowFunction? _currentParentArrow;
     private string? _currentCollectClassName;
+    private bool _currentCollectStrict;
     // The IMMEDIATELY enclosing callable (Expr.ArrowFunction or Stmt.Function) during
     // collection. Unlike _currentParentArrow (nearest ancestor arrow, which skips
     // function-declaration boundaries), this tells CollectInnerFunction whether an
@@ -341,6 +344,17 @@ public partial class ILCompiler
 
                 foreach (var capturedVar in captures)
                 {
+                    // A named function expression's own name is a distinct
+                    // inner binding even when top-level code declares the same
+                    // spelling. Always give it a capture field; wrapper
+                    // construction populates that field with the $TSFunction.
+                    if (arrow.Name?.Lexeme == capturedVar)
+                    {
+                        fieldMap[capturedVar] = displayClass.DefineField(
+                            capturedVar, _types.Object, FieldAttributes.Public);
+                        continue;
+                    }
+
                     // Skip top-level captured vars - they'll be accessed through $entryPointDC.
                     // #1222 exception: when THIS arrow's capture is an unlifted top-level
                     // BLOCK-scoped binding, the same-named entry-DC field belongs to a
@@ -442,6 +456,10 @@ public partial class ILCompiler
             // User arrow / function-expression body: when invoked as a value, omitted trailing
             // args must pad with the `undefined` sentinel (JS semantics), not CLR null. (#640)
             MarkPadsUndefined(_closures.ArrowMethods[arrow]);
+            MarkFunctionLength(_closures.ArrowMethods[arrow], arrow.Parameters);
+            MarkFunctionName(_closures.ArrowMethods[arrow], arrow.Name?.Lexeme ?? "");
+            if (!arrow.HasOwnThis)
+                MarkNonConstructible(_closures.ArrowMethods[arrow]);
         }
     }
 
@@ -505,6 +523,7 @@ public partial class ILCompiler
                     var previousEnclosing = _currentEnclosingFunctionName;
                     var previousEnclosingStmt = _currentEnclosingFunctionStmt;
                     var previousCallable = _currentEnclosingCallable;
+                    var previousStrict = _currentCollectStrict;
                     // A nested function declaration is a lambda-lift boundary: an arrow inside it captures
                     // from the function, not the enclosing async arrow. Clear the async-arrow cursor so a
                     // deeper arrow is not mis-attributed to the async arrow's function DC (#838 follow-up).
@@ -517,8 +536,18 @@ public partial class ILCompiler
                         _currentEnclosingFunctionStmt = f;
                     }
                     _currentEnclosingCallable = f;
+                    _currentCollectStrict = previousStrict
+                        || _currentCollectClassName != null
+                        || Parsing.DirectivePrologue.HasUseStrict(f.Body);
 
                     _functionNestingDepth++;
+                    // Parameter initializers execute in this function's
+                    // environment too. Collect nested callables while the
+                    // enclosing-function cursors are still active so their
+                    // captured locals route through this function's DC.
+                    foreach (var p in f.Parameters)
+                        if (p.DefaultValue != null)
+                            CollectArrowsFromExpr(p.DefaultValue);
                     foreach (var s in f.Body)
                         CollectArrowsFromStmt(s);
                     _functionNestingDepth--;
@@ -527,10 +556,8 @@ public partial class ILCompiler
                     _currentEnclosingFunctionStmt = previousEnclosingStmt;
                     _currentEnclosingCallable = previousCallable;
                     _currentEnclosingAsyncArrow = previousEnclosingAsyncArrowFn;
+                    _currentCollectStrict = previousStrict;
                 }
-                foreach (var p in f.Parameters)
-                    if (p.DefaultValue != null)
-                        CollectArrowsFromExpr(p.DefaultValue);
                 break;
             case Stmt.Class c:
                 var previousClassName = _currentCollectClassName;
@@ -677,10 +704,19 @@ public partial class ILCompiler
     {
         switch (expr)
         {
+            case Expr.DestructuringAssign da:
+                // Assignment-pattern lowering synthesizes statements which
+                // can themselves contain object literals with accessor/method
+                // functions.  Discover those exact AST nodes; otherwise their
+                // values reach emission without MethodBuilders and become null.
+                foreach (var statement in da.Assignments)
+                    CollectArrowsFromStmt(statement);
+                CollectArrowsFromExpr(da.ResultValue);
+                break;
             case Expr.ArrowFunction af:
                 var captures = _closures.Analyzer.GetCaptures(af);
                 _collectedArrows.Add((af, captures));
-                if (_currentCollectClassName != null)
+                if (_currentCollectClassName != null || _currentCollectStrict)
                     _strictArrows.Add(af);
                 // Only record a module mapping when collection is under a real
                 // module context. Single-file compile runs without setting
@@ -737,8 +773,12 @@ public partial class ILCompiler
                 var previousParent = _currentParentArrow;
                 var previousCallable = _currentEnclosingCallable;
                 var previousEnclosingAsyncArrow = _currentEnclosingAsyncArrow;
+                var previousStrict = _currentCollectStrict;
                 _currentParentArrow = af;
                 _currentEnclosingCallable = af;
+                _currentCollectStrict = previousStrict
+                    || _currentCollectClassName != null
+                    || BodyDeclaresUseStrict(af.BlockBody);
                 if (af.IsAsync)
                     _currentEnclosingAsyncArrow = af;
 
@@ -752,6 +792,13 @@ public partial class ILCompiler
                 // runtime. Real-world case: lodash's IIFE `(function() { ... })()` wraps
                 // ~5000 lines of nested `function basePropertyOf(...)` declarations.
                 _functionNestingDepth++;
+                // Parameter initializers are evaluated in this callable's parameter environment
+                // and may themselves contain function/arrow expressions. Collect them under the
+                // same parent/callable cursors as the body so they receive MethodBuilders instead
+                // of EmitArrowFunction's null fallback (e.g. `function(a = function(){}()) {}`).
+                foreach (var parameter in af.Parameters)
+                    if (parameter.DefaultValue != null)
+                        CollectArrowsFromExpr(parameter.DefaultValue);
                 if (af.ExpressionBody != null)
                     CollectArrowsFromExpr(af.ExpressionBody);
                 if (af.BlockBody != null)
@@ -762,6 +809,7 @@ public partial class ILCompiler
                 _currentParentArrow = previousParent;
                 _currentEnclosingCallable = previousCallable;
                 _currentEnclosingAsyncArrow = previousEnclosingAsyncArrow;
+                _currentCollectStrict = previousStrict;
                 break;
             case Expr.Binary b:
                 CollectArrowsFromExpr(b.Left);
@@ -781,6 +829,36 @@ public partial class ILCompiler
                 CollectArrowsFromExpr(g.Expression);
                 break;
             case Expr.Call c:
+                // Literal expression-only direct eval is lowered into the current
+                // emitted scope. Parse it during discovery—not later during IL
+                // emission—so any function/arrow expressions receive builders and
+                // closure metadata keyed to the exact AST nodes we will emit.
+                if (c.Callee is Expr.Variable { Name.Lexeme: "eval" }
+                    && c.Arguments.Count > 0
+                    && c.Arguments[0] is Expr.Literal { Value: string evalSource })
+                {
+                    try
+                    {
+                        var evalStatements = new Parser(new Lexer(evalSource).ScanTokens())
+                            .ParseOrThrow();
+                        if (evalStatements.All(statement =>
+                                statement is Stmt.Expression or Stmt.Var { IsVar: true }))
+                        {
+                            _staticDirectEvalStatements[c] = evalStatements;
+                            foreach (var statement in evalStatements)
+                            {
+                                if (statement is Stmt.Expression expression)
+                                    CollectArrowsFromExpr(expression.Expr);
+                                else if (statement is Stmt.Var { Initializer: { } initializer })
+                                    CollectArrowsFromExpr(initializer);
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Runtime eval retains responsibility for syntax errors.
+                    }
+                }
                 CollectArrowsFromExpr(c.Callee);
                 foreach (var arg in c.Arguments)
                     CollectArrowsFromExpr(arg);
@@ -815,7 +893,11 @@ public partial class ILCompiler
                 break;
             case Expr.ObjectLiteral o:
                 foreach (var prop in o.Properties)
+                {
+                    if (prop.Key is Expr.ComputedKey computed)
+                        CollectArrowsFromExpr(computed.Expression);
                     CollectArrowsFromExpr(prop.Value);
+                }
                 break;
             case Expr.Ternary t:
                 CollectArrowsFromExpr(t.Condition);
@@ -1540,6 +1622,22 @@ public partial class ILCompiler
             // are also excluded here — keeping CapturedArrowLocals consistent with
             // the fields the DC actually has.
             ctx.CapturedArrowLocals = [.. _closures.ArrowScopeDisplayClassFields[arrow].Keys];
+
+            // A named function expression whose name is captured by an inner
+            // closure owns that binding in this scope DC. The wrapper was
+            // populated into the outer capture display instance when the
+            // function expression was created; copy it into the invocation's
+            // live scope environment before defaults/body closures are built.
+            if (arrow.Name is { } selfName
+                && displayClass != null
+                && ctx.CapturedFields?.TryGetValue(selfName.Lexeme, out var capturedSelfField) == true
+                && ctx.ArrowScopeDisplayClassFields.TryGetValue(selfName.Lexeme, out var scopeSelfField))
+            {
+                il.Emit(OpCodes.Ldloc, arrowScopeDCLocal);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, capturedSelfField);
+                il.Emit(OpCodes.Stfld, scopeSelfField);
+            }
         }
 
         var emitter = new ILEmitter(ctx);

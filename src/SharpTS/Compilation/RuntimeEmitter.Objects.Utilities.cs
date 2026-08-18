@@ -408,10 +408,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brfalse, notTSObjLabel);
-        // keyStr = key.ToString()
+        // keyStr = ToPropertyKey(key).  The Symbol case was handled above;
+        // ToJsString supplies the required string-hint ToPrimitive semantics
+        // for object keys and canonical ECMAScript number formatting.
         var keyStrLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Object, "ToString"));
+        il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, keyStrLocal);
         // if (getter != null) obj.DefineGetter(keyStr, getter)
         var skipGetterLabel = il.DefineLabel();

@@ -51,6 +51,8 @@ public partial class ILCompiler
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             // Function metadata
             FunctionRestParams = _functions.RestParams,
+            FunctionLengths = _functions.Lengths,
+            FunctionNames = _functions.Names,
             FunctionsCapturingArguments = _functions.CapturingArguments,
             MethodsCapturingArguments = _functions.MethodsCapturingArguments,
             FunctionGenericParams = _functions.GenericParams,
@@ -62,6 +64,7 @@ public partial class ILCompiler
             // Compilation-wide services
             Runtime = _runtime,
             RuntimeFeatures = _features,
+            StaticDirectEvalStatements = _staticDirectEvalStatements,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             TypeEmitterRegistry = _typeEmitterRegistry,
@@ -212,6 +215,7 @@ public partial class ILCompiler
         {
             Runtime = parentCtx.Runtime,
             RuntimeFeatures = parentCtx.RuntimeFeatures,
+            StaticDirectEvalStatements = parentCtx.StaticDirectEvalStatements,
             ClosureAnalyzer = parentCtx.ClosureAnalyzer,
             ArrowMethods = parentCtx.ArrowMethods,
             ConstArrowBindings = parentCtx.ConstArrowBindings,
@@ -224,6 +228,8 @@ public partial class ILCompiler
             EnumKinds = parentCtx.EnumKinds,
             TopLevelStaticVars = parentCtx.TopLevelStaticVars,
             FunctionRestParams = parentCtx.FunctionRestParams,
+            FunctionLengths = parentCtx.FunctionLengths,
+            FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParams = parentCtx.FunctionGenericParams,
             IsGenericFunction = parentCtx.IsGenericFunction,
             TypeMap = parentCtx.TypeMap,
@@ -251,6 +257,7 @@ public partial class ILCompiler
             EntryPointDisplayClassFields = parentCtx.EntryPointDisplayClassFields,
             CapturedTopLevelVars = parentCtx.CapturedTopLevelVars,
             EntryPointDisplayClassStaticField = parentCtx.EntryPointDisplayClassStaticField,
+            TopLevelLexicalInitFields = parentCtx.TopLevelLexicalInitFields,
             // Captured locals promoted into the enclosing function's display class (#625): the
             // arrow reads/writes them through `outer.functionDC.field` rather than mutating the
             // boxed value-type state machine in place (unverifiable). Only fields the function
@@ -276,6 +283,7 @@ public partial class ILCompiler
             ClassRegistry = GetClassRegistry(),
             Runtime = _runtime,
             RuntimeFeatures = _features,
+            StaticDirectEvalStatements = _staticDirectEvalStatements,
             TypeMap = _typeMap,
             IsStrictMode = isStrict
         };
@@ -319,6 +327,7 @@ public partial class ILCompiler
             : BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
         ctx.CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath);
+        ctx.TopLevelLexicalInitFields = BuildTopLevelLexicalInitFieldsForModule(_modules.CurrentPath);
         ctx.EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField;
     }
 

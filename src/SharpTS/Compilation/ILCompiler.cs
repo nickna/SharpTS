@@ -2056,6 +2056,7 @@ public partial class ILCompiler
                 _ => null
             };
             if (varName == null || !_closures.Analyzer.IsVariableCaptured(varName)) return;
+            bool isLexical = stmt is Stmt.Const or Stmt.Var { IsVar: false };
 
             var displayClass = EnsureEntryPointDisplayClass();
 
@@ -2071,6 +2072,19 @@ public partial class ILCompiler
                     : $"{SanitizeModuleForField(path)}__{varName}";
                 var field = displayClass.DefineField(fieldName, _types.Object, FieldAttributes.Public);
                 mf[varName] = field;
+            }
+
+            if (isLexical)
+            {
+                var initFields = GetOrCreate(_closures.ModuleTopLevelLexicalInitFields, captureKey);
+                if (!initFields.ContainsKey(varName))
+                {
+                    string initName = path == null
+                        ? $"<>init_{varName}"
+                        : $"<>init_{SanitizeModuleForField(path)}__{varName}";
+                    initFields[varName] = displayClass.DefineField(
+                        initName, _types.Boolean, FieldAttributes.Public);
+                }
             }
 
             _closures.CapturedTopLevelVars.Add(varName);
@@ -2407,6 +2421,18 @@ public partial class ILCompiler
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
 
+        bool isLexical = stmt is Stmt.Const or Stmt.Var { IsVar: false };
+        if (isLexical)
+        {
+            string key = modulePath ?? ClosureCompilationState.SingleFileKey;
+            if (!_closures.ModuleTopLevelLexicalInitFields.TryGetValue(key, out var initFields))
+                _closures.ModuleTopLevelLexicalInitFields[key] = initFields = [];
+            initFields[varName] = _programType.DefineField(
+                $"{fieldName}$initialized",
+                _types.Boolean,
+                FieldAttributes.Public | FieldAttributes.Static);
+        }
+
         // The global dict (_topLevelStaticVars) is last-write-wins by name. That's
         // only consulted for captured-var dispatch via name, which this path skips
         // (we `continue` above when the var is captured). For non-captured vars,
@@ -2569,6 +2595,14 @@ public partial class ILCompiler
         {
             return new Dictionary<string, FieldBuilder>(fields);
         }
+        return null;
+    }
+
+    private Dictionary<string, FieldBuilder>? BuildTopLevelLexicalInitFieldsForModule(string? modulePath)
+    {
+        string key = modulePath ?? ClosureCompilationState.SingleFileKey;
+        if (_closures.ModuleTopLevelLexicalInitFields.TryGetValue(key, out var fields) && fields.Count > 0)
+            return new Dictionary<string, FieldBuilder>(fields);
         return null;
     }
 }

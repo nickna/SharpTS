@@ -410,6 +410,19 @@ public class ClosureAnalyzer : AstVisitorBase
                 }
                 capturedLocals.Add(name);
 
+                // A named function expression's name is a binding in that
+                // function's own environment. If an inner closure captures the
+                // name, make the defining function expression capturing too so
+                // its display class gets the self-reference field populated with
+                // the wrapping $TSFunction (rather than resolving an outer
+                // same-named binding).
+                if (definingFunc is Expr.ArrowFunction { Name: { } functionName } definingArrow
+                    && functionName.Lexeme == name)
+                {
+                    _captures[definingArrow].Add(name);
+                    _allCapturedVariables.Add(name);
+                }
+
                 // Record the defining scope for this capture. Within a single
                 // function's analysis the scope stack is fixed, so repeated
                 // references resolve to the same defining function.
@@ -947,6 +960,8 @@ public class ClosureAnalyzer : AstVisitorBase
 
         // Enter function scope and declare parameters
         EnterScope();
+        foreach (var evalVar in CollectDirectEvalVarDeclarations(parameters))
+            DeclareVariable(evalVar);
         foreach (var param in parameters)
         {
             DeclareVariable(param.Name.Lexeme);
@@ -1023,6 +1038,15 @@ public class ClosureAnalyzer : AstVisitorBase
             DeclareVariable(af.Name.Lexeme);
         }
 
+
+        // Sloppy direct eval in a parameter initializer introduces var
+        // bindings in the callable's parameter environment. Predeclare every
+        // statically-known literal eval var before visiting defaults so a
+        // closure created by an earlier default resolves to the same live
+        // binding initialized by a later eval call.
+        foreach (var evalVar in CollectDirectEvalVarDeclarations(af.Parameters))
+            DeclareVariable(evalVar);
+
         // Declare parameters (may shadow function name if same identifier)
         foreach (var param in af.Parameters)
         {
@@ -1053,6 +1077,73 @@ public class ClosureAnalyzer : AstVisitorBase
         _outerVariables.Clear();
         foreach (var name in previousOuter)
             _outerVariables.Add(name);
+    }
+
+    private static HashSet<string> CollectDirectEvalVarDeclarations(List<Stmt.Parameter> parameters)
+    {
+        var scanner = new DirectEvalVarScanner();
+        foreach (var parameter in parameters)
+            if (parameter.DefaultValue != null)
+                scanner.Visit(parameter.DefaultValue);
+        return scanner.Names;
+    }
+
+    /// <summary>
+    /// Finds var declarations introduced by literal direct eval calls in the
+    /// current parameter list. Nested callable bodies are separate execution
+    /// contexts and are deliberately not traversed.
+    /// </summary>
+    private sealed class DirectEvalVarScanner : AstVisitorBase
+    {
+        public HashSet<string> Names { get; } = [];
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+        {
+            // A function expression used as a default is not part of the
+            // surrounding parameter initializer's direct-eval environment.
+        }
+
+        protected override void VisitCall(Expr.Call expr)
+        {
+            if (expr.Callee is Expr.Variable { Name.Lexeme: "eval" }
+                && expr.Arguments.Count > 0
+                && expr.Arguments[0] is Expr.Literal { Value: string source })
+            {
+                try
+                {
+                    var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+                    var declarations = new EvalVarDeclarationScanner(Names);
+                    foreach (var statement in statements)
+                        declarations.Visit(statement);
+                }
+                catch
+                {
+                    // Runtime eval remains responsible for malformed source.
+                }
+            }
+
+            base.VisitCall(expr);
+        }
+    }
+
+    private sealed class EvalVarDeclarationScanner(HashSet<string> names) : AstVisitorBase
+    {
+        protected override void VisitVar(Stmt.Var stmt)
+        {
+            if (stmt.IsVar)
+                names.Add(stmt.Name.Lexeme);
+            base.VisitVar(stmt);
+        }
+
+        protected override void VisitFunction(Stmt.Function stmt)
+        {
+            // A nested function's body is not executed by the surrounding eval.
+        }
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+        {
+            // Likewise, do not attribute declarations in nested expressions.
+        }
     }
 
     #endregion

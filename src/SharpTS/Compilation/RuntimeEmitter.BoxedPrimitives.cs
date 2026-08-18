@@ -583,10 +583,99 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, objectLikeLabel);
+        if (_features.UsesDate)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Brtrue, objectLikeLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
         il.Emit(OpCodes.Brfalse, passThruLabel);
         il.MarkLabel(objectLikeLabel);
+
+        // ECMA-262 7.1.1 ToPrimitive(input, preferredType absent): an exotic
+        // @@toPrimitive method is consulted before OrdinaryToPrimitive and is
+        // invoked with the literal hint "default".  The old implementation
+        // skipped this step and eventually delegated to ToJsString, which
+        // invoked the hook with "string" and made compiled `+` observably
+        // different from the interpreter.
+        var ordinaryToPrimitiveLabel = il.DefineLabel();
+        var toPrimitiveFn = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, runtime.SymbolToPrimitive);
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Stloc, toPrimitiveFn);
+        il.Emit(OpCodes.Ldloc, toPrimitiveFn);
+        il.Emit(OpCodes.Brfalse, ordinaryToPrimitiveLabel);
+        il.Emit(OpCodes.Ldloc, toPrimitiveFn);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, ordinaryToPrimitiveLabel);
+
+        il.Emit(OpCodes.Ldloc, toPrimitiveFn);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        var callableToPrimitiveLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, callableToPrimitiveLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Symbol.toPrimitive is not callable");
+        il.MarkLabel(callableToPrimitiveLabel);
+
+        var defaultHintArgs = il.DeclareLocal(_types.ObjectArray);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, defaultHintArgs);
+        il.Emit(OpCodes.Ldloc, defaultHintArgs);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldstr, "default");
+        il.Emit(OpCodes.Stelem_Ref);
+        var exoticResult = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, toPrimitiveFn);
+        il.Emit(OpCodes.Ldloc, defaultHintArgs);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, exoticResult);
+
+        // Any object or callable result violates the ToPrimitive contract.
+        il.Emit(OpCodes.Ldloc, exoticResult);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        var exoticType = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, exoticType);
+        var exoticResultIsPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, exoticType);
+        il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        var exoticResultInvalid = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, exoticResultInvalid);
+        il.Emit(OpCodes.Ldloc, exoticType);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, exoticResultIsPrimitive);
+        il.MarkLabel(exoticResultInvalid);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        il.MarkLabel(exoticResultIsPrimitive);
+        il.Emit(OpCodes.Ldloc, exoticResult);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(ordinaryToPrimitiveLabel);
+
+        // Date is the sole built-in whose absent/default hint behaves as the
+        // string hint.  An explicit @@toPrimitive above still wins; otherwise
+        // use Date.prototype.toString before the number-hint ordinary path.
+        if (_features.UsesDate)
+        {
+            var notDateLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Brfalse, notDateLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.DateToString);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notDateLabel);
+        }
 
         var isBoxedLocal = il.DeclareLocal(_types.Boolean);
         var primitiveValueLocal = il.DeclareLocal(_types.Object);
@@ -615,6 +704,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
         il.Emit(OpCodes.Stloc, primitiveValueLocal);
         il.MarkLabel(afterMarkerProbeLabel);
+
+        // An unmodified boxed primitive's intrinsic valueOf returns its
+        // [[PrimitiveValue]]. Skip the generic inherited stub in that common
+        // case; it does not preserve boxed BigInt identity. Own overrides are
+        // still invoked below and remain observable.
+        var continueValueOfLookup = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, isBoxedLocal);
+        il.Emit(OpCodes.Brfalse, continueValueOfLookup);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "valueOf");
+        il.Emit(OpCodes.Call, runtime.HasOwnPropertyHelperMethod);
+        il.Emit(OpCodes.Brtrue, continueValueOfLookup);
+        il.Emit(OpCodes.Ldloc, primitiveValueLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(continueValueOfLookup);
 
         // #574: ECMA-262 7.1.1 ToPrimitive (default/number hint, used by == and +):
         // OrdinaryToPrimitive tries valueOf first. An OWN valueOf override wins;
@@ -673,12 +777,43 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, primitiveValueLocal);
         il.Emit(OpCodes.Ret);
 
-        // Plain object, non-callable own valueOf, or object-valued valueOf:
-        // continue at toString. ToJsString implements the remaining string-hint
-        // method lookup and primitive-result validation.
+        // Plain object, non-callable valueOf, or object-valued valueOf:
+        // continue with OrdinaryToPrimitive's second candidate. Return the
+        // primitive itself; ToJsString would incorrectly turn a numeric
+        // toString() result into text before `+` chooses its numeric branch.
         il.MarkLabel(useStringFallback);
+        var toStringFn = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Ldstr, "toString");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, toStringFn);
+        il.Emit(OpCodes.Ldloc, toStringFn);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        var callableToString = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, callableToString);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        il.MarkLabel(callableToString);
+
+        var toStringResult = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, toStringFn);
+        il.Emit(OpCodes.Ldloc, emptyArgs);
+        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        il.Emit(OpCodes.Stloc, toStringResult);
+        il.Emit(OpCodes.Ldloc, toStringResult);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        var toStringType = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Stloc, toStringType);
+        var returnToStringPrimitive = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, toStringType);
+        il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, returnToStringPrimitive);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        il.MarkLabel(returnToStringPrimitive);
+        il.Emit(OpCodes.Ldloc, toStringResult);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(passThruLabel);

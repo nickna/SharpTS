@@ -6634,7 +6634,7 @@ test/built-ins/Object/getOwnPropertyNames/15.2.3.4-1.js Pass
 test/built-ins/Object/getOwnPropertyNames/15.2.3.4-2-1.js Pass
 test/built-ins/Object/getOwnPropertyNames/15.2.3.4-2-2.js Pass
 test/built-ins/Object/getOwnPropertyNames/15.2.3.4-2-3.js Pass
-test/built-ins/Object/getOwnPropertyNames/15.2.3.4-2-4.js RuntimeError
+test/built-ins/Object/getOwnPropertyNames/15.2.3.4-2-4.js Pass
 test/built-ins/Object/getOwnPropertyNames/15.2.3.4-3-1.js Pass
 test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-1.js Fail
 test/built-ins/Object/getOwnPropertyNames/15.2.3.4-4-2.js Pass

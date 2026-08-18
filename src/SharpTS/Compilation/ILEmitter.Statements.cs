@@ -93,6 +93,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Stfld, displayField);
+                _ctx.EmitMarkTopLevelLexicalInitialized(IL, v.Name.Lexeme);
                 MirrorScriptVarToGlobal(() =>
                 {
                     if (_ctx.EntryPointDisplayClassLocal != null)
@@ -130,6 +131,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                     IL.Emit(OpCodes.Stsfld, staticField);
                 }
+                _ctx.EmitMarkTopLevelLexicalInitialized(IL, v.Name.Lexeme);
                 MirrorScriptVarToGlobal(() => IL.Emit(OpCodes.Ldsfld, staticField));
                 return;
             }

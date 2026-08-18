@@ -797,6 +797,25 @@ public sealed class RuntimeFeatureDetector
                         HandleModulePath(modPath);
                     }
                 }
+                // Constant direct eval is parsed again during callable discovery
+                // and emitted as its exact AST when it is expression-only. Detect
+                // runtime features in that source now, before runtime types are
+                // emitted; otherwise an eval-contained regex (for example) reaches
+                // EmitRegexLiteral with its constructor helper never defined.
+                if (c.Callee is Expr.Variable { Name.Lexeme: "eval" }
+                    && c.Arguments.Count > 0
+                    && c.Arguments[0] is Expr.Literal { Value: string evalSource })
+                {
+                    try
+                    {
+                        foreach (var statement in new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow())
+                            VisitStmt(statement);
+                    }
+                    catch
+                    {
+                        // Runtime eval remains responsible for syntax errors.
+                    }
+                }
                 VisitExpr(c.Callee);
                 foreach (var a in c.Arguments) VisitExpr(a);
                 break;
@@ -893,7 +912,12 @@ public sealed class RuntimeFeatureDetector
                 foreach (var e in al.Elements) VisitExpr(e);
                 break;
             case Expr.ObjectLiteral ol:
-                foreach (var prop in ol.Properties) VisitExpr(prop.Value);
+                foreach (var prop in ol.Properties)
+                {
+                    if (prop.Key is Expr.ComputedKey computed)
+                        VisitExpr(computed.Expression);
+                    VisitExpr(prop.Value);
+                }
                 break;
 
             case Expr.ArrowFunction af:

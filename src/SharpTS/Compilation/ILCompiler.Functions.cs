@@ -181,6 +181,8 @@ public partial class ILCompiler
         // User TS function: when invoked as a value, omitted trailing args must pad with the
         // `undefined` sentinel (JS semantics), not CLR null. (#640)
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, funcStmt.Parameters);
+        MarkFunctionName(methodBuilder, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
 
         // Flag eagerly (phase 3) so direct-call sites emitted in phase 7 can publish
         // caller args to the thread-static before OpCodes.Call. Uses the same scanner
@@ -1465,9 +1467,6 @@ public partial class ILCompiler
     /// </summary>
     internal void MarkFunctionLength(MethodBuilder method, IReadOnlyList<Stmt.Parameter> parameters)
     {
-        if (_runtime?.FunctionLengthAttrCtor == null)
-            return;
-
         int length = 0;
         foreach (var parameter in parameters)
         {
@@ -1476,9 +1475,31 @@ public partial class ILCompiler
             length++;
         }
 
+        _functions.Lengths[method] = length;
+
+        if (_runtime?.FunctionLengthAttrCtor == null)
+            return;
+
         method.SetCustomAttribute(
             _runtime.FunctionLengthAttrCtor,
             CustomAttributeEncoder.Encode(_runtime.FunctionLengthAttrCtor, length));
+    }
+
+    internal void MarkFunctionName(MethodBuilder method, string name)
+    {
+        _functions.Names[method] = name;
+        if (_runtime?.FunctionNameAttrCtor != null)
+            method.SetCustomAttribute(
+                _runtime.FunctionNameAttrCtor,
+                CustomAttributeEncoder.Encode(_runtime.FunctionNameAttrCtor, name));
+    }
+
+    internal void MarkNonConstructible(MethodBuilder method)
+    {
+        if (_runtime?.NonConstructibleAttrCtor != null)
+            method.SetCustomAttribute(
+                _runtime.NonConstructibleAttrCtor,
+                CustomAttributeEncoder.EmptyBlob);
     }
 
     /// <summary>

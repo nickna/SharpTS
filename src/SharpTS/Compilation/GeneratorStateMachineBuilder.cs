@@ -482,11 +482,24 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // Reject a re-entrant next() before touching any state (ECMA-262 §27.5.3.3).
         EmitThrowIfExecuting(nextIL, executingField);
 
-        // Stash the sent value so the resumed yield (read of SentField in MoveNext)
-        // sees it. Set before MoveNext so the resume path observes the new value.
+        // The argument to the first next(v) is ignored by GeneratorStart; only
+        // a resume from an existing suspension receives v.  Preserve the
+        // constructor-seeded undefined sentinel while state is -1.
+        var sentReadyLabel = nextIL.DefineLabel();
+        var storeSentArgumentLabel = nextIL.DefineLabel();
+        nextIL.Emit(OpCodes.Ldarg_0);
+        nextIL.Emit(OpCodes.Ldfld, StateField);
+        nextIL.Emit(OpCodes.Ldc_I4_M1);
+        nextIL.Emit(OpCodes.Bne_Un, storeSentArgumentLabel);
+        nextIL.Emit(OpCodes.Ldarg_0);
+        nextIL.Emit(OpCodes.Ldsfld, _runtime!.UndefinedInstance);
+        nextIL.Emit(OpCodes.Stfld, SentField);
+        nextIL.Emit(OpCodes.Br, sentReadyLabel);
+        nextIL.MarkLabel(storeSentArgumentLabel);
         nextIL.Emit(OpCodes.Ldarg_0);
         nextIL.Emit(OpCodes.Ldarg_1);
         nextIL.Emit(OpCodes.Stfld, SentField);
+        nextIL.MarkLabel(sentReadyLabel);
 
         // Run the body with the executing flag set so a re-entrant next()/return()/throw()
         // from inside it hits the guards and throws "already running" instead of recursing

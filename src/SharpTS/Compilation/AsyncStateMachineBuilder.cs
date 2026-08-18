@@ -76,6 +76,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
     /// <param name="analysis">Analysis results from AsyncStateAnalyzer</param>
     /// <param name="returnType">The inner type of Task&lt;T&gt; (use typeof(object) for Task&lt;object&gt;)</param>
     /// <param name="isInstanceMethod">True if this is an instance method (needs 'this' hoisting)</param>
+    /// <param name="hasDynamicThis">True for free async functions whose call-time receiver must be hoisted</param>
     /// <param name="hasAsyncArrows">True if this function contains async arrow functions (needs self-boxed field)</param>
     /// <param name="hasLock">True if this method has @lock decorator (needs lock fields)</param>
     public void DefineStateMachine(
@@ -83,6 +84,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
         AsyncStateAnalyzer.AsyncFunctionAnalysis analysis,
         Type returnType,
         bool isInstanceMethod = false,
+        bool hasDynamicThis = false,
         bool hasAsyncArrows = false,
         bool hasLock = false)
     {
@@ -127,7 +129,7 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
 
         // Define 'this' field for instance methods that use 'this'
         // Also needed for @lock to access _asyncLock and _lockReentrancy fields
-        if (isInstanceMethod && (analysis.UsesThis || hasLock))
+        if (((isInstanceMethod || hasDynamicThis) && analysis.UsesThis) || (isInstanceMethod && hasLock))
         {
             ThisField = _stateMachineType.DefineField(
                 "<>4__this",

@@ -56,6 +56,8 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<string, MethodBuilder>> StaticSetters { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> PreDefinedMethods { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> PreDefinedAccessors { get; } = [];
+        public Dictionary<Parsing.Stmt.Accessor, MethodBuilder> AccessorBuilders { get; } =
+            new(ReferenceEqualityComparer.Instance);
         // Symbol-keyed computed accessors (#266): class name (typeBuilder.Name) ->
         // list of (accessor AST node, emitted getter/setter MethodBuilder). Used to
         // emit the bodies and to register them in the class .cctor.
@@ -110,6 +112,8 @@ public partial class ILCompiler
         public Dictionary<string, (int RestParamIndex, int RegularParamCount)> RestParams { get; } = [];
         public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
         public Dictionary<string, bool> IsGeneric { get; } = [];
+        public Dictionary<MethodBase, int> Lengths { get; } = [];
+        public Dictionary<MethodBase, string> Names { get; } = [];
 
         /// <summary>
         /// Qualified names of functions flagged at DefineFunction time as referencing
@@ -177,6 +181,10 @@ public partial class ILCompiler
         // sentinel (Dictionary<string,...> rejects null keys).
         public Dictionary<string, HashSet<string>> ModuleCapturedTopLevelVars { get; } = [];
         public Dictionary<string, Dictionary<string, FieldBuilder>> ModuleEntryPointDisplayClassFields { get; } = [];
+        // Per-module initialization flags for top-level let/const bindings.
+        // Captured lexical bindings use instance bool fields on the entry-point
+        // display class; non-captured bindings use static bool fields on $Program.
+        public Dictionary<string, Dictionary<string, FieldBuilder>> ModuleTopLevelLexicalInitFields { get; } = [];
 
         // Sentinel key for single-file / script mode, where there's no module path.
         // Chosen so it can't clash with any real module path.

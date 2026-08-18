@@ -6741,6 +6741,54 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
     public void Issue_1380_residuals_match_in_compiled_mode(string relativePath)
         => AssertPass(relativePath, Test262ExecutionMode.Compiled);
 
+    public static TheoryData<string> Issue1382LanguageExpressionCases => new()
+    {
+        // Primitive coercion, numeric conversion, equality, and update operators.
+        "language/expressions/addition/coerce-symbol-to-prim-invocation.js",
+        "language/expressions/left-shift/S9.5_A2.1_T1.js",
+        "language/expressions/equals/bigint-and-object.js",
+        "language/expressions/greater-than-or-equal/bigint-and-non-finite.js",
+        "language/expressions/postfix-increment/bigint.js",
+        "language/types/number/S8.5_A5.js",
+        "built-ins/Array/prototype/reduce/15.4.4.21-9-c-i-32.js",
+        "built-ins/Number/S9.3.1_A3_T2.js",
+
+        // References, strict assignment, destructuring, and lexical initialization.
+        "language/expressions/logical-assignment/lgcl-and-assignment-operator-unresolved-lhs.js",
+        "language/expressions/assignment/dstr/obj-rest-number.js",
+        "language/expressions/assignment/dstr/array-elem-init-let.js",
+
+        // Callable metadata, parameter environments, and named/self bindings.
+        "language/expressions/arrow-function/name.js",
+        "language/expressions/arrow-function/prototype-rules.js",
+        "language/expressions/arrow-function/dflt-params-abrupt.js",
+        "language/expressions/arrow-function/scope-param-elem-var-close.js",
+        "language/expressions/function/name.js",
+        "language/expressions/generators/scope-name-var-close.js",
+        "language/expressions/generators/scope-paramsbody-var-close.js",
+
+        // Suspension, completion routing, and receiver preservation.
+        "language/expressions/yield/star-string.js",
+        "language/expressions/yield/rhs-unresolvable.js",
+        "language/expressions/async-function/try-return-finally-throw.js",
+        "language/expressions/optional-chaining/member-expression-async-this.js",
+        "language/expressions/optional-chaining/optional-call-preserves-this.js",
+
+        // Computed keys, iterator-based spread, strictness, and eval discovery.
+        "language/computed-property-names/class/accessor/getter-duplicates.js",
+        "language/expressions/object/accessor-name-computed-err-to-prop-key.js",
+        "language/expressions/object/method-definition/generator-prop-name-eval-error.js",
+        "language/expressions/super/call-spread-err-mult-err-iter-get-value.js",
+        "language/expressions/tagged-template/call-expression-context-strict.js",
+        "language/literals/regexp/mongolian-vowel-separator-eval.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(Issue1382LanguageExpressionCases))]
+    public void Issue_1382_language_expression_abstractions_match_in_both_modes(
+        string relativePath)
+        => AssertPassInBothModes(relativePath);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

@@ -94,7 +94,7 @@ public class GlobalFunctionHandler : ICallHandler
         // bridge below because they require runtime parsing/hoisting machinery.
         if (call.Arguments[0] is Expr.Literal { Value: string source }
             && emitter is ILEmitter syncEmitter
-            && syncEmitter.TryEmitStaticDirectEval(source))
+            && syncEmitter.TryEmitStaticDirectEval(call, source))
         {
             return true;
         }

@@ -25,7 +25,13 @@ public partial class ILCompiler
         // Create state machine builder
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
-        smBuilder.DefineStateMachine(funcStmt.Name.Lexeme, analysis, _types.Object, false, hasAsyncArrows);
+        smBuilder.DefineStateMachine(
+            funcStmt.Name.Lexeme,
+            analysis,
+            _types.Object,
+            isInstanceMethod: false,
+            hasDynamicThis: analysis.UsesThis,
+            hasAsyncArrows: hasAsyncArrows);
 
         // Define stub method (returns Task<object>).
         // A trailing rest parameter is typed List<object> so the indirect
@@ -53,6 +59,8 @@ public partial class ILCompiler
         // callback → $TSFunction.Invoke) must pad omitted trailing optional args with the `undefined`
         // sentinel, not CLR null — matching plain functions, arrows, async arrows, and class methods.
         MarkPadsUndefined(stubMethod);
+        MarkFunctionLength(stubMethod, funcStmt.Parameters);
+        MarkFunctionName(stubMethod, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
 
         // Create function-level display class for captured locals (same as sync functions).
         // This enables closure mutation sharing between the async state machine and sync inner arrows.
@@ -365,6 +373,8 @@ public partial class ILCompiler
                 // Define the stub method that will be called to invoke the async arrow
                 arrowBuilder.DefineStubMethod(_programType, _runtime);
                 MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+                MarkFunctionLength(arrowBuilder.StubMethod, arrowInfo.Arrow.Parameters);
+                MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.Name?.Lexeme ?? "");
                 RegisterStateMachine(
                     arrowBuilder.StubMethod,
                     arrowBuilder.StateMachineType,
@@ -387,6 +397,8 @@ public partial class ILCompiler
             // Define the stub method that will be called to invoke the async arrow
             arrowBuilder.DefineStubMethod(_programType, _runtime);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+            MarkFunctionLength(arrowBuilder.StubMethod, arrowInfo.Arrow.Parameters);
+            MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.Name?.Lexeme ?? "");
             RegisterStateMachine(
                 arrowBuilder.StubMethod,
                 arrowBuilder.StateMachineType,
@@ -864,11 +876,16 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Initobj, smBuilder.StateMachineType);
 
-        // Copy 'this' to state machine if this is an instance method and uses 'this'
-        if (isInstanceMethod && smBuilder.ThisField != null)
+        // Copy `this` to the state machine. Instance methods read arg0; free
+        // async functions snapshot the call-time receiver staged by
+        // $TSFunction.InvokeWithThis in the runtime thread-local.
+        if (smBuilder.ThisField != null)
         {
             il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldarg_0);  // 'this' is arg 0 for instance methods
+            if (isInstanceMethod)
+                il.Emit(OpCodes.Ldarg_0);
+            else
+                il.Emit(OpCodes.Ldsfld, _runtime!.CurrentFunctionThisField);
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);
         }
 
@@ -1175,6 +1192,8 @@ public partial class ILCompiler
             // Define the stub method
             arrowBuilder.DefineStubMethod(_programType, _runtime);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+            MarkFunctionLength(arrowBuilder.StubMethod, arrow.Parameters);
+            MarkFunctionName(arrowBuilder.StubMethod, arrow.Name?.Lexeme ?? "");
             RegisterStateMachine(
                 arrowBuilder.StubMethod,
                 arrowBuilder.StateMachineType,

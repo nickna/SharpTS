@@ -352,6 +352,11 @@ public class EmittedRuntime
     public TypeBuilder FunctionLengthAttrType { get; set; } = null!;
     public ConstructorBuilder FunctionLengthAttrCtor { get; set; } = null!;
     public FieldBuilder FunctionLengthAttrValueField { get; set; } = null!;
+    public TypeBuilder FunctionNameAttrType { get; set; } = null!;
+    public ConstructorBuilder FunctionNameAttrCtor { get; set; } = null!;
+    public FieldBuilder FunctionNameAttrValueField { get; set; } = null!;
+    public TypeBuilder NonConstructibleAttrType { get; set; } = null!;
+    public ConstructorBuilder NonConstructibleAttrCtor { get; set; } = null!;
 
     // Marker attribute applied to a user function-expression / `this`-bearing arrow method whose
     // first emitted parameter is the synthetic `__this` receiver slot. $TSFunction reads it back via

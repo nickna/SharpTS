@@ -427,6 +427,7 @@ public partial class ILCompiler
             // User inner-function body: when invoked as a value, omitted trailing args must
             // pad with the `undefined` sentinel (JS semantics), not CLR null. (#640)
             MarkPadsUndefined(_innerFunctionMethods[func]);
+            MarkFunctionLength(_innerFunctionMethods[func], func.Parameters);
         }
     }
 
@@ -982,15 +983,8 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Call, ctx.Types.MethodBaseGetMethodFromHandle);
                 }
                 il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
-                int arity = 0;
-                foreach (var param in capturedFuncMethod.GetParameters())
-                {
-                    if (param.IsOptional) continue;
-                    if (param.ParameterType == typeof(List<object>)) continue;
-                    if (param.Name?.StartsWith("__") == true) continue;
-                    arity++;
-                }
-                il.Emit(OpCodes.Ldstr, capturedVar);
+                int arity = ctx.GetFunctionLength(capturedFuncMethod);
+                il.Emit(OpCodes.Ldstr, ctx.GetFunctionName(capturedFuncMethod, capturedVar));
                 il.Emit(OpCodes.Ldc_I4, arity);
                 il.Emit(OpCodes.Call, ctx.Runtime!.TSFunctionGetOrCreate);
             }

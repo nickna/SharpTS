@@ -13,23 +13,38 @@ namespace SharpTS.Compilation;
 public partial class ILEmitter
 {
     /// <summary>
-    /// Lowers a statically known, expression-only eval program into the current
-    /// lexical environment. Returns false for declarations/control flow so those
-    /// sources continue through the runtime eval bridge.
+    /// Lowers a statically known eval program containing expressions and simple
+    /// <c>var</c> declarations into the current lexical environment. Other
+    /// declarations/control flow continue through the runtime eval bridge.
     /// </summary>
-    internal bool TryEmitStaticDirectEval(string source)
+    internal bool TryEmitStaticDirectEval(Expr.Call call, string source)
     {
-        List<Stmt> statements;
-        try
+        List<Stmt>? statements = null;
+        _ctx.StaticDirectEvalStatements?.TryGetValue(call, out statements);
+
+        // Generator/function lifting can clone the containing call node after
+        // callable discovery, so the reference-keyed registry no longer finds
+        // it. Declaration-only literal eval has no nested callable AST identity
+        // to preserve; safely reparse that narrow shape at emission time.
+        if (statements is null)
         {
-            statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
-        }
-        catch
-        {
-            return false;
+            try
+            {
+                var reparsed = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+                if (reparsed.All(statement => statement is Stmt.Var { IsVar: true }))
+                    statements = reparsed;
+            }
+            catch
+            {
+                // The runtime eval bridge retains responsibility for syntax errors.
+            }
         }
 
-        if (statements.Any(statement => statement is not Stmt.Expression))
+        if (statements is null)
+            return false;
+
+        if (statements.Any(statement =>
+                statement is not Stmt.Expression and not Stmt.Var { IsVar: true }))
             return false;
 
         if (statements.Count == 0)
@@ -39,20 +54,38 @@ public partial class ILEmitter
             return true;
         }
 
-        for (int i = 0; i < statements.Count - 1; i++)
+        for (int i = 0; i < statements.Count; i++)
         {
-            EmitExpression(((Stmt.Expression)statements[i]).Expr);
-            IL.Emit(OpCodes.Pop);
+            bool isLast = i == statements.Count - 1;
+            switch (statements[i])
+            {
+                case Stmt.Expression expression:
+                    EmitExpression(expression.Expr);
+                    if (!isLast)
+                        IL.Emit(OpCodes.Pop);
+                    else
+                        EnsureBoxed();
+                    break;
+                case Stmt.Var declaration:
+                    EmitVarDeclaration(declaration);
+                    if (isLast)
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    break;
+            }
         }
-
-        EmitExpression(((Stmt.Expression)statements[^1]).Expr);
-        EnsureBoxed();
         SetStackUnknown();
         return true;
     }
 
     protected override void EmitCall(Expr.Call c)
     {
+        // A lexical super() inside an immediately invoked arrow must still be
+        // emitted in the derived CLR constructor. Moving it into the arrow's
+        // helper method would make the IL invalid: only a constructor may call
+        // its base constructor. This covers the spec-shaped
+        // `(_ => super())()` form while preserving argument side effects.
+        if (TryEmitImmediateLexicalSuperArrow(c)) return;
+
         // A constant, expression-only indirect eval of a global identifier can bind directly
         // to the emitted script-global field. The interpreter bridge has its own global scope
         // and cannot see fields in the compiled assembly, so `(0, eval)('arguments;')` would
@@ -231,6 +264,35 @@ public partial class ILEmitter
 
         // All non-Get call patterns — delegate to base class
         base.EmitCall(c);
+    }
+
+    private bool TryEmitImmediateLexicalSuperArrow(Expr.Call call)
+    {
+        if (_ctx.CurrentMethod is not ConstructorBuilder || call.Optional)
+            return false;
+
+        Expr callee = call.Callee;
+        while (callee is Expr.Grouping grouping)
+            callee = grouping.Expression;
+
+        if (callee is not Expr.ArrowFunction
+            {
+                IsAsync: false,
+                HasOwnThis: false,
+                ExpressionBody: Expr.Call { Callee: Expr.Super } superCall
+            })
+            return false;
+
+        // The formal values are unused by this concise body, but actual
+        // arguments are still evaluated left-to-right before super().
+        foreach (var argument in call.Arguments)
+        {
+            EmitExpression(argument);
+            EmitBoxIfNeeded(argument);
+            IL.Emit(OpCodes.Pop);
+        }
+
+        return _callHandlers.TryHandle(this, superCall);
     }
 
     /// <summary>

@@ -84,6 +84,14 @@ public partial class CompilationContext
     // Whole-program feature analysis used by semantic optimization guards.
     public RuntimeFeatureSet? RuntimeFeatures { get; set; }
 
+    /// <summary>
+    /// Expression-only literal eval programs parsed during callable discovery.
+    /// Reusing these exact AST nodes during emission is required because arrow
+    /// method registries are keyed by AST identity.
+    /// </summary>
+    internal Dictionary<SharpTS.Parsing.Expr.Call, List<SharpTS.Parsing.Stmt>>?
+        StaticDirectEvalStatements { get; set; }
+
     // Type emitter registry for type-first method dispatch
     public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
 

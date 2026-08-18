@@ -34,6 +34,32 @@ public partial class CompilationContext
     public Dictionary<string, bool>? IsGenericFunction { get; set; }
 
     /// <summary>
+    /// ECMAScript <c>Function.length</c> values keyed by emitted user method. Unlike CLR
+    /// parameter metadata, these retain the position of the first default initializer.
+    /// </summary>
+    public Dictionary<MethodBase, int>? FunctionLengths { get; set; }
+    public Dictionary<MethodBase, string>? FunctionNames { get; set; }
+
+    public int GetFunctionLength(MethodBase method)
+    {
+        if (FunctionLengths?.TryGetValue(method, out int length) == true)
+            return length;
+
+        int fallback = 0;
+        foreach (var parameter in method.GetParameters())
+        {
+            if (parameter.IsOptional) continue;
+            if (parameter.ParameterType == typeof(List<object>)) continue;
+            if (parameter.Name?.StartsWith("__", StringComparison.Ordinal) == true) continue;
+            fallback++;
+        }
+        return fallback;
+    }
+
+    public string GetFunctionName(MethodBase method, string fallback) =>
+        FunctionNames?.TryGetValue(method, out string? name) == true ? name : fallback;
+
+    /// <summary>
     /// Qualified names of functions whose body references JS <c>arguments</c> (directly,
     /// or through a nested arrow — arrows inherit their enclosing non-arrow's binding).
     /// Direct call sites to any of these must publish the caller's raw arg array to the

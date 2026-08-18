@@ -721,6 +721,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
         il.Emit(OpCodes.Stloc, methodKeyLocal);
 
+        // Arrow/async/generator methods carry $NonConstructible. They do not
+        // have an own `prototype` property even though their callable wrapper
+        // is the same $TSFunction representation used by ordinary functions.
+        var constructiblePrototypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, methodKeyLocal);
+        il.Emit(OpCodes.Brfalse, constructiblePrototypeLabel);
+        il.Emit(OpCodes.Ldloc, methodKeyLocal);
+        il.Emit(OpCodes.Ldtoken, runtime.NonConstructibleAttrType);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Brfalse, constructiblePrototypeLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(constructiblePrototypeLabel);
+
         // Built-in helpers ($TSFunction wrapping $Runtime methods) do NOT
         // get an auto-created `prototype` per ECMA-262 — they're not
         // constructors. Test262 patterns like

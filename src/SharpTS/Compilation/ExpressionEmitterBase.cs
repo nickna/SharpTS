@@ -681,6 +681,13 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (TryEmitGlobalVariable(name)) return;
 
+        // An unresolved identifier is a ReferenceError in every execution
+        // context, including state-machine bodies.  Returning CLR null here
+        // made `yield missingName` silently yield null while the synchronous
+        // ILEmitter correctly threw.
+        IL.Emit(OpCodes.Ldstr, name);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+        // Unreachable stack value for verifier shape.
         IL.Emit(OpCodes.Ldnull);
         SetStackUnknown();
     }
@@ -1865,6 +1872,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (Ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            Ctx.EmitTopLevelLexicalTdzCheck(IL, name);
             IL.Emit(OpCodes.Ldsfld, topLevelField);
             SetStackUnknown();
             return true;
@@ -1882,6 +1890,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             Ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var capturedEntryField) == true &&
             Ctx.EntryPointDisplayClassStaticField != null)
         {
+            Ctx.EmitTopLevelLexicalTdzCheck(IL, name);
             IL.Emit(OpCodes.Ldsfld, Ctx.EntryPointDisplayClassStaticField);
             IL.Emit(OpCodes.Ldfld, capturedEntryField);
             SetStackUnknown();
@@ -1904,15 +1913,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
                 IL.Emit(OpCodes.Call, Types.MethodBaseGetMethodFromHandle);
             }
             IL.Emit(OpCodes.Castclass, typeof(MethodInfo));
-            int arity = 0;
-            foreach (var param in funcMethod.GetParameters())
-            {
-                if (param.IsOptional) continue;
-                if (param.ParameterType == typeof(List<object>)) continue;
-                if (param.Name?.StartsWith("__") == true) continue;
-                arity++;
-            }
-            IL.Emit(OpCodes.Ldstr, name);
+            int arity = Ctx.GetFunctionLength(funcMethod);
+            IL.Emit(OpCodes.Ldstr, Ctx.GetFunctionName(funcMethod, name));
             IL.Emit(OpCodes.Ldc_I4, arity);
             IL.Emit(OpCodes.Call, Ctx.Runtime!.TSFunctionGetOrCreate);
             SetStackUnknown();
@@ -2091,6 +2093,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             Ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
             Ctx.EntryPointDisplayClassStaticField != null)
         {
+            Ctx.EmitTopLevelLexicalTdzCheck(IL, name);
             var temp = IL.DeclareLocal(Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
             IL.Emit(OpCodes.Ldsfld, Ctx.EntryPointDisplayClassStaticField);
@@ -2102,6 +2105,7 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         if (Ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            Ctx.EmitTopLevelLexicalTdzCheck(IL, name);
             IL.Emit(OpCodes.Stsfld, topLevelField);
             SetStackUnknown();
             return true;

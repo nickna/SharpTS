@@ -910,10 +910,9 @@ public partial class RuntimeEmitter
         // String/Number/Boolean populate shells already defined above
         // (before cctor) so the cctor can call them eagerly.
         EmitGetProperty(typeBuilder, runtime);
-        // Fill UnwrapIfBoxed's body now that GetProperty / InvokeMethodValue /
-        // HasOwnPropertyHelper are all emitted — its #574 own-conversion dispatch
-        // (own valueOf/toString before __primitiveValue) calls them.
-        EmitUnwrapIfBoxedBody(runtime);
+        // UnwrapIfBoxed's body is filled after GetIndex below.  In addition to
+        // GetProperty/InvokeMethodValue it now uses indexed symbol lookup for
+        // the @@toPrimitive hook.
         // Dynamic iterator-protocol bridge — must come after GetProperty +
         // InvokeMethodValue since its non-enumerator fallback calls both.
         EmitIteratorProtocolCall(typeBuilder, runtime);
@@ -1289,6 +1288,9 @@ public partial class RuntimeEmitter
         // Date.prototype populate — must come AFTER EmitDateMethods, which is what
         // assigns the runtime.Date* helper builders the wiring below references.
         EmitDatePrototypePopulate(typeBuilder, runtime);
+        // Fill the default-hint ToPrimitive body after every dependency is
+        // bound, including DateToString for Date's special default hint.
+        EmitUnwrapIfBoxedBody(runtime);
         // Fill in LookupBuiltInStaticMember's body now that IsArray, NumberIs*,
         // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
         // gated on UsesDate) are all in place. Only the body is late — the

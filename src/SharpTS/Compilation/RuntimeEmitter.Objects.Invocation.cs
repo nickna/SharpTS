@@ -416,7 +416,10 @@ public partial class RuntimeEmitter
         // sets thread-local _currentThis and calls Invoke unchanged.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldnull);  // thisArg = null
+        // A call through InvokeValue has no Reference receiver.  Pass the JS
+        // undefined sentinel so strict callees retain undefined while sloppy
+        // callees normalize it to globalThis in LoadThis.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Ret);

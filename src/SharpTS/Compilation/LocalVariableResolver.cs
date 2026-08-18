@@ -206,6 +206,7 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             if (_ctx.EntryPointDisplayClassLocal != null)
             {
                 // Direct access from entry point - use the local
@@ -236,6 +237,7 @@ public class LocalVariableResolver : IVariableResolver
         // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Ldsfld, topLevelField);
             return StackType.Unknown;
         }
@@ -454,6 +456,7 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             // Use temp local pattern for storing to fields
             var temp = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, temp);
@@ -488,6 +491,7 @@ public class LocalVariableResolver : IVariableResolver
         // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Stsfld, topLevelField);
             return true;
         }

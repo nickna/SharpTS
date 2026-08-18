@@ -346,6 +346,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(symbolOkLabel);
 
+        // Computed accessor keys are Property Keys, not arbitrary boxed values. Preserve Symbols,
+        // but normalize strings/numbers/other primitives exactly like computed methods and bracket
+        // lookup do. Without this, `["b"]` and `[1]` accessors were registered under mismatching
+        // keys and an earlier literal accessor could incorrectly remain visible.
+        var keyNormalizedLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brtrue, keyNormalizedLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Starg_S, (byte)1);
+        il.MarkLabel(keyNormalizedLabel);
+
         // if (!_symbolAccessors.TryGetValue(owner, out inner)) { inner = new(); _symbolAccessors[owner] = inner; }
         var haveInner = il.DefineLabel();
         il.Emit(OpCodes.Ldsfld, field);
