@@ -20,9 +20,12 @@ public partial class TypeChecker
 
         // A missing factory (classic mode with no `React` in scope → TS2304 from
         // LookupVariable) must not mask attribute diagnostics: record and continue.
+        // tsc does not otherwise type-check the synthesized classic factory access:
+        // an ambient `react` module may intentionally be empty while still making
+        // `React.createElement(...)` a valid emit target.
         try
         {
-            CheckExpr(call.Callee);
+            CheckJsxFactoryReference(call.Callee, jsx.Mode);
         }
         catch (TypeCheckException ex)
         {
@@ -84,6 +87,17 @@ public partial class TypeChecker
         }
 
         return ResolveJsxElementType(jsxNamespace, jsx.Line, reportMissing: true);
+    }
+
+    private TypeInfo CheckJsxFactoryReference(Expr callee, JsxMode mode)
+    {
+        if (mode != JsxMode.React)
+            return CheckExpr(callee);
+
+        Expr root = callee;
+        while (root is Expr.Get get)
+            root = get.Object;
+        return CheckExpr(root);
     }
 
     private void CheckJsxIntrinsic(JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo propsType)

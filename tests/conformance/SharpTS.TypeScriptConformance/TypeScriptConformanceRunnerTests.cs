@@ -67,6 +67,23 @@ public class TypeScriptConformanceRunnerTests
             result.Message ?? result.Outcome.ToString());
     }
 
+    [Fact]
+    public void RunOne_TsxElementResolution19_MatchesEmptyDiagnosticBaseline()
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            "jsx",
+            "tsxElementResolution19.tsx");
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(
+            result.Outcome == TypeScriptConformanceOutcome.Pass,
+            result.Message ?? result.Outcome.ToString());
+    }
+
     [Theory]
     [InlineData("es2019/importMeta/importMeta.ts")]
     [InlineData("es2020/modules/exportAsNamespace_nonExistent.ts")]

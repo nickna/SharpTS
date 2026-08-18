@@ -257,6 +257,37 @@ public class JsxTypeCheckerTests
     }
 
     [Fact]
+    public void ClassicFactory_RequiresRootButNotCreateElementMember()
+    {
+        const string prelude = "declare namespace React {}";
+        var call = new Expr.Call(
+            new Expr.Get(new Expr.Variable(Identifier("React")), Identifier("createElement")),
+            Identifier("("),
+            null,
+            [new Expr.Literal("div"), new Expr.ObjectLiteral([])])
+        {
+            JsxOrigin = new JsxCallInfo(
+                JsxElementKind.Intrinsic,
+                "div",
+                new Expr.ObjectLiteral([]),
+                [],
+                null,
+                JsxMode.React,
+                1),
+        };
+
+        Assert.DoesNotContain(Check(call, prelude).Diagnostics, d => d.TsCode == "TS2694");
+
+        var missingRoot = call with
+        {
+            Callee = new Expr.Get(
+                new Expr.Variable(Identifier("MissingReact")),
+                Identifier("createElement")),
+        };
+        Assert.Contains(Check(missingRoot, "").Diagnostics, d => d.TsCode == "TS2304");
+    }
+
+    [Fact]
     public void FunctionComponent_PropMismatch_ReportsTs2322()
     {
         var call = JsxCall(JsxElementKind.Component, "Greeting",

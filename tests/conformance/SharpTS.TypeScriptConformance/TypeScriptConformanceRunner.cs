@@ -137,6 +137,17 @@ public sealed class TypeScriptConformanceRunner
             {
                 JsxOptions = ResolveJsxOptions(metadata),
             };
+
+            // TypeScript resolves ambient modules declared by any declaration root before
+            // following imports from the program's other roots. Register those declarations
+            // up front so an in-test `declare module "react"` wins over SharpTS's executable
+            // React fallback just as an installed declaration package would.
+            var declarationRoots = rootFiles
+                .Where(IsDeclarationFile)
+                .Select(rootFile => resolver.LoadModule(rootFile))
+                .ToList();
+            resolver.RegisterAmbientModuleDeclarations(declarationRoots);
+
             var entry = resolver.LoadProgram(rootFiles[0]);
             modules = resolver.GetModulesInOrder(entry);
 
@@ -243,6 +254,11 @@ public sealed class TypeScriptConformanceRunner
             expected,
             actual);
     }
+
+    private static bool IsDeclarationFile(string path) =>
+        path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".d.mts", StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(".d.cts", StringComparison.OrdinalIgnoreCase);
 
     private static bool? DirectiveBool(
         TypeScriptConformanceMetadata metadata,
