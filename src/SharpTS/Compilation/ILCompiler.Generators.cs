@@ -119,7 +119,9 @@ public partial class ILCompiler
     {
         var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(funcStmt));
         capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(funcStmt));
-        ApplyWriteCaptureRenames(capturedLocals, GeneratorBlockScopeRenamer.Compute(funcStmt));
+        var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(funcStmt);
+        ApplyWriteCaptureRenames(capturedLocals, blockScopeRenames);
+        ApplyReadCaptureRenames(capturedLocals, blockScopeRenames);
         if (capturedLocals.Count == 0)
             return;
 
@@ -196,6 +198,38 @@ public partial class ILCompiler
                 continue;
             if (_closures.ArrowFunctionDCFieldRenames.TryGetValue(arrow, out var existing))
                 foreach (var (k, v) in perArrow) existing[k] = v;
+            else
+                _closures.ArrowFunctionDCFieldRenames[arrow] = perArrow;
+        }
+    }
+
+    /// <summary>
+    /// Makes a function display class that owns every generator capture rename-aware for READ-only
+    /// block-scoped shadows. These captures formerly used the arrow's by-value snapshot pivot, but once
+    /// every capture is routed through <c>$functionDC</c> the snapshot field is deliberately omitted.
+    /// Register the renamed storage as its own DC field and redirect that arrow's reads to it, while
+    /// retaining the original field for an outer same-named capture.
+    /// </summary>
+    private void ApplyReadCaptureRenames(HashSet<string> capturedLocals, BlockScopeRenameResult renames)
+    {
+        foreach (var (arrowNode, names) in renames.CaptureRenames)
+        {
+            if (arrowNode is not Expr.ArrowFunction arrow)
+                continue;
+
+            Dictionary<string, string>? perArrow = null;
+            foreach (var (name, storage) in names)
+            {
+                if (!capturedLocals.Contains(name))
+                    continue;
+                capturedLocals.Add(storage);
+                (perArrow ??= [])[name] = storage;
+            }
+
+            if (perArrow == null)
+                continue;
+            if (_closures.ArrowFunctionDCFieldRenames.TryGetValue(arrow, out var existing))
+                foreach (var (name, storage) in perArrow) existing[name] = storage;
             else
                 _closures.ArrowFunctionDCFieldRenames[arrow] = perArrow;
         }
@@ -289,7 +323,9 @@ public partial class ILCompiler
             // otherwise observe the enclosing/global binding instead of the method-local binding.
             var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(method));
             capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(method));
-            ApplyWriteCaptureRenames(capturedLocals, GeneratorBlockScopeRenamer.Compute(method));
+            var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(method);
+            ApplyWriteCaptureRenames(capturedLocals, blockScopeRenames);
+            ApplyReadCaptureRenames(capturedLocals, blockScopeRenames);
             if (capturedLocals.Count == 0)
                 continue;
 

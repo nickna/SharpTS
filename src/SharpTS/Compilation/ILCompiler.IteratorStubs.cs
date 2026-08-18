@@ -38,19 +38,32 @@ public partial class ILCompiler
 
         // #775: capture the active dynamic `this` into <>4__this. The receiver is the thread-local
         // `$TSFunction._currentFunctionThis` (set by InvokeWithThis for an `o.gen()` / `.call(recv)`
-        // value-call), coerced null → globalThis sentinel to match LocalVariableResolver.LoadThis.
+        // value-call), coerced from null/undefined → globalThis for a sloppy generator to match
+        // OrdinaryCallBindThis and LocalVariableResolver.LoadThis. Strict generators preserve undefined.
         if (smBuilder.ThisField != null && _runtime?.CurrentFunctionThisField != null)
         {
             il.Emit(OpCodes.Dup);       // Keep state machine reference on stack
             il.Emit(OpCodes.Ldsfld, _runtime.CurrentFunctionThisField);
             if (_runtime.GlobalThisSingletonField != null)
             {
-                var thisNotNull = il.DefineLabel();
+                var keepThis = il.DefineLabel();
+                var useGlobalThis = il.DefineLabel();
                 il.Emit(OpCodes.Dup);
-                il.Emit(OpCodes.Brtrue, thisNotNull);
+                il.Emit(OpCodes.Brfalse, useGlobalThis);
+                if (!(_isStrictMode || BodyDeclaresUseStrict(funcStmt.Body)))
+                {
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                    il.Emit(OpCodes.Brfalse, keepThis);
+                }
+                else
+                {
+                    il.Emit(OpCodes.Br, keepThis);
+                }
+                il.MarkLabel(useGlobalThis);
                 il.Emit(OpCodes.Pop);
                 il.Emit(OpCodes.Ldsfld, _runtime.GlobalThisSingletonField);
-                il.MarkLabel(thisNotNull);
+                il.MarkLabel(keepThis);
             }
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);
         }

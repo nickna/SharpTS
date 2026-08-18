@@ -2005,6 +2005,17 @@ public class GeneratorTests
         Assert.Equal("object\n", TestHarness.Run(source, mode));
     }
 
+    [Fact]
+    public void PlainGeneratorFunctionExpressionCall_ThisIsUndefinedInStrictMode_Compiled()
+    {
+        var source = """
+            const g = function*() { "use strict"; yield typeof this; };
+            console.log([...g()].join(","));
+            """;
+
+        Assert.Equal("undefined\n", TestHarness.RunCompiled(source));
+    }
+
     #endregion
 
     #region Generator function EXPRESSION closing over a BLOCK-scoped binding — issue #678
