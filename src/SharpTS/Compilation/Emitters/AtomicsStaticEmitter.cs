@@ -42,8 +42,18 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
     /// </summary>
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        // Atomics has no static properties
-        return false;
+        if (propertyName != "pause")
+            return false;
+
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        il.Emit(OpCodes.Ldtoken, ctx.Runtime!.AtomicsPause);
+        il.Emit(OpCodes.Call, ctx.Types.MethodBaseGetMethodFromHandle);
+        il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
+        il.Emit(OpCodes.Ldstr, "pause");
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, ctx.Runtime.TSFunctionGetOrCreate);
+        return true;
     }
 
     private static bool EmitLoad(IEmitterContext emitter, List<Expr> arguments)

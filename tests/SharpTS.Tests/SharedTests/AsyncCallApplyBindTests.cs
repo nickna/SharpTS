@@ -94,4 +94,16 @@ public class AsyncCallApplyBindTests
 
         Assert.Equal("105\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void AsyncFunctionDeclaration_PlainSloppyCall_BindsGlobalThis(ExecutionMode mode)
+    {
+        var source = """
+            const glob: any = this;
+            async function probe(): Promise<void> { console.log(this === glob); }
+            probe();
+            """;
+
+        Assert.Equal("true\n", TestHarness.Run(source, mode));
+    }
 }

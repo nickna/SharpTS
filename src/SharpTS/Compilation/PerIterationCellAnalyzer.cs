@@ -87,10 +87,8 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
 
     protected override void VisitFor(Stmt.For stmt)
     {
-        // The initializer and condition do not create closures in a newly-copied
-        // per-iteration environment.
+        // The initializer runs before the per-iteration cell exists.
         if (stmt.Initializer != null) Visit(stmt.Initializer);
-        if (stmt.Condition != null) Visit(stmt.Condition);
 
         var bindings = CollectLoopBindingNames(stmt.Initializer);
         // The cell is an IL local in every emitter (sync ILEmitter.EmitFor and the
@@ -108,7 +106,9 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
         // and snapshot the cell reference in their closure-capture path.
         if (bindings == null || bindings.Count == 0 || HasDirectSuspension(stmt.Body))
         {
+            if (stmt.Condition != null) Visit(stmt.Condition);
             Visit(stmt.Body);
+            if (stmt.Increment != null) Visit(stmt.Increment);
             return;
         }
 
@@ -120,6 +120,9 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
             ClosureDepthAtEntry = _closureStack.Count,
         };
         _loopFrames.Push(frame);
+        // The test expression runs inside loopEnv and may create closures that
+        // capture the same per-iteration binding cell as the body/increment.
+        if (stmt.Condition != null) Visit(stmt.Condition);
         Visit(stmt.Body);
         var wasVisitingIncrement = _visitingIncrement;
         try

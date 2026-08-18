@@ -34,6 +34,22 @@ public class ForLoopPerIterationBindingTests
         Assert.Equal("0,1,2\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void ClosuresInForTestBodyAndIncrement_ReadLiveCell(ExecutionMode mode)
+    {
+        var source = """
+            let before: any, test: any, body: any, increment: any;
+            let run = true;
+            for (
+                let x = "outside", unused = before = () => x;
+                run && (x = "inside", test = () => x);
+                increment = () => x
+            ) body = () => x, run = false;
+            console.log([before(), test(), body(), increment()].join(","));
+            """;
+        Assert.Equal("outside,inside,inside,inside\n", TestHarness.Run(source, mode));
+    }
+
     // The #622 headline repro: a generator created per iteration capturing the loop variable.
     [Theory, ModeData]
     public void GeneratorCapturesLetLoopVar_PerIteration(ExecutionMode mode)

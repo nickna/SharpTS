@@ -27,6 +27,16 @@ public class WorkerThreadsTests
         Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
     }
 
+    [Theory, ModeData]
+    public void AtomicsPause_HasFunctionMetadata(ExecutionMode mode)
+    {
+        var source = """
+            console.log(Atomics.pause.name);
+            console.log(Atomics.pause.length);
+            """;
+        Assert.Equal("pause\n0\n", TestHarness.Run(source, mode));
+    }
+
     #region SharedArrayBuffer Tests
 
     [Theory, ModeData]

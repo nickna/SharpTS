@@ -745,7 +745,11 @@ public partial class ILCompiler
             var analysis = _async.Analyzer.Analyze(func);
 
             // Emit stub method body
-            EmitAsyncStubMethod(stubMethod, smBuilder, func.Parameters);
+            EmitAsyncStubMethod(
+                stubMethod,
+                smBuilder,
+                func.Parameters,
+                coerceSloppyDynamicThis: !(_isStrictMode || BodyDeclaresUseStrict(func.Body)));
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -868,7 +872,8 @@ public partial class ILCompiler
         bool isInstanceMethod = false,
         FieldBuilder? asyncLockField = null,
         FieldBuilder? lockReentrancyField = null,
-        string? functionDCKey = null)
+        string? functionDCKey = null,
+        bool coerceSloppyDynamicThis = false)
     {
         var il = stubMethod.GetILGenerator();
         var smLocal = il.DeclareLocal(smBuilder.StateMachineType);
@@ -886,7 +891,26 @@ public partial class ILCompiler
             if (isInstanceMethod)
                 il.Emit(OpCodes.Ldarg_0);
             else
+            {
                 il.Emit(OpCodes.Ldsfld, _runtime!.CurrentFunctionThisField);
+                if (coerceSloppyDynamicThis)
+                {
+                    // Async free functions snapshot their receiver before MoveNext runs.
+                    // Apply OrdinaryCallBindThis here so a plain sloppy-mode call keeps
+                    // globalThis across suspension instead of hoisting the undefined sentinel.
+                    var keepThis = il.DefineLabel();
+                    var useGlobalThis = il.DefineLabel();
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Brfalse, useGlobalThis);
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                    il.Emit(OpCodes.Brfalse, keepThis);
+                    il.MarkLabel(useGlobalThis);
+                    il.Emit(OpCodes.Pop);
+                    il.Emit(OpCodes.Ldsfld, _runtime.GlobalThisSingletonField);
+                    il.MarkLabel(keepThis);
+                }
+            }
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);
         }
 
