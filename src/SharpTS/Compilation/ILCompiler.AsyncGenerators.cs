@@ -175,7 +175,7 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Emits the body of an instance async generator method using a state machine.
+    /// Emits the body of an instance or static async generator method using a state machine.
     /// Called for class methods marked with both IsAsync and IsGenerator = true.
     /// </summary>
     private void EmitAsyncGeneratorMethodBody(MethodBuilder methodBuilder, Stmt.Function method, FieldInfo? fieldsField,
@@ -215,16 +215,14 @@ public partial class ILCompiler
         if (methodDCKey != null && _closures.FunctionDisplayClasses.TryGetValue(methodDCKey, out var methodFuncDC))
             smBuilder.DefineFunctionDisplayClassField(methodFuncDC);
 
-        // Emit stub method body (creates state machine and returns it). A static async generator method
-        // (#778) has no `this` and no function-DC write-capture support (it is not registered in
-        // RegisterGeneratorMethodFunctionDisplayClasses, so methodDCKey is null), mirroring the sync
-        // static generator (#692).
+        // Emit the creation stub and seed the method's function display class for both instance and
+        // static async generators. Static parameters begin at argument zero.
         EmitIteratorMethodStub(
             methodBuilder,
             smBuilder,
             method,
             isInstanceMethod,
-            isInstanceMethod ? methodDCKey : null,
+            methodDCKey,
             fieldsField,
             currentClassName);
 

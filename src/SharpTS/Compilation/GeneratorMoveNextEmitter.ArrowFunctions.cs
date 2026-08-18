@@ -18,8 +18,7 @@ public partial class GeneratorMoveNextEmitter
         // routed through `$functionDC` and so is intentionally absent from the arrow's own by-value
         // snapshot fields — its write reaches shared storage and this guard does not fire. What
         // remains is the still-unsupported subset: a write to a captured variable that is only ever
-        // snapshotted by value (e.g. inside an instance generator method, whose state machine has no
-        // function DC wired). Fail fast there rather than miscompiling `arr.forEach(n => sum += n)`.
+        // snapshotted by value. Fail fast there rather than silently losing the write.
         CapturedWriteAnalysis.ThrowIfCapturedWriteWouldBeLost(af, _ctx?.DisplayClassFields);
 
         base.EmitArrowFunction(af);

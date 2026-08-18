@@ -573,6 +573,8 @@ internal sealed class GeneratorArrowLifter
                 return LiftGeneratorArrow(af);
             case Expr.ArrowFunction af:
                 return RewriteNonGeneratorArrow(af);
+            case Expr.ClassExpr cls:
+                return RewriteClassExpression(cls);
 
             case Expr.Comma c:
             {
@@ -773,10 +775,63 @@ internal sealed class GeneratorArrowLifter
 
             default:
                 // Leaf / type-only / declaration-only nodes carry no nested generator expression:
-                // Literal, Variable, This, Super, RegexLiteral, ImportMeta, ClassExpr (handled
-                // structurally elsewhere). Returned unchanged.
+                // Literal, Variable, This, Super, RegexLiteral, ImportMeta. Returned unchanged.
                 return expr;
         }
+    }
+
+    /// <summary>
+    /// Rewrites a class expression with the same class-definition and function-scope rules as a class
+    /// declaration. Class expressions may occur on any expression path, so handling them here is what
+    /// lets generator expressions inside their methods, fields, accessors, computed keys, and static
+    /// initializers reach the declaration-based generator pipeline.
+    /// </summary>
+    private Expr RewriteClassExpression(Expr.ClassExpr cls)
+    {
+        var newSuperclass = cls.SuperclassExpr is null ? null : RewriteExpr(cls.SuperclassExpr);
+        var newMethods = RewriteListIfChanged(cls.Methods, RewriteClassMethod);
+        var newFields = RewriteListIfChanged(cls.Fields, RewriteClassField);
+        var newAccessors = cls.Accessors is null
+            ? null
+            : RewriteListIfChanged(cls.Accessors, RewriteClassAccessor);
+        var newAutoAccessors = cls.AutoAccessors is null
+            ? null
+            : RewriteListIfChanged(cls.AutoAccessors, RewriteAutoAccessor);
+
+        // StaticInitializers repeats the static Field nodes held in Fields. Reuse the corresponding
+        // rewritten node so a generator in a static field initializer is lifted exactly once.
+        List<Stmt>? newStaticInitializers = cls.StaticInitializers;
+        if (cls.StaticInitializers is not null)
+        {
+            var rewrittenFields = new Dictionary<Stmt.Field, Stmt.Field>(ReferenceEqualityComparer.Instance);
+            for (int i = 0; i < cls.Fields.Count; i++)
+                rewrittenFields[cls.Fields[i]] = newFields[i];
+
+            newStaticInitializers = RewriteListIfChanged(cls.StaticInitializers, initializer =>
+                initializer is Stmt.Field field && rewrittenFields.TryGetValue(field, out var rewrittenField)
+                    ? rewrittenField
+                    : initializer is Stmt.StaticBlock block
+                        ? RewriteStaticBlock(block)
+                        : RewriteStmt(initializer));
+        }
+
+        if ((cls.SuperclassExpr is null || ReferenceEquals(newSuperclass, cls.SuperclassExpr))
+            && ReferenceEquals(newMethods, cls.Methods)
+            && ReferenceEquals(newFields, cls.Fields)
+            && (cls.Accessors is null || ReferenceEquals(newAccessors, cls.Accessors))
+            && (cls.AutoAccessors is null || ReferenceEquals(newAutoAccessors, cls.AutoAccessors))
+            && (cls.StaticInitializers is null || ReferenceEquals(newStaticInitializers, cls.StaticInitializers)))
+            return cls;
+
+        return cls with
+        {
+            SuperclassExpr = newSuperclass,
+            Methods = newMethods,
+            Fields = newFields,
+            Accessors = newAccessors,
+            AutoAccessors = newAutoAccessors,
+            StaticInitializers = newStaticInitializers,
+        };
     }
 
     private Expr RewriteObjectLiteral(Expr.ObjectLiteral obj)

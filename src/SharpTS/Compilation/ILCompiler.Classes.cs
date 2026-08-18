@@ -82,9 +82,9 @@ public partial class ILCompiler
         // closure captures a method-local binding.
         RegisterSyncMethodFunctionDisplayClasses(classStmt.Methods, qualifiedClassName);
 
-        // #724: register function display classes for instance generator methods whose arrows write a
-        // captured method local, before Phase 5's PropagateFunctionDCRequirements runs. Skipped for
-        // external (@DotNetType) classes, which return above without an emitted body.
+        // Register live function storage for captured locals in sync/async, instance/static generator
+        // methods before Phase 5's PropagateFunctionDCRequirements runs. Skipped for external
+        // (@DotNetType) classes, which return above without an emitted body.
         RegisterGeneratorMethodFunctionDisplayClasses(classStmt, qualifiedClassName);
 
         // Same, for async (non-generator) methods whose nested sync arrow writes a captured method local,

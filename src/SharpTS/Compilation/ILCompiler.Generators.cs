@@ -11,7 +11,7 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILCompiler
 {
-    // Maps an instance generator method's AST node to the function-display-class key registered for
+    // Maps a generator method's AST node to the function-display-class key registered for
     // it during DefineClass (#724). EmitGeneratorMethodBody reads this to wire the state machine's
     // function DC at emit time. Keyed by AST identity so the Phase-4 registration and the later
     // Phase-7 emission agree without reconstructing a string from the emitted type name.
@@ -145,10 +145,9 @@ public partial class ILCompiler
 
         // #945: a read-only capture forwarded by a HOISTED lambda-lifted nested generator (the sync
         // forwarding arrow NestedFunctionLifter marks IsLiftedForwarder) must also live in the DC, so the
-        // hoisted forwarder reads it live at call time. Marked forwarders only appear in free/module/
-        // nested-in-function generator bodies (class-method enclosers decline → unmarked), so generator
-        // METHODS are unaffected. Unioned BEFORE the empty-set short-circuit and the per-iteration
-        // exclusion below, which still strips any per-iteration loop binding a forwarder happens to read.
+        // hoisted forwarder reads it live at call time. This applies uniformly to free generators and
+        // generator methods. Unioned BEFORE the empty-set short-circuit and the per-iteration exclusion
+        // below, which still strips any per-iteration loop binding a forwarder happens to read.
         var forwardedReads = CollectLiftedForwarderCapturedReads(funcStmt);
         forwardedReads.IntersectWith(capturedLocals);
         result.UnionWith(forwardedReads);
@@ -261,16 +260,11 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Phase-4 registration (called from <see cref="DefineClass"/>): for each SYNC instance generator
-    /// method whose body contains an arrow that WRITES a variable captured from the method scope,
-    /// registers a function-level display class — the instance-method analogue of the free-function
-    /// wiring <see cref="DefineGeneratorFunctionDisplayClass"/> does for <c>function*</c> declarations
-    /// (#724/#674). This must run before Phase 5 so <see cref="PropagateFunctionDCRequirements"/> can
-    /// resolve the nested arrow back to the method (via <c>FunctionAstNodes</c>) and route its write
-    /// through <c>$functionDC</c> instead of a by-value snapshot. <see cref="EmitGeneratorMethodBody"/>
-    /// later consumes the recorded key to wire the state machine's function DC. No-op for methods with
-    /// no such write-capture, leaving their state machines fully standalone. Covers both sync (#724)
-    /// and async (#725) instance generator methods; static and plain methods use other paths.
+    /// Phase-4 registration (called from <see cref="DefineClass"/>): registers shared function display
+    /// classes for sync/async and instance/static generator methods whose locals are captured by nested
+    /// closures. This must run before Phase 5 so <see cref="PropagateFunctionDCRequirements"/> can route
+    /// those closures to the correct live storage. Class expressions reuse the same registration later
+    /// in Phase 5, once their generated class names are known.
     /// </summary>
     private void RegisterGeneratorMethodFunctionDisplayClasses(Stmt.Class classStmt, string qualifiedClassName) =>
         RegisterGeneratorMethodFunctionDisplayClasses(classStmt.Methods, qualifiedClassName);
@@ -297,10 +291,10 @@ public partial class ILCompiler
             if (capturedLocals.Count == 0)
                 continue;
 
-            // Method names with bodies are unique within a class (overload signatures have no body),
-            // and the qualified class name disambiguates across modules/namespaces — so the "::" key is
-            // unique and disjoint from free-function registry keys (which never contain "::").
-            string key = $"{qualifiedClassName}::{method.Name.Lexeme}";
+            // A class may legally contain same-named static and instance methods. Include the dispatch
+            // kind so their independent per-invocation storage can never alias in the registries.
+            string dispatchKind = method.IsStatic ? "static" : "instance";
+            string key = $"{qualifiedClassName}::{dispatchKind}::{method.Name.Lexeme}";
             _closures.FunctionAstNodes[key] = method;
             RegisterFunctionDisplayClass(key, capturedLocals);
             (method.IsAsync ? _asyncGeneratorMethodFunctionDCKeys : _generatorMethodFunctionDCKeys)[method] = key;
@@ -428,7 +422,7 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Emits the body of an instance generator method using a state machine.
+    /// Emits the body of an instance or static generator method using a state machine.
     /// Called for class methods marked with IsGenerator = true.
     /// </summary>
     private void EmitGeneratorMethodBody(MethodBuilder methodBuilder, Stmt.Function method, FieldInfo? fieldsField,
@@ -470,10 +464,8 @@ public partial class ILCompiler
         if (methodDCKey != null && _closures.FunctionDisplayClasses.TryGetValue(methodDCKey, out var methodFuncDC))
             smBuilder.DefineFunctionDisplayClassField(methodFuncDC);
 
-        // Emit stub method body (creates state machine and returns it). A static generator method
-        // (#692) has no function-DC write-capture support (it is not registered in
-        // RegisterGeneratorMethodFunctionDisplayClasses, so methodDCKey is null) and a write-capture
-        // inside one still fail-fasts safely via the CapturedWriteAnalysis guard.
+        // Emit the creation stub and seed the method's function display class for both instance and
+        // static generators (the latter uses parameter argument offset zero).
         EmitIteratorMethodStub(
             methodBuilder,
             smBuilder,

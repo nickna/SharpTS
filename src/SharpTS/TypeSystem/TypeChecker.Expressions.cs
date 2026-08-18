@@ -2312,8 +2312,13 @@ public partial class TypeChecker
                 {
                     if (method.Body != null)
                     {
-                        foreach (var bodyStmt in method.Body)
-                            CheckStmt(bodyStmt);
+                        // Match ordinary function-body checking (and class declarations): generator
+                        // expression lifting appends __genArrow_N at the body end while its binding is
+                        // referenced earlier, so declarations and lexical bindings must be visible
+                        // before the sequential pass.
+                        HoistFunctionDeclarations(method.Body);
+                        HoistLexicalDeclarations(method.Body);
+                        CheckStmtList(method.Body);
 
                         // #367/#372: object-slot number/boolean-typed locals, parameters, and returns
                         // that may hold the undefined sentinel.

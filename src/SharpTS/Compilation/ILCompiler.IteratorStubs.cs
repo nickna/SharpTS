@@ -67,8 +67,8 @@ public partial class ILCompiler
             }
         }
 
-        // Instantiate the function display class (#674/#725) and seed any captured-and-mutated parameter
-        // into it so an arrow that writes it shares the iterator's storage. Captured outer-scope variables
+        // Instantiate the function display class (#674/#725) and seed every captured parameter it owns
+        // so nested closures share the iterator's live storage. Captured outer-scope variables
         // are NOT copied here — snapshotting them at creation hid later mutations (#541); MoveNext reads
         // them live from their enclosing storage instead.
         EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, funcStmt, qualifiedName, paramOffset: 0);
@@ -83,7 +83,7 @@ public partial class ILCompiler
     /// (<see cref="MethodBuilder.GetParameters"/>): a private method's parameters are all <c>object</c>
     /// slots, so boxing the AST-resolved value type would mismatch the loaded <c>object</c>
     /// (StackUnexpected). The function DC is seeded only when <paramref name="funcDCKey"/> is non-null;
-    /// static iterator methods pass null (they have no write-capture support — #692/#778).
+    /// static iterator methods use the same path with parameter argument offset zero.
     /// </summary>
     private void EmitIteratorMethodStub(
         MethodBuilder methodBuilder,
@@ -129,8 +129,8 @@ public partial class ILCompiler
             }
         }
 
-        // Seed captured-and-mutated parameters into the function DC (typed stub params → value types are
-        // boxed before the store). No-op when the method has no function DC. Static methods pass null.
+        // Seed captured parameters into the function DC (typed stub params → value types are boxed
+        // before the store). No-op when the method has no function DC.
         if (funcDCKey != null)
             EmitGeneratorFunctionDCInit(il, smBuilder.FunctionDCField, method, funcDCKey, paramOffset, paramTypes);
 
