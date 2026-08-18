@@ -1,5 +1,3 @@
-using SharpTS.Diagnostics.Exceptions;
-using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -137,13 +135,11 @@ public class PrivateAsyncGeneratorMethodTests
         Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void StaticAsyncGeneratorPrivate_ReportsCleanError_NotInvalidIL()
+    [Theory, ModeData]
+    public void StaticAsyncGeneratorPrivateMethod(ExecutionMode mode)
     {
-        // Static async generators are not yet supported (the async-generator state machine is
-        // instance-only; the public static form fails the same way, #761). The static private form must
-        // report that clean compile error rather than emitting invalid IL — i.e. the fix routes only the
-        // supported cases.
+        // Static private async generators share the public static iterator path: no instance field and
+        // parameters beginning at argument zero.
         var source = """
             class A {
               static async *#p(x: number) { yield x; yield x + 1; }
@@ -152,6 +148,6 @@ public class PrivateAsyncGeneratorMethodTests
             A.go().then(v => console.log(v));
             """;
 
-        Assert.Throws<CompileException>(() => TestHarness.CompileAndVerifyOnly(source, DecoratorMode.None));
+        Assert.Equal("11\n", TestHarness.Run(source, mode));
     }
 }

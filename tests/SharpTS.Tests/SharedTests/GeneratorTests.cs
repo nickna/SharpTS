@@ -1649,6 +1649,41 @@ public class GeneratorTests
         Assert.Contains("Yield not supported", ex.Message);
     }
 
+    [Fact]
+    public void GeneratorExpression_ClosesOverLocal_WithDefaultParam_CompiledFailsCleanly()
+    {
+        var source = """
+            function outer() {
+              let y = 5;
+              const g = function*(x: number = 2) { yield y + x; };
+              return [...g()];
+            }
+            console.log(outer());
+            """;
+
+        Assert.Equal("[7]\n", TestHarness.Run(source, ExecutionMode.Interpreted));
+        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Yield not supported", ex.Message);
+    }
+
+    [Fact]
+    public void GeneratorExpression_ClosesOverLocal_UsingArguments_CompiledFailsCleanly()
+    {
+        var source = """
+            function outer() {
+              let y = 5;
+              const g = function*() { yield y; yield arguments.length; };
+              return [...g(1, 2)];
+            }
+            console.log(outer());
+            """;
+
+        // The interpreter's generator-expression `arguments` binding is a separate existing gap; this
+        // test pins the compiler's conservative decline only.
+        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Yield not supported", ex.Message);
+    }
+
     [Theory, ModeData]
     public void GeneratorExpression_ClosesOverLocal_UsingThis_ThreadsDynamicThis(ExecutionMode mode)
     {
@@ -1691,9 +1726,8 @@ public class GeneratorTests
     // #945 (generator-encloser analog of #534/#924): a generator expression closing over a local of an
     // enclosing top-level/module-level (or nested-in-plain-function) `function*` now runs in BOTH modes.
     // The lifted forwarding binding is hoisted to the generator body top and its read-only forwarded
-    // capture is routed through the generator's #674 function display class, so the hoisted forwarder
-    // reads it LIVE. Class generator-method enclosers (sync/async, static/instance) instead decline
-    // cleanly (a compile error, never a stale-value miscompile) — pinned below.
+    // capture is routed through the generator's function display class, so the hoisted forwarder reads
+    // it LIVE. The same storage path now covers class generator methods, including static and async.
 
     [Theory, ModeData]
     public void GeneratorExpression_ClosesOverGeneratorLocal(ExecutionMode mode)
@@ -1787,50 +1821,91 @@ public class GeneratorTests
         Assert.Equal("[7]\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void GeneratorExpression_ClosesOverInstanceGeneratorMethodLocal_CompiledDeclinesCleanly()
+    [Theory, ModeData]
+    public void GeneratorExpression_ClosesOverInstanceGeneratorMethodLocal(ExecutionMode mode)
     {
-        // A class instance generator method encloser has no function DC wired for read-only captures, so
-        // the compiler keeps the binding in place and the body's `yield` fails cleanly ("Yield not
-        // supported in this context") — never a stale-value miscompile. Interpreter runs it natively.
+        // The forwarding closure is created at method entry, then reads y after its mutation through the
+        // shared generator-method display class.
         var source = """
             class C {
               *m() {
                 let y = 5;
                 const g = function*() { yield y; };
+                y = 9;
                 yield* g();
               }
             }
             console.log([...new C().m()]);
             """;
 
-        Assert.Equal("[5]\n", TestHarness.Run(source, ExecutionMode.Interpreted));
-        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
-        Assert.Contains("Yield not supported", ex.Message);
+        Assert.Equal("[9]\n", TestHarness.Run(source, mode));
     }
 
-    [Fact]
-    public void GeneratorExpression_ClosesOverStaticGeneratorMethodLocal_CompiledDeclinesCleanly()
+    [Theory, ModeData]
+    public void GeneratorExpression_ClosesOverStaticGeneratorMethodParameter(ExecutionMode mode)
     {
-        // A static generator method has no function DC at all; same clean decline as the instance case.
+        // Static method parameters start at IL argument zero; seed the captured parameter into the live
+        // display-class cell before MoveNext and observe a later mutation.
         var source = """
             class C {
-              static *m() {
-                let y = 7;
+              static *m(y: number) {
                 const g = function*() { yield y; };
+                y += 4;
                 yield* g();
               }
             }
-            console.log([...C.m()]);
+            console.log([...C.m(7)]);
             """;
 
-        Assert.Equal("[7]\n", TestHarness.Run(source, ExecutionMode.Interpreted));
-        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
-        Assert.Contains("Yield not supported", ex.Message);
+        Assert.Equal("[11]\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void GeneratorExpressions_ClassExpressionMethods_AllKindsUseIndependentLiveStorage(ExecutionMode mode)
+    {
+        // A ternary forces NestedFunctionLifter to reach the class expression through a non-trivial
+        // expression path. Same-named static/instance methods must receive distinct DC keys. The static
+        // parameter cases also pin argument offset zero for both iterator families.
+        var source = """
+            const C = true ? class {
+              *m(seed: number) {
+                const g = function*() { yield seed; };
+                seed += 1;
+                yield* g();
+              }
+              static *m(seed: number) {
+                const g = function*() { yield seed; };
+                seed += 2;
+                yield* g();
+              }
+              async *am(seed: number) {
+                const g = async function*() { yield seed; };
+                seed += 3;
+                for await (const value of g()) yield value;
+              }
+              static async *am(seed: number) {
+                const g = async function*() { yield seed; };
+                seed += 4;
+                for await (const value of g()) yield value;
+              }
+            } : class {};
+
+            async function main() {
+              const values: number[] = [];
+              values.push(new C().m(10).next().value);
+              values.push(C.m(10).next().value);
+              for await (const value of new C().am(10)) values.push(value);
+              for await (const value of C.am(10)) values.push(value);
+              console.log(values.join(","));
+            }
+            main();
+            """;
+
+        Assert.Equal("11,12,13,14\n", TestHarness.Run(source, mode));
     }
 
     [Fact]
-    public void GeneratorExpression_NamedSelfRecursive_ClosesOverGeneratorLocal_CompiledNeverWrong()
+    public void GeneratorExpression_NamedSelfRecursive_ClosesOverGeneratorLocal_CompiledFailsCleanly()
     {
         // A NAMED self-recursive generator expression that also captures an enclosing local is declined by
         // the lambda-lift (self-recursion can't be forwarded). The compiled path must be a clean error or
@@ -1845,10 +1920,8 @@ public class GeneratorTests
             console.log([...outer()]);
             """;
 
-        string compiled;
-        try { compiled = TestHarness.RunCompiled(source); }
-        catch { compiled = "<compile-or-runtime-error>"; }
-        Assert.True(compiled == "<compile-or-runtime-error>" || compiled == "[2, 2]\n", $"unexpected: {compiled}");
+        var ex = Assert.Throws<CompileException>(() => TestHarness.RunCompiled(source));
+        Assert.Contains("Yield not supported", ex.Message);
     }
 
     #endregion

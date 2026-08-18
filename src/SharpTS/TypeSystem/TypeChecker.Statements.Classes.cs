@@ -939,6 +939,12 @@ public partial class TypeChecker
                     // Abstract methods have no body to check
                     if (method.Body != null)
                     {
+                        // Method bodies have ordinary function-declaration and lexical hoisting
+                        // semantics. GeneratorArrowLifter appends a synthesized __genArrow_N
+                        // declaration after the earlier forwarding reference, so predeclare both
+                        // declaration kinds before the source-order body pass.
+                        HoistFunctionDeclarations(method.Body);
+                        HoistLexicalDeclarations(method.Body);
                         CheckStmtList(method.Body);
 
                         // #367/#372: object-slot number/boolean-typed locals, parameters, and returns

@@ -381,6 +381,45 @@ internal sealed class NestedFunctionLifter
     {
         switch (stmt)
         {
+            case Stmt.Expression e:
+                CollectShapeCandidatesExpr(e.Expr, enclosingBlockBindings, scan);
+                break;
+            case Stmt.Return { Value: not null } r:
+                CollectShapeCandidatesExpr(r.Value, enclosingBlockBindings, scan);
+                break;
+            case Stmt.Var { Initializer: not null } v:
+                CollectShapeCandidatesExpr(v.Initializer, enclosingBlockBindings, scan);
+                break;
+            case Stmt.Const c:
+                CollectShapeCandidatesExpr(c.Initializer, enclosingBlockBindings, scan);
+                break;
+            case Stmt.Throw t:
+                CollectShapeCandidatesExpr(t.Value, enclosingBlockBindings, scan);
+                break;
+            case Stmt.Field field:
+                if (field.ComputedKey != null) CollectShapeCandidatesExpr(field.ComputedKey, enclosingBlockBindings, scan);
+                if (field.Initializer != null) CollectShapeCandidatesExpr(field.Initializer, enclosingBlockBindings, scan);
+                break;
+            case Stmt.Accessor accessor:
+                if (accessor.ComputedKey != null) CollectShapeCandidatesExpr(accessor.ComputedKey, enclosingBlockBindings, scan);
+                if (accessor.SetterParam?.DefaultValue != null) CollectShapeCandidatesExpr(accessor.SetterParam.DefaultValue, enclosingBlockBindings, scan);
+                foreach (var bodyStmt in accessor.Body)
+                    new ClassExpressionShapeScanner(enclosingBlockBindings, scan).Visit(bodyStmt);
+                break;
+            case Stmt.AutoAccessor accessor:
+                if (accessor.Initializer != null) CollectShapeCandidatesExpr(accessor.Initializer, enclosingBlockBindings, scan);
+                break;
+            case Stmt.StaticBlock block:
+                foreach (var bodyStmt in block.Body)
+                    new ClassExpressionShapeScanner(enclosingBlockBindings, scan).Visit(bodyStmt);
+                break;
+            case Stmt.Using u:
+                foreach (var binding in u.Bindings)
+                {
+                    if (binding.DestructuringPattern != null) CollectShapeCandidatesExpr(binding.DestructuringPattern, enclosingBlockBindings, scan);
+                    CollectShapeCandidatesExpr(binding.Initializer, enclosingBlockBindings, scan);
+                }
+                break;
             case Stmt.Function f when f.Body != null:
                 // (1) A declaration nested INSIDE a function-like whose shape needs the top-level
                 // state-machine pipeline (gen/async, or a plain fn inside a state machine). Captures
@@ -399,6 +438,9 @@ internal sealed class NestedFunctionLifter
                     scan.ModuleBlockEnclosingBindings[f] = enclosingBlockBindings;
                 }
                 // A nested function's own body establishes a fresh enclosing kind for its children.
+                foreach (var parameter in f.Parameters)
+                    if (parameter.DefaultValue != null)
+                        CollectShapeCandidatesExpr(parameter.DefaultValue, enclosingBlockBindings, scan);
                 CollectShapeCandidates(f.Body, f.IsGenerator || f.IsAsync, insideFunction: true, insideModuleBlock: false, enclosingBlockBindings, scan);
                 break;
             case Stmt.Block b:
@@ -408,14 +450,17 @@ internal sealed class NestedFunctionLifter
                 CollectShapeCandidates(s.Statements, enclosingIsStateMachine, insideFunction, insideModuleBlock, enclosingBlockBindings, scan);
                 break;
             case Stmt.If i:
+                CollectShapeCandidatesExpr(i.Condition, enclosingBlockBindings, scan);
                 CollectShapeCandidatesStmt(i.ThenBranch, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
                 if (i.ElseBranch != null) CollectShapeCandidatesStmt(i.ElseBranch, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
                 break;
             case Stmt.While w:
+                CollectShapeCandidatesExpr(w.Condition, enclosingBlockBindings, scan);
                 CollectShapeCandidatesStmt(w.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
                 break;
             case Stmt.DoWhile d:
                 CollectShapeCandidatesStmt(d.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
+                CollectShapeCandidatesExpr(d.Condition, enclosingBlockBindings, scan);
                 break;
             case Stmt.For fo:
                 // The loop variable is scoped to the loop body — add it to the bindings so a body
@@ -423,14 +468,18 @@ internal sealed class NestedFunctionLifter
                 // case) is recognized as capturing and left nested.
                 var forBindings = !insideFunction ? WithDeclaration(enclosingBlockBindings, fo.Initializer) : enclosingBlockBindings;
                 if (fo.Initializer != null) CollectShapeCandidatesStmt(fo.Initializer, enclosingIsStateMachine, insideFunction, insideModuleBlock, enclosingBlockBindings, scan);
+                if (fo.Condition != null) CollectShapeCandidatesExpr(fo.Condition, forBindings, scan);
+                if (fo.Increment != null) CollectShapeCandidatesExpr(fo.Increment, forBindings, scan);
                 CollectShapeCandidatesStmt(fo.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, forBindings, scan);
                 break;
             case Stmt.ForOf fof:
                 var forOfBindings = !insideFunction ? WithName(enclosingBlockBindings, fof.Variable.Lexeme) : enclosingBlockBindings;
+                CollectShapeCandidatesExpr(fof.Iterable, enclosingBlockBindings, scan);
                 CollectShapeCandidatesStmt(fof.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, forOfBindings, scan);
                 break;
             case Stmt.ForIn fin:
                 var forInBindings = !insideFunction ? WithName(enclosingBlockBindings, fin.Variable.Lexeme) : enclosingBlockBindings;
+                CollectShapeCandidatesExpr(fin.Object, enclosingBlockBindings, scan);
                 CollectShapeCandidatesStmt(fin.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, forInBindings, scan);
                 break;
             case Stmt.LabeledStatement l:
@@ -446,18 +495,99 @@ internal sealed class NestedFunctionLifter
                 if (t.FinallyBlock != null) CollectShapeCandidates(t.FinallyBlock, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
                 break;
             case Stmt.Switch sw:
+                CollectShapeCandidatesExpr(sw.Subject, enclosingBlockBindings, scan);
+                foreach (var c in sw.Cases) CollectShapeCandidatesExpr(c.Value, enclosingBlockBindings, scan);
                 foreach (var c in sw.Cases) CollectShapeCandidates(c.Body, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
                 if (sw.DefaultBody != null) CollectShapeCandidates(sw.DefaultBody, enclosingIsStateMachine, insideFunction, insideModuleBlock: !insideFunction, enclosingBlockBindings, scan);
                 break;
             case Stmt.Class cls:
                 // Method bodies are function-likes regardless of where the class sits.
+                if (cls.SuperclassExpr != null)
+                    CollectShapeCandidatesExpr(cls.SuperclassExpr, enclosingBlockBindings, scan);
                 foreach (var m in cls.Methods)
+                {
+                    if (m.ComputedKey != null) CollectShapeCandidatesExpr(m.ComputedKey, enclosingBlockBindings, scan);
+                    foreach (var p in m.Parameters)
+                        if (p.DefaultValue != null) CollectShapeCandidatesExpr(p.DefaultValue, enclosingBlockBindings, scan);
                     if (m.Body != null) CollectShapeCandidates(m.Body, m.IsGenerator || m.IsAsync, insideFunction: true, insideModuleBlock: false, enclosingBlockBindings, scan);
+                }
+                foreach (var field in cls.Fields)
+                {
+                    if (field.ComputedKey != null) CollectShapeCandidatesExpr(field.ComputedKey, enclosingBlockBindings, scan);
+                    if (field.Initializer != null) CollectShapeCandidatesExpr(field.Initializer, enclosingBlockBindings, scan);
+                }
+                if (cls.Accessors != null)
+                    foreach (var accessor in cls.Accessors)
+                    {
+                        if (accessor.ComputedKey != null) CollectShapeCandidatesExpr(accessor.ComputedKey, enclosingBlockBindings, scan);
+                        if (accessor.SetterParam?.DefaultValue != null) CollectShapeCandidatesExpr(accessor.SetterParam.DefaultValue, enclosingBlockBindings, scan);
+                        foreach (var bodyStmt in accessor.Body)
+                            new ClassExpressionShapeScanner(enclosingBlockBindings, scan).Visit(bodyStmt);
+                    }
+                if (cls.AutoAccessors != null)
+                    foreach (var accessor in cls.AutoAccessors)
+                        if (accessor.Initializer != null) CollectShapeCandidatesExpr(accessor.Initializer, enclosingBlockBindings, scan);
+                if (cls.StaticInitializers != null)
+                    foreach (var initializer in cls.StaticInitializers)
+                        if (initializer is Stmt.StaticBlock block)
+                            foreach (var bodyStmt in block.Body)
+                                new ClassExpressionShapeScanner(enclosingBlockBindings, scan).Visit(bodyStmt);
                 break;
-            case Stmt.Export ex when ex.Declaration != null:
-                CollectShapeCandidatesStmt(ex.Declaration, enclosingIsStateMachine, insideFunction, insideModuleBlock, enclosingBlockBindings, scan);
+            case Stmt.Export ex:
+                if (ex.Declaration != null)
+                    CollectShapeCandidatesStmt(ex.Declaration, enclosingIsStateMachine, insideFunction, insideModuleBlock, enclosingBlockBindings, scan);
+                if (ex.DefaultExpr != null) CollectShapeCandidatesExpr(ex.DefaultExpr, enclosingBlockBindings, scan);
+                if (ex.ExportAssignment != null) CollectShapeCandidatesExpr(ex.ExportAssignment, enclosingBlockBindings, scan);
                 break;
             // Stmt.Namespace is intentionally NOT traversed (#583 §3 lift barrier).
+        }
+    }
+
+    private static void CollectShapeCandidatesExpr(Expr expr, HashSet<string> enclosingBlockBindings, ShapeScan scan) =>
+        new ClassExpressionShapeScanner(enclosingBlockBindings, scan).Visit(expr);
+
+    /// <summary>Finds class expressions anywhere under an expression and scans each method body using
+    /// function-like candidate semantics. The ordinary visitor supplies exhaustive expression traversal;
+    /// the override supplements class-definition children not covered by its generic class visitor.</summary>
+    private sealed class ClassExpressionShapeScanner(HashSet<string> enclosingBlockBindings, ShapeScan scan)
+        : Parsing.Visitors.AstVisitorBase
+    {
+        protected override void VisitClassExpr(Expr.ClassExpr expr)
+        {
+            if (expr.SuperclassExpr != null) Visit(expr.SuperclassExpr);
+
+            foreach (var method in expr.Methods)
+            {
+                if (method.ComputedKey != null) Visit(method.ComputedKey);
+                foreach (var parameter in method.Parameters)
+                    if (parameter.DefaultValue != null) Visit(parameter.DefaultValue);
+                if (method.Body != null)
+                    CollectShapeCandidates(method.Body, method.IsGenerator || method.IsAsync,
+                        insideFunction: true, insideModuleBlock: false, enclosingBlockBindings, scan);
+            }
+
+            foreach (var field in expr.Fields)
+            {
+                if (field.ComputedKey != null) Visit(field.ComputedKey);
+                if (field.Initializer != null) Visit(field.Initializer);
+            }
+
+            if (expr.Accessors != null)
+                foreach (var accessor in expr.Accessors)
+                {
+                    if (accessor.ComputedKey != null) Visit(accessor.ComputedKey);
+                    if (accessor.SetterParam?.DefaultValue != null) Visit(accessor.SetterParam.DefaultValue);
+                    foreach (var bodyStmt in accessor.Body) Visit(bodyStmt);
+                }
+
+            if (expr.AutoAccessors != null)
+                foreach (var accessor in expr.AutoAccessors)
+                    if (accessor.Initializer != null) Visit(accessor.Initializer);
+
+            if (expr.StaticInitializers != null)
+                foreach (var initializer in expr.StaticInitializers)
+                    if (initializer is Stmt.StaticBlock block)
+                        foreach (var bodyStmt in block.Body) Visit(bodyStmt);
         }
     }
 
@@ -560,15 +690,13 @@ internal sealed class NestedFunctionLifter
                     // call time and the earlier hoisted creation position is harmless. The generator-
                     // encloser case (#945) is the generator analog of the async-function #924 fix.
                     //
-                    // When the enclosing function is a class GENERATOR METHOD (sync or async, static or
-                    // instance), keep the binding in place: a static generator method has no function
-                    // display class at all and an instance one wires it only for write-captures, so a
-                    // hoisted forwarding arrow would snapshot the captured local by value at creation and
-                    // read a stale value. Those decline cleanly (a clean failure, never a miscompile).
+                    // Class generator methods use the same shared function display class for lifted
+                    // forwarder captures, including static and async methods, so they follow the same
+                    // hoisting rule as free generator functions.
                     // Module-block/loop captures (#622) likewise stay in place so each loop iteration
                     // rebuilds a fresh arrow over that iteration's binding.
                     result ??= new List<Stmt>(body.GetRange(0, i));
-                    bool hoist = _hoistedForwards.Contains(f) && !enclosingIsGeneratorClassMethod;
+                    bool hoist = _hoistedForwards.Contains(f);
                     var binding = LambdaLiftCandidate(f, forwarded, hoisted: hoist);
                     if (hoist)
                         (aliases ??= new List<Stmt>()).Add(binding);
@@ -685,10 +813,9 @@ internal sealed class NestedFunctionLifter
             IsAsync: false,
             IsGenerator: false)
         {
-            // #945: when this forwarder is HOISTED into a generator encloser's body, mark it so the
-            // generator function-DC pass routes its read-only forwarded captures through the shared
-            // display class (live read), not a stale by-value snapshot. Only hoisted forwarders are
-            // marked — class-method (declined) and module-block/loop (#622) forwarders stay unmarked.
+            // When this forwarder is HOISTED into a generator encloser's body, mark it so the generator
+            // function-DC pass routes its read-only forwarded captures through shared live storage.
+            // Module-block/loop (#622) forwarders remain unmarked because they stay in place.
             IsLiftedForwarder = hoisted,
         };
 
@@ -696,6 +823,279 @@ internal sealed class NestedFunctionLifter
         // function-declaration hoisting. Module-block/loop capture (#622): a block-scoped `let` left
         // in place, re-bound per loop iteration.
         return new Stmt.Var(f.Name, TypeAnnotation: null, Initializer: arrow, IsVar: hoisted);
+    }
+
+    /// <summary>Rewrites only expression paths that contain a changed descendant. In particular this
+    /// reaches class expressions in every ordinary expression position without replacing unrelated AST
+    /// identities used by closure and type maps.</summary>
+    private Expr ProcessExpr(Expr expr)
+    {
+        switch (expr)
+        {
+            case Expr.ClassExpr cls:
+                return ProcessClassExpression(cls);
+            case Expr.ArrowFunction arrow:
+            {
+                var parameters = ProcessParameters(arrow.Parameters);
+                var expressionBody = arrow.ExpressionBody == null ? null : ProcessExpr(arrow.ExpressionBody);
+                var blockBody = arrow.BlockBody == null ? null : ProcessBody(
+                    arrow.BlockBody, arrow.IsGenerator || arrow.IsAsync, arrow.IsAsync && !arrow.IsGenerator,
+                    enclosingIsGeneratorClassMethod: false);
+                return ReferenceEquals(parameters, arrow.Parameters)
+                    && (arrow.ExpressionBody == null || ReferenceEquals(expressionBody, arrow.ExpressionBody))
+                    && (arrow.BlockBody == null || ReferenceEquals(blockBody, arrow.BlockBody))
+                        ? arrow
+                        : arrow with { Parameters = parameters, ExpressionBody = expressionBody, BlockBody = blockBody };
+            }
+            case Expr.DestructuringAssign d:
+            {
+                var assignments = RewriteListIfChanged(d.Assignments,
+                    s => ProcessStmt(s, enclosingIsStateMachine: false, enclosingIsAsyncFunction: false, enclosingIsGeneratorClassMethod: false));
+                var result = ProcessExpr(d.ResultValue);
+                var rawTarget = d.RawTarget == null ? null : ProcessExpr(d.RawTarget);
+                var rawDefault = d.RawDefault == null ? null : ProcessExpr(d.RawDefault);
+                return ReferenceEquals(assignments, d.Assignments) && ReferenceEquals(result, d.ResultValue)
+                    && (d.RawTarget == null || ReferenceEquals(rawTarget, d.RawTarget))
+                    && (d.RawDefault == null || ReferenceEquals(rawDefault, d.RawDefault))
+                        ? d : d with { Assignments = assignments, ResultValue = result, RawTarget = rawTarget, RawDefault = rawDefault };
+            }
+            case Expr.Comma e:
+            {
+                var left = ProcessExpr(e.Left); var right = ProcessExpr(e.Right);
+                return ReferenceEquals(left, e.Left) && ReferenceEquals(right, e.Right) ? e : e with { Left = left, Right = right };
+            }
+            case Expr.Binary e:
+            {
+                var left = ProcessExpr(e.Left); var right = ProcessExpr(e.Right);
+                return ReferenceEquals(left, e.Left) && ReferenceEquals(right, e.Right) ? e : e with { Left = left, Right = right };
+            }
+            case Expr.Logical e:
+            {
+                var left = ProcessExpr(e.Left); var right = ProcessExpr(e.Right);
+                return ReferenceEquals(left, e.Left) && ReferenceEquals(right, e.Right) ? e : e with { Left = left, Right = right };
+            }
+            case Expr.NullishCoalescing e:
+            {
+                var left = ProcessExpr(e.Left); var right = ProcessExpr(e.Right);
+                return ReferenceEquals(left, e.Left) && ReferenceEquals(right, e.Right) ? e : e with { Left = left, Right = right };
+            }
+            case Expr.Ternary e:
+            {
+                var condition = ProcessExpr(e.Condition); var thenBranch = ProcessExpr(e.ThenBranch); var elseBranch = ProcessExpr(e.ElseBranch);
+                return ReferenceEquals(condition, e.Condition) && ReferenceEquals(thenBranch, e.ThenBranch) && ReferenceEquals(elseBranch, e.ElseBranch)
+                    ? e : e with { Condition = condition, ThenBranch = thenBranch, ElseBranch = elseBranch };
+            }
+            case Expr.Grouping e:
+            {
+                var child = ProcessExpr(e.Expression);
+                return ReferenceEquals(child, e.Expression) ? e : e with { Expression = child };
+            }
+            case Expr.Unary e:
+            {
+                var child = ProcessExpr(e.Right);
+                return ReferenceEquals(child, e.Right) ? e : e with { Right = child };
+            }
+            case Expr.Delete e:
+            {
+                var child = ProcessExpr(e.Operand);
+                return ReferenceEquals(child, e.Operand) ? e : e with { Operand = child };
+            }
+            case Expr.Assign e:
+            {
+                var value = ProcessExpr(e.Value);
+                return ReferenceEquals(value, e.Value) ? e : e with { Value = value };
+            }
+            case Expr.Call e:
+            {
+                var callee = ProcessExpr(e.Callee);
+                var arguments = RewriteListIfChanged(e.Arguments, ProcessExpr);
+                return ReferenceEquals(callee, e.Callee) && ReferenceEquals(arguments, e.Arguments)
+                    ? e : e with { Callee = callee, Arguments = arguments };
+            }
+            case Expr.Get e:
+            {
+                var obj = ProcessExpr(e.Object);
+                return ReferenceEquals(obj, e.Object) ? e : e with { Object = obj };
+            }
+            case Expr.Set e:
+            {
+                var obj = ProcessExpr(e.Object); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(value, e.Value) ? e : e with { Object = obj, Value = value };
+            }
+            case Expr.GetPrivate e:
+            {
+                var obj = ProcessExpr(e.Object);
+                return ReferenceEquals(obj, e.Object) ? e : e with { Object = obj };
+            }
+            case Expr.SetPrivate e:
+            {
+                var obj = ProcessExpr(e.Object); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(value, e.Value) ? e : e with { Object = obj, Value = value };
+            }
+            case Expr.CallPrivate e:
+            {
+                var obj = ProcessExpr(e.Object); var arguments = RewriteListIfChanged(e.Arguments, ProcessExpr);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(arguments, e.Arguments) ? e : e with { Object = obj, Arguments = arguments };
+            }
+            case Expr.New e:
+            {
+                var callee = ProcessExpr(e.Callee); var arguments = RewriteListIfChanged(e.Arguments, ProcessExpr);
+                return ReferenceEquals(callee, e.Callee) && ReferenceEquals(arguments, e.Arguments) ? e : e with { Callee = callee, Arguments = arguments };
+            }
+            case Expr.ArrayLiteral e:
+            {
+                var elements = RewriteListIfChanged(e.Elements, ProcessExpr);
+                return ReferenceEquals(elements, e.Elements) ? e : e with { Elements = elements };
+            }
+            case Expr.ObjectLiteral e:
+            {
+                List<Expr.Property>? properties = null;
+                for (int i = 0; i < e.Properties.Count; i++)
+                {
+                    var property = e.Properties[i];
+                    Expr.PropertyKey? key = property.Key;
+                    if (property.Key is Expr.ComputedKey computed)
+                    {
+                        var keyExpr = ProcessExpr(computed.Expression);
+                        if (!ReferenceEquals(keyExpr, computed.Expression)) key = new Expr.ComputedKey(keyExpr);
+                    }
+                    var value = ProcessExpr(property.Value);
+                    var setterParam = property.SetterParam == null ? null : ProcessParameter(property.SetterParam);
+                    if (!ReferenceEquals(key, property.Key) || !ReferenceEquals(value, property.Value)
+                        || !ReferenceEquals(setterParam, property.SetterParam))
+                    {
+                        properties ??= new List<Expr.Property>(e.Properties);
+                        properties[i] = property with { Key = key, Value = value, SetterParam = setterParam };
+                    }
+                }
+                return properties == null ? e : e with { Properties = properties };
+            }
+            case Expr.GetIndex e:
+            {
+                var obj = ProcessExpr(e.Object); var index = ProcessExpr(e.Index);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(index, e.Index) ? e : e with { Object = obj, Index = index };
+            }
+            case Expr.SetIndex e:
+            {
+                var obj = ProcessExpr(e.Object); var index = ProcessExpr(e.Index); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(index, e.Index) && ReferenceEquals(value, e.Value)
+                    ? e : e with { Object = obj, Index = index, Value = value };
+            }
+            case Expr.CompoundAssign e:
+            {
+                var value = ProcessExpr(e.Value);
+                return ReferenceEquals(value, e.Value) ? e : e with { Value = value };
+            }
+            case Expr.CompoundSet e:
+            {
+                var obj = ProcessExpr(e.Object); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(value, e.Value) ? e : e with { Object = obj, Value = value };
+            }
+            case Expr.CompoundSetIndex e:
+            {
+                var obj = ProcessExpr(e.Object); var index = ProcessExpr(e.Index); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(index, e.Index) && ReferenceEquals(value, e.Value)
+                    ? e : e with { Object = obj, Index = index, Value = value };
+            }
+            case Expr.LogicalAssign e:
+            {
+                var value = ProcessExpr(e.Value);
+                return ReferenceEquals(value, e.Value) ? e : e with { Value = value };
+            }
+            case Expr.LogicalSet e:
+            {
+                var obj = ProcessExpr(e.Object); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(value, e.Value) ? e : e with { Object = obj, Value = value };
+            }
+            case Expr.LogicalSetIndex e:
+            {
+                var obj = ProcessExpr(e.Object); var index = ProcessExpr(e.Index); var value = ProcessExpr(e.Value);
+                return ReferenceEquals(obj, e.Object) && ReferenceEquals(index, e.Index) && ReferenceEquals(value, e.Value)
+                    ? e : e with { Object = obj, Index = index, Value = value };
+            }
+            case Expr.PrefixIncrement e:
+            {
+                var operand = ProcessExpr(e.Operand);
+                return ReferenceEquals(operand, e.Operand) ? e : e with { Operand = operand };
+            }
+            case Expr.PostfixIncrement e:
+            {
+                var operand = ProcessExpr(e.Operand);
+                return ReferenceEquals(operand, e.Operand) ? e : e with { Operand = operand };
+            }
+            case Expr.TemplateLiteral e:
+            {
+                var expressions = RewriteListIfChanged(e.Expressions, ProcessExpr);
+                return ReferenceEquals(expressions, e.Expressions) ? e : e with { Expressions = expressions };
+            }
+            case Expr.TaggedTemplateLiteral e:
+            {
+                var tag = ProcessExpr(e.Tag); var expressions = RewriteListIfChanged(e.Expressions, ProcessExpr);
+                return ReferenceEquals(tag, e.Tag) && ReferenceEquals(expressions, e.Expressions) ? e : e with { Tag = tag, Expressions = expressions };
+            }
+            case Expr.Spread e:
+            {
+                var child = ProcessExpr(e.Expression);
+                return ReferenceEquals(child, e.Expression) ? e : e with { Expression = child };
+            }
+            case Expr.TypeAssertion e:
+            {
+                var child = ProcessExpr(e.Expression);
+                return ReferenceEquals(child, e.Expression) ? e : e with { Expression = child };
+            }
+            case Expr.Satisfies e:
+            {
+                var child = ProcessExpr(e.Expression);
+                return ReferenceEquals(child, e.Expression) ? e : e with { Expression = child };
+            }
+            case Expr.NonNullAssertion e:
+            {
+                var child = ProcessExpr(e.Expression);
+                return ReferenceEquals(child, e.Expression) ? e : e with { Expression = child };
+            }
+            case Expr.Await e:
+            {
+                var child = ProcessExpr(e.Expression);
+                return ReferenceEquals(child, e.Expression) ? e : e with { Expression = child };
+            }
+            case Expr.DynamicImport e:
+            {
+                var child = ProcessExpr(e.PathExpression);
+                return ReferenceEquals(child, e.PathExpression) ? e : e with { PathExpression = child };
+            }
+            case Expr.Yield { Value: not null } e:
+            {
+                var child = ProcessExpr(e.Value);
+                return ReferenceEquals(child, e.Value) ? e : e with { Value = child };
+            }
+            default:
+                return expr;
+        }
+    }
+
+    private List<Stmt.Parameter> ProcessParameters(List<Stmt.Parameter> parameters) =>
+        RewriteListIfChanged(parameters, ProcessParameter);
+
+    private Stmt.Parameter ProcessParameter(Stmt.Parameter parameter)
+    {
+        if (parameter.DefaultValue == null) return parameter;
+        var value = ProcessExpr(parameter.DefaultValue);
+        return ReferenceEquals(value, parameter.DefaultValue) ? parameter : parameter with { DefaultValue = value };
+    }
+
+    private static List<T> RewriteListIfChanged<T>(List<T> source, Func<T, T> rewrite)
+    {
+        List<T>? result = null;
+        for (int i = 0; i < source.Count; i++)
+        {
+            var next = rewrite(source[i]);
+            if (!ReferenceEquals(next, source[i]))
+            {
+                result ??= new List<T>(source);
+                result[i] = next;
+            }
+        }
+        return result ?? source;
     }
 
     /// <summary>
@@ -717,12 +1117,67 @@ internal sealed class NestedFunctionLifter
     {
         switch (stmt)
         {
+            case Stmt.Expression e:
+            {
+                var expression = ProcessExpr(e.Expr);
+                return ReferenceEquals(expression, e.Expr) ? e : new Stmt.Expression(expression);
+            }
+            case Stmt.Return { Value: not null } r:
+            {
+                var value = ProcessExpr(r.Value);
+                return ReferenceEquals(value, r.Value) ? r : new Stmt.Return(r.Keyword, value);
+            }
+            case Stmt.Var { Initializer: not null } v:
+            {
+                var initializer = ProcessExpr(v.Initializer);
+                return ReferenceEquals(initializer, v.Initializer) ? v : v with { Initializer = initializer };
+            }
+            case Stmt.Const c:
+            {
+                var initializer = ProcessExpr(c.Initializer);
+                return ReferenceEquals(initializer, c.Initializer) ? c : c with { Initializer = initializer };
+            }
+            case Stmt.Throw t:
+            {
+                var value = ProcessExpr(t.Value);
+                return ReferenceEquals(value, t.Value) ? t : new Stmt.Throw(t.Keyword, value);
+            }
+            case Stmt.Field field:
+                return ProcessClassField(field);
+            case Stmt.Accessor accessor:
+                return ProcessClassAccessor(accessor);
+            case Stmt.AutoAccessor accessor:
+                return ProcessClassAutoAccessor(accessor);
+            case Stmt.StaticBlock block:
+            {
+                var body = ProcessBody(block.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
+                return ReferenceEquals(body, block.Body) ? block : block with { Body = body };
+            }
+            case Stmt.Using u:
+            {
+                List<Stmt.UsingBinding>? bindings = null;
+                for (int i = 0; i < u.Bindings.Count; i++)
+                {
+                    var binding = u.Bindings[i];
+                    var pattern = binding.DestructuringPattern == null ? null : ProcessExpr(binding.DestructuringPattern);
+                    var initializer = ProcessExpr(binding.Initializer);
+                    if ((binding.DestructuringPattern != null && !ReferenceEquals(pattern, binding.DestructuringPattern))
+                        || !ReferenceEquals(initializer, binding.Initializer))
+                    {
+                        bindings ??= new List<Stmt.UsingBinding>(u.Bindings);
+                        bindings[i] = binding with { DestructuringPattern = pattern, Initializer = initializer };
+                    }
+                }
+                return bindings == null ? u : u with { Bindings = bindings };
+            }
             case Stmt.Function f when f.Body != null:
             {
                 // Not lifted (not a safe candidate), but its body may contain nested candidates.
                 // A nested function declaration is never a class method, so the flag resets to false.
+                var parameters = ProcessParameters(f.Parameters);
                 var nb = ProcessBody(f.Body, f.IsGenerator || f.IsAsync, f.IsAsync && !f.IsGenerator, enclosingIsGeneratorClassMethod: false);
-                return ReferenceEquals(nb, f.Body) ? f : f with { Body = nb };
+                return ReferenceEquals(parameters, f.Parameters) && ReferenceEquals(nb, f.Body)
+                    ? f : f with { Parameters = parameters, Body = nb };
             }
             case Stmt.Block b:
             {
@@ -736,39 +1191,52 @@ internal sealed class NestedFunctionLifter
             }
             case Stmt.If i:
             {
+                var condition = ProcessExpr(i.Condition);
                 var nt = ProcessStmt(i.ThenBranch, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
                 var ne = i.ElseBranch != null ? ProcessStmt(i.ElseBranch, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod) : null;
-                if (ReferenceEquals(nt, i.ThenBranch) && (i.ElseBranch == null || ReferenceEquals(ne, i.ElseBranch)))
+                if (ReferenceEquals(condition, i.Condition) && ReferenceEquals(nt, i.ThenBranch)
+                    && (i.ElseBranch == null || ReferenceEquals(ne, i.ElseBranch)))
                     return i;
-                return new Stmt.If(i.Condition, nt, ne);
+                return new Stmt.If(condition, nt, ne);
             }
             case Stmt.While w:
             {
+                var condition = ProcessExpr(w.Condition);
                 var nb = ProcessStmt(w.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                return ReferenceEquals(nb, w.Body) ? w : new Stmt.While(w.Condition, nb);
+                return ReferenceEquals(condition, w.Condition) && ReferenceEquals(nb, w.Body) ? w : new Stmt.While(condition, nb);
             }
             case Stmt.DoWhile d:
             {
                 var nb = ProcessStmt(d.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                return ReferenceEquals(nb, d.Body) ? d : new Stmt.DoWhile(nb, d.Condition);
+                var condition = ProcessExpr(d.Condition);
+                return ReferenceEquals(nb, d.Body) && ReferenceEquals(condition, d.Condition) ? d : new Stmt.DoWhile(nb, condition);
             }
             case Stmt.For fo:
             {
                 var ni = fo.Initializer != null ? ProcessStmt(fo.Initializer, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod) : null;
+                var condition = fo.Condition == null ? null : ProcessExpr(fo.Condition);
+                var increment = fo.Increment == null ? null : ProcessExpr(fo.Increment);
                 var nb = ProcessStmt(fo.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                if ((fo.Initializer == null || ReferenceEquals(ni, fo.Initializer)) && ReferenceEquals(nb, fo.Body))
+                if ((fo.Initializer == null || ReferenceEquals(ni, fo.Initializer))
+                    && (fo.Condition == null || ReferenceEquals(condition, fo.Condition))
+                    && (fo.Increment == null || ReferenceEquals(increment, fo.Increment))
+                    && ReferenceEquals(nb, fo.Body))
                     return fo;
-                return new Stmt.For(ni, fo.Condition, fo.Increment, nb);
+                return new Stmt.For(ni, condition, increment, nb);
             }
             case Stmt.ForOf fof:
             {
+                var iterable = ProcessExpr(fof.Iterable);
                 var nb = ProcessStmt(fof.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                return ReferenceEquals(nb, fof.Body) ? fof : fof with { Body = nb };
+                return ReferenceEquals(iterable, fof.Iterable) && ReferenceEquals(nb, fof.Body)
+                    ? fof : fof with { Iterable = iterable, Body = nb };
             }
             case Stmt.ForIn fin:
             {
+                var obj = ProcessExpr(fin.Object);
                 var nb = ProcessStmt(fin.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                return ReferenceEquals(nb, fin.Body) ? fin : fin with { Body = nb };
+                return ReferenceEquals(obj, fin.Object) && ReferenceEquals(nb, fin.Body)
+                    ? fin : fin with { Object = obj, Body = nb };
             }
             case Stmt.LabeledStatement l:
             {
@@ -788,28 +1256,35 @@ internal sealed class NestedFunctionLifter
             }
             case Stmt.Switch sw:
             {
+                var subject = ProcessExpr(sw.Subject);
                 List<Stmt.SwitchCase>? newCases = null;
                 for (int i = 0; i < sw.Cases.Count; i++)
                 {
                     var c = sw.Cases[i];
+                    var value = ProcessExpr(c.Value);
                     var nb = ProcessBody(c.Body, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                    if (!ReferenceEquals(nb, c.Body))
+                    if (!ReferenceEquals(value, c.Value) || !ReferenceEquals(nb, c.Body))
                     {
                         newCases ??= new List<Stmt.SwitchCase>(sw.Cases);
-                        newCases[i] = new Stmt.SwitchCase(c.Value, nb);
+                        newCases[i] = new Stmt.SwitchCase(value, nb);
                     }
                 }
                 var newDefault = sw.DefaultBody != null ? ProcessBody(sw.DefaultBody, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod) : null;
                 bool defaultChanged = sw.DefaultBody != null && !ReferenceEquals(newDefault, sw.DefaultBody);
-                if (newCases == null && !defaultChanged) return sw;
-                return new Stmt.Switch(sw.Subject, newCases ?? sw.Cases, defaultChanged ? newDefault : sw.DefaultBody);
+                if (ReferenceEquals(subject, sw.Subject) && newCases == null && !defaultChanged) return sw;
+                return new Stmt.Switch(subject, newCases ?? sw.Cases, defaultChanged ? newDefault : sw.DefaultBody);
             }
             case Stmt.Class cls:
                 return ProcessClass(cls);
-            case Stmt.Export ex when ex.Declaration != null:
+            case Stmt.Export ex:
             {
-                var nd = ProcessStmt(ex.Declaration, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
-                return ReferenceEquals(nd, ex.Declaration) ? ex : ex with { Declaration = nd };
+                var declaration = ex.Declaration == null ? null : ProcessStmt(ex.Declaration, enclosingIsStateMachine, enclosingIsAsyncFunction, enclosingIsGeneratorClassMethod);
+                var defaultExpr = ex.DefaultExpr == null ? null : ProcessExpr(ex.DefaultExpr);
+                var exportAssignment = ex.ExportAssignment == null ? null : ProcessExpr(ex.ExportAssignment);
+                return (ex.Declaration == null || ReferenceEquals(declaration, ex.Declaration))
+                    && (ex.DefaultExpr == null || ReferenceEquals(defaultExpr, ex.DefaultExpr))
+                    && (ex.ExportAssignment == null || ReferenceEquals(exportAssignment, ex.ExportAssignment))
+                        ? ex : ex with { Declaration = declaration, DefaultExpr = defaultExpr, ExportAssignment = exportAssignment };
             }
             // Stmt.Namespace is intentionally NOT traversed (#583 §3 lift barrier).
             default:
@@ -819,22 +1294,121 @@ internal sealed class NestedFunctionLifter
 
     private Stmt ProcessClass(Stmt.Class cls)
     {
-        List<Stmt.Function>? newMethods = null;
-        for (int i = 0; i < cls.Methods.Count; i++)
+        var superclass = cls.SuperclassExpr == null ? null : ProcessExpr(cls.SuperclassExpr);
+        var methods = RewriteListIfChanged(cls.Methods, ProcessClassMethod);
+        var fields = RewriteListIfChanged(cls.Fields, ProcessClassField);
+        var accessors = cls.Accessors == null ? null : RewriteListIfChanged(cls.Accessors, ProcessClassAccessor);
+        var autoAccessors = cls.AutoAccessors == null ? null : RewriteListIfChanged(cls.AutoAccessors, ProcessClassAutoAccessor);
+        var staticInitializers = ProcessStaticInitializers(cls.Fields, fields, cls.StaticInitializers);
+
+        return (cls.SuperclassExpr == null || ReferenceEquals(superclass, cls.SuperclassExpr))
+            && ReferenceEquals(methods, cls.Methods)
+            && ReferenceEquals(fields, cls.Fields)
+            && (cls.Accessors == null || ReferenceEquals(accessors, cls.Accessors))
+            && (cls.AutoAccessors == null || ReferenceEquals(autoAccessors, cls.AutoAccessors))
+            && (cls.StaticInitializers == null || ReferenceEquals(staticInitializers, cls.StaticInitializers))
+                ? cls
+                : cls with
+                {
+                    SuperclassExpr = superclass,
+                    Methods = methods,
+                    Fields = fields,
+                    Accessors = accessors,
+                    AutoAccessors = autoAccessors,
+                    StaticInitializers = staticInitializers,
+                };
+    }
+
+    private Expr ProcessClassExpression(Expr.ClassExpr cls)
+    {
+        var superclass = cls.SuperclassExpr == null ? null : ProcessExpr(cls.SuperclassExpr);
+        var methods = RewriteListIfChanged(cls.Methods, ProcessClassMethod);
+        var fields = RewriteListIfChanged(cls.Fields, ProcessClassField);
+        var accessors = cls.Accessors == null ? null : RewriteListIfChanged(cls.Accessors, ProcessClassAccessor);
+        var autoAccessors = cls.AutoAccessors == null ? null : RewriteListIfChanged(cls.AutoAccessors, ProcessClassAutoAccessor);
+        var staticInitializers = ProcessStaticInitializers(cls.Fields, fields, cls.StaticInitializers);
+
+        return (cls.SuperclassExpr == null || ReferenceEquals(superclass, cls.SuperclassExpr))
+            && ReferenceEquals(methods, cls.Methods)
+            && ReferenceEquals(fields, cls.Fields)
+            && (cls.Accessors == null || ReferenceEquals(accessors, cls.Accessors))
+            && (cls.AutoAccessors == null || ReferenceEquals(autoAccessors, cls.AutoAccessors))
+            && (cls.StaticInitializers == null || ReferenceEquals(staticInitializers, cls.StaticInitializers))
+                ? cls
+                : cls with
+                {
+                    SuperclassExpr = superclass,
+                    Methods = methods,
+                    Fields = fields,
+                    Accessors = accessors,
+                    AutoAccessors = autoAccessors,
+                    StaticInitializers = staticInitializers,
+                };
+    }
+
+    private Stmt.Function ProcessClassMethod(Stmt.Function method)
+    {
+        var computedKey = method.ComputedKey == null ? null : ProcessExpr(method.ComputedKey);
+        var parameters = ProcessParameters(method.Parameters);
+        var body = method.Body == null ? null : ProcessBody(
+            method.Body, method.IsGenerator || method.IsAsync, method.IsAsync && !method.IsGenerator,
+            enclosingIsGeneratorClassMethod: method.IsGenerator);
+        return (method.ComputedKey == null || ReferenceEquals(computedKey, method.ComputedKey))
+            && ReferenceEquals(parameters, method.Parameters)
+            && (method.Body == null || ReferenceEquals(body, method.Body))
+                ? method
+                : method with { ComputedKey = computedKey, Parameters = parameters, Body = body };
+    }
+
+    private Stmt.Field ProcessClassField(Stmt.Field field)
+    {
+        var computedKey = field.ComputedKey == null ? null : ProcessExpr(field.ComputedKey);
+        var initializer = field.Initializer == null ? null : ProcessExpr(field.Initializer);
+        return (field.ComputedKey == null || ReferenceEquals(computedKey, field.ComputedKey))
+            && (field.Initializer == null || ReferenceEquals(initializer, field.Initializer))
+                ? field : field with { ComputedKey = computedKey, Initializer = initializer };
+    }
+
+    private Stmt.Accessor ProcessClassAccessor(Stmt.Accessor accessor)
+    {
+        var computedKey = accessor.ComputedKey == null ? null : ProcessExpr(accessor.ComputedKey);
+        var setterParam = accessor.SetterParam == null ? null : ProcessParameter(accessor.SetterParam);
+        var body = ProcessBody(accessor.Body, enclosingIsStateMachine: false, enclosingIsAsyncFunction: false,
+            enclosingIsGeneratorClassMethod: false);
+        return (accessor.ComputedKey == null || ReferenceEquals(computedKey, accessor.ComputedKey))
+            && ReferenceEquals(setterParam, accessor.SetterParam) && ReferenceEquals(body, accessor.Body)
+                ? accessor : accessor with { ComputedKey = computedKey, SetterParam = setterParam, Body = body };
+    }
+
+    private Stmt.AutoAccessor ProcessClassAutoAccessor(Stmt.AutoAccessor accessor)
+    {
+        var initializer = accessor.Initializer == null ? null : ProcessExpr(accessor.Initializer);
+        return accessor.Initializer == null || ReferenceEquals(initializer, accessor.Initializer)
+            ? accessor : accessor with { Initializer = initializer };
+    }
+
+    private List<Stmt>? ProcessStaticInitializers(
+        List<Stmt.Field> originalFields,
+        List<Stmt.Field> rewrittenFields,
+        List<Stmt>? staticInitializers)
+    {
+        if (staticInitializers == null) return null;
+
+        var fieldMap = new Dictionary<Stmt.Field, Stmt.Field>(ReferenceEqualityComparer.Instance);
+        for (int i = 0; i < originalFields.Count; i++) fieldMap[originalFields[i]] = rewrittenFields[i];
+        return RewriteListIfChanged(staticInitializers, initializer =>
         {
-            var m = cls.Methods[i];
-            if (m.Body == null) continue;
-            // #945: a class generator method (sync or async, static or instance) does NOT reliably wire
-            // a function display class for read-only captures, so a forwarding binding hoisted into its
-            // body would read a stale by-value snapshot. Flag it so the gate declines to hoist there.
-            var nb = ProcessBody(m.Body, m.IsGenerator || m.IsAsync, m.IsAsync && !m.IsGenerator, enclosingIsGeneratorClassMethod: m.IsGenerator);
-            if (!ReferenceEquals(nb, m.Body))
+            if (initializer is Stmt.Field field && fieldMap.TryGetValue(field, out var rewrittenField))
+                return rewrittenField;
+            if (initializer is Stmt.StaticBlock block)
             {
-                newMethods ??= new List<Stmt.Function>(cls.Methods);
-                newMethods[i] = m with { Body = nb };
+                var body = ProcessBody(block.Body, enclosingIsStateMachine: false, enclosingIsAsyncFunction: false,
+                    enclosingIsGeneratorClassMethod: false);
+                return ReferenceEquals(body, block.Body) ? block : block with { Body = body };
             }
-        }
-        return newMethods == null ? cls : cls with { Methods = newMethods };
+            return ProcessStmt(initializer, enclosingIsStateMachine: false, enclosingIsAsyncFunction: false,
+                enclosingIsGeneratorClassMethod: false);
+        });
     }
 
     #endregion

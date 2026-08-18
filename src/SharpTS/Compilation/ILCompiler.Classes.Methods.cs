@@ -704,14 +704,9 @@ public partial class ILCompiler
         // themselves). The qualified class name is threaded so nested private member access resolves.
         if (method.IsAsync && method.IsGenerator)
         {
-            // Static async generators are not yet supported (the async-generator state machine is
-            // instance-only; the public static form fails the same way, #761): fall through to the
-            // linear path, which reports the existing "Yield not supported" error rather than invalid IL.
-            if (!isStatic)
-            {
-                EmitAsyncGeneratorMethodBody(methodBuilder, method, fieldsField, currentClassName: qualifiedClassName);
-                return;
-            }
+            EmitAsyncGeneratorMethodBody(methodBuilder, method, isStatic ? null : fieldsField,
+                isInstanceMethod: !isStatic, currentClassName: qualifiedClassName);
+            return;
         }
         else if (method.IsAsync)
         {
@@ -727,9 +722,6 @@ public partial class ILCompiler
                 isInstanceMethod: !isStatic, currentClassName: qualifiedClassName);
             return;
         }
-        // A static async generator falls through to the linear emission below, which reports
-        // "Yield not supported" (the public static async-generator gap, #761), not invalid IL.
-
         var il = methodBuilder.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, methodBuilder);
         ctx.IsStrictMode = true;

@@ -1779,18 +1779,15 @@ public class AsyncGeneratorTests
         Assert.Equal("3,4\n", TestHarness.RunCompiled(source));
     }
 
-    // #945 decline: a class GENERATOR METHOD encloser (here an async-generator instance method) stays
-    // unsupported in compiled mode — its state machine wires no function DC for read-only captures, so
-    // hoisting the forwarding binding would read a stale by-value snapshot. It must fail CLEANLY (compile
-    // error), never miscompile to a wrong value. The interpreter runs the nested declaration natively.
-    [Fact]
-    public void AsyncGeneratorExpression_CapturesAsyncGeneratorMethodLocal_CompiledDeclinesCleanly()
+    [Theory, ModeData]
+    public void AsyncGeneratorExpression_CapturesAsyncGeneratorMethodLocal(ExecutionMode mode)
     {
         var source = """
             class C {
                 async *m() {
                     let y = 3;
                     const g = async function* () { yield y; yield y + 1; };
+                    y = 8;
                     for await (const v of g()) yield v;
                 }
             }
@@ -1801,12 +1798,27 @@ public class AsyncGeneratorTests
             }
             main();
             """;
-        Assert.Equal("3,4\n", TestHarness.Run(source, ExecutionMode.Interpreted));
-        string compiled;
-        try { compiled = TestHarness.RunCompiled(source); }
-        catch { compiled = "<compile-or-runtime-error>"; }
-        // A clean failure is acceptable; the correct "3,4\n" is acceptable; a wrong value is not.
-        Assert.True(compiled == "<compile-or-runtime-error>" || compiled == "3,4\n", $"unexpected: {compiled}");
+        Assert.Equal("8,9\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void AsyncGeneratorExpression_CapturesStaticAsyncGeneratorMethodParameter(ExecutionMode mode)
+    {
+        var source = """
+            class C {
+                static async *m(y: number) {
+                    const g = async function* () { yield y; };
+                    y += 5;
+                    for await (const v of g()) yield v;
+                }
+            }
+            async function main() {
+                for await (const v of C.m(4)) console.log(v);
+            }
+            main();
+            """;
+
+        Assert.Equal("9\n", TestHarness.Run(source, mode));
     }
 
     #endregion
