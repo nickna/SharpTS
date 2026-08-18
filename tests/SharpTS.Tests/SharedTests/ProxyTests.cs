@@ -10,6 +10,23 @@ namespace SharpTS.Tests.SharedTests;
 public class ProxyTests
 {
     [Theory, ModeData]
+    public void Proxy_TraplessNestedDefineAndSetPreserveReflectBoolean(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = [];
+            const proxy: any = new Proxy(new Proxy(target, {}), {});
+            console.log(Reflect.defineProperty(proxy, "x", { value: 1 }));
+            console.log(target.x);
+            Object.preventExtensions(target);
+            console.log(Reflect.defineProperty(proxy, "y", { value: 2 }));
+            console.log(Reflect.set(proxy, "z", 3));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n1\nfalse\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void Proxy_MissingGetOwnPropertyDescriptorTrap_ForwardsCompleteDescriptor(ExecutionMode mode)
     {
         var source = """

@@ -80,6 +80,19 @@ public partial class RuntimeEmitter
                 [_types.Object, _types.Object, _types.Object, _types.Object]);
         }
 
+        // Reflect.set and trapless Proxy [[Set]] must use the boolean-returning
+        // [[DefineOwnProperty]] operation rather than Object.defineProperty's
+        // throwing wrapper. Reserve it here so ReflectSet can call it before
+        // its body is emitted later in EmitRuntimeClass.
+        if (_features.UsesReflect || _features.UsesProxy)
+        {
+            runtime.ReflectDefineProperty = typeBuilder.DefineMethod(
+                "ReflectDefineProperty",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Boolean,
+                [_types.Object, _types.Object, _types.Object]);
+        }
+
         // Reserve GetProcessObject() → object — the live $Process singleton
         // (epic #1078). Body emitted by EmitProcessObjectInfrastructure; the
         // signature must exist earlier because GlobalThisGetProperty (emitted

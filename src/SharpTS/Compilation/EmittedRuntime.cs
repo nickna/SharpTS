@@ -536,6 +536,8 @@ public class EmittedRuntime
     public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
     public FieldBuilder JsonSingletonField { get; set; } = null!;
+    /// <summary>Reflect singleton — the value-form ES namespace object.</summary>
+    public FieldBuilder? ReflectSingletonField { get; set; }
     /// <summary>
     /// Array.prototype singleton dictionary populated at cctor time with
     /// <c>$TSFunction</c> wrappers around <c>$Runtime.Array*</c> helpers.
@@ -566,6 +568,15 @@ public class EmittedRuntime
     /// (<c>const j = JSON; j.stringify(x)</c>) resolves. Idempotent. See issue #276.
     /// </summary>
     public MethodBuilder JsonSingletonPopulateMethod { get; set; } = null!;
+    /// <summary>Populates <see cref="ReflectSingletonField"/> with the standard Reflect methods.</summary>
+    public MethodBuilder? ReflectSingletonPopulateMethod { get; set; }
+    /// <summary>
+    /// Value-form Reflect wrappers keyed by their JavaScript method names. Each
+    /// wrapper accepts an object[] rest argument so it can preserve optional
+    /// argument presence while still exposing the spec-defined function length.
+    /// </summary>
+    public Dictionary<string, MethodBuilder> ReflectValueFormMethods { get; } =
+        new(StringComparer.Ordinal);
     /// <summary>Populates <see cref="StringPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
     public MethodBuilder StringPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="NumberPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
@@ -730,6 +741,7 @@ public class EmittedRuntime
     public MethodBuilder ReflectOwnKeys { get; set; } = null!;
     public MethodBuilder ReflectSetPrototypeOf { get; set; } = null!;
     public MethodBuilder ReflectDefineProperty { get; set; } = null!;
+    public MethodBuilder ReflectDefinePropertyObjectAdapter { get; set; } = null!;
     public MethodBuilder ReflectApply { get; set; } = null!;
     public MethodBuilder ReflectConstruct { get; set; } = null!;
     public MethodBuilder ReflectSet { get; set; } = null!;

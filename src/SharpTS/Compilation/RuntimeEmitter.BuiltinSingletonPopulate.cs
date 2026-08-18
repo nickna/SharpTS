@@ -35,6 +35,15 @@ public partial class RuntimeEmitter
             Type.EmptyTypes);
     }
 
+    private void DefineReflectSingletonPopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        runtime.ReflectSingletonPopulateMethod = typeBuilder.DefineMethod(
+            "_ReflectSingletonPopulate",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            Type.EmptyTypes);
+    }
+
     private void EmitMathSingletonPopulate(EmittedRuntime runtime) =>
         EmitBuiltinSingletonPopulate(
             runtime.MathSingletonPopulateMethod,
@@ -50,6 +59,14 @@ public partial class RuntimeEmitter
             runtime,
             JSONStaticEmitter.EnumerateValueFormMethods(runtime),
             "JSON");
+
+    private void EmitReflectSingletonPopulate(EmittedRuntime runtime) =>
+        EmitBuiltinSingletonPopulate(
+            runtime.ReflectSingletonPopulateMethod!,
+            runtime.ReflectSingletonField!,
+            runtime,
+            ReflectStaticEmitter.EnumerateValueFormMethods(runtime),
+            "Reflect");
 
     /// <summary>
     /// Fills a built-in singleton dictionary with identity-cached $TSFunction

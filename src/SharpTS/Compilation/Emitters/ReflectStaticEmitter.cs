@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
 
@@ -493,10 +494,51 @@ public sealed class ReflectStaticEmitter : IStaticTypeEmitterStrategy
     }
 
     /// <summary>
-    /// Reflect has no static properties.
+    /// Exposes Reflect methods as identity-stable function values. Reads route
+    /// through the singleton so deletion/replacement remains observable.
     /// </summary>
     public bool TryEmitStaticPropertyGet(IEmitterContext emitter, string propertyName)
     {
-        return false;
+        var runtime = emitter.Context.Runtime!;
+        if (!runtime.ReflectValueFormMethods.ContainsKey(propertyName)
+            || runtime.ReflectSingletonPopulateMethod is null
+            || runtime.ReflectSingletonField is null)
+            return false;
+
+        var il = emitter.Context.IL;
+        il.Emit(OpCodes.Call, runtime.ReflectSingletonPopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.ReflectSingletonField);
+        il.Emit(OpCodes.Ldstr, propertyName);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        return true;
     }
+
+    internal static IEnumerable<(string Name, MethodInfo? Backing, int Length)>
+        EnumerateValueFormMethods(EmittedRuntime runtime)
+    {
+        MethodInfo? Lookup(string name) =>
+            runtime.ReflectValueFormMethods.TryGetValue(name, out var method)
+                ? method
+                : null;
+
+        yield return ("apply", Lookup("apply"), 3);
+        yield return ("construct", Lookup("construct"), 2);
+        yield return ("defineProperty", Lookup("defineProperty"), 3);
+        yield return ("deleteProperty", Lookup("deleteProperty"), 2);
+        yield return ("get", Lookup("get"), 2);
+        yield return ("getOwnPropertyDescriptor", Lookup("getOwnPropertyDescriptor"), 2);
+        yield return ("getPrototypeOf", Lookup("getPrototypeOf"), 1);
+        yield return ("has", Lookup("has"), 2);
+        yield return ("isExtensible", Lookup("isExtensible"), 1);
+        yield return ("ownKeys", Lookup("ownKeys"), 1);
+        yield return ("preventExtensions", Lookup("preventExtensions"), 1);
+        yield return ("set", Lookup("set"), 3);
+        yield return ("setPrototypeOf", Lookup("setPrototypeOf"), 2);
+    }
+
+    public bool HasStaticProperty(string memberName) =>
+        memberName is "apply" or "construct" or "defineProperty"
+            or "deleteProperty" or "get" or "getOwnPropertyDescriptor"
+            or "getPrototypeOf" or "has" or "isExtensible" or "ownKeys"
+            or "preventExtensions" or "set" or "setPrototypeOf";
 }

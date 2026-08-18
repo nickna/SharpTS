@@ -539,6 +539,67 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, missLabel);
 
+        // Own PropertyDescriptorStore entries shadow the intrinsic/inherited
+        // function properties below. This is especially important for the
+        // configurable own `name` and `length` slots: Object.defineProperty
+        // may replace either one, including through trapless nested Proxies.
+        // Checking only in the generic fallback made the synthesized cached
+        // metadata win before the replacement descriptor was consulted.
+        var ownShadow = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, ownShadow);
+        var noOwnShadow = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, ownShadow);
+        il.Emit(OpCodes.Brfalse, noOwnShadow);
+
+        var ownGetter = il.DeclareLocal(_types.Object);
+        var ownData = il.DefineLabel();
+        var ownUndefinedAccessor = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, ownShadow);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, ownGetter);
+        il.Emit(OpCodes.Ldloc, ownGetter);
+        il.Emit(OpCodes.Brfalse, ownData);
+        il.Emit(OpCodes.Ldloc, ownGetter);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, ownUndefinedAccessor);
+        var ownGetterIsBound = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, ownGetter);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, ownGetterIsBound);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ownGetterIsBound);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, ownGetter);
+        il.Emit(OpCodes.Castclass, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Callvirt, runtime.BoundAnyFunctionInvoke);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(ownData);
+        il.Emit(OpCodes.Ldloc, ownShadow);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, ownUndefinedAccessor);
+        il.Emit(OpCodes.Ldloc, ownShadow);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(ownUndefinedAccessor);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noOwnShadow);
+
         // Check for "bind"
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldstr, "bind");

@@ -2000,6 +2000,14 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return true;
         }
 
+        if (name == "Reflect" && Ctx.Runtime!.ReflectSingletonPopulateMethod != null)
+        {
+            IL.Emit(OpCodes.Call, Ctx.Runtime.ReflectSingletonPopulateMethod);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.ReflectSingletonField!);
+            SetStackUnknown();
+            return true;
+        }
+
         return false;
     }
 
