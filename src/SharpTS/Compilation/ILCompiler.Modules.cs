@@ -1155,13 +1155,17 @@ public partial class ILCompiler
         // those fields from the async runner instead of introducing function locals,
         // preserving visibility to exported dependents and top-level functions.
         Stmt.Const declaration => new Stmt.Expression(
-            new Expr.Assign(declaration.Name, declaration.Initializer)),
+            new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer,
+                IsLexicalInitialization: true)),
         Stmt.Var declaration when !declaration.IsDeclare => new Stmt.Expression(
             new Expr.Assign(
                 declaration.Name,
                 declaration.Initializer ??
                     new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
-                IsVarRedeclaration: declaration.IsVar)),
+                IsVarRedeclaration: declaration.IsVar,
+                IsLexicalInitialization: !declaration.IsVar)),
         Stmt.Var => null,
         Stmt.Sequence sequence => new Stmt.Sequence(
             sequence.Statements
@@ -1171,13 +1175,17 @@ public partial class ILCompiler
                 .Cast<Stmt>()
                 .ToList()),
         Stmt.Export { Declaration: Stmt.Const declaration } => new Stmt.Expression(
-            new Expr.Assign(declaration.Name, declaration.Initializer)),
+            new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer,
+                IsLexicalInitialization: true)),
         Stmt.Export { Declaration: Stmt.Var declaration } when !declaration.IsDeclare =>
             new Stmt.Expression(new Expr.Assign(
                 declaration.Name,
                 declaration.Initializer ??
                     new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
-                IsVarRedeclaration: declaration.IsVar)),
+                IsVarRedeclaration: declaration.IsVar,
+                IsLexicalInitialization: !declaration.IsVar)),
         Stmt.Export { Declaration: Stmt.Var } => null,
         Stmt.Export { Declaration: Stmt.Sequence sequence } => new Stmt.Sequence(
             sequence.Statements
