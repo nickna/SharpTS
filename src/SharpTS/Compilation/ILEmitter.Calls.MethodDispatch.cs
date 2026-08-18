@@ -228,7 +228,9 @@ public partial class ILEmitter
         }
 
         // Number instance methods - runtime dispatch for any/unknown types
-        if (methodName is "toFixed" or "toPrecision" or "toExponential" or "valueOf" or "toString")
+        if (methodName is "toFixed" or "toPrecision" or "toExponential" or "valueOf" or "toString"
+            && !(_ctx.RuntimeFeatures?.UsesDatePrototypeMutation == true
+                && methodName is "valueOf" or "toString"))
         {
             // Check if we know it's a number at compile time
             if (objType is TypeSystem.TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or TypeSystem.TypeInfo.NumberLiteral)

@@ -17,6 +17,15 @@ public sealed class DateEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        // Date.prototype is mutable. Programs that write it must resolve the
+        // method value at runtime; otherwise this emitter's direct helper call
+        // would keep invoking the original intrinsic after an override.
+        if (ctx.RuntimeFeatures?.UsesDatePrototypeMutation == true)
+        {
+            EmitDynamicPrototypeMethodCall(emitter, receiver, methodName, arguments);
+            return true;
+        }
+
         // Emit the Date object
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
@@ -301,6 +310,32 @@ public sealed class DateEmitter : ITypeEmitterStrategy
     {
         // Date doesn't expose properties directly - all access is via methods
         return false;
+    }
+
+    private static void EmitDynamicPrototypeMethodCall(
+        IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitBoxIfNeeded(receiver);
+        var receiverLocal = emitter.SpillStackToObjectLocal();
+
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldstr, methodName);
+        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        var functionLocal = emitter.SpillStackToObjectLocal();
+
+        emitter.EmitArgsArrayWithSpread(arguments);
+        var argsLocal = il.DeclareLocal(ctx.Types.ObjectArray);
+        il.Emit(OpCodes.Stloc, argsLocal);
+
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldloc, functionLocal);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        emitter.SetStackUnknown();
     }
 
     /// <summary>

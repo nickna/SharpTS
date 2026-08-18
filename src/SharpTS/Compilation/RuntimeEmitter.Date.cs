@@ -272,6 +272,8 @@ public partial class RuntimeEmitter
             _types.EmptyTypes
         );
         runtime.DateNow = method;
+        method.SetCustomAttribute(
+            runtime.NonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
         // Process any pending virtual timers before returning
@@ -310,17 +312,30 @@ public partial class RuntimeEmitter
         runtime.CreateDateFromValue = method;
 
         var il = method.GetILGenerator();
+        var dateLabel = il.DefineLabel();
         var stringLabel = il.DefineLabel();
         var defaultLabel = il.DefineLabel();
 
         // Check if value is double
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.Double);
-        il.Emit(OpCodes.Brfalse, stringLabel);
+        il.Emit(OpCodes.Brfalse, dateLabel);
 
         // Double case: new $TSDate((double)value)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Newobj, runtime.TSDateCtorMilliseconds);
+        il.Emit(OpCodes.Ret);
+
+        // Date(value) copies the [[DateValue]] directly. It must not run the
+        // source object's overridable valueOf/toString coercion hooks.
+        il.MarkLabel(dateLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSDateType);
+        il.Emit(OpCodes.Brfalse, stringLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSDateType);
+        il.Emit(OpCodes.Callvirt, runtime.TSDateMethods["GetTime"]);
         il.Emit(OpCodes.Newobj, runtime.TSDateCtorMilliseconds);
         il.Emit(OpCodes.Ret);
 

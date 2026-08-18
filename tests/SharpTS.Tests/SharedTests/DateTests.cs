@@ -524,6 +524,58 @@ public class DateTests
     }
 
     [Theory, ModeData]
+    public void Date_CopyConstructionAndExtremeValuesPreserveDateSemantics(ExecutionMode mode)
+    {
+        var source = """
+            const original: any = new Date(1438560000000);
+            original.valueOf = () => { throw new Error("unexpected coercion"); };
+            original.toString = () => { throw new Error("unexpected coercion"); };
+            console.log(new Date(original).getTime());
+            console.log(typeof new Date(8640000000000000).getTimezoneOffset());
+            console.log(typeof new Date(-8640000000000000).getTimezoneOffset());
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1438560000000\nnumber\nnumber\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Date_StringFormattingAndPrototypeOverridesAreObservable(ExecutionMode mode)
+    {
+        var source = """
+            const date: any = new Date(0);
+            console.log(/^[0-9]{2}:[0-9]{2}:[0-9]{2} GMT[+-][0-9]{4}$/.test(date.toTimeString()));
+            console.log(/ GMT[+-][0-9]{4}$/.test(date.toString()));
+            Date.prototype.toString = Object.prototype.toString;
+            console.log(date.toString());
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n[object Date]\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Date_StaticFunctionsAreNotConstructors(ExecutionMode mode)
+    {
+        var source = """
+            function isConstructor(value: any) {
+                try {
+                    Reflect.construct(function() {}, [], value);
+                    return true;
+                } catch {
+                    return false;
+                }
+            }
+            console.log(isConstructor(Date.now));
+            console.log(isConstructor(Date.parse));
+            console.log(isConstructor(Date.UTC));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\nfalse\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void Date_ToLocale_HonorsLocaleAndOptions(ExecutionMode mode)
     {
         // #539: locale and options are honored. Exact locale-formatted output is host-dependent

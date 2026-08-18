@@ -79,6 +79,7 @@ public sealed class RuntimeFeatureDetector
             UsesMap = false,
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
+            UsesDatePrototypeMutation = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
         };
     }
@@ -758,6 +759,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Set s:
+                if (IsDatePrototype(s.Object))
+                    _set.UsesDatePrototypeMutation = true;
                 if (s.Object is Expr.Variable osv)
                     HandleMemberAccess(osv.Name.Lexeme, s.Name.Lexeme);
                 VisitExpr(s.Object);
@@ -782,12 +785,24 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(gi.Index);
                 break;
             case Expr.SetIndex si:
+                if (IsDatePrototype(si.Object))
+                    _set.UsesDatePrototypeMutation = true;
                 VisitExpr(si.Object);
                 VisitExpr(si.Index);
                 VisitExpr(si.Value);
                 break;
 
             case Expr.Call c:
+                if (c.Arguments.Count > 0
+                    && c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "Object" },
+                        Name.Lexeme: "defineProperty" or "defineProperties"
+                    }
+                    && IsDatePrototype(c.Arguments[0]))
+                {
+                    _set.UsesDatePrototypeMutation = true;
+                }
                 if (c.Callee is Expr.Variable cv && cv.Name.Lexeme == "require")
                 {
                     _set.UsesCjsRequire = true;
@@ -989,4 +1004,10 @@ public sealed class RuntimeFeatureDetector
                 break;
         }
     }
+
+    private static bool IsDatePrototype(Expr expr) => expr is Expr.Get
+    {
+        Object: Expr.Variable { Name.Lexeme: "Date" },
+        Name.Lexeme: "prototype"
+    };
 }

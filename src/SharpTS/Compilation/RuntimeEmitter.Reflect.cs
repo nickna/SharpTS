@@ -1040,7 +1040,7 @@ public partial class RuntimeEmitter
         string[] runtimeHelperClasses =
         [
             "$Runtime", "$RegExp", "$Array", "$Object", "$Promise", "$TSPromise",
-            "$Date", "$Map", "$Set", "$WeakMap", "$WeakSet", "$WeakRef",
+            "$Date", "$TSDate", "$Map", "$Set", "$WeakMap", "$WeakSet", "$WeakRef",
             "$Error", "$TypeError", "$RangeError", "$ReferenceError",
             "$SyntaxError", "$URIError", "$EvalError", "$AggregateError",
             "$Buffer", "$Headers", "$Hash", "$Hmac", "$NodeError",

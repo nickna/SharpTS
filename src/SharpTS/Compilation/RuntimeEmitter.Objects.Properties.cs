@@ -349,6 +349,26 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(afterPDSCheckLabel);
 
+        // $TSDate has no JavaScript-visible CLR own methods. Once expando/PDS
+        // own properties miss, every named lookup must continue through the
+        // mutable Date.prototype singleton. Bypassing reflection here prevents
+        // the emitted CLR ToString method from shadowing a user replacement of
+        // Date.prototype.toString.
+        if (_features.UsesDate)
+        {
+            var notDateLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSDateType);
+            il.Emit(OpCodes.Brfalse, notDateLabel);
+            il.Emit(OpCodes.Call, runtime.DatePrototypePopulateMethod);
+            il.Emit(OpCodes.Ldsfld, runtime.DatePrototypeField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.ReflectGet);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notDateLabel);
+        }
+
         // If obj is emitted $Object, query its _fields dictionary directly.
         // If property not found in _fields, fall through to $IHasFields check
         // (since $Object subclasses may have typed properties with backing fields)

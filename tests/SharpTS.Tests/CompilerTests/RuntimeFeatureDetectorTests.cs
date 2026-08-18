@@ -32,4 +32,17 @@ public class RuntimeFeatureDetectorTests
 
         Assert.Equal(expected, features.UsesDynamicPropertyDescriptors);
     }
+
+    [Theory]
+    [InlineData("Date.prototype.toString = Object.prototype.toString;", true)]
+    [InlineData("Date.prototype['valueOf'] = function() { return 0; };", true)]
+    [InlineData("Object.defineProperty(Date.prototype, 'x', { value: 1 });", true)]
+    [InlineData("new Date().toString();", false)]
+    public void DetectsDatePrototypeMutation(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.Equal(expected, features.UsesDatePrototypeMutation);
+    }
 }
