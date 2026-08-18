@@ -757,7 +757,7 @@ public partial class ILCompiler
             ctx.CommonJsExportFields = _modules.CommonJsExportFields;
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
-            ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(func.Body);
+            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -1088,7 +1088,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         ctx.IsStrictMode = currentClassName != null
             || _isStrictMode
-            || Parsing.DirectivePrologue.HasUseStrict(method.Body);
+            || BodyDeclaresUseStrict(method.Body);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders;

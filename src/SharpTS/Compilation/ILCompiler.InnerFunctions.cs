@@ -72,7 +72,7 @@ public partial class ILCompiler
         // All code in a class body is strict, including ordinary functions nested
         // inside methods. Record that lexical fact while the class collection cursor
         // is available; body emission happens later, after the cursor is gone.
-        if (_currentCollectClassName != null)
+        if (_currentCollectStrict || _currentCollectClassName != null)
             _strictInnerFunctions.Add(funcStmt);
 
         var captures = new HashSet<string>(_closures.Analyzer.GetCaptures(funcStmt));

@@ -38,7 +38,7 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext CreateBaseCompilationContext(ILGenerator il, MethodBase? method = null)
     {
-        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
         {
             // Closure analysis registries
             ClosureAnalyzer = _closures.Analyzer,
@@ -87,6 +87,8 @@ public partial class ILCompiler
             CurrentMethod = method,
             DebugScope = CurrentDebugScope,
         };
+        ApplyInnerFunctionSupport(ctx);
+        return ctx;
     }
 
     /// <summary>
@@ -367,6 +369,7 @@ public partial class ILCompiler
     /// </summary>
     private void ApplyInnerFunctionSupport(CompilationContext ctx)
     {
+        ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
         ctx.InnerFunctionMethods = _innerFunctionMethods;
         ctx.InnerFunctionDisplayClasses = _innerFunctionDisplayClasses;
         ctx.InnerFunctionDCFields = _innerFunctionDCFields;

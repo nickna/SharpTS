@@ -31,7 +31,11 @@ public partial class ILEmitter
             try
             {
                 var reparsed = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
-                if (reparsed.All(statement => statement is Stmt.Var { IsVar: true }))
+                if (reparsed.All(statement =>
+                        statement is Stmt.Var { IsVar: true }
+                        || statement is Stmt.Directive
+                        || statement is Stmt.Expression expression
+                            && !EvalCallableScanner.ContainsCallable(expression.Expr)))
                     statements = reparsed;
             }
             catch
@@ -44,7 +48,10 @@ public partial class ILEmitter
             return false;
 
         if (statements.Any(statement =>
-                statement is not Stmt.Expression and not Stmt.Var { IsVar: true }))
+                statement is not Stmt.Expression
+                    and not Stmt.Var { IsVar: true }
+                    and not Stmt.Function { Body: not null }
+                    and not Stmt.Directive))
             return false;
 
         if (statements.Count == 0)
@@ -52,6 +59,27 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
             SetStackUnknown();
             return true;
+        }
+
+        bool savedStrictMode = _ctx.IsStrictMode;
+        bool? savedThisBindingStrictOverride = _ctx.ThisBindingIsStrictOverride;
+        _ctx.ThisBindingIsStrictOverride ??= savedStrictMode;
+        _ctx.IsStrictMode = savedStrictMode
+            || Parsing.DirectivePrologue.HasUseStrict(statements);
+
+        // Function declarations are instantiated before the first eval
+        // statement, regardless of textual order.
+        foreach (var function in statements.OfType<Stmt.Function>())
+        {
+            _ctx.EmitBlockScopedInnerFunction?.Invoke(IL, _ctx, function);
+            if (_ctx.IsScriptTopLevel && _resolver.TryLoadVariable(function.Name.Lexeme) != null)
+            {
+                var value = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, value);
+                IL.Emit(OpCodes.Ldstr, function.Name.Lexeme);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
+            }
         }
 
         for (int i = 0; i < statements.Count; i++)
@@ -67,14 +95,63 @@ public partial class ILEmitter
                         EnsureBoxed();
                     break;
                 case Stmt.Var declaration:
-                    EmitVarDeclaration(declaration);
+                    // EvalDeclarationInstantiation reuses an existing var-env
+                    // binding instead of creating a shadow slot. This is the
+                    // common `var x = 0; eval("var x = 1")` case.
+                    if (_resolver.HasVariable(declaration.Name.Lexeme))
+                    {
+                        if (declaration.Initializer != null)
+                        {
+                            EmitExpression(declaration.Initializer);
+                            EnsureBoxed();
+                            _resolver.TryStoreVariable(declaration.Name.Lexeme);
+                        }
+                    }
+                    else
+                    {
+                        EmitVarDeclaration(declaration);
+                    }
+                    if (isLast)
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    break;
+                case Stmt.Function:
+                    if (isLast)
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    break;
+                case Stmt.Directive:
                     if (isLast)
                         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                     break;
             }
         }
+        _ctx.IsStrictMode = savedStrictMode;
+        _ctx.ThisBindingIsStrictOverride = savedThisBindingStrictOverride;
         SetStackUnknown();
         return true;
+    }
+
+    private sealed class EvalCallableScanner : Parsing.Visitors.AstVisitorBase
+    {
+        public bool Found { get; private set; }
+
+        public static bool ContainsCallable(Expr expression)
+        {
+            var scanner = new EvalCallableScanner();
+            scanner.Visit(expression);
+            return scanner.Found;
+        }
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
+
+        protected override void VisitClassExpr(Expr.ClassExpr expr)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
     }
 
     protected override void EmitCall(Expr.Call c)

@@ -538,7 +538,7 @@ public partial class ILCompiler
                     _currentEnclosingCallable = f;
                     _currentCollectStrict = previousStrict
                         || _currentCollectClassName != null
-                        || Parsing.DirectivePrologue.HasUseStrict(f.Body);
+                        || BodyDeclaresUseStrict(f.Body);
 
                     _functionNestingDepth++;
                     // Parameter initializers execute in this function's
@@ -833,7 +833,15 @@ public partial class ILCompiler
                 // emitted scope. Parse it during discovery—not later during IL
                 // emission—so any function/arrow expressions receive builders and
                 // closure metadata keyed to the exact AST nodes we will emit.
-                if (c.Callee is Expr.Variable { Name.Lexeme: "eval" }
+                Expr evalCallee = c.Callee;
+                while (evalCallee is Expr.Grouping evalGrouping)
+                    evalCallee = evalGrouping.Expression;
+                bool isDirectEval = evalCallee is Expr.Variable { Name.Lexeme: "eval" };
+                bool isIndirectEval = evalCallee is Expr.Comma
+                {
+                    Right: Expr.Variable { Name.Lexeme: "eval" }
+                };
+                if ((isDirectEval || isIndirectEval)
                     && c.Arguments.Count > 0
                     && c.Arguments[0] is Expr.Literal { Value: string evalSource })
                 {
@@ -842,16 +850,37 @@ public partial class ILCompiler
                         var evalStatements = new Parser(new Lexer(evalSource).ScanTokens())
                             .ParseOrThrow();
                         if (evalStatements.All(statement =>
-                                statement is Stmt.Expression or Stmt.Var { IsVar: true }))
+                                statement is Stmt.Expression
+                                    or Stmt.Var { IsVar: true }
+                                    or Stmt.Function { Body: not null }
+                                    or Stmt.Directive))
                         {
                             _staticDirectEvalStatements[c] = evalStatements;
+                            var savedEvalStrict = _currentCollectStrict;
+                            _currentCollectStrict = savedEvalStrict
+                                || BodyDeclaresUseStrict(evalStatements);
                             foreach (var statement in evalStatements)
                             {
                                 if (statement is Stmt.Expression expression)
                                     CollectArrowsFromExpr(expression.Expr);
                                 else if (statement is Stmt.Var { Initializer: { } initializer })
                                     CollectArrowsFromExpr(initializer);
+                                else if (statement is Stmt.Function function)
+                                {
+                                    // Eval declarations are instantiated in the
+                                    // current variable environment. Treat even a
+                                    // script-global eval declaration as an inner
+                                    // callable so it can be materialized at the eval
+                                    // site instead of becoming an eagerly-hoisted
+                                    // program declaration.
+                                    int savedDepth = _functionNestingDepth;
+                                    if (_functionNestingDepth == 0)
+                                        _functionNestingDepth = 1;
+                                    CollectArrowsFromStmt(function);
+                                    _functionNestingDepth = savedDepth;
+                                }
                             }
+                            _currentCollectStrict = savedEvalStrict;
                         }
                     }
                     catch
@@ -1405,22 +1434,7 @@ public partial class ILCompiler
     /// scan consecutive string-literal statements, stop at the first non-string.
     /// </summary>
     private static bool BodyDeclaresUseStrict(List<Stmt>? body)
-    {
-        if (body is null) return false;
-        foreach (var stmt in body)
-        {
-            string? directiveValue = stmt switch
-            {
-                Stmt.Directive d => d.Value,
-                Stmt.Expression { Expr: Expr.Literal { Value: string s } } => s,
-                _ => null,
-            };
-            if (directiveValue is null) return false; // prologue ended
-            if (directiveValue == "use strict") return true;
-            // otherwise another directive (e.g. "use asm") — keep scanning
-        }
-        return false;
-    }
+        => Parsing.DirectivePrologue.HasUseStrict(body);
 
     private void EmitArrowBody(Expr.ArrowFunction arrow, MethodBuilder method, TypeBuilder? displayClass)
     {

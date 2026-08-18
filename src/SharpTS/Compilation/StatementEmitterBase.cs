@@ -267,6 +267,10 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 EmitConstDeclaration(c);
                 break;
 
+            case Stmt.Function fn:
+                Ctx.EmitBlockScopedInnerFunction?.Invoke(IL, Ctx, fn);
+                break;
+
             case Stmt.Class classStmt:
                 EmitStateMachineClassDeclaration(classStmt);
                 break;

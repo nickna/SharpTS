@@ -388,10 +388,38 @@ public abstract partial class ExpressionEmitterBase
             return false;
         }
 
-        if (statements is not [Stmt.Expression { Expr: Expr.Variable identifier }])
+        if (Ctx.IsScriptTopLevel && this is ILEmitter syncEmitter
+            && statements.Any(statement => statement is Stmt.Function))
+        {
+            EmitExpression(comma.Left);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Pop);
+            return syncEmitter.TryEmitStaticDirectEval(call, source);
+        }
+
+        if (statements is not [Stmt.Expression { Expr: var expression }])
         {
             return false;
         }
+
+        // At classic-script top level, a small expression-only indirect eval can
+        // execute directly against the emitted global bindings. This preserves
+        // both completion values and updates to globals without pretending that
+        // the interpreter bridge shares the compiled assembly's environment.
+        if (Ctx.IsScriptTopLevel
+            && expression is Expr.Literal or Expr.Assign
+                or Expr.PrefixIncrement or Expr.PostfixIncrement)
+        {
+            EmitExpression(comma.Left);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Pop);
+            EmitExpression(expression);
+            EnsureBoxed();
+            return true;
+        }
+
+        if (expression is not Expr.Variable identifier)
+            return false;
 
         FieldBuilder? globalField = null;
         FieldBuilder? capturedField = null;

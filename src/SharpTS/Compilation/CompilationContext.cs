@@ -175,6 +175,14 @@ public partial class CompilationContext
     public bool IsStrictMode { get; set; }
 
     /// <summary>
+    /// Optional strictness of the surrounding function's established this
+    /// binding when emitting nested eval code. Direct eval may enable strict
+    /// syntax for its own source, but it inherits the caller's already-bound
+    /// this value rather than rebinding it under the eval source's strictness.
+    /// </summary>
+    public bool? ThisBindingIsStrictOverride { get; set; }
+
+    /// <summary>
     /// True when emitting code inside a static constructor (class initializer).
     /// In this context, 'this' refers to the class type, not an instance.
     /// </summary>

@@ -162,7 +162,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(methodBuilder.GetILGenerator(), methodBuilder);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
-        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(function.Body);
+        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
         ctx.CurrentClassName = currentClassName;
         ctx.CurrentClassBuilder = methodBuilder.DeclaringType as TypeBuilder;
         ctx.EmittingTypeBuilder = methodBuilder.DeclaringType as TypeBuilder;

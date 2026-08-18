@@ -1038,7 +1038,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, argsLenLocal);
         il.MarkLabel(afterArgsLenLabel);
 
-        // thisArg = argsLen > 0 ? args[0] : null
+        // thisArg = argsLen > 0 ? args[0] : undefined
         var noThisLabel = il.DefineLabel();
         var afterThisLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, argsLenLocal);
@@ -1050,7 +1050,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.Emit(OpCodes.Br, afterThisLabel);
         il.MarkLabel(noThisLabel);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.MarkLabel(afterThisLabel);
 
