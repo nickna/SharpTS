@@ -31,6 +31,7 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
             "wait" => EmitWait(emitter, arguments),
             "notify" => EmitNotify(emitter, arguments),
             "isLockFree" => EmitIsLockFree(emitter, arguments),
+            "pause" => EmitPause(emitter, arguments),
             _ => false
         };
     }
@@ -265,6 +266,23 @@ public sealed class AtomicsStaticEmitter : IStaticTypeEmitterStrategy
         emitter.EmitExpressionAsDouble(arguments[0]);
         il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsIsLockFree);
         il.Emit(OpCodes.Box, ctx.Types.Boolean);
+        return true;
+    }
+
+    private static bool EmitPause(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        if (arguments.Count > 0)
+        {
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitBoxIfNeeded(arguments[0]);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        }
+        il.Emit(OpCodes.Call, ctx.Runtime!.AtomicsPause);
         return true;
     }
 }

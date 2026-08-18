@@ -36,6 +36,50 @@ public partial class RuntimeEmitter
         EmitErrorDefineMessageProperty(typeBuilder, runtime);
         // CreateError must come last - it references ErrorSetCause and other helpers
         EmitCreateError(typeBuilder, runtime);
+        EmitCreateErrorFromTypeOrNull(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Adapts emitted native-error Type tokens to the JavaScript-facing error
+    /// factory. Dynamic <c>new</c> and Reflect.construct otherwise select CLR
+    /// constructors directly, losing optional arguments and own descriptors.
+    /// Returns null for non-error types so the caller can keep its normal path.
+    /// </summary>
+    private void EmitCreateErrorFromTypeOrNull(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = runtime.CreateErrorFromTypeOrNull;
+
+        var il = method.GetILGenerator();
+        var getTypeFromHandle = _types.GetMethod(
+            _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle);
+        var typeEquality = _types.GetMethod(
+            _types.Type, "op_Equality", _types.Type, _types.Type);
+
+        void EmitCase(Type errorType, string jsName)
+        {
+            var next = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldtoken, errorType);
+            il.Emit(OpCodes.Call, getTypeFromHandle);
+            il.Emit(OpCodes.Call, typeEquality);
+            il.Emit(OpCodes.Brfalse, next);
+            il.Emit(OpCodes.Ldstr, jsName);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.CreateError);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(next);
+        }
+
+        EmitCase(runtime.TSErrorType, "Error");
+        EmitCase(runtime.TSTypeErrorType, "TypeError");
+        EmitCase(runtime.TSRangeErrorType, "RangeError");
+        EmitCase(runtime.TSReferenceErrorType, "ReferenceError");
+        EmitCase(runtime.TSSyntaxErrorType, "SyntaxError");
+        EmitCase(runtime.TSURIErrorType, "URIError");
+        EmitCase(runtime.TSEvalErrorType, "EvalError");
+        EmitCase(runtime.TSAggregateErrorType, "AggregateError");
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

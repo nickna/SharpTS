@@ -95,6 +95,9 @@ public partial class RuntimeEmitter
         var emitValue = il.DefineLabel();
         var emitEntry = il.DefineLabel();
         var storeCurrent = il.DefineLabel();
+        var useListCount = il.DefineLabel();
+        var haveLiveLength = il.DefineLabel();
+        var liveLength = il.DeclareLocal(_types.Int32);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, completedField);
@@ -109,11 +112,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, nextIndex);
-        il.Emit(OpCodes.Ldloc, nextIndex);
+        // Array iterators observe length on every next() call. $Arguments has
+        // an independent JS-visible length slot that may be truncated without
+        // shrinking its List backing store.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, arrayField);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, useListCount);
+        il.Emit(OpCodes.Ldfld, runtime.ArgumentsLengthField);
+        il.Emit(OpCodes.Stloc, liveLength);
+        il.Emit(OpCodes.Br, haveLiveLength);
+        il.MarkLabel(useListCount);
+        il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, arrayField);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(
             _types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, liveLength);
+        il.MarkLabel(haveLiveLength);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Ldloc, liveLength);
         il.Emit(OpCodes.Blt, indexInRange);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldc_I4_1);

@@ -592,6 +592,27 @@ public partial class RuntimeEmitter
 
         EmitGlobalThisSetRedirect(il, runtime);
 
+        // $Arguments has a JS-visible length slot independent from its List
+        // backing store. Writes must update that live slot so an already-
+        // created ArrayIterator observes truncation on its next() call.
+        var notArgumentsLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.ArgumentsType);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stfld, runtime.ArgumentsLengthField);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notArgumentsLengthLabel);
+
         // Proxy dispatch is omitted entirely from assemblies that do not use
         // Proxy. Its receiver-aware ordinary-set helper is feature-gated too.
         if (_features.UsesProxy)

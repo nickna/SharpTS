@@ -128,6 +128,15 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,
             [_types.String, _types.Object]);
+
+        // Reserve the native-error Type-token adapter before Reflect.construct
+        // is emitted. EmitErrorMethods fills its body later, after CreateError
+        // and descriptor support are available.
+        runtime.CreateErrorFromTypeOrNull = typeBuilder.DefineMethod(
+            "CreateErrorFromTypeOrNull",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Type, _types.ObjectArray]);
         // Shared backing store for value-form global assignments. DeleteProperty
         // is emitted before the GlobalThis helper bodies, so the field must be
         // reserved in phase 1 alongside their method signatures.

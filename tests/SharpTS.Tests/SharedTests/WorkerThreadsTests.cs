@@ -9,6 +9,24 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class WorkerThreadsTests
 {
+    [Theory, ModeData]
+    public void AtomicsPause_AcceptsOnlyIntegralNumbers(ExecutionMode mode)
+    {
+        var source = """
+            console.log(Atomics.pause() === undefined);
+            console.log(Atomics.pause(42) === undefined);
+            for (const value of [true, 1.5, "2", null]) {
+                try {
+                    Atomics.pause(value as any);
+                } catch (error) {
+                    console.log(error instanceof TypeError);
+                }
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
+
     #region SharedArrayBuffer Tests
 
     [Theory, ModeData]

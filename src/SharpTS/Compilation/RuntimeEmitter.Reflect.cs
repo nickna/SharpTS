@@ -1240,6 +1240,20 @@ public partial class RuntimeEmitter
         // Is a Type - use Activator.CreateInstance(type, args)
         il.MarkLabel(isTypeLabel);
 
+        // Emitted native-error types require the JS-facing factory for
+        // optional arguments and own message/cause descriptors. A null result
+        // means this is some other Type and normal construction continues.
+        var notErrorTypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.CreateErrorFromTypeOrNull);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notErrorTypeLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notErrorTypeLabel);
+        il.Emit(OpCodes.Pop);
+
         // %Promise% also has a JavaScript-facing adapter rather than a CLR
         // constructor that accepts its executor. Most importantly, the missing
         // executor must throw before GetPrototypeFromConstructor(newTarget), so

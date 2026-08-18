@@ -1427,6 +1427,7 @@ public class EmittedRuntime
 
     // Error helper methods in $Runtime
     public MethodBuilder CreateError { get; set; } = null!;
+    public MethodBuilder CreateErrorFromTypeOrNull { get; set; } = null!;
     public MethodBuilder ErrorGetName { get; set; } = null!;
     public MethodBuilder ErrorGetMessage { get; set; } = null!;
     public MethodBuilder ErrorGetStack { get; set; } = null!;
@@ -2615,6 +2616,7 @@ public class EmittedRuntime
     public MethodBuilder AtomicsWait { get; set; } = null!;
     public MethodBuilder AtomicsNotify { get; set; } = null!;
     public MethodBuilder AtomicsIsLockFree { get; set; } = null!;
+    public MethodBuilder AtomicsPause { get; set; } = null!;
 
     // $MessagePort type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort

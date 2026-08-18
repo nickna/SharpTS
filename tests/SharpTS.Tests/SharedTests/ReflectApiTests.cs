@@ -381,4 +381,24 @@ public class ReflectApiTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("true\ntrue\n", output);
     }
+
+    [Theory, ModeData]
+    public void ReflectConstruct_AggregateErrorUsesIntrinsicPrototypeFallback(ExecutionMode mode)
+    {
+        var source = """
+            function NewTarget(): void {}
+            const values: any[] = [undefined, null, 42, false, "text"];
+            for (const value of values) {
+                const newTarget: any = new Proxy(NewTarget, {
+                    get(target: any, property: any): any {
+                        return property === "prototype" ? value : target[property];
+                    }
+                });
+                const error: any = Reflect.construct(AggregateError, [[]], newTarget);
+                console.log(Object.getPrototypeOf(error) === AggregateError.prototype);
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
 }

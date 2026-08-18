@@ -584,6 +584,25 @@ public partial class ILEmitter
             IL.MarkLabel(notRegExpType);
         }
 
+        // Native errors have JavaScript-facing optional arguments and install
+        // own message/cause descriptors. CLR constructor selection cannot
+        // express those semantics, so route exact emitted error Type tokens
+        // through the shared factory before the reflection fallback.
+        IL.Emit(OpCodes.Ldloc, typeLocal);
+        IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        for (int i = 0; i < argTemps.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldloc, argTemps[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+        IL.Emit(OpCodes.Call, _ctx.Runtime.CreateErrorFromTypeOrNull);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Brtrue, constructionDone);
+        IL.Emit(OpCodes.Pop);
+
         // ctor = type.GetConstructors()[0]
         var getConstructorsMethod = _ctx.Types.GetMethod(
             typeof(Type),

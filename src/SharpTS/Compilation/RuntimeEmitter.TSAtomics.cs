@@ -50,6 +50,58 @@ public partial class RuntimeEmitter
 
         // Atomics.isLockFree(size) -> bool
         runtime.AtomicsIsLockFree = EmitAtomicsIsLockFreePure(runtimeType);
+
+        // Atomics.pause(iterationNumber?) -> undefined
+        runtime.AtomicsPause = EmitAtomicsPausePure(runtimeType, runtime);
+    }
+
+    private MethodBuilder EmitAtomicsPausePure(TypeBuilder runtimeType, EmittedRuntime runtime)
+    {
+        var method = runtimeType.DefineMethod(
+            "AtomicsPause",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+
+        var il = method.GetILGenerator();
+        var valid = il.DefineLabel();
+        var invalid = il.DefineLabel();
+        var numberLocal = il.DeclareLocal(_types.Double);
+
+        // Omitted/undefined is valid.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, valid);
+
+        // A supplied value must be a finite integral Number. No coercion is
+        // performed by Atomics.pause.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, invalid);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Stloc, numberLocal);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
+        il.Emit(OpCodes.Brtrue, invalid);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, typeof(double).GetMethod(
+            nameof(double.IsInfinity), [typeof(double)])!);
+        il.Emit(OpCodes.Brtrue, invalid);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod(
+            nameof(Math.Truncate), [typeof(double)])!);
+        il.Emit(OpCodes.Ldloc, numberLocal);
+        il.Emit(OpCodes.Beq, valid);
+
+        il.MarkLabel(invalid);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "Atomics.pause iterationNumber must be an integral Number");
+
+        il.MarkLabel(valid);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
