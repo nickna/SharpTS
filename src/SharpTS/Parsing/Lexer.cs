@@ -420,6 +420,13 @@ public class Lexer(string source)
                 {
                     AddToken(TokenType.SLASH);
                 }
+                else if (JsxTolerant && Peek() == '>')
+                {
+                    // A JSX self-closing marker can occur where the ordinary
+                    // expression-state lexer would otherwise start a regex (notably
+                    // after an attribute value or in intentionally invalid JSX).
+                    AddToken(TokenType.SLASH);
+                }
                 else if (_expectExpr)
                 {
                     // Regex literal
@@ -465,15 +472,12 @@ public class Lexer(string source)
         int i = _current;
         if (i < _source.Length && _source[i] == '>')
             return true; // fragment: </>
-        if (i >= _source.Length ||
-            !(char.IsLetter(_source[i]) || _source[i] is '_' or '$'))
-            return false;
-
-        while (i < _source.Length &&
-               (char.IsLetterOrDigit(_source[i]) || _source[i] is '_' or '$' or '-' or '.'))
-        {
+        // Keep malformed JSX closers lexable too (`</.a>`, `</a[foo]>`, etc.)
+        // so the parser can report/recover from the syntax error. A second slash
+        // before `>` rules out a JSX closer and preserves ordinary `/regex/`
+        // after a relational `<` expression.
+        while (i < _source.Length && _source[i] is not '>' and not '/' and not '\r' and not '\n')
             i++;
-        }
         return i < _source.Length && _source[i] == '>';
     }
 
@@ -541,9 +545,11 @@ public class Lexer(string source)
                 OctalLiteral();
                 return;
             }
-            // Check for legacy octal literals (0-prefixed numbers like 0777)
-            // TypeScript does not support legacy octals - always reject them
-            else if (next >= '0' && next <= '7')
+            // Check for legacy octal literals (0-prefixed numbers like 0777).
+            // In a TSX upfront pass the digits may instead be JSX text (for example
+            // the entity `&#0123;`) and will be rescanned by JsxText, so defer the
+            // diagnostic to the parser in tolerant mode.
+            else if (!JsxTolerant && next >= '0' && next <= '7')
             {
                 throw new Exception($"SyntaxError: Legacy octal literals are not allowed. Use '0o' prefix for octal numbers at line {_line}");
             }

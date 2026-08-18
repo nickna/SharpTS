@@ -70,6 +70,17 @@ public class JsxParserTests
     }
 
     [Fact]
+    public void NamespacedClosingTagsAndNumericEntitiesSurviveUpfrontLexing()
+    {
+        var parsed = ParseTsx("""
+            const first = <svg:path>&#0123;</svg:path>;
+            const second = <svg : path></svg : path>;
+            """);
+
+        Assert.True(parsed.IsSuccess, string.Join(Environment.NewLine, parsed.Diagnostics));
+    }
+
+    [Fact]
     public void IntrinsicAttributesUseJsxNamespaceWhenAvailable()
     {
         const string source = """

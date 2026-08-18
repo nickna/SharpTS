@@ -1,3 +1,4 @@
+using SharpTS.Diagnostics;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -27,6 +28,13 @@ public class ParsedModule
     /// Parsed AST statements from the module.
     /// </summary>
     public List<Stmt> Statements { get; }
+
+    /// <summary>
+    /// Recoverable syntax diagnostics produced while parsing this module. Empty during
+    /// normal product loading, which remains fail-fast; conformance and editor-style
+    /// callers can opt into retaining the partial AST and these diagnostics.
+    /// </summary>
+    public List<Diagnostic> ParseDiagnostics { get; } = [];
 
     /// <summary>
     /// The text this module was parsed from, together with its line index, content checksum, and

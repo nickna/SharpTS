@@ -179,6 +179,13 @@ public class ModuleResolver
     /// </summary>
     public JsxParseOptions? JsxOptions { get; set; }
 
+    /// <summary>
+    /// Retains the parser's partial AST and syntax diagnostics instead of throwing on
+    /// the first recovered parse error. Intended for diagnostic-oriented callers such
+    /// as language conformance runners; execution and compilation remain fail-fast.
+    /// </summary>
+    public bool RecoverParseErrors { get; set; }
+
     private static bool IsJsxSourcePath(string path) =>
         path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) ||
         path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase);
@@ -880,8 +887,9 @@ public class ModuleResolver
                 parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
             var parseResult = parser.Parse();
 
-            // For module loading, we throw on parse errors (backward compatible)
-            if (!parseResult.IsSuccess)
+            // Product loading remains fail-fast. Diagnostic-oriented callers can keep
+            // the recovered statement list and compare the parser diagnostics instead.
+            if (!parseResult.IsSuccess && !RecoverParseErrors)
             {
                 string? parentName = Path.GetFileName(Path.GetDirectoryName(absolutePath));
                 string displayName = string.IsNullOrEmpty(parentName)
@@ -897,6 +905,7 @@ public class ModuleResolver
                 IsDeclarationFile = IsDeclarationFilePath(absolutePath),
                 Document = document,
             };
+            module.ParseDiagnostics.AddRange(parseResult.Diagnostics);
 
             // Determine if this is a script or module file
             module.IsScript = ScriptDetector.IsScriptFile(statements);
@@ -918,9 +927,10 @@ public class ModuleResolver
             if (module.IsDeclarationFile)
                 _moduleCache[absolutePath] = module;
 
-            // Process triple-slash path references. Runtime modules retain the
-            // historical script-only restriction, but declaration modules commonly
-            // use path references to compose packages such as @types/node.
+            // Process triple-slash path references. TypeScript permits a module to
+            // reference a script or declaration file; the referenced file contributes
+            // its global declarations to the program without changing the referrer's
+            // module scope.
             // NOTE: Process BEFORE caching to properly detect circular references
             var directives = lexer.TripleSlashDirectives;
             var pathRefs = directives.Where(d => d.Type == TripleSlashReferenceType.Path).ToList();
@@ -928,11 +938,6 @@ public class ModuleResolver
 
             if (pathRefs.Count > 0)
             {
-                if (!module.IsScript && !module.IsDeclarationFile)
-                {
-                    throw new Exception($"Type Error: /// <reference path=\"...\"> is only valid in script files (files without import/export). File '{absolutePath}' is a module.");
-                }
-
                 // Load referenced scripts
                 foreach (var pathRef in pathRefs)
                 {

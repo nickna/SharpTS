@@ -2,6 +2,7 @@ using SharpTS.Diagnostics;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
+using System.Text.RegularExpressions;
 
 namespace SharpTS.TypeScriptConformance;
 
@@ -107,6 +108,29 @@ public sealed class TypeScriptConformanceRunner
                 relativeName.Replace('/', Path.DirectorySeparatorChar)));
             virtualFiles[path] = file.Body;
             rootFiles.Add(path);
+
+            // The TypeScript test harness exposes tests/lib fixtures through the
+            // virtual /.lib/ directory. Preserve that convention in our in-memory
+            // resolver so JSX cases can reference react.d.ts/react16.d.ts without
+            // depending on files outside the vendored corpus.
+            foreach (Match match in Regex.Matches(
+                         file.Body,
+                         """///\s*<reference\s+path\s*=\s*["']/(?<path>\.lib/[^"']+)["']""",
+                         RegexOptions.IgnoreCase))
+            {
+                string fixturePath = match.Groups["path"].Value;
+                string fixtureSourcePath = Path.Combine(
+                    _typescriptRoot,
+                    "tests",
+                    "lib",
+                    fixturePath[".lib/".Length..].Replace('/', Path.DirectorySeparatorChar));
+                if (File.Exists(fixtureSourcePath))
+                {
+                    string virtualFixturePath = Path.GetFullPath(
+                        "/" + fixturePath.Replace('/', Path.DirectorySeparatorChar));
+                    virtualFiles[virtualFixturePath] = File.ReadAllText(fixtureSourcePath);
+                }
+            }
         }
 
         if (rootFiles.Count == 0)
@@ -136,6 +160,7 @@ public sealed class TypeScriptConformanceRunner
             resolver = new ModuleResolver(rootFiles[0], virtualFiles, programOptions)
             {
                 JsxOptions = ResolveJsxOptions(metadata),
+                RecoverParseErrors = true,
             };
 
             // TypeScript resolves ambient modules declared by any declaration root before
@@ -150,6 +175,7 @@ public sealed class TypeScriptConformanceRunner
 
             var entry = resolver.LoadProgram(rootFiles[0]);
             modules = resolver.GetModulesInOrder(entry);
+            resolver.RegisterAmbientModuleDeclarations(modules);
 
             // TypeScript treats every @filename section as a root file, even if
             // it is not reachable through an import from the first section.
@@ -157,7 +183,9 @@ public sealed class TypeScriptConformanceRunner
             foreach (string rootFile in rootFiles.Skip(1))
             {
                 var root = resolver.LoadModule(rootFile);
-                foreach (var module in resolver.GetModulesInOrder(root))
+                var rootModules = resolver.GetModulesInOrder(root);
+                resolver.RegisterAmbientModuleDeclarations(rootModules);
+                foreach (var module in rootModules)
                 {
                     if (seen.Add(module.Path))
                         modules.Add(module);
@@ -199,7 +227,10 @@ public sealed class TypeScriptConformanceRunner
                 MaxErrors = 1000,
             });
             checker.CheckModules(modules, resolver);
-            diagnostics = checker.GetDiagnostics();
+            diagnostics = modules
+                .SelectMany(module => module.ParseDiagnostics)
+                .Concat(checker.GetDiagnostics())
+                .ToList();
         }
         catch (Exception ex)
         {
@@ -236,7 +267,9 @@ public sealed class TypeScriptConformanceRunner
         // noise. Conservative — only fires when our diagnostic set is
         // completely empty AND expected is non-empty AND every expected code
         // is one of the property/global-resolution shapes.
-        if (LooksLikeLibDrift(expected, actual))
+        bool hadParseDiagnostics = diagnostics.Any(
+            diagnostic => diagnostic.Code == DiagnosticCode.ParseError);
+        if (!hadParseDiagnostics && LooksLikeLibDrift(expected, actual))
         {
             return new TypeScriptConformanceResult(
                 TypeScriptConformanceOutcome.Skipped,

@@ -507,6 +507,15 @@ public partial class Parser
     /// </summary>
     private Token ConsumeSpecifierName(string errorMessage)
     {
+        if (Check(TokenType.STRING))
+        {
+            Token token = Advance();
+            // Import/export names use the StringValue rather than the quoted source
+            // spelling as their module namespace key. Keep STRING as a marker for
+            // declaration emitters, but synthesize the decoded name for all binding
+            // and module-map consumers.
+            return new Token(TokenType.STRING, (string)token.Literal!, token.Literal, token.Line);
+        }
         if (Check(TokenType.IDENTIFIER) || Check(TokenType.DEFAULT))
             return Advance();
         if (IsContextualKeyword(Peek().Type))

@@ -81,6 +81,8 @@ public class TypeScriptConformanceTests
             {
                 result = await runTask;
             }
+            if (result.Outcome == TypeScriptConformanceOutcome.ParseError)
+                _output.WriteLine($"parse error: {relPath}: {result.Message}");
             current[relPath] = TypeScriptConformanceBaseline.EncodeBucket(result);
             counts.TryGetValue(result.Outcome, out var c);
             counts[result.Outcome] = c + 1;

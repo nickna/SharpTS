@@ -257,22 +257,22 @@ public class TripleSlashReferenceTests
     }
 
     [Theory, ModeData]
-    public void PathReference_InModuleFile_ThrowsError(ExecutionMode mode)
+    public void PathReference_InModuleFile_LoadsReferencedScriptGlobals(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {
             ["./helper.ts"] = """
-                const x: number = 1;
+                interface ReferencedShape { value: number; }
                 """,
             ["./main.ts"] = """
                 /// <reference path="./helper.ts" />
-                export const y: number = 2;
+                export const item: ReferencedShape = { value: 2 };
+                console.log(item.value);
                 """
         };
 
-        var ex = Assert.Throws<Exception>(() =>
-            TestHarness.RunModules(files, "./main.ts", mode));
-        Assert.Contains("script", ex.Message.ToLower());
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("2\n", output);
     }
 
     [Theory, ModeData]

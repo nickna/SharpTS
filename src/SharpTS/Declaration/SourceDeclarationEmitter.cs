@@ -268,7 +268,7 @@ public static class SourceDeclarationEmitter
             {
                 if (export.NamespaceExportName is not null)
                 {
-                    WriteLine($"export {(export.IsTypeOnly ? "type " : "")}* as {export.NamespaceExportName.Lexeme} from {Quote(export.FromModulePath)};");
+                    WriteLine($"export {(export.IsTypeOnly ? "type " : "")}* as {RenderModuleExportName(export.NamespaceExportName)} from {Quote(export.FromModulePath)};");
                 }
                 else if (export.NamedExports is not null)
                 {
@@ -609,7 +609,7 @@ public static class SourceDeclarationEmitter
             if (import.NamedImports is { Count: > 0 })
             {
                 string named = string.Join(", ", import.NamedImports.Select(specifier =>
-                    $"{(specifier.IsTypeOnly ? "type " : "")}{specifier.Imported.Lexeme}" +
+                    $"{(specifier.IsTypeOnly ? "type " : "")}{RenderModuleExportName(specifier.Imported)}" +
                     $"{(specifier.LocalName is null ? "" : $" as {specifier.LocalName.Lexeme}")}"));
                 bindings.Add($"{{ {named} }}");
             }
@@ -622,8 +622,11 @@ public static class SourceDeclarationEmitter
             string.Join(", ", specifiers.Select(specifier =>
                 $"{(specifier.IsTypeOnly ? "type " : "")}" +
                 (specifier.ExportedName is null
-                    ? specifier.LocalName.Lexeme
-                    : $"{specifier.LocalName.Lexeme} as {specifier.ExportedName.Lexeme}")));
+                    ? RenderModuleExportName(specifier.LocalName)
+                    : $"{RenderModuleExportName(specifier.LocalName)} as {RenderModuleExportName(specifier.ExportedName)}")));
+
+        private static string RenderModuleExportName(Token token) =>
+            token.Type == TokenType.STRING ? Quote(token.Lexeme) : token.Lexeme;
 
         private string RenderParameters(
             IReadOnlyList<Stmt.Parameter> parameters,

@@ -84,6 +84,45 @@ public class TypeScriptConformanceRunnerTests
             result.Message ?? result.Outcome.ToString());
     }
 
+    [Fact]
+    public void RunOne_TsxReferenceToHarnessLib_ResolvesFixture()
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            "jsx",
+            "checkJsxChildrenProperty1.tsx");
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.NotEqual(TypeScriptConformanceOutcome.ParseError, result.Outcome);
+        Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
+    }
+
+    [Theory]
+    [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_syntax.ts")]
+    [InlineData("jsx/jsxParsingError2.tsx")]
+    [InlineData("jsx/jsxAttributeInitializer.ts")]
+    [InlineData("jsx/jsxInvalidEsprimaTestSuite.tsx")]
+    [InlineData("jsx/tsxElementResolution17.tsx")]
+    [InlineData("jsx/tsxNamespacedTagName1.tsx")]
+    [InlineData("jsx/tsxReactEmitEntities.tsx")]
+    public void RunOne_IntentionalSyntaxErrorsBecomeComparableDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.NotEqual(TypeScriptConformanceOutcome.ParseError, result.Outcome);
+        Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
+        Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
+    }
+
     [Theory]
     [InlineData("es2019/importMeta/importMeta.ts")]
     [InlineData("es2020/modules/exportAsNamespace_nonExistent.ts")]
