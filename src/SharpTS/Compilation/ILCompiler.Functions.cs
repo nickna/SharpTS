@@ -525,6 +525,10 @@ public partial class ILCompiler
             }
         }
 
+        // Captured lexical slots must enter TDZ before hoisted functions can
+        // retain a reference to their environment.
+        emitter.InitializeCapturedLexicalTdzBindings(funcStmt.Body);
+
         // Hoist inner function declarations (create TSFunction locals before other statements)
         EmitInnerFunctionHoisting(il, ctx, funcStmt.Body);
 
@@ -1441,7 +1445,8 @@ public partial class ILCompiler
                 funcStmt.Parameters,
                 arity,
                 isStatic: true,
-                emitter
+                emitter,
+                _runtime.UndefinedInstance
             );
         }
     }

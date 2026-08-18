@@ -972,6 +972,8 @@ public partial class RuntimeEmitter
         EmitArrayIteratorType(moduleBuilder, runtime);
         if (_features.UsesMap)
             EmitMapCollectionIteratorType(moduleBuilder, runtime);
+        if (_features.UsesSet)
+            EmitSetCollectionIteratorType(moduleBuilder, runtime);
         EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
         // but its incremental custom-iterator body needs both the basic

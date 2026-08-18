@@ -64,6 +64,7 @@ public partial class ILCompiler
             // Compilation-wide services
             Runtime = _runtime,
             RuntimeFeatures = _features,
+            LexicalTdzNames = _lexicalBindingNames,
             StaticDirectEvalStatements = _staticDirectEvalStatements,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
@@ -275,20 +276,22 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Creates the deliberately minimal context used to emit an overload's forwarding body —
-    /// just enough to evaluate default-value expressions (#698). Not a general emission context.
+    /// Creates the context used to emit an overload's forwarding body. Default
+    /// initializers execute in the function's surrounding lexical environment,
+    /// so they need the same module/global/capture resolution as the full body.
     /// </summary>
     private CompilationContext CreateOverloadDefaultsContext(ILGenerator il, bool isStrict)
     {
-        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClassRegistry = GetClassRegistry(),
-            Runtime = _runtime,
-            RuntimeFeatures = _features,
-            StaticDirectEvalStatements = _staticDirectEvalStatements,
-            TypeMap = _typeMap,
-            IsStrictMode = isStrict
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ApplyCommonJsModuleAccess(ctx);
+        ctx.FunctionOverloads = _functions.Overloads;
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0
+            ? _async.ArrowBuilders
+            : null;
+        ctx.UnionGenerator = _unionGenerator;
+        ctx.IsStrictMode = isStrict;
+        return ctx;
     }
 
     /// <summary>
@@ -370,6 +373,7 @@ public partial class ILCompiler
     private void ApplyInnerFunctionSupport(CompilationContext ctx)
     {
         ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         ctx.InnerFunctionMethods = _innerFunctionMethods;
         ctx.InnerFunctionDisplayClasses = _innerFunctionDisplayClasses;
         ctx.InnerFunctionDCFields = _innerFunctionDCFields;

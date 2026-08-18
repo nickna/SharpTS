@@ -195,6 +195,16 @@ public partial class CompilationContext
     /// </summary>
     internal IReadOnlySet<string>? DefaultParameterTdzNames { get; set; }
 
+    /// <summary>Names of lexical bindings whose captured storage can hold the TDZ sentinel.</summary>
+    internal IReadOnlySet<string>? LexicalTdzNames { get; set; }
+
+    /// <summary>
+    /// Lexical declaration whose initializer is currently being emitted. Its
+    /// own binding exists but is uninitialized even when an outer binding has
+    /// the same name.
+    /// </summary>
+    internal string? LexicalInitializerTdzName { get; set; }
+
     /// <summary>
     /// True only when emitting the module's top-level statements (entry-point Main,
     /// module/script <c>$Initialize</c>). A <c>var</c>/<c>let</c>/<c>const</c> declared

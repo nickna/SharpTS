@@ -97,6 +97,7 @@ public class LocalVariableResolver : IVariableResolver
                 // Direct access from function body - use the local
                 _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 _il.Emit(OpCodes.Ldfld, funcDCField);
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
 
@@ -132,6 +133,7 @@ public class LocalVariableResolver : IVariableResolver
                     _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
                     _il.Emit(OpCodes.Ldfld, funcDCField);
                 }
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
 
@@ -146,6 +148,7 @@ public class LocalVariableResolver : IVariableResolver
         {
             _il.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
             _il.Emit(OpCodes.Ldfld, arrowDCField);
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return StackType.Unknown;
         }
 
@@ -161,6 +164,7 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Ldarg_0);                              // this
             _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField); // this.$arrowDC (parent's DC)
             _il.Emit(OpCodes.Ldfld, parentArrowDCField);            // parent.<name>
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return StackType.Unknown;
         }
 
@@ -173,6 +177,7 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, extraBinding.RefField);
             _il.Emit(OpCodes.Ldfld, extraBinding.VarField);
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return StackType.Unknown;
         }
 
@@ -212,8 +217,10 @@ public class LocalVariableResolver : IVariableResolver
                 // The field is object-typed but holds a StrongBox at runtime.
                 _il.Emit(OpCodes.Castclass, _types.StrongBoxOfObject);
                 _il.Emit(OpCodes.Ldfld, _types.StrongBoxOfObjectValueField);
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return MapTypeToStackType(field.FieldType);
         }
 
@@ -311,6 +318,11 @@ public class LocalVariableResolver : IVariableResolver
             if (_ctx.FunctionDisplayClassLocal != null)
             {
                 // Direct access from function body - use the local
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                    _il.Emit(OpCodes.Ldfld, funcDCField);
+                });
                 _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 _il.Emit(OpCodes.Ldloc, temp);
                 _il.Emit(OpCodes.Stfld, funcDCField);
@@ -327,6 +339,12 @@ public class LocalVariableResolver : IVariableResolver
 
             if (_ctx.CurrentArrowFunctionDCField != null)
             {
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+                    _il.Emit(OpCodes.Ldfld, funcDCField);
+                });
                 if (_ctx.CapturedFields?.ContainsKey(name) == true)
                 {
                     // Emit: if (this.$functionDC != null) store to DC, else store to own field
@@ -371,6 +389,11 @@ public class LocalVariableResolver : IVariableResolver
         {
             var tempArrow = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, tempArrow);
+            EmitCapturedLexicalStoreGuard(name, () =>
+            {
+                _il.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+                _il.Emit(OpCodes.Ldfld, arrowDCFieldStore);
+            });
             _il.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
             _il.Emit(OpCodes.Ldloc, tempArrow);
             _il.Emit(OpCodes.Stfld, arrowDCFieldStore);
@@ -409,6 +432,12 @@ public class LocalVariableResolver : IVariableResolver
             {
                 var tempArrow = _il.DeclareLocal(_types.Object);
                 _il.Emit(OpCodes.Stloc, tempArrow);
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
+                    _il.Emit(OpCodes.Ldfld, storeField);
+                });
                 _il.Emit(OpCodes.Ldarg_0);
                 _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
                 _il.Emit(OpCodes.Ldloc, tempArrow);
@@ -422,6 +451,12 @@ public class LocalVariableResolver : IVariableResolver
         {
             var tempExtra = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, tempExtra);
+            EmitCapturedLexicalStoreGuard(name, () =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, extraStoreBinding.RefField);
+                _il.Emit(OpCodes.Ldfld, extraStoreBinding.VarField);
+            });
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, extraStoreBinding.RefField);
             _il.Emit(OpCodes.Ldloc, tempExtra);
@@ -454,6 +489,13 @@ public class LocalVariableResolver : IVariableResolver
             // write through Value so the loop body and sibling closures see the update.
             if (_ctx.CellCapturedFieldNames?.Contains(name) == true)
             {
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, field);
+                    _il.Emit(OpCodes.Castclass, _types.StrongBoxOfObject);
+                    _il.Emit(OpCodes.Ldfld, _types.StrongBoxOfObjectValueField);
+                });
                 _il.Emit(OpCodes.Ldarg_0);
                 _il.Emit(OpCodes.Ldfld, field);
                 _il.Emit(OpCodes.Castclass, _types.StrongBoxOfObject);
@@ -461,6 +503,11 @@ public class LocalVariableResolver : IVariableResolver
                 _il.Emit(OpCodes.Stfld, _types.StrongBoxOfObjectValueField);
                 return true;
             }
+            EmitCapturedLexicalStoreGuard(name, () =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, field);
+            });
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, temp);
             _il.Emit(OpCodes.Stfld, field);
@@ -512,6 +559,16 @@ public class LocalVariableResolver : IVariableResolver
         }
 
         return false;
+    }
+
+    private void EmitCapturedLexicalStoreGuard(string name, Action emitCurrentValue)
+    {
+        if (_ctx.LexicalTdzNames?.Contains(name) != true)
+            return;
+
+        emitCurrentValue();
+        _ctx.EmitLexicalTdzValueCheck(_il, name);
+        _il.Emit(OpCodes.Pop);
     }
 
     /// <inheritdoc />

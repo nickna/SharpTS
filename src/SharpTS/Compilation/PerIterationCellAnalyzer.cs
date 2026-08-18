@@ -44,6 +44,7 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
         public int ClosureDepthAtEntry { get; init; }
         public HashSet<string> Assigned { get; } = [];
         public HashSet<string> CleanSyncCapture { get; } = [];
+        public HashSet<string> IncrementCapture { get; } = [];
         public HashSet<string> Ineligible { get; } = [];
         public List<(object Closure, string Name)> Tentative { get; } = [];
     }
@@ -56,6 +57,7 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
 
     // Number of async/generator closures currently on the closure stack.
     private int _asyncDepth;
+    private bool _visitingIncrement;
 
     /// <summary>For each cell-eligible for-loop, the binding names that get a cell.</summary>
     public Dictionary<Stmt.For, HashSet<string>> ForLoopCells { get; } =
@@ -85,12 +87,10 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
 
     protected override void VisitFor(Stmt.For stmt)
     {
-        // The increment clause is visited OUTSIDE the frame, so an `i++` update is
-        // not counted as a body mutation (matching ECMA-262: the per-iteration copy
-        // happens before the increment).
+        // The initializer and condition do not create closures in a newly-copied
+        // per-iteration environment.
         if (stmt.Initializer != null) Visit(stmt.Initializer);
         if (stmt.Condition != null) Visit(stmt.Condition);
-        if (stmt.Increment != null) Visit(stmt.Increment);
 
         var bindings = CollectLoopBindingNames(stmt.Initializer);
         // The cell is an IL local in every emitter (sync ILEmitter.EmitFor and the
@@ -121,11 +121,22 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
         };
         _loopFrames.Push(frame);
         Visit(stmt.Body);
+        var wasVisitingIncrement = _visitingIncrement;
+        try
+        {
+            _visitingIncrement = true;
+            if (stmt.Increment != null) Visit(stmt.Increment);
+        }
+        finally
+        {
+            _visitingIncrement = wasVisitingIncrement;
+        }
         _loopFrames.Pop();
 
         var cells = new HashSet<string>(frame.Bindings);
         cells.IntersectWith(frame.Assigned);
         cells.IntersectWith(frame.CleanSyncCapture);
+        cells.UnionWith(frame.IncrementCapture);
         cells.ExceptWith(frame.Ineligible);
         if (cells.Count == 0) return;
 
@@ -190,6 +201,8 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
             if (clean)
             {
                 frame.CleanSyncCapture.Add(name);
+                if (_visitingIncrement)
+                    frame.IncrementCapture.Add(name);
                 frame.Tentative.Add((innermost, name));
             }
             else
@@ -204,6 +217,10 @@ public sealed class PerIterationCellAnalyzer : AstVisitorBase
 
     private void RecordAssignment(string name)
     {
+        // The copy-forward happens before the increment clause. A plain i++
+        // therefore does not by itself require a cell; a closure created in
+        // that clause does, and RecordReference tracks it separately above.
+        if (_visitingIncrement) return;
         foreach (var frame in _loopFrames)
         {
             if (!frame.Bindings.Contains(name)) continue;

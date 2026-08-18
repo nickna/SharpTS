@@ -58,6 +58,14 @@ public partial class ILEmitter
         if (TryEmitDefaultParameterTdz(name))
             return;
 
+        if (_ctx.LexicalInitializerTdzName == name)
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            EmitNullConstant();
+            return;
+        }
+
         // Block-scoped class locals start as undefined and are initialized at
         // the declaration statement. Observe the class TDZ before ordinary
         // local resolution.
@@ -409,6 +417,18 @@ public partial class ILEmitter
 
         EmitExpression(a.Value);
 
+        if (_ctx.LexicalInitializerTdzName == a.Name.Lexeme)
+        {
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            EmitNullConstant();
+            return;
+        }
+
+        EmitLexicalAssignmentTdzGuard(a.Name.Lexeme);
+
         // 0. Per-iteration loop-binding cell (#650): write through the StrongBox so the
         //    mutation is visible to closures that captured this iteration's cell. Mirrors
         //    LocalVariableResolver's cell store; this hand-rolled assignment path does not
@@ -692,6 +712,59 @@ public partial class ILEmitter
             }
             SetStackUnknown();
         }
+    }
+
+    private void EmitLexicalAssignmentTdzGuard(string name)
+    {
+        if (_ctx.LexicalTdzNames?.Contains(name) != true)
+            return;
+
+        var storageName = _ctx.ResolveFunctionDCFieldName(name);
+        if (_ctx.CapturedFunctionLocals?.Contains(storageName) == true
+            && _ctx.FunctionDisplayClassFields?.TryGetValue(storageName, out var functionField) == true
+            && _ctx.FunctionDisplayClassLocal != null)
+        {
+            IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            IL.Emit(OpCodes.Ldfld, functionField);
+        }
+        else if (_ctx.CapturedArrowLocals?.Contains(name) == true
+            && _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var arrowField) == true
+            && _ctx.ArrowScopeDisplayClassLocal != null)
+        {
+            IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+            IL.Emit(OpCodes.Ldfld, arrowField);
+        }
+        else if (_ctx.ParentArrowCapturedLocals?.Contains(name) == true
+            && _ctx.ParentArrowScopeDisplayClassFields?.TryGetValue(name, out var parentArrowField) == true
+            && _ctx.CurrentArrowScopeDCField != null)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
+            IL.Emit(OpCodes.Ldfld, parentArrowField);
+        }
+        else if (_ctx.ExtraArrowScopeBindings?.TryGetValue(name, out var extraArrowBinding) == true)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, extraArrowBinding.RefField);
+            IL.Emit(OpCodes.Ldfld, extraArrowBinding.VarField);
+        }
+        else if (_ctx.CapturedFields?.TryGetValue(name, out var capturedField) == true)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, capturedField);
+        }
+        else if (_ctx.Locals.GetLocal(name) is { LocalType: var localType } local
+            && localType == _ctx.Types.Object)
+        {
+            IL.Emit(OpCodes.Ldloc, local);
+        }
+        else
+        {
+            return;
+        }
+
+        _ctx.EmitLexicalTdzValueCheck(IL, name);
+        IL.Emit(OpCodes.Pop);
     }
 
     protected override void EmitThis()

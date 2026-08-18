@@ -410,6 +410,141 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits a Set value iterator backed by the live set plus its initial
+    /// insertion-order snapshot. Values deleted before visitation are skipped.
+    /// </summary>
+    private void EmitSetCollectionIteratorType(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$SetCollectionIterator",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object,
+            [_types.IEnumeratorOfObject, _types.IEnumerator, _types.IDisposable,
+             _types.IEnumerableOfObject, _types.IEnumerable]);
+        runtime.SetCollectionIteratorType = typeBuilder;
+
+        var setField = typeBuilder.DefineField("_set", _types.HashSetOfObject,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var valuesField = typeBuilder.DefineField("_values", _types.ListOfObject,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var indexField = typeBuilder.DefineField("_index", _types.Int32, FieldAttributes.Private);
+        var currentField = typeBuilder.DefineField("_current", _types.Object, FieldAttributes.Private);
+        var completedField = typeBuilder.DefineField("_completed", _types.Boolean, FieldAttributes.Private);
+
+        var ctor = typeBuilder.DefineConstructor(MethodAttributes.Public,
+            CallingConventions.Standard, [_types.HashSetOfObject, _types.ListOfObject]);
+        runtime.SetCollectionIteratorCtor = ctor;
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, setField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_2);
+        ctorIl.Emit(OpCodes.Stfld, valuesField);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldc_I4_M1);
+        ctorIl.Emit(OpCodes.Stfld, indexField);
+        ctorIl.Emit(OpCodes.Ret);
+
+        var currentProperty = typeBuilder.DefineProperty(
+            "Current", PropertyAttributes.None, _types.Object, Type.EmptyTypes);
+        var currentGetter = typeBuilder.DefineMethod("get_Current",
+            MethodAttributes.Public | MethodAttributes.Virtual |
+            MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            _types.Object, Type.EmptyTypes);
+        var currentIl = currentGetter.GetILGenerator();
+        currentIl.Emit(OpCodes.Ldarg_0);
+        currentIl.Emit(OpCodes.Ldfld, currentField);
+        currentIl.Emit(OpCodes.Ret);
+        currentProperty.SetGetMethod(currentGetter);
+
+        var nongenericCurrent = typeBuilder.DefineMethod(
+            "System.Collections.IEnumerator.get_Current",
+            MethodAttributes.Private | MethodAttributes.Virtual |
+            MethodAttributes.SpecialName | MethodAttributes.HideBySig |
+            MethodAttributes.NewSlot | MethodAttributes.Final,
+            _types.Object, Type.EmptyTypes);
+        var nongenericIl = nongenericCurrent.GetILGenerator();
+        nongenericIl.Emit(OpCodes.Ldarg_0);
+        nongenericIl.Emit(OpCodes.Ldfld, currentField);
+        nongenericIl.Emit(OpCodes.Ret);
+        typeBuilder.DefineMethodOverride(nongenericCurrent,
+            _types.GetProperty(_types.IEnumerator, "Current")!.GetGetMethod()!);
+
+        var moveNext = typeBuilder.DefineMethod("MoveNext",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Boolean, Type.EmptyTypes);
+        var il = moveNext.GetILGenerator();
+        var nextIndex = il.DeclareLocal(_types.Int32);
+        var value = il.DeclareLocal(_types.Object);
+        var loop = il.DefineLabel();
+        var inRange = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, completedField);
+        il.Emit(OpCodes.Brfalse, loop);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, indexField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, nextIndex);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, valuesField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Blt, inRange);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, completedField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(inRange);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Stfld, indexField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, valuesField);
+        il.Emit(OpCodes.Ldloc, nextIndex);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, value);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, setField);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.HashSetOfObject, "Contains", _types.Object));
+        il.Emit(OpCodes.Brfalse, loop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, value);
+        il.Emit(OpCodes.Stfld, currentField);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+
+        var reset = typeBuilder.DefineMethod("Reset",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Void, Type.EmptyTypes);
+        var resetIl = reset.GetILGenerator();
+        resetIl.Emit(OpCodes.Ldstr, "Reset is not supported for set iterators");
+        resetIl.Emit(OpCodes.Newobj,
+            typeof(NotSupportedException).GetConstructor([typeof(string)])!);
+        resetIl.Emit(OpCodes.Throw);
+
+        var dispose = typeBuilder.DefineMethod("Dispose",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Void, Type.EmptyTypes);
+        dispose.GetILGenerator().Emit(OpCodes.Ret);
+
+        EmitGetEnumeratorReturnsSelf(typeBuilder);
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
     /// Emits the $IteratorWrapper class that adapts custom iterator objects to IEnumerator&lt;object&gt;.
     /// This allows for...of loops to work with any object that has a [Symbol.iterator]() method.
     /// NOTE: Must be called AFTER EmitIteratorMethods so that runtime.InvokeIteratorNext etc. are defined.

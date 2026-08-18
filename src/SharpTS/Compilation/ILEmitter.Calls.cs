@@ -51,7 +51,10 @@ public partial class ILEmitter
                 statement is not Stmt.Expression
                     and not Stmt.Var { IsVar: true }
                     and not Stmt.Function { Body: not null }
-                    and not Stmt.Directive))
+                    and not Stmt.Directive
+                    and not Stmt.Block
+                    and not Stmt.Class
+                    and not Stmt.For))
             return false;
 
         if (statements.Count == 0)
@@ -119,6 +122,11 @@ public partial class ILEmitter
                         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                     break;
                 case Stmt.Directive:
+                    if (isLast)
+                        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+                    break;
+                default:
+                    EmitStatement(statements[i]);
                     if (isLast)
                         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                     break;

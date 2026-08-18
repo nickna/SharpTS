@@ -1345,6 +1345,7 @@ public partial class ILEmitter
         // local store below instead of clobbering the outer binding's DC field.
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
+            !_ctx.TryGetParameter(name, out _) &&
             _ctx.Locals.GetNestedScopeLocal(name) == null)
         {
             if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
@@ -1372,8 +1373,21 @@ public partial class ILEmitter
 
         // Fall-through storage: an IL local (typed double stored unboxed), a captured display-class
         // field, or a top-level static. The result is left on the stack unboxed for lazy boxing.
-        var local = _ctx.Locals.GetLocal(name);
-        if (local != null)
+        var nestedLocal = _ctx.Locals.GetNestedScopeLocal(name);
+        if (nestedLocal != null)
+        {
+            IL.Emit(OpCodes.Stloc, nestedLocal);
+        }
+        else if (_ctx.TryGetParameter(name, out var parameterIndex))
+        {
+            // Update expressions on parameters must consume the duplicated
+            // value-to-store and write it back to the argument slot. Omitting
+            // this rung left an extra value on the evaluation stack (invalid
+            // IL at return sites) and made ++arg observe the original value.
+            _ctx.EmitConvertForParamSlot(IL, name);
+            IL.Emit(OpCodes.Starg, parameterIndex);
+        }
+        else if (_ctx.Locals.GetLocal(name) is { } local)
         {
             IL.Emit(OpCodes.Stloc, local);
         }

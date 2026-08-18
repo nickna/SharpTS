@@ -53,6 +53,11 @@ public partial class ILCompiler
     private Expr.ArrowFunction? _currentParentArrow;
     private string? _currentCollectClassName;
     private bool _currentCollectStrict;
+    // Explicit block nesting while walking top-level statements. A function
+    // declaration inside a top-level block can capture that block's lexical
+    // bindings, so it must use the inner-function/display-class pipeline even
+    // though it is not nested inside another callable.
+    private int _topLevelBlockDepth;
     // The IMMEDIATELY enclosing callable (Expr.ArrowFunction or Stmt.Function) during
     // collection. Unlike _currentParentArrow (nearest ancestor arrow, which skips
     // function-declaration boundaries), this tells CollectInnerFunction whether an
@@ -241,7 +246,6 @@ public partial class ILCompiler
             // Check if arrow needs function DC or arrow DC (for itself or to pass to inner arrows)
             bool needsFunctionDCForArrow = _arrowsNeedingFunctionDC.Contains(arrow);
             bool needsArrowDCForArrow = _arrowsNeedingArrowDC.Contains(arrow);
-
             if (captures.Count == 0 && !needsFunctionDCForArrow && !needsArrowDCForArrow)
             {
                 // Non-capturing and doesn't need function DC: static method on $Program
@@ -515,7 +519,7 @@ public partial class ILCompiler
                 if (f.Body != null)
                 {
                     // Track inner function declarations (nested inside another function)
-                    if (_functionNestingDepth > 0)
+                    if (_functionNestingDepth > 0 || _topLevelBlockDepth > 0)
                     {
                         CollectInnerFunction(f);
                     }
@@ -529,7 +533,7 @@ public partial class ILCompiler
                     // deeper arrow is not mis-attributed to the async arrow's function DC (#838 follow-up).
                     var previousEnclosingAsyncArrowFn = _currentEnclosingAsyncArrow;
                     _currentEnclosingAsyncArrow = null;
-                    if (_functionNestingDepth == 0)
+                    if (_functionNestingDepth == 0 && _topLevelBlockDepth == 0)
                     {
                         // Top-level function: use its qualified name as enclosing context
                         _currentEnclosingFunctionName = GetDefinitionContext().GetQualifiedFunctionName(f.Name.Lexeme);
@@ -625,8 +629,10 @@ public partial class ILCompiler
                     CollectArrowsFromStmt(s);
                 break;
             case Stmt.Block b:
+                _topLevelBlockDepth++;
                 foreach (var s in b.Statements)
                     CollectArrowsFromStmt(s);
+                _topLevelBlockDepth--;
                 break;
             case Stmt.Sequence seq:
                 foreach (var s in seq.Statements)
@@ -853,7 +859,10 @@ public partial class ILCompiler
                                 statement is Stmt.Expression
                                     or Stmt.Var { IsVar: true }
                                     or Stmt.Function { Body: not null }
-                                    or Stmt.Directive))
+                                    or Stmt.Directive
+                                    or Stmt.Block
+                                    or Stmt.Class
+                                    or Stmt.For))
                         {
                             _staticDirectEvalStatements[c] = evalStatements;
                             var savedEvalStrict = _currentCollectStrict;
@@ -878,6 +887,10 @@ public partial class ILCompiler
                                         _functionNestingDepth = 1;
                                     CollectArrowsFromStmt(function);
                                     _functionNestingDepth = savedDepth;
+                                }
+                                else
+                                {
+                                    CollectArrowsFromStmt(statement);
                                 }
                             }
                             _currentCollectStrict = savedEvalStrict;
@@ -1740,6 +1753,7 @@ public partial class ILCompiler
         }
         else if (arrow.BlockBody != null)
         {
+            emitter.InitializeCapturedLexicalTdzBindings(arrow.BlockBody);
             // Hoist nested `function X() {}` declarations into the arrow's scope. Creates
             // TSFunction locals before any body statement runs, mirroring top-level function
             // compilation at ILCompiler.Functions.cs. Without this, IIFE bodies that reference

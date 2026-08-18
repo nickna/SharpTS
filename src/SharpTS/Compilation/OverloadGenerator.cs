@@ -58,30 +58,33 @@ public static class OverloadGenerator
     }
 
     /// <summary>
-    /// Emits the forwarding body for an overload method. Loads the provided arguments, supplies the
-    /// single next default value, then forwards to <paramref name="targetMethod"/> — the overload one
-    /// arity higher (or the full implementation when this overload is one arity below it).
+    /// Emits the forwarding body for an overload method. Loads the provided arguments, supplies an
+    /// <c>undefined</c> placeholder for the next default, then forwards to
+    /// <paramref name="targetMethod"/> — the overload one arity higher (or the full implementation
+    /// when this overload is one arity below it).
     /// </summary>
     /// <remarks>
     /// Forwarding is <b>cascading</b>, not direct-to-full: an overload of arity <c>k</c> fills exactly
     /// the default at index <c>k</c> and calls the arity-<c>k+1</c> method, which fills index <c>k+1</c>,
-    /// and so on. This keeps every parameter a real argument of the method that evaluates the next
-    /// default, so a default expression may reference any earlier parameter — including an earlier
-    /// <i>defaulted</i> one, e.g. <c>function f(a, b = 1, c = a + b) {}</c>. (#698)
+    /// and so on. The full implementation's ordered prologue evaluates every placeholder in the real
+    /// function environment, so defaults can reference earlier parameters, direct eval bindings, and
+    /// the function's display class. (#698)
     /// </remarks>
     /// <param name="il">IL generator for the overload method</param>
     /// <param name="targetMethod">The next-higher-arity method to forward to (overload or full)</param>
     /// <param name="parameters">All parameters from AST (for default value expressions)</param>
     /// <param name="overloadArity">Number of parameters in this overload</param>
     /// <param name="isStatic">Whether this is a static method</param>
-    /// <param name="emitter">ILEmitter for emitting default value expressions</param>
+    /// <param name="emitter">ILEmitter used only for a defensive value-type fallback</param>
+    /// <param name="undefinedInstance">The emitted runtime's JavaScript undefined singleton</param>
     public static void EmitOverloadBody(
         ILGenerator il,
         MethodInfo targetMethod,
         List<Stmt.Parameter> parameters,
         int overloadArity,
         bool isStatic,
-        ILEmitter emitter)
+        ILEmitter emitter,
+        FieldInfo undefinedInstance)
     {
         int argOffset = isStatic ? 0 : 1;
         var targetParams = targetMethod.GetParameters();
@@ -108,11 +111,20 @@ public static class OverloadGenerator
 
             if (defaultExpr != null)
             {
-                emitter.EmitExpression(defaultExpr);
-                // Stack-aware conversion: adapts to whatever EmitExpression actually produced
-                // (an unboxed double/bool for an earlier-parameter reference, a boxed object for
-                // an `any` expression, etc.) so a default like `b = a` is not wrongly unboxed. (#698)
-                emitter.EmitConversionForParameter(defaultExpr, targetType);
+                // Defaulted parameters are widened to object slots. Evaluate
+                // the initializer only in the full function prologue, where
+                // its parameter environment and display class both exist.
+                if (targetType == typeof(object))
+                {
+                    il.Emit(OpCodes.Ldsfld, undefinedInstance);
+                }
+                else
+                {
+                    // Defensive fallback if a defaulted value-type signature
+                    // escaped widening.
+                    emitter.EmitExpression(defaultExpr);
+                    emitter.EmitConversionForParameter(defaultExpr, targetType);
+                }
             }
             else
             {

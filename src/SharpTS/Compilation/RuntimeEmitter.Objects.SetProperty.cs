@@ -1260,6 +1260,26 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.PDSIsWritable);
             il.Emit(OpCodes.Brfalse, nullLabel);
+
+            // Keep a writable PDS data descriptor synchronized with the
+            // $Object dictionary. Descriptor-aware reads (including gOPD and
+            // GetProperty's PDS-first path) otherwise keep observing the old
+            // value after an ordinary assignment even though the backing
+            // dictionary was updated.
+            var tsObjDescriptorLocal = il.DeclareLocal(
+                runtime.CompiledPropertyDescriptorType);
+            var tsObjRawStoreLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsObjDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, tsObjDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, tsObjRawStoreLabel);
+            il.Emit(OpCodes.Ldloc, tsObjDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.MarkLabel(tsObjRawStoreLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);

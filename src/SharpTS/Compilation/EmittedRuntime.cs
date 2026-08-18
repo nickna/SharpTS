@@ -69,6 +69,10 @@ public class EmittedRuntime
     public Type UndefinedType { get; set; } = null!;
     public FieldInfo UndefinedInstance { get; set; } = null!;
 
+    // Internal sentinel for captured let/const storage before initialization.
+    public Type LexicalUninitializedType { get; set; } = null!;
+    public FieldInfo LexicalUninitializedInstance { get; set; } = null!;
+
     // The emitted TSFunction class
     public TypeBuilder TSFunctionType { get; set; } = null!;
     public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
@@ -309,6 +313,8 @@ public class EmittedRuntime
     public ConstructorBuilder ArrayIteratorCtor { get; set; } = null!;
     public TypeBuilder MapCollectionIteratorType { get; set; } = null!;
     public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
+    public TypeBuilder SetCollectionIteratorType { get; set; } = null!;
+    public ConstructorBuilder SetCollectionIteratorCtor { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterialize { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via

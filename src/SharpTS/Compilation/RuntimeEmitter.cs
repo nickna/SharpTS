@@ -41,6 +41,7 @@ public partial class RuntimeEmitter
 
         // Emit $Undefined singleton class first (other methods need this type)
         EmitUndefinedClass(moduleBuilder, runtime);
+        EmitLexicalUninitializedClass(moduleBuilder, runtime);
 
         // Marker used only to give compiler-generated prototype constructors a
         // signature that cannot collide with a user-declared constructor.

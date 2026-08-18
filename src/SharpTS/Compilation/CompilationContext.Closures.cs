@@ -149,6 +149,28 @@ public partial class CompilationContext
         return true;
     }
 
+    /// <summary>
+    /// Checks a value already on the IL stack for the captured-lexical TDZ
+    /// sentinel. The original value remains on the stack when initialized.
+    /// </summary>
+    internal bool EmitLexicalTdzValueCheck(ILGenerator il, string name)
+    {
+        if (LexicalTdzNames?.Contains(name) != true || Runtime == null)
+            return false;
+
+        var initialized = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, Runtime.LexicalUninitializedType);
+        il.Emit(OpCodes.Brfalse, initialized);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, Runtime.ThrowUndefinedVariable);
+        // Unreachable verifier value for the initialized join.
+        il.Emit(OpCodes.Ldsfld, Runtime.UndefinedInstance);
+        il.MarkLabel(initialized);
+        return true;
+    }
+
     private bool EmitTopLevelLexicalInitFlagLoad(ILGenerator il, FieldBuilder initField)
     {
         if (initField.IsStatic)
@@ -462,4 +484,10 @@ public partial class CompilationContext
     /// <see cref="HoistedInnerFunctions"/> or not collected as inner functions (#1230).
     /// </summary>
     public Action<ILGenerator, CompilationContext, Stmt.Function>? EmitBlockScopedInnerFunction { get; set; }
+
+    /// <summary>Predeclares lexical locals captured by a function declared in the same scope.</summary>
+    public Action<ILGenerator, CompilationContext, List<Stmt>>? PredeclareCapturedLexicalLocals { get; set; }
+
+    /// <summary>Snapshot capture fields that must receive the lexical declaration's initialized value.</summary>
+    public Dictionary<string, List<(LocalBuilder DisplayClass, FieldBuilder Field)>> LexicalCaptureWriteBacks { get; } = [];
 }

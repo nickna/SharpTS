@@ -669,6 +669,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitDefaultParameterTdz(name))
             return;
 
+        if (Ctx.LexicalInitializerTdzName == name)
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
+            return;
+        }
+
         var stackType = Resolver.TryLoadVariable(name);
         if (stackType != null)
         {
@@ -720,6 +729,15 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         EmitExpression(a.Value);
         EnsureBoxed();
+        if (Ctx.LexicalInitializerTdzName == name)
+        {
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ThrowUndefinedVariable);
+            IL.Emit(OpCodes.Ldnull);
+            SetStackUnknown();
+            return;
+        }
         IL.Emit(OpCodes.Dup);
 
         if (TryEmitGlobalStore(name)) return;

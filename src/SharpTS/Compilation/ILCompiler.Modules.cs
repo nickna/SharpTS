@@ -492,7 +492,17 @@ public partial class ILCompiler
         il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
         il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-        // Task is complete — GetResult() to rethrow if faulted
+        // An ordinary JavaScript expression statement discards an async
+        // function's returned Promise. Pump it so queued side effects still
+        // run, but do not turn an ignored rejection into a synchronous host
+        // exception. Only explicit top-level `await` observes/rethrows it.
+        if (exprStmt.Expr is not Expr.Await)
+        {
+            il.Emit(OpCodes.Br, notTaskLabel);
+        }
+
+        // Explicit top-level await: observe the completed task and rethrow a
+        // rejection through GetResult().
         il.Emit(OpCodes.Ldloc, taskLocal);
         var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
         il.Emit(OpCodes.Call, getAwaiter);
