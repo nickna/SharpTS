@@ -382,15 +382,8 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
             }
             IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-            int arity = 0;
-            foreach (var param in funcMethod.GetParameters())
-            {
-                if (param.IsOptional) continue;
-                if (param.ParameterType == typeof(List<object>)) continue;
-                if (param.Name?.StartsWith("__") == true) continue;
-                arity++;
-            }
-            IL.Emit(OpCodes.Ldstr, className);
+            int arity = _ctx.GetFunctionLength(funcMethod);
+            IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(funcMethod, className));
             IL.Emit(OpCodes.Ldc_I4, arity);
             IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
         }
@@ -590,6 +583,25 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Br, constructionDone);
             IL.MarkLabel(notRegExpType);
         }
+
+        // Native errors have JavaScript-facing optional arguments and install
+        // own message/cause descriptors. CLR constructor selection cannot
+        // express those semantics, so route exact emitted error Type tokens
+        // through the shared factory before the reflection fallback.
+        IL.Emit(OpCodes.Ldloc, typeLocal);
+        IL.Emit(OpCodes.Ldc_I4, argTemps.Count);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        for (int i = 0; i < argTemps.Count; i++)
+        {
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_I4, i);
+            IL.Emit(OpCodes.Ldloc, argTemps[i]);
+            IL.Emit(OpCodes.Stelem_Ref);
+        }
+        IL.Emit(OpCodes.Call, _ctx.Runtime.CreateErrorFromTypeOrNull);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Brtrue, constructionDone);
+        IL.Emit(OpCodes.Pop);
 
         // ctor = type.GetConstructors()[0]
         var getConstructorsMethod = _ctx.Types.GetMethod(

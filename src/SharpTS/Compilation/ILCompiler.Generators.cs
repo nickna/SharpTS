@@ -94,6 +94,8 @@ public partial class ILCompiler
         // params are all `object` slots, so the sentinel flows into the state-machine fields and the
         // MoveNext default prologue / `typeof` / `=== undefined` all answer correctly.
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, funcStmt.Parameters);
+        MarkFunctionName(methodBuilder, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
 
         // Track rest parameter info (keyed by the qualified name so ResolveFunctionName-based
         // call-site lookups in ExpressionEmitterBase find it).
@@ -107,21 +109,23 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Lifts a generator's captured-AND-mutated locals into a function-level display class so an
-    /// arrow/callback inside the generator body that writes such a variable shares storage with the
-    /// generator instead of snapshotting it by value (#674). Read-only captures keep the existing
-    /// by-value snapshot path. Mirrors the sync/async function-DC wiring, restricted to the write
-    /// case the generator state machine could not previously honour. No-op when the generator has no
-    /// write-captures (the common case), leaving fully-standalone output unchanged.
+    /// Lifts a generator's captured locals into a function-level display class. A generator body runs
+    /// later than its creation/default-parameter evaluation, so every captured local needs one shared
+    /// environment across the eager stub, lazy state machine, and nested closures; a by-value snapshot
+    /// can otherwise resolve a same-named outer binding or miss an eval-introduced parameter binding.
     /// </summary>
     private void DefineGeneratorFunctionDisplayClass(
         Stmt.Function funcStmt, string qualifiedName, GeneratorStateMachineBuilder smBuilder)
     {
-        var mutatedCaptured = ComputeMutatedCapturedGeneratorVars(funcStmt);
-        if (mutatedCaptured.Count == 0)
+        var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(funcStmt));
+        capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(funcStmt));
+        var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(funcStmt);
+        ApplyWriteCaptureRenames(capturedLocals, blockScopeRenames);
+        ApplyReadCaptureRenames(capturedLocals, blockScopeRenames);
+        if (capturedLocals.Count == 0)
             return;
 
-        RegisterFunctionDisplayClass(qualifiedName, mutatedCaptured);
+        RegisterFunctionDisplayClass(qualifiedName, capturedLocals);
         if (_closures.FunctionDisplayClasses.TryGetValue(qualifiedName, out var funcDC))
             smBuilder.DefineFunctionDisplayClassField(funcDC);
     }
@@ -194,6 +198,38 @@ public partial class ILCompiler
                 continue;
             if (_closures.ArrowFunctionDCFieldRenames.TryGetValue(arrow, out var existing))
                 foreach (var (k, v) in perArrow) existing[k] = v;
+            else
+                _closures.ArrowFunctionDCFieldRenames[arrow] = perArrow;
+        }
+    }
+
+    /// <summary>
+    /// Makes a function display class that owns every generator capture rename-aware for READ-only
+    /// block-scoped shadows. These captures formerly used the arrow's by-value snapshot pivot, but once
+    /// every capture is routed through <c>$functionDC</c> the snapshot field is deliberately omitted.
+    /// Register the renamed storage as its own DC field and redirect that arrow's reads to it, while
+    /// retaining the original field for an outer same-named capture.
+    /// </summary>
+    private void ApplyReadCaptureRenames(HashSet<string> capturedLocals, BlockScopeRenameResult renames)
+    {
+        foreach (var (arrowNode, names) in renames.CaptureRenames)
+        {
+            if (arrowNode is not Expr.ArrowFunction arrow)
+                continue;
+
+            Dictionary<string, string>? perArrow = null;
+            foreach (var (name, storage) in names)
+            {
+                if (!capturedLocals.Contains(name))
+                    continue;
+                capturedLocals.Add(storage);
+                (perArrow ??= [])[name] = storage;
+            }
+
+            if (perArrow == null)
+                continue;
+            if (_closures.ArrowFunctionDCFieldRenames.TryGetValue(arrow, out var existing))
+                foreach (var (name, storage) in perArrow) existing[name] = storage;
             else
                 _closures.ArrowFunctionDCFieldRenames[arrow] = perArrow;
         }
@@ -287,7 +323,9 @@ public partial class ILCompiler
             // otherwise observe the enclosing/global binding instead of the method-local binding.
             var capturedLocals = new HashSet<string>(_closures.Analyzer.GetCapturedLocals(method));
             capturedLocals.ExceptWith(_closures.Analyzer.GetPerIterationLoopBindings(method));
-            ApplyWriteCaptureRenames(capturedLocals, GeneratorBlockScopeRenamer.Compute(method));
+            var blockScopeRenames = GeneratorBlockScopeRenamer.Compute(method);
+            ApplyWriteCaptureRenames(capturedLocals, blockScopeRenames);
+            ApplyReadCaptureRenames(capturedLocals, blockScopeRenames);
             if (capturedLocals.Count == 0)
                 continue;
 
@@ -353,14 +391,18 @@ public partial class ILCompiler
         Stmt.Function funcStmt,
         string qualifiedName,
         int paramOffset,
-        System.Reflection.ParameterInfo[]? paramTypes = null)
+        System.Reflection.ParameterInfo[]? paramTypes = null,
+        LocalBuilder? precreatedFunctionDC = null)
     {
         if (functionDCField == null ||
             !_closures.FunctionDisplayClassCtors.TryGetValue(qualifiedName, out var dcCtor))
             return;
 
         il.Emit(OpCodes.Dup);                       // [sm, sm]
-        il.Emit(OpCodes.Newobj, dcCtor);            // [sm, sm, dc]
+        if (precreatedFunctionDC != null)
+            il.Emit(OpCodes.Ldloc, precreatedFunctionDC); // [sm, sm, dc]
+        else
+            il.Emit(OpCodes.Newobj, dcCtor);        // [sm, sm, dc]
         il.Emit(OpCodes.Stfld, functionDCField);    // [sm]
 
         if (!_closures.FunctionDisplayClassFields.TryGetValue(qualifiedName, out var dcFields))
@@ -396,7 +438,7 @@ public partial class ILCompiler
         var il = smBuilder.MoveNextMethod.GetILGenerator();
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body);
         // Captured outer variables are read live (by reference) rather than snapshotted (#541).
         // These mirror the async-generator MoveNext context so reads/writes of top-level
         // variables go straight to their backing storage instead of a stale state-machine field.

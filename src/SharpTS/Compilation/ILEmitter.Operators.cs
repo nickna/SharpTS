@@ -101,9 +101,24 @@ public partial class ILEmitter
                     SetStackType(StackType.Double);
                     break;
                 }
-                // Numeric arithmetic with direct IL opcodes
-                EmitExpressionAsDouble(b.Left);
-                EmitExpressionAsDouble(b.Right);
+                // The spec evaluates/GetValue's both operands before either
+                // ToNumeric conversion.  Keep the direct path only when both
+                // sides are statically Numbers (the conversion is then
+                // unobservable); dynamic operands must be spilled first.
+                if (IsNumericComparison(b))
+                {
+                    EmitExpressionAsDouble(b.Left);
+                    EmitExpressionAsDouble(b.Right);
+                }
+                else
+                {
+                    var left = SpillBoxed(b.Left);
+                    var right = SpillBoxed(b.Right);
+                    IL.Emit(OpCodes.Ldloc, left);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+                    IL.Emit(OpCodes.Ldloc, right);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.ToNumber);
+                }
                 IL.Emit(arith.Opcode);
                 SetStackType(StackType.Double);
                 break;
@@ -139,7 +154,13 @@ public partial class ILEmitter
                 {
                     EmitExpressionAsDouble(b.Left);
                     EmitExpressionAsDouble(b.Right);
-                    IL.Emit(cmp.Opcode);
+                    // <=/>= are specified as negated relational results, but
+                    // an unordered (NaN) comparison is `undefined` and the
+                    // language result must be false.  The unsigned IL compare
+                    // treats unordered as true before the final negation.
+                    IL.Emit(cmp.Negated
+                        ? cmp.Opcode == OpCodes.Clt ? OpCodes.Clt_Un : OpCodes.Cgt_Un
+                        : cmp.Opcode);
                     if (cmp.Negated)
                     {
                         IL.Emit(OpCodes.Ldc_I4_0);
@@ -154,25 +175,67 @@ public partial class ILEmitter
                     //   >  : Cgt, !negated → JsLessThan(b, a)
                     //   <= : Cgt,  negated → !JsLessThan(b, a)
                     //   >= : Clt,  negated → !JsLessThan(a, b)
+                    bool useNegatedBigIntComparison =
+                        cmp.Negated && IsBigIntOperation(b);
                     bool swapArgs = cmp.Opcode == OpCodes.Cgt;
-                    EmitExpression(b.Left);
-                    EmitBoxIfNeeded(b.Left);
-                    EmitExpression(b.Right);
-                    EmitBoxIfNeeded(b.Right);
+                    // The original JsLessThan lowering swaps <=/>= operands
+                    // before negating. JsLessOrEqual already represents the
+                    // negation, so its ordinary Number/Object path needs the
+                    // opposite ordering: a <= b, and b <= a for a >= b.
+                    if (cmp.Negated && !useNegatedBigIntComparison)
+                        swapArgs = !swapArgs;
+                    var left = SpillBoxed(b.Left);
+                    var right = SpillBoxed(b.Right);
+
+                    // IsLessThan's LeftFirst flag preserves source-order
+                    // ToPrimitive even when the mathematical operands are
+                    // swapped for >/>=.  Materialize both primitives in source
+                    // order before calling the two-argument runtime helpers.
+                    IL.Emit(OpCodes.Ldloc, left);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.UnwrapIfBoxedMethod);
+                    IL.Emit(OpCodes.Stloc, left);
+                    IL.Emit(OpCodes.Ldloc, right);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.UnwrapIfBoxedMethod);
+                    IL.Emit(OpCodes.Stloc, right);
                     if (swapArgs)
                     {
-                        var tmp = IL.DeclareLocal(_ctx.Types.Object);
-                        IL.Emit(OpCodes.Stloc, tmp);
-                        var leftLocal = IL.DeclareLocal(_ctx.Types.Object);
-                        IL.Emit(OpCodes.Stloc, leftLocal);
-                        IL.Emit(OpCodes.Ldloc, tmp);
-                        IL.Emit(OpCodes.Ldloc, leftLocal);
+                        IL.Emit(OpCodes.Ldloc, right);
+                        IL.Emit(OpCodes.Ldloc, left);
                     }
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.JsLessThan);
-                    if (cmp.Negated)
+                    else
                     {
+                        IL.Emit(OpCodes.Ldloc, left);
+                        IL.Emit(OpCodes.Ldloc, right);
+                    }
+
+                    if (useNegatedBigIntComparison)
+                    {
+                        // The general <= helper converts through ToNumber and
+                        // therefore cannot consume BigInt.  JsLessThan has the
+                        // mixed Number/BigInt algorithm; only its `undefined`
+                        // (NaN) result needs to be preserved before negation.
+                        var first = swapArgs ? right : left;
+                        var second = swapArgs ? left : right;
+                        var resultFalse = IL.DefineLabel();
+                        var resultEnd = IL.DefineLabel();
+                        EmitBranchIfBoxedNaN(first, resultFalse);
+                        EmitBranchIfBoxedNaN(second, resultFalse);
+                        IL.Emit(OpCodes.Call, _ctx.Runtime.JsLessThan);
                         IL.Emit(OpCodes.Ldc_I4_0);
                         IL.Emit(OpCodes.Ceq);
+                        IL.Emit(OpCodes.Br, resultEnd);
+                        IL.MarkLabel(resultFalse);
+                        // Discard the two call arguments still on the stack.
+                        IL.Emit(OpCodes.Pop);
+                        IL.Emit(OpCodes.Pop);
+                        IL.Emit(OpCodes.Ldc_I4_0);
+                        IL.MarkLabel(resultEnd);
+                    }
+                    else
+                    {
+                        IL.Emit(OpCodes.Call, cmp.Negated
+                            ? _ctx.Runtime.JsLessOrEqual
+                            : _ctx.Runtime.JsLessThan);
                     }
                 }
                 SetStackType(StackType.Boolean);
@@ -238,8 +301,20 @@ public partial class ILEmitter
     /// </summary>
     private void EmitPowerBinary(Expr.Binary b)
     {
-        EmitExpressionAsDouble(b.Left);
-        EmitExpressionAsDouble(b.Right);
+        if (IsNumericComparison(b))
+        {
+            EmitExpressionAsDouble(b.Left);
+            EmitExpressionAsDouble(b.Right);
+        }
+        else
+        {
+            var left = SpillBoxed(b.Left);
+            var right = SpillBoxed(b.Right);
+            IL.Emit(OpCodes.Ldloc, left);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+            IL.Emit(OpCodes.Ldloc, right);
+            IL.Emit(OpCodes.Call, _ctx.Runtime.ToNumber);
+        }
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Math, "Pow", _ctx.Types.Double, _ctx.Types.Double));
         SetStackType(StackType.Double);
     }
@@ -308,13 +383,14 @@ public partial class ILEmitter
 
     private void EmitBitwiseBinary(Expr.Binary b)
     {
-        // Convert to int32 for bitwise operations (ECMA-262 ToInt32: wraps, never throws)
-        EmitExpression(b.Left);
-        EmitBoxIfNeeded(b.Left);
+        // GetValue both operands before ToNumeric either operand.  Besides
+        // preserving observable coercion order, this prevents a throwing RHS
+        // from being masked by an eager LHS valueOf call.
+        var left = SpillBoxed(b.Left);
+        var right = SpillBoxed(b.Right);
+        IL.Emit(OpCodes.Ldloc, left);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
-
-        EmitExpression(b.Right);
-        EmitBoxIfNeeded(b.Right);
+        IL.Emit(OpCodes.Ldloc, right);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.JsToInt32);
 
         switch (b.Operator.Type)
@@ -352,6 +428,23 @@ public partial class ILEmitter
 
         // Convert back to double (for signed operations)
         EmitConvR8AndBox();
+    }
+
+    /// <summary>
+    /// Branches when an object local contains a boxed NaN without consuming
+    /// the relational-call arguments already staged on the evaluation stack.
+    /// </summary>
+    private void EmitBranchIfBoxedNaN(LocalBuilder value, Label target)
+    {
+        var notDouble = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Isinst, _ctx.Types.Double);
+        IL.Emit(OpCodes.Brfalse, notDouble);
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(_ctx.Types.Double, "IsNaN", _ctx.Types.Double));
+        IL.Emit(OpCodes.Brtrue, target);
+        IL.MarkLabel(notDouble);
     }
 
     private bool IsComparisonExpr(Expr expr)
@@ -452,7 +545,7 @@ public partial class ILEmitter
                     EmitBoxIfNeeded(u.Right);
                     // ECMA-262 21.1.1.1 ToNumber: handles hex strings ("0x..."),
                     // "Infinity", boolean coercion. Convert.ToDouble doesn't.
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
                     EmitBoxDouble();
                 }
                 break;
@@ -756,6 +849,19 @@ public partial class ILEmitter
 
     protected override void EmitLogicalAssign(Expr.LogicalAssign la)
     {
+        // An unresolvable reference throws before the logical operator can
+        // inspect its value.  Letting the generic store path handle this left
+        // incompatible stack shapes at the join label (the failed store does
+        // not consume a value), producing InvalidProgramException instead of
+        // the required ReferenceError.
+        if (!IsKnownVariable(la.Name.Lexeme))
+        {
+            IL.Emit(OpCodes.Ldstr, la.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            EmitNullConstant(); // unreachable expression result
+            return;
+        }
+
         var builder = _ctx.ILBuilder;
         var endLabel = builder.DefineLabel("logical_assign_end");
         var local = _ctx.Locals.GetLocal(la.Name.Lexeme);
@@ -1239,6 +1345,7 @@ public partial class ILEmitter
         // local store below instead of clobbering the outer binding's DC field.
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
+            !_ctx.TryGetParameter(name, out _) &&
             _ctx.Locals.GetNestedScopeLocal(name) == null)
         {
             if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
@@ -1266,8 +1373,21 @@ public partial class ILEmitter
 
         // Fall-through storage: an IL local (typed double stored unboxed), a captured display-class
         // field, or a top-level static. The result is left on the stack unboxed for lazy boxing.
-        var local = _ctx.Locals.GetLocal(name);
-        if (local != null)
+        var nestedLocal = _ctx.Locals.GetNestedScopeLocal(name);
+        if (nestedLocal != null)
+        {
+            IL.Emit(OpCodes.Stloc, nestedLocal);
+        }
+        else if (_ctx.TryGetParameter(name, out var parameterIndex))
+        {
+            // Update expressions on parameters must consume the duplicated
+            // value-to-store and write it back to the argument slot. Omitting
+            // this rung left an extra value on the evaluation stack (invalid
+            // IL at return sites) and made ++arg observe the original value.
+            _ctx.EmitConvertForParamSlot(IL, name);
+            IL.Emit(OpCodes.Starg, parameterIndex);
+        }
+        else if (_ctx.Locals.GetLocal(name) is { } local)
         {
             IL.Emit(OpCodes.Stloc, local);
         }
@@ -1434,49 +1554,20 @@ public partial class ILEmitter
     /// </summary>
     private void EmitIncrementProperty(Expr.Get get, bool isIncrement, bool isPrefix)
     {
-        // Get current value
-        EmitExpression(get.Object);
-        EmitBoxIfNeeded(get.Object);
+        var receiver = SpillBoxed(get.Object);
+        IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetProperty);
-        EmitUnboxToDouble();
-
-        LocalBuilder? oldValue = null;
-        if (!isPrefix)
-        {
-            // Save old value for postfix return
-            oldValue = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, oldValue);
-        }
-
-        // Increment or decrement
-        IL.Emit(OpCodes.Ldc_R8, 1.0);
-        IL.Emit(isIncrement ? OpCodes.Add : OpCodes.Sub);
-
-        // Box new value and store in temp
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        var newValue = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, newValue);
+        var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, rawValue);
+        EmitNumericUpdate(rawValue, isIncrement, out var oldValue, out var newValue);
 
         // SetProperty(obj, name, newValue)
-        EmitExpression(get.Object);
-        EmitBoxIfNeeded(get.Object);
+        IL.Emit(OpCodes.Ldloc, receiver);
         IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
         IL.Emit(OpCodes.Ldloc, newValue);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.SetProperty);
-
-        if (isPrefix)
-        {
-            // Return new value (prefix behavior)
-            IL.Emit(OpCodes.Ldloc, newValue);
-        }
-        else
-        {
-            // Return old value (postfix behavior)
-            IL.Emit(OpCodes.Ldloc, oldValue!);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        }
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
     }
 
@@ -1486,52 +1577,53 @@ public partial class ILEmitter
     /// </summary>
     private void EmitIncrementIndex(Expr.GetIndex gi, bool isIncrement, bool isPrefix)
     {
-        // Get current value
-        EmitExpression(gi.Object);
-        EmitBoxIfNeeded(gi.Object);
-        EmitExpression(gi.Index);
-        EmitBoxIfNeeded(gi.Index);
+        var receiver = SpillBoxed(gi.Object);
+        var index = SpillBoxed(gi.Index);
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Ldloc, index);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
-        EmitUnboxToDouble();
-
-        LocalBuilder? oldValue = null;
-        if (!isPrefix)
-        {
-            // Save old value for postfix return
-            oldValue = IL.DeclareLocal(_ctx.Types.Double);
-            IL.Emit(OpCodes.Dup);
-            IL.Emit(OpCodes.Stloc, oldValue);
-        }
-
-        // Increment or decrement
-        IL.Emit(OpCodes.Ldc_R8, 1.0);
-        IL.Emit(isIncrement ? OpCodes.Add : OpCodes.Sub);
-
-        // Box new value and store in temp
-        IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        var newValue = IL.DeclareLocal(_ctx.Types.Object);
-        IL.Emit(OpCodes.Stloc, newValue);
+        var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, rawValue);
+        EmitNumericUpdate(rawValue, isIncrement, out var oldValue, out var newValue);
 
         // SetIndex(obj, index, newValue)
-        EmitExpression(gi.Object);
-        EmitBoxIfNeeded(gi.Object);
-        EmitExpression(gi.Index);
-        EmitBoxIfNeeded(gi.Index);
+        IL.Emit(OpCodes.Ldloc, receiver);
+        IL.Emit(OpCodes.Ldloc, index);
         IL.Emit(OpCodes.Ldloc, newValue);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
-
-        if (isPrefix)
-        {
-            // Return new value (prefix behavior)
-            IL.Emit(OpCodes.Ldloc, newValue);
-        }
-        else
-        {
-            // Return old value (postfix behavior)
-            IL.Emit(OpCodes.Ldloc, oldValue!);
-            IL.Emit(OpCodes.Box, _ctx.Types.Double);
-        }
+        IL.Emit(OpCodes.Ldloc, isPrefix ? newValue : oldValue);
         SetStackUnknown();
+    }
+
+    private void EmitNumericUpdate(
+        LocalBuilder rawValue,
+        bool isIncrement,
+        out LocalBuilder oldNumeric,
+        out LocalBuilder newNumeric)
+    {
+        oldNumeric = IL.DeclareLocal(_ctx.Types.Object);
+        newNumeric = IL.DeclareLocal(_ctx.Types.Object);
+        var numberPath = IL.DefineLabel();
+        var numericReady = IL.DefineLabel();
+
+        IL.Emit(OpCodes.Ldloc, rawValue);
+        IL.Emit(OpCodes.Isinst, _ctx.Types.BigInteger);
+        IL.Emit(OpCodes.Brfalse, numberPath);
+        IL.Emit(OpCodes.Ldloc, rawValue);
+        IL.Emit(OpCodes.Stloc, oldNumeric);
+        IL.Emit(OpCodes.Br, numericReady);
+
+        IL.MarkLabel(numberPath);
+        IL.Emit(OpCodes.Ldloc, rawValue);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ToNumber);
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        IL.Emit(OpCodes.Stloc, oldNumeric);
+
+        IL.MarkLabel(numericReady);
+        IL.Emit(OpCodes.Ldloc, oldNumeric);
+        IL.Emit(isIncrement ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.UpdateNumeric);
+        IL.Emit(OpCodes.Stloc, newNumeric);
     }
 
     protected override void EmitPostfixIncrement(Expr.PostfixIncrement pi)
@@ -1571,11 +1663,13 @@ public partial class ILEmitter
             {
                 EmitVariable(v);
                 EmitBoxIfNeeded(v);
-                IL.Emit(OpCodes.Dup);
-                IL.Emit(pi.Operator.Type == TokenType.PLUS_PLUS
-                    ? OpCodes.Ldc_I4_1
-                    : OpCodes.Ldc_I4_0);
-                IL.Emit(OpCodes.Call, _ctx.Runtime!.UpdateNumeric);
+                var rawValue = IL.DeclareLocal(_ctx.Types.Object);
+                IL.Emit(OpCodes.Stloc, rawValue);
+                EmitNumericUpdate(rawValue,
+                    pi.Operator.Type == TokenType.PLUS_PLUS,
+                    out var oldNumeric, out var newNumeric);
+                IL.Emit(OpCodes.Ldloc, oldNumeric);
+                IL.Emit(OpCodes.Ldloc, newNumeric);
                 EmitStoreIncrementedVariable(v.Name.Lexeme, isTypedDouble: false,
                     resultIsUnboxedDouble: false);
                 return;
@@ -2581,10 +2675,16 @@ public partial class ILEmitter
 
             case TokenType.EQUAL_EQUAL:
             case TokenType.BANG_EQUAL:
-                EmitExpression(b.Left);
-                EmitBoxIfNeeded(b.Left);
-                EmitExpression(b.Right);
-                EmitBoxIfNeeded(b.Right);
+                // IsLooselyEqual converts an Object operand to primitive before
+                // the BigInt/String/Number/Boolean comparison. Evaluate both
+                // references first, then perform that conversion in source
+                // order; primitive operands pass through unchanged.
+                var left = SpillBoxed(b.Left);
+                var right = SpillBoxed(b.Right);
+                IL.Emit(OpCodes.Ldloc, left);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.UnwrapIfBoxedMethod);
+                IL.Emit(OpCodes.Ldloc, right);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.UnwrapIfBoxedMethod);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.BigIntLooseEquals);
                 if (op == TokenType.BANG_EQUAL)
                 {

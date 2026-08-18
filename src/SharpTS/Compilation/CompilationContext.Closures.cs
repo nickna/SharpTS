@@ -101,6 +101,116 @@ public partial class CompilationContext
     public Dictionary<string, FieldBuilder>? EntryPointDisplayClassFields { get; set; }
 
     /// <summary>
+    /// Initialization flags for visible top-level let/const bindings. A false
+    /// flag means the binding is still in its temporal dead zone.
+    /// </summary>
+    public Dictionary<string, FieldBuilder>? TopLevelLexicalInitFields { get; set; }
+
+    /// <summary>
+    /// Emits a temporal-dead-zone check for a top-level lexical binding, if
+    /// <paramref name="name"/> has an initialization flag in this module.
+    /// The check is stack-neutral, so callers may use it after staging an
+    /// assignment value as well as before a read.
+    /// </summary>
+    internal bool EmitTopLevelLexicalTdzCheck(ILGenerator il, string name)
+    {
+        if (TopLevelLexicalInitFields?.TryGetValue(name, out var initField) != true || initField == null)
+            return false;
+
+        if (!EmitTopLevelLexicalInitFlagLoad(il, initField))
+            return false;
+
+        var initialized = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, initialized);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, Runtime!.ThrowUndefinedVariable);
+        il.MarkLabel(initialized);
+        return true;
+    }
+
+    /// <summary>Marks a top-level let/const binding initialized after its declaration stores.</summary>
+    internal bool EmitMarkTopLevelLexicalInitialized(ILGenerator il, string name)
+    {
+        if (TopLevelLexicalInitFields?.TryGetValue(name, out var initField) != true || initField == null)
+            return false;
+
+        if (initField.IsStatic)
+        {
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stsfld, initField);
+            return true;
+        }
+
+        if (!EmitEntryPointDisplayClassLoad(il))
+            return false;
+
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, initField);
+        return true;
+    }
+
+    /// <summary>
+    /// Checks a value already on the IL stack for the captured-lexical TDZ
+    /// sentinel. The original value remains on the stack when initialized.
+    /// </summary>
+    internal bool EmitLexicalTdzValueCheck(ILGenerator il, string name)
+    {
+        if (LexicalTdzNames?.Contains(name) != true || Runtime == null)
+            return false;
+
+        var initialized = il.DefineLabel();
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Isinst, Runtime.LexicalUninitializedType);
+        il.Emit(OpCodes.Brfalse, initialized);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, name);
+        il.Emit(OpCodes.Call, Runtime.ThrowUndefinedVariable);
+        // Unreachable verifier value for the initialized join.
+        il.Emit(OpCodes.Ldsfld, Runtime.UndefinedInstance);
+        il.MarkLabel(initialized);
+        return true;
+    }
+
+    private bool EmitTopLevelLexicalInitFlagLoad(ILGenerator il, FieldBuilder initField)
+    {
+        if (initField.IsStatic)
+        {
+            il.Emit(OpCodes.Ldsfld, initField);
+            return true;
+        }
+
+        if (!EmitEntryPointDisplayClassLoad(il))
+            return false;
+
+        il.Emit(OpCodes.Ldfld, initField);
+        return true;
+    }
+
+    private bool EmitEntryPointDisplayClassLoad(ILGenerator il)
+    {
+        if (EntryPointDisplayClassLocal != null)
+        {
+            il.Emit(OpCodes.Ldloc, EntryPointDisplayClassLocal);
+            return true;
+        }
+
+        if (CurrentArrowEntryPointDCField != null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, CurrentArrowEntryPointDCField);
+            return true;
+        }
+
+        if (EntryPointDisplayClassStaticField != null)
+        {
+            il.Emit(OpCodes.Ldsfld, EntryPointDisplayClassStaticField);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Local variable holding the entry-point display class instance.
     /// Used in entry point methods for direct access.
     /// </summary>
@@ -374,4 +484,10 @@ public partial class CompilationContext
     /// <see cref="HoistedInnerFunctions"/> or not collected as inner functions (#1230).
     /// </summary>
     public Action<ILGenerator, CompilationContext, Stmt.Function>? EmitBlockScopedInnerFunction { get; set; }
+
+    /// <summary>Predeclares lexical locals captured by a function declared in the same scope.</summary>
+    public Action<ILGenerator, CompilationContext, List<Stmt>>? PredeclareCapturedLexicalLocals { get; set; }
+
+    /// <summary>Snapshot capture fields that must receive the lexical declaration's initialized value.</summary>
+    public Dictionary<string, List<(LocalBuilder DisplayClass, FieldBuilder Field)>> LexicalCaptureWriteBacks { get; } = [];
 }

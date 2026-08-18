@@ -38,7 +38,7 @@ public partial class ILCompiler
     /// </summary>
     private CompilationContext CreateBaseCompilationContext(ILGenerator il, MethodBase? method = null)
     {
-        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
+        var ctx = new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
         {
             // Closure analysis registries
             ClosureAnalyzer = _closures.Analyzer,
@@ -51,6 +51,8 @@ public partial class ILCompiler
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             // Function metadata
             FunctionRestParams = _functions.RestParams,
+            FunctionLengths = _functions.Lengths,
+            FunctionNames = _functions.Names,
             FunctionsCapturingArguments = _functions.CapturingArguments,
             MethodsCapturingArguments = _functions.MethodsCapturingArguments,
             FunctionGenericParams = _functions.GenericParams,
@@ -62,6 +64,9 @@ public partial class ILCompiler
             // Compilation-wide services
             Runtime = _runtime,
             RuntimeFeatures = _features,
+            LexicalTdzNames = _lexicalBindingNames,
+            StaticDirectEvalStatements = _staticDirectEvalStatements,
+            StaticIndirectEvalCalls = _staticIndirectEvalCalls,
             TypeMap = _typeMap,
             DeadCode = _deadCodeInfo,
             TypeEmitterRegistry = _typeEmitterRegistry,
@@ -84,6 +89,8 @@ public partial class ILCompiler
             CurrentMethod = method,
             DebugScope = CurrentDebugScope,
         };
+        ApplyInnerFunctionSupport(ctx);
+        return ctx;
     }
 
     /// <summary>
@@ -212,6 +219,7 @@ public partial class ILCompiler
         {
             Runtime = parentCtx.Runtime,
             RuntimeFeatures = parentCtx.RuntimeFeatures,
+            StaticDirectEvalStatements = parentCtx.StaticDirectEvalStatements,
             ClosureAnalyzer = parentCtx.ClosureAnalyzer,
             ArrowMethods = parentCtx.ArrowMethods,
             ConstArrowBindings = parentCtx.ConstArrowBindings,
@@ -224,6 +232,8 @@ public partial class ILCompiler
             EnumKinds = parentCtx.EnumKinds,
             TopLevelStaticVars = parentCtx.TopLevelStaticVars,
             FunctionRestParams = parentCtx.FunctionRestParams,
+            FunctionLengths = parentCtx.FunctionLengths,
+            FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParams = parentCtx.FunctionGenericParams,
             IsGenericFunction = parentCtx.IsGenericFunction,
             TypeMap = parentCtx.TypeMap,
@@ -251,6 +261,7 @@ public partial class ILCompiler
             EntryPointDisplayClassFields = parentCtx.EntryPointDisplayClassFields,
             CapturedTopLevelVars = parentCtx.CapturedTopLevelVars,
             EntryPointDisplayClassStaticField = parentCtx.EntryPointDisplayClassStaticField,
+            TopLevelLexicalInitFields = parentCtx.TopLevelLexicalInitFields,
             // Captured locals promoted into the enclosing function's display class (#625): the
             // arrow reads/writes them through `outer.functionDC.field` rather than mutating the
             // boxed value-type state machine in place (unverifiable). Only fields the function
@@ -266,19 +277,22 @@ public partial class ILCompiler
     }
 
     /// <summary>
-    /// Creates the deliberately minimal context used to emit an overload's forwarding body —
-    /// just enough to evaluate default-value expressions (#698). Not a general emission context.
+    /// Creates the context used to emit an overload's forwarding body. Default
+    /// initializers execute in the function's surrounding lexical environment,
+    /// so they need the same module/global/capture resolution as the full body.
     /// </summary>
     private CompilationContext CreateOverloadDefaultsContext(ILGenerator il, bool isStrict)
     {
-        return new CompilationContext(il, _typeMapper, _functions.Builders, _classes.Builders, _namespaceFields, _namespaceVarFields, _types)
-        {
-            ClassRegistry = GetClassRegistry(),
-            Runtime = _runtime,
-            RuntimeFeatures = _features,
-            TypeMap = _typeMap,
-            IsStrictMode = isStrict
-        };
+        var ctx = CreateModuleMemberContext(il);
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ApplyCommonJsModuleAccess(ctx);
+        ctx.FunctionOverloads = _functions.Overloads;
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0
+            ? _async.ArrowBuilders
+            : null;
+        ctx.UnionGenerator = _unionGenerator;
+        ctx.IsStrictMode = isStrict;
+        return ctx;
     }
 
     /// <summary>
@@ -319,6 +333,7 @@ public partial class ILCompiler
             : BuildTopLevelStaticVarsForModule(_modules.CurrentPath);
         ctx.CapturedTopLevelVars = BuildCapturedTopLevelVarsForModule(_modules.CurrentPath);
         ctx.EntryPointDisplayClassFields = BuildEntryPointDisplayClassFieldsForModule(_modules.CurrentPath);
+        ctx.TopLevelLexicalInitFields = BuildTopLevelLexicalInitFieldsForModule(_modules.CurrentPath);
         ctx.EntryPointDisplayClassStaticField = _closures.EntryPointDisplayClassStaticField;
     }
 
@@ -358,6 +373,8 @@ public partial class ILCompiler
     /// </summary>
     private void ApplyInnerFunctionSupport(CompilationContext ctx)
     {
+        ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         ctx.InnerFunctionMethods = _innerFunctionMethods;
         ctx.InnerFunctionDisplayClasses = _innerFunctionDisplayClasses;
         ctx.InnerFunctionDCFields = _innerFunctionDCFields;

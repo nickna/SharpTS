@@ -84,6 +84,17 @@ public partial class CompilationContext
     // Whole-program feature analysis used by semantic optimization guards.
     public RuntimeFeatureSet? RuntimeFeatures { get; set; }
 
+    /// <summary>
+    /// Expression-only literal eval programs parsed during callable discovery.
+    /// Reusing these exact AST nodes during emission is required because arrow
+    /// method registries are keyed by AST identity.
+    /// </summary>
+    internal Dictionary<SharpTS.Parsing.Expr.Call, List<SharpTS.Parsing.Stmt>>?
+        StaticDirectEvalStatements { get; set; }
+
+    /// <summary>Calls proven during discovery to use an unchanged top-level eval alias.</summary>
+    internal HashSet<SharpTS.Parsing.Expr.Call>? StaticIndirectEvalCalls { get; set; }
+
     // Type emitter registry for type-first method dispatch
     public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
 
@@ -167,6 +178,14 @@ public partial class CompilationContext
     public bool IsStrictMode { get; set; }
 
     /// <summary>
+    /// Optional strictness of the surrounding function's established this
+    /// binding when emitting nested eval code. Direct eval may enable strict
+    /// syntax for its own source, but it inherits the caller's already-bound
+    /// this value rather than rebinding it under the eval source's strictness.
+    /// </summary>
+    public bool? ThisBindingIsStrictOverride { get; set; }
+
+    /// <summary>
     /// True when emitting code inside a static constructor (class initializer).
     /// In this context, 'this' refers to the class type, not an instance.
     /// </summary>
@@ -178,6 +197,16 @@ public partial class CompilationContext
     /// argument slot; the current and all later parameters are in this TDZ.
     /// </summary>
     internal IReadOnlySet<string>? DefaultParameterTdzNames { get; set; }
+
+    /// <summary>Names of lexical bindings whose captured storage can hold the TDZ sentinel.</summary>
+    internal IReadOnlySet<string>? LexicalTdzNames { get; set; }
+
+    /// <summary>
+    /// Lexical declaration whose initializer is currently being emitted. Its
+    /// own binding exists but is uninitialized even when an outer binding has
+    /// the same name.
+    /// </summary>
+    internal string? LexicalInitializerTdzName { get; set; }
 
     /// <summary>
     /// True only when emitting the module's top-level statements (entry-point Main,

@@ -240,12 +240,9 @@ internal static class GlobalFunctionHandlers
         IReadOnlyList<Expr> arguments,
         Interpreter interpreter)
     {
-        // JS: encodeURIComponent(undefined) === "undefined"; encodeURIComponent() throws.
-        if (arguments.Count < 1)
-            throw new InterpreterException($"{BuiltInNames.EncodeURIComponent}() requires exactly one argument.");
-
-        var argRV = await evaluateArg(arguments[0]);
-        var str = CoerceToString(argRV);
+        var str = arguments.Count < 1
+            ? "undefined"
+            : CoerceToString(await evaluateArg(arguments[0]));
         return RuntimeValue.FromString(Uri.EscapeDataString(str));
     }
 
@@ -254,11 +251,9 @@ internal static class GlobalFunctionHandlers
         IReadOnlyList<Expr> arguments,
         Interpreter interpreter)
     {
-        if (arguments.Count < 1)
-            throw new InterpreterException($"{BuiltInNames.DecodeURIComponent}() requires exactly one argument.");
-
-        var argRV = await evaluateArg(arguments[0]);
-        var str = CoerceToString(argRV);
+        var str = arguments.Count < 1
+            ? "undefined"
+            : CoerceToString(await evaluateArg(arguments[0]));
         try
         {
             return RuntimeValue.FromString(Uri.UnescapeDataString(str));

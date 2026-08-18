@@ -81,6 +81,41 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Emits the private language-level sentinel used for captured lexical
+    /// bindings before their declaration initializes them. It is distinct from
+    /// undefined because reading or assigning the binding must throw ReferenceError.
+    /// </summary>
+    private void EmitLexicalUninitializedClass(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime)
+    {
+        var typeBuilder = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$LexicalUninitialized",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var instanceField = typeBuilder.DefineField(
+            "Instance",
+            typeBuilder,
+            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly);
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Private,
+            CallingConventions.Standard,
+            Type.EmptyTypes);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+        ctorIl.Emit(OpCodes.Ret);
+        var cctor = typeBuilder.DefineTypeInitializer().GetILGenerator();
+        cctor.Emit(OpCodes.Newobj, ctor);
+        cctor.Emit(OpCodes.Stsfld, instanceField);
+        cctor.Emit(OpCodes.Ret);
+        var createdType = typeBuilder.CreateType()!;
+        runtime.LexicalUninitializedType = createdType;
+        runtime.LexicalUninitializedInstance = createdType.GetField("Instance")!;
+    }
+
+    /// <summary>
     /// Emits the $IUnionType marker interface for fast union type detection.
     /// All generated union types implement this interface.
     /// </summary>

@@ -248,6 +248,18 @@ public class NumberTests
     }
 
     [Theory, ModeData]
+    public void Global_parseInt_NegativeZeroUsesJavaScriptStringCoercion(ExecutionMode mode)
+    {
+        var source = """
+            const result = parseInt(-0);
+            console.log(result === 0);
+            console.log(1 / result === Infinity);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Global_parseFloat_Works(ExecutionMode mode)
     {
         var source = """

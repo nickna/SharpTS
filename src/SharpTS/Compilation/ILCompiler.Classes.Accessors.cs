@@ -39,6 +39,44 @@ public partial class ILCompiler
             paramTypes);
 
         list.Add((accessor, methodBuilder));
+
+        // A statically known computed string/number key also participates in normal named-member
+        // dispatch. Register it in source order so later definitions replace earlier ones, matching
+        // DefinePropertyOrThrow semantics for `get b()` followed by `get ["b"]()` (and vice versa).
+        string? constantKey = accessor.ComputedKey switch
+        {
+            Expr.Literal { Value: string s } => s,
+            Expr.Literal { Value: double d } => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            Expr.Literal { Value: int i } => i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            _ => null,
+        };
+        if (constantKey != null)
+        {
+            var registry = isGetter
+                ? (accessor.IsStatic ? _classes.StaticGetters : _classes.InstanceGetters)
+                : (accessor.IsStatic ? _classes.StaticSetters : _classes.InstanceSetters);
+            if (!registry.TryGetValue(className, out var members))
+            {
+                members = [];
+                registry[className] = members;
+            }
+            members[accessor.IsStatic ? constantKey : NamingConventions.ToPascalCase(constantKey)] = methodBuilder;
+
+            if (!accessor.IsStatic)
+            {
+                string pascalKey = NamingConventions.ToPascalCase(constantKey);
+                if (!_typedInterop.ExplicitAccessors.TryGetValue(className, out var accessors))
+                {
+                    accessors = [];
+                    _typedInterop.ExplicitAccessors[className] = accessors;
+                }
+                if (!accessors.TryGetValue(pascalKey, out var accessorInfo))
+                    accessorInfo = (null, null, typeof(object));
+                accessors[pascalKey] = isGetter
+                    ? (methodBuilder, accessorInfo.Setter, typeof(object))
+                    : (accessorInfo.Getter, methodBuilder, typeof(object));
+            }
+        }
     }
 
     /// <summary>
@@ -68,8 +106,16 @@ public partial class ILCompiler
         string className = typeBuilder.Name;
         MethodBuilder methodBuilder;
 
+        // Prefer the AST-identity map: duplicate accessor names intentionally have distinct
+        // MethodBuilders and each body must be emitted into its own method. A name-keyed lookup
+        // aliases every duplicate to the last builder, leaving the first body first in that IL
+        // stream and therefore observably reachable.
+        if (_classes.AccessorBuilders.TryGetValue(accessor, out var identityAccessor))
+        {
+            methodBuilder = identityAccessor;
+        }
         // Check if accessor was pre-defined in DefineClassMethodsOnly
-        if (_classes.PreDefinedAccessors.TryGetValue(className, out var preDefinedAcc) &&
+        else if (_classes.PreDefinedAccessors.TryGetValue(className, out var preDefinedAcc) &&
             preDefinedAcc.TryGetValue(methodName, out var existingAccessor))
         {
             methodBuilder = existingAccessor;

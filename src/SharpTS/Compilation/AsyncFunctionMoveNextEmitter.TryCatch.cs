@@ -94,7 +94,13 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         bool hasAwaitsInCatch = t.CatchBlock != null && AnyStmtContainsSuspension(t.CatchBlock);
         bool hasAwaitsInFinally = t.FinallyBlock != null && AnyStmtContainsSuspension(t.FinallyBlock);
 
-        if (hasAwaitsInTry || hasAwaitsInCatch || hasAwaitsInFinally)
+        // Even a wholly synchronous finally needs the flag-based exit routing in
+        // an async state machine.  Completing the Task from a return inside a
+        // real IL try/finally publishes the result before the finally runs; if
+        // that finally throws, the outer MoveNext catch then attempts to fault an
+        // already-completed Task.  Routing every async try/finally through the
+        // pending-exit machinery defers completion until after the finally.
+        if (hasAwaitsInTry || hasAwaitsInCatch || hasAwaitsInFinally || t.FinallyBlock != null)
         {
             // Complex case: await inside protected region
             EmitTryCatchWithAwaits(t, hasAwaitsInTry, hasAwaitsInCatch, hasAwaitsInFinally);
@@ -196,10 +202,10 @@ public abstract partial class AsyncFunctionMoveNextEmitter
             // Emit try body with segmented exception handling
             EmitTryBodyWithAwaits(t.TryBlock, caughtExceptionLocal);
         }
-        else if (hasAwaitsInFinally)
+        else if (t.FinallyBlock != null)
         {
-            // No awaits in try but awaits in finally - need to capture exception from try
-            // so we can run the finally with awaits before rethrowing. The try body runs inside a real
+            // No awaits in try, but a finally still needs us to capture an exception from try
+            // so the flag-based path can run the finally before rethrowing. The try body runs inside a real
             // IL exception block, so a non-local exit crossing it must Leave, not Br — bump
             // ExceptionBlockDepth so EmitBranchToLabel / the routing pick Leave to the cleanup (#774).
             Ctx.ExceptionBlockDepth++;

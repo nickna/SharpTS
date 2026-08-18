@@ -199,6 +199,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_R8, 8640000000000000.0);
         il.Emit(OpCodes.Bgt, invalidLabel);
 
+        // System.DateTime has a narrower range than ECMAScript Date. Keep an
+        // otherwise valid but unrepresentable instant as Invalid Date rather
+        // than allowing AddMilliseconds to escape as a CLR exception. Its
+        // numeric getters still return NaN, as required by JavaScript.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_R8, -62135596800000.0);
+        il.Emit(OpCodes.Blt, invalidLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_R8, 253402300799999.0);
+        il.Emit(OpCodes.Bgt, invalidLabel);
+
         // _utcDateTime = UnixEpoch.AddMilliseconds(milliseconds)
         // For value type instance methods, we need the address of the struct
         var epochLocal = il.DeclareLocal(_types.DateTime);
@@ -468,6 +479,8 @@ public partial class RuntimeEmitter
             [_types.ObjectArray]
         );
         runtime.TSDateUTCStatic = method;
+        method.SetCustomAttribute(
+            runtime.NonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
         var nanLabel = il.DefineLabel();
@@ -627,6 +640,8 @@ public partial class RuntimeEmitter
             [_types.Object]
         );
         runtime.TSDateParseStatic = method;
+        method.SetCustomAttribute(
+            runtime.NonConstructibleAttrCtor, CustomAttributeEncoder.EmptyBlob);
 
         var il = method.GetILGenerator();
         // return new $TSDate((string)s).GetTime();  — invalid strings yield an Invalid date => NaN.
@@ -1186,17 +1201,27 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(validLabel);
-        // Simple format: return local.ToString("ddd MMM dd yyyy HH:mm:ss") + offset
+        // Format with a numeric local offset, then remove only the offset's
+        // colon: "Thu Jan 01 1970 00:00:00 GMT+0000".
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
+        var formattedLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localTimeLocal);
-        il.Emit(OpCodes.Ldstr, "ddd MMM dd yyyy HH:mm:ss");
+        il.Emit(OpCodes.Ldstr, "ddd MMM dd yyyy HH:mm:ss 'GMT'zzz");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Stloc, formattedLocal);
+        il.Emit(OpCodes.Ldloc, formattedLocal);
+        il.Emit(OpCodes.Ldloc, formattedLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Remove", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1283,15 +1308,24 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(validLabel);
         var localTimeLocal = il.DeclareLocal(_types.DateTime);
+        var formattedLocal = il.DeclareLocal(_types.String);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, _tsDateUtcDateTimeField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToLocalTime")!);
         il.Emit(OpCodes.Stloc, localTimeLocal);
 
         il.Emit(OpCodes.Ldloca, localTimeLocal);
-        il.Emit(OpCodes.Ldstr, "HH:mm:ss");
+        il.Emit(OpCodes.Ldstr, "HH:mm:ss 'GMT'zzz");
         il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.DateTime, "ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Stloc, formattedLocal);
+        il.Emit(OpCodes.Ldloc, formattedLocal);
+        il.Emit(OpCodes.Ldloc, formattedLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Remove", [_types.Int32, _types.Int32])!);
         il.Emit(OpCodes.Ret);
     }
 

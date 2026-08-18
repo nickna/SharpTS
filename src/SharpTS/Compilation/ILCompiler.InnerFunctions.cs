@@ -72,7 +72,7 @@ public partial class ILCompiler
         // All code in a class body is strict, including ordinary functions nested
         // inside methods. Record that lexical fact while the class collection cursor
         // is available; body emission happens later, after the cursor is gone.
-        if (_currentCollectClassName != null)
+        if (_currentCollectStrict || _currentCollectClassName != null)
             _strictInnerFunctions.Add(funcStmt);
 
         var captures = new HashSet<string>(_closures.Analyzer.GetCaptures(funcStmt));
@@ -275,7 +275,6 @@ public partial class ILCompiler
             // Check if any captured vars are top-level captured vars
             bool needsEntryPointDC = _closures.EntryPointDisplayClass != null &&
                 captures.Any(c => _closures.CapturedTopLevelVars.Contains(c));
-
             // #307: captured vars that live on an ancestor arrow's scope display
             // class are accessed LIVE via a $arrowScopeDC reference, not copied at
             // hoist time (the copy would run before the arrow body assigns them).
@@ -427,6 +426,7 @@ public partial class ILCompiler
             // User inner-function body: when invoked as a value, omitted trailing args must
             // pad with the `undefined` sentinel (JS semantics), not CLR null. (#640)
             MarkPadsUndefined(_innerFunctionMethods[func]);
+            MarkFunctionLength(_innerFunctionMethods[func], func.Parameters);
         }
     }
 
@@ -618,6 +618,7 @@ public partial class ILCompiler
             // Emit function body
             if (func.Body != null)
             {
+                emitter.InitializeCapturedLexicalTdzBindings(func.Body);
                 // Hoist inner functions within this inner function's body
                 EmitInnerFunctionHoisting(il, ctx, func.Body);
 
@@ -659,7 +660,10 @@ public partial class ILCompiler
         // function declarations this pre-pass deliberately skips. Also record which declarations we
         // hoist here, so the in-place path recognizes them as already-materialized and does nothing.
         ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         var hoisted = ctx.HoistedInnerFunctions ??= new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
+
+        ctx.PredeclareCapturedLexicalLocals(il, ctx, body);
 
         // Two-pass hoisting to match JS spec semantics. JavaScript hoists all
         // `function` declarations to the top of the containing scope before
@@ -714,7 +718,82 @@ public partial class ILCompiler
     private void WireInPlaceInnerFunctions(CompilationContext ctx)
     {
         ctx.EmitBlockScopedInnerFunction ??= EmitBlockScopedInnerFunctionDeclaration;
+        ctx.PredeclareCapturedLexicalLocals ??= PredeclareCapturedLexicalLocals;
         ctx.HoistedInnerFunctions ??= new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
+    }
+
+    private void PredeclareCapturedLexicalLocals(ILGenerator il, CompilationContext ctx, List<Stmt> statements)
+    {
+        var lexicalTokens = new Dictionary<string, Token>(StringComparer.Ordinal);
+        foreach (var statement in statements)
+        {
+            switch (statement)
+            {
+                case Stmt.Const constant:
+                    lexicalTokens[constant.Name.Lexeme] = constant.Name;
+                    break;
+                case Stmt.Var { IsVar: false } lexical:
+                    lexicalTokens[lexical.Name.Lexeme] = lexical.Name;
+                    break;
+                case Stmt.Sequence sequence:
+                    foreach (var nested in sequence.Statements)
+                    {
+                        if (nested is Stmt.Const nestedConst)
+                            lexicalTokens[nestedConst.Name.Lexeme] = nestedConst.Name;
+                        else if (nested is Stmt.Var { IsVar: false } nestedLexical)
+                            lexicalTokens[nestedLexical.Name.Lexeme] = nestedLexical.Name;
+                    }
+                    break;
+            }
+        }
+
+        if (lexicalTokens.Count == 0)
+            return;
+
+        var captured = new HashSet<string>(StringComparer.Ordinal);
+        var directArrowCaptures = new List<Expr.ArrowFunction>();
+        foreach (var function in statements.OfType<Stmt.Function>())
+            captured.UnionWith(_closures.Analyzer.GetCaptures(function));
+        foreach (var statement in statements)
+        {
+            Expr? initializer = statement switch
+            {
+                Stmt.Var variable => variable.Initializer,
+                Stmt.Const constant => constant.Initializer,
+                _ => null
+            };
+            if (initializer is Expr.ArrowFunction arrow)
+            {
+                directArrowCaptures.Add(arrow);
+                captured.UnionWith(_closures.Analyzer.GetCaptures(arrow));
+            }
+        }
+
+        foreach (var (name, token) in lexicalTokens)
+        {
+            if (!captured.Contains(name) || ctx.Locals.GetCurrentScopeLocal(name) != null)
+                continue;
+
+            // Function/arrow scope display classes and lifted top-level
+            // bindings already provide live storage whose TDZ state is
+            // initialized by their dedicated prologues. A predeclared local
+            // is needed only for snapshot captures of an actual block local.
+            if (ctx.CapturedFunctionLocals?.Contains(name) == true
+                && ctx.FunctionDisplayClassFields?.ContainsKey(name) == true)
+                continue;
+            if (ctx.CapturedArrowLocals?.Contains(name) == true
+                && ctx.ArrowScopeDisplayClassFields?.ContainsKey(name) == true)
+                continue;
+            if (ctx.CapturedTopLevelVars?.Contains(name) == true
+                && ctx.EntryPointDisplayClassFields?.ContainsKey(name) == true
+                && !directArrowCaptures.Any(arrow =>
+                    IsShadowedTopLevelBlockCapture(arrow, name)))
+                continue;
+
+            var local = ctx.Locals.DeclareLocal(name, ctx.Types.Object, token);
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.LexicalUninitializedInstance);
+            il.Emit(OpCodes.Stloc, local);
+        }
     }
 
     /// <summary>
@@ -982,15 +1061,8 @@ public partial class ILCompiler
                     il.Emit(OpCodes.Call, ctx.Types.MethodBaseGetMethodFromHandle);
                 }
                 il.Emit(OpCodes.Castclass, ctx.Types.MethodInfo);
-                int arity = 0;
-                foreach (var param in capturedFuncMethod.GetParameters())
-                {
-                    if (param.IsOptional) continue;
-                    if (param.ParameterType == typeof(List<object>)) continue;
-                    if (param.Name?.StartsWith("__") == true) continue;
-                    arity++;
-                }
-                il.Emit(OpCodes.Ldstr, capturedVar);
+                int arity = ctx.GetFunctionLength(capturedFuncMethod);
+                il.Emit(OpCodes.Ldstr, ctx.GetFunctionName(capturedFuncMethod, capturedVar));
                 il.Emit(OpCodes.Ldc_I4, arity);
                 il.Emit(OpCodes.Call, ctx.Runtime!.TSFunctionGetOrCreate);
             }
@@ -1007,6 +1079,13 @@ public partial class ILCompiler
                     // the arrow creation path (EmitDisplayInstanceFieldPopulation).
                     if (existingLocal.LocalType.IsValueType)
                         il.Emit(OpCodes.Box, existingLocal.LocalType);
+
+                    if (ctx.Locals.TryGetTag(capturedVar, out var lexicalTag) && lexicalTag is Token)
+                    {
+                        if (!ctx.LexicalCaptureWriteBacks.TryGetValue(capturedVar, out var writeBacks))
+                            ctx.LexicalCaptureWriteBacks[capturedVar] = writeBacks = [];
+                        writeBacks.Add((dcTemp, field));
+                    }
                 }
                 else
                     il.Emit(OpCodes.Ldnull);

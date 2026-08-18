@@ -438,9 +438,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_3);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldloc, descriptorLocal);
-        il.Emit(OpCodes.Call, runtime.ObjectDefineProperty);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.ReflectDefineProperty);
         il.Emit(OpCodes.Ret);
     }
 
@@ -470,6 +468,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(notNullLabel);
+
+        // Validate proto before invoking the target's [[SetPrototypeOf]]. This
+        // completion must not be converted to Reflect's boolean false result.
+        // CLR null represents JavaScript null and is the only primitive allowed.
+        var protoValidLabel = il.DefineLabel();
+        var invalidProtoLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, protoValidLabel);
+        void RejectProtoType(Type primitiveType)
+        {
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, primitiveType);
+            il.Emit(OpCodes.Brtrue, invalidProtoLabel);
+        }
+        RejectProtoType(runtime.UndefinedType);
+        RejectProtoType(_types.Boolean);
+        RejectProtoType(_types.Double);
+        RejectProtoType(_types.Int32);
+        RejectProtoType(_types.String);
+        RejectProtoType(runtime.TSSymbolType);
+        RejectProtoType(_types.BigInteger);
+        il.Emit(OpCodes.Br, protoValidLabel);
+        il.MarkLabel(invalidProtoLabel);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "Reflect.setPrototypeOf prototype must be an object or null");
+        il.MarkLabel(protoValidLabel);
 
         // Reflect returns the proxy [[SetPrototypeOf]] boolean directly. Do
         // not preflight [[IsExtensible]]: the proxy algorithm calls it only
@@ -513,16 +537,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notProxyLabel);
 
-        // Check if not extensible → return false
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ObjectIsExtensible);
-        var isExtensibleLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, isExtensibleLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(isExtensibleLabel);
-
+        // ObjectSetPrototypeOf performs SameValue(proto, current) before its
+        // extensibility check, so a non-extensible object succeeds when the
+        // requested prototype is already current. Other ordinary rejection is
+        // translated to Reflect's false result.
         // try { ObjectSetPrototypeOf(target, proto); return true; }
         // catch { return false; }
         il.BeginExceptionBlock();
@@ -551,13 +569,25 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitReflectDefineProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        var method = typeBuilder.DefineMethod(
-            "ReflectDefineProperty",
+        var method = runtime.ReflectDefineProperty;
+
+        // The late-bound SharpTSProxy bridge accepts a delegate returning
+        // object. A bool-returning method pointer is not delegate-compatible
+        // with that signature, so expose a tiny boxing adapter for recursive
+        // trapless forwarding through nested proxies.
+        var objectAdapter = typeBuilder.DefineMethod(
+            "ReflectDefinePropertyObjectAdapter",
             MethodAttributes.Public | MethodAttributes.Static,
-            _types.Boolean,
-            [_types.Object, _types.Object, _types.Object]
-        );
-        runtime.ReflectDefineProperty = method;
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object]);
+        runtime.ReflectDefinePropertyObjectAdapter = objectAdapter;
+        var adapterIl = objectAdapter.GetILGenerator();
+        adapterIl.Emit(OpCodes.Ldarg_0);
+        adapterIl.Emit(OpCodes.Ldarg_1);
+        adapterIl.Emit(OpCodes.Ldarg_2);
+        adapterIl.Emit(OpCodes.Call, method);
+        adapterIl.Emit(OpCodes.Box, _types.Boolean);
+        adapterIl.Emit(OpCodes.Ret);
 
         var il = method.GetILGenerator();
         var resultLocal = il.DeclareLocal(_types.Boolean);
@@ -590,7 +620,7 @@ public partial class RuntimeEmitter
                 il.Emit(OpCodes.Ldc_I4_1);
                 il.Emit(OpCodes.Ldarg_2);
                 il.Emit(OpCodes.Stelem_Ref);
-                EmitDelegate(2, runtime.ObjectDefineProperty,
+                EmitDelegate(2, runtime.ReflectDefinePropertyObjectAdapter,
                     typeof(Func<object, object, object, object?>));
                 EmitDelegate(3, runtime.ObjectGetOwnPropertyDescriptor,
                     typeof(Func<object, object, object?>));
@@ -1010,7 +1040,7 @@ public partial class RuntimeEmitter
         string[] runtimeHelperClasses =
         [
             "$Runtime", "$RegExp", "$Array", "$Object", "$Promise", "$TSPromise",
-            "$Date", "$Map", "$Set", "$WeakMap", "$WeakSet", "$WeakRef",
+            "$Date", "$TSDate", "$Map", "$Set", "$WeakMap", "$WeakSet", "$WeakRef",
             "$Error", "$TypeError", "$RangeError", "$ReferenceError",
             "$SyntaxError", "$URIError", "$EvalError", "$AggregateError",
             "$Buffer", "$Headers", "$Hash", "$Hmac", "$NodeError",
@@ -1210,6 +1240,20 @@ public partial class RuntimeEmitter
         // Is a Type - use Activator.CreateInstance(type, args)
         il.MarkLabel(isTypeLabel);
 
+        // Emitted native-error types require the JS-facing factory for
+        // optional arguments and own message/cause descriptors. A null result
+        // means this is some other Type and normal construction continues.
+        var notErrorTypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldloc, argsLocal);
+        il.Emit(OpCodes.Call, runtime.CreateErrorFromTypeOrNull);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notErrorTypeLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notErrorTypeLabel);
+        il.Emit(OpCodes.Pop);
+
         // %Promise% also has a JavaScript-facing adapter rather than a CLR
         // constructor that accepts its executor. Most importantly, the missing
         // executor must throw before GetPrototypeFromConstructor(newTarget), so
@@ -1322,5 +1366,175 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(typeof(Activator), "CreateInstance", _types.Type, _types.ObjectArray));
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits callable value-form adapters for the Reflect namespace. The
+    /// direct <c>Reflect.x(...)</c> fast paths already own argument evaluation;
+    /// these adapters serve property reads, aliases, and the bare Reflect
+    /// singleton while preserving whether an optional receiver/newTarget was
+    /// actually supplied.
+    /// </summary>
+    private void EmitReflectValueFormMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        MethodBuilder Define(string name, Action<ILGenerator> emitBody)
+        {
+            var method = typeBuilder.DefineMethod(
+                $"ReflectValueForm_{name}",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.ObjectArray]);
+            emitBody(method.GetILGenerator());
+            runtime.ReflectValueFormMethods[name] = method;
+            return method;
+        }
+
+        static void EmitArgument(ILGenerator il, int index)
+        {
+            var present = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Bgt, present);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Br, done);
+            il.MarkLabel(present);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.MarkLabel(done);
+        }
+
+        static void EmitArgumentOrLocal(
+            ILGenerator il, int index, LocalBuilder fallback)
+        {
+            var present = il.DefineLabel();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Bgt, present);
+            il.Emit(OpCodes.Ldloc, fallback);
+            il.Emit(OpCodes.Br, done);
+            il.MarkLabel(present);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4, index);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.MarkLabel(done);
+        }
+
+        static void BoxBoolean(ILGenerator il) => il.Emit(OpCodes.Box, typeof(bool));
+
+        Define("apply", il =>
+        {
+            EmitArgument(il, 0);
+            EmitArgument(il, 1);
+            EmitArgument(il, 2);
+            il.Emit(OpCodes.Call, runtime.ReflectApply);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("construct", il =>
+        {
+            EmitArgument(il, 0);
+            EmitArgument(il, 1);
+            EmitArgument(il, 2);
+            il.Emit(OpCodes.Call, runtime.ReflectConstruct);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("defineProperty", il =>
+        {
+            EmitArgument(il, 0);
+            EmitArgument(il, 1);
+            EmitArgument(il, 2);
+            il.Emit(OpCodes.Call, runtime.ReflectDefineProperty);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("deleteProperty", il =>
+        {
+            EmitArgument(il, 0);
+            EmitArgument(il, 1);
+            il.Emit(OpCodes.Call, runtime.ReflectDeleteProperty);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("get", il =>
+        {
+            var target = il.DeclareLocal(_types.Object);
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Stloc, target);
+            il.Emit(OpCodes.Ldloc, target);
+            EmitArgument(il, 1);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            EmitArgumentOrLocal(il, 2, target);
+            il.Emit(OpCodes.Call, runtime.ReflectGet);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("getOwnPropertyDescriptor", il =>
+        {
+            EmitArgument(il, 0);
+            EmitArgument(il, 1);
+            il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("getPrototypeOf", il =>
+        {
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Call, runtime.ObjectGetPrototypeOf);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("has", il =>
+        {
+            // HasIn is keyed as (propertyKey, target).
+            EmitArgument(il, 1);
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Call, runtime.HasIn);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("isExtensible", il =>
+        {
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Call, runtime.ObjectIsExtensible);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("ownKeys", il =>
+        {
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Call, runtime.ReflectOwnKeys);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("preventExtensions", il =>
+        {
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Call, runtime.ReflectPreventExtensions);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("set", il =>
+        {
+            var target = il.DeclareLocal(_types.Object);
+            EmitArgument(il, 0);
+            il.Emit(OpCodes.Stloc, target);
+            il.Emit(OpCodes.Ldloc, target);
+            EmitArgument(il, 1);
+            EmitArgument(il, 2);
+            EmitArgumentOrLocal(il, 3, target);
+            il.Emit(OpCodes.Call, runtime.ReflectSet);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
+        Define("setPrototypeOf", il =>
+        {
+            EmitArgument(il, 0);
+            EmitArgument(il, 1);
+            il.Emit(OpCodes.Call, runtime.ReflectSetPrototypeOf);
+            BoxBoolean(il);
+            il.Emit(OpCodes.Ret);
+        });
     }
 }

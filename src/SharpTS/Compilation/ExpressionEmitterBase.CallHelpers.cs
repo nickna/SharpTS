@@ -369,9 +369,23 @@ public abstract partial class ExpressionEmitterBase
         while (callee is Expr.Grouping grouping)
             callee = grouping.Expression;
 
-        if (callee is not Expr.Comma comma
-            || comma.Right is not Expr.Variable evalVar
-            || evalVar.Name.Lexeme != "eval"
+        Expr? calleeSideEffect = null;
+        bool isKnownEval = false;
+        if (callee is Expr.Comma
+            {
+                Right: Expr.Variable { Name.Lexeme: "eval" }
+            } comma)
+        {
+            calleeSideEffect = comma.Left;
+            isKnownEval = true;
+        }
+        else if (callee is Expr.Variable
+            && Ctx.StaticIndirectEvalCalls?.Contains(call) == true)
+        {
+            isKnownEval = true;
+        }
+
+        if (!isKnownEval
             || call.Arguments.Count != 1
             || call.Arguments[0] is not Expr.Literal { Value: string source })
         {
@@ -388,10 +402,37 @@ public abstract partial class ExpressionEmitterBase
             return false;
         }
 
-        if (statements is not [Stmt.Expression { Expr: Expr.Variable identifier }])
+        if (Ctx.IsScriptTopLevel && this is ILEmitter syncEmitter
+            && statements.Any(statement => statement is Stmt.Function))
+        {
+            EmitCalleeSideEffect();
+            return syncEmitter.TryEmitStaticDirectEval(call, source);
+        }
+
+        var executableStatements = statements
+            .Where(statement => statement is not Stmt.Directive)
+            .ToList();
+        if (executableStatements is not [Stmt.Expression { Expr: var expression }])
         {
             return false;
         }
+
+        // At classic-script top level, a small expression-only indirect eval can
+        // execute directly against the emitted global bindings. This preserves
+        // both completion values and updates to globals without pretending that
+        // the interpreter bridge shares the compiled assembly's environment.
+        if (Ctx.IsScriptTopLevel
+            && expression is Expr.Literal or Expr.Variable or Expr.Assign or Expr.Call
+                or Expr.PrefixIncrement or Expr.PostfixIncrement)
+        {
+            EmitCalleeSideEffect();
+            EmitExpression(expression);
+            EnsureBoxed();
+            return true;
+        }
+
+        if (expression is not Expr.Variable identifier)
+            return false;
 
         FieldBuilder? globalField = null;
         FieldBuilder? capturedField = null;
@@ -404,9 +445,7 @@ public abstract partial class ExpressionEmitterBase
         if (!isStaticGlobal && !isCapturedGlobal)
             return false;
 
-        EmitExpression(comma.Left);
-        EnsureBoxed();
-        IL.Emit(OpCodes.Pop);
+        EmitCalleeSideEffect();
         if (isStaticGlobal)
         {
             IL.Emit(OpCodes.Ldsfld, globalField!);
@@ -418,6 +457,15 @@ public abstract partial class ExpressionEmitterBase
         }
         SetStackUnknown();
         return true;
+
+        void EmitCalleeSideEffect()
+        {
+            if (calleeSideEffect is null)
+                return;
+            EmitExpression(calleeSideEffect);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Pop);
+        }
     }
 
     /// <summary>
@@ -894,6 +942,44 @@ public abstract partial class ExpressionEmitterBase
         bool publishesArguments =
             Ctx.MethodsCapturingArguments?.Contains(targetMethod) == true &&
             Ctx.Runtime?.CurrentArgumentsField != null;
+
+        // A spread can change both the number and the positions of the runtime arguments, so it
+        // cannot be lowered as one CLR argument per source expression. Expand through the shared
+        // iterator-aware helper first, then reload only the target's fixed slots. This preserves
+        // iterator protocol errors and source order for calls such as super(...iterable), while
+        // still discarding JavaScript surplus arguments at the CLR boundary.
+        if (!hasRestParam && arguments.Any(arg => arg is Expr.Spread))
+        {
+            var expandedArguments = IL.DeclareLocal(Types.ObjectArray);
+            EmitArgsArrayWithSpread(arguments);
+            IL.Emit(OpCodes.Stloc, expandedArguments);
+
+            if (publishesArguments)
+            {
+                IL.Emit(OpCodes.Ldloc, expandedArguments);
+                IL.Emit(OpCodes.Stsfld, Ctx.Runtime!.CurrentArgumentsField);
+            }
+
+            for (int i = 0; i < paramCount; i++)
+            {
+                var missing = IL.DefineLabel();
+                var loaded = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, expandedArguments);
+                IL.Emit(OpCodes.Ldlen);
+                IL.Emit(OpCodes.Conv_I4);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ble, missing);
+                IL.Emit(OpCodes.Ldloc, expandedArguments);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                IL.Emit(OpCodes.Ldelem_Ref);
+                EmitCoerceBoxedToType(targetParams[i].ParameterType);
+                IL.Emit(OpCodes.Br, loaded);
+                IL.MarkLabel(missing);
+                EmitOmittedArgument(targetParams[i].ParameterType);
+                IL.MarkLabel(loaded);
+            }
+            return;
+        }
 
         // A fixed CLR signature has nowhere to carry JavaScript surplus values.
         // When this callee observes `arguments`, evaluate into boxed temps, publish
@@ -1545,6 +1631,7 @@ public abstract partial class ExpressionEmitterBase
     private void EmitFunctionValueCall(Expr.Call c)
     {
         LocalBuilder calleeLocal;
+        var callReference = UnwrapCallReference(c.Callee);
 
         // #923: a direct method-style value-call `o.m(...)` must bind `this` to the receiver. The
         // generic value-call below passes a null receiver (correct for a detached call like `f()`),
@@ -1559,7 +1646,7 @@ public abstract partial class ExpressionEmitterBase
         // the receiver is now preserved. Strategy-resolved callees, detached `f()` (Expr.Variable),
         // and `arr[i]()` (Expr.Index) keep the null-receiver path below.
         LocalBuilder? receiverLocal = null;
-        if (c.Callee is Expr.Get methodGet && !HasOptionalLink(methodGet) && !ReceiverHasGetStrategy(methodGet.Object))
+        if (callReference is Expr.Get methodGet && !ReceiverHasGetStrategy(methodGet.Object))
         {
             // Evaluate the receiver once, spill it (a MoveNext re-entry from a suspending argument
             // wipes plain IL locals, #400), enforce RequireObjectCoercible before the arguments'
@@ -1574,7 +1661,7 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
             calleeLocal = _helpers.SpillStoreObject();
         }
-        else if (c.Callee is Expr.GetIndex methodIndex && !HasOptionalLink(methodIndex))
+        else if (callReference is Expr.GetIndex methodIndex)
         {
             // Computed member calls have the same Reference receiver semantics as
             // dot-member calls: `obj[key]()` invokes the resolved function with
@@ -1625,13 +1712,16 @@ public abstract partial class ExpressionEmitterBase
         EmitArgsArrayWithSpread(c.Arguments);
 
         // Call InvokeMethodValue(receiver, function, args). The receiver is the spilled `o` for a
-        // threaded `o.m()` (#923, above), else null for a detached call.
+        // threaded `o.m()` (#923, above), else the JS undefined sentinel for a detached call.
+        // Using CLR null here made strict callees observe globalThis because null is also the
+        // runtime's legacy sloppy-call marker; undefined lets OrdinaryCallBindThis choose by the
+        // callee's strictness while preserving an explicit `.call(null)` as null.
         var argsLocal = IL.DeclareLocal(Types.ObjectArray);
         IL.Emit(OpCodes.Stloc, argsLocal);
         if (receiverLocal != null)
             IL.Emit(OpCodes.Ldloc, receiverLocal);
         else
-            IL.Emit(OpCodes.Ldnull);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, calleeLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);
@@ -1705,6 +1795,18 @@ public abstract partial class ExpressionEmitterBase
         Expr.Grouping gr => HasOptionalLink(gr.Expression),
         Expr.TypeAssertion ta => HasOptionalLink(ta.Expression),
         _ => false
+    };
+
+    /// <summary>
+    /// Parentheses and type assertions preserve a member Reference for call
+    /// evaluation; peel only those transparent wrappers when selecting the
+    /// receiver that becomes `this`.
+    /// </summary>
+    private static Expr UnwrapCallReference(Expr expr) => expr switch
+    {
+        Expr.Grouping grouping => UnwrapCallReference(grouping.Expression),
+        Expr.TypeAssertion assertion => UnwrapCallReference(assertion.Expression),
+        _ => expr
     };
 
     /// <summary>
@@ -1881,14 +1983,90 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     private void EmitOptionalCall(Expr.Call c)
     {
-        // Evaluate callee and store in local
-        EmitExpression(c.Callee);
-        EnsureBoxed();
-        var calleeLocal = IL.DeclareLocal(Types.Object);
-        IL.Emit(OpCodes.Stloc, calleeLocal);
+        var reference = UnwrapCallReference(c.Callee);
+
+        // A resolvable super method must use a non-virtual base call.  Looking
+        // it up dynamically from the derived instance re-enters the override
+        // and recurses; since the method exists, the optional callable check is
+        // known to succeed and the direct call is semantically equivalent.
+        if (reference is Expr.Super { Method: not null } super
+            && TryEmitSuperMethodCall(super.Method.Lexeme, c.Arguments))
+            return;
 
         var nullishLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
+
+        // Optional calls preserve the Reference receiver: `obj.method?.()` and
+        // `(obj.method)?.()` invoke the function with obj as `this`.  Evaluate
+        // the receiver once, then resolve the callable from that same value.
+        LocalBuilder? receiverLocal = null;
+        LocalBuilder calleeLocal;
+        if (reference is Expr.Get get)
+        {
+            EmitExpression(get.Object);
+            EnsureBoxed();
+            receiverLocal = _helpers.SpillStoreObject();
+
+            if (get.Optional)
+            {
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Brfalse, nullishLabel);
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Brtrue, nullishLabel);
+            }
+            else
+            {
+                EmitThrowIfReceiverUndefined(receiverLocal, get.Name.Lexeme);
+            }
+
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Ldstr, get.Name.Lexeme);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+            calleeLocal = _helpers.SpillStoreObject();
+        }
+        else if (reference is Expr.GetIndex index)
+        {
+            EmitExpression(index.Object);
+            EnsureBoxed();
+            receiverLocal = _helpers.SpillStoreObject();
+
+            if (index.Optional)
+            {
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Brfalse, nullishLabel);
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, Ctx.Runtime!.UndefinedType);
+                IL.Emit(OpCodes.Brtrue, nullishLabel);
+            }
+            else
+            {
+                EmitThrowIfReceiverUndefined(receiverLocal, "[]");
+            }
+
+            EmitExpression(index.Index);
+            EnsureBoxed();
+            var indexLocal = _helpers.SpillStoreObject();
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.GetIndex);
+            calleeLocal = _helpers.SpillStoreObject();
+        }
+        else if (reference is Expr.Super)
+        {
+            EmitThis();
+            EnsureBoxed();
+            receiverLocal = _helpers.SpillStoreObject();
+            EmitExpression(c.Callee);
+            EnsureBoxed();
+            calleeLocal = _helpers.SpillStoreObject();
+        }
+        else
+        {
+            EmitExpression(c.Callee);
+            EnsureBoxed();
+            calleeLocal = _helpers.SpillStoreObject();
+        }
 
         // Check for null
         IL.Emit(OpCodes.Ldloc, calleeLocal);
@@ -1902,10 +2080,13 @@ public abstract partial class ExpressionEmitterBase
         // Not nullish — evaluate arguments (await-safe, spreads flattened) and invoke
         EmitArgsArrayWithSpread(c.Arguments);
 
-        // InvokeMethodValue(receiver=null, function, args)
+        // InvokeMethodValue(receiver, function, args)
         var argsLocal = IL.DeclareLocal(Types.ObjectArray);
         IL.Emit(OpCodes.Stloc, argsLocal);
-        IL.Emit(OpCodes.Ldnull);
+        if (receiverLocal != null)
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+        else
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
         IL.Emit(OpCodes.Ldloc, calleeLocal);
         IL.Emit(OpCodes.Ldloc, argsLocal);
         IL.Emit(OpCodes.Call, Ctx.Runtime!.InvokeMethodValue);

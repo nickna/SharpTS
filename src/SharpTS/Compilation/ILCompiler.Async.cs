@@ -25,7 +25,13 @@ public partial class ILCompiler
         // Create state machine builder
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
         var hasAsyncArrows = analysis.AsyncArrows.Count > 0;
-        smBuilder.DefineStateMachine(funcStmt.Name.Lexeme, analysis, _types.Object, false, hasAsyncArrows);
+        smBuilder.DefineStateMachine(
+            funcStmt.Name.Lexeme,
+            analysis,
+            _types.Object,
+            isInstanceMethod: false,
+            hasDynamicThis: analysis.UsesThis,
+            hasAsyncArrows: hasAsyncArrows);
 
         // Define stub method (returns Task<object>).
         // A trailing rest parameter is typed List<object> so the indirect
@@ -53,6 +59,9 @@ public partial class ILCompiler
         // callback → $TSFunction.Invoke) must pad omitted trailing optional args with the `undefined`
         // sentinel, not CLR null — matching plain functions, arrows, async arrows, and class methods.
         MarkPadsUndefined(stubMethod);
+        MarkFunctionLength(stubMethod, funcStmt.Parameters);
+        MarkFunctionName(stubMethod, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
+        MarkNonConstructible(stubMethod);
 
         // Create function-level display class for captured locals (same as sync functions).
         // This enables closure mutation sharing between the async state machine and sync inner arrows.
@@ -365,6 +374,8 @@ public partial class ILCompiler
                 // Define the stub method that will be called to invoke the async arrow
                 arrowBuilder.DefineStubMethod(_programType, _runtime);
                 MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+                MarkFunctionLength(arrowBuilder.StubMethod, arrowInfo.Arrow.Parameters);
+                MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.Name?.Lexeme ?? "");
                 RegisterStateMachine(
                     arrowBuilder.StubMethod,
                     arrowBuilder.StateMachineType,
@@ -387,6 +398,8 @@ public partial class ILCompiler
             // Define the stub method that will be called to invoke the async arrow
             arrowBuilder.DefineStubMethod(_programType, _runtime);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+            MarkFunctionLength(arrowBuilder.StubMethod, arrowInfo.Arrow.Parameters);
+            MarkFunctionName(arrowBuilder.StubMethod, arrowInfo.Arrow.Name?.Lexeme ?? "");
             RegisterStateMachine(
                 arrowBuilder.StubMethod,
                 arrowBuilder.StateMachineType,
@@ -732,7 +745,11 @@ public partial class ILCompiler
             var analysis = _async.Analyzer.Analyze(func);
 
             // Emit stub method body
-            EmitAsyncStubMethod(stubMethod, smBuilder, func.Parameters);
+            EmitAsyncStubMethod(
+                stubMethod,
+                smBuilder,
+                func.Parameters,
+                coerceSloppyDynamicThis: !(_isStrictMode || BodyDeclaresUseStrict(func.Body)));
 
             // Create context for MoveNext emission
             var il = smBuilder.MoveNextMethod.GetILGenerator();
@@ -745,7 +762,7 @@ public partial class ILCompiler
             ctx.CommonJsExportFields = _modules.CommonJsExportFields;
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
-            ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(func.Body);
+            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -855,7 +872,8 @@ public partial class ILCompiler
         bool isInstanceMethod = false,
         FieldBuilder? asyncLockField = null,
         FieldBuilder? lockReentrancyField = null,
-        string? functionDCKey = null)
+        string? functionDCKey = null,
+        bool coerceSloppyDynamicThis = false)
     {
         var il = stubMethod.GetILGenerator();
         var smLocal = il.DeclareLocal(smBuilder.StateMachineType);
@@ -864,11 +882,35 @@ public partial class ILCompiler
         il.Emit(OpCodes.Ldloca, smLocal);
         il.Emit(OpCodes.Initobj, smBuilder.StateMachineType);
 
-        // Copy 'this' to state machine if this is an instance method and uses 'this'
-        if (isInstanceMethod && smBuilder.ThisField != null)
+        // Copy `this` to the state machine. Instance methods read arg0; free
+        // async functions snapshot the call-time receiver staged by
+        // $TSFunction.InvokeWithThis in the runtime thread-local.
+        if (smBuilder.ThisField != null)
         {
             il.Emit(OpCodes.Ldloca, smLocal);
-            il.Emit(OpCodes.Ldarg_0);  // 'this' is arg 0 for instance methods
+            if (isInstanceMethod)
+                il.Emit(OpCodes.Ldarg_0);
+            else
+            {
+                il.Emit(OpCodes.Ldsfld, _runtime!.CurrentFunctionThisField);
+                if (coerceSloppyDynamicThis)
+                {
+                    // Async free functions snapshot their receiver before MoveNext runs.
+                    // Apply OrdinaryCallBindThis here so a plain sloppy-mode call keeps
+                    // globalThis across suspension instead of hoisting the undefined sentinel.
+                    var keepThis = il.DefineLabel();
+                    var useGlobalThis = il.DefineLabel();
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Brfalse, useGlobalThis);
+                    il.Emit(OpCodes.Dup);
+                    il.Emit(OpCodes.Isinst, _runtime.UndefinedType);
+                    il.Emit(OpCodes.Brfalse, keepThis);
+                    il.MarkLabel(useGlobalThis);
+                    il.Emit(OpCodes.Pop);
+                    il.Emit(OpCodes.Ldsfld, _runtime.GlobalThisSingletonField);
+                    il.MarkLabel(keepThis);
+                }
+            }
             il.Emit(OpCodes.Stfld, smBuilder.ThisField);
         }
 
@@ -1071,7 +1113,7 @@ public partial class ILCompiler
         var ctx = CreateModuleMemberContext(il, smBuilder.MoveNextMethod);
         ctx.IsStrictMode = currentClassName != null
             || _isStrictMode
-            || Parsing.DirectivePrologue.HasUseStrict(method.Body);
+            || BodyDeclaresUseStrict(method.Body);
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = isInstanceMethod;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders;
@@ -1175,6 +1217,8 @@ public partial class ILCompiler
             // Define the stub method
             arrowBuilder.DefineStubMethod(_programType, _runtime);
             MarkPadsUndefined(arrowBuilder.StubMethod); // #640
+            MarkFunctionLength(arrowBuilder.StubMethod, arrow.Parameters);
+            MarkFunctionName(arrowBuilder.StubMethod, arrow.Name?.Lexeme ?? "");
             RegisterStateMachine(
                 arrowBuilder.StubMethod,
                 arrowBuilder.StateMachineType,

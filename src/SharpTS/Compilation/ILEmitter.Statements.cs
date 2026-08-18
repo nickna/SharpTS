@@ -93,6 +93,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                 }
                 IL.Emit(OpCodes.Stfld, displayField);
+                _ctx.EmitMarkTopLevelLexicalInitialized(IL, v.Name.Lexeme);
                 MirrorScriptVarToGlobal(() =>
                 {
                     if (_ctx.EntryPointDisplayClassLocal != null)
@@ -130,6 +131,7 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
                     IL.Emit(OpCodes.Stsfld, staticField);
                 }
+                _ctx.EmitMarkTopLevelLexicalInitialized(IL, v.Name.Lexeme);
                 MirrorScriptVarToGlobal(() => IL.Emit(OpCodes.Ldsfld, staticField));
                 return;
             }
@@ -186,6 +188,37 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
             }
             IL.Emit(OpCodes.Stfld, arrowDisplayField);
+            return;
+        }
+
+        // A lexical binding captured by a same-scope function declaration is
+        // allocated before that function is materialized, so the capture sees
+        // the TDZ sentinel rather than CLR null. Initialize that existing slot
+        // here and refresh the snapshot fields retained by hoisted functions.
+        if (_ctx.Locals.TryGetTag(v.Name.Lexeme, out var lexicalTag)
+            && ReferenceEquals(lexicalTag, v.Name)
+            && _ctx.Locals.GetCurrentScopeLocal(v.Name.Lexeme) is { } predeclaredLexical)
+        {
+            if (v.Initializer != null)
+            {
+                EmitExpression(v.Initializer);
+                EmitBoxIfNeeded(v.Initializer);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            }
+            IL.Emit(OpCodes.Stloc, predeclaredLexical);
+
+            if (_ctx.LexicalCaptureWriteBacks.TryGetValue(v.Name.Lexeme, out var writeBacks))
+            {
+                foreach (var (displayClass, field) in writeBacks)
+                {
+                    IL.Emit(OpCodes.Ldloc, displayClass);
+                    IL.Emit(OpCodes.Ldloc, predeclaredLexical);
+                    IL.Emit(OpCodes.Stfld, field);
+                }
+            }
             return;
         }
 
@@ -918,6 +951,17 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
         }
 
+        if (iterableType is TypeInfo.Map or TypeInfo.Set)
+        {
+            var collectionStartLabel = builder.DefineLabel("forof_collection_start");
+            var collectionEndLabel = builder.DefineLabel("forof_collection_end");
+            var collectionContinueLabel = builder.DefineLabel("forof_collection_continue");
+            _ctx.EnterLoop(collectionEndLabel, collectionContinueLabel, labelNames);
+            EmitForOfNormalizedEnumerator(
+                f, collectionStartLabel, collectionEndLabel, collectionContinueLabel);
+            return;
+        }
+
         // For generators, use IEnumerable-based iteration
         if (iterableType is TypeInfo.Generator)
         {
@@ -943,6 +987,49 @@ public partial class ILEmitter
         // Store the iterable for potential iterator protocol check
         var iterableLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, iterableLocal);
+        var afterLoopLabel = builder.DefineLabel("forof_after");
+        var arrayDesc = ArrayElements.Resolve(iterableType);
+
+        // JavaScript-style `var map = new Map()` can remain `any` in the
+        // type map. Select the collection iterator dynamically before the
+        // generic protocol/index paths so live deletion semantics still apply.
+        // A statically known array takes the direct fast path below; emitting
+        // dynamic collection branches before that compile-time early return
+        // would leave their shared after-loop target unmarked.
+        if (arrayDesc == null && _ctx.RuntimeFeatures?.UsesMap == true)
+        {
+            var notDynamicMap = builder.DefineLabel("forof_not_dynamic_map");
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Isinst, _ctx.Types.DictionaryObjectObject);
+            builder.Emit_Brfalse(notDynamicMap);
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.MapEntries);
+            var start = builder.DefineLabel("forof_dynamic_map_start");
+            var end = builder.DefineLabel("forof_dynamic_map_end");
+            var cont = builder.DefineLabel("forof_dynamic_map_continue");
+            _ctx.EnterLoop(end, cont, labelNames);
+            EmitForOfNormalizedEnumerator(f, start, end, cont);
+            builder.Emit_Br(afterLoopLabel);
+            _ctx.Locals.EnterScope();
+            builder.MarkLabel(notDynamicMap);
+        }
+        if (arrayDesc == null && _ctx.RuntimeFeatures?.UsesSet == true)
+        {
+            var notDynamicSet = builder.DefineLabel("forof_not_dynamic_set");
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Isinst, _ctx.Types.HashSetOfObject);
+            builder.Emit_Brfalse(notDynamicSet);
+            IL.Emit(OpCodes.Ldloc, iterableLocal);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetValues);
+            var start = builder.DefineLabel("forof_dynamic_set_start");
+            var end = builder.DefineLabel("forof_dynamic_set_end");
+            var cont = builder.DefineLabel("forof_dynamic_set_continue");
+            _ctx.EnterLoop(end, cont, labelNames);
+            EmitForOfNormalizedEnumerator(f, start, end, cont);
+            builder.Emit_Br(afterLoopLabel);
+            _ctx.Locals.EnterScope();
+            builder.MarkLabel(notDynamicSet);
+        }
 
         // Phase C: when the iterable's static type is `T[]`, skip the
         // iterator-protocol probe and the per-iter GetLength/GetElement
@@ -952,7 +1039,6 @@ public partial class ILEmitter
         // run through the existing slow path — their runtime
         // representation can be a typed list OR a List<object> depending
         // on construction site, and the slow path already handles both.
-        var arrayDesc = ArrayElements.Resolve(iterableType);
         if (arrayDesc != null && arrayDesc.Kind == ArrayElementsKind.Object)
         {
             EmitForOfArrayDirect(f, iterableLocal, arrayDesc, labelNames);
@@ -963,7 +1049,6 @@ public partial class ILEmitter
         // Try iterator protocol first: GetIteratorFunction(iterable, Symbol.iterator)
         var iteratorFnLocal = IL.DeclareLocal(_ctx.Types.Object);
         var indexBasedLabel = builder.DefineLabel("forof_index_based");
-        var afterLoopLabel = builder.DefineLabel("forof_after");
 
         IL.Emit(OpCodes.Ldloc, iterableLocal);
         IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.SymbolIterator);
@@ -1460,6 +1545,9 @@ public partial class ILEmitter
     {
         _ctx.Locals.EnterScope();
 
+        _ctx.PredeclareCapturedLexicalLocals?.Invoke(IL, _ctx, b.Statements);
+        InitializeCapturedLexicalTdzBindings(b.Statements);
+
         // Class declarations have lexical block bindings but their CLR Types
         // are defined ahead of method emission. Predeclare an undefined local
         // for TDZ behavior; the declaration statement installs its Type token.
@@ -1497,6 +1585,57 @@ public partial class ILEmitter
                 classStmt.Name.Lexeme, _ctx.Types.Object, classStmt);
             IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
             IL.Emit(OpCodes.Stloc, local);
+        }
+    }
+
+    /// <summary>
+    /// Initializes captured let/const slots for this statement-list scope to
+    /// the dedicated TDZ sentinel before any hoisted or textual function can
+    /// observe them. Declaration emission later replaces the sentinel.
+    /// </summary>
+    internal void InitializeCapturedLexicalTdzBindings(IEnumerable<Stmt> statements)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var statement in statements)
+            CollectDirectLexicalNames(statement, names);
+
+        foreach (var name in names)
+        {
+            if (_ctx.CapturedFunctionLocals?.Contains(name) == true
+                && _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var functionField) == true
+                && _ctx.FunctionDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.LexicalUninitializedInstance);
+                IL.Emit(OpCodes.Stfld, functionField);
+                continue;
+            }
+
+            if (_ctx.CapturedArrowLocals?.Contains(name) == true
+                && _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var arrowField) == true
+                && _ctx.ArrowScopeDisplayClassLocal != null)
+            {
+                IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+                IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.LexicalUninitializedInstance);
+                IL.Emit(OpCodes.Stfld, arrowField);
+            }
+        }
+
+        static void CollectDirectLexicalNames(Stmt statement, HashSet<string> names)
+        {
+            switch (statement)
+            {
+                case Stmt.Const constant:
+                    names.Add(constant.Name.Lexeme);
+                    break;
+                case Stmt.Var { IsVar: false } lexical:
+                    names.Add(lexical.Name.Lexeme);
+                    break;
+                case Stmt.Sequence sequence:
+                    foreach (var nested in sequence.Statements)
+                        CollectDirectLexicalNames(nested, names);
+                    break;
+            }
         }
     }
 
@@ -1649,6 +1788,8 @@ public partial class ILEmitter
     /// </summary>
     public void EmitStatements(List<Stmt> statements)
     {
+        InitializeCapturedLexicalTdzBindings(statements);
+
         // Function/state-machine bodies are emitted as a raw statement list,
         // not through EmitBlock. Their direct class declarations still need
         // lexical locals so references after the declaration resolve to the

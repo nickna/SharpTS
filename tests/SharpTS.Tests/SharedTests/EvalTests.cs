@@ -101,6 +101,37 @@ public class EvalTests
     }
 
     [Theory, ModeData]
+    public void Eval_StaticIndirectAlias_SeesScriptGlobalFunctions(ExecutionMode mode)
+    {
+        var source = """
+            const indirect = eval;
+            console.log(indirect("\"use strict\"; globalFunction();"));
+
+            function globalFunction(): string {
+                return "visible";
+            }
+            """;
+
+        Assert.Equal("visible\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Eval_ReassignedAlias_RemainsAnOrdinaryFunctionCall(ExecutionMode mode)
+    {
+        var source = """
+            let indirect: any = eval;
+            indirect = (text: string): string => "ordinary:" + text;
+            console.log(indirect("globalFunction()"));
+
+            function globalFunction(): string {
+                return "wrong";
+            }
+            """;
+
+        Assert.Equal("ordinary:globalFunction()\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void Eval_EvaluatesExtraArgumentsButUsesOnlyFirstSource(ExecutionMode mode)
     {
         var source = """

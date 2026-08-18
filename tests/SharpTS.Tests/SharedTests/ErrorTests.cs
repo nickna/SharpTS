@@ -797,5 +797,29 @@ public class ErrorTests
         Assert.Equal("true true\nstring plain string\n", output);
     }
 
+    [Theory, ModeData]
+    public void AliasedNativeErrorConstruction_InstallsMessageAndCauseDescriptors(ExecutionMode mode)
+    {
+        var source = """
+            const constructors: any[] = [
+                EvalError, RangeError, ReferenceError, SyntaxError, TypeError, URIError
+            ];
+            for (const NativeError of constructors) {
+                const cause: any = {};
+                const error: any = new NativeError("message", { cause });
+                const message = Object.getOwnPropertyDescriptor(error, "message")!;
+                const causeDescriptor = Object.getOwnPropertyDescriptor(error, "cause")!;
+                console.log(
+                    message.value, message.writable, message.enumerable, message.configurable,
+                    causeDescriptor.value === cause, causeDescriptor.writable,
+                    causeDescriptor.enumerable, causeDescriptor.configurable
+                );
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(string.Concat(Enumerable.Repeat(
+            "message true false true true true false true\n", 6)), output);
+    }
+
     #endregion
 }

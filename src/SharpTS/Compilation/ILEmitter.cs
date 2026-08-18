@@ -194,12 +194,13 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
                 break;
 
             case Stmt.Var v:
-                EmitVarDeclaration(v);
+                EmitVariableDeclarationWithLexicalTdz(v);
                 break;
 
             case Stmt.Const c:
                 // Const declarations are emitted the same way as var declarations
-                EmitVarDeclaration(new Stmt.Var(c.Name, c.TypeAnnotation, c.Initializer));
+                EmitVariableDeclarationWithLexicalTdz(
+                    new Stmt.Var(c.Name, c.TypeAnnotation, c.Initializer));
                 break;
 
             case Stmt.If i:
@@ -326,6 +327,26 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
 
             default:
                 throw new CompileException($"Unhandled statement type in ILEmitter: {stmt.GetType().Name}");
+        }
+    }
+
+    private void EmitVariableDeclarationWithLexicalTdz(Stmt.Var declaration)
+    {
+        if (declaration.IsVar)
+        {
+            EmitVarDeclaration(declaration);
+            return;
+        }
+
+        var saved = _ctx.LexicalInitializerTdzName;
+        _ctx.LexicalInitializerTdzName = declaration.Name.Lexeme;
+        try
+        {
+            EmitVarDeclaration(declaration);
+        }
+        finally
+        {
+            _ctx.LexicalInitializerTdzName = saved;
         }
     }
 

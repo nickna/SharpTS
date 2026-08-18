@@ -26,12 +26,20 @@ public static class EvalBridge
     /// scope and returns the completion value. Per ECMA-262 §19.2.1, a non-string argument is
     /// returned unchanged.
     /// </summary>
-    public static object? Eval(object? argument)
+    public static object? Eval(
+        object? argument,
+        object? callerGlobalThis,
+        object? callerUndefined)
     {
         if (argument is not string source)
             return argument;
 
         var interpreter = new Interpreter();
-        return interpreter.Eval(source);
+        var result = interpreter.Eval(source);
+        if (result is Runtime.Types.SharpTSUndefined)
+            return callerUndefined;
+        return result is Runtime.Types.SharpTSGlobalThis
+            ? callerGlobalThis
+            : result;
     }
 }

@@ -111,6 +111,12 @@ public partial class AsyncMoveNextEmitter
 
         string name = a.Name.Lexeme;
 
+        if (a.IsLexicalInitialization)
+        {
+            EmitHostedTopLevelLexicalInitialization(a);
+            return;
+        }
+
         if (TryGetFunctionDCField(name, out var dcField))
         {
             EmitExpression(a.Value);
@@ -140,6 +146,55 @@ public partial class AsyncMoveNextEmitter
         }
 
         base.EmitAssign(a);
+    }
+
+    /// <summary>
+    /// Hosted top-level-await runners lower module lexical declarations to assignments because
+    /// their storage already exists in module fields. This is the declaration's initializing
+    /// store, so it must bypass the ordinary assignment TDZ guard and flip the initialization
+    /// flag only after the initializer completes successfully.
+    /// </summary>
+    private void EmitHostedTopLevelLexicalInitialization(Expr.Assign assignment)
+    {
+        string name = assignment.Name.Lexeme;
+        EmitExpression(assignment.Value);
+        EnsureBoxed();
+        _il.Emit(OpCodes.Dup); // assignment-expression result
+
+        if (_ctx!.CapturedTopLevelVars?.Contains(name) == true &&
+            _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
+        {
+            var value = _il.DeclareLocal(_types.Object);
+            _il.Emit(OpCodes.Stloc, value);
+
+            if (_ctx.EntryPointDisplayClassLocal != null)
+                _il.Emit(OpCodes.Ldloc, _ctx.EntryPointDisplayClassLocal);
+            else if (_ctx.CurrentArrowEntryPointDCField != null)
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowEntryPointDCField);
+            }
+            else if (_ctx.EntryPointDisplayClassStaticField != null)
+                _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
+            else
+                throw new InvalidOperationException(
+                    $"Hosted lexical initialization cannot access captured top-level binding '{name}'.");
+
+            _il.Emit(OpCodes.Ldloc, value);
+            _il.Emit(OpCodes.Stfld, entryPointField);
+        }
+        else if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
+        {
+            _il.Emit(OpCodes.Stsfld, topLevelField);
+        }
+        else
+        {
+            throw new InvalidOperationException(
+                $"Hosted lexical initialization has no module storage for '{name}'.");
+        }
+
+        _ctx.EmitMarkTopLevelLexicalInitialized(_il, name);
+        SetStackUnknown();
     }
 
     /// <summary>

@@ -38,8 +38,39 @@ public partial class RuntimeEmitter
             FieldAttributes.Private | FieldAttributes.Static);
 
         EmitIndirectEval(typeBuilder, runtime);
+        EmitUriComponentFunctions(typeBuilder, runtime);
         EmitGlobalThisGetProperty(typeBuilder, runtime);
         EmitGlobalThisSetProperty(typeBuilder, runtime);
+    }
+
+    private void EmitUriComponentFunctions(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        MethodBuilder Emit(string clrName, MethodInfo uriMethod)
+        {
+            var method = typeBuilder.DefineMethod(
+                clrName,
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.String,
+                [_types.Object]);
+
+            // Value calls must turn an omitted argument into JS undefined, not
+            // CLR null, before applying the URI function's ToString coercion.
+            if (runtime.PadUndefinedAttrCtor is not null)
+                method.SetCustomAttribute(
+                    runtime.PadUndefinedAttrCtor, CustomAttributeEncoder.EmptyBlob);
+
+            var il = method.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Call, uriMethod);
+            il.Emit(OpCodes.Ret);
+            return method;
+        }
+
+        runtime.GlobalEncodeURIComponent = Emit(
+            "GlobalEncodeURIComponent", _types.UriEscapeDataString);
+        runtime.GlobalDecodeURIComponent = Emit(
+            "GlobalDecodeURIComponent", _types.UriUnescapeDataString);
     }
 
     /// <summary>
@@ -66,6 +97,8 @@ public partial class RuntimeEmitter
         var parseFloatLabel = il.DefineLabel();
         var isNaNLabel = il.DefineLabel();
         var isFiniteLabel = il.DefineLabel();
+        var encodeURIComponentLabel = il.DefineLabel();
+        var decodeURIComponentLabel = il.DefineLabel();
         var evalLabel = il.DefineLabel();
         var returnLabel = il.DefineLabel();
         var checkBuiltInsLabel = il.DefineLabel();
@@ -205,6 +238,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brtrue, isFiniteLabel);
 
+        // URI functions are ordinary first-class globals as well as recognized
+        // direct-call intrinsics.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "encodeURIComponent");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, encodeURIComponentLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "decodeURIComponent");
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, decodeURIComponentLabel);
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldstr, "eval");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
@@ -300,6 +345,8 @@ public partial class RuntimeEmitter
         }
         EmitSingletonBranch("Math", runtime.MathSingletonField);
         EmitSingletonBranch("JSON", runtime.JsonSingletonField);
+        if (runtime.ReflectSingletonField is not null)
+            EmitSingletonBranch("Reflect", runtime.ReflectSingletonField);
 
         // globalThis.process → the live $Process singleton (epic #1078), same
         // object as the bare `process` identifier and the module facade's
@@ -414,6 +461,14 @@ public partial class RuntimeEmitter
         EmitGetOrCreateTSFn(runtime.NumberIsFinite, "isFinite", 1);
         il.Emit(OpCodes.Br, returnLabel);
 
+        il.MarkLabel(encodeURIComponentLabel);
+        EmitGetOrCreateTSFn(runtime.GlobalEncodeURIComponent, "encodeURIComponent", 1);
+        il.Emit(OpCodes.Br, returnLabel);
+
+        il.MarkLabel(decodeURIComponentLabel);
+        EmitGetOrCreateTSFn(runtime.GlobalDecodeURIComponent, "decodeURIComponent", 1);
+        il.Emit(OpCodes.Br, returnLabel);
+
         il.MarkLabel(evalLabel);
         EmitGetOrCreateTSFn(runtime.EvalIndirect, "eval", 1);
         il.Emit(OpCodes.Br, returnLabel);
@@ -463,11 +518,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Eval");
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
         il.Emit(OpCodes.Ldnull);
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldc_I4_3);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));

@@ -138,20 +138,15 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
         };
         if (method == null) return false;
 
-        // ECMA-262 §17 built-in `name` + spec `length`.
-        // parse(text, reviver?) → 2; stringify(value, replacer?, space?) → 3;
-        // rawJSON(text) → 1; isRawJSON(value) → 1.
-        int specLength = propertyName switch
-        {
-            "parse" => 2,
-            "stringify" => 3,
-            _ => 1,
-        };
+        // Route value-form reads through the singleton object. Besides keeping
+        // identity stable, this makes configurable built-in deletion observable:
+        // after `delete JSON.stringify`, a later `JSON.stringify` must not be
+        // resurrected by this compile-time fast path.
         var il = ctx.IL;
-        ctx.Types.EmitLoadMethodInfo(il, method);
+        il.Emit(OpCodes.Call, runtime.JsonSingletonPopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.JsonSingletonField);
         il.Emit(OpCodes.Ldstr, propertyName);
-        il.Emit(OpCodes.Ldc_I4, specLength);
-        il.Emit(OpCodes.Call, runtime.TSFunctionGetOrCreate);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         return true;
     }
 

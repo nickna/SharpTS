@@ -18,20 +18,29 @@ public partial class GeneratorMoveNextEmitter
             return;
         }
 
-        // 1. Emit the yield value (or null if no value)
+        // 1. Emit the yield value. Operand evaluation is outside the flag-based
+        // try's ordinary sync segments because the yield itself suspends, so
+        // capture just this non-suspending operation and route failures to the
+        // surrounding JavaScript catch.
+        var valueTemp = _il.DeclareLocal(typeof(object));
         if (y.Value != null)
         {
-            EmitExpression(y.Value);
-            EnsureBoxed();
+            EmitTryBodyOperation(() =>
+            {
+                EmitExpression(y.Value);
+                EnsureBoxed();
+                // Leave requires an empty evaluation stack; carry the guarded
+                // operand through a local and reload it after the protected block.
+                _il.Emit(OpCodes.Stloc, valueTemp);
+            });
         }
         else
         {
-            _il.Emit(OpCodes.Ldnull);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.UndefinedInstance);
+            _il.Emit(OpCodes.Stloc, valueTemp);
         }
 
         // 2. Store value in <>2__current field
-        var valueTemp = _il.DeclareLocal(typeof(object));
-        _il.Emit(OpCodes.Stloc, valueTemp);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, valueTemp);
         _il.Emit(OpCodes.Stfld, _builder.CurrentField);
@@ -117,10 +126,15 @@ public partial class GeneratorMoveNextEmitter
         var iteratorLocal = _il.DeclareLocal(typeof(object));
         var enumTemp = _il.DeclareLocal(typeof(System.Collections.IEnumerator));
 
-        // Emit the iterable expression
-        EmitExpression(y.Value!);
-        EnsureBoxed();
-        _il.Emit(OpCodes.Stloc, iterableLocal);
+        // Emit the iterable expression. Like a plain yield operand this sits
+        // outside the flag-based try's sync segments, so explicitly route an
+        // abrupt completion to that try's catch.
+        EmitTryBodyOperation(() =>
+        {
+            EmitExpression(y.Value!);
+            EnsureBoxed();
+            _il.Emit(OpCodes.Stloc, iterableLocal);
+        });
 
         // A delegated SharpTS generator implements $IGenerator. Store it directly in the
         // delegate field and skip the Symbol.iterator/$IteratorWrapper setup below, which
@@ -197,15 +211,18 @@ public partial class GeneratorMoveNextEmitter
         NormalizeYieldStarTypedArrayOrBuffer(iterableLocal);
 
         // Check for Symbol.iterator on the object (for custom iterables)
-        _il.Emit(OpCodes.Ldloc, iterableLocal);
-        _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
-        _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
-        _il.Emit(OpCodes.Stloc, iterFnLocal);
+        EmitTryBodyOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, iterableLocal);
+            _il.Emit(OpCodes.Ldsfld, _ctx!.Runtime!.SymbolIterator);
+            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
+            _il.Emit(OpCodes.Stloc, iterFnLocal);
+        });
 
         // If @@iterator is present, use the iterator protocol. Explicit null
         // is present-but-non-callable and must not take the CLR fallback.
         _il.Emit(OpCodes.Ldloc, iterFnLocal);
-        _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);
+        _il.Emit(OpCodes.Isinst, _ctx!.Runtime!.UndefinedType);
         _il.Emit(OpCodes.Brfalse, hasIteratorLabel);
 
         // No Symbol.iterator - fall back to IEnumerable cast
@@ -218,12 +235,15 @@ public partial class GeneratorMoveNextEmitter
         // Has Symbol.iterator - use iterator protocol with $IteratorWrapper
         _il.MarkLabel(hasIteratorLabel);
         // Call iterator function: iterator = InvokeMethodValue(iterable, iterFn, new object[0])
-        _il.Emit(OpCodes.Ldloc, iterableLocal);     // receiver (this)
-        _il.Emit(OpCodes.Ldloc, iterFnLocal);       // function
-        _il.Emit(OpCodes.Ldc_I4_0);
-        _il.Emit(OpCodes.Newarr, typeof(object));   // empty args
-        _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
-        _il.Emit(OpCodes.Stloc, iteratorLocal);
+        EmitTryBodyOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldloc, iterableLocal);     // receiver (this)
+            _il.Emit(OpCodes.Ldloc, iterFnLocal);       // function
+            _il.Emit(OpCodes.Ldc_I4_0);
+            _il.Emit(OpCodes.Newarr, typeof(object));   // empty args
+            _il.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+            _il.Emit(OpCodes.Stloc, iteratorLocal);
+        });
 
         // Create $IteratorWrapper: new $IteratorWrapper(iterator, runtimeType)
         _il.Emit(OpCodes.Ldloc, iteratorLocal);
@@ -302,12 +322,18 @@ public partial class GeneratorMoveNextEmitter
             _il.Emit(OpCodes.Isinst, iteratorWrapperType);
             _il.Emit(OpCodes.Brfalse, plainEnumeratorLabel);
 
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Castclass, iteratorWrapperType);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.SentField);
-            _il.Emit(OpCodes.Call, moveNextWithSent);
+            var wrapperMovedLocal = _il.DeclareLocal(typeof(bool));
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, delegatedField);
+                _il.Emit(OpCodes.Castclass, iteratorWrapperType);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, _builder.SentField);
+                _il.Emit(OpCodes.Call, moveNextWithSent);
+                _il.Emit(OpCodes.Stloc, wrapperMovedLocal);
+            });
+            _il.Emit(OpCodes.Ldloc, wrapperMovedLocal);
             _il.Emit(OpCodes.Brfalse, loopEnd);
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, delegatedField);
@@ -319,13 +345,27 @@ public partial class GeneratorMoveNextEmitter
         }
 
         // Plain IEnumerator path (arrays, Maps, Sets, etc.): advance, then read Current into valueTemp.
-        _il.Emit(OpCodes.Ldarg_0);
-        _il.Emit(OpCodes.Ldfld, delegatedField);
-        _il.Emit(OpCodes.Callvirt, moveNext);
+        var plainMovedLocal = _il.DeclareLocal(typeof(bool));
+        EmitTryBodyOperation(() =>
+        {
+            _il.Emit(OpCodes.Ldarg_0);
+            _il.Emit(OpCodes.Ldfld, delegatedField);
+            _il.Emit(OpCodes.Callvirt, moveNext);
+            _il.Emit(OpCodes.Stloc, plainMovedLocal);
+        });
+        _il.Emit(OpCodes.Ldloc, plainMovedLocal);
         _il.Emit(OpCodes.Brfalse, loopEnd);
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldfld, delegatedField);
         _il.Emit(OpCodes.Callvirt, current);
+        // String's CLR enumerator exposes boxed Char values; JavaScript's
+        // string iterator yields one-character strings.
+        var plainCurrentNotCharLabel = _il.DefineLabel();
+        _il.Emit(OpCodes.Dup);
+        _il.Emit(OpCodes.Isinst, Types.Char);
+        _il.Emit(OpCodes.Brfalse, plainCurrentNotCharLabel);
+        _il.Emit(OpCodes.Call, Types.ConvertToStringFromObject);
+        _il.MarkLabel(plainCurrentNotCharLabel);
         _il.Emit(OpCodes.Stloc, valueTemp);
         _il.Emit(OpCodes.Br, haveValueLabel);
 
@@ -333,20 +373,23 @@ public partial class GeneratorMoveNextEmitter
         if (generatorInterfaceType != null)
         {
             _il.MarkLabel(driveViaGeneratorLabel);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, delegatedField);
-            _il.Emit(OpCodes.Castclass, generatorInterfaceType);
-            _il.Emit(OpCodes.Ldarg_0);
-            _il.Emit(OpCodes.Ldfld, _builder.SentField);
-            _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.GeneratorNextMethod);
-            _il.Emit(OpCodes.Stloc, genResultLocal);
+            EmitTryBodyOperation(() =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, delegatedField);
+                _il.Emit(OpCodes.Castclass, generatorInterfaceType);
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, _builder.SentField);
+                _il.Emit(OpCodes.Callvirt, _ctx!.Runtime!.GeneratorNextMethod);
+                _il.Emit(OpCodes.Stloc, genResultLocal);
+            });
 
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorDone);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIteratorDone);
             _il.Emit(OpCodes.Brtrue, genDoneLabel);
 
             _il.Emit(OpCodes.Ldloc, genResultLocal);
-            _il.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorValue);
+            _il.Emit(OpCodes.Call, _ctx!.Runtime!.GetIteratorValue);
             _il.Emit(OpCodes.Stloc, valueTemp);
             // fall through to haveValue
         }
@@ -410,6 +453,37 @@ public partial class GeneratorMoveNextEmitter
         // yield* evaluates to the delegated iterator's return value (captured above).
         _il.Emit(OpCodes.Ldloc, yieldStarResultLocal);
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Emits a non-suspending operation belonging to a yield inside the
+    /// innermost flag-based try.  The yield's return/resume labels must remain
+    /// outside real IL protected regions, but operand evaluation and iterator
+    /// protocol calls can be guarded independently and routed to the guest
+    /// catch exactly like an ordinary synchronous segment.
+    /// </summary>
+    private void EmitTryBodyOperation(Action emit)
+    {
+        if (_tryBodyContext is not { } target)
+        {
+            emit();
+            return;
+        }
+
+        var completed = _il.DefineLabel();
+        _protectedRegionDepth++;
+        _il.BeginExceptionBlock();
+        emit();
+        _il.Emit(OpCodes.Leave, completed);
+        _il.BeginCatchBlock(typeof(Exception));
+        _il.Emit(OpCodes.Call, _ctx!.Runtime!.WrapException);
+        _il.Emit(OpCodes.Stloc, target.CaughtException);
+        _il.Emit(OpCodes.Ldc_I4_1);
+        _il.Emit(OpCodes.Stloc, target.ExceptionPresent);
+        _il.Emit(OpCodes.Leave, target.AfterTryBody);
+        _il.EndExceptionBlock();
+        _protectedRegionDepth--;
+        _il.MarkLabel(completed);
     }
 
     /// <summary>

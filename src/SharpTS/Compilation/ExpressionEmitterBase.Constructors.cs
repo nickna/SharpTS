@@ -461,10 +461,31 @@ public abstract partial class ExpressionEmitterBase
 
             // --- Promise ---
             case "Promise":
-                if (arguments.Count != 1)
-                    throw new CompileException("Promise constructor requires exactly 1 argument (executor function).");
-                EmitExpression(arguments[0]);
-                EnsureBoxed();
+                if (arguments.Count == 0)
+                {
+                    // Missing executor is a runtime TypeError. Emitting the
+                    // undefined sentinel lets PromiseFromExecutor reject an
+                    // enclosing async function instead of failing compilation.
+                    IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+                }
+                else
+                {
+                    EmitExpression(arguments[0]);
+                    EnsureBoxed();
+                    if (arguments.Count > 1)
+                    {
+                        var executor = IL.DeclareLocal(Ctx.Types.Object);
+                        IL.Emit(OpCodes.Stloc, executor);
+                        // Extra arguments are evaluated left-to-right and ignored.
+                        for (int i = 1; i < arguments.Count; i++)
+                        {
+                            EmitExpression(arguments[i]);
+                            EnsureBoxed();
+                            IL.Emit(OpCodes.Pop);
+                        }
+                        IL.Emit(OpCodes.Ldloc, executor);
+                    }
+                }
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseFromExecutor);
                 SetStackUnknown();
                 return true;

@@ -383,6 +383,41 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notStringTypeLabel);
 
+        // Function call form. Bare Function is represented by the $TSFunction
+        // Type token; calling it (including through the GeneratorFunction
+        // constructor identity currently exposed by generator prototypes)
+        // produces the same anonymous callable shell as `new Function(...)`.
+        var notFunctionTypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.Type);
+        il.Emit(OpCodes.Ldtoken, runtime.TSFunctionType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle",
+            [_types.RuntimeTypeHandle])!);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "op_Equality",
+            [_types.Type, _types.Type])!);
+        il.Emit(OpCodes.Brfalse, notFunctionTypeLabel);
+        var dynamicFunctionLengthLocal = il.DeclareLocal(_types.Int32);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, dynamicFunctionLengthLocal);
+        var functionLengthNonNegative = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, dynamicFunctionLengthLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, functionLengthNonNegative);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, dynamicFunctionLengthLocal);
+        il.MarkLabel(functionLengthNonNegative);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldstr, "anonymous");
+        il.Emit(OpCodes.Ldloc, dynamicFunctionLengthLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSFunctionCtorWithCache);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notFunctionTypeLabel);
+
         // Emitted ECMAScript classes implement $IHasFields and, unlike legacy
         // function constructors, are never callable.  This path is reached by
         // indirect calls such as `Derived.apply(receiver, args)`.
@@ -416,7 +451,10 @@ public partial class RuntimeEmitter
         // sets thread-local _currentThis and calls Invoke unchanged.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSFunctionType);
-        il.Emit(OpCodes.Ldnull);  // thisArg = null
+        // A call through InvokeValue has no Reference receiver.  Pass the JS
+        // undefined sentinel so strict callees retain undefined while sloppy
+        // callees normalize it to globalThis in LoadThis.
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
         il.Emit(OpCodes.Ret);

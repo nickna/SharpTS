@@ -181,6 +181,8 @@ public partial class ILCompiler
         // User TS function: when invoked as a value, omitted trailing args must pad with the
         // `undefined` sentinel (JS semantics), not CLR null. (#640)
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, funcStmt.Parameters);
+        MarkFunctionName(methodBuilder, funcStmt.RuntimeName ?? funcStmt.Name.Lexeme);
 
         // Flag eagerly (phase 3) so direct-call sites emitted in phase 7 can publish
         // caller args to the thread-static before OpCodes.Call. Uses the same scanner
@@ -431,7 +433,7 @@ public partial class ILCompiler
         ApplyCommonJsModuleAccess(ctx);
         ctx.UnionGenerator = _unionGenerator;
         // Check for function-level "use strict" directive
-        ctx.IsStrictMode = _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body);
+        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body);
         // Entry-point display class for captured top-level variables. TopLevelStaticVars uses
         // the pre-computed per-function map rather than the module-wide default.
         ApplyCapturedTopLevelVariableAccess(ctx);
@@ -522,6 +524,10 @@ public partial class ILCompiler
                 }
             }
         }
+
+        // Captured lexical slots must enter TDZ before hoisted functions can
+        // retain a reference to their environment.
+        emitter.InitializeCapturedLexicalTdzBindings(funcStmt.Body);
 
         // Hoist inner function declarations (create TSFunction locals before other statements)
         EmitInnerFunctionHoisting(il, ctx, funcStmt.Body);
@@ -1412,7 +1418,7 @@ public partial class ILCompiler
             var il = overload.GetILGenerator();
 
             // Create a minimal context just for emitting default value expressions
-            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || Parsing.DirectivePrologue.HasUseStrict(funcStmt.Body));
+            var ctx = CreateOverloadDefaultsContext(il, _isStrictMode || BodyDeclaresUseStrict(funcStmt.Body));
             var emitter = new ILEmitter(ctx);
 
             // Make the provided parameters resolvable so a default value that references an
@@ -1439,7 +1445,8 @@ public partial class ILCompiler
                 funcStmt.Parameters,
                 arity,
                 isStatic: true,
-                emitter
+                emitter,
+                _runtime.UndefinedInstance
             );
         }
     }
@@ -1465,9 +1472,6 @@ public partial class ILCompiler
     /// </summary>
     internal void MarkFunctionLength(MethodBuilder method, IReadOnlyList<Stmt.Parameter> parameters)
     {
-        if (_runtime?.FunctionLengthAttrCtor == null)
-            return;
-
         int length = 0;
         foreach (var parameter in parameters)
         {
@@ -1476,9 +1480,31 @@ public partial class ILCompiler
             length++;
         }
 
+        _functions.Lengths[method] = length;
+
+        if (_runtime?.FunctionLengthAttrCtor == null)
+            return;
+
         method.SetCustomAttribute(
             _runtime.FunctionLengthAttrCtor,
             CustomAttributeEncoder.Encode(_runtime.FunctionLengthAttrCtor, length));
+    }
+
+    internal void MarkFunctionName(MethodBuilder method, string name)
+    {
+        _functions.Names[method] = name;
+        if (_runtime?.FunctionNameAttrCtor != null)
+            method.SetCustomAttribute(
+                _runtime.FunctionNameAttrCtor,
+                CustomAttributeEncoder.Encode(_runtime.FunctionNameAttrCtor, name));
+    }
+
+    internal void MarkNonConstructible(MethodBuilder method)
+    {
+        if (_runtime?.NonConstructibleAttrCtor != null)
+            method.SetCustomAttribute(
+                _runtime.NonConstructibleAttrCtor,
+                CustomAttributeEncoder.EmptyBlob);
     }
 
     /// <summary>

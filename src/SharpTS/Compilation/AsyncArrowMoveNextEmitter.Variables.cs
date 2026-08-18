@@ -64,6 +64,7 @@ public partial class AsyncArrowMoveNextEmitter
         // because cross-module function references need to go through the import field
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Ldsfld, topLevelField);
             SetStackUnknown();
             return;
@@ -95,6 +96,7 @@ public partial class AsyncArrowMoveNextEmitter
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
             _ctx.EntryPointDisplayClassStaticField != null)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
             _il.Emit(OpCodes.Ldfld, entryPointField);
             SetStackUnknown();
@@ -188,6 +190,7 @@ public partial class AsyncArrowMoveNextEmitter
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
             _ctx.EntryPointDisplayClassStaticField != null)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             var temp = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, temp);
             _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
@@ -200,6 +203,7 @@ public partial class AsyncArrowMoveNextEmitter
         // Check if it's a non-captured top-level variable
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Stsfld, topLevelField);
             SetStackUnknown();
             return;
@@ -324,6 +328,7 @@ public partial class AsyncArrowMoveNextEmitter
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true &&
             _ctx.EntryPointDisplayClassStaticField != null)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             var temp = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, temp);
             _il.Emit(OpCodes.Ldsfld, _ctx.EntryPointDisplayClassStaticField);
@@ -335,6 +340,7 @@ public partial class AsyncArrowMoveNextEmitter
         // Check if it's a non-captured top-level variable
         if (_ctx?.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Stsfld, topLevelField);
             return;
         }

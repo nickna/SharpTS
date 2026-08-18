@@ -285,4 +285,34 @@ public class ArgumentsMagicVariableTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("2\n", output);
     }
+
+    [Theory, ModeData]
+    public void ArgumentsIterator_ObservesLiveLengthTruncation(ExecutionMode mode)
+    {
+        var source = """
+            function loose(a: number, b: number, c: number): void {
+                const values: any = arguments;
+                const iterator: any = values[Symbol.iterator]();
+                iterator.next();
+                iterator.next();
+                values.length = 2;
+                const result: any = iterator.next();
+                console.log(result.done, result.value === undefined);
+            }
+            function strict(a: number, b: number, c: number): void {
+                "use strict";
+                const values: any = arguments;
+                const iterator: any = values[Symbol.iterator]();
+                iterator.next();
+                iterator.next();
+                values.length = 2;
+                const result: any = iterator.next();
+                console.log(result.done, result.value === undefined);
+            }
+            loose(2, 1, 3);
+            strict(2, 1, 3);
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true true\ntrue true\n", output);
+    }
 }

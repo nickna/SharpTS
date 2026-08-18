@@ -1002,7 +1002,8 @@ internal sealed class GeneratorArrowLifter
             // Carry the annotation node twins so the lifted declaration resolves node-first
             // exactly like the original expression would have.
             ThisTypeNode: af.ThisTypeNode,
-            ReturnTypeNode: af.ReturnTypeNode);
+            ReturnTypeNode: af.ReturnTypeNode,
+            RuntimeName: af.Name?.Lexeme ?? "");
 
         // The declaration itself is scaffolding — the user wrote an expression, not a declaration —
         // but its body statements keep the spans they were parsed with.

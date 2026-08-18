@@ -84,12 +84,16 @@ public abstract record Expr
     /// compares THIS annotation — not the value's type — against the established declared type using
     /// structural identity for TS2403. The self-assignment is a runtime no-op that preserves the
     /// existing binding's value.</param>
+    /// <param name="IsLexicalInitialization">True when hosted top-level-await lowering turns a
+    /// <c>let</c>/<c>const</c> declaration into an assignment to its predeclared module field. The
+    /// compiler must permit this first store through the TDZ and mark the binding initialized.</param>
     public record Assign(
         Token Name,
         Expr Value,
         bool IsVarRedeclaration = false,
         string? RedeclarationTypeAnnotation = null,
-        TypeNode? RedeclarationTypeAnnotationNode = null) : Expr;
+        TypeNode? RedeclarationTypeAnnotationNode = null,
+        bool IsLexicalInitialization = false) : Expr;
     // TypeArgNodes: per-element node twins of TypeArgs (type-AST migration) — same length as
     // TypeArgs when non-null; an element without node support is null without discarding siblings.
     public record Call(Expr Callee, Token Paren, List<string>? TypeArgs, List<Expr> Arguments, bool Optional = false, List<TypeNode?>? TypeArgNodes = null) : Expr
@@ -348,7 +352,7 @@ public abstract record Stmt
     /// ThisTypeNode/ReturnTypeNode are the node twins of ThisType/ReturnType (type-AST
     /// migration), populated when the parser produced them.
     /// </summary>
-    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, bool HasDynamicThis = false, TypeNode? ThisTypeNode = null, TypeNode? ReturnTypeNode = null) : Stmt;
+    public record Function(Token Name, List<TypeParam>? TypeParams, string? ThisType, List<Parameter> Parameters, List<Stmt>? Body, string? ReturnType, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsAbstract = false, bool IsOverride = false, bool IsAsync = false, bool IsGenerator = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, bool HasDynamicThis = false, TypeNode? ThisTypeNode = null, TypeNode? ReturnTypeNode = null, string? RuntimeName = null) : Stmt;
     public record Parameter(Token Name, string? Type, Expr? DefaultValue = null, bool IsRest = false, bool IsParameterProperty = false, AccessModifier? Access = null, bool IsReadonly = false, bool IsOptional = false, List<Decorator>? Decorators = null, TypeNode? TypeAnnotationNode = null);
     /// <summary>
     /// Class field declaration. For computed property names (e.g., [Symbol("key")]: type),

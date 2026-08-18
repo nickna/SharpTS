@@ -1156,6 +1156,20 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
         il.MarkLabel(noExplicitCoercionShadowLabel);
 
+        // Object.create(null) has no inherited Object.prototype coercion
+        // methods.  The compatibility fallback below is only for shapes whose
+        // implicit prototype is not represented by GetProperty; an explicit
+        // null [[Prototype]] must instead make OrdinaryToPrimitive fail.
+        var noExplicitNullPrototypeLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Brfalse, noExplicitNullPrototypeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Brtrue, noExplicitNullPrototypeLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert object to primitive value");
+        il.MarkLabel(noExplicitNullPrototypeLabel);
+
         // No usable toString/valueOf on this object — fall back to "[object Object]"
         // per ECMA-262 19.1.3.6 (Object.prototype.toString returns this for plain objects).
         // Lenient: spec strictly throws TypeError when both are unusable, but the
@@ -1466,6 +1480,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, notBigIntLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot convert a BigInt to a number");
         il.MarkLabel(notBigIntLabel);
+
+        // ConvertToNumber owns the complete StringNumericLiteral parser,
+        // including ECMAScript whitespace trimming. Delegate primitive strings
+        // only after the Symbol/BigInt guards above so abstract ToNumber keeps
+        // rejecting those two numeric-incompatible primitive kinds.
+        var notStringNumberLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Brfalse, notStringNumberLabel);
+        il.Emit(OpCodes.Ldloc, argLocal);
+        il.Emit(OpCodes.Call, runtime.ConvertToNumber);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notStringNumberLabel);
 
         // ECMA-262 ToNumber: strings with "0x"/"0X" prefix parse as hex. Convert.ToDouble
         // throws on those, so special-case before the fallback. Without this, tests that

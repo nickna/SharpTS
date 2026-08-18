@@ -48,6 +48,7 @@ public static class StringAccumulatorPromotionAnalyzer
         foreach (var (key, nameToken) in visitor.Candidates)
         {
             if (visitor.Disqualified.Contains(key)) continue;
+            if (visitor.DirectEvalScopes.Contains(key.Scope)) continue;
             if (visitor.DeclCount.GetValueOrDefault(key) != 1) continue;
             // IsVariableCaptured is lexeme-global (conservative): a captured local is routed to an
             // object display-class field, never a StringBuilder slot, so capture must disqualify.
@@ -76,6 +77,13 @@ public static class StringAccumulatorPromotionAnalyzer
 
         /// <summary>(scope, name) pairs with at least one disqualifying occurrence.</summary>
         public HashSet<(int Scope, string Name)> Disqualified { get; } = new();
+
+        /// <summary>
+        /// Scopes containing a direct eval call. Its source can observe any
+        /// lexical binding even when that binding has no ordinary AST use, so
+        /// representation-changing local promotion is unsound in that scope.
+        /// </summary>
+        public HashSet<int> DirectEvalScopes { get; } = new();
 
         protected override void VisitFunction(Stmt.Function stmt) => InScope(() => base.VisitFunction(stmt));
         protected override void VisitArrowFunction(Expr.ArrowFunction expr) => InScope(() => base.VisitArrowFunction(expr));
@@ -137,6 +145,9 @@ public static class StringAccumulatorPromotionAnalyzer
 
         protected override void VisitCall(Expr.Call expr)
         {
+            if (expr.Callee is Expr.Variable { Name.Lexeme: "eval" })
+                DirectEvalScopes.Add(_scope);
+
             // `s.charCodeAt(i)` — permitted; visit the index args but skip the receiver variable.
             if (expr.Callee is Expr.Get { Object: Expr.Variable, Optional: false } get
                 && get.Name.Lexeme == "charCodeAt")

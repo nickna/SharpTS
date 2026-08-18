@@ -120,7 +120,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, argsLenLocal);
         il.MarkLabel(afterLenLabel);
 
-        // thisArg = argsLen > 0 ? args[0] : null
+        // thisArg = argsLen > 0 ? args[0] : undefined
         var noThisLabel = il.DefineLabel();
         var afterThisLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, argsLenLocal);
@@ -132,7 +132,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.Emit(OpCodes.Br, afterThisLabel);
         il.MarkLabel(noThisLabel);
-        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Stloc, thisArgLocal);
         il.MarkLabel(afterThisLabel);
 
@@ -380,6 +380,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.ArrayType, "Copy",
             [_types.ArrayType, _types.Int32, _types.ArrayType, _types.Int32, _types.Int32])!);
         il.MarkLabel(afterBoundLabel);
+
+        // Inheriting from Function.prototype does not grant [[Call]]. Validate
+        // the actual receiver before creating a bound wrapper.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        var callableTargetLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, callableTargetLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime,
+            "Function.prototype.bind called on incompatible receiver");
+        il.MarkLabel(callableTargetLabel);
 
         // $BoundTSFunction's ctor expects target as $TSFunction. For non-
         // $TSFunction __this (e.g. a $FunctionBindWrapper from the previous

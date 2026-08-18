@@ -2047,15 +2047,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
             il.Emit(OpCodes.Brfalse, listDeleteNotFrozen);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ret);
+            EmitDeleteIndexFail("Cannot delete property of a frozen arguments object");
             il.MarkLabel(listDeleteNotFrozen);
             var listDeleteNotSealed = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.PDSIsSealed);
             il.Emit(OpCodes.Brfalse, listDeleteNotSealed);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ret);
+            EmitDeleteIndexFail("Cannot delete property of a sealed arguments object");
             il.MarkLabel(listDeleteNotSealed);
 
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
@@ -2075,8 +2073,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
             var listDeleteConfigurable = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, listDeleteConfigurable);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ret);
+            EmitDeleteIndexFail("Cannot delete a non-configurable arguments property");
             il.MarkLabel(listDeleteConfigurable);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);
@@ -2118,8 +2115,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
             var listNamedDeleteConfigurable = il.DefineLabel();
             il.Emit(OpCodes.Brtrue, listNamedDeleteConfigurable);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ret);
+            EmitDeleteIndexFail("Cannot delete a non-configurable arguments property");
             il.MarkLabel(listNamedDeleteConfigurable);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldloc, listDeleteKeyLocal);

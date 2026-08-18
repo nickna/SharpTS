@@ -69,6 +69,10 @@ public class EmittedRuntime
     public Type UndefinedType { get; set; } = null!;
     public FieldInfo UndefinedInstance { get; set; } = null!;
 
+    // Internal sentinel for captured let/const storage before initialization.
+    public Type LexicalUninitializedType { get; set; } = null!;
+    public FieldInfo LexicalUninitializedInstance { get; set; } = null!;
+
     // The emitted TSFunction class
     public TypeBuilder TSFunctionType { get; set; } = null!;
     public ConstructorBuilder TSFunctionCtor { get; set; } = null!;
@@ -309,6 +313,8 @@ public class EmittedRuntime
     public ConstructorBuilder ArrayIteratorCtor { get; set; } = null!;
     public TypeBuilder MapCollectionIteratorType { get; set; } = null!;
     public ConstructorBuilder MapCollectionIteratorCtor { get; set; } = null!;
+    public TypeBuilder SetCollectionIteratorType { get; set; } = null!;
+    public ConstructorBuilder SetCollectionIteratorCtor { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterialize { get; set; } = null!;
     // ECMA-262 RequireObjectCoercible(this) — throws TypeError if `this` is
     // null or undefined. Called from $TSFunction.CoercePrimitiveArgs via
@@ -352,6 +358,11 @@ public class EmittedRuntime
     public TypeBuilder FunctionLengthAttrType { get; set; } = null!;
     public ConstructorBuilder FunctionLengthAttrCtor { get; set; } = null!;
     public FieldBuilder FunctionLengthAttrValueField { get; set; } = null!;
+    public TypeBuilder FunctionNameAttrType { get; set; } = null!;
+    public ConstructorBuilder FunctionNameAttrCtor { get; set; } = null!;
+    public FieldBuilder FunctionNameAttrValueField { get; set; } = null!;
+    public TypeBuilder NonConstructibleAttrType { get; set; } = null!;
+    public ConstructorBuilder NonConstructibleAttrCtor { get; set; } = null!;
 
     // Marker attribute applied to a user function-expression / `this`-bearing arrow method whose
     // first emitted parameter is the synthetic `__this` receiver slot. $TSFunction reads it back via
@@ -525,6 +536,8 @@ public class EmittedRuntime
     public MethodBuilder SymbolPrototypePopulateMethod { get; set; } = null!;
     /// <summary>JSON singleton — `typeof JSON === "object"` per ECMA-262.</summary>
     public FieldBuilder JsonSingletonField { get; set; } = null!;
+    /// <summary>Reflect singleton — the value-form ES namespace object.</summary>
+    public FieldBuilder? ReflectSingletonField { get; set; }
     /// <summary>
     /// Array.prototype singleton dictionary populated at cctor time with
     /// <c>$TSFunction</c> wrappers around <c>$Runtime.Array*</c> helpers.
@@ -555,6 +568,15 @@ public class EmittedRuntime
     /// (<c>const j = JSON; j.stringify(x)</c>) resolves. Idempotent. See issue #276.
     /// </summary>
     public MethodBuilder JsonSingletonPopulateMethod { get; set; } = null!;
+    /// <summary>Populates <see cref="ReflectSingletonField"/> with the standard Reflect methods.</summary>
+    public MethodBuilder? ReflectSingletonPopulateMethod { get; set; }
+    /// <summary>
+    /// Value-form Reflect wrappers keyed by their JavaScript method names. Each
+    /// wrapper accepts an object[] rest argument so it can preserve optional
+    /// argument presence while still exposing the spec-defined function length.
+    /// </summary>
+    public Dictionary<string, MethodBuilder> ReflectValueFormMethods { get; } =
+        new(StringComparer.Ordinal);
     /// <summary>Populates <see cref="StringPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
     public MethodBuilder StringPrototypePopulateMethod { get; set; } = null!;
     /// <summary>Populates <see cref="NumberPrototypeField"/> with $TSFunction wrappers; idempotent.</summary>
@@ -719,6 +741,7 @@ public class EmittedRuntime
     public MethodBuilder ReflectOwnKeys { get; set; } = null!;
     public MethodBuilder ReflectSetPrototypeOf { get; set; } = null!;
     public MethodBuilder ReflectDefineProperty { get; set; } = null!;
+    public MethodBuilder ReflectDefinePropertyObjectAdapter { get; set; } = null!;
     public MethodBuilder ReflectApply { get; set; } = null!;
     public MethodBuilder ReflectConstruct { get; set; } = null!;
     public MethodBuilder ReflectSet { get; set; } = null!;
@@ -747,6 +770,7 @@ public class EmittedRuntime
     public MethodBuilder BoundTSFunctionInvoke { get; set; } = null!;
     public MethodBuilder BoundTSFunctionInvokeWithThis { get; set; } = null!;
     public FieldBuilder BoundTSFunctionTargetField { get; set; } = null!;
+    public FieldBuilder BoundTSFunctionBoundArgsField { get; set; } = null!;
     public TypeBuilder FunctionBindWrapperType { get; set; } = null!;
     public ConstructorBuilder FunctionBindWrapperCtor { get; set; } = null!;
     public MethodBuilder FunctionBindWrapperInvoke { get; set; } = null!;
@@ -800,6 +824,8 @@ public class EmittedRuntime
     public TypeBuilder BoundAnyFunctionType { get; set; } = null!;
     public ConstructorBuilder BoundAnyFunctionCtor { get; set; } = null!;
     public MethodBuilder BoundAnyFunctionInvoke { get; set; } = null!;
+    public FieldBuilder BoundAnyFunctionTargetField { get; set; } = null!;
+    public FieldBuilder BoundAnyFunctionBoundArgsField { get; set; } = null!;
 
     // Method callable wrapper for GetMember results (BuiltInMethod etc.)
     public TypeBuilder MethodCallableType { get; set; } = null!;
@@ -1089,6 +1115,8 @@ public class EmittedRuntime
     public MethodBuilder NumberIsSafeInteger { get; set; } = null!;
     public MethodBuilder GlobalIsNaN { get; set; } = null!;
     public MethodBuilder GlobalIsFinite { get; set; } = null!;
+    public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
+    public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
     public MethodBuilder NumberToFixed { get; set; } = null!;
     public MethodBuilder NumberToPrecision { get; set; } = null!;
     public MethodBuilder NumberToExponential { get; set; } = null!;
@@ -1399,6 +1427,7 @@ public class EmittedRuntime
 
     // Error helper methods in $Runtime
     public MethodBuilder CreateError { get; set; } = null!;
+    public MethodBuilder CreateErrorFromTypeOrNull { get; set; } = null!;
     public MethodBuilder ErrorGetName { get; set; } = null!;
     public MethodBuilder ErrorGetMessage { get; set; } = null!;
     public MethodBuilder ErrorGetStack { get; set; } = null!;
@@ -2587,6 +2616,7 @@ public class EmittedRuntime
     public MethodBuilder AtomicsWait { get; set; } = null!;
     public MethodBuilder AtomicsNotify { get; set; } = null!;
     public MethodBuilder AtomicsIsLockFree { get; set; } = null!;
+    public MethodBuilder AtomicsPause { get; set; } = null!;
 
     // $MessagePort type - emitted for standalone worker support
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSMessagePort

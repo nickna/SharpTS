@@ -1200,8 +1200,12 @@ public class SharpTSProxy : ISharpTSCallable
                     prop, descriptor, ordinaryDefine,
                     ordinaryGetOwnPropertyDescriptor, ordinaryIsExtensible,
                     ordinaryGet, ordinaryHasOwn);
-            ordinaryDefine(_target, prop, descriptor);
-            return true;
+            object? result = ordinaryDefine(_target, prop, descriptor);
+            // Object.defineProperty's callback returns the target object and
+            // therefore denotes success. Reflect.defineProperty's callback
+            // returns the target [[DefineOwnProperty]] boolean; preserve that
+            // false result through every trapless Proxy layer.
+            return result is bool status ? status : true;
         }
 
         bool trapResult = ToBoolean(InvokeTrap(

@@ -592,6 +592,27 @@ public partial class RuntimeEmitter
 
         EmitGlobalThisSetRedirect(il, runtime);
 
+        // $Arguments has a JS-visible length slot independent from its List
+        // backing store. Writes must update that live slot so an already-
+        // created ArrayIterator observes truncation on its next() call.
+        var notArgumentsLengthLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldstr, "length");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notArgumentsLengthLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.ArgumentsType);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stfld, runtime.ArgumentsLengthField);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notArgumentsLengthLabel);
+
         // Proxy dispatch is omitted entirely from assemblies that do not use
         // Proxy. Its receiver-aware ordinary-set helper is feature-gated too.
         if (_features.UsesProxy)
@@ -702,6 +723,12 @@ public partial class RuntimeEmitter
         var tsFunctionSetLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionSetLabel);
 
         // $CJSModule — `module.exports = X` (or any aliased write) goes through here.
@@ -1211,7 +1238,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(tsFnDefineNewLabel);
-            // Function `length` is an intrinsic own data property with
+            // Function `name` and `length` are intrinsic own data properties with
             // [[Writable]] false. It is synthesized by Get/descriptor helpers
             // rather than stored in PDS, so an absent PDS entry must not be
             // mistaken for permission to create a writable shadow.
@@ -1222,6 +1249,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, tsFnNotIntrinsicLengthLabel);
             il.Emit(OpCodes.Ret);
             il.MarkLabel(tsFnNotIntrinsicLengthLabel);
+            var tsFnNotIntrinsicNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "name");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, tsFnNotIntrinsicNameLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(tsFnNotIntrinsicNameLabel);
             var tsFnDoSetLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);
@@ -1260,6 +1294,26 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.PDSIsWritable);
             il.Emit(OpCodes.Brfalse, nullLabel);
+
+            // Keep a writable PDS data descriptor synchronized with the
+            // $Object dictionary. Descriptor-aware reads (including gOPD and
+            // GetProperty's PDS-first path) otherwise keep observing the old
+            // value after an ordinary assignment even though the backing
+            // dictionary was updated.
+            var tsObjDescriptorLocal = il.DeclareLocal(
+                runtime.CompiledPropertyDescriptorType);
+            var tsObjRawStoreLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsObjDescriptorLocal);
+            il.Emit(OpCodes.Ldloc, tsObjDescriptorLocal);
+            il.Emit(OpCodes.Brfalse, tsObjRawStoreLabel);
+            il.Emit(OpCodes.Ldloc, tsObjDescriptorLocal);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Callvirt,
+                runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+            il.MarkLabel(tsObjRawStoreLabel);
         }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
@@ -1624,6 +1678,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.BoundAnyFunctionType);
+        il.Emit(OpCodes.Brtrue, tsFunctionSetStrictLabel);
 
         // $CJSModule — mirror the non-strict branch. Gated on UsesCjsRequire.
         var cjsModuleSetStrictLabel = il.DefineLabel();
@@ -1826,7 +1886,7 @@ public partial class RuntimeEmitter
             EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
 
             il.MarkLabel(tsFnStrictNewPropertyLabel);
-            // The synthesized intrinsic function `length` property is
+            // The synthesized intrinsic function `name` and `length` properties are
             // non-writable even though it has no backing PDS entry. A strict
             // Set must reject it instead of defining a writable shadow.
             var tsFnStrictNotIntrinsicLengthLabel = il.DefineLabel();
@@ -1838,6 +1898,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brfalse, nullLabel);
             EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
             il.MarkLabel(tsFnStrictNotIntrinsicLengthLabel);
+            var tsFnStrictNotIntrinsicNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "name");
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, tsFnStrictNotIntrinsicNameLabel);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brfalse, nullLabel);
+            EmitThrowTypeErrorWithName(il, runtime, "Cannot assign to read only property '", "' of function");
+            il.MarkLabel(tsFnStrictNotIntrinsicNameLabel);
             var tsFnStrictCanAddLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldarg_1);

@@ -338,6 +338,22 @@ public partial class ILEmitter
         {
             if (selfRefSkipName != null && capturedVar == selfRefSkipName) continue;
 
+            // A block lexical predeclared with the TDZ sentinel is captured by
+            // value when this display instance is created. Retain the instance
+            // so declaration emission can refresh the snapshot with the
+            // initialized value, preserving the binding after the TDZ ends.
+            if (_ctx.Locals.TryGetTag(capturedVar, out var lexicalTag)
+                && lexicalTag is Token)
+            {
+                var lexicalDcInstance = IL.DeclareLocal(displayClass);
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Stloc, lexicalDcInstance);
+                if (!_ctx.LexicalCaptureWriteBacks.TryGetValue(
+                        capturedVar, out var lexicalWriteBacks))
+                    _ctx.LexicalCaptureWriteBacks[capturedVar] = lexicalWriteBacks = [];
+                lexicalWriteBacks.Add((lexicalDcInstance, field));
+            }
+
             // Self-referential capture (issue #421): this arrow captures the
             // variable currently being declared, whose initializer creates this
             // arrow. The field is about to be populated with a snapshot of the
@@ -495,15 +511,8 @@ public partial class ILEmitter
                     IL.Emit(OpCodes.Call, _ctx.Types.MethodBaseGetMethodFromHandle);
                 }
                 IL.Emit(OpCodes.Castclass, _ctx.Types.MethodInfo);
-                int arity = 0;
-                foreach (var param in capturedFuncMethod.GetParameters())
-                {
-                    if (param.IsOptional) continue;
-                    if (param.ParameterType == typeof(List<object>)) continue;
-                    if (param.Name?.StartsWith("__") == true) continue;
-                    arity++;
-                }
-                IL.Emit(OpCodes.Ldstr, capturedVar);
+                int arity = _ctx.GetFunctionLength(capturedFuncMethod);
+                IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(capturedFuncMethod, capturedVar));
                 IL.Emit(OpCodes.Ldc_I4, arity);
                 IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
             }

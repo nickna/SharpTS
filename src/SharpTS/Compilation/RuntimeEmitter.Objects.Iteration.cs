@@ -94,12 +94,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, tsObjectLabel);
 
-        // Fallback: null or unsupported source
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse, emptyLabel);
-        il.Emit(OpCodes.Ldstr, "ObjectRest requires dictionary or $IHasFields.");
-        il.Emit(OpCodes.Newobj, _types.InvalidOperationExceptionCtorString);
-        il.Emit(OpCodes.Throw);
+        // Primitive wrappers other than String have no enumerable own properties, so their
+        // CopyDataProperties result is a fresh empty object. The prior host exception for Number
+        // and Symbol violated ToObject and leaked an implementation detail into destructuring.
+        // (String sources are represented through the ordinary indexed-object paths before here.)
+        il.Emit(OpCodes.Br, emptyLabel);
 
         // Dictionary path: cast arg0 directly
         il.MarkLabel(dictLabel);

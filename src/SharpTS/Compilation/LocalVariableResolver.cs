@@ -48,6 +48,21 @@ public class LocalVariableResolver : IVariableResolver
             return StackType.Unknown;
         }
 
+        // A lexical declaration in a nested block/catch shadows a same-named
+        // function parameter and any function-scope capture. Parameter-first
+        // resolution is correct only at the method root.
+        if (_ctx.Locals.GetNestedScopeLocal(name) is { } nestedScopeLocal)
+        {
+            var nestedType = _ctx.Locals.GetLocalType(name);
+            _il.Emit(OpCodes.Ldloc, nestedScopeLocal);
+            if (nestedType == _types.Int64 && _ctx.IntegerCounterLocals.Contains(name))
+            {
+                _il.Emit(OpCodes.Conv_R8);
+                return StackType.Double;
+            }
+            return MapTypeToStackType(nestedType);
+        }
+
         // 1. Parameters
         if (_ctx.TryGetParameter(name, out var argIndex))
         {
@@ -82,6 +97,7 @@ public class LocalVariableResolver : IVariableResolver
                 // Direct access from function body - use the local
                 _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 _il.Emit(OpCodes.Ldfld, funcDCField);
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
 
@@ -117,6 +133,7 @@ public class LocalVariableResolver : IVariableResolver
                     _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
                     _il.Emit(OpCodes.Ldfld, funcDCField);
                 }
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
 
@@ -131,6 +148,7 @@ public class LocalVariableResolver : IVariableResolver
         {
             _il.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
             _il.Emit(OpCodes.Ldfld, arrowDCField);
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return StackType.Unknown;
         }
 
@@ -146,6 +164,7 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Ldarg_0);                              // this
             _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField); // this.$arrowDC (parent's DC)
             _il.Emit(OpCodes.Ldfld, parentArrowDCField);            // parent.<name>
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return StackType.Unknown;
         }
 
@@ -158,6 +177,7 @@ public class LocalVariableResolver : IVariableResolver
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, extraBinding.RefField);
             _il.Emit(OpCodes.Ldfld, extraBinding.VarField);
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return StackType.Unknown;
         }
 
@@ -197,8 +217,10 @@ public class LocalVariableResolver : IVariableResolver
                 // The field is object-typed but holds a StrongBox at runtime.
                 _il.Emit(OpCodes.Castclass, _types.StrongBoxOfObject);
                 _il.Emit(OpCodes.Ldfld, _types.StrongBoxOfObjectValueField);
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
+            _ctx.EmitLexicalTdzValueCheck(_il, name);
             return MapTypeToStackType(field.FieldType);
         }
 
@@ -206,6 +228,7 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             if (_ctx.EntryPointDisplayClassLocal != null)
             {
                 // Direct access from entry point - use the local
@@ -236,6 +259,7 @@ public class LocalVariableResolver : IVariableResolver
         // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Ldsfld, topLevelField);
             return StackType.Unknown;
         }
@@ -294,6 +318,11 @@ public class LocalVariableResolver : IVariableResolver
             if (_ctx.FunctionDisplayClassLocal != null)
             {
                 // Direct access from function body - use the local
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                    _il.Emit(OpCodes.Ldfld, funcDCField);
+                });
                 _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 _il.Emit(OpCodes.Ldloc, temp);
                 _il.Emit(OpCodes.Stfld, funcDCField);
@@ -310,6 +339,12 @@ public class LocalVariableResolver : IVariableResolver
 
             if (_ctx.CurrentArrowFunctionDCField != null)
             {
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+                    _il.Emit(OpCodes.Ldfld, funcDCField);
+                });
                 if (_ctx.CapturedFields?.ContainsKey(name) == true)
                 {
                     // Emit: if (this.$functionDC != null) store to DC, else store to own field
@@ -354,6 +389,11 @@ public class LocalVariableResolver : IVariableResolver
         {
             var tempArrow = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, tempArrow);
+            EmitCapturedLexicalStoreGuard(name, () =>
+            {
+                _il.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+                _il.Emit(OpCodes.Ldfld, arrowDCFieldStore);
+            });
             _il.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
             _il.Emit(OpCodes.Ldloc, tempArrow);
             _il.Emit(OpCodes.Stfld, arrowDCFieldStore);
@@ -392,6 +432,12 @@ public class LocalVariableResolver : IVariableResolver
             {
                 var tempArrow = _il.DeclareLocal(_types.Object);
                 _il.Emit(OpCodes.Stloc, tempArrow);
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
+                    _il.Emit(OpCodes.Ldfld, storeField);
+                });
                 _il.Emit(OpCodes.Ldarg_0);
                 _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
                 _il.Emit(OpCodes.Ldloc, tempArrow);
@@ -405,6 +451,12 @@ public class LocalVariableResolver : IVariableResolver
         {
             var tempExtra = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, tempExtra);
+            EmitCapturedLexicalStoreGuard(name, () =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, extraStoreBinding.RefField);
+                _il.Emit(OpCodes.Ldfld, extraStoreBinding.VarField);
+            });
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, extraStoreBinding.RefField);
             _il.Emit(OpCodes.Ldloc, tempExtra);
@@ -437,6 +489,13 @@ public class LocalVariableResolver : IVariableResolver
             // write through Value so the loop body and sibling closures see the update.
             if (_ctx.CellCapturedFieldNames?.Contains(name) == true)
             {
+                EmitCapturedLexicalStoreGuard(name, () =>
+                {
+                    _il.Emit(OpCodes.Ldarg_0);
+                    _il.Emit(OpCodes.Ldfld, field);
+                    _il.Emit(OpCodes.Castclass, _types.StrongBoxOfObject);
+                    _il.Emit(OpCodes.Ldfld, _types.StrongBoxOfObjectValueField);
+                });
                 _il.Emit(OpCodes.Ldarg_0);
                 _il.Emit(OpCodes.Ldfld, field);
                 _il.Emit(OpCodes.Castclass, _types.StrongBoxOfObject);
@@ -444,6 +503,11 @@ public class LocalVariableResolver : IVariableResolver
                 _il.Emit(OpCodes.Stfld, _types.StrongBoxOfObjectValueField);
                 return true;
             }
+            EmitCapturedLexicalStoreGuard(name, () =>
+            {
+                _il.Emit(OpCodes.Ldarg_0);
+                _il.Emit(OpCodes.Ldfld, field);
+            });
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldloc, temp);
             _il.Emit(OpCodes.Stfld, field);
@@ -454,6 +518,7 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.CapturedTopLevelVars?.Contains(name) == true &&
             _ctx.EntryPointDisplayClassFields?.TryGetValue(name, out var entryPointField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             // Use temp local pattern for storing to fields
             var temp = _il.DeclareLocal(_types.Object);
             _il.Emit(OpCodes.Stloc, temp);
@@ -488,11 +553,22 @@ public class LocalVariableResolver : IVariableResolver
         // 6. Top-level static vars (non-captured)
         if (_ctx.TopLevelStaticVars?.TryGetValue(name, out var topLevelField) == true)
         {
+            _ctx.EmitTopLevelLexicalTdzCheck(_il, name);
             _il.Emit(OpCodes.Stsfld, topLevelField);
             return true;
         }
 
         return false;
+    }
+
+    private void EmitCapturedLexicalStoreGuard(string name, Action emitCurrentValue)
+    {
+        if (_ctx.LexicalTdzNames?.Contains(name) != true)
+            return;
+
+        emitCurrentValue();
+        _ctx.EmitLexicalTdzValueCheck(_il, name);
+        _il.Emit(OpCodes.Pop);
     }
 
     /// <inheritdoc />
@@ -519,7 +595,8 @@ public class LocalVariableResolver : IVariableResolver
             // cases 5/6 (and InvokeWithThis's "null in our model" convention) so
             // `this.x` routes through GlobalThis instead of throwing on null.
             // (Test262 Array filter/some 15.4.4.{20,17}-5-1, call 11.2.3-3_8.)
-            EmitCoerceSloppyThisToGlobal();
+            if (!(_ctx.ThisBindingIsStrictOverride ?? _ctx.IsStrictMode))
+                EmitCoerceSloppyThisToGlobal();
             return;
         }
 
@@ -541,7 +618,17 @@ public class LocalVariableResolver : IVariableResolver
             return;
         }
 
-        // 5. Thread-local `this` set by $Runtime.NewOnFunction (or other call paths
+        // 5. Classic-script top-level code always receives the global this value,
+        //    even when its directive prologue enables strict mode. The thread-local
+        //    slot below is only a function-call transport and must not leak its
+        //    idle `undefined` sentinel into the script's global execution context.
+        if (_ctx.IsScriptTopLevel && _ctx.Runtime != null)
+        {
+            _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.GlobalThisSingletonField);
+            return;
+        }
+
+        // 6. Thread-local `this` set by $Runtime.NewOnFunction (or other call paths
         //    that prep a thisArg for a method whose signature has no __this param).
         //    Falls back to the globalThis sentinel when no such this is active: the
         //    sentinel denotes sloppy-mode `this` (= globalThis) so that a subsequent
@@ -550,11 +637,12 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.Runtime?.CurrentFunctionThisField != null)
         {
             _il.Emit(OpCodes.Ldsfld, _ctx.Runtime.CurrentFunctionThisField);
-            EmitCoerceSloppyThisToGlobal();
+            if (!(_ctx.ThisBindingIsStrictOverride ?? _ctx.IsStrictMode))
+                EmitCoerceSloppyThisToGlobal();
             return;
         }
 
-        // 6. Static context with an emitted runtime: top-level / entry point with no
+        // 7. Static context with an emitted runtime: top-level / entry point with no
         //    active this binding. Resolve to the globalThis sentinel (sloppy `this`)
         //    so `this.x` works and value-null remains distinguishable. Reference-
         //    assembly mode (no runtime) falls back to bare null as before.
@@ -591,7 +679,8 @@ public class LocalVariableResolver : IVariableResolver
         _il.Emit(OpCodes.Brfalse, useGlobal);
 
         // undefined → globalThis (non-strict callees only).
-        if (!_ctx.IsStrictMode && _ctx.Runtime.UndefinedType != null)
+        if (!(_ctx.ThisBindingIsStrictOverride ?? _ctx.IsStrictMode)
+            && _ctx.Runtime.UndefinedType != null)
         {
             _il.Emit(OpCodes.Dup);
             _il.Emit(OpCodes.Isinst, _ctx.Runtime.UndefinedType);

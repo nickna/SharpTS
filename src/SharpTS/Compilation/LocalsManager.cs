@@ -120,6 +120,14 @@ public class LocalsManager(ILGenerator il)
     public bool HasLocal(string name) =>
         _localStacks.TryGetValue(name, out var stack) && stack.Count > 0;
 
+    public LocalBuilder? GetCurrentScopeLocal(string name)
+    {
+        if (_localStacks.TryGetValue(name, out var stack) && stack.Count > 0
+            && stack.Peek().ScopeDepth == _scopes.Count)
+            return stack.Peek().Local;
+        return null;
+    }
+
     /// <summary>
     /// Returns the in-scope local for <paramref name="name"/> ONLY when its current binding
     /// was declared inside a nested (block) scope; null for method-root locals and unbound

@@ -328,4 +328,77 @@ public class ReflectApiTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("10\n20\n", output);
     }
+
+    [Theory, ModeData]
+    public void Reflect_ValueForm_ExposesStableCallableMetadataAndAliases(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = { x: 1 };
+            const get: any = Reflect.get;
+            const set: any = Reflect.set;
+            console.log(typeof Reflect.apply);
+            console.log(Reflect.apply.name);
+            console.log(Reflect.apply.length);
+            console.log(get(target, "x"));
+            console.log(set(target, "y", 2));
+            console.log(target.y);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("function\napply\n3\n1\ntrue\n2\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Reflect_Set_ReturnsFalseForIncompatibleReceiverDescriptor(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = {};
+            const receiver: any = {};
+            Object.defineProperty(receiver, "p", { get() { return 1; } });
+            console.log(Reflect.set(target, "p", 2, receiver));
+            console.log(receiver.p);
+            console.log(target.hasOwnProperty("p"));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\n1\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Reflect_SetPrototypeOf_ValidatesBeforeBooleanRejectionAndAcceptsCurrent(ExecutionMode mode)
+    {
+        var source = """
+            const object: any = {};
+            Object.preventExtensions(object);
+            console.log(Reflect.setPrototypeOf(object, Object.prototype));
+            try {
+                Reflect.setPrototypeOf({}, 1 as any);
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void ReflectConstruct_AggregateErrorUsesIntrinsicPrototypeFallback(ExecutionMode mode)
+    {
+        var source = """
+            function NewTarget(): void {}
+            const values: any[] = [undefined, null, 42, false, "text"];
+            for (const value of values) {
+                const newTarget: any = new Proxy(NewTarget, {
+                    get(target: any, property: any): any {
+                        return property === "prototype" ? value : target[property];
+                    }
+                });
+                const error: any = Reflect.construct(AggregateError, [[]], newTarget);
+                console.log(Object.getPrototypeOf(error) === AggregateError.prototype);
+            }
+            """;
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\ntrue\ntrue\ntrue\ntrue\n", output);
+    }
 }

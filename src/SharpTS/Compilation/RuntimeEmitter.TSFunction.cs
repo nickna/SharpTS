@@ -112,6 +112,53 @@ public partial class RuntimeEmitter
         typeBuilder.CreateType();
     }
 
+    private void EmitFunctionNameAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = moduleBuilder.DefineType(
+            "$FunctionName",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            typeof(System.Attribute));
+        var valueField = typeBuilder.DefineField(
+            "Name", typeof(string), FieldAttributes.Public | FieldAttributes.InitOnly);
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, [typeof(string)]);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Ldarg_1);
+        ctorIl.Emit(OpCodes.Stfld, valueField);
+        ctorIl.Emit(OpCodes.Ret);
+        runtime.FunctionNameAttrType = typeBuilder;
+        runtime.FunctionNameAttrCtor = ctor;
+        runtime.FunctionNameAttrValueField = valueField;
+        typeBuilder.CreateType();
+    }
+
+    /// <summary>
+    /// Marks callable methods which do not implement ECMAScript [[Construct]].
+    /// Arrow, async, and generator functions therefore have no own `prototype`
+    /// property and reject construction even though they share $TSFunction.
+    /// </summary>
+    private void EmitNonConstructibleAttribute(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    {
+        var typeBuilder = moduleBuilder.DefineType(
+            "$NonConstructible",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            typeof(System.Attribute));
+        var ctor = typeBuilder.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var ctorIl = ctor.GetILGenerator();
+        ctorIl.Emit(OpCodes.Ldarg_0);
+        ctorIl.Emit(OpCodes.Call, typeof(System.Attribute).GetConstructor(
+            BindingFlags.Instance | BindingFlags.NonPublic, null, Type.EmptyTypes, null)!);
+        ctorIl.Emit(OpCodes.Ret);
+        runtime.NonConstructibleAttrCtor = ctor;
+        runtime.NonConstructibleAttrType = typeBuilder;
+        typeBuilder.CreateType();
+    }
+
     /// <summary>
     /// Emits a minimal marker attribute <c>$ExpectsThis</c> (empty <see cref="System.Attribute"/>
     /// subclass) applied to a user function-expression / <c>this</c>-bearing arrow method, whose
@@ -304,6 +351,10 @@ public partial class RuntimeEmitter
         // Invoker cache: ConcurrentDictionary<MethodInfo, MethodInvoker>.
         cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(invokerCacheType, Type.EmptyTypes)!);
         cctorIL.Emit(OpCodes.Stsfld, invokerCacheField);
+        // Bare calls start with ECMAScript undefined. Sloppy bodies coerce it
+        // to globalThis when they read `this`; strict bodies preserve it.
+        cctorIL.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        cctorIL.Emit(OpCodes.Stsfld, currentThisField);
         cctorIL.Emit(OpCodes.Ret);
 
         // Constructor: public $TSFunction(object target, MethodInfo method)
@@ -345,6 +396,7 @@ public partial class RuntimeEmitter
         // User methods carry their ECMAScript arity explicitly because reflection cannot
         // recover the "stop at the first default initializer" rule.
         EmitComputeFunctionLength(ctorIL, cachedLengthField, runtime, methodArgIndex: 2);
+        EmitComputeFunctionName(ctorIL, cachedNameField, runtime, methodArgIndex: 2);
         // this._expectsThis = (method.GetParameters().Length > 0 && params[0].Name == "__this")
         EmitComputeExpectsThis(ctorIL, expectsThisField, runtime, methodArgIndex: 2);
         // this._capturesArguments = method.IsDefined($CapturesArguments)
@@ -673,20 +725,10 @@ public partial class RuntimeEmitter
         iwt.Emit(OpCodes.Ldsfld, currentThisField);
         iwt.Emit(OpCodes.Stloc, prevThisIWT);
 
-        // Coerce a null thisArg to the globalThis sentinel before storing: compiled
-        // mode uses CLR null to denote sloppy-mode `this` (= globalThis), but #735/#733
-        // rely on value-position JS null being unambiguous so the property-access guards
-        // can throw TypeError on `null.x` / `null.x = v`. Substituting the sentinel here
-        // means the thread-local never holds a "sloppy-this" null; a genuine JS null
-        // thisArg never reaches this path (callers pass $Undefined or a real object).
-        // Mirrors the interpreter binding sloppy `this` to SharpTSGlobalThis.Instance.
-        var thisArgNotNullIWT = iwt.DefineLabel();
+        // Preserve the raw receiver. The emitted body owns OrdinaryCallBindThis:
+        // strict functions keep null/undefined, while sloppy functions coerce
+        // both to globalThis. Normalizing here erased that distinction.
         iwt.Emit(OpCodes.Ldarg_1);
-        iwt.Emit(OpCodes.Dup);
-        iwt.Emit(OpCodes.Brtrue, thisArgNotNullIWT);
-        iwt.Emit(OpCodes.Pop);
-        iwt.Emit(OpCodes.Ldsfld, runtime.GlobalThisSingletonField);
-        iwt.MarkLabel(thisArgNotNullIWT);
         iwt.Emit(OpCodes.Stsfld, currentThisField);
 
         iwt.BeginExceptionBlock();
@@ -1489,6 +1531,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, runtime.FunctionLengthAttrValueField);
         il.Emit(OpCodes.Stfld, cachedLengthField);
 
+        il.MarkLabel(done);
+    }
+
+    private void EmitComputeFunctionName(ILGenerator il, FieldBuilder cachedNameField, EmittedRuntime runtime, int methodArgIndex)
+    {
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionNameAttrType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "IsDefined", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg, methodArgIndex);
+        il.Emit(OpCodes.Ldtoken, runtime.FunctionNameAttrType);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "GetCustomAttributes", _types.Type, _types.Boolean));
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Castclass, runtime.FunctionNameAttrType);
+        il.Emit(OpCodes.Ldfld, runtime.FunctionNameAttrValueField);
+        il.Emit(OpCodes.Stfld, cachedNameField);
         il.MarkLabel(done);
     }
 

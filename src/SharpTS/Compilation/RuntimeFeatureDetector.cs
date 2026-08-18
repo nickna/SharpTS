@@ -79,6 +79,7 @@ public sealed class RuntimeFeatureDetector
             UsesMap = false,
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
+            UsesDatePrototypeMutation = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
         };
     }
@@ -758,6 +759,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Set s:
+                if (IsDatePrototype(s.Object))
+                    _set.UsesDatePrototypeMutation = true;
                 if (s.Object is Expr.Variable osv)
                     HandleMemberAccess(osv.Name.Lexeme, s.Name.Lexeme);
                 VisitExpr(s.Object);
@@ -782,12 +785,24 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(gi.Index);
                 break;
             case Expr.SetIndex si:
+                if (IsDatePrototype(si.Object))
+                    _set.UsesDatePrototypeMutation = true;
                 VisitExpr(si.Object);
                 VisitExpr(si.Index);
                 VisitExpr(si.Value);
                 break;
 
             case Expr.Call c:
+                if (c.Arguments.Count > 0
+                    && c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "Object" },
+                        Name.Lexeme: "defineProperty" or "defineProperties"
+                    }
+                    && IsDatePrototype(c.Arguments[0]))
+                {
+                    _set.UsesDatePrototypeMutation = true;
+                }
                 if (c.Callee is Expr.Variable cv && cv.Name.Lexeme == "require")
                 {
                     _set.UsesCjsRequire = true;
@@ -795,6 +810,25 @@ public sealed class RuntimeFeatureDetector
                         && lit.Value is string modPath)
                     {
                         HandleModulePath(modPath);
+                    }
+                }
+                // Constant direct eval is parsed again during callable discovery
+                // and emitted as its exact AST when it is expression-only. Detect
+                // runtime features in that source now, before runtime types are
+                // emitted; otherwise an eval-contained regex (for example) reaches
+                // EmitRegexLiteral with its constructor helper never defined.
+                if (c.Callee is Expr.Variable { Name.Lexeme: "eval" }
+                    && c.Arguments.Count > 0
+                    && c.Arguments[0] is Expr.Literal { Value: string evalSource })
+                {
+                    try
+                    {
+                        foreach (var statement in new Parser(new Lexer(evalSource).ScanTokens()).ParseOrThrow())
+                            VisitStmt(statement);
+                    }
+                    catch
+                    {
+                        // Runtime eval remains responsible for syntax errors.
                     }
                 }
                 VisitExpr(c.Callee);
@@ -893,7 +927,12 @@ public sealed class RuntimeFeatureDetector
                 foreach (var e in al.Elements) VisitExpr(e);
                 break;
             case Expr.ObjectLiteral ol:
-                foreach (var prop in ol.Properties) VisitExpr(prop.Value);
+                foreach (var prop in ol.Properties)
+                {
+                    if (prop.Key is Expr.ComputedKey computed)
+                        VisitExpr(computed.Expression);
+                    VisitExpr(prop.Value);
+                }
                 break;
 
             case Expr.ArrowFunction af:
@@ -965,4 +1004,10 @@ public sealed class RuntimeFeatureDetector
                 break;
         }
     }
+
+    private static bool IsDatePrototype(Expr expr) => expr is Expr.Get
+    {
+        Object: Expr.Variable { Name.Lexeme: "Date" },
+        Name.Lexeme: "prototype"
+    };
 }

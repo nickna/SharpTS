@@ -60,7 +60,7 @@ public class GlobalFunctionHandler : ICallHandler
 
     /// <summary>
     /// Emits a compiled <c>eval(arg)</c>. Compiled output has no live interpreter/scope, so this
-    /// reflectively invokes <c>SharpTS.Execution.EvalBridge.Eval(object)</c> (indirect, global-scope
+    /// reflectively invokes <c>SharpTS.Execution.EvalBridge.Eval(object, object, object)</c> (indirect, global-scope
     /// eval) only when the SharpTS runtime is present, degrading to a deterministic throw otherwise.
     /// The reflection pattern keeps the output DLL free of a hard SharpTS.dll reference.
     /// </summary>
@@ -94,7 +94,7 @@ public class GlobalFunctionHandler : ICallHandler
         // bridge below because they require runtime parsing/hoisting machinery.
         if (call.Arguments[0] is Expr.Literal { Value: string source }
             && emitter is ILEmitter syncEmitter
-            && syncEmitter.TryEmitStaticDirectEval(source))
+            && syncEmitter.TryEmitStaticDirectEval(call, source))
         {
             return true;
         }
@@ -122,13 +122,21 @@ public class GlobalFunctionHandler : ICallHandler
         il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "Eval");
         il.Emit(System.Reflection.Emit.OpCodes.Callvirt, ctx.Types.GetMethod(ctx.Types.Type, "GetMethod", ctx.Types.String));
 
-        // return (object) m.Invoke(null, new object[] { arg });
+        // return (object) m.Invoke(null, new object[] { arg, globalThis, undefined });
         il.Emit(System.Reflection.Emit.OpCodes.Ldnull);
-        il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_1);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_3);
         il.Emit(System.Reflection.Emit.OpCodes.Newarr, ctx.Types.Object);
         il.Emit(System.Reflection.Emit.OpCodes.Dup);
         il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_0);
         il.Emit(System.Reflection.Emit.OpCodes.Ldloc, argLocal);
+        il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
+        il.Emit(System.Reflection.Emit.OpCodes.Dup);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_1);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.GlobalThisSingletonField);
+        il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
+        il.Emit(System.Reflection.Emit.OpCodes.Dup);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4_2);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime.UndefinedInstance);
         il.Emit(System.Reflection.Emit.OpCodes.Stelem_Ref);
         il.Emit(System.Reflection.Emit.OpCodes.Callvirt, ctx.Types.GetMethod(
             ctx.Types.MethodInfo, "Invoke", ctx.Types.Object, ctx.Types.ObjectArray));
@@ -237,19 +245,16 @@ public class GlobalFunctionHandler : ICallHandler
 
     private static bool EmitEncodeURIComponent(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
-        // JS: encodeURIComponent() throws; encodeURIComponent(undefined) returns "undefined".
-        // We match the "undefined" coercion and let the runtime throw if truly missing.
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "undefined");
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         else
         {
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Stringify);
         }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Types.UriEscapeDataString);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalEncodeURIComponent);
         emitter.SetStackType(StackType.String);
         return true;
     }
@@ -258,15 +263,14 @@ public class GlobalFunctionHandler : ICallHandler
     {
         if (call.Arguments.Count == 0)
         {
-            il.Emit(System.Reflection.Emit.OpCodes.Ldstr, "undefined");
+            il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
         }
         else
         {
             emitter.EmitExpression(call.Arguments[0]);
             emitter.EmitBoxIfNeeded(call.Arguments[0]);
-            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.Stringify);
         }
-        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Types.UriUnescapeDataString);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.GlobalDecodeURIComponent);
         emitter.SetStackType(StackType.String);
         return true;
     }

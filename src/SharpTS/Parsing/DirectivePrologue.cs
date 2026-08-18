@@ -18,19 +18,20 @@ public static class DirectivePrologue
         if (statements == null) return false;
         foreach (var stmt in statements)
         {
-            if (stmt is Stmt.Directive directive)
+            string? directiveValue = stmt switch
             {
-                if (directive.Value == "use strict")
-                {
-                    return true;
-                }
-                // Keep scanning the rest of the directive prologue.
-            }
-            else
-            {
+                Stmt.Directive directive => directive.Value,
+                // Function/arrow bodies are parsed through Block(), where a
+                // directive remains a leading string-literal expression.
+                Stmt.Expression { Expr: Expr.Literal { Value: string value } } => value,
+                _ => null,
+            };
+            if (directiveValue is null)
                 // First non-directive statement ends the prologue.
                 break;
-            }
+            if (directiveValue == "use strict")
+                return true;
+            // Keep scanning the rest of the directive prologue.
         }
         return false;
     }

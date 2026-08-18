@@ -793,6 +793,20 @@ public static class SharpTSAtomics
                 return RuntimeValue.FromBoolean(IsLockFree((int)args[0].AsNumberUnsafe()));
             }),
 
+            "pause" => BuiltInMethod.CreateV2("pause", 0, 1, static (_, _, args) =>
+            {
+                if (args.Length == 0 || args[0].IsUndefined)
+                    return RuntimeValue.Undefined;
+                if (!args[0].IsNumber)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Atomics.pause iterationNumber must be an integral Number"));
+                var value = args[0].AsNumberUnsafe();
+                if (!double.IsFinite(value) || Math.Truncate(value) != value)
+                    throw new ThrowException(new SharpTSTypeError(
+                        "Atomics.pause iterationNumber must be an integral Number"));
+                return RuntimeValue.Undefined;
+            }),
+
             _ => null
         };
     }

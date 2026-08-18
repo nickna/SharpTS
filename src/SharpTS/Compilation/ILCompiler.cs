@@ -132,6 +132,10 @@ public partial class ILCompiler
     // Strict mode setting (from "use strict" directive)
     private bool _isStrictMode;
 
+    // Lexeme-level set of let/const bindings. Captured lexical storage uses a
+    // dedicated runtime sentinel until declaration initialization completes.
+    private HashSet<string> _lexicalBindingNames = [];
+
     // Runtime feature gating result. Populated by Compile via RuntimeFeatureDetector
     // unless a caller (CompileModules, tests) has set it explicitly first.
     private RuntimeFeatureSet? _features;
@@ -628,6 +632,7 @@ public partial class ILCompiler
         _deadCodeInfo = deadCodeInfo;
         _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
+        _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
         _features ??= new RuntimeFeatureDetector().Detect(statements);
         return statements;
     }
@@ -1273,6 +1278,7 @@ public partial class ILCompiler
         }
 
         var allStatements = modules.SelectMany(m => m.Statements).ToList();
+        _lexicalBindingNames = LexicalBindingNameCollector.Collect(allStatements);
 
         // Detect features across the union of all modules' statements (any module
         // pulling in `crypto` makes the runtime emit crypto types).
@@ -2056,6 +2062,7 @@ public partial class ILCompiler
                 _ => null
             };
             if (varName == null || !_closures.Analyzer.IsVariableCaptured(varName)) return;
+            bool isLexical = stmt is Stmt.Const or Stmt.Var { IsVar: false };
 
             var displayClass = EnsureEntryPointDisplayClass();
 
@@ -2071,6 +2078,19 @@ public partial class ILCompiler
                     : $"{SanitizeModuleForField(path)}__{varName}";
                 var field = displayClass.DefineField(fieldName, _types.Object, FieldAttributes.Public);
                 mf[varName] = field;
+            }
+
+            if (isLexical)
+            {
+                var initFields = GetOrCreate(_closures.ModuleTopLevelLexicalInitFields, captureKey);
+                if (!initFields.ContainsKey(varName))
+                {
+                    string initName = path == null
+                        ? $"<>init_{varName}"
+                        : $"<>init_{SanitizeModuleForField(path)}__{varName}";
+                    initFields[varName] = displayClass.DefineField(
+                        initName, _types.Boolean, FieldAttributes.Public);
+                }
             }
 
             _closures.CapturedTopLevelVars.Add(varName);
@@ -2132,6 +2152,21 @@ public partial class ILCompiler
                     ? name
                     : $"{SanitizeModuleForField(modulePath)}__{name}";
                 mf[name] = displayClass.DefineField(fieldName, _types.Object, FieldAttributes.Public);
+            }
+
+            // Lifted block-scoped bindings need the same TDZ flag as direct
+            // top-level let/const declarations. The value field is allocated
+            // before execution, but its declaration still initializes only at
+            // the textual statement.
+            var initFields = GetOrCreateEntry(
+                _closures.ModuleTopLevelLexicalInitFields, key);
+            if (!initFields.ContainsKey(name))
+            {
+                string initName = modulePath == null
+                    ? $"<>init_{name}"
+                    : $"<>init_{SanitizeModuleForField(modulePath)}__{name}";
+                initFields[name] = displayClass.DefineField(
+                    initName, _types.Boolean, FieldAttributes.Public);
             }
 
             if (!_closures.ModuleLiftedBlockScopedVars.TryGetValue(key, out var lifted))
@@ -2407,6 +2442,18 @@ public partial class ILCompiler
             _types.Object,
             FieldAttributes.Public | FieldAttributes.Static);
 
+        bool isLexical = stmt is Stmt.Const or Stmt.Var { IsVar: false };
+        if (isLexical)
+        {
+            string key = modulePath ?? ClosureCompilationState.SingleFileKey;
+            if (!_closures.ModuleTopLevelLexicalInitFields.TryGetValue(key, out var initFields))
+                _closures.ModuleTopLevelLexicalInitFields[key] = initFields = [];
+            initFields[varName] = _programType.DefineField(
+                $"{fieldName}$initialized",
+                _types.Boolean,
+                FieldAttributes.Public | FieldAttributes.Static);
+        }
+
         // The global dict (_topLevelStaticVars) is last-write-wins by name. That's
         // only consulted for captured-var dispatch via name, which this path skips
         // (we `continue` above when the var is captured). For non-captured vars,
@@ -2569,6 +2616,14 @@ public partial class ILCompiler
         {
             return new Dictionary<string, FieldBuilder>(fields);
         }
+        return null;
+    }
+
+    private Dictionary<string, FieldBuilder>? BuildTopLevelLexicalInitFieldsForModule(string? modulePath)
+    {
+        string key = modulePath ?? ClosureCompilationState.SingleFileKey;
+        if (_closures.ModuleTopLevelLexicalInitFields.TryGetValue(key, out var fields) && fields.Count > 0)
+            return new Dictionary<string, FieldBuilder>(fields);
         return null;
     }
 }

@@ -96,7 +96,7 @@ public static class ConstantFolder
                 return true;
 
             case TokenType.TILDE when lit.Value is double d:
-                result = (double)~(int)d;
+                result = (double)~ToInt32(d);
                 return true;
 
             case TokenType.TYPEOF:
@@ -133,12 +133,12 @@ public static class ConstantFolder
             TokenType.BANG_EQUAL_EQUAL => left != right,
 
             // Bitwise
-            TokenType.AMPERSAND => (double)((int)left & (int)right),
-            TokenType.PIPE => (double)((int)left | (int)right),
-            TokenType.CARET => (double)((int)left ^ (int)right),
-            TokenType.LESS_LESS => (double)((int)left << ((int)right & 0x1F)),
-            TokenType.GREATER_GREATER => (double)((int)left >> ((int)right & 0x1F)),
-            TokenType.GREATER_GREATER_GREATER => (double)((uint)(int)left >> ((int)right & 0x1F)),
+            TokenType.AMPERSAND => (double)(ToInt32(left) & ToInt32(right)),
+            TokenType.PIPE => (double)(ToInt32(left) | ToInt32(right)),
+            TokenType.CARET => (double)(ToInt32(left) ^ ToInt32(right)),
+            TokenType.LESS_LESS => (double)(ToInt32(left) << (ToInt32(right) & 0x1F)),
+            TokenType.GREATER_GREATER => (double)(ToInt32(left) >> (ToInt32(right) & 0x1F)),
+            TokenType.GREATER_GREATER_GREATER => (double)((uint)ToInt32(left) >> (ToInt32(right) & 0x1F)),
 
             _ => null
         };
@@ -172,9 +172,9 @@ public static class ConstantFolder
             TokenType.EQUAL_EQUAL_EQUAL => left == right,
             TokenType.BANG_EQUAL => left != right,
             TokenType.BANG_EQUAL_EQUAL => left != right,
-            TokenType.AMPERSAND => left & right,
-            TokenType.PIPE => left | right,
-            TokenType.CARET => left ^ right,
+            TokenType.AMPERSAND => (double)((left ? 1 : 0) & (right ? 1 : 0)),
+            TokenType.PIPE => (double)((left ? 1 : 0) | (right ? 1 : 0)),
+            TokenType.CARET => (double)((left ? 1 : 0) ^ (right ? 1 : 0)),
             _ => null
         };
 
@@ -272,6 +272,16 @@ public static class ConstantFolder
     }
 
     private static string FormatNumber(double d) => RuntimeTypes.FormatNumber(d);
+
+    private static int ToInt32(double value)
+    {
+        if (!double.IsFinite(value) || value == 0) return 0;
+        double integer = Math.Truncate(value);
+        double modulo = integer - Math.Floor(integer / 4294967296.0) * 4294967296.0;
+        return modulo >= 2147483648.0
+            ? (int)(modulo - 4294967296.0)
+            : (int)modulo;
+    }
 
     private static string TypeOf(object? value)
     {

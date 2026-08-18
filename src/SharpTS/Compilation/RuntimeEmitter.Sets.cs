@@ -392,8 +392,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(enumeratorType, "Dispose")!);
 
         // return result;
+        il.Emit(OpCodes.Ldloc, setLocal);
         il.Emit(OpCodes.Ldloc, resultLocal);
-        EmitArrayIteratorWrapper(il, runtime);
+        il.Emit(OpCodes.Newobj, runtime.SetCollectionIteratorCtor);
         il.Emit(OpCodes.Ret);
 
         // return new List<object?>();

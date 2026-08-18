@@ -157,6 +157,13 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
         runtime.JsonSingletonField = jsonSingletonField;
+        if (_features.UsesReflect)
+        {
+            runtime.ReflectSingletonField = typeBuilder.DefineField(
+                "_reflectSingleton",
+                _types.DictionaryStringObject,
+                FieldAttributes.Public | FieldAttributes.Static);
+        }
 
         // Array.prototype singleton — populated lazily after $TSFunction and the
         // Array* helper MethodBuilders are defined. Read by ArrayStaticEmitter
@@ -483,6 +490,8 @@ public partial class RuntimeEmitter
         DefineArrayPrototypePopulateShell(typeBuilder, runtime);
         DefineMathSingletonPopulateShell(typeBuilder, runtime);
         DefineJsonSingletonPopulateShell(typeBuilder, runtime);
+        if (_features.UsesReflect)
+            DefineReflectSingletonPopulateShell(typeBuilder, runtime);
         DefineStringPrototypePopulateShell(typeBuilder, runtime);
         DefineNumberPrototypePopulateShell(typeBuilder, runtime);
         DefineBigIntPrototypePopulateShell(typeBuilder, runtime);
@@ -532,6 +541,11 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Stsfld, symbolPrototypeField);
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, jsonSingletonField);
+        if (runtime.ReflectSingletonField is not null)
+        {
+            cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+            cctorIL.Emit(OpCodes.Stsfld, runtime.ReflectSingletonField);
+        }
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, runtime.DatePrototypeField);
 
@@ -679,6 +693,8 @@ public partial class RuntimeEmitter
         // unconditionally is safe even when the program doesn't use JSON (#276).
         cctorIL.Emit(OpCodes.Call, runtime.MathSingletonPopulateMethod);
         cctorIL.Emit(OpCodes.Call, runtime.JsonSingletonPopulateMethod);
+        if (runtime.ReflectSingletonPopulateMethod is not null)
+            cctorIL.Emit(OpCodes.Call, runtime.ReflectSingletonPopulateMethod);
 
         cctorIL.Emit(OpCodes.Ret);
 
@@ -910,10 +926,9 @@ public partial class RuntimeEmitter
         // String/Number/Boolean populate shells already defined above
         // (before cctor) so the cctor can call them eagerly.
         EmitGetProperty(typeBuilder, runtime);
-        // Fill UnwrapIfBoxed's body now that GetProperty / InvokeMethodValue /
-        // HasOwnPropertyHelper are all emitted — its #574 own-conversion dispatch
-        // (own valueOf/toString before __primitiveValue) calls them.
-        EmitUnwrapIfBoxedBody(runtime);
+        // UnwrapIfBoxed's body is filled after GetIndex below.  In addition to
+        // GetProperty/InvokeMethodValue it now uses indexed symbol lookup for
+        // the @@toPrimitive hook.
         // Dynamic iterator-protocol bridge — must come after GetProperty +
         // InvokeMethodValue since its non-enumerator fallback calls both.
         EmitIteratorProtocolCall(typeBuilder, runtime);
@@ -973,6 +988,8 @@ public partial class RuntimeEmitter
         EmitArrayIteratorType(moduleBuilder, runtime);
         if (_features.UsesMap)
             EmitMapCollectionIteratorType(moduleBuilder, runtime);
+        if (_features.UsesSet)
+            EmitSetCollectionIteratorType(moduleBuilder, runtime);
         EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
         // but its incremental custom-iterator body needs both the basic
@@ -1056,16 +1073,18 @@ public partial class RuntimeEmitter
         if (_features.UsesReflect || _features.UsesProxy)
         {
             EmitReflectSet(typeBuilder, runtime);
+            EmitReflectDefineProperty(typeBuilder, runtime);
         }
         if (_features.UsesReflect)
         {
             EmitReflectDeleteProperty(typeBuilder, runtime);
             EmitReflectPreventExtensions(typeBuilder, runtime);
             EmitReflectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
-            EmitReflectDefineProperty(typeBuilder, runtime);
             EmitReflectOwnKeys(typeBuilder, runtime);
             EmitReflectApply(typeBuilder, runtime);
             EmitReflectConstruct(typeBuilder, runtime);
+            EmitReflectValueFormMethods(typeBuilder, runtime);
+            EmitReflectSingletonPopulate(runtime);
         }
         EmitIsArray(typeBuilder, runtime);
         EmitConcatArrays(typeBuilder, runtime);
@@ -1289,6 +1308,9 @@ public partial class RuntimeEmitter
         // Date.prototype populate — must come AFTER EmitDateMethods, which is what
         // assigns the runtime.Date* helper builders the wiring below references.
         EmitDatePrototypePopulate(typeBuilder, runtime);
+        // Fill the default-hint ToPrimitive body after every dependency is
+        // bound, including DateToString for Date's special default hint.
+        EmitUnwrapIfBoxedBody(runtime);
         // Fill in LookupBuiltInStaticMember's body now that IsArray, NumberIs*,
         // StringFrom*, TSFunctionCtor (#63) and DateNow (value-form `Date.now`,
         // gated on UsesDate) are all in place. Only the body is late — the

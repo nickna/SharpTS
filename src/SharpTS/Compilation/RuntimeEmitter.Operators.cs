@@ -842,10 +842,29 @@ public partial class RuntimeEmitter
         var symbolKeyLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
         var listLabel = il.DefineLabel();
+        var invalidRhsLabel = il.DefineLabel();
+        var validRhsLabel = il.DefineLabel();
 
-        // if (obj == null) return false
+        // The RHS of `in` must be an Object. Null, undefined, and all other
+        // primitives throw a guest TypeError rather than returning false.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, falseLabel);
+        il.Emit(OpCodes.Brfalse, invalidRhsLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, invalidRhsLabel);
+        var rhsType = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.TypeOf);
+        il.Emit(OpCodes.Stloc, rhsType);
+        il.Emit(OpCodes.Ldloc, rhsType);
+        il.Emit(OpCodes.Ldstr, "object");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brtrue, validRhsLabel);
+        il.Emit(OpCodes.Ldloc, rhsType);
+        il.Emit(OpCodes.Ldstr, "function");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, invalidRhsLabel);
+        il.MarkLabel(validRhsLabel);
 
         // Proxy check: uses obj.GetType().FullName comparison (no SharpTS.dll dependency)
         // Note: HasIn signature is (key, obj) so obj is arg_1
@@ -1103,6 +1122,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
+        il.MarkLabel(invalidRhsLabel);
+        GuestErrorEmitter.ThrowTypeError(il, runtime, "Right-hand side of 'in' is not an object");
+
         // SharpTSProxy's compiled callback uses the natural (target, key)
         // order, while the emitted `in` helper uses (key, target).
         var proxyOrdinaryHasIl = runtime.ProxyOrdinaryHas.GetILGenerator();
@@ -1191,11 +1213,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, undefinedNanLabel);
 
-        // Numeric addition
+        // Numeric addition.  Use the language ToNumber operation, not CLR
+        // Convert.ToDouble: Date/Array/plain-object operands require
+        // ToPrimitive, Symbol must throw a guest TypeError, and undefined is
+        // NaN rather than an InvalidCastException.
         il.Emit(OpCodes.Ldloc, leftLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Ldloc, rightLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToDouble", _types.Object));
+        il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Box, _types.Double);
         il.Emit(OpCodes.Ret);
@@ -1466,6 +1491,22 @@ public partial class RuntimeEmitter
         // Object.Equals terminal path. Object/object branches arrive here with
         // the untouched original operands.
         il.MarkLabel(objectEqualsLabel);
+        // CLR Double.Equals considers NaN equal to itself; JavaScript Number
+        // equality does not. `ceq` has the required IEEE behavior.
+        var notBothNumbers = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, leftLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, notBothNumbers);
+        il.Emit(OpCodes.Ldloc, rightLocal);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brfalse, notBothNumbers);
+        il.Emit(OpCodes.Ldloc, leftLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Ldloc, rightLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Br, endLabel);
+        il.MarkLabel(notBothNumbers);
         il.Emit(OpCodes.Ldloc, leftLocal);
         il.Emit(OpCodes.Ldloc, rightLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));

@@ -288,6 +288,7 @@ public partial class ILCompiler
                     typeof(object),  // Explicit accessors return object
                     paramTypes
                 );
+                _classes.AccessorBuilders[accessor] = methodBuilder;
 
                 // Track getter/setter. Static accessors register in StaticGetters/StaticSetters
                 // keyed by original (camelCase) name, matching the auto-accessor convention and
@@ -695,6 +696,7 @@ public partial class ILCompiler
         // #703: a private method referenced as a value (e.g. `this.#m` passed as a callback)
         // pads omitted optional args with the `undefined` sentinel on the value-call path.
         MarkPadsUndefined(methodBuilder);
+        MarkFunctionLength(methodBuilder, method.Parameters);
 
         // #720: async/generator private methods must be emitted through a state machine, exactly like
         // their public counterparts — not linearly into __private_<name>, which leaves a bare object on

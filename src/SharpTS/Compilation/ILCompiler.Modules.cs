@@ -492,7 +492,17 @@ public partial class ILCompiler
         il.Emit(OpCodes.Callvirt, _runtime.EventLoopWaitForTask);
         il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-        // Task is complete — GetResult() to rethrow if faulted
+        // An ordinary JavaScript expression statement discards an async
+        // function's returned Promise. Pump it so queued side effects still
+        // run, but do not turn an ignored rejection into a synchronous host
+        // exception. Only explicit top-level `await` observes/rethrows it.
+        if (exprStmt.Expr is not Expr.Await)
+        {
+            il.Emit(OpCodes.Br, notTaskLabel);
+        }
+
+        // Explicit top-level await: observe the completed task and rethrow a
+        // rejection through GetResult().
         il.Emit(OpCodes.Ldloc, taskLocal);
         var getAwaiter = _types.GetMethodNoParams(_types.TaskOfObject, "GetAwaiter");
         il.Emit(OpCodes.Call, getAwaiter);
@@ -1145,13 +1155,17 @@ public partial class ILCompiler
         // those fields from the async runner instead of introducing function locals,
         // preserving visibility to exported dependents and top-level functions.
         Stmt.Const declaration => new Stmt.Expression(
-            new Expr.Assign(declaration.Name, declaration.Initializer)),
+            new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer,
+                IsLexicalInitialization: true)),
         Stmt.Var declaration when !declaration.IsDeclare => new Stmt.Expression(
             new Expr.Assign(
                 declaration.Name,
                 declaration.Initializer ??
                     new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
-                IsVarRedeclaration: declaration.IsVar)),
+                IsVarRedeclaration: declaration.IsVar,
+                IsLexicalInitialization: !declaration.IsVar)),
         Stmt.Var => null,
         Stmt.Sequence sequence => new Stmt.Sequence(
             sequence.Statements
@@ -1161,13 +1175,17 @@ public partial class ILCompiler
                 .Cast<Stmt>()
                 .ToList()),
         Stmt.Export { Declaration: Stmt.Const declaration } => new Stmt.Expression(
-            new Expr.Assign(declaration.Name, declaration.Initializer)),
+            new Expr.Assign(
+                declaration.Name,
+                declaration.Initializer,
+                IsLexicalInitialization: true)),
         Stmt.Export { Declaration: Stmt.Var declaration } when !declaration.IsDeclare =>
             new Stmt.Expression(new Expr.Assign(
                 declaration.Name,
                 declaration.Initializer ??
                     new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance),
-                IsVarRedeclaration: declaration.IsVar)),
+                IsVarRedeclaration: declaration.IsVar,
+                IsLexicalInitialization: !declaration.IsVar)),
         Stmt.Export { Declaration: Stmt.Var } => null,
         Stmt.Export { Declaration: Stmt.Sequence sequence } => new Stmt.Sequence(
             sequence.Statements

@@ -58,6 +58,14 @@ public partial class ILEmitter
         if (TryEmitDefaultParameterTdz(name))
             return;
 
+        if (_ctx.LexicalInitializerTdzName == name)
+        {
+            IL.Emit(OpCodes.Ldstr, name);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            EmitNullConstant();
+            return;
+        }
+
         // Block-scoped class locals start as undefined and are initialized at
         // the declaration statement. Observe the class TDZ before ordinary
         // local resolution.
@@ -285,15 +293,8 @@ public partial class ILEmitter
             // Compute function arity at compile time. name/length are used only
             // on first create (subsequent cache hits return the existing wrapper
             // whose name/length are already set).
-            int arity = 0;
-            foreach (var param in methodBuilder.GetParameters())
-            {
-                if (param.IsOptional) continue;
-                if (param.ParameterType == typeof(List<object>)) continue;
-                if (param.Name?.StartsWith("__") == true) continue;
-                arity++;
-            }
-            IL.Emit(OpCodes.Ldstr, name);  // function name
+            int arity = _ctx.GetFunctionLength(methodBuilder);
+            IL.Emit(OpCodes.Ldstr, _ctx.GetFunctionName(methodBuilder, name));
             IL.Emit(OpCodes.Ldc_I4, arity);  // function length
             IL.Emit(OpCodes.Call, _ctx.Runtime!.TSFunctionGetOrCreate);
             SetStackUnknown();
@@ -415,6 +416,18 @@ public partial class ILEmitter
         }
 
         EmitExpression(a.Value);
+
+        if (_ctx.LexicalInitializerTdzName == a.Name.Lexeme)
+        {
+            EmitBoxIfNeeded(a.Value);
+            IL.Emit(OpCodes.Pop);
+            IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ThrowUndefinedVariable);
+            EmitNullConstant();
+            return;
+        }
+
+        EmitLexicalAssignmentTdzGuard(a.Name.Lexeme);
 
         // 0. Per-iteration loop-binding cell (#650): write through the StrongBox so the
         //    mutation is visible to closures that captured this iteration's cell. Mirrors
@@ -629,6 +642,7 @@ public partial class ILEmitter
             // Captured top-level variable in entry-point display class
             EmitBoxIfNeeded(a.Value);
             IL.Emit(OpCodes.Dup);
+            _ctx.EmitTopLevelLexicalTdzCheck(IL, a.Name.Lexeme);
             // Store to field: need temp since value is on top of stack
             var temp = IL.DeclareLocal(_ctx.Types.Object);
             IL.Emit(OpCodes.Stloc, temp);
@@ -666,6 +680,7 @@ public partial class ILEmitter
             // Top-level static variable
             EmitBoxIfNeeded(a.Value);
             IL.Emit(OpCodes.Dup);
+            _ctx.EmitTopLevelLexicalTdzCheck(IL, a.Name.Lexeme);
             IL.Emit(OpCodes.Stsfld, topLevelField);
             SetStackUnknown();
         }
@@ -684,10 +699,72 @@ public partial class ILEmitter
             }
             else
             {
+                // Sloppy PutValue creates a property on the global object and
+                // still evaluates to the assigned value.  Preserve one copy
+                // as the expression result while the other is consumed by
+                // the runtime setter.
+                var value = IL.DeclareLocal(_ctx.Types.Object);
                 IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Stloc, value);
+                IL.Emit(OpCodes.Ldstr, a.Name.Lexeme);
+                IL.Emit(OpCodes.Ldloc, value);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.GlobalThisSetProperty);
             }
             SetStackUnknown();
         }
+    }
+
+    private void EmitLexicalAssignmentTdzGuard(string name)
+    {
+        if (_ctx.LexicalTdzNames?.Contains(name) != true)
+            return;
+
+        var storageName = _ctx.ResolveFunctionDCFieldName(name);
+        if (_ctx.CapturedFunctionLocals?.Contains(storageName) == true
+            && _ctx.FunctionDisplayClassFields?.TryGetValue(storageName, out var functionField) == true
+            && _ctx.FunctionDisplayClassLocal != null)
+        {
+            IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+            IL.Emit(OpCodes.Ldfld, functionField);
+        }
+        else if (_ctx.CapturedArrowLocals?.Contains(name) == true
+            && _ctx.ArrowScopeDisplayClassFields?.TryGetValue(name, out var arrowField) == true
+            && _ctx.ArrowScopeDisplayClassLocal != null)
+        {
+            IL.Emit(OpCodes.Ldloc, _ctx.ArrowScopeDisplayClassLocal);
+            IL.Emit(OpCodes.Ldfld, arrowField);
+        }
+        else if (_ctx.ParentArrowCapturedLocals?.Contains(name) == true
+            && _ctx.ParentArrowScopeDisplayClassFields?.TryGetValue(name, out var parentArrowField) == true
+            && _ctx.CurrentArrowScopeDCField != null)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowScopeDCField);
+            IL.Emit(OpCodes.Ldfld, parentArrowField);
+        }
+        else if (_ctx.ExtraArrowScopeBindings?.TryGetValue(name, out var extraArrowBinding) == true)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, extraArrowBinding.RefField);
+            IL.Emit(OpCodes.Ldfld, extraArrowBinding.VarField);
+        }
+        else if (_ctx.CapturedFields?.TryGetValue(name, out var capturedField) == true)
+        {
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, capturedField);
+        }
+        else if (_ctx.Locals.GetLocal(name) is { LocalType: var localType } local
+            && localType == _ctx.Types.Object)
+        {
+            IL.Emit(OpCodes.Ldloc, local);
+        }
+        else
+        {
+            return;
+        }
+
+        _ctx.EmitLexicalTdzValueCheck(IL, name);
+        IL.Emit(OpCodes.Pop);
     }
 
     protected override void EmitThis()
@@ -988,7 +1065,10 @@ public partial class ILEmitter
         // - delete obj.prop: removes property, returns true (or throws TypeError if frozen/sealed in strict mode)
         // - delete obj[key]: removes computed property, returns true (or throws TypeError if frozen/sealed in strict mode)
         // - delete variable: throws SyntaxError in strict mode, returns false in sloppy mode
-        switch (del.Operand)
+        Expr operand = del.Operand;
+        while (operand is Expr.Grouping grouping)
+            operand = grouping.Expression;
+        switch (operand)
         {
             case Expr.Get get:
                 // delete obj.prop - use static runtime helper with strict mode
@@ -1036,9 +1116,15 @@ public partial class ILEmitter
                 }
                 else
                 {
-                    // Sloppy mode: warn and return false
-                    IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
-                    EmitCallUnknown(_ctx.Runtime!.WarnSloppyDeleteVariable);
+                    // Deleting an unresolvable reference succeeds; deleting a
+                    // resolvable environment binding returns false.
+                    if (!IsKnownVariable(v.Name.Lexeme))
+                        EmitBoolConstant(true);
+                    else
+                    {
+                        IL.Emit(OpCodes.Ldstr, v.Name.Lexeme);
+                        EmitCallUnknown(_ctx.Runtime!.WarnSloppyDeleteVariable);
+                    }
                 }
                 SetStackType(StackType.Boolean);
                 break;
@@ -1046,7 +1132,7 @@ public partial class ILEmitter
             default:
                 // delete on other expressions: returns true but does nothing
                 // Still need to evaluate for side effects
-                EmitExpression(del.Operand);
+                EmitExpression(operand);
                 IL.Emit(OpCodes.Pop);
                 EmitBoolConstant(true);
                 break;
