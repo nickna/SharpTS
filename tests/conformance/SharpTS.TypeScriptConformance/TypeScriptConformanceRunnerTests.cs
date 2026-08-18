@@ -266,10 +266,9 @@ public class TypeScriptConformanceRunnerTests
     private const string ImplicitAnyParam = "function f(x) { return x; }\n";
 
     [Fact]
-    public void NoDirectives_DoNotEnableNoImplicitAny()
+    public void NoDirectives_UseTypeScript6StrictDefault()
     {
-        // The legacy corpus was generated with noImplicitAny off; that must stay the default.
-        Assert.DoesNotContain("TS7006", ActualCodes(ImplicitAnyParam));
+        Assert.Contains("TS7006", ActualCodes(ImplicitAnyParam));
     }
 
     [Fact]

@@ -16,7 +16,7 @@ public class TypeScriptConformanceMetadataParserTests
         Assert.Equal("foo.ts", meta.Files[0].Name);
         Assert.Equal(src, meta.Files[0].Body);
         Assert.Null(meta.Target);
-        Assert.False(meta.Strict);
+        Assert.True(meta.Strict);
     }
 
     [Fact]

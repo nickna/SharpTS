@@ -81,6 +81,11 @@ public class TypeScriptConformanceTests
             {
                 result = await runTask;
             }
+            if (result.Outcome == TypeScriptConformanceOutcome.Fail &&
+                GetBool("SHARPTS_TSCONFORMANCE_DUMP_FAILURES"))
+            {
+                _output.WriteLine($"mismatch: {relPath}: {result.Message}");
+            }
             if (result.Outcome == TypeScriptConformanceOutcome.ParseError)
                 _output.WriteLine($"parse error: {relPath}: {result.Message}");
             current[relPath] = TypeScriptConformanceBaseline.EncodeBucket(result);

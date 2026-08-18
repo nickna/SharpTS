@@ -86,7 +86,7 @@ public partial class TypeChecker
                 break;
         }
 
-        return ResolveJsxElementType(jsxNamespace, jsx.Line, reportMissing: true);
+        return ResolveJsxElementType(jsxNamespace);
     }
 
     private TypeInfo CheckJsxFactoryReference(Expr callee, JsxMode mode)
@@ -234,7 +234,7 @@ public partial class TypeChecker
 
     private void CheckJsxComponentReturnType(JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo returnType)
     {
-        TypeInfo elementType = ResolveJsxElementType(jsxNamespace, jsx.Line, reportMissing: false);
+        TypeInfo elementType = ResolveJsxElementType(jsxNamespace);
         if (elementType is TypeInfo.Any || returnType is TypeInfo.Any)
             return;
         if (returnType is TypeInfo.Promise)
@@ -731,20 +731,13 @@ public partial class TypeChecker
 
     /// <summary>
     /// The result type of every JSX expression: <c>JSX.Element</c> when declared, else
-    /// <c>any</c> (with TS2602 under noImplicitAny, matching tsc).
+    /// <c>any</c>. TypeScript 6's JSX lookup returns its internal error type when the
+    /// member is absent, so its old TS2602 precondition is no longer emitted.
     /// </summary>
-    private TypeInfo ResolveJsxElementType(TypeInfo.Namespace? jsxNamespace, int line, bool reportMissing)
+    private static TypeInfo ResolveJsxElementType(TypeInfo.Namespace? jsxNamespace)
     {
         TypeInfo? element = jsxNamespace?.Types.GetValueOrDefault("Element");
-        if (element is not null)
-            return element;
-        if (reportMissing && _noImplicitAny)
-        {
-            ReportJsx(new TypeCheckException(
-                "JSX element implicitly has type 'any' because the global type 'JSX.Element' does not exist.",
-                line, tsCode: "TS2602"));
-        }
-        return TypeInfo.Any.Shared;
+        return element ?? TypeInfo.Any.Shared;
     }
 
     /// <summary>

@@ -109,7 +109,10 @@ public static class TypeScriptConformanceMetadataParser
             Target: GetString(directives, "target"),
             Module: GetString(directives, "module"),
             Jsx: GetString(directives, "jsx"),
-            Strict: GetBool(directives, "strict") ?? false,
+            // TypeScript 6 changed the compiler initialization defaults to strict mode.
+            // The conformance baselines are generated with those defaults, while an
+            // explicit @strict: false still opts an individual test out.
+            Strict: GetBool(directives, "strict") ?? true,
             NoImplicitAny: GetBool(directives, "noimplicitany"),
             StrictNullChecks: GetBool(directives, "strictnullchecks"),
             NoEmit: GetBool(directives, "noemit") ?? false,

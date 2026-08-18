@@ -34,6 +34,10 @@ multi-file test as a program, diffs SharpTS diagnostics against `tsc`'s
 `*.errors.txt` baseline, and compares the bucket distribution against the
 committed baseline at `baselines/interpreted.txt`.
 
+Set `SHARPTS_TSCONFORMANCE_DUMP_FAILURES=1` to print every failing test's
+missing and extra `(line, TSnnnn)` tuples. Use this before implementing a
+diagnostic-parity cluster so the triage reflects the currently pinned corpus.
+
 ## Updating the baseline
 
 After an intentional change (new feature, fixed parser bug, refined diagnostic), regenerate the committed baseline:

@@ -206,8 +206,8 @@ public sealed class TypeScriptConformanceRunner
         try
         {
             // Each strictness knob follows the test's directives, with the specific directive
-            // overriding @strict and everything defaulting off — matching how tsc generated the
-            // legacy *.errors.txt baselines.
+            // overriding @strict. TypeScript 6's compiler defaults @strict to true; the metadata
+            // parser supplies that default while preserving an explicit @strict: false.
             bool strictNullChecks = metadata.StrictNullChecks ?? metadata.Strict;
             bool noImplicitAny = metadata.NoImplicitAny ?? metadata.Strict;
             // Raise the error cap well above the product default (10) so we collect every diagnostic

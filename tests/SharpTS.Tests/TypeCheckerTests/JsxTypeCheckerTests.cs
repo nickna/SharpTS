@@ -233,7 +233,7 @@ public class JsxTypeCheckerTests
     }
 
     [Fact]
-    public void NoJsxNamespaceAtAll_Ts2602_UnderNoImplicitAny()
+    public void NoJsxNamespaceAtAll_DoesNotReportLegacyTs2602()
     {
         const string prelude = "declare const _jsx: any;";
         var call = JsxCall(JsxElementKind.Intrinsic, "div", new Expr.Literal("div"),
@@ -242,7 +242,7 @@ public class JsxTypeCheckerTests
         var strict = Check(call, prelude,
             new TypeCheckerOptions { NoImplicitAny = true, MaxErrors = 50 });
 
-        Assert.Contains(strict.Diagnostics, d => d.TsCode == "TS2602");
+        Assert.DoesNotContain(strict.Diagnostics, d => d.TsCode == "TS2602");
         Assert.Contains(strict.Diagnostics, d => d.TsCode == "TS7026");
     }
 
