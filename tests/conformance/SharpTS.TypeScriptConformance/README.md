@@ -64,11 +64,11 @@ Each test classifies into one of:
 | `Fail` | Diagnostic set differs from the baseline. |
 | `ParseError` | Source failed to lex or parse before the type checker ran. |
 | `TypeCheckError` | Checker threw something unrecoverable — distinct from "checker found errors." |
-| `Skipped` | Skipped per directive policy, lib-drift filter, or explicit by-path skip. |
+| `Skipped` | Skipped per directive policy or explicit by-path skip. |
 | `HarnessError` | Setup error: couldn't read test, baseline parse failed, etc. |
 
-`Skipped` carries a reason suffix (`Skipped:lib-drift`,
-`Skipped:directive:experimentaldecorators`, `Skipped:explicitly-skipped`) so
+`Skipped` carries a reason suffix (`Skipped:directive:experimentaldecorators`,
+`Skipped:explicitly-skipped`) so
 the diff harness can tell different skip causes apart.
 
 ## Baseline file contract
@@ -98,14 +98,22 @@ Diagnostics match on `(line, tsCode)` tuples. Column is intentionally dropped �
 
 Diagnostics with no `tsCode` (SharpTS-only — e.g. `@DotNetType` integration errors) are excluded from baseline matching for that test rather than forcing a fail.
 
+## JavaScript inputs
+
+Selected tests that opt into `@allowJs` / `@checkJs` are measured. Their
+virtual `.js` and `.jsx` roots use the same parser, resolver, and checker as the
+SharpTS CLI; this diagnostics-only runner does not emit JavaScript. JavaScript-
+specific semantic gaps remain visible as `Fail` instead of being skipped.
+
 ## Library selection
 
 The runner loads the compiler's embedded copy of the pinned TypeScript
 distribution's `lib.*.d.ts` graph from `src/SharpTS/Modules/TypeScriptLibResources`,
 including triple-slash library references. `@lib`, `@target`, `@noLib`,
 declaration-file roots, and visible `@types` packages flow through the same
-program resolver as the CLI. The conservative legacy `lib-drift` skip remains
-for expected missing-surface diagnostics that produce no SharpTS diagnostic.
+program resolver as the CLI. Missing-surface diagnostic differences are
+measured as `Fail`; the pinned lib graph makes them actionable checker or
+resolver gaps rather than harness skips.
 
 ## Configuration
 

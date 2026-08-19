@@ -6,8 +6,9 @@ namespace SharpTS.TypeScriptConformance;
 /// Reads and writes the committed baseline file. Format mirrors
 /// <c>SharpTS.Test262.Test262Baseline</c> exactly: one line per test,
 /// <c>&lt;relative-path&gt; &lt;bucket&gt;</c>, sorted by path. Skip reasons
-/// are appended as <c>:reason</c> (e.g. <c>Skipped:lib-drift</c>) so the
-/// differ can tell a feature-skip apart from a lib-drift skip.
+/// are appended as <c>:reason</c> (e.g.
+/// <c>Skipped:directive:experimentaldecorators</c>) so the differ can tell
+/// skip policies apart.
 /// </summary>
 public static class TypeScriptConformanceBaseline
 {

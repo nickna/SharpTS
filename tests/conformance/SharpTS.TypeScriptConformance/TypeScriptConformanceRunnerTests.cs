@@ -145,6 +145,39 @@ public class TypeScriptConformanceRunnerTests
         Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
     }
 
+    [Theory]
+    [InlineData("es2019/globalThisAmbientModules.ts")]
+    [InlineData("es2019/globalThisBlockscopedProperties.ts")]
+    [InlineData("es2019/globalThisCollision.ts")]
+    [InlineData("es2019/globalThisPropertyAssignment.ts")]
+    [InlineData("es2019/globalThisUnknown.ts")]
+    [InlineData("es2019/globalThisVarDeclaration.ts")]
+    [InlineData("jsx/jsxCheckJsxNoTypeArgumentsAllowed.tsx")]
+    [InlineData("types/conditional/inferTypesInvalidExtendsDeclaration.ts")]
+    public void RunOne_ReducedSkipSurface_IsMeasured(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        var projectDir = TypeScriptConformancePaths.TryFindProjectDir();
+        if (root is null || projectDir is null) return;
+
+        string configDir = Path.Combine(projectDir, "config");
+        var config = TypeScriptConformanceConfig.Load(Path.Combine(configDir, "subset.json"));
+        var runner = new TypeScriptConformanceRunner(
+            root,
+            config.LoadSkipDirectives(configDir),
+            config.LoadSkipTests(configDir));
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = runner.RunOne(path);
+
+        Assert.True(
+            result.Outcome is TypeScriptConformanceOutcome.Pass or TypeScriptConformanceOutcome.Fail,
+            $"Expected a measured diagnostic outcome, got {result.Outcome}: " +
+            (result.Message ?? result.SkipReason));
+    }
+
     [Fact]
     public void RunOne_NonexistentFile_ReturnsHarnessError()
     {
@@ -325,8 +358,13 @@ public class TypeScriptConformanceBaselineTests
     [Fact]
     public void EncodeBucket_SkippedWithReason_AppendsReason()
     {
-        var r = new TypeScriptConformanceResult(TypeScriptConformanceOutcome.Skipped, null, "lib-drift");
-        Assert.Equal("Skipped:lib-drift", TypeScriptConformanceBaseline.EncodeBucket(r));
+        var r = new TypeScriptConformanceResult(
+            TypeScriptConformanceOutcome.Skipped,
+            null,
+            "directive:experimentaldecorators");
+        Assert.Equal(
+            "Skipped:directive:experimentaldecorators",
+            TypeScriptConformanceBaseline.EncodeBucket(r));
     }
 
     [Fact]
@@ -369,7 +407,7 @@ public class TypeScriptConformanceBaselineTests
         // surfacing but not worth failing the build.
         var diff = TypeScriptConformanceBaselineDiffer.Diff(
             new Dictionary<string, string> { ["a.ts"] = "Skipped:directive:foo" },
-            new Dictionary<string, string> { ["a.ts"] = "Skipped:lib-drift" });
+            new Dictionary<string, string> { ["a.ts"] = "Skipped:directive:bar" });
         Assert.False(diff.HasHardFailures);
         Assert.Single(diff.BucketChanges);
     }

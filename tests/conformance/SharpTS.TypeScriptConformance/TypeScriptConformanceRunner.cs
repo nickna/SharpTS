@@ -260,25 +260,6 @@ public sealed class TypeScriptConformanceRunner
                 null);
         }
 
-        // Lib-drift filter (#83): if tsc expected diagnostics but our checker
-        // produced none, the most likely cause is that we have a global tsc
-        // doesn't (under whatever @lib the test set). We bucket as Skipped
-        // rather than Fail so the baseline isn't dominated by lib-version
-        // noise. Conservative — only fires when our diagnostic set is
-        // completely empty AND expected is non-empty AND every expected code
-        // is one of the property/global-resolution shapes.
-        bool hadParseDiagnostics = diagnostics.Any(
-            diagnostic => diagnostic.Code == DiagnosticCode.ParseError);
-        if (!hadParseDiagnostics && LooksLikeLibDrift(expected, actual))
-        {
-            return new TypeScriptConformanceResult(
-                TypeScriptConformanceOutcome.Skipped,
-                null,
-                "lib-drift",
-                expected,
-                actual);
-        }
-
         var matches = DiagnosticSetsMatch(expected, actual);
         return new TypeScriptConformanceResult(
             matches ? TypeScriptConformanceOutcome.Pass : TypeScriptConformanceOutcome.Fail,
@@ -463,26 +444,6 @@ public sealed class TypeScriptConformanceRunner
         var e = new HashSet<(int, string)>(expected.Select(d => (d.Line, d.TsCode)));
         var a = new HashSet<(int, string)>(actual.Select(d => (d.Line, d.TsCode)));
         return e.SetEquals(a);
-    }
-
-    /// <summary>
-    /// Lib-drift heuristic from #83: the test expected errors but we produced
-    /// none, and every expected code is a "missing surface" shape (TS2339
-    /// "Property does not exist", TS2304 "Cannot find name", TS2551 "did you
-    /// mean", TS7053 "no index signature"). The strongest signal that the
-    /// divergence is lib-version noise rather than a checker bug.
-    /// </summary>
-    private static bool LooksLikeLibDrift(
-        IReadOnlyList<BaselineDiagnostic> expected,
-        IReadOnlyList<BaselineDiagnostic> actual)
-    {
-        if (actual.Count > 0) return false;
-        if (expected.Count == 0) return false;
-        foreach (var e in expected)
-        {
-            if (e.TsCode is not ("TS2339" or "TS2304" or "TS2551" or "TS7053")) return false;
-        }
-        return true;
     }
 
     private static string FormatMismatch(

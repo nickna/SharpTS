@@ -19,9 +19,8 @@ public enum TypeScriptConformanceOutcome
     /// <summary>The type checker threw something unrecoverable — distinct from "checker found errors."</summary>
     TypeCheckError,
 
-    /// <summary>Skipped per directive policy (e.g. <c>@experimentalDecorators</c>) or
-    /// per the lib-drift filter (we report no errors but tsc expected errors that
-    /// look like missing-global / version-conditional surface — see #83).</summary>
+    /// <summary>Skipped per directive policy (e.g. <c>@experimentalDecorators</c>)
+    /// or by an explicit path escape hatch.</summary>
     Skipped,
 
     /// <summary>Setup error (couldn't read test, multi-file resolution failed, baseline parse error, ...).</summary>

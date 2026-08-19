@@ -11,6 +11,5 @@ usedefineforclassfields
 # Per-file isolation mode; not relevant to type-only conformance.
 isolatedmodules
 
-# allowJs / checkJs — JS-in-TS testing surface, not what we're testing here.
-allowjs
-checkjs
+# allowJs / checkJs inputs are part of the measured conformance surface. The
+# runner already loads virtual .js/.jsx roots and type-checks tests that opt in.
