@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using SharpTS.Diagnostics;
 using SharpTS.Execution;
+using SharpTS.Execution.Debugging;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns;
@@ -312,6 +313,11 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             // abort, not an error — Node emits 'exit' with code 1 and no 'error' event.
             exitCode = 1;
         }
+        catch (DebuggerTerminationException)
+        {
+            // The owning debug session ended while this worker was starting or parked.
+            exitCode = 1;
+        }
         catch (Exception ex)
         {
             // A terminated worker must not surface an 'error' event; a genuine uncaught
@@ -387,6 +393,13 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         _workerInterpreter = interpreter;
         interpreter.SetWorkerTerminationToken(_cts.Token);
 
+        // Debugging is inherited only in interpreter mode. Registration happens before globals,
+        // parsing, or user code so nested workers and early failures have an exact DAP lifetime.
+        using IDisposable? debugRegistration = _parentInterpreter?.DebugHost?.RegisterWorker(
+            interpreter,
+            $"Worker {ThreadId}: {Path.GetFileName(absolutePath)}",
+            RequestDebuggerShutdown);
+
         // Isolate this worker's process.stdin (#1076): install the per-worker Readable as the
         // thread-local override so guest `process.stdin` never resolves to the Console-reading
         // singleton. Always done (even without `stdin: true`) so a worker never consumes the host
@@ -418,7 +431,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             }
             else
             {
-                RunWorkerSingleFile(interpreter, source);
+                RunWorkerSingleFile(interpreter, source, absolutePath);
             }
         }
         finally
@@ -449,11 +462,20 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// <summary>
     /// Runs a script-mode worker (no import/export) on a single-file pipeline.
     /// </summary>
-    private static void RunWorkerSingleFile(Interpreter interpreter, string source)
+    private static void RunWorkerSingleFile(
+        Interpreter interpreter,
+        string source,
+        string absolutePath)
     {
         var lexer = new Lexer(source);
         var tokens = lexer.ScanTokens();
         var parser = new Parser(tokens);
+        SourceDocument? document = null;
+        if (interpreter.DebugController is not null)
+        {
+            document = new SourceDocument(absolutePath, source);
+            parser.WithSourceDocument(document).WithFilePath(absolutePath);
+        }
         var parseResult = parser.Parse();
 
         if (!parseResult.IsSuccess)
@@ -466,6 +488,12 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         // failing as undefined — they're bound by SetupWorkerGlobals.
         var typeChecker = new TypeChecker().AsWorkerContext();
         var typeMap = typeChecker.Check(parseResult.Statements);
+
+        if (document is not null)
+        {
+            interpreter.DebugController!.RegisterModule(new ParsedModule(
+                absolutePath, parseResult.Statements) { Document = document });
+        }
 
         interpreter.Interpret(parseResult.Statements, typeMap);
     }
@@ -483,6 +511,10 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         var resolver = new ModuleResolver(absolutePath);
         var entryModule = resolver.LoadModule(absolutePath);
         var allModules = resolver.GetModulesInOrder(entryModule);
+
+        // Module documents already carry parser spans. Register every source before execution so
+        // pending session breakpoints can bind even when the dependency has not run yet.
+        interpreter.DebugController?.RegisterModules(allModules);
 
         // AsWorkerContext keeps the bare worker-scoped globals resolving as `any` in
         // every module, matching the single-file path.
@@ -505,6 +537,17 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         }
 
         interpreter.InterpretModules(allModules, resolver, typeMap);
+    }
+
+    private void RequestDebuggerShutdown(Interpreter interpreter)
+    {
+        _isTerminated = true;
+        try { _cts.Cancel(); }
+        catch (ObjectDisposedException) { }
+        try { _parentToWorkerQueue.CompleteAdding(); }
+        catch (ObjectDisposedException) { }
+        interpreter.Shutdown();
+        ReleaseRunningRef();
     }
 
     /// <summary>

@@ -43,6 +43,7 @@ namespace SharpTS.Execution;
 public partial class Interpreter : IDisposable
 {
     private RuntimeEnvironment _environment = new();
+    internal InterpreterDebugHost? DebugHost { get; set; }
     internal InterpreterDebugController? DebugController { get; set; }
     // Keyed by AST-node identity, not structural value. The resolver stores and reads the
     // same Expr instance, so reference identity is the intent. Expr is a record, so the
@@ -431,6 +432,11 @@ public partial class Interpreter : IDisposable
         }
     }
 
+    /// <summary>Wakes an idle interpreter so a cooperative debugger pause can converge.</summary>
+    internal void WakeDebugger() => WakeEventLoop();
+
+    private void DebuggerIdleCheckpoint() => DebugController?.OnIdleSafePoint(this);
+
     /// <summary>
     /// Queues a microtask to be executed at the end of the current task.
     /// Microtasks execute before any macrotasks (setTimeout/setInterval callbacks).
@@ -644,6 +650,8 @@ public partial class Interpreter : IDisposable
     /// </summary>
     public void TickEventLoop()
     {
+        DebuggerIdleCheckpoint();
+
         // Process microtasks (Promise callbacks, queueMicrotask)
         ProcessMicrotasks();
 
@@ -653,6 +661,7 @@ public partial class Interpreter : IDisposable
         // Drain any queued callbacks (async I/O completions, etc.)
         while (_callbackQueue.TryTake(out var action, TimeSpan.Zero))
         {
+            DebuggerIdleCheckpoint();
             try { action(); }
             catch (Exception ex)
             {
@@ -811,6 +820,8 @@ public partial class Interpreter : IDisposable
     {
         while (!_isDisposed)
         {
+            DebuggerIdleCheckpoint();
+
             // Exit immediately if there's no work keeping the loop alive
             if (!HasActiveHandles && _callbackQueue.Count == 0)
             {
@@ -824,6 +835,7 @@ public partial class Interpreter : IDisposable
             // or shutdown is requested (via CancellationToken from Shutdown())
             if (_callbackQueue.TryTake(out var action, (int)timeout.TotalMilliseconds, shutdownToken))
             {
+                DebuggerIdleCheckpoint();
                 // Execute the queued callback (HTTP request handler, async continuation, etc.)
                 try
                 {
@@ -835,6 +847,8 @@ public partial class Interpreter : IDisposable
                     Error.WriteLine($"Uncaught exception in event loop callback: {ex.Message}");
                 }
             }
+
+            DebuggerIdleCheckpoint();
 
             // Process microtasks first (queueMicrotask, Promise callbacks)
             // Microtasks always run before any macrotasks (timers)
@@ -1221,6 +1235,7 @@ public partial class Interpreter : IDisposable
                     }
                     catch (ThrowException tex)
                     {
+                        NotifyDebuggerUnhandledException(tex.Value);
                         LastUncaughtError = tex;
                         Out.WriteLine($"Runtime Error: {Stringify(tex.Value)}");
                         return;
@@ -1231,8 +1246,10 @@ public partial class Interpreter : IDisposable
                     var result = Execute(statement);
                     if (result.Type == ExecutionResult.ResultType.Throw)
                     {
-                        LastUncaughtError = ThrowException.FromResult(result.Value.ToObject());
-                        Out.WriteLine($"Runtime Error: {Stringify(result.Value.ToObject())}");
+                        object? thrown = result.Value.ToObject();
+                        NotifyDebuggerUnhandledException(thrown);
+                        LastUncaughtError = ThrowException.FromResult(thrown);
+                        Out.WriteLine($"Runtime Error: {Stringify(thrown)}");
                         return;
                     }
                     if (result.IsAbrupt)
@@ -1258,6 +1275,7 @@ public partial class Interpreter : IDisposable
         }
         catch (Exception error)
         {
+            NotifyDebuggerUnhandledException(TranslateException(error));
             Out.WriteLine($"Runtime Error: {error.Message}");
             throw;
         }

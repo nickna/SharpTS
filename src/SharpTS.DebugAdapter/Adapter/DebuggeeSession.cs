@@ -30,27 +30,32 @@ internal sealed class DebuggeeSession : IAsyncDisposable
     private readonly Interpreter _interpreter;
     private readonly Action<string, string> _emitOutput;
     private Task<DebuggeeExit>? _execution;
+    private Task _termination = Task.CompletedTask;
     private int _started;
 
     private DebuggeeSession(
         DebuggeeLaunchOptions options,
         SharpTSProgram program,
         Interpreter interpreter,
+        InterpreterDebugHost host,
         InterpreterDebugController controller,
         Action<string, string> emitOutput)
     {
         _options = options;
         _program = program;
         _interpreter = interpreter;
+        Host = host;
         Controller = controller;
         _emitOutput = emitOutput;
     }
 
+    public InterpreterDebugHost Host { get; }
     public InterpreterDebugController Controller { get; }
     public Task<DebuggeeExit>? Execution => _execution;
 
     public static async Task<DebuggeeSession> PrepareAsync(
         DebuggeeLaunchOptions options,
+        InterpreterDebugHost host,
         Action<string, string> emitOutput,
         CancellationToken cancellationToken)
     {
@@ -71,10 +76,10 @@ internal sealed class DebuggeeSession : IAsyncDisposable
         interpreter.SetDecoratorMode(program.DecoratorMode);
         interpreter.EmitProcessLifecycleEvents = true;
 
-        var controller = new InterpreterDebugController();
+        host.ConfigureJustMyCode(options.JustMyCode);
+        InterpreterDebugThreadInfo mainThread = host.RegisterMain(interpreter);
+        InterpreterDebugController controller = mainThread.Controller;
         controller.RegisterModules(program.RuntimeModules);
-        controller.ConfigureJustMyCode(options.JustMyCode);
-        interpreter.DebugController = controller;
 
         if (options.Diagnostics == "all")
         {
@@ -89,7 +94,7 @@ internal sealed class DebuggeeSession : IAsyncDisposable
                 variableResolver.Resolve(module.Statements);
         }
 
-        return new DebuggeeSession(options, program, interpreter, controller, emitOutput);
+        return new DebuggeeSession(options, program, interpreter, host, controller, emitOutput);
     }
 
     public Task<DebuggeeExit> Start()
@@ -97,7 +102,7 @@ internal sealed class DebuggeeSession : IAsyncDisposable
         if (Interlocked.Exchange(ref _started, 1) != 0)
             throw new InvalidOperationException("The debuggee has already started.");
 
-        Controller.Start(_options.StopOnEntry);
+        Host.StartMain(_options.StopOnEntry);
         _execution = Task.Factory.StartNew(
             Run,
             CancellationToken.None,
@@ -106,12 +111,12 @@ internal sealed class DebuggeeSession : IAsyncDisposable
         return _execution;
     }
 
-    public void Pause() => Controller.RequestPause();
-    public void Continue(DebugStepKind step = DebugStepKind.None) => Controller.Continue(step);
+    public void Pause() => Host.RequestPause(1);
+    public void Continue(DebugStepKind step = DebugStepKind.None) => Host.Continue(1, step);
 
     public void Terminate()
     {
-        Controller.Terminate();
+        _termination = Host.Terminate();
         _interpreter.Dispose();
     }
 
@@ -163,7 +168,10 @@ internal sealed class DebuggeeSession : IAsyncDisposable
         }
         finally
         {
-            Controller.MarkExited();
+            Host.MarkMainExited();
+            _termination = Host.Terminate();
+            try { _termination.Wait(TimeSpan.FromSeconds(5)); }
+            catch (AggregateException) { }
             _interpreter.Dispose();
             ProcessControl.ExitHandler = previousExit;
             ProcessControl.AbortHandler = previousAbort;
@@ -179,9 +187,12 @@ internal sealed class DebuggeeSession : IAsyncDisposable
     {
         if (Controller.State != DebugExecutionState.Exited)
             Terminate();
-        if (_execution is not null)
+        if (_execution is not null || !_termination.IsCompleted)
         {
-            try { await _execution.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
+            Task owned = _execution is null
+                ? _termination
+                : Task.WhenAll(_execution, _termination);
+            try { await owned.WaitAsync(TimeSpan.FromSeconds(5)).ConfigureAwait(false); }
             catch (TimeoutException) { }
         }
         Controller.Dispose();

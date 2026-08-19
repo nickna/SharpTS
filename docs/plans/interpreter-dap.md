@@ -1,6 +1,7 @@
 # Interpreter Debug Adapter Protocol plan
 
-Status: approved for a bounded launch-only v1 implementation (2026-08-19).
+Status: launch-only v1 implemented; debuggable worker threads follow-up #1404 implemented
+(2026-08-19).
 
 Tracks [#1400](https://github.com/nickna/SharpTS/issues/1400) and its children #1401–#1405.
 This decision is independent of compiled-mode portable-PDB debugging in #1306.
@@ -69,12 +70,16 @@ entry. Debugging is opt-in: a normal interpreter has no controller, so its hot d
 single predictable null check and allocates no debugger state.
 
 The main interpreter, its event-loop callbacks, promise continuations, and timers form DAP thread
-1. Pausing is global for that interpreter: the owner thread parks cooperatively at a safe point,
-the DAP reader remains live on its own thread, and queued guest callbacks do not run until continue.
-Evaluation requests are marshalled back to the parked owner thread. Worker-created interpreters
-remain independent in v1 and are not surfaced as DAP threads. Their output still inherits the
-parent's DAP-safe writers. Coordinated worker pause requires a new runtime host/registration API
-and is recorded as the one blocked concurrency follow-up rather than approximated unsafely.
+1. Every interpreter-mode Worker, including nested workers, registers with a debugger-neutral
+session host and becomes a separate DAP thread. A stop requests cooperative suspension of every
+live interpreter. Threads report their real parked state individually until `allThreadsStopped`
+becomes true; an interpreter blocked in a managed/native call is never reported stopped early.
+Evaluation requests are marshalled back to the selected parked interpreter thread.
+
+Continue resumes every interpreter. Step in/over/out applies its condition only to the selected
+thread while peers resume normally, preserving worker-message and event-loop liveness. Workers
+created during stop convergence inherit the pending pause, and worker exit removes that thread from
+the convergence set. The DAP reader remains live on its own thread throughout.
 
 Step-in stops at the next distinct executable statement. Step-over also requires call depth not to
 increase; step-out requires it to decrease. Source identity, frame identity, and span progress—not
@@ -150,5 +155,6 @@ The implementation was validated on Windows on 2026-08-19:
 
 Two release gates cannot be completed purely in this repository: NuGet must onboard the new
 `SharpTS.DebugAdapter` package ID before a tag can pass preflight, and the VS Code presentation
-checklist still requires an interactive Extension Development Host. Worker interpreters remain the
-documented v1 technical limitation described above.
+checklist still requires an interactive Extension Development Host. The worker-interpreter
+limitation was resolved by #1404. Cooperative suspension still cannot preempt a blocking
+managed/native call; partial-stop events report that limitation accurately.

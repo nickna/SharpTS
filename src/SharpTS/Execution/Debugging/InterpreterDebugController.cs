@@ -44,7 +44,6 @@ internal sealed record DebugSourceLocation(
     int EndColumn);
 
 internal sealed record DebugStackFrame(
-    int Id,
     string Name,
     RuntimeEnvironment Environment,
     DebugSourceLocation Location,
@@ -69,6 +68,8 @@ internal sealed record DebugBreakpointBinding(
     int? Line,
     int? Column,
     string? Message);
+
+internal sealed record DebugBreakpointRequest(int Id, int Line, int Column);
 
 /// <summary>
 /// Debugger-neutral cooperative execution controller for the AST interpreter.
@@ -201,13 +202,28 @@ internal sealed class InterpreterDebugController : IDisposable
         string sourcePath,
         IReadOnlyList<(int Line, int Column)> requested)
     {
+        DebugBreakpointRequest[] requests;
+        lock (_gate)
+        {
+            requests = requested.Select(point => new DebugBreakpointRequest(
+                ++_nextBreakpointId, point.Line, point.Column)).ToArray();
+        }
+        return SetBreakpoints(sourcePath, requests);
+    }
+
+    internal IReadOnlyList<DebugBreakpointBinding> SetBreakpoints(
+        string sourcePath,
+        IReadOnlyList<DebugBreakpointRequest> requested)
+    {
         string identity = NormalizeSourceIdentity(sourcePath);
         lock (_gate)
         {
             var bindings = new List<DebugBreakpointBinding>(requested.Count);
-            foreach ((int requestedLine, int requestedColumn) in requested)
+            foreach (DebugBreakpointRequest request in requested)
             {
-                int id = ++_nextBreakpointId;
+                int id = request.Id;
+                int requestedLine = request.Line;
+                int requestedColumn = request.Column;
                 if (!_sources.TryGetValue(identity, out SourceEntry? source))
                 {
                     bindings.Add(new DebugBreakpointBinding(
@@ -268,9 +284,24 @@ internal sealed class InterpreterDebugController : IDisposable
         }
     }
 
+    internal void CancelPauseRequest()
+    {
+        lock (_gate)
+        {
+            if (_state == DebugExecutionState.PauseRequested)
+                _state = DebugExecutionState.Running;
+        }
+    }
+
     public void Continue(DebugStepKind stepKind = DebugStepKind.None)
     {
-        Action? continued = null;
+        PrepareContinue(stepKind);
+        ReleasePreparedContinue();
+        Continued?.Invoke();
+    }
+
+    internal void PrepareContinue(DebugStepKind stepKind)
+    {
         lock (_gate)
         {
             ThrowIfDisposed();
@@ -282,10 +313,16 @@ internal sealed class InterpreterDebugController : IDisposable
             _resumeDepth = _currentStop.FunctionDepth;
             _currentStop = null;
             _state = DebugExecutionState.Continuing;
-            Monitor.PulseAll(_gate);
-            continued = Continued;
         }
-        continued?.Invoke();
+    }
+
+    internal void ReleasePreparedContinue()
+    {
+        lock (_gate)
+        {
+            if (_state is DebugExecutionState.Continuing or DebugExecutionState.PauseRequested)
+                Monitor.PulseAll(_gate);
+        }
     }
 
     public void Terminate()
@@ -414,6 +451,36 @@ internal sealed class InterpreterDebugController : IDisposable
         WaitWhileStopped(interpreter);
     }
 
+    internal void OnIdleSafePoint(Interpreter interpreter)
+    {
+        if (_executingDebuggerWork)
+            return;
+
+        DebugStopSnapshot? stopped = null;
+        lock (_gate)
+        {
+            if (_state == DebugExecutionState.Terminating)
+                throw new DebuggerTerminationException();
+            if (_state != DebugExecutionState.PauseRequested || _disposed)
+                return;
+
+            FrameContext? frame = _currentFrame.Value;
+            LastExecutionPoint? last = _lastExecution.Value;
+            DebugSourceLocation? location = frame?.LastLocation ?? last?.Location;
+            RuntimeEnvironment? environment = frame?.Environment ?? last?.Environment;
+            if (location is null || environment is null)
+                return;
+
+            stopped = CreateSnapshot(
+                DebugStopReason.Pause, location, environment, exception: null, unhandled: false);
+            _currentStop = stopped;
+            _state = DebugExecutionState.Stopped;
+        }
+
+        Stopped?.Invoke(stopped);
+        WaitWhileStopped(interpreter);
+    }
+
     public Task<T> InvokeWhileStoppedAsync<T>(
         Func<Interpreter, T> operation,
         CancellationToken cancellationToken)
@@ -521,7 +588,7 @@ internal sealed class InterpreterDebugController : IDisposable
         if (currentFrame is null)
         {
             frames.Add(new DebugStackFrame(
-                MakeFrameId(generation, 0), ModuleFrameName(location.Document), environment, location));
+                ModuleFrameName(location.Document), environment, location));
         }
         else
         {
@@ -533,7 +600,6 @@ internal sealed class InterpreterDebugController : IDisposable
                     ? location
                     : context.LastLocation ?? location;
                 frames.Add(new DebugStackFrame(
-                    MakeFrameId(generation, dapIndex),
                     context.Name,
                     context.Environment,
                     frameLocation,
@@ -545,7 +611,6 @@ internal sealed class InterpreterDebugController : IDisposable
             if (outermost?.CallerLocation is not null && outermost.CallerEnvironment is not null)
             {
                 frames.Add(new DebugStackFrame(
-                    MakeFrameId(generation, dapIndex),
                     ModuleFrameName(outermost.CallerLocation.Document),
                     outermost.CallerEnvironment,
                     outermost.CallerLocation));
@@ -565,8 +630,6 @@ internal sealed class InterpreterDebugController : IDisposable
         return new DebugStopSnapshot(
             generation, reason, description, frames.ToArray(), exception, unhandled, functionDepth);
     }
-
-    private static int MakeFrameId(int generation, int index) => checked(generation * 10_000 + index + 1);
 
     private static string ModuleFrameName(SourceDocument document) =>
         $"<module: {Path.GetFileName(document.Path)}>";

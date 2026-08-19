@@ -23,17 +23,17 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
     private readonly object _stateGate = new();
     private readonly HashSet<int> _seenSequences = [];
     private readonly ConcurrentDictionary<int, CancellationTokenSource> _requestCancellation = [];
-    private readonly Dictionary<string, IReadOnlyList<(int Line, int Column)>> _pendingBreakpoints =
-        new(OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+    private readonly InterpreterDebugHost _debugHost = new();
     private readonly DebugHandleStore _handles = new();
-    private readonly Dictionary<int, SourceDocument> _sourceReferences = [];
+    private readonly Dictionary<int, DapFrameHandle> _frameHandles = [];
+    private readonly Dictionary<DapFrameKey, int> _reverseFrameHandles = [];
     private readonly CancellationTokenSource _sessionCancellation = new();
 
     private DapSessionState _state;
     private DebuggeeSession? _debuggee;
     private bool _clientLinesStartAtOne = true;
     private bool _clientColumnsStartAtOne = true;
-    private int _nextSourceReference;
+    private int _nextFrameHandle;
     private bool _breakOnCaughtException;
     private bool _breakOnUncaughtException = true;
     private bool _breakOnUnhandledRejection = true;
@@ -168,6 +168,7 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
             supportsSetExpression = false,
             supportsTerminateThreadsRequest = false,
             supportsRestartRequest = false,
+            supportsSingleThreadExecutionRequests = false,
             exceptionBreakpointFilters = new object[]
             {
                 new { filter = "caught", label = "Caught Exceptions", @default = false },
@@ -214,20 +215,23 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
             request.Arguments.OptionalBoolean("justMyCode", true),
             diagnostics);
 
-        _debuggee = await DebuggeeSession.PrepareAsync(
-            options, EmitOutput, cancellationToken).ConfigureAwait(false);
-        _debuggee.Controller.Stopped += OnStopped;
-        _debuggee.Controller.Continued += OnContinued;
-        _debuggee.Controller.SourceRegistered += OnSourceRegistered;
-        _debuggee.Controller.ConfigureExceptionFilters(
+        _debugHost.ConfigureExceptionFilters(
             _breakOnCaughtException, _breakOnUncaughtException, _breakOnUnhandledRejection);
-        foreach ((string path, IReadOnlyList<(int Line, int Column)> breakpoints) in _pendingBreakpoints)
-            _debuggee.Controller.SetBreakpoints(path, breakpoints);
+        _debuggee = await DebuggeeSession.PrepareAsync(
+            options, _debugHost, EmitOutput, cancellationToken).ConfigureAwait(false);
+        _debugHost.Stopped += OnStopped;
+        _debugHost.Continued += OnContinued;
+        _debugHost.ThreadStarted += OnThreadStarted;
+        _debugHost.ThreadExited += OnThreadExited;
+        _debugHost.SourceChanged += OnSourceChanged;
+        _debugHost.BreakpointChanged += OnBreakpointChanged;
 
         lock (_stateGate)
             _state = DapSessionState.Launched;
         await connection.SendResponseAsync(request, true, cancellationToken: cancellationToken)
             .ConfigureAwait(false);
+        await connection.SendEventAsync("thread", new { reason = "started", threadId = 1 },
+            cancellationToken).ConfigureAwait(false);
     }
 
     private async Task ConfigurationDoneAsync(DapRequest request, CancellationToken cancellationToken)
@@ -268,13 +272,7 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
                 requested.Add((line, column));
             }
         }
-        _pendingBreakpoints[path] = requested;
-
-        IReadOnlyList<DebugBreakpointBinding> bindings = _debuggee is null
-            ? requested.Select((point, index) => new DebugBreakpointBinding(
-                index + 1, path, point.Line, point.Column, false, null, null,
-                "Source will be resolved during launch.")).ToArray()
-            : _debuggee.Controller.SetBreakpoints(path, requested);
+        IReadOnlyList<DebugBreakpointBinding> bindings = _debugHost.SetBreakpoints(path, requested);
         await connection.SendResponseAsync(request, true, new
         {
             breakpoints = bindings.Select(binding => new
@@ -297,7 +295,7 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         _breakOnCaughtException = filters.Contains("caught");
         _breakOnUncaughtException = filters.Contains("uncaught");
         _breakOnUnhandledRejection = filters.Contains("unhandledRejection");
-        _debuggee?.Controller.ConfigureExceptionFilters(
+        _debugHost.ConfigureExceptionFilters(
             _breakOnCaughtException, _breakOnUncaughtException, _breakOnUnhandledRejection);
         return connection.SendResponseAsync(request, true, new
         {
@@ -314,26 +312,33 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         RequireAtLeastInitialized("threads");
         return connection.SendResponseAsync(request, true, new
         {
-            threads = new[] { new { id = 1, name = "SharpTS interpreter" } },
+            threads = _debugHost.Threads.Select(thread => new
+            {
+                id = thread.Id,
+                name = thread.Name,
+            }).ToArray(),
         }, cancellationToken: cancellationToken);
     }
 
     private Task StackTraceAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        DebugStopSnapshot stop = RequireStop();
+        int threadId = request.Arguments.RequiredInt32("threadId");
+        (InterpreterDebugThreadInfo thread, DebugStopSnapshot stop) = RequireStop(threadId);
+        ResetStopHandles(_debugHost.CurrentStopEpoch);
         int start = Math.Max(0, TryGetInt(request.Arguments, "startFrame") ?? 0);
         int levels = Math.Clamp(TryGetInt(request.Arguments, "levels") ?? stop.Frames.Count, 0, 1_000);
-        object[] frames = stop.Frames.Skip(start).Take(levels).Select(frame => new
-        {
-            id = frame.Id,
-            name = frame.Name,
-            source = SourceDescriptor(frame.Location.Document),
-            line = ToClientLine(frame.Location.Line),
-            column = ToClientColumn(frame.Location.Column),
-            endLine = ToClientLine(frame.Location.EndLine),
-            endColumn = ToClientColumn(frame.Location.EndColumn),
-            presentationHint = frame.IsAsyncOrigin ? "subtle" : "normal",
-        }).Cast<object>().ToArray();
+        object[] frames = stop.Frames.Select((frame, index) => (frame, index))
+            .Skip(start).Take(levels).Select(item => new
+            {
+                id = GetFrameHandle(thread.Id, stop, item.index, item.frame),
+                name = item.frame.Name,
+                source = SourceDescriptor(item.frame.Location.Document),
+                line = ToClientLine(item.frame.Location.Line),
+                column = ToClientColumn(item.frame.Location.Column),
+                endLine = ToClientLine(item.frame.Location.EndLine),
+                endColumn = ToClientColumn(item.frame.Location.EndColumn),
+                presentationHint = item.frame.IsAsyncOrigin ? "subtle" : "normal",
+            }).Cast<object>().ToArray();
         return connection.SendResponseAsync(request, true, new
         {
             stackFrames = frames,
@@ -343,12 +348,13 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
 
     private Task ScopesAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        DebugStopSnapshot stop = RequireStop();
         int frameId = request.Arguments.RequiredInt32("frameId");
-        DebugStackFrame frame = stop.Frames.FirstOrDefault(frame => frame.Id == frameId)
-            ?? throw new DapRequestException("Stack frame is stale or invalid.");
-        if (_handles.Generation != stop.Generation)
-            _handles.Reset(stop.Generation);
+        DapFrameHandle handle = RequireFrame(frameId);
+        (_, DebugStopSnapshot stop) = RequireStop(handle.ThreadId);
+        if (stop.Generation != handle.ControllerGeneration)
+            throw new DapRequestException("Stack frame is stale or invalid.");
+        DebugStackFrame frame = handle.Frame;
+        ResetStopHandles(_debugHost.CurrentStopEpoch);
 
         var scopes = new List<object>();
         RuntimeEnvironment? environment = frame.Environment;
@@ -407,7 +413,7 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
 
     private Task VariablesAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        RequireStop();
+        RequireAnyStop();
         int reference = request.Arguments.RequiredInt32("variablesReference");
         object value = _handles.Get<object>(reference);
         int start = TryGetInt(request.Arguments, "start") ?? 0;
@@ -424,16 +430,29 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
 
     private async Task EvaluateAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        DebugStopSnapshot stop = RequireStop();
         string expression = request.Arguments.RequiredString("expression");
         string context = request.Arguments.OptionalString("context") ?? "watch";
         int? frameId = TryGetInt(request.Arguments, "frameId");
-        DebugStackFrame frame = frameId is null
-            ? stop.Frames[0]
-            : stop.Frames.FirstOrDefault(frame => frame.Id == frameId)
-                ?? throw new DapRequestException("Stack frame is stale or invalid.");
+        InterpreterDebugThreadInfo thread;
+        DebugStopSnapshot stop;
+        DebugStackFrame frame;
+        if (frameId is int requestedFrame)
+        {
+            DapFrameHandle handle = RequireFrame(requestedFrame);
+            (thread, stop) = RequireStop(handle.ThreadId);
+            if (stop.Generation != handle.ControllerGeneration)
+                throw new DapRequestException("Stack frame is stale or invalid.");
+            frame = handle.Frame;
+        }
+        else
+        {
+            thread = _debugHost.Threads.FirstOrDefault(candidate => candidate.CurrentStop is not null)
+                ?? throw new DapRequestException("No interpreter thread is stopped.");
+            stop = thread.CurrentStop!;
+            frame = stop.Frames[0];
+        }
 
-        object? result = await RequireDebuggee().Controller.InvokeWhileStoppedAsync(
+        object? result = await thread.Controller.InvokeWhileStoppedAsync(
             interpreter => interpreter.EvaluateDebuggerExpression(
                 expression, frame.Environment, context != "hover", cancellationToken),
             cancellationToken).ConfigureAwait(false);
@@ -453,7 +472,8 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
 
     private Task ExceptionInfoAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        DebugStopSnapshot stop = RequireStop();
+        int threadId = request.Arguments.RequiredInt32("threadId");
+        (_, DebugStopSnapshot stop) = RequireStop(threadId);
         if (stop.Reason != DebugStopReason.Exception)
             throw new DapRequestException("The current stop is not an exception stop.");
         DebugVariableValue exception = DebugValueInspector.Describe("exception", stop.Exception);
@@ -472,8 +492,10 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         CancellationToken cancellationToken)
     {
         RequireConfigured(request.Command);
-        _handles.Clear();
-        RequireDebuggee().Continue(step);
+        int threadId = request.Arguments.RequiredInt32("threadId");
+        try { _debugHost.Continue(threadId, step); }
+        catch (KeyNotFoundException exception) { throw new DapRequestException(exception.Message); }
+        catch (InvalidOperationException exception) { throw new DapRequestException(exception.Message); }
         return connection.SendResponseAsync(request, true, new { allThreadsContinued = true },
             cancellationToken: cancellationToken);
     }
@@ -481,29 +503,28 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
     private Task PauseAsync(DapRequest request, CancellationToken cancellationToken)
     {
         RequireConfigured("pause");
-        RequireDebuggee().Pause();
+        int threadId = request.Arguments.RequiredInt32("threadId");
+        try { _debugHost.RequestPause(threadId); }
+        catch (KeyNotFoundException exception) { throw new DapRequestException(exception.Message); }
         return connection.SendResponseAsync(request, true, cancellationToken: cancellationToken);
     }
 
     private Task LoadedSourcesAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        DebuggeeSession debuggee = RequireDebuggee();
+        _ = RequireDebuggee();
         return connection.SendResponseAsync(request, true, new
         {
-            sources = debuggee.Controller.Sources.Select(SourceDescriptor).ToArray(),
+            sources = _debugHost.Sources.Select(source => SourceDescriptor(source.Document)).ToArray(),
         }, cancellationToken: cancellationToken);
     }
 
     private Task SourceAsync(DapRequest request, CancellationToken cancellationToken)
     {
         int reference = request.Arguments.RequiredInt32("sourceReference");
-        SourceDocument document;
-        lock (_stateGate)
-        {
-            if (!_sourceReferences.TryGetValue(reference, out SourceDocument? found))
-                throw new DapRequestException("Source reference is stale or invalid.");
-            document = found;
-        }
+        if (!_debugHost.TryGetSource(reference, out InterpreterDebugSourceInfo? source)
+            || source is null || !source.Document.IsVirtual)
+            throw new DapRequestException("Source reference is stale or invalid.");
+        SourceDocument document = source.Document;
         return connection.SendResponseAsync(request, true, new
         {
             content = document.Text,
@@ -515,12 +536,12 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
 
     private Task ModulesAsync(DapRequest request, CancellationToken cancellationToken)
     {
-        DebuggeeSession debuggee = RequireDebuggee();
+        _ = RequireDebuggee();
+        IReadOnlyList<InterpreterDebugSourceInfo> sources = _debugHost.Sources;
         return connection.SendResponseAsync(request, true, new
         {
-            modules = debuggee.Controller.Sources.Select((document, index) =>
-                ModuleDescriptor(document, index + 1)).ToArray(),
-            totalModules = debuggee.Controller.Sources.Count,
+            modules = sources.Select(source => ModuleDescriptor(source.Document, source.Id)).ToArray(),
+            totalModules = sources.Count,
         }, cancellationToken: cancellationToken);
     }
 
@@ -549,9 +570,10 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         await connection.SendResponseAsync(request, true).ConfigureAwait(false);
     }
 
-    private void OnStopped(DebugStopSnapshot stop)
+    private void OnStopped(InterpreterDebugStopEvent stopped)
     {
-        _handles.Reset(stop.Generation);
+        ResetStopHandles(stopped.Epoch);
+        DebugStopSnapshot stop = stopped.Stop;
         string reason = stop.Reason switch
         {
             DebugStopReason.Entry => "entry",
@@ -565,44 +587,62 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         {
             reason,
             description = stop.Description,
-            threadId = 1,
-            allThreadsStopped = true,
+            threadId = stopped.ThreadId,
+            allThreadsStopped = stopped.AllThreadsStopped,
             text = stop.Exception is null ? null : DebugValueInspector.Describe("exception", stop.Exception).Value,
         }));
     }
 
-    private void OnContinued()
+    private void OnContinued(InterpreterDebugContinueEvent continued)
     {
-        _handles.Clear();
+        ClearStopHandles();
         Observe(connection.SendEventAsync("continued", new
         {
-            threadId = 1,
-            allThreadsContinued = true,
+            threadId = continued.ThreadId,
+            allThreadsContinued = continued.AllThreadsContinued,
         }));
     }
 
-    private void OnSourceRegistered(SourceDocument document)
+    private void OnThreadStarted(InterpreterDebugThreadInfo thread) =>
+        Observe(connection.SendEventAsync("thread", new
+        {
+            reason = "started",
+            threadId = thread.Id,
+        }));
+
+    private void OnThreadExited(int threadId) =>
+        Observe(connection.SendEventAsync("thread", new
+        {
+            reason = "exited",
+            threadId,
+        }));
+
+    private void OnSourceChanged(InterpreterDebugSourceEvent change)
     {
-        DebuggeeSession? debuggee = _debuggee;
-        if (debuggee is null)
-            return;
         try
         {
             Observe(connection.SendEventAsync("loadedSource", new
             {
-                reason = "new",
-                source = SourceDescriptor(document),
+                reason = change.Reason == InterpreterDebugSourceChangeReason.New ? "new" : "removed",
+                source = SourceDescriptor(change.Source.Document, change.Source.Id),
             }));
             Observe(connection.SendEventAsync("module", new
             {
-                reason = "new",
-                module = ModuleDescriptor(document, debuggee.Controller.Sources.Count),
+                reason = change.Reason == InterpreterDebugSourceChangeReason.New ? "new" : "removed",
+                module = ModuleDescriptor(change.Source.Document, change.Source.Id),
             }));
         }
         catch (ObjectDisposedException)
         {
         }
     }
+
+    private void OnBreakpointChanged(DebugBreakpointBinding binding) =>
+        Observe(connection.SendEventAsync("breakpoint", new
+        {
+            reason = "changed",
+            breakpoint = ToDapBreakpoint(binding),
+        }));
 
     private void EmitOutput(string category, string output) =>
         Observe(connection.SendEventAsync("output", new { category, output }));
@@ -631,21 +671,22 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         };
     }
 
-    private object SourceDescriptor(SourceDocument document)
+    private object ToDapBreakpoint(DebugBreakpointBinding binding) => new
+    {
+        id = binding.Id,
+        verified = binding.Verified,
+        line = binding.Line is int line ? ToClientLine(line) : (int?)null,
+        column = binding.Column is int column ? ToClientColumn(column) : (int?)null,
+        message = binding.Message,
+        source = new { name = Path.GetFileName(binding.SourcePath), path = binding.SourcePath },
+    };
+
+    private object SourceDescriptor(SourceDocument document, int? knownSourceId = null)
     {
         if (!document.IsVirtual)
             return new { name = Path.GetFileName(document.Path), path = document.Path, sourceReference = 0 };
-        lock (_stateGate)
-        {
-            int reference = _sourceReferences.FirstOrDefault(
-                pair => ReferenceEquals(pair.Value, document)).Key;
-            if (reference == 0)
-            {
-                reference = ++_nextSourceReference;
-                _sourceReferences.Add(reference, document);
-            }
-            return new { name = Path.GetFileName(document.Path), path = (string?)null, sourceReference = reference };
-        }
+        int sourceId = knownSourceId ?? _debugHost.GetSource(document).Id;
+        return new { name = Path.GetFileName(document.Path), path = (string?)null, sourceReference = sourceId };
     }
 
     private static object ModuleDescriptor(SourceDocument document, int id) => new
@@ -684,18 +725,89 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         DebuggeeSession? debuggee = Interlocked.Exchange(ref _debuggee, null);
         if (debuggee is null)
             return;
-        debuggee.Controller.Stopped -= OnStopped;
-        debuggee.Controller.Continued -= OnContinued;
-        debuggee.Controller.SourceRegistered -= OnSourceRegistered;
+        _debugHost.Stopped -= OnStopped;
+        _debugHost.Continued -= OnContinued;
+        _debugHost.ThreadStarted -= OnThreadStarted;
+        _debugHost.ThreadExited -= OnThreadExited;
+        _debugHost.SourceChanged -= OnSourceChanged;
+        _debugHost.BreakpointChanged -= OnBreakpointChanged;
         await debuggee.DisposeAsync().ConfigureAwait(false);
     }
 
     private DebuggeeSession RequireDebuggee() =>
         _debuggee ?? throw new DapRequestException("No debuggee has been launched.");
 
-    private DebugStopSnapshot RequireStop() =>
-        RequireDebuggee().Controller.CurrentStop
-        ?? throw new DapRequestException("The interpreter is not stopped.");
+    private (InterpreterDebugThreadInfo Thread, DebugStopSnapshot Stop) RequireStop(int threadId)
+    {
+        _ = RequireDebuggee();
+        InterpreterDebugThreadInfo thread;
+        try { thread = _debugHost.GetThread(threadId); }
+        catch (KeyNotFoundException exception) { throw new DapRequestException(exception.Message); }
+        return thread.CurrentStop is DebugStopSnapshot stop
+            ? (thread, stop)
+            : throw new DapRequestException("The selected interpreter thread is not stopped.");
+    }
+
+    private void RequireAnyStop()
+    {
+        _ = RequireDebuggee();
+        if (_debugHost.CurrentStopEpoch == 0
+            || !_debugHost.Threads.Any(thread => thread.CurrentStop is not null))
+            throw new DapRequestException("No interpreter thread is stopped.");
+    }
+
+    private DapFrameHandle RequireFrame(int frameId)
+    {
+        lock (_stateGate)
+        {
+            return _frameHandles.TryGetValue(frameId, out DapFrameHandle? frame)
+                ? frame
+                : throw new DapRequestException("Stack frame is stale or invalid.");
+        }
+    }
+
+    private int GetFrameHandle(
+        int threadId,
+        DebugStopSnapshot stop,
+        int frameIndex,
+        DebugStackFrame frame)
+    {
+        var key = new DapFrameKey(threadId, stop.Generation, frameIndex);
+        lock (_stateGate)
+        {
+            if (_reverseFrameHandles.TryGetValue(key, out int existing))
+                return existing;
+            int id = checked(++_nextFrameHandle);
+            _reverseFrameHandles.Add(key, id);
+            _frameHandles.Add(id, new DapFrameHandle(
+                threadId, stop.Generation, frameIndex, frame));
+            return id;
+        }
+    }
+
+    private void ResetStopHandles(int epoch)
+    {
+        if (epoch <= 0)
+            return;
+        lock (_stateGate)
+        {
+            if (_handles.Generation == epoch)
+                return;
+            _handles.Reset(epoch);
+            _frameHandles.Clear();
+            _reverseFrameHandles.Clear();
+        }
+    }
+
+    private void ClearStopHandles()
+    {
+        lock (_stateGate)
+        {
+            _handles.Clear();
+            _frameHandles.Clear();
+            _reverseFrameHandles.Clear();
+        }
+    }
 
     private void Transition(DapSessionState expected, DapSessionState next, string command)
     {
@@ -768,6 +880,18 @@ internal sealed class DapAdapterSession(DapProtocolConnection connection, TextWr
         _disposed = true;
         _sessionCancellation.Cancel();
         await DisconnectDebuggeeAsync().ConfigureAwait(false);
+        _debugHost.Dispose();
         _sessionCancellation.Dispose();
     }
+
+    private readonly record struct DapFrameKey(
+        int ThreadId,
+        int ControllerGeneration,
+        int FrameIndex);
+
+    private sealed record DapFrameHandle(
+        int ThreadId,
+        int ControllerGeneration,
+        int FrameIndex,
+        DebugStackFrame Frame);
 }

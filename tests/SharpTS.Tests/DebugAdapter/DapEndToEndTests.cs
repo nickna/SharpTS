@@ -249,6 +249,192 @@ public sealed class DapEndToEndTests
     }
 
     [Fact]
+    public async Task WorkerBreakpointVerifiesOnLoadAndStopsAsItsOwnThread()
+    {
+        string directory = CreateFixtureDirectory();
+        string worker = Path.Combine(directory, "worker-debug.ts");
+        string program = Path.Combine(directory, "main.ts");
+        await File.WriteAllTextAsync(worker,
+            "let workerValue = 41;\nlet doubled = workerValue * 2;\nconsole.log(workerValue + 1);");
+        await File.WriteAllTextAsync(program,
+            "import { Worker } from 'worker_threads';\nnew Worker(__dirname + '/worker-debug.ts');");
+
+        await using var dap = new DapProtocolHarness();
+        AssertSuccess(await dap.RequestAsync("initialize", new { adapterID = "sharpts" }));
+        await dap.WaitForEventAsync("initialized");
+        AssertSuccess(await dap.RequestAsync("launch", new { program }));
+        JsonElement pending = await dap.RequestAsync("setBreakpoints", new
+        {
+            source = new { path = worker },
+            breakpoints = new[] { new { line = 2 } },
+        });
+        JsonElement pendingBreakpoint = pending.GetProperty("body").GetProperty("breakpoints")[0];
+        Assert.False(pendingBreakpoint.GetProperty("verified").GetBoolean());
+        int breakpointId = pendingBreakpoint.GetProperty("id").GetInt32();
+        AssertSuccess(await dap.RequestAsync("configurationDone"));
+
+        JsonElement workerStarted;
+        do
+        {
+            workerStarted = await dap.WaitForEventAsync("thread");
+        }
+        while (workerStarted.GetProperty("body").GetProperty("reason").GetString() != "started"
+            || workerStarted.GetProperty("body").GetProperty("threadId").GetInt32() == 1);
+        int workerThreadId = workerStarted.GetProperty("body").GetProperty("threadId").GetInt32();
+
+        JsonElement changed = await dap.WaitForEventAsync("breakpoint");
+        JsonElement verifiedBreakpoint = changed.GetProperty("body").GetProperty("breakpoint");
+        Assert.Equal(breakpointId, verifiedBreakpoint.GetProperty("id").GetInt32());
+        Assert.True(verifiedBreakpoint.GetProperty("verified").GetBoolean());
+
+        var stoppedThreads = new HashSet<int>();
+        JsonElement finalStop;
+        do
+        {
+            finalStop = await dap.WaitForEventAsync("stopped");
+            stoppedThreads.Add(finalStop.GetProperty("body").GetProperty("threadId").GetInt32());
+        }
+        while (!finalStop.GetProperty("body").GetProperty("allThreadsStopped").GetBoolean());
+
+        Assert.Contains(1, stoppedThreads);
+        Assert.Contains(workerThreadId, stoppedThreads);
+        JsonElement threads = await dap.RequestAsync("threads");
+        int[] threadIds = threads.GetProperty("body").GetProperty("threads")
+            .EnumerateArray().Select(thread => thread.GetProperty("id").GetInt32()).ToArray();
+        Assert.Contains(1, threadIds);
+        Assert.Contains(workerThreadId, threadIds);
+        JsonElement stack = await dap.RequestAsync("stackTrace", new { threadId = workerThreadId });
+        JsonElement top = stack.GetProperty("body").GetProperty("stackFrames")[0];
+        Assert.Equal(Path.GetFullPath(worker),
+            top.GetProperty("source").GetProperty("path").GetString());
+        Assert.Equal(2, top.GetProperty("line").GetInt32());
+        int frameId = top.GetProperty("id").GetInt32();
+        JsonElement scopes = await dap.RequestAsync("scopes", new { frameId });
+        int localsReference = scopes.GetProperty("body").GetProperty("scopes")[0]
+            .GetProperty("variablesReference").GetInt32();
+        JsonElement variables = await dap.RequestAsync("variables", new
+        {
+            variablesReference = localsReference,
+        });
+        Assert.Contains(variables.GetProperty("body").GetProperty("variables").EnumerateArray(),
+            variable => variable.GetProperty("name").GetString() == "workerValue"
+                && variable.GetProperty("value").GetString() == "41");
+        JsonElement evaluation = await dap.RequestAsync("evaluate", new
+        {
+            expression = "workerValue + 1",
+            frameId,
+            context = "watch",
+        });
+        Assert.Equal("42", evaluation.GetProperty("body").GetProperty("result").GetString());
+
+        AssertSuccess(await dap.RequestAsync("next", new { threadId = workerThreadId }));
+        JsonElement workerStep;
+        do
+        {
+            workerStep = await dap.WaitForEventAsync("stopped");
+        }
+        while (workerStep.GetProperty("body").GetProperty("threadId").GetInt32() != workerThreadId
+            || workerStep.GetProperty("body").GetProperty("reason").GetString() != "step");
+        JsonElement steppedStack = await dap.RequestAsync("stackTrace", new { threadId = workerThreadId });
+        Assert.Equal(3, steppedStack.GetProperty("body").GetProperty("stackFrames")[0]
+            .GetProperty("line").GetInt32());
+
+        JsonElement convergence = workerStep;
+        while (!convergence.GetProperty("body").GetProperty("allThreadsStopped").GetBoolean())
+            convergence = await dap.WaitForEventAsync("stopped");
+        AssertSuccess(await dap.RequestAsync("continue", new { threadId = workerThreadId }));
+        JsonElement output = await dap.WaitForEventAsync("output");
+        Assert.Contains("42", output.GetProperty("body").GetProperty("output").GetString());
+        await dap.WaitForEventAsync("exited");
+    }
+
+    [Fact]
+    public async Task NestedWorkersEmitStableStartedAndExitedThreadEvents()
+    {
+        string directory = CreateFixtureDirectory();
+        string inner = Path.Combine(directory, "inner.ts");
+        string outer = Path.Combine(directory, "outer.ts");
+        string program = Path.Combine(directory, "main.ts");
+        await File.WriteAllTextAsync(inner, "console.log('nested-worker-done');");
+        await File.WriteAllTextAsync(outer,
+            "import { Worker } from 'worker_threads';\nnew Worker(__dirname + '/inner.ts');");
+        await File.WriteAllTextAsync(program,
+            "import { Worker } from 'worker_threads';\nnew Worker(__dirname + '/outer.ts');");
+
+        await using var dap = new DapProtocolHarness();
+        AssertSuccess(await dap.RequestAsync("initialize", new { adapterID = "sharpts" }));
+        await dap.WaitForEventAsync("initialized");
+        AssertSuccess(await dap.RequestAsync("launch", new { program }));
+        AssertSuccess(await dap.RequestAsync("configurationDone"));
+
+        var started = new HashSet<int>();
+        var exited = new HashSet<int>();
+        while (started.Count < 2 || exited.Count < 2)
+        {
+            JsonElement threadEvent = await dap.WaitForEventAsync("thread");
+            JsonElement body = threadEvent.GetProperty("body");
+            int threadId = body.GetProperty("threadId").GetInt32();
+            if (threadId == 1)
+                continue;
+            if (body.GetProperty("reason").GetString() == "started")
+                started.Add(threadId);
+            else
+                exited.Add(threadId);
+        }
+
+        Assert.Equal(2, started.Count);
+        Assert.True(started.SetEquals(exited));
+        Assert.DoesNotContain(1, started);
+        JsonElement output = await dap.WaitForEventAsync("output");
+        Assert.Contains("nested-worker-done", output.GetProperty("body").GetProperty("output").GetString());
+        await dap.WaitForEventAsync("exited");
+    }
+
+    [Fact]
+    public async Task WorkerExceptionInfoIsRoutedToTheWorkerThread()
+    {
+        string directory = CreateFixtureDirectory();
+        string worker = Path.Combine(directory, "throwing-worker.ts");
+        string program = Path.Combine(directory, "main.ts");
+        await File.WriteAllTextAsync(worker, "let marker = 1;\nthrow new Error('worker boom');");
+        await File.WriteAllTextAsync(program,
+            "import { Worker } from 'worker_threads';\nnew Worker(__dirname + '/throwing-worker.ts');");
+
+        await using var dap = new DapProtocolHarness();
+        AssertSuccess(await dap.RequestAsync("initialize", new { adapterID = "sharpts" }));
+        await dap.WaitForEventAsync("initialized");
+        AssertSuccess(await dap.RequestAsync("launch", new { program }));
+        AssertSuccess(await dap.RequestAsync("configurationDone"));
+
+        int workerThreadId = 0;
+        while (workerThreadId == 0)
+        {
+            JsonElement threadEvent = await dap.WaitForEventAsync("thread");
+            JsonElement body = threadEvent.GetProperty("body");
+            int id = body.GetProperty("threadId").GetInt32();
+            if (id != 1 && body.GetProperty("reason").GetString() == "started")
+                workerThreadId = id;
+        }
+
+        JsonElement exceptionStop;
+        do
+        {
+            exceptionStop = await dap.WaitForEventAsync("stopped");
+        }
+        while (exceptionStop.GetProperty("body").GetProperty("threadId").GetInt32() != workerThreadId
+            || exceptionStop.GetProperty("body").GetProperty("reason").GetString() != "exception");
+        JsonElement info = await dap.RequestAsync("exceptionInfo", new { threadId = workerThreadId });
+        AssertSuccess(info);
+        Assert.Contains("worker boom", info.GetProperty("body").GetProperty("description").GetString());
+
+        JsonElement convergence = exceptionStop;
+        while (!convergence.GetProperty("body").GetProperty("allThreadsStopped").GetBoolean())
+            convergence = await dap.WaitForEventAsync("stopped");
+        AssertSuccess(await dap.RequestAsync("continue", new { threadId = workerThreadId }));
+        await dap.WaitForEventAsync("exited");
+    }
+
+    [Fact]
     public async Task DuplicateModuleBasenamesKeepIndependentSourceIdentity()
     {
         string directory = CreateFixtureDirectory();

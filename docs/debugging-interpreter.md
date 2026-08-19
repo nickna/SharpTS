@@ -85,11 +85,29 @@ Async functions and generators use their TypeScript statement locations; steppin
 next source statement rather than exposing the runtime continuation machinery. Imported and
 dynamically discovered modules appear as separate sources.
 
-Interpreter v1 exposes one DAP thread and uses cooperative, statement-boundary suspension. A pause
-request therefore takes effect at the next safe point, not in the middle of a blocking .NET call.
-Worker-created interpreters are independent runtimes and are not yet surfaced as child DAP threads;
-the main interpreter remains debuggable while workers execute. This is the principal v1 concurrency
-limitation.
+The main interpreter is DAP thread 1. Every interpreter-mode `Worker`, including a worker created by
+another worker, appears as a separate named DAP thread with a stable, session-only ID. Worker IDs are
+not the same contract as guest `worker_threads.threadId`. A worker emits standard thread
+started/exited events, and its script and imported modules appear in loaded sources/modules. A
+breakpoint set before a worker loads its file is initially unverified and emits a standard
+`breakpoint/changed` event when that worker binds it.
+
+Suspension is coordinated all-stop and cooperative. A breakpoint, exception, or pause in any
+interpreter requests a pause in every live interpreter and wakes idle worker event loops. Each
+thread reports a stopped event only after it actually reaches a safe point;
+`allThreadsStopped: false` means other interpreters may still be running, and the final parked
+thread reports `allThreadsStopped: true`. Only threads that have reported a stop can be inspected
+during partial convergence.
+
+Continue always resumes every interpreter. Step in, over, or out applies its step condition to the
+selected thread while also resuming its peers normally. This keeps worker messages, promises, and
+timers live while the selected thread advances. A worker created while a coordinated stop is still
+converging immediately inherits the pending pause request.
+
+Safe points are TypeScript statement and callback boundaries plus idle event-loop checkpoints. A
+pause therefore cannot preempt an interpreter in a blocking or long-running managed/native call;
+that thread remains running and `allThreadsStopped` remains false until it reaches a safe point.
+The DAP reader, continue, terminate, and disconnect requests remain responsive during that wait.
 
 ## Security and shutdown
 
@@ -98,6 +116,6 @@ their identity. The tradeoff is that interpreted code has the same operating-sys
 the adapter. Only debug programs you trust, restrict `cwd` and assembly references as appropriate,
 and do not expose adapter standard I/O through an unauthenticated network bridge.
 
-`terminate`, `disconnect`, client EOF, Ctrl+C, and interpreter exit all release a cooperative pause
-and dispose the session. Output is emitted only through DAP `output` events, leaving protocol stdout
-clean.
+`terminate`, `disconnect`, client EOF, Ctrl+C, and interpreter exit release every cooperative pause,
+wake and shut down all registered interpreter event loops, and wait within the session's five-second
+ownership bound. Output is emitted only through DAP `output` events, leaving protocol stdout clean.
