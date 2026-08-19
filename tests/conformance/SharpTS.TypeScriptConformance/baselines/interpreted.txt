@@ -391,6 +391,12 @@ tests/cases/conformance/types/conditional/inferTypesWithExtends1.ts Pass
 tests/cases/conformance/types/conditional/inferTypesWithExtends2.ts Pass
 tests/cases/conformance/types/conditional/inferTypesWithExtendsDependingOnTypeVariables.ts Pass
 tests/cases/conformance/types/conditional/variance.ts Pass
+tests/cases/conformance/types/keyof/circularIndexedAccessErrors.ts Fail
+tests/cases/conformance/types/keyof/keyofAndForIn.ts Fail
+tests/cases/conformance/types/keyof/keyofAndIndexedAccess.ts Fail
+tests/cases/conformance/types/keyof/keyofAndIndexedAccess2.ts Fail
+tests/cases/conformance/types/keyof/keyofAndIndexedAccessErrors.ts Fail
+tests/cases/conformance/types/keyof/keyofIntersection.ts Pass
 tests/cases/conformance/types/typeRelationships/assignmentCompatibility/anyAssignabilityInInheritance.ts Pass
 tests/cases/conformance/types/typeRelationships/assignmentCompatibility/anyAssignableToEveryType.ts Fail
 tests/cases/conformance/types/typeRelationships/assignmentCompatibility/anyAssignableToEveryType2.ts Pass

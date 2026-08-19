@@ -28,8 +28,8 @@ This project is **not** included in `SharpTS.sln`. Solution-level `dotnet build`
 dotnet test tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj
 ```
 
-The configured subset covers type relationships, conditional types, symbols,
-modern ECMAScript libraries, and representative TSX inputs. It builds each
+The configured subset covers type relationships, conditional and `keyof` types,
+symbols, modern ECMAScript libraries, and representative TSX inputs. It builds each
 multi-file test as a program, diffs SharpTS diagnostics against `tsc`'s
 `*.errors.txt` baseline, and compares the bucket distribution against the
 committed baseline at `baselines/interpreted.txt`.

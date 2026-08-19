@@ -3,6 +3,7 @@
     "tests/cases/conformance/types/typeRelationships/assignmentCompatibility",
     "tests/cases/conformance/types/typeRelationships/subtypesAndSuperTypes",
     "tests/cases/conformance/types/conditional",
+    "tests/cases/conformance/types/keyof",
     "tests/cases/conformance/Symbols",
     "tests/cases/conformance/es6/Symbols",
     "tests/cases/conformance/es2016",
