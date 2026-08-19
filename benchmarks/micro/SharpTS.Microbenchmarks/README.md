@@ -43,11 +43,18 @@ with the cross-runtime shell harness, so both suites measure the same source.
 
 ```bash
 # From the repo root. BenchmarkDotNet requires a Release build.
-dotnet run -c Release --project SharpTS.Microbenchmarks
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks
 
 # Interactive picker, or filter to a subset:
-dotnet run -c Release --project SharpTS.Microbenchmarks -- --filter '*Fibonacci*'
-dotnet run -c Release --project SharpTS.Microbenchmarks -- --list flat
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --filter '*Fibonacci*'
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --list flat
+```
+
+CI uses `--smoke` to compile every embedded TypeScript source and then perform
+the same flat benchmark discovery without running any timed benchmark:
+
+```bash
+dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
 ```
 
 Results (Markdown + HTML, plus allocation columns) are written under

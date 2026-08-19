@@ -41,7 +41,7 @@ function buildJumps(program: string): number[] {
 
 function runBF(program: string, jumps: number[]): number {
     const TAPE: number = 4096;
-    const tape: Uint8Array = new Uint8Array(TAPE);
+    const tape = new Uint8Array(TAPE);
     let ptr: number = 0;
     let ip: number = 0;
     const len: number = program.length;

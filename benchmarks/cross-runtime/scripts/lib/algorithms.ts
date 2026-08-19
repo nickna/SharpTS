@@ -125,7 +125,7 @@ export function jsonRoundTrip(n: number): number {
 // Data-parallel arithmetic over a real typed buffer — where compiled IL should
 // approach native and the dynamic/boxed representation pays the most.
 export function typedArrayKernel(n: number): number {
-    const a: Float64Array = new Float64Array(n);
+    const a = new Float64Array(n);
     for (let i: number = 0; i < n; i++) {
         a[i] = i * 1.5 + (i % 7);
     }

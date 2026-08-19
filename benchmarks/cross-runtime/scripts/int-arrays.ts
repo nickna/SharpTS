@@ -10,7 +10,7 @@ import { bench } from "./lib/bench.ts";
 // typedArrayKernel but on a 4-byte signed integer element type, so it measures
 // the unboxed Get/Set fast path for a non-Float64 typed array.
 function int32Kernel(n: number): number {
-    const a: Int32Array = new Int32Array(n);
+    const a = new Int32Array(n);
     for (let i: number = 0; i < n; i++) {
         a[i] = i * 3 - (i % 7);
     }
@@ -25,7 +25,7 @@ function int32Kernel(n: number): number {
 // Four accumulation passes dominate the single fill, so this measures the
 // compound-index-assign path, not allocation.
 function accumulate(n: number): number {
-    const a: Float64Array = new Float64Array(n);
+    const a = new Float64Array(n);
     for (let i: number = 0; i < n; i++) {
         a[i] = i;
     }

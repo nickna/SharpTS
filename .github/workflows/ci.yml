@@ -71,6 +71,17 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
+      # Discover and type-check/compile every cross-runtime workload through the
+      # real runner. This catches repository moves and declaration drift without
+      # paying the cost (or accepting the noise) of timing benchmarks in CI.
+      - name: Smoke test benchmark harnesses
+        shell: pwsh
+        run: |
+          ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke -NoBuild
+          dotnet run --configuration Release --no-build `
+            --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
+        timeout-minutes: 10
+
       # The conformance harnesses live outside SharpTS.sln (running them needs the
       # external/ submodules, absent here), but each references src/SharpTS/SharpTS.csproj — so
       # compile them to catch API rot that would otherwise only surface when someone

@@ -40,6 +40,13 @@ pipeline), so it reflects what a user actually experiences invoking each runtime
 ./benchmarks/cross-runtime/format-results.ps1 -ResultsFile $env:TEMP/bench-results/results.txt
 ```
 
+To discover and compile every workload without running the timed loops (the
+same inexpensive guard used by CI):
+
+```powershell
+./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke
+```
+
 Override the output directory with `$env:OUTPUT_DIR`. Node and Bun are detected
 automatically; Bun is skipped if not on `PATH`.
 
