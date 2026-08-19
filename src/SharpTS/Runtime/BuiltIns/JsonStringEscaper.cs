@@ -21,6 +21,26 @@ internal static class JsonStringEscaper
     /// <summary>Appends <paramref name="s"/> quoted and escaped per QuoteJSONString.</summary>
     internal static void AppendQuoted(StringBuilder sb, string s)
     {
+        // Identifiers and ordinary application strings overwhelmingly need no
+        // escaping. Append that common case in three chunks instead of one
+        // virtual StringBuilder call per UTF-16 code unit. Keep surrogate code
+        // units on the complete path below so lone surrogates remain well-formed.
+        bool needsEscaping = false;
+        foreach (char c in s)
+        {
+            if (c is '"' or '\\' || c < 0x20 || char.IsSurrogate(c))
+            {
+                needsEscaping = true;
+                break;
+            }
+        }
+
+        if (!needsEscaping)
+        {
+            sb.Append('"').Append(s).Append('"');
+            return;
+        }
+
         sb.Append('"');
         for (int i = 0; i < s.Length; i++)
         {

@@ -1068,9 +1068,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, iLocalObj);
         // Get(holder, key); absent keys become undefined and are omitted below.
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
         il.Emit(OpCodes.Stloc, valLocal);
         il.Emit(OpCodes.Br, iterDoneLabel);
 
@@ -1089,9 +1089,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, iLocalObj);
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
         il.Emit(OpCodes.Stloc, valLocal);
 
         il.MarkLabel(iterDoneLabel);
@@ -1139,9 +1139,7 @@ public partial class RuntimeEmitter
         // sb.Append(EscapeJsonString(key));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
 
         // sb.Append(indentStr.Length > 0 ? ": " : ":");
         il.Emit(OpCodes.Ldloc, sbLocal);

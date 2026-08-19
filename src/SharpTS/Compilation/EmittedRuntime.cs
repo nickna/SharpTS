@@ -2740,6 +2740,7 @@ public class EmittedRuntime
     public MethodBuilder PDSDefineProperty { get; set; } = null!;
     public MethodBuilder PDSDeleteProperty { get; set; } = null!;
     public MethodBuilder PDSGetPropertyDescriptor { get; set; } = null!;
+    public MethodBuilder PDSHasPropertyDescriptors { get; set; } = null!;
     public MethodBuilder PDSHasIndexedOwnProperty { get; set; } = null!;
     public MethodBuilder PDSGetStaticShadow { get; set; } = null!;
 

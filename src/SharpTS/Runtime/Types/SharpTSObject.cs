@@ -413,7 +413,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         _setters[name] = setter;
     }
 
-    private bool IsAccessorProperty(string name)
+    internal bool IsAccessorProperty(string name)
         => _accessorProperties?.Contains(name) ?? false;
 
     /// <summary>
@@ -999,6 +999,73 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 yield return key;
     }
 
+    /// <summary>
+    /// Captures enumerable own keys into a single list in
+    /// OrdinaryOwnPropertyKeys order. JSON serialization needs a snapshot
+    /// before invoking getters; building it directly avoids the layered
+    /// iterator objects and the subsequent LINQ copy for ordinary objects.
+    /// </summary>
+    internal IReadOnlyList<string> SnapshotOwnEnumerableKeys()
+    {
+        // Fresh object literals have no descriptor/accessor overlay and no
+        // deleted entries. If they also have no array-index key, their creation
+        // order is already the required order; copy it directly into the
+        // snapshot array and avoid per-key dictionary/descriptor probes.
+        if (!IsPrimitiveWrapper
+            && _descriptors is null
+            && _accessorProperties is null
+            && _fields.Count == _stringPropertyOrder.Count)
+        {
+            bool hasArrayIndex = false;
+            foreach (string key in _stringPropertyOrder)
+            {
+                if (key.Length > 0
+                    && key[0] is >= '0' and <= '9'
+                    && TryGetArrayIndex(key, out _))
+                {
+                    hasArrayIndex = true;
+                    break;
+                }
+            }
+
+            if (!hasArrayIndex)
+                return _stringPropertyOrder.ToArray();
+        }
+
+        var ordinary = new List<string>(_stringPropertyOrder.Count);
+        List<(uint Index, string Key)>? indices = null;
+
+        foreach (string key in _stringPropertyOrder)
+        {
+            if (!HasOwnStringProperty(key)
+                || (IsPrimitiveWrapper && IsInternalSlot(key))
+                || !GetPropertyFlags(key).Enumerable)
+            {
+                continue;
+            }
+
+            if (TryGetArrayIndex(key, out uint index))
+            {
+                indices ??= [];
+                indices.Add((index, key));
+            }
+            else
+            {
+                ordinary.Add(key);
+            }
+        }
+
+        if (indices is null)
+            return ordinary;
+
+        indices.Sort(static (left, right) => left.Index.CompareTo(right.Index));
+        var result = new List<string>(indices.Count + ordinary.Count);
+        foreach (var entry in indices)
+            result.Add(entry.Key);
+        result.AddRange(ordinary);
+        return result;
+    }
+
     internal IEnumerable<string> OwnVisibleStringKeys()
         => IsPrimitiveWrapper
             ? OwnStringKeys().Where(key => !IsInternalSlot(key))
@@ -1011,25 +1078,30 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     internal IEnumerable<string> OwnStringKeys()
     {
-        var indices = new List<(uint Index, string Key)>();
+        List<(uint Index, string Key)>? indices = null;
         foreach (string key in _stringPropertyOrder)
         {
             if (!HasOwnStringProperty(key))
                 continue;
             if (TryGetArrayIndex(key, out uint index))
             {
+                indices ??= [];
                 indices.Add((index, key));
             }
         }
-        indices.Sort(static (left, right) => left.Index.CompareTo(right.Index));
-        foreach (var entry in indices)
-            yield return entry.Key;
+
+        if (indices is not null)
+        {
+            indices.Sort(static (left, right) => left.Index.CompareTo(right.Index));
+            foreach (var entry in indices)
+                yield return entry.Key;
+        }
 
         foreach (string key in _stringPropertyOrder)
         {
             if (!HasOwnStringProperty(key))
                 continue;
-            if (TryGetArrayIndex(key, out _))
+            if (indices is not null && TryGetArrayIndex(key, out _))
                 continue;
             yield return key;
         }
@@ -1055,17 +1127,30 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         return false;
     }
 
-    private bool HasOwnStringProperty(string name)
+    internal bool HasOwnStringProperty(string name)
         => _fields.ContainsKey(name) || IsAccessorProperty(name);
 
     private static bool TryGetArrayIndex(string key, out uint index)
-        => uint.TryParse(
+    {
+        // Canonical array indices contain only ASCII digits and have no
+        // leading zero unless the key is exactly "0". Reject ordinary names
+        // before entering UInt32.TryParse, and avoid allocating ToString just
+        // to verify the canonical spelling.
+        if (key.Length == 0
+            || key[0] is < '0' or > '9'
+            || (key.Length > 1 && key[0] == '0'))
+        {
+            index = 0;
+            return false;
+        }
+
+        return uint.TryParse(
                 key,
                 System.Globalization.NumberStyles.None,
                 System.Globalization.CultureInfo.InvariantCulture,
                 out index)
-            && index < uint.MaxValue
-            && key == index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            && index < uint.MaxValue;
+    }
 
     public override string ToString() => $"{{ {string.Join(", ", _fields.Select(f => $"{f.Key}: {f.Value}"))} }}";
 }

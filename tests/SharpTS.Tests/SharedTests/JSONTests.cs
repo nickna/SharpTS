@@ -358,6 +358,106 @@ public class JSONTests
         Assert.Equal("\"custom\"\n", output);
     }
 
+    [Theory, ModeData]
+    public void JSON_Stringify_InheritedToJSON_UsesOriginalReceiverAndKey(ExecutionMode mode)
+    {
+        var source = """
+            const proto: any = {
+                toJSON: function (key: string): any {
+                    return { key: key, value: this.x };
+                }
+            };
+            const child: any = Object.create(proto);
+            child.x = 7;
+            console.log(JSON.stringify({ child: child }));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"child\":{\"key\":\"child\",\"value\":7}}\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_CustomPrototypeToJSONAccessor_IsObserved(ExecutionMode mode)
+    {
+        var source = """
+            let calls: number = 0;
+            const proto: any = {};
+            Object.defineProperty(proto, "toJSON", {
+                configurable: true,
+                get: function (): any {
+                    calls++;
+                    return function (_key: string): any { return this.x; };
+                }
+            });
+            const child: any = Object.create(proto);
+            child.x = 3;
+            console.log(JSON.stringify({ value: child }));
+            console.log(calls);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"value\":3}\n1\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_OwnSetterOnlyToJSON_ShadowsPrototypeMethod(ExecutionMode mode)
+    {
+        var source = """
+            const proto: any = {
+                toJSON: function (): string { return "wrong"; }
+            };
+            const obj: any = Object.create(proto);
+            Object.defineProperty(obj, "toJSON", {
+                configurable: true,
+                enumerable: true,
+                set: function (_value: any): void {}
+            });
+            obj.x = 1;
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"x\":1}\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_KeySnapshot_StillReadsInheritedValueAfterDeletion(ExecutionMode mode)
+    {
+        // Own keys are captured before values are read. The first property's
+        // toJSON deletes a later own property, so the later Get must fall back
+        // to the prototype while retaining the snapshotted key.
+        var source = """
+            const proto: any = { b: 9 };
+            const obj: any = Object.create(proto);
+            obj.a = {
+                toJSON: function (): number {
+                    delete obj.b;
+                    return 1;
+                }
+            };
+            obj.b = 2;
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"a\":1,\"b\":9}\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_EscapeFastPathFallsBackForSpecialCharacters(ExecutionMode mode)
+    {
+        var source = """
+            const key: string = "a\"\\\n";
+            const value: string = "x\t" + String.fromCharCode(0xd800);
+            const obj: any = {};
+            obj[key] = value;
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"a\\\"\\\\\\n\":\"x\\t\\ud800\"}\n", output);
+    }
+
     [Theory, CompiledOnlyData]
     public void JSON_Stringify_ToJSON_ReceivesPropertyKey(ExecutionMode mode)
     {

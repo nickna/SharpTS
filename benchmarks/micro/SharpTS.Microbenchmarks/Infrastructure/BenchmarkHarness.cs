@@ -120,6 +120,15 @@ public static class BenchmarkHarness
     public static Func<double, double> GetCompiledNumberFunc(Assembly assembly, string functionName)
     {
         var method = GetCompiledMethod(assembly, functionName);
+        var parameters = method.GetParameters();
+        if (method.ReturnType != typeof(double) ||
+            parameters.Length != 1 || parameters[0].ParameterType != typeof(double))
+        {
+            throw new InvalidOperationException(
+                $"Compiled benchmark '{functionName}' has signature " +
+                $"{method.ReturnType.Name}({string.Join(", ", parameters.Select(p => p.ParameterType.Name))}); " +
+                "expected Double(Double)");
+        }
         return method.CreateDelegate<Func<double, double>>();
     }
 

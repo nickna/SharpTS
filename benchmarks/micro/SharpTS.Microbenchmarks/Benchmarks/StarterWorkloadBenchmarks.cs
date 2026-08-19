@@ -1,6 +1,9 @@
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Order;
+using SharpTS.Execution;
 using SharpTS.Microbenchmarks.Baselines;
+using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Microbenchmarks.Benchmarks;
 
@@ -35,6 +38,110 @@ public class JsonRoundTripBenchmarks : ComputationalBenchmarkBase
 
     [Benchmark]
     public object? Equivalent() => EquivalentCSharp.JsonRoundTrip((double)N);
+}
+
+/// <summary>
+/// Cumulative JSON phase probes.  Subtract adjacent timings/allocations to
+/// isolate build, stringify, parse, and post-parse traversal costs without
+/// introducing cross-benchmark state or changing the guarded round trip.
+/// </summary>
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class JsonPhaseBenchmarks : ComputationalBenchmarkBase
+{
+    private Func<double, double> _build = null!;
+    private Func<double, double> _stringify = null!;
+    private Func<double, double> _parse = null!;
+    private Func<double, double> _roundTrip = null!;
+
+    [Params(1000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _build = LoadCompiled("jsonBuildPhase");
+        _stringify = LoadCompiled("jsonStringifyPhase");
+        _parse = LoadCompiled("jsonParsePhase");
+        _roundTrip = LoadCompiled("jsonRoundTrip");
+    }
+
+    [Benchmark(Baseline = true)]
+    public double Build() => _build(N);
+
+    [Benchmark]
+    public double BuildAndStringify() => _stringify(N);
+
+    [Benchmark]
+    public double BuildStringifyAndParse() => _parse(N);
+
+    [Benchmark]
+    public double FullRoundTrip() => _roundTrip(N);
+}
+
+/// <summary>
+/// Interpreter counterpart to <see cref="JsonPhaseBenchmarks"/>. Parsing,
+/// type-checking, declaration binding, and realm construction happen in setup;
+/// the measured methods execute only the same cumulative phase functions used
+/// by the compiled and cross-runtime benchmarks.
+/// </summary>
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class JsonInterpreterPhaseBenchmarks
+    : ComputationalBenchmarkBase, IDisposable
+{
+    private Interpreter _interpreter = null!;
+    private TypeMap _typeMap = null!;
+    private List<Stmt> _build = null!;
+    private List<Stmt> _stringify = null!;
+    private List<Stmt> _parse = null!;
+    private List<Stmt> _roundTrip = null!;
+
+    [Params(1000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        var source = LoadTypeScriptSource();
+        var statements = Parse(source);
+        _typeMap = new TypeChecker().Check(statements);
+        _interpreter = new Interpreter(
+            stdout: TextWriter.Null,
+            stderr: TextWriter.Null);
+        _interpreter.Interpret(statements, _typeMap);
+
+        _build = Parse($"jsonBuildPhase({N});");
+        _stringify = Parse($"jsonStringifyPhase({N});");
+        _parse = Parse($"jsonParsePhase({N});");
+        _roundTrip = Parse($"jsonRoundTrip({N});");
+    }
+
+    [Benchmark(Baseline = true)]
+    public object? Build() => _interpreter.InterpretRepl(_build, _typeMap);
+
+    [Benchmark]
+    public object? BuildAndStringify() =>
+        _interpreter.InterpretRepl(_stringify, _typeMap);
+
+    [Benchmark]
+    public object? BuildStringifyAndParse() =>
+        _interpreter.InterpretRepl(_parse, _typeMap);
+
+    [Benchmark]
+    public object? FullRoundTrip() =>
+        _interpreter.InterpretRepl(_roundTrip, _typeMap);
+
+    [GlobalCleanup]
+    public void Dispose() => _interpreter?.Dispose();
+
+    private static List<Stmt> Parse(string source)
+    {
+        var tokens = new Lexer(source).ScanTokens();
+        return new Parser(tokens).ParseOrThrow();
+    }
 }
 
 [MemoryDiagnoser]

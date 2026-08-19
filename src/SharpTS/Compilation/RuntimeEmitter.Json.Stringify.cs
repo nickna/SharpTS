@@ -7,6 +7,139 @@ namespace SharpTS.Compilation;
 public partial class RuntimeEmitter
 {
     private MethodBuilder? _escapeJsonStringMethod;
+    private MethodBuilder? _appendEscapedJsonStringMethod;
+    private MethodBuilder? _jsonGetDictionaryPropertyMethod;
+    private MethodBuilder? _jsonGetDictionaryToJsonMethod;
+
+    /// <summary>
+    /// Reads an existing ordinary dictionary property without entering the
+    /// general dynamic-property dispatcher. Descriptor-bearing objects and
+    /// misses still take the full path so accessors, prototype lookup, and
+    /// mutations between the key snapshot and value read remain observable.
+    /// </summary>
+    private MethodBuilder EmitJsonGetDictionaryPropertyHelper(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
+    {
+        if (_jsonGetDictionaryPropertyMethod is not null)
+            return _jsonGetDictionaryPropertyMethod;
+
+        var method = typeBuilder.DefineMethod(
+            "JsonGetDictionaryProperty",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object,
+            [_types.DictionaryStringObject, _types.String]);
+
+        var il = method.GetILGenerator();
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var fallback = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, fallback);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+
+        _jsonGetDictionaryPropertyMethod = method;
+        return method;
+    }
+
+    /// <summary>
+    /// Performs the JSON <c>toJSON</c> lookup for a dictionary receiver while
+    /// bypassing unrelated dynamic receiver branches. Custom prototypes and
+    /// descriptor-bearing receivers retain the general [[Get]] path.
+    /// </summary>
+    private MethodBuilder EmitJsonGetDictionaryToJsonHelper(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
+    {
+        if (_jsonGetDictionaryToJsonMethod is not null)
+            return _jsonGetDictionaryToJsonMethod;
+
+        var method = typeBuilder.DefineMethod(
+            "JsonGetDictionaryToJson",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object,
+            [_types.DictionaryStringObject]);
+
+        var il = method.GetILGenerator();
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var fullLookup = il.DefineLabel();
+        var implicitPrototype = il.DefineLabel();
+        var miss = il.DefineLabel();
+        var returnValue = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Brtrue, fullLookup);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, implicitPrototype);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(implicitPrototype);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Brtrue, fullLookup);
+        il.Emit(OpCodes.Call, runtime.ObjectPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, miss);
+
+        // Object.prototype accessors retain an undefined dictionary
+        // placeholder to preserve property order. Only that unusual sentinel
+        // case needs a descriptor probe; an absent toJSON remains CWT-free.
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Bne_Un, returnValue);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, fullLookup);
+
+        il.MarkLabel(returnValue);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(miss);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fullLookup);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "toJSON");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+
+        _jsonGetDictionaryToJsonMethod = method;
+        return method;
+    }
 
     /// <summary>
     /// Emits a helper method that escapes a string for JSON output.
@@ -42,6 +175,60 @@ public partial class RuntimeEmitter
         var checkSurrogate = il.DefineLabel();
         var appendNormal = il.DefineLabel();
         var nextChar = il.DefineLabel();
+
+        // Most property names and application strings require no JSON
+        // escaping. Detect that shape first and let String.Concat allocate the
+        // quoted result in one pass; the full well-formed/surrogate path below
+        // remains unchanged for every string containing a special character.
+        var escapeSlow = il.DefineLabel();
+        var probeLoop = il.DefineLabel();
+        var probeNext = il.DefineLabel();
+        var probeDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, lenLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.MarkLabel(probeLoop);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, lenLocal);
+        il.Emit(OpCodes.Bge, probeDone);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32]));
+        il.Emit(OpCodes.Stloc, cLocal);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'"');
+        il.Emit(OpCodes.Beq, escapeSlow);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'\\');
+        il.Emit(OpCodes.Beq, escapeSlow);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Ldc_I4, 32);
+        il.Emit(OpCodes.Blt, escapeSlow);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Ldc_I4, 0xD800);
+        il.Emit(OpCodes.Blt, probeNext);
+        il.Emit(OpCodes.Ldloc, cLocal);
+        il.Emit(OpCodes.Ldc_I4, 0xE000);
+        il.Emit(OpCodes.Blt, escapeSlow);
+        il.MarkLabel(probeNext);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.Emit(OpCodes.Br, probeLoop);
+        il.MarkLabel(probeDone);
+        il.Emit(OpCodes.Ldstr, "\"");
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "\"");
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String,
+            "Concat",
+            [_types.String, _types.String, _types.String]));
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(escapeSlow);
 
         // sb = new StringBuilder("\"");
         il.Emit(OpCodes.Ldstr, "\"");
@@ -271,10 +458,96 @@ public partial class RuntimeEmitter
         return method;
     }
 
+    /// <summary>
+    /// Appends a quoted JSON string directly into an existing builder. The
+    /// common escape-free path avoids creating an intermediate quoted string;
+    /// special characters delegate to the complete escaping helper above.
+    /// </summary>
+    private MethodBuilder EmitAppendEscapedJsonStringHelper(TypeBuilder typeBuilder)
+    {
+        if (_appendEscapedJsonStringMethod is not null)
+            return _appendEscapedJsonStringMethod;
+
+        var method = typeBuilder.DefineMethod(
+            "AppendEscapedJsonString",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [_types.StringBuilder, _types.String]);
+        var il = method.GetILGenerator();
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var charLocal = il.DeclareLocal(_types.Char);
+        var loop = il.DefineLabel();
+        var next = il.DefineLabel();
+        var fast = il.DefineLabel();
+        var slow = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, fast);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32]));
+        il.Emit(OpCodes.Stloc, charLocal);
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'"');
+        il.Emit(OpCodes.Beq, slow);
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'\\');
+        il.Emit(OpCodes.Beq, slow);
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Ldc_I4, 32);
+        il.Emit(OpCodes.Blt, slow);
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Ldc_I4, 0xD800);
+        il.Emit(OpCodes.Blt, next);
+        il.Emit(OpCodes.Ldloc, charLocal);
+        il.Emit(OpCodes.Ldc_I4, 0xE000);
+        il.Emit(OpCodes.Blt, slow);
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(fast);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, (int)'"');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.Char]));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, (int)'"');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.Char]));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(slow);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        _appendEscapedJsonStringMethod = method;
+        return method;
+    }
+
     private void EmitJsonStringify(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // First emit the escape helper (needed by stringify)
         EmitEscapeJsonStringHelper(typeBuilder);
+        EmitAppendEscapedJsonStringHelper(typeBuilder);
+        EmitJsonGetDictionaryPropertyHelper(typeBuilder, runtime);
+        EmitJsonGetDictionaryToJsonHelper(typeBuilder, runtime);
 
         // Then emit the main stringify helper
         var stringifyHelper = EmitJsonStringifyHelper(typeBuilder, runtime);
@@ -631,9 +904,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, doneLabel);
 
         var toJsonLocal = il.DeclareLocal(_types.Object);
+        var toJsonDictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var genericToJsonLookup = il.DefineLabel();
+        var toJsonLookupDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, toJsonDictLocal);
+        il.Emit(OpCodes.Ldloc, toJsonDictLocal);
+        il.Emit(OpCodes.Brfalse, genericToJsonLookup);
+        il.Emit(OpCodes.Ldloc, toJsonDictLocal);
+        il.Emit(OpCodes.Call, _jsonGetDictionaryToJsonMethod!);
+        il.Emit(OpCodes.Br, toJsonLookupDone);
+        il.MarkLabel(genericToJsonLookup);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldstr, "toJSON");
         il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.MarkLabel(toJsonLookupDone);
         il.Emit(OpCodes.Stloc, toJsonLocal);
 
         // IsCallable(toJSON)
@@ -1066,9 +1352,9 @@ public partial class RuntimeEmitter
         // ECMA-262 25.5.2.5 step 6.a: the recursive key is the property name
         // so toJSON can branch on it.
         var dictValStrLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1094,9 +1380,7 @@ public partial class RuntimeEmitter
         // sb.Append(EscapeJsonString(key));
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, _escapeJsonStringMethod!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
-        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
 
         // sb.Append(":");
         il.Emit(OpCodes.Ldloc, sbLocal);
@@ -1141,23 +1425,44 @@ public partial class RuntimeEmitter
     private void EmitBoxedPrimitiveJsonCoerce(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime)
     {
         var notBoxed = il.DefineLabel();
-        var doUnwrap = il.DefineLabel();
+        var readTsObjectTag = il.DefineLabel();
+        var tagRead = il.DefineLabel();
         var done = il.DefineLabel();
+        var boxedDict = il.DeclareLocal(_types.DictionaryStringObject);
+        var tagValue = il.DeclareLocal(_types.Object);
 
-        // Only an $Object / Dictionary shape can be a wrapper.
+        // The wrapper brand is represented by an own internal marker. Read it
+        // directly: inherited/accessor properties are not [[PrimitiveData]].
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Brtrue, doUnwrap);
+        il.Emit(OpCodes.Brtrue, readTsObjectTag);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, boxedDict);
+        il.Emit(OpCodes.Ldloc, boxedDict);
         il.Emit(OpCodes.Brfalse, notBoxed);
-        il.MarkLabel(doUnwrap);
-
-        // tag = (string)GetProperty("__primitiveType"); must be a string (#565).
-        var tag = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldloc, boxedDict);
         il.Emit(OpCodes.Ldstr, "__primitiveType");
-        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ldloca, tagValue);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, notBoxed);
+        il.Emit(OpCodes.Br, tagRead);
+
+        il.MarkLabel(readTsObjectTag);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "__primitiveType");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Stloc, tagValue);
+
+        il.MarkLabel(tagRead);
+
+        // The marker must carry a recognized string tag (#565).
+        var tag = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, tagValue);
         il.Emit(OpCodes.Isinst, _types.String);
         il.Emit(OpCodes.Stloc, tag);
         il.Emit(OpCodes.Ldloc, tag);

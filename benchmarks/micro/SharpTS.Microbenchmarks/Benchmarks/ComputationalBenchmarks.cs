@@ -25,13 +25,18 @@ public abstract class ComputationalBenchmarkBase
 {
     private const string ResourceName = "SharpTS.Microbenchmarks.algorithms.ts";
 
-    protected static Func<double, double> LoadCompiled(string functionName)
+    protected static string LoadTypeScriptSource()
     {
         var assembly = typeof(ComputationalBenchmarkBase).Assembly;
         using var stream = assembly.GetManifestResourceStream(ResourceName)
             ?? throw new InvalidOperationException($"Could not find embedded resource {ResourceName}");
         using var reader = new StreamReader(stream);
-        var tsSource = reader.ReadToEnd();
+        return reader.ReadToEnd();
+    }
+
+    protected static Func<double, double> LoadCompiled(string functionName)
+    {
+        var tsSource = LoadTypeScriptSource();
 
         // Compiled once and cached across all three algorithm classes.
         var dllPath = CompilationCache.GetOrCompile(tsSource, "Algorithms");

@@ -288,6 +288,7 @@ public partial class RuntimeEmitter
         EmitPDSDefineProperty(typeBuilder, runtime, descriptorsField, descriptorsGetOrCreate, descriptorsDictType, descriptorsDictSetItem);
         EmitPDSDeleteProperty(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictContainsKey);
         EmitPDSGetPropertyDescriptor(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
+        EmitPDSHasPropertyDescriptors(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType);
         EmitPDSHasIndexedOwnProperty(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType);
         EmitPDSGetStaticShadow(typeBuilder, runtime);
         EmitPDSGetEnumerableExtraKeys(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
@@ -1038,6 +1039,38 @@ public partial class RuntimeEmitter
         // return null
         il.MarkLabel(returnNullLabel);
         il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool HasPropertyDescriptors(object obj).
+    /// This shape-only query lets callers retain direct dictionary operations
+    /// until defineProperty/accessor metadata is actually attached to an object.
+    /// A stale empty descriptor table is conservatively reported as present.
+    /// </summary>
+    private void EmitPDSHasPropertyDescriptors(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        FieldBuilder descriptorsField,
+        MethodInfo descriptorsTryGet,
+        Type descriptorsDictType)
+    {
+        var method = typeBuilder.DefineMethod(
+            "HasPropertyDescriptors",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object]);
+        runtime.PDSHasPropertyDescriptors = method;
+
+        var il = method.GetILGenerator();
+        var descriptorsLocal = il.DeclareLocal(descriptorsDictType);
+        var keyLocal = il.DeclareLocal(_types.Object);
+        EmitNormalizePDSKey(il, runtime, keyLocal);
+
+        il.Emit(OpCodes.Ldsfld, descriptorsField);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloca, descriptorsLocal);
+        il.Emit(OpCodes.Callvirt, descriptorsTryGet);
         il.Emit(OpCodes.Ret);
     }
 

@@ -277,6 +277,7 @@ public partial class RuntimeEmitter
         var listLocal = il.DeclareLocal(listType);
         var indexLocal = il.DeclareLocal(_types.Int32);
         var fieldsDictLocal = il.DeclareLocal(dictType);
+        var hasDescriptorsLocal = il.DeclareLocal(_types.Boolean);
 
         var checkListLabel = il.DefineLabel();
         var reflectionLabel = il.DefineLabel();
@@ -357,7 +358,15 @@ public partial class RuntimeEmitter
         // Object.keys AND for-in (see StatementEmitterBase.EmitForIn → GetKeys).
         // Without this, RegExp.prototype's built-in methods that carry
         // PDS-installed non-enumerable descriptors still surface in Object.keys.
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Stloc, hasDescriptorsLocal);
+
+        // The snapshot is required because getters can mutate later keys, but
+        // pre-size it for the overwhelmingly common descriptor-free shape.
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(dictType, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, [_types.Int32])!);
         il.Emit(OpCodes.Stloc, resultLocal);
 
         // Use KeyCollection and iterate
@@ -383,6 +392,11 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloca, keysEnumeratorLocal);
         il.Emit(OpCodes.Call, _types.GetProperty(keysEnumeratorType, "Current")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, currentKeyLocal);
+
+        // Descriptor-free object literals need no per-key ConditionalWeakTable
+        // probes. Once metadata exists, retain the spec-complete filter below.
+        il.Emit(OpCodes.Ldloc, hasDescriptorsLocal);
+        il.Emit(OpCodes.Brfalse, keysLoopSkip);
 
         // descriptor = PDSGetPropertyDescriptor(dict, current)
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -411,6 +425,10 @@ public partial class RuntimeEmitter
         // own properties (created via Object.defineProperty without writing to
         // the backing dict). PDSGetOwnEnumerableKeys returns the list of
         // enumerable PDS keys NOT already in dict.Keys.
+        var normalizeDictKeys = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, hasDescriptorsLocal);
+        il.Emit(OpCodes.Brfalse, normalizeDictKeys);
+
         var pdsKeysList = il.DeclareLocal(listType);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, dictLocal);
@@ -421,6 +439,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, pdsKeysList);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "AddRange", [_types.IEnumerableOfObject])!);
 
+        il.MarkLabel(normalizeDictKeys);
         il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Call, runtime.NormalizeOwnPropertyKeys);
         il.Emit(OpCodes.Ret);
@@ -834,6 +853,52 @@ public partial class RuntimeEmitter
         var itemLocal = il.DeclareLocal(_types.Object);
         var textLocal = il.DeclareLocal(_types.String);
         var uintLocal = il.DeclareLocal(_types.UInt32);
+
+        // Most object literals contain no canonical array-index keys. Probe
+        // first and return the already-snapshotted list unchanged in that case,
+        // avoiding the numeric, ordinary, and result-list allocations below.
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        var probeStart = il.DefineLabel();
+        var probeEnd = il.DefineLabel();
+        var probeNext = il.DefineLabel();
+        var normalize = il.DefineLabel();
+        il.MarkLabel(probeStart);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Count")!);
+        il.Emit(OpCodes.Bge, probeEnd);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "get_Item", [_types.Int32])!);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, textLocal);
+        il.Emit(OpCodes.Ldloc, textLocal);
+        il.Emit(OpCodes.Brfalse, probeNext);
+        il.Emit(OpCodes.Ldloc, textLocal);
+        il.Emit(OpCodes.Ldloca, uintLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, probeNext);
+        il.Emit(OpCodes.Ldloc, uintLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Beq, probeNext);
+        il.Emit(OpCodes.Ldloca, uintLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Ldloc, textLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brtrue, normalize);
+        il.MarkLabel(probeNext);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, probeStart);
+        il.MarkLabel(probeEnd);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(normalize);
 
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listOfUInt32, Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, numericLocal);

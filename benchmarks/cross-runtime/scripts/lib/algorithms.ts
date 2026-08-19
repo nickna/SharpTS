@@ -121,6 +121,40 @@ export function jsonRoundTrip(n: number): number {
     return sum;
 }
 
+// Cumulative phase probes for the JSON round-trip regression guard.  Keeping
+// each prefix byte-for-byte equivalent to jsonRoundTrip makes adjacent-result
+// deltas attribute build, stringify, parse, and post-parse traversal costs;
+// returning a value from every phase prevents the generated work from becoming
+// dead code.  These are consumed by SharpTS.Microbenchmarks rather than the
+// cross-runtime shell so the public cross-runtime workload remains unchanged.
+export function jsonBuildPhase(n: number): number {
+    const items: { id: number; name: string; value: number }[] = [];
+    for (let i: number = 0; i < n; i++) {
+        items.push({ id: i, name: "item-" + i, value: i * 3 - 1 });
+    }
+    return items.length + 0.5 - 0.5;
+}
+
+export function jsonStringifyPhase(n: number): number {
+    const items: { id: number; name: string; value: number }[] = [];
+    for (let i: number = 0; i < n; i++) {
+        items.push({ id: i, name: "item-" + i, value: i * 3 - 1 });
+    }
+    const json: string = JSON.stringify({ items: items });
+    return json.length + 0.5 - 0.5;
+}
+
+export function jsonParsePhase(n: number): number {
+    const items: { id: number; name: string; value: number }[] = [];
+    for (let i: number = 0; i < n; i++) {
+        items.push({ id: i, name: "item-" + i, value: i * 3 - 1 });
+    }
+    const json: string = JSON.stringify({ items: items });
+    const parsed = JSON.parse(json);
+    const back: { id: number; name: string; value: number }[] = parsed.items;
+    return back.length + 0.5 - 0.5;
+}
+
 // Typed-array numeric kernel: fill a Float64Array, then a 3-point stencil sweep.
 // Data-parallel arithmetic over a real typed buffer — where compiled IL should
 // approach native and the dynamic/boxed representation pays the most.
