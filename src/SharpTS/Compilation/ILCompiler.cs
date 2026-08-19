@@ -60,6 +60,12 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, (string ModuleName, string MethodName)>> _builtInModuleMethodBindingsByModule = [];
     private static readonly Dictionary<string, (string ModuleName, string MethodName)> _emptyBindings = [];
     private readonly HashSet<string> _importedNames = [];  // Every named / default / namespace import, any module source. Used to shadow global call handlers.
+
+    // Function AST nodes whose top-level binding is never reassigned in their owning module.
+    // The emitter uses this only for recursive self-calls and keys the exception to the exact
+    // MethodBuilder, preserving value dispatch for imported and otherwise replaceable bindings.
+    private readonly HashSet<Stmt.Function> _stableSelfCallFunctions =
+        new(ReferenceEqualityComparer.Instance);
     private TypeBuilder _programType = null!;
 
     // Organized state containers (see ILCompiler.State.cs for definitions)
@@ -654,8 +660,11 @@ public partial class ILCompiler
         DefineHoistedRegexFields(statements);
     }
 
-    private void AnalyzeSingleModuleBindings(List<Stmt> statements) =>
+    private void AnalyzeSingleModuleBindings(List<Stmt> statements)
+    {
         PreScanBuiltInModuleImports(statements);
+        StableFunctionBindingAnalyzer.Analyze(statements, _stableSelfCallFunctions);
+    }
 
     #region Compile Phases
 
@@ -1307,6 +1316,7 @@ public partial class ILCompiler
         foreach (var m in modules)
         {
             PreScanBuiltInModuleImports(m.Statements, m.Path);
+            StableFunctionBindingAnalyzer.Analyze(m.Statements, _stableSelfCallFunctions);
         }
         ModulePhase4_DefineModuleTypes(modules);
         // Captured top-level vars continue to share the entry-point display class

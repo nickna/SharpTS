@@ -12,6 +12,14 @@ public partial class CompilationContext
     public Dictionary<string, MethodBuilder> Functions { get; }
 
     /// <summary>
+    /// The exact emitted method that may bypass a value-backed module binding for recursive
+    /// self-calls. Null unless whole-module analysis proved that function declaration's binding is
+    /// never reassigned. Matching by builder identity prevents this exception from applying to an
+    /// imported or same-named function.
+    /// </summary>
+    public MethodBuilder? StableDirectSelfCallTarget { get; set; }
+
+    /// <summary>
     /// The $Program type where top-level functions are defined.
     /// Used for GetMethodFromHandle to properly resolve MethodBuilder tokens in persisted assemblies.
     /// </summary>

@@ -124,9 +124,17 @@ public abstract partial class ExpressionEmitterBase
         if (c.Callee is Expr.Variable funcVar)
         {
             string resolvedFuncName = Ctx.ResolveFunctionName(funcVar.Name.Lexeme);
+            Ctx.Functions.TryGetValue(resolvedFuncName, out var methodBuilder);
+            bool isStableDirectSelfCall =
+                methodBuilder != null &&
+                ReferenceEquals(Ctx.StableDirectSelfCallTarget, methodBuilder);
 
-            // Imported functions must go through TopLevelStaticVars (cross-module tokens don't work)
-            bool isImportedFunction = Ctx.TopLevelStaticVars?.ContainsKey(funcVar.Name.Lexeme) == true;
+            // A function name backed by a static value field may be an import or a same-module
+            // live ESM export. Both normally require value dispatch. The sole exception is the
+            // current function's exact MethodBuilder when whole-module analysis proved its binding
+            // is never reassigned: that recursive call is guaranteed to target the emitted method.
+            bool isValueBackedFunction =
+                Ctx.TopLevelStaticVars?.ContainsKey(funcVar.Name.Lexeme) == true;
 
             // A more-local binding of the same name (parameter, local, captured var, or a
             // hoisted nested function declaration) must shadow a module top-level function,
@@ -137,6 +145,23 @@ public abstract partial class ExpressionEmitterBase
             // the inner-function direct call (below) or the function-value call (fallback),
             // both of which honor the resolver's precedence.
             bool shadowedByLocalBinding = Resolver.HasVariable(funcVar.Name.Lexeme);
+
+            // Resolver.HasVariable intentionally includes TopLevelStaticVars for ordinary variable
+            // reads, so a live export field makes it report true even when there is no more-local
+            // shadow. For an authorized self-call only, separate those cases explicitly. Any real
+            // parameter/local/display-class binding keeps the value-call path.
+            if (shadowedByLocalBinding && isStableDirectSelfCall &&
+                !Ctx.TryGetParameter(funcVar.Name.Lexeme, out _) &&
+                !Ctx.CellBindingLocals.ContainsKey(funcVar.Name.Lexeme) &&
+                !Ctx.Locals.HasLocal(funcVar.Name.Lexeme) &&
+                Ctx.CapturedFunctionLocals?.Contains(funcVar.Name.Lexeme) != true &&
+                Ctx.CapturedArrowLocals?.Contains(funcVar.Name.Lexeme) != true &&
+                Ctx.ParentArrowCapturedLocals?.Contains(funcVar.Name.Lexeme) != true &&
+                Ctx.ExtraArrowScopeBindings?.ContainsKey(funcVar.Name.Lexeme) != true &&
+                Ctx.CapturedFields?.ContainsKey(funcVar.Name.Lexeme) != true)
+            {
+                shadowedByLocalBinding = false;
+            }
 
             // Exception: a same-module top-level function referenced from within a nested
             // closure is materialized into a display-class capture field, so HasVariable
@@ -163,7 +188,11 @@ public abstract partial class ExpressionEmitterBase
             bool hasKnownRestParameter =
                 Ctx.FunctionRestParams?.ContainsKey(resolvedFuncName) == true;
             bool directCallSupportsArguments = !hasSpreadArguments || hasKnownRestParameter;
-            if (directCallSupportsArguments && !shadowedByLocalBinding && !isImportedFunction && Ctx.Functions.TryGetValue(resolvedFuncName, out var methodBuilder))
+            if (directCallSupportsArguments &&
+                !shadowedByLocalBinding &&
+                methodBuilder != null &&
+                (!isValueBackedFunction ||
+                 isStableDirectSelfCall))
             {
                 MethodInfo targetMethod = methodBuilder;
 

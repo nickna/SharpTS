@@ -425,6 +425,8 @@ public partial class ILCompiler
         Dictionary<string, FieldBuilder>? topLevelVars = BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
 
         var ctx = CreateModuleMemberContext(il, methodBuilder);
+        if (_stableSelfCallFunctions.Contains(funcStmt))
+            ctx.StableDirectSelfCallTarget = methodBuilder;
         ctx.FunctionOverloads = _functions.Overloads;
         ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
         // CJS/ESM resolution — needed so require('./literal') and module.exports/exports
