@@ -1622,6 +1622,8 @@ public partial class RuntimeEmitter
 
     private void EmitArraySort(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        EmitArraySortDenseFastPathGuard(typeBuilder, runtime);
+
         // ArraySort(List<object> list, object? compareFn) -> List<object>
         // Mutates the list in-place, returns the same list reference
         var method = typeBuilder.DefineMethod(
@@ -1648,6 +1650,97 @@ public partial class RuntimeEmitter
         // Frozen return path - return unchanged list
         il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the shape guard shared by sort's snapshot and write-back phases.
+    /// It performs no indexed Get/Set/Delete operations and invokes no guest
+    /// code, so a failed check can safely fall through to the observable path.
+    /// </summary>
+    private void EmitArraySortDenseFastPathGuard(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArraySortCanUseDenseFastPath",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Int32]);
+        runtime.ArraySortCanUseDenseFastPath = method;
+
+        var il = method.GetILGenerator();
+        var receiverList = il.DeclareLocal(_types.ListOfObject);
+        var returnFalse = il.DefineLabel();
+
+        // Only ordinary array/list representations qualify. Arguments also
+        // inherits List<object> but has a distinct observable length slot.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.ArgumentsType);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
+        il.Emit(OpCodes.Stloc, receiverList);
+        il.Emit(OpCodes.Ldloc, receiverList);
+        il.Emit(OpCodes.Brfalse, returnFalse);
+
+        // Explicit prototypes, relevant own descriptors, or a frozen receiver
+        // require the strict property-operation path.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+
+        // The raw backing must still represent every snapshotted index.
+        il.Emit(OpCodes.Ldloc, receiverList);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Bne_Un, returnFalse);
+
+        var notTSArray = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, notTSArray);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bne_Un, returnFalse);
+        var afterTSArray = il.DefineLabel();
+        il.Emit(OpCodes.Br, afterTSArray);
+        il.MarkLabel(notTSArray);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(afterTSArray);
+
+        // Default arrays inherit directly from the intrinsic Array.prototype,
+        // which must still inherit directly from Object.prototype. Relevant
+        // indexed properties anywhere on that standard chain force bailout.
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Bne_Un, returnFalse);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Call, runtime.PDSHasPrototypeEntry);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+        il.Emit(OpCodes.Ldsfld, runtime.ArrayPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+        il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
+        il.Emit(OpCodes.Brtrue, returnFalse);
+
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnFalse);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1853,8 +1946,12 @@ public partial class RuntimeEmitter
         var elementLocal = il.DeclareLocal(_types.Object);
         LocalBuilder? isLazyLocal = null;
         LocalBuilder? observableReceiverLocal = null;
+        LocalBuilder? denseFastPathLocal = null;
         if (observeProperties)
+        {
             EmitHoistedLazyCheck(il, runtime, out isLazyLocal, out observableReceiverLocal);
+            denseFastPathLocal = il.DeclareLocal(_types.Boolean);
+        }
 
         // === Phase 1: Partition defined vs undefined ===
         // defined = new List<object>()
@@ -1872,6 +1969,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Stloc, sortLengthLocal);
 
+        if (observeProperties)
+        {
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
+            il.Emit(OpCodes.Ldloc, sortLengthLocal);
+            il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+            il.Emit(OpCodes.Stloc, denseFastPathLocal!);
+        }
+
         // for (i = 0; i < list.Count; i++)
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, iLocal);
@@ -1880,6 +1985,7 @@ public partial class RuntimeEmitter
         var partitionLoopCondition = il.DefineLabel();
         var isUndefinedLabel = il.DefineLabel();
         var isHoleLabel = il.DefineLabel();
+        var densePathFoundHole = il.DefineLabel();
         var partitionNext = il.DefineLabel();
 
         il.Emit(OpCodes.Br, partitionLoopCondition);
@@ -1887,7 +1993,20 @@ public partial class RuntimeEmitter
         il.MarkLabel(partitionLoopStart);
         // element = Get(O, i), preserving live accessor/prototype reads for sort.
         if (observeProperties)
+        {
+            var observableElementLoad = il.DefineLabel();
+            var elementLoaded = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, denseFastPathLocal!);
+            il.Emit(OpCodes.Brfalse, observableElementLoad);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Callvirt,
+                _types.GetProperty(_types.ListOfObject, "Item").GetGetMethod()!);
+            il.Emit(OpCodes.Br, elementLoaded);
+            il.MarkLabel(observableElementLoad);
             EmitElementLoad(il, iLocal, runtime, isLazyLocal!);
+            il.MarkLabel(elementLoaded);
+        }
         else
         {
             il.Emit(OpCodes.Ldloc, listLocal);
@@ -1908,7 +2027,7 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Isinst, runtime.ArrayHoleType);
-        il.Emit(OpCodes.Brtrue, observeProperties ? isHoleLabel : isUndefinedLabel);
+        il.Emit(OpCodes.Brtrue, observeProperties ? densePathFoundHole : isUndefinedLabel);
 
         // Not undefined or hole: defined.Add(element)
         il.Emit(OpCodes.Ldloc, definedLocal);
@@ -1923,6 +2042,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, undefinedCountLocal);
         il.Emit(OpCodes.Br, partitionNext);
+
+        if (observeProperties)
+        {
+            // The descriptor/prototype guard makes raw hole reads equivalent
+            // to HasProperty/Get, but a hole disqualifies direct write-back.
+            // Recording that here folds the dense check into partitioning and
+            // avoids a separate O(n) pre-scan for the common packed case.
+            il.MarkLabel(densePathFoundHole);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, denseFastPathLocal!);
+            il.Emit(OpCodes.Br, isHoleLabel);
+        }
 
         // Sort preserves holes as absent properties at the tail. Copying
         // toSorted deliberately stays dense, so only the mutating path uses
@@ -2300,7 +2431,67 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, nLocal);
         il.Emit(OpCodes.Blt, widthBody);
 
-        // Write the sorted result (now in src) back into defined: defined[k] = src[k]
+        if (observeProperties)
+        {
+            // Re-check after all comparator/default-coercion guest calls. A
+            // comparator may have installed an indexed descriptor, changed a
+            // prototype, frozen the receiver, or introduced a hole. In that
+            // case branch into the ordinary Set/Delete implementation below.
+            var observableWriteBack = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, denseFastPathLocal!);
+            il.Emit(OpCodes.Brfalse, observableWriteBack);
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
+            il.Emit(OpCodes.Ldloc, sortLengthLocal);
+            il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+            il.Emit(OpCodes.Brfalse, observableWriteBack);
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(OpCodes.Ldsfld, runtime.ArrayHoleInstance);
+            il.Emit(OpCodes.Callvirt,
+                _types.GetMethod(_types.ListOfObject, "Contains", _types.Object));
+            il.Emit(OpCodes.Brtrue, observableWriteBack);
+
+            // Guarded dense ordinary array: replace the backing list directly.
+            // All slots are present, so there is no delete tail on this path.
+            var denseReceiver = il.DeclareLocal(_types.ListOfObject);
+            il.Emit(OpCodes.Ldloc, observableReceiverLocal!);
+            il.Emit(OpCodes.Castclass, _types.ListOfObject);
+            il.Emit(OpCodes.Stloc, denseReceiver);
+            il.Emit(OpCodes.Ldloc, denseReceiver);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear"));
+
+            il.Emit(OpCodes.Ldloc, denseReceiver);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Callvirt, _types.ListObjectAddRange);
+
+            var denseUndefinedIndex = il.DeclareLocal(_types.Int32);
+            var appendDenseUndefined = il.DefineLabel();
+            var denseUndefinedDone = il.DefineLabel();
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, denseUndefinedIndex);
+            il.MarkLabel(appendDenseUndefined);
+            il.Emit(OpCodes.Ldloc, denseUndefinedIndex);
+            il.Emit(OpCodes.Ldloc, undefinedCountLocal);
+            il.Emit(OpCodes.Bge, denseUndefinedDone);
+            il.Emit(OpCodes.Ldloc, denseReceiver);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Callvirt,
+                _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+            il.Emit(OpCodes.Ldloc, denseUndefinedIndex);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, denseUndefinedIndex);
+            il.Emit(OpCodes.Br, appendDenseUndefined);
+            il.MarkLabel(denseUndefinedDone);
+            il.Emit(OpCodes.Ldloc, listLocal);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(observableWriteBack);
+        }
+
+        // Bailout and copying variants retain the established exact-sized
+        // defined list. The guarded dense path above rebuilds from src and
+        // returns before paying this extra per-element copy.
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, kLocal);
         il.Emit(OpCodes.Br, wbCond);

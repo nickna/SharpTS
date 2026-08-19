@@ -288,6 +288,7 @@ public partial class RuntimeEmitter
         EmitPDSDefineProperty(typeBuilder, runtime, descriptorsField, descriptorsGetOrCreate, descriptorsDictType, descriptorsDictSetItem);
         EmitPDSDeleteProperty(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictContainsKey);
         EmitPDSGetPropertyDescriptor(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
+        EmitPDSHasIndexedOwnProperty(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType);
         EmitPDSGetStaticShadow(typeBuilder, runtime);
         EmitPDSGetEnumerableExtraKeys(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
         EmitPDSGetAllExtraKeys(typeBuilder, runtime, descriptorsField, descriptorsTryGet, descriptorsDictType, descriptorsDictTryGetValue);
@@ -1037,6 +1038,163 @@ public partial class RuntimeEmitter
         // return null
         il.MarkLabel(returnNullLabel);
         il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits: public static bool HasIndexedOwnProperty(object obj, int exclusiveLength).
+    /// Checks descriptor keys and ordinary dictionary keys without invoking any
+    /// getter. This is the cheap shape query used by guarded dense-array paths.
+    /// </summary>
+    private void EmitPDSHasIndexedOwnProperty(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        FieldBuilder descriptorsField,
+        MethodInfo descriptorsTryGet,
+        Type descriptorsDictType)
+    {
+        var method = typeBuilder.DefineMethod(
+            "HasIndexedOwnProperty",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.Object, _types.Int32]);
+        runtime.PDSHasIndexedOwnProperty = method;
+
+        var il = method.GetILGenerator();
+        var returnFalse = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ble, returnFalse);
+
+        var tryParse = typeof(uint).GetMethod(
+            nameof(uint.TryParse), [typeof(string), typeof(uint).MakeByRefType()])!;
+        var parsedIndex = il.DeclareLocal(_types.UInt32);
+        var keyLocal = il.DeclareLocal(_types.Object);
+        EmitNormalizePDSKey(il, runtime, keyLocal);
+
+        // First scan explicitly-defined descriptor keys for the receiver.
+        var descriptorsLocal = il.DeclareLocal(descriptorsDictType);
+        var scanOrdinaryDictionary = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, descriptorsField);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloca, descriptorsLocal);
+        il.Emit(OpCodes.Callvirt, descriptorsTryGet);
+        il.Emit(OpCodes.Brfalse, scanOrdinaryDictionary);
+
+        var descriptorKvpType = _types.MakeGenericType(
+            typeof(KeyValuePair<,>), _types.String, runtime.CompiledPropertyDescriptorType);
+        var descriptorEnumeratorType = _types.MakeGenericType(
+            typeof(Dictionary<,>.Enumerator), _types.String, runtime.CompiledPropertyDescriptorType);
+        var descriptorGetEnumerator = EmitterTypeHelpers.ResolveMethod(
+            descriptorsDictType, typeof(Dictionary<,>).GetMethod("GetEnumerator")!);
+        var descriptorMoveNext = EmitterTypeHelpers.ResolveMethod(
+            descriptorEnumeratorType, typeof(Dictionary<,>.Enumerator).GetMethod("MoveNext")!);
+        var descriptorCurrent = EmitterTypeHelpers.ResolveMethod(
+            descriptorEnumeratorType,
+            typeof(Dictionary<,>.Enumerator).GetProperty("Current")!.GetGetMethod()!);
+        var descriptorDispose = EmitterTypeHelpers.ResolveMethod(
+            descriptorEnumeratorType, typeof(Dictionary<,>.Enumerator).GetMethod("Dispose")!);
+        var descriptorKeyGetter = EmitterTypeHelpers.ResolveMethod(
+            descriptorKvpType, typeof(KeyValuePair<,>).GetProperty("Key")!.GetGetMethod()!);
+        var descriptorEnumerator = il.DeclareLocal(descriptorEnumeratorType);
+        var descriptorKvp = il.DeclareLocal(descriptorKvpType);
+        var descriptorKey = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, descriptorsLocal);
+        il.Emit(OpCodes.Callvirt, descriptorGetEnumerator);
+        il.Emit(OpCodes.Stloc, descriptorEnumerator);
+
+        var descriptorLoop = il.DefineLabel();
+        var descriptorDone = il.DefineLabel();
+        var descriptorNext = il.DefineLabel();
+        il.MarkLabel(descriptorLoop);
+        il.Emit(OpCodes.Ldloca, descriptorEnumerator);
+        il.Emit(OpCodes.Call, descriptorMoveNext);
+        il.Emit(OpCodes.Brfalse, descriptorDone);
+        il.Emit(OpCodes.Ldloca, descriptorEnumerator);
+        il.Emit(OpCodes.Call, descriptorCurrent);
+        il.Emit(OpCodes.Stloc, descriptorKvp);
+        il.Emit(OpCodes.Ldloca, descriptorKvp);
+        il.Emit(OpCodes.Call, descriptorKeyGetter);
+        il.Emit(OpCodes.Stloc, descriptorKey);
+        il.Emit(OpCodes.Ldloc, descriptorKey);
+        il.Emit(OpCodes.Ldloca, parsedIndex);
+        il.Emit(OpCodes.Call, tryParse);
+        il.Emit(OpCodes.Brfalse, descriptorNext);
+        il.Emit(OpCodes.Ldloc, parsedIndex);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bge, descriptorNext);
+        il.Emit(OpCodes.Ldloca, descriptorEnumerator);
+        il.Emit(OpCodes.Call, descriptorDispose);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(descriptorNext);
+        il.Emit(OpCodes.Br, descriptorLoop);
+        il.MarkLabel(descriptorDone);
+        il.Emit(OpCodes.Ldloca, descriptorEnumerator);
+        il.Emit(OpCodes.Call, descriptorDispose);
+
+        // Then scan value-backed own keys when the object is an ordinary dict
+        // (the representation used by Array/Object.prototype in compiled code).
+        il.MarkLabel(scanOrdinaryDictionary);
+        var ordinaryDictionary = il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Stloc, ordinaryDictionary);
+        il.Emit(OpCodes.Ldloc, ordinaryDictionary);
+        il.Emit(OpCodes.Brfalse, returnFalse);
+
+        var ordinaryKvpType = _types.MakeGenericType(
+            typeof(KeyValuePair<,>), _types.String, _types.Object);
+        var ordinaryEnumeratorType = _types.MakeGenericType(
+            typeof(Dictionary<,>.Enumerator), _types.String, _types.Object);
+        var ordinaryEnumerator = il.DeclareLocal(ordinaryEnumeratorType);
+        var ordinaryKvp = il.DeclareLocal(ordinaryKvpType);
+        var ordinaryKey = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, ordinaryDictionary);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "GetEnumerator", Type.EmptyTypes));
+        il.Emit(OpCodes.Stloc, ordinaryEnumerator);
+
+        var ordinaryLoop = il.DefineLabel();
+        var ordinaryDone = il.DefineLabel();
+        var ordinaryNext = il.DefineLabel();
+        il.MarkLabel(ordinaryLoop);
+        il.Emit(OpCodes.Ldloca, ordinaryEnumerator);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            ordinaryEnumeratorType, "MoveNext", Type.EmptyTypes));
+        il.Emit(OpCodes.Brfalse, ordinaryDone);
+        il.Emit(OpCodes.Ldloca, ordinaryEnumerator);
+        il.Emit(OpCodes.Call, _types.GetProperty(
+            ordinaryEnumeratorType, "Current").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, ordinaryKvp);
+        il.Emit(OpCodes.Ldloca, ordinaryKvp);
+        il.Emit(OpCodes.Call, _types.GetProperty(ordinaryKvpType, "Key").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, ordinaryKey);
+        il.Emit(OpCodes.Ldloc, ordinaryKey);
+        il.Emit(OpCodes.Ldloca, parsedIndex);
+        il.Emit(OpCodes.Call, tryParse);
+        il.Emit(OpCodes.Brfalse, ordinaryNext);
+        il.Emit(OpCodes.Ldloc, parsedIndex);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bge, ordinaryNext);
+        il.Emit(OpCodes.Ldloca, ordinaryEnumerator);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            ordinaryEnumeratorType, "Dispose", Type.EmptyTypes));
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(ordinaryNext);
+        il.Emit(OpCodes.Br, ordinaryLoop);
+        il.MarkLabel(ordinaryDone);
+        il.Emit(OpCodes.Ldloca, ordinaryEnumerator);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            ordinaryEnumeratorType, "Dispose", Type.EmptyTypes));
+
+        il.MarkLabel(returnFalse);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
     }
 

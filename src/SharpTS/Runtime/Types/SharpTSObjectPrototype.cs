@@ -28,6 +28,8 @@ public sealed class SharpTSObjectPrototype : ISharpTSMutableBuiltIn
     internal SharpTSObjectNamespace? RealmConstructor { get; set; }
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    internal bool HasIndexedExtra(long exclusiveLength)
+        => _extras.HasIndexedOwnProperty(exclusiveLength);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {

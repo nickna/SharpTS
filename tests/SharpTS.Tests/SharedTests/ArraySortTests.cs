@@ -176,6 +176,137 @@ public class ArraySortTests
         Assert.Equal("1\n2\n", output);
     }
 
+    [Theory, ModeData]
+    public void Array_Sort_OwnIndexAccessor_UsesObservablePath(ExecutionMode mode)
+    {
+        var source = """
+            let values: any[] = [3, 2, 1];
+            let reads: number = 0;
+            let writes: any[] = [];
+            Object.defineProperty(values, "1", {
+                get(): number { reads++; return 2; },
+                set(value: number): void { writes.push(value); },
+                configurable: true
+            });
+            values.sort((a: number, b: number): number => a - b);
+            console.log(reads);
+            console.log(writes.join(","));
+            console.log(values[0] + "," + values[1] + "," + values[2]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n2\n1,2,3\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_ProxyReceiver_UsesObservablePath(ExecutionMode mode)
+    {
+        var source = """
+            let target: any[] = [3, 2, 1];
+            let reads: string[] = [];
+            let writes: string[] = [];
+            let receiver: any = new Proxy(target, {
+                get(obj: any, key: any): any {
+                    reads.push(String(key));
+                    return obj[key];
+                },
+                set(obj: any, key: any, value: any): boolean {
+                    writes.push(String(key));
+                    obj[key] = value;
+                    return true;
+                }
+            });
+            Array.prototype.sort.call(
+                receiver, (a: number, b: number): number => a - b);
+            console.log(reads.join(","));
+            console.log(writes.join(","));
+            console.log(target.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("length,0,1,2\n0,1,2\n1,2,3\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_ComparatorInstallingOwnIndexAccessor_BailsOutOfDensePath(
+        ExecutionMode mode)
+    {
+        var source = """
+            let values: number[] = [3, 2, 1];
+            let writes: number[] = [];
+            let changed: boolean = false;
+            values.sort((a: number, b: number): number => {
+                if (!changed) {
+                    changed = true;
+                    Object.defineProperty(values, "0", {
+                        get(): number { return 99; },
+                        set(value: number): void { writes.push(value); },
+                        configurable: true
+                    });
+                }
+                return a - b;
+            });
+            console.log(writes.join(","));
+            console.log(values[0] + "," + values[1] + "," + values[2]);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("1\n99,2,3\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_ComparatorInstallingPrototypeIndex_BailsOutOfDensePath(
+        ExecutionMode mode)
+    {
+        var source = """
+            let values: number[] = [3, 2, 1];
+            let writes: number[] = [];
+            let changed: boolean = false;
+            try {
+                values.sort((a: number, b: number): number => {
+                    if (!changed) {
+                        changed = true;
+                        delete values[1];
+                        Object.defineProperty(Array.prototype, "1", {
+                            get(): number { return 77; },
+                            set(value: number): void { writes.push(value); },
+                            configurable: true
+                        });
+                    }
+                    return a - b;
+                });
+                console.log(writes.join(","));
+                console.log(values[0] + "," + values[1] + "," + values[2]);
+            } finally {
+                delete (Array.prototype as any)[1];
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("2\n1,77,3\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_ComparatorFreezingReceiver_BailsOutOfDensePath(
+        ExecutionMode mode)
+    {
+        var source = """
+            let values: number[] = [3, 2, 1];
+            try {
+                values.sort((a: number, b: number): number => {
+                    Object.freeze(values);
+                    return a - b;
+                });
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            console.log(values.join(","));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("true\n3,2,1\n", output);
+    }
+
     #endregion
 
     #region Stability

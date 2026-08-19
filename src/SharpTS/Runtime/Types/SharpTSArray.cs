@@ -414,6 +414,68 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         _dense.Reverse();
     }
 
+    /// <summary>
+    /// Shape-only guard for mutators that can safely read and rebuild the dense
+    /// backing without observable per-index property operations.
+    /// </summary>
+    internal bool CanUseDenseSortFastPath(
+        long expectedLength, bool checkForHoles = true)
+    {
+        if (IsFrozen
+            || expectedLength < 0
+            || expectedLength > int.MaxValue
+            || _length != expectedLength
+            || _sparse is not null
+            || _dense.Count != expectedLength
+            || (_indexAccessors?.Count ?? 0) != 0)
+        {
+            return false;
+        }
+
+        if (_descriptors is not null)
+        {
+            foreach (string key in _descriptors.Keys)
+            {
+                if (uint.TryParse(
+                        key,
+                        System.Globalization.NumberStyles.None,
+                        System.Globalization.CultureInfo.InvariantCulture,
+                        out uint index)
+                    && index < uint.MaxValue
+                    && index < expectedLength
+                    && key == index.ToString(
+                        System.Globalization.CultureInfo.InvariantCulture))
+                {
+                    return false;
+                }
+            }
+        }
+
+        if (!checkForHoles) return true;
+        for (int index = 0; index < _dense.Count; index++)
+        {
+            if (_dense[index] is ArrayHole)
+                return false;
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// Replaces a guarded dense array's backing contents without routing the
+    /// writes through indexed property dispatch.
+    /// </summary>
+    internal void ReplaceDenseSortContents(
+        IReadOnlyList<object?> defined, long undefinedCount)
+    {
+        _dense.Clear();
+        for (int index = 0; index < defined.Count; index++)
+            _dense.Add(defined[index]);
+        for (long index = 0; index < undefinedCount; index++)
+            _dense.Add(SharpTSUndefined.Instance);
+        _sparse = null;
+        _length = _dense.Count;
+    }
+
     /// <summary>Returns a new <see cref="List{T}"/> containing the given slice.</summary>
     public List<object?> GetRange(int index, int count)
     {

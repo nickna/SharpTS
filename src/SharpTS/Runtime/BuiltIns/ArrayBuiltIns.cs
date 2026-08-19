@@ -1078,20 +1078,51 @@ public static class ArrayBuiltIns
             interpreter.GetPropertyValue(receiver, "length"), interpreter);
         var defined = new List<(object? Element, long Index)>();
         long undefinedCount = 0;
-        for (long index = 0; index < length; index++)
+        var denseArray = receiver as SharpTSArray;
+        bool useDenseFastPath = denseArray is not null
+            && CanUseDenseSortFastPath(
+                interpreter, denseArray, length, checkForHoles: false);
+        if (useDenseFastPath)
         {
-            string key = index.ToString(
-                System.Globalization.CultureInfo.InvariantCulture);
-            if (!interpreter.HasProperty(receiver, key)) continue;
+            for (int index = 0; index < length; index++)
+            {
+                object? value = denseArray!.GetRaw(index);
+                if (value is ArrayHole)
+                    useDenseFastPath = false;
+                else if (IsUndefined(value))
+                    undefinedCount++;
+                else
+                    defined.Add((value, index));
+            }
+        }
+        else
+        {
+            for (long index = 0; index < length; index++)
+            {
+                string key = index.ToString(
+                    System.Globalization.CultureInfo.InvariantCulture);
+                if (!interpreter.HasProperty(receiver, key)) continue;
 
-            object? value = interpreter.GetPropertyValue(receiver, key);
-            if (IsUndefined(value))
-                undefinedCount++;
-            else
-                defined.Add((value, index));
+                object? value = interpreter.GetPropertyValue(receiver, key);
+                if (IsUndefined(value))
+                    undefinedCount++;
+                else
+                    defined.Add((value, index));
+            }
         }
 
         List<object?> sorted = StableSort(defined, compareFn, interpreter);
+        // Default string coercion and user comparators can mutate the receiver,
+        // its indexed descriptors, or either intrinsic prototype. Revalidate
+        // immediately before the direct rebuild; a changed shape resumes the
+        // fully observable Set/Delete implementation below.
+        if (useDenseFastPath
+            && CanUseDenseSortFastPath(interpreter, denseArray!, length))
+        {
+            denseArray!.ReplaceDenseSortContents(sorted, undefinedCount);
+            return receiver;
+        }
+
         long nextIndex = 0;
         for (int index = 0; index < sorted.Count; index++, nextIndex++)
         {
@@ -1117,6 +1148,16 @@ public static class ArrayBuiltIns
 
         return receiver;
     }
+
+    private static bool CanUseDenseSortFastPath(
+        Interpreter interpreter,
+        SharpTSArray array,
+        long length,
+        bool checkForHoles = true)
+        => !array.HasExplicitPrototype
+            && array.CanUseDenseSortFastPath(length, checkForHoles)
+            && !interpreter.GetArrayPrototype().HasIndexedExtra(length)
+            && !interpreter.GetObjectPrototype().HasIndexedExtra(length);
 
     /// <summary>
     /// ECMA-262 23.1.3.28 generic slice algorithm. The result preserves holes,

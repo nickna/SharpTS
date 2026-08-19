@@ -1035,6 +1035,26 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
     }
 
+    /// <summary>
+    /// Returns whether this object has an own canonical array-index property in
+    /// <c>[0, exclusiveLength)</c>. Array mutators use this shape-only query to
+    /// guard dense backing-storage fast paths without invoking getters.
+    /// </summary>
+    internal bool HasIndexedOwnProperty(long exclusiveLength)
+    {
+        if (exclusiveLength <= 0) return false;
+        foreach (string key in _stringPropertyOrder)
+        {
+            if (HasOwnStringProperty(key)
+                && TryGetArrayIndex(key, out uint index)
+                && index < exclusiveLength)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private bool HasOwnStringProperty(string name)
         => _fields.ContainsKey(name) || IsAccessorProperty(name);
 

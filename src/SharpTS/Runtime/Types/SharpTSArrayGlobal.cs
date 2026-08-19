@@ -117,6 +117,8 @@ public sealed class SharpTSArrayPrototype : ISharpTSMutableBuiltIn, ISharpTSSymb
         _methodCache = new(StringComparer.Ordinal);
 
     public bool HasExtra(string name) => _extras.HasProperty(name) || _extras.HasSetter(name);
+    internal bool HasIndexedExtra(long exclusiveLength)
+        => _extras.HasIndexedOwnProperty(exclusiveLength);
     public object? TryGetExtra(string name) => _extras.GetProperty(name);
     public void SetExtra(string name, object? value)
     {

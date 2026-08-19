@@ -289,6 +289,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayFlatHelper { get; set; } = null!;
     public MethodBuilder ArraySort { get; set; } = null!;
     public MethodBuilder ArraySortProto { get; set; } = null!;
+    public MethodBuilder ArraySortCanUseDenseFastPath { get; set; } = null!;
     public MethodBuilder ArrayToSorted { get; set; } = null!;
     public MethodBuilder ArrayToSortedGeneric { get; set; } = null!;
     public MethodBuilder ArrayLikeMaterializeForCopy { get; set; } = null!;
@@ -2739,6 +2740,7 @@ public class EmittedRuntime
     public MethodBuilder PDSDefineProperty { get; set; } = null!;
     public MethodBuilder PDSDeleteProperty { get; set; } = null!;
     public MethodBuilder PDSGetPropertyDescriptor { get; set; } = null!;
+    public MethodBuilder PDSHasIndexedOwnProperty { get; set; } = null!;
     public MethodBuilder PDSGetStaticShadow { get; set; } = null!;
 
     // cluster module — late-bound bridge into SharpTS.dll (#1171). Workers run the
