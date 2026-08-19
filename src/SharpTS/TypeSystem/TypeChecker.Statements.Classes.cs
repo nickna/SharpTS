@@ -933,6 +933,7 @@ public partial class TypeChecker
                 // Isolate the narrowing context for this method body so narrowings
                 // from `if (x) return;` don't leak into sibling methods/accessors.
                 PushEmptyNarrowingScope();
+                PushDefiniteAssignmentScope();
 
                 try
                 {
@@ -1007,6 +1008,7 @@ public partial class TypeChecker
                 }
                 finally
                 {
+                    PopDefiniteAssignmentScope();
                     PopNarrowingScope();
                     _environment = previousEnvFunc;
                     _currentFunctionReturnType = previousReturnFunc;
@@ -1076,6 +1078,7 @@ public partial class TypeChecker
                     // Isolate narrowing context so that narrowings don't leak between
                     // accessors or into sibling methods.
                     PushEmptyNarrowingScope();
+                    PushDefiniteAssignmentScope();
 
                     try
                     {
@@ -1088,6 +1091,7 @@ public partial class TypeChecker
                     }
                     finally
                     {
+                        PopDefiniteAssignmentScope();
                         PopNarrowingScope();
                         _environment = previousEnvAcc;
                         _currentFunctionReturnType = previousReturnAcc;

@@ -587,6 +587,7 @@ public class StrictnessResolutionTests
         var resolved = StrictnessOptions.Resolve(None, new StrictnessOptions { StrictNullChecks = false });
 
         Assert.False(resolved.StrictNullChecks);
+        Assert.False(resolved.CheckVariableUseBeforeAssignment);
     }
 
     [Fact]
@@ -597,6 +598,7 @@ public class StrictnessResolutionTests
             new StrictnessOptions { StrictNullChecks = false });
 
         Assert.True(resolved.StrictNullChecks);
+        Assert.True(resolved.CheckVariableUseBeforeAssignment);
     }
 
     [Fact]
@@ -618,6 +620,7 @@ public class StrictnessResolutionTests
         Assert.True(resolved.StrictNullChecks);
         Assert.True(resolved.StrictFunctionTypes);
         Assert.True(resolved.NoImplicitAny);
+        Assert.True(resolved.CheckVariableUseBeforeAssignment);
     }
 
     [Fact]

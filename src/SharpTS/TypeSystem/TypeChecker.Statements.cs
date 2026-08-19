@@ -138,7 +138,9 @@ public partial class TypeChecker
 
     internal VoidResult VisitVar(Stmt.Var stmt)
     {
-        RegisterValueDeclaration(stmt.Name, mergeWithLocal: stmt.IsVar);
+        BindingSymbol variableSymbol = RegisterValueDeclaration(
+            stmt.Name,
+            mergeWithLocal: stmt.IsVar);
 
         // Captured before any provisional Define overwrites it — used for the TS2403
         // redeclaration check once this declaration's type settles. Locally only: a same-named
@@ -179,6 +181,7 @@ public partial class TypeChecker
             RecordDeclaredType(stmt.Name.Lexeme, declaredType!);
             // Register as local variable for escape analysis
             _escapeAnalyzer.DefineVariable(stmt.Name.Lexeme);
+            RecordDefiniteAssignmentDeclaration(variableSymbol, isAssigned: true, declaredType!);
             return VoidResult.Instance;
         }
 
@@ -259,6 +262,7 @@ public partial class TypeChecker
             CheckVarRedeclaration(stmt, preExistingType, declaredType!);
             // Record the declared type for assignment checking
             RecordDeclaredType(stmt.Name.Lexeme, declaredType!);
+            RecordDefiniteAssignmentDeclaration(variableSymbol, isAssigned: true, declaredType!);
             return VoidResult.Instance;
         }
 
@@ -267,8 +271,27 @@ public partial class TypeChecker
         CheckVarRedeclaration(stmt, preExistingType, declaredType);
         // Record the declared type for assignment checking
         RecordDeclaredType(stmt.Name.Lexeme, declaredType);
+        RecordDefiniteAssignmentDeclaration(
+            variableSymbol,
+            isAssigned: stmt.IsDeclare ||
+                        HasAmbientValueDeclaration(variableSymbol) ||
+                        IsPreinitializedGlobalRedeclaration(stmt),
+            declaredType);
         return VoidResult.Instance;
     }
+
+    private static bool HasAmbientValueDeclaration(BindingSymbol symbol) =>
+        symbol.Declarations.Any(declaration =>
+            declaration.Document.Path.EndsWith(".d.ts", StringComparison.OrdinalIgnoreCase) ||
+            declaration.Document.Path.EndsWith(".d.mts", StringComparison.OrdinalIgnoreCase) ||
+            declaration.Document.Path.EndsWith(".d.cts", StringComparison.OrdinalIgnoreCase));
+
+    private bool IsPreinitializedGlobalRedeclaration(Stmt.Var stmt) =>
+        stmt.IsVar &&
+        _currentFunctionReturnType is null &&
+        _namespaceDepth == 0 &&
+        (_currentModule is null || _currentModule.IsScript) &&
+        stmt.Name.Lexeme == "Symbol";
 
     /// <summary>
     /// TS2304 ("Cannot find name 'X'"): a variable/const annotated with a bare type name that
@@ -663,6 +686,39 @@ public partial class TypeChecker
     internal VoidResult VisitIf(Stmt.If stmt)
     {
         CheckExpr(stmt.Condition);
+        var incomingAssignments = SnapshotDefiniteAssignmentState();
+        Dictionary<BindingSymbol, bool>? thenAssignments = null;
+        Dictionary<BindingSymbol, bool>? elseAssignments = null;
+
+        void CheckThenBranch()
+        {
+            RestoreDefiniteAssignmentState(incomingAssignments);
+            try
+            {
+                CheckStmt(stmt.ThenBranch);
+                thenAssignments = SnapshotDefiniteAssignmentState();
+            }
+            catch
+            {
+                RestoreDefiniteAssignmentState(incomingAssignments);
+                throw;
+            }
+        }
+
+        void CheckElseBranch()
+        {
+            RestoreDefiniteAssignmentState(incomingAssignments);
+            try
+            {
+                CheckStmt(stmt.ElseBranch!);
+                elseAssignments = SnapshotDefiniteAssignmentState();
+            }
+            catch
+            {
+                RestoreDefiniteAssignmentState(incomingAssignments);
+                throw;
+            }
+        }
 
         // Try compound type guard analysis first (handles && conditions like x !== null && y !== null)
         var compoundGuards = AnalyzeCompoundTypeGuards(stmt.Condition);
@@ -670,7 +726,7 @@ public partial class TypeChecker
         if (compoundGuards.Count > 0)
         {
             // Apply all narrowings for compound conditions
-            ApplyCompoundNarrowings(stmt, compoundGuards);
+            ApplyCompoundNarrowings(stmt, compoundGuards, CheckThenBranch, CheckElseBranch);
         }
         else
         {
@@ -686,7 +742,7 @@ public partial class TypeChecker
                 thenEnv.Define(guard.VarName, guard.NarrowedType ?? TypeInfo.Never.Shared);
                 using (new EnvironmentScope(this, thenEnv))
                 {
-                    CheckStmt(stmt.ThenBranch);
+                    CheckThenBranch();
                 }
 
                 if (stmt.ElseBranch != null && guard.ExcludedType != null)
@@ -695,12 +751,12 @@ public partial class TypeChecker
                     elseEnv.Define(guard.VarName, guard.ExcludedType);
                     using (new EnvironmentScope(this, elseEnv))
                     {
-                        CheckStmt(stmt.ElseBranch);
+                        CheckElseBranch();
                     }
                 }
                 else if (stmt.ElseBranch != null)
                 {
-                    CheckStmt(stmt.ElseBranch);
+                    CheckElseBranch();
                 }
 
                 if (stmt.ElseBranch == null && guard.ExcludedType != null && AlwaysTerminates(stmt.ThenBranch))
@@ -715,8 +771,8 @@ public partial class TypeChecker
             }
             else
             {
-                CheckStmt(stmt.ThenBranch);
-                if (stmt.ElseBranch != null) CheckStmt(stmt.ElseBranch);
+                CheckThenBranch();
+                if (stmt.ElseBranch != null) CheckElseBranch();
 
                 // `if (A || B) return;` — when the then-branch always
                 // terminates and there is no else, the code after the if sees
@@ -734,6 +790,13 @@ public partial class TypeChecker
                 }
             }
         }
+
+        MergeDefiniteAssignmentBranches(
+            incomingAssignments,
+            thenAssignments,
+            stmt.ElseBranch is null ? incomingAssignments : elseAssignments,
+            AlwaysTerminates(stmt.ThenBranch),
+            stmt.ElseBranch is not null && AlwaysTerminates(stmt.ElseBranch));
         return VoidResult.Instance;
     }
 
@@ -760,7 +823,9 @@ public partial class TypeChecker
     /// </summary>
     private void ApplyCompoundNarrowings(
         Stmt.If stmt,
-        List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> narrowings)
+        List<(Narrowing.NarrowingPath Path, TypeInfo NarrowedType, TypeInfo ExcludedType)> narrowings,
+        Action checkThenBranch,
+        Action checkElseBranch)
     {
         // Separate variable and property path narrowings
         var varNarrowings = narrowings.Where(n => n.Path is Narrowing.NarrowingPath.Variable).ToList();
@@ -792,7 +857,7 @@ public partial class TypeChecker
             }
             try
             {
-                CheckStmt(stmt.ThenBranch);
+                checkThenBranch();
             }
             finally
             {
@@ -834,7 +899,7 @@ public partial class TypeChecker
                     }
                     try
                     {
-                        CheckStmt(stmt.ElseBranch);
+                        checkElseBranch();
                     }
                     finally
                     {
@@ -848,7 +913,7 @@ public partial class TypeChecker
             else
             {
                 // For compound conditions, just check without narrowing
-                CheckStmt(stmt.ElseBranch);
+                checkElseBranch();
             }
         }
 
@@ -872,8 +937,16 @@ public partial class TypeChecker
     internal VoidResult VisitWhile(Stmt.While stmt)
     {
         CheckExpr(stmt.Condition);
+        var incomingAssignments = SnapshotDefiniteAssignmentState();
         var conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
-        CheckLoopBody(stmt.Body, conditionNarrowings);
+        try
+        {
+            CheckLoopBody(stmt.Body, conditionNarrowings);
+        }
+        finally
+        {
+            RestoreDefiniteAssignmentState(incomingAssignments);
+        }
         ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
@@ -897,6 +970,7 @@ public partial class TypeChecker
             CheckExpr(stmt.Condition);
             conditionNarrowings = AnalyzeLoopConditionNarrowings(stmt.Condition);
         }
+        var incomingAssignments = SnapshotDefiniteAssignmentState();
 
         // Include increment expression in assigned paths analysis
         HashSet<Narrowing.NarrowingPath>? incrementPaths = null;
@@ -906,11 +980,17 @@ public partial class TypeChecker
                 new Stmt.Expression(stmt.Increment));
         }
 
-        CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths);
+        try
+        {
+            CheckLoopBody(stmt.Body, conditionNarrowings, incrementPaths);
 
-        if (stmt.Increment != null)
-            CheckExpr(stmt.Increment);
-
+            if (stmt.Increment != null)
+                CheckExpr(stmt.Increment);
+        }
+        finally
+        {
+            RestoreDefiniteAssignmentState(incomingAssignments);
+        }
         ApplyLoopExitNarrowings(conditionNarrowings);
         return VoidResult.Instance;
     }
@@ -929,6 +1009,7 @@ public partial class TypeChecker
         }
 
         TypeInfo iterableType = CheckExpr(stmt.Iterable);
+        var incomingAssignments = SnapshotDefiniteAssignmentState();
 
         // Now that generator yield-type inference draws from the `yield` / `yield*` operands (#548), the
         // Generator/AsyncGenerator yield type is real (a delegating-only generator infers its delegate's
@@ -965,13 +1046,21 @@ public partial class TypeChecker
         TypeEnvironment forOfEnv = new(_environment);
         DeclareValue(forOfEnv, stmt.Variable, elementType);
 
-        CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forOfEnv);
+        try
+        {
+            CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forOfEnv);
+        }
+        finally
+        {
+            RestoreDefiniteAssignmentState(incomingAssignments);
+        }
         return VoidResult.Instance;
     }
 
     internal VoidResult VisitForIn(Stmt.ForIn stmt)
     {
         TypeInfo objType = CheckExpr(stmt.Object);
+        var incomingAssignments = SnapshotDefiniteAssignmentState();
 
         // The right-hand side must be an object type / `any` / a type parameter; a symbol fails (TS2407).
         if (ContainsSymbolType(objType))
@@ -1005,7 +1094,14 @@ public partial class TypeChecker
             forInEnv.Define(stmt.Variable.Lexeme, TypeInfo.String.Shared);
         }
 
-        CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
+        try
+        {
+            CheckLoopBody(stmt.Body, conditionNarrowings: null, loopEnvironment: forInEnv);
+        }
+        finally
+        {
+            RestoreDefiniteAssignmentState(incomingAssignments);
+        }
         return VoidResult.Instance;
     }
 

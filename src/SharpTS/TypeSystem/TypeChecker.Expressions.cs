@@ -1551,6 +1551,7 @@ public partial class TypeChecker
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
+        PushDefiniteAssignmentScope();
 
         try
         {
@@ -1637,6 +1638,7 @@ public partial class TypeChecker
         }
         finally
         {
+            PopDefiniteAssignmentScope();
             _environment = previousEnv;
             _currentFunctionReturnType = previousReturn;
             _inferredReturnTypes = previousInferredArrow;
@@ -1673,7 +1675,7 @@ public partial class TypeChecker
         var declaredType = GetDeclaredType(assign.Name.Lexeme);
         if (declaredType == null)
         {
-            throw new TypeCheckException($" Undefined variable '{assign.Name.Lexeme}'.", tsCode: "TS2304");
+            throw new TypeCheckException($" Undefined variable '{assign.Name.Lexeme}'.", line: assign.Name.Line, tsCode: "TS2304");
         }
 
         // VarHoister synthesizes a self-assignment (`z = z`) carrying an explicit annotation when a
@@ -1707,9 +1709,12 @@ public partial class TypeChecker
             {
                 throw new TypeCheckException(
                     $" Subsequent variable declarations must have the same type. Variable '{assign.Name.Lexeme}' must be of type '{declaredType}', but here has type '{valueType}'.",
-                    tsCode: "TS2403");
+                    line: assign.Name.Line, tsCode: "TS2403");
             }
-            throw new TypeCheckException($" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{declaredType}'.", tsCode: AssignmentDiagnosticCode(declaredType, valueType));
+            throw new TypeCheckException(
+                $" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{declaredType}'.",
+                line: assign.Name.Line,
+                tsCode: AssignmentDiagnosticCode(declaredType, valueType));
         }
 
         // A reassignment widens the variable's OWN narrowing only when the assigned value falls
@@ -1775,6 +1780,7 @@ public partial class TypeChecker
             AddNarrowing(assignedPath, narrowed);
         }
 
+        MarkDefinitelyAssigned(assign.Name);
         return valueType;
     }
 
@@ -1787,6 +1793,8 @@ public partial class TypeChecker
         if (_environment.Get(name.Lexeme) is { } declared)
         {
             BindValueUse(name);
+            if (_environment.GetValueBinding(name.Lexeme) is { } symbol)
+                ThrowIfUsedBeforeAssigned(name, symbol);
             var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
             return GetNarrowing(declaredPath) ?? declared;
         }
@@ -2307,6 +2315,7 @@ public partial class TypeChecker
                 _loopDepth = 0;
                 _switchDepth = 0;
                 _activeLabels.Clear();
+                PushDefiniteAssignmentScope();
 
                 try
                 {
@@ -2377,6 +2386,7 @@ public partial class TypeChecker
                 }
                 finally
                 {
+                    PopDefiniteAssignmentScope();
                     _environment = previousEnvFunc;
                     _currentFunctionReturnType = previousReturnFunc;
                     _inferredReturnTypes = previousInferredFunc;
@@ -2430,6 +2440,7 @@ public partial class TypeChecker
                     _switchDepth = 0;
                     _activeLabels.Clear();
                     _inStaticMethod = accessor.IsStatic;
+                    PushDefiniteAssignmentScope();
 
                     try
                     {
@@ -2442,6 +2453,7 @@ public partial class TypeChecker
                     }
                     finally
                     {
+                        PopDefiniteAssignmentScope();
                         _environment = previousEnvAcc;
                         _currentFunctionReturnType = previousReturnAcc;
                         _loopDepth = previousLoopDepthAcc;

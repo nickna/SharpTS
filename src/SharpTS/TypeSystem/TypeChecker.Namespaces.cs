@@ -68,8 +68,10 @@ public partial class TypeChecker
             }
         }
 
-        using (new EnvironmentScope(this, namespaceEnv))
+        _namespaceDepth++;
+        try
         {
+            using var namespaceScope = new EnvironmentScope(this, namespaceEnv);
             // Pre-register type declarations in the NAMESPACE scope (mirrors the top-level
             // pass): forward and self references (`interface S2 { foo: S2 }`) need the name
             // bound before members resolve, and it must bind to THIS namespace's declaration,
@@ -159,6 +161,10 @@ public partial class TypeChecker
                     typeBindings,
                     valueBindings);
             }
+        }
+        finally
+        {
+            _namespaceDepth--;
         }
 
         // Create namespace with frozen collections

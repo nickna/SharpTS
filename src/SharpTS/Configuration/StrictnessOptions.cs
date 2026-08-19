@@ -58,11 +58,13 @@ public sealed record StrictnessOptions
 
         // `strict` itself merges per-key like any other option before it acts as a fallback.
         bool? umbrella = cli?.Strict ?? tsConfig?.Strict;
+        bool? configuredStrictNullChecks =
+            cli?.StrictNullChecks ?? tsConfig?.StrictNullChecks ?? umbrella;
+        bool strictNullChecks = configuredStrictNullChecks ?? d.StrictNullChecks;
 
         return new TypeCheckerOptions
         {
-            StrictNullChecks =
-                cli?.StrictNullChecks ?? tsConfig?.StrictNullChecks ?? umbrella ?? d.StrictNullChecks,
+            StrictNullChecks = strictNullChecks,
             StrictFunctionTypes =
                 cli?.StrictFunctionTypes ?? tsConfig?.StrictFunctionTypes ?? umbrella ?? d.StrictFunctionTypes,
             NoImplicitAny =
@@ -72,6 +74,11 @@ public sealed record StrictnessOptions
             StrictPropertyInitialization =
                 cli?.StrictPropertyInitialization ?? tsConfig?.StrictPropertyInitialization
                 ?? umbrella ?? d.StrictPropertyInitialization,
+            // TS2454 was added after SharpTS's historical strict-null default. Preserve the
+            // no-options behavior, but enable it whenever strict null checking is explicitly
+            // selected (directly or through the strict umbrella).
+            CheckVariableUseBeforeAssignment =
+                configuredStrictNullChecks ?? d.CheckVariableUseBeforeAssignment,
             // These flags are not members of the strict umbrella in tsc.
             ExactOptionalPropertyTypes =
                 cli?.ExactOptionalPropertyTypes ?? tsConfig?.ExactOptionalPropertyTypes

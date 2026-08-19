@@ -72,7 +72,9 @@ public class CommandLineParserStrictnessTests
         Assert.False(explicitlyOff.StrictNullChecks);   // explicitly false
         Assert.Null(absent.StrictNullChecks);           // absent
         Assert.False(explicitlyOff.TypeCheckerOptionsFor().StrictNullChecks);
+        Assert.False(explicitlyOff.TypeCheckerOptionsFor().CheckVariableUseBeforeAssignment);
         Assert.True(absent.TypeCheckerOptionsFor().StrictNullChecks);
+        Assert.False(absent.TypeCheckerOptionsFor().CheckVariableUseBeforeAssignment);
     }
 
     [Fact]
@@ -105,6 +107,7 @@ public class CommandLineParserStrictnessTests
         Assert.True(resolved.StrictNullChecks);
         Assert.True(resolved.StrictFunctionTypes);
         Assert.True(resolved.NoImplicitAny);
+        Assert.True(resolved.CheckVariableUseBeforeAssignment);
     }
 
     [Fact]
@@ -115,6 +118,7 @@ public class CommandLineParserStrictnessTests
         Assert.False(resolved.StrictNullChecks);
         Assert.False(resolved.StrictFunctionTypes);
         Assert.False(resolved.NoImplicitAny);
+        Assert.False(resolved.CheckVariableUseBeforeAssignment);
     }
 
     [Fact]

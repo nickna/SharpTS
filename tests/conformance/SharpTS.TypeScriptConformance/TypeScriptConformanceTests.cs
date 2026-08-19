@@ -51,8 +51,10 @@ public class TypeScriptConformanceTests
         var skipDirectives = config.LoadSkipDirectives(configDir);
         var skipTests = config.LoadSkipTests(configDir);
 
-        var files = EnumerateTestFiles(root, config.Folders);
-        _output.WriteLine($"enumerated {files.Count} test files from {config.Folders.Count} folder(s)");
+        var files = EnumerateTestFiles(root, config.Folders, config.Files ?? []);
+        _output.WriteLine(
+            $"enumerated {files.Count} test files from {config.Folders.Count} folder(s) " +
+            $"and {config.Files?.Count ?? 0} explicit file(s)");
 
         var runner = new TypeScriptConformanceRunner(root, skipDirectives, skipTests);
         var current = new SortedDictionary<string, string>(StringComparer.Ordinal);
@@ -150,9 +152,11 @@ public class TypeScriptConformanceTests
     /// path so baselines don't flap between runs.
     /// </summary>
     private static List<(string RelPath, string AbsPath)> EnumerateTestFiles(
-        string typescriptRoot, IReadOnlyList<string> folders)
+        string typescriptRoot,
+        IReadOnlyList<string> folders,
+        IReadOnlyList<string> explicitFiles)
     {
-        var results = new List<(string, string)>();
+        var results = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var folder in folders)
         {
             var absFolder = Path.Combine(typescriptRoot, folder.Replace('/', Path.DirectorySeparatorChar));
@@ -161,11 +165,30 @@ public class TypeScriptConformanceTests
                          .Where(path => Path.GetExtension(path) is ".ts" or ".tsx"))
             {
                 var rel = Path.GetRelativePath(typescriptRoot, file).Replace('\\', '/');
-                results.Add((rel, file));
+                results[rel] = file;
             }
         }
-        results.Sort((a, b) => StringComparer.Ordinal.Compare(a.Item1, b.Item1));
-        return results;
+
+        foreach (var explicitFile in explicitFiles)
+        {
+            var normalized = explicitFile.Replace('/', Path.DirectorySeparatorChar);
+            var absolute = Path.Combine(typescriptRoot, normalized);
+            if (!File.Exists(absolute))
+                throw new FileNotFoundException(
+                    $"Configured TypeScript conformance file does not exist: {explicitFile}",
+                    absolute);
+            if (Path.GetExtension(absolute) is not (".ts" or ".tsx"))
+                throw new InvalidDataException(
+                    $"Configured TypeScript conformance file must be .ts or .tsx: {explicitFile}");
+
+            var relative = Path.GetRelativePath(typescriptRoot, absolute).Replace('\\', '/');
+            results[relative] = absolute;
+        }
+
+        return results
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Select(pair => (pair.Key, pair.Value))
+            .ToList();
     }
 
     private static string FormatSummary(

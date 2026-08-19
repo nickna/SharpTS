@@ -222,6 +222,7 @@ public partial class TypeChecker
     private readonly bool _noImplicitAny;
     private readonly bool _noImplicitThis;
     private readonly bool _strictPropertyInitialization;
+    private readonly bool _checkVariableUseBeforeAssignment;
     private readonly bool _exactOptionalPropertyTypes;
     private readonly bool _noUncheckedIndexedAccess;
 
@@ -325,6 +326,7 @@ public partial class TypeChecker
         _noImplicitAny = Options.NoImplicitAny;
         _noImplicitThis = Options.NoImplicitThis;
         _strictPropertyInitialization = Options.StrictPropertyInitialization;
+        _checkVariableUseBeforeAssignment = Options.CheckVariableUseBeforeAssignment;
         _exactOptionalPropertyTypes = Options.ExactOptionalPropertyTypes;
         _noUncheckedIndexedAccess = Options.NoUncheckedIndexedAccess;
         _diagnostics.MaxErrors = Options.MaxErrors;
@@ -391,6 +393,13 @@ public partial class TypeChecker
     // This allows assignments to check against the original declared type, not the narrowed type
     // Stack of dictionaries to handle function scope boundaries
     private readonly Stack<Dictionary<string, TypeInfo>> _declaredVariableTypesStack = new();
+
+    // Flow state for TS2454 ("variable is used before being assigned"). Each callable/module
+    // frame owns its own binding-identity map so a deferred closure read of an outer variable is
+    // not confused with an immediate read in the variable's declaring flow. Blocks deliberately
+    // share their callable frame; assignments in them participate in the surrounding flow.
+    private readonly Stack<Dictionary<BindingSymbol, bool>> _definiteAssignmentStack = new();
+    private int _namespaceDepth;
 
     /// <summary>
     /// Gets the narrowed type for a path, if one exists in the current scope.
@@ -543,6 +552,7 @@ public partial class TypeChecker
     private void PushDeclaredVariableScope()
     {
         _declaredVariableTypesStack.Push(new Dictionary<string, TypeInfo>());
+        PushDefiniteAssignmentScope();
     }
 
     /// <summary>
@@ -552,6 +562,115 @@ public partial class TypeChecker
     {
         if (_declaredVariableTypesStack.Count > 0)
             _declaredVariableTypesStack.Pop();
+        PopDefiniteAssignmentScope();
+    }
+
+    private void PushDefiniteAssignmentScope() =>
+        _definiteAssignmentStack.Push(new Dictionary<BindingSymbol, bool>(ReferenceEqualityComparer.Instance));
+
+    private void PopDefiniteAssignmentScope()
+    {
+        if (_definiteAssignmentStack.Count > 0)
+            _definiteAssignmentStack.Pop();
+    }
+
+    private void RecordDefiniteAssignmentDeclaration(
+        BindingSymbol symbol,
+        bool isAssigned,
+        TypeInfo declaredType)
+    {
+        if (!_checkVariableUseBeforeAssignment || !_strictNullChecks || CanBeUndefined(declaredType) ||
+            !_definiteAssignmentStack.TryPeek(out var state))
+        {
+            return;
+        }
+
+        // A declaration without an initializer does not undo an assignment made by an earlier
+        // merged `var` declaration. Conversely, an initialized redeclaration makes the binding
+        // definitely assigned from that point onward.
+        if (state.TryGetValue(symbol, out bool alreadyAssigned))
+            state[symbol] = alreadyAssigned || isAssigned;
+        else
+            state[symbol] = isAssigned;
+    }
+
+    private void MarkDefinitelyAssigned(Token name)
+    {
+        if (!_definiteAssignmentStack.TryPeek(out var state) ||
+            _environment.GetValueBinding(name.Lexeme) is not { } symbol ||
+            !state.ContainsKey(symbol))
+        {
+            return;
+        }
+
+        state[symbol] = true;
+    }
+
+    private void ThrowIfUsedBeforeAssigned(Token name, BindingSymbol symbol)
+    {
+        if (_definiteAssignmentStack.TryPeek(out var state) &&
+            state.TryGetValue(symbol, out bool assigned) && !assigned)
+        {
+            throw new TypeCheckException(
+                $" Variable '{name.Lexeme}' is used before being assigned.",
+                line: name.Line,
+                tsCode: "TS2454");
+        }
+    }
+
+    private Dictionary<BindingSymbol, bool>? SnapshotDefiniteAssignmentState() =>
+        _definiteAssignmentStack.TryPeek(out var state)
+            ? new Dictionary<BindingSymbol, bool>(state, ReferenceEqualityComparer.Instance)
+            : null;
+
+    private void RestoreDefiniteAssignmentState(
+        IReadOnlyDictionary<BindingSymbol, bool>? snapshot)
+    {
+        if (snapshot is null || !_definiteAssignmentStack.TryPeek(out var state))
+            return;
+
+        state.Clear();
+        foreach (var (symbol, assigned) in snapshot)
+            state[symbol] = assigned;
+    }
+
+    private void MergeDefiniteAssignmentBranches(
+        IReadOnlyDictionary<BindingSymbol, bool>? incoming,
+        IReadOnlyDictionary<BindingSymbol, bool>? thenExit,
+        IReadOnlyDictionary<BindingSymbol, bool>? elseExit,
+        bool thenTerminates,
+        bool elseTerminates)
+    {
+        if (incoming is null || !_definiteAssignmentStack.TryPeek(out var state))
+            return;
+
+        IReadOnlyDictionary<BindingSymbol, bool> first;
+        IReadOnlyDictionary<BindingSymbol, bool> second;
+        if (thenTerminates && !elseTerminates)
+        {
+            first = second = elseExit ?? incoming;
+        }
+        else if (elseTerminates && !thenTerminates)
+        {
+            first = second = thenExit ?? incoming;
+        }
+        else if (thenTerminates && elseTerminates)
+        {
+            first = second = incoming;
+        }
+        else
+        {
+            first = thenExit ?? incoming;
+            second = elseExit ?? incoming;
+        }
+
+        state.Clear();
+        foreach (var (symbol, wasAssigned) in incoming)
+        {
+            bool assigned = wasAssigned ||
+                (first.GetValueOrDefault(symbol) && second.GetValueOrDefault(symbol));
+            state[symbol] = assigned;
+        }
     }
 
     /// <summary>
@@ -1111,6 +1230,7 @@ public partial class TypeChecker
         // Clear first: the checker is reused across REPL lines and may retain frames from a
         // prior check (function frames are normally popped, but be defensive on early-exit).
         _declaredVariableTypesStack.Clear();
+        _definiteAssignmentStack.Clear();
         PushDeclaredVariableScope();
 
         // Pre-define built-ins
@@ -1178,6 +1298,7 @@ public partial class TypeChecker
         // Clear first: the checker is reused across REPL lines and may retain frames from a
         // prior check (function frames are normally popped, but be defensive on early-exit).
         _declaredVariableTypesStack.Clear();
+        _definiteAssignmentStack.Clear();
         PushDeclaredVariableScope();
 
         // Pre-define built-ins
@@ -1437,6 +1558,7 @@ public partial class TypeChecker
         // (#1218: `let found = false; if (!found) { found = true; }` rejected in module mode).
         // Clear first: the checker may retain frames from a prior check's early exit.
         _declaredVariableTypesStack.Clear();
+        _definiteAssignmentStack.Clear();
         PushDeclaredVariableScope();
 
         // Pre-define built-ins in the global environment

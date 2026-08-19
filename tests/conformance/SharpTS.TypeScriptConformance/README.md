@@ -28,11 +28,21 @@ This project is **not** included in `SharpTS.sln`. Solution-level `dotnet build`
 dotnet test tests/conformance/SharpTS.TypeScriptConformance/SharpTS.TypeScriptConformance.csproj
 ```
 
-The configured subset covers type relationships, conditional and `keyof` types,
-symbols, modern ECMAScript libraries, and representative TSX inputs. It builds each
-multi-file test as a program, diffs SharpTS diagnostics against `tsc`'s
-`*.errors.txt` baseline, and compares the bucket distribution against the
+The configured subset covers type relationships, conditional, `keyof`, indexed
+access, alias, mapped, union, intersection, literal, and `this` types; symbols;
+classes; type parameters; functions; interfaces; expressions; control flow;
+enums; decorators; modern ECMAScript libraries; and representative TSX inputs.
+It builds each multi-file test as a program, diffs SharpTS diagnostics against
+`tsc`'s `*.errors.txt` baseline, and compares the bucket distribution against the
 committed baseline at `baselines/interpreted.txt`.
+
+### Verified snapshot (2026-08-18)
+
+At TypeScript `050880ce59e30b356b686bd3144efe24f875ebc8`, the selected
+subset contains 534 tests: 192 `Pass` and 342 `Fail`, with zero parser failures,
+checker/harness errors, or skips. The pass rate is **35.96%**. Fourteen of the
+tests are explicit high-signal files used to expand coverage without pulling an
+entire large corpus directory into one untriaged rollout.
 
 Set `SHARPTS_TSCONFORMANCE_DUMP_FAILURES=1` to print every failing test's
 missing and extra `(line, TSnnnn)` tuples. Use this before implementing a
@@ -67,7 +77,7 @@ Each test classifies into one of:
 | `Skipped` | Skipped per directive policy or explicit by-path skip. |
 | `HarnessError` | Setup error: couldn't read test, baseline parse failed, etc. |
 
-`Skipped` carries a reason suffix (`Skipped:directive:experimentaldecorators`,
+`Skipped` carries a reason suffix (`Skipped:directive:usedefineforclassfields`,
 `Skipped:explicitly-skipped`) so
 the diff harness can tell different skip causes apart.
 
@@ -119,7 +129,7 @@ resolver gaps rather than harness skips.
 
 | File | Purpose |
 |---|---|
-| `config/subset.json` | Folders to enumerate, per-test timeout, paths to skip-files. |
+| `config/subset.json` | Folders and explicit files to enumerate, per-test timeout, paths to skip-files. Explicit files support small, reviewable coverage rollouts. |
 | `config/skip-directives.txt` | Directive names (lower-cased) whose presence in a test's `// @<key>: <value>` header short-circuits the run as `Skipped:directive:<name>`. |
 | `config/skip-tests.txt` | Test paths (relative to the conformance corpus root) to wholesale skip. Escape hatch for tests that crash the runner. |
 

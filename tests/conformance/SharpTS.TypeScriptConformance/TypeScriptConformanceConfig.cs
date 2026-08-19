@@ -5,8 +5,9 @@ namespace SharpTS.TypeScriptConformance;
 
 /// <summary>
 /// Subset configuration loaded from a JSON file. Describes which folders
-/// under <c>tests/cases/conformance/</c> to enumerate, the per-test timeout,
-/// and paths to the skip-directives + skip-tests sidecars.
+/// under <c>tests/cases/conformance/</c> to enumerate, optional individual files
+/// for deliberately small coverage rollouts, the per-test timeout, and paths to
+/// the skip-directives + skip-tests sidecars.
 ///
 /// Mirrors <c>SharpTS.Test262.Test262Config</c> shape; the differences are
 /// (a) skip-directives instead of skip-features (TS uses different metadata)
@@ -17,7 +18,8 @@ public sealed record TypeScriptConformanceConfig(
     [property: JsonPropertyName("folders")] IReadOnlyList<string> Folders,
     [property: JsonPropertyName("timeoutSeconds")] int TimeoutSeconds,
     [property: JsonPropertyName("skipDirectivesFile")] string? SkipDirectivesFile,
-    [property: JsonPropertyName("skipTestsFile")] string? SkipTestsFile)
+    [property: JsonPropertyName("skipTestsFile")] string? SkipTestsFile,
+    [property: JsonPropertyName("files")] IReadOnlyList<string>? Files = null)
 {
     public TimeSpan Timeout => TimeSpan.FromSeconds(TimeoutSeconds);
 

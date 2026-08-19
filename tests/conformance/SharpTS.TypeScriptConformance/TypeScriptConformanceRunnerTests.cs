@@ -152,6 +152,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("es2019/globalThisPropertyAssignment.ts")]
     [InlineData("es2019/globalThisUnknown.ts")]
     [InlineData("es2019/globalThisVarDeclaration.ts")]
+    [InlineData("decorators/class/decoratorOnClass1.ts")]
     [InlineData("jsx/jsxCheckJsxNoTypeArgumentsAllowed.tsx")]
     [InlineData("types/conditional/inferTypesInvalidExtendsDeclaration.ts")]
     public void RunOne_ReducedSkipSurface_IsMeasured(string relativePath)

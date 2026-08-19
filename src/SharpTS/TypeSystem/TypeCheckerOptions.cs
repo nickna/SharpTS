@@ -45,6 +45,14 @@ public sealed record TypeCheckerOptions
 
     public bool StrictPropertyInitialization { get; init; } = false;
 
+    /// <summary>
+    /// Enables TS2454 flow diagnostics for typed variables read before assignment.
+    /// The direct checker default remains false for backwards compatibility with
+    /// execution-oriented callers; CLI/tsconfig resolution enables it when strict null
+    /// checking is explicitly selected, either directly or through the strict umbrella.
+    /// </summary>
+    public bool CheckVariableUseBeforeAssignment { get; init; } = false;
+
     public bool ExactOptionalPropertyTypes { get; init; } = false;
 
     public bool NoUncheckedIndexedAccess { get; init; } = false;
@@ -76,5 +84,6 @@ public sealed record TypeCheckerOptions
         NoImplicitAny = true,
         NoImplicitThis = true,
         StrictPropertyInitialization = true,
+        CheckVariableUseBeforeAssignment = true,
     };
 }

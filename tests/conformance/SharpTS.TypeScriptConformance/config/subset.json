@@ -17,6 +17,22 @@
     "tests/cases/conformance/esnext",
     "tests/cases/conformance/jsx"
   ],
+  "files": [
+    "tests/cases/conformance/types/typeAliases/typeAliasesForObjectTypes.ts",
+    "tests/cases/conformance/types/mapped/mappedTypeModifiers.ts",
+    "tests/cases/conformance/types/union/unionTypeMembers.ts",
+    "tests/cases/conformance/types/intersection/intersectionTypeAssignment.ts",
+    "tests/cases/conformance/types/literal/literalTypes1.ts",
+    "tests/cases/conformance/types/thisType/thisTypeInFunctions.ts",
+    "tests/cases/conformance/classes/classExpression.ts",
+    "tests/cases/conformance/types/typeParameters/typeParameterAsBaseType.ts",
+    "tests/cases/conformance/functions/functionImplementations.ts",
+    "tests/cases/conformance/interfaces/interfaceDeclarations/interfaceWithCallAndConstructSignature.ts",
+    "tests/cases/conformance/expressions/assignmentOperator/assignmentTypeNarrowing.ts",
+    "tests/cases/conformance/controlFlow/controlFlowIfStatement.ts",
+    "tests/cases/conformance/enums/enumBasics.ts",
+    "tests/cases/conformance/decorators/class/decoratorOnClass1.ts"
+  ],
   "timeoutSeconds": 5,
   "skipDirectivesFile": "skip-directives.txt",
   "skipTestsFile": "skip-tests.txt"

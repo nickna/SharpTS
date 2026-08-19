@@ -155,6 +155,9 @@ public sealed class TypeScriptConformanceRunner
 
         ModuleResolver resolver;
         List<ParsedModule> modules;
+        DecoratorMode decoratorMode = DirectiveBool(metadata, "experimentaldecorators") == true
+            ? DecoratorMode.Legacy
+            : DecoratorMode.Stage3;
         try
         {
             resolver = new ModuleResolver(rootFiles[0], virtualFiles, programOptions)
@@ -169,11 +172,11 @@ public sealed class TypeScriptConformanceRunner
             // React fallback just as an installed declaration package would.
             var declarationRoots = rootFiles
                 .Where(IsDeclarationFile)
-                .Select(rootFile => resolver.LoadModule(rootFile))
+                .Select(rootFile => resolver.LoadModule(rootFile, decoratorMode))
                 .ToList();
             resolver.RegisterAmbientModuleDeclarations(declarationRoots);
 
-            var entry = resolver.LoadProgram(rootFiles[0]);
+            var entry = resolver.LoadProgram(rootFiles[0], decoratorMode);
             modules = resolver.GetModulesInOrder(entry);
             resolver.RegisterAmbientModuleDeclarations(modules);
 
@@ -182,7 +185,7 @@ public sealed class TypeScriptConformanceRunner
             var seen = modules.Select(m => m.Path).ToHashSet(StringComparer.OrdinalIgnoreCase);
             foreach (string rootFile in rootFiles.Skip(1))
             {
-                var root = resolver.LoadModule(rootFile);
+                var root = resolver.LoadModule(rootFile, decoratorMode);
                 var rootModules = resolver.GetModulesInOrder(root);
                 resolver.RegisterAmbientModuleDeclarations(rootModules);
                 foreach (var module in rootModules)
@@ -220,12 +223,14 @@ public sealed class TypeScriptConformanceRunner
                 NoImplicitThis = DirectiveBool(metadata, "noimplicitthis") ?? metadata.Strict,
                 StrictPropertyInitialization =
                     DirectiveBool(metadata, "strictpropertyinitialization") ?? metadata.Strict,
+                CheckVariableUseBeforeAssignment = strictNullChecks,
                 ExactOptionalPropertyTypes =
                     DirectiveBool(metadata, "exactoptionalpropertytypes") ?? false,
                 NoUncheckedIndexedAccess =
                     DirectiveBool(metadata, "nouncheckedindexedaccess") ?? false,
                 MaxErrors = 1000,
             });
+            checker.SetDecoratorMode(decoratorMode);
             checker.CheckModules(modules, resolver);
             diagnostics = modules
                 .SelectMany(module => module.ParseDiagnostics)

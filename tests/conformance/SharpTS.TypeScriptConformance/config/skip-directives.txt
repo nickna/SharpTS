@@ -2,9 +2,6 @@
 # Lower-case the directive name (matches RawDirectives key normalization).
 # Lines starting with # and blank lines are ignored.
 
-# Decorator support varies; bucketing as Skipped is more honest than running and failing.
-experimentaldecorators
-
 # Class fields semantics edge case; not in scope for Phase 1.
 usedefineforclassfields
 
