@@ -20,7 +20,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void DefineRegExpPrototypePopulateShell(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
-        runtime.RegExpPrototypePopulateMethod = typeBuilder.DefineMethod(
+        runtime.RegExpPrototypePopulateMethod ??= typeBuilder.DefineMethod(
             "_RegExpPrototypePopulate",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Void,

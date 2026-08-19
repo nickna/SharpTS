@@ -257,6 +257,20 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject,
             FieldAttributes.Public | FieldAttributes.Static);
 
+        // $RegExp is emitted before the main $Runtime body. Its guarded
+        // intrinsic protocol helpers inspect the current RegExp.prototype
+        // descriptors, so reserve the populate method token here; the body is
+        // still filled by EmitRegExpPrototypePopulate with the rest of the
+        // runtime prototype machinery.
+        if (_features.UsesRegExp)
+        {
+            runtime.RegExpPrototypePopulateMethod = typeBuilder.DefineMethod(
+                "_RegExpPrototypePopulate",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Void,
+                Type.EmptyTypes);
+        }
+
         // Forward-declare the globalThis/global sentinel field (#271). $TSFunction's
         // InvokeWithThis (emitted in EmitTSFunctionClass, BEFORE EmitRuntimeClass)
         // coerces a null sloppy-this thisArg to this sentinel, so the field must

@@ -9432,7 +9432,7 @@ test/built-ins/RegExp/prototype/Symbol.split/coerce-limit.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/coerce-string-err.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/coerce-string.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/get-flags-err.js Pass
-test/built-ins/RegExp/prototype/Symbol.split/last-index-exceeds-str-size.js Fail
+test/built-ins/RegExp/prototype/Symbol.split/last-index-exceeds-str-size.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/length.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/limit-0-bail.js Pass
 test/built-ins/RegExp/prototype/Symbol.split/name.js Pass

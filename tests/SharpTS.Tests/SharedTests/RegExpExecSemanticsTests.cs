@@ -77,4 +77,104 @@ public class RegExpExecSemanticsTests
             """;
         Assert.Equal("true\nll:2:null\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void StringMatchAndReplace_IntrinsicGlobalRegExpResetLastIndex(
+        ExecutionMode mode)
+    {
+        var source = """
+            const matcher: any = /a/g;
+            matcher.lastIndex = 2;
+            const matches: any = "aba".match(matcher);
+            console.log(matches.join(",") + ":" + matcher.lastIndex);
+
+            const replacer: any = /a/g;
+            replacer.lastIndex = 2;
+            console.log("aba".replace(replacer, "x") + ":" + replacer.lastIndex);
+            """;
+
+        Assert.Equal("a,a:0\nxbx:0\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StringMatch_ObservesSymbolAccessorBeforeCustomExec(
+        ExecutionMode mode)
+    {
+        var source = """
+            const intrinsicMatch: any = RegExp.prototype[Symbol.match];
+            const intrinsicExec: any = RegExp.prototype.exec;
+            const regexp: any = /a/g;
+            let order: string = "";
+
+            Object.defineProperty(regexp, Symbol.match, {
+                configurable: true,
+                get: function (): any {
+                    order = order + "symbol>";
+                    return intrinsicMatch;
+                }
+            });
+            regexp.exec = function (input: string): any {
+                order = order + "exec>";
+                return intrinsicExec.call(this, input);
+            };
+
+            console.log("aba".match(regexp).join(","));
+            console.log(order);
+            """;
+
+        Assert.Equal(
+            "a,a\nsymbol>exec>exec>exec>\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StringReplace_InvokesPrototypeExecAccessorForEveryAttempt(
+        ExecutionMode mode)
+    {
+        var source = """
+            const intrinsicExec: any = RegExp.prototype.exec;
+            let gets: number = 0;
+            let calls: number = 0;
+            Object.defineProperty(RegExp.prototype, "exec", {
+                configurable: true,
+                get: function (): any {
+                    gets = gets + 1;
+                    return function (input: string): any {
+                        calls = calls + 1;
+                        return intrinsicExec.call(this, input);
+                    };
+                }
+            });
+
+            console.log("aba".replace(/a/g, "x") + ":" + gets + ":" + calls);
+            """;
+
+        Assert.Equal("xbx:3:3\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StringMatchAndReplace_InvokePrototypeSymbolOverrides(
+        ExecutionMode mode)
+    {
+        var source = """
+            RegExp.prototype[Symbol.match] = function (input: string): any {
+                console.log("match:" + input + ":" + (this instanceof RegExp));
+                return "custom-match";
+            };
+            RegExp.prototype[Symbol.replace] = function (
+                input: string, replacement: any): any {
+                console.log("replace:" + input + ":" + replacement + ":" +
+                    (this instanceof RegExp));
+                return "custom-replace";
+            };
+
+            console.log("aba".match(/a/g));
+            console.log("aba".replace(/a/g, "x"));
+            """;
+
+        Assert.Equal(
+            "match:aba:true\ncustom-match\n" +
+            "replace:aba:x:true\ncustom-replace\n",
+            TestHarness.Run(source, mode));
+    }
 }

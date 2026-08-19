@@ -1090,10 +1090,57 @@ public partial class RuntimeEmitter
                 NameMatchBranch(propName, () =>
                 {
                     il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+                    var prototypeDescriptorLocal =
+                        il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
                     il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
                     il.Emit(OpCodes.Ldstr, propName);
-                    il.Emit(OpCodes.Callvirt, _types.GetMethod(
-                        _types.DictionaryStringObject, "get_Item", _types.String));
+                    il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+                    il.Emit(OpCodes.Stloc, prototypeDescriptorLocal);
+                    var descriptorPresentLabel = il.DefineLabel();
+                    var prototypeDataLabel = il.DefineLabel();
+                    var prototypeDoneLabel = il.DefineLabel();
+                    il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
+                    il.Emit(OpCodes.Brtrue, descriptorPresentLabel);
+                    il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                    il.Emit(OpCodes.Br, prototypeDoneLabel);
+
+                    il.MarkLabel(descriptorPresentLabel);
+                    var prototypeGetterLocal = il.DeclareLocal(_types.Object);
+                    il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
+                    il.Emit(OpCodes.Callvirt,
+                        runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+                    il.Emit(OpCodes.Stloc, prototypeGetterLocal);
+                    il.Emit(OpCodes.Ldloc, prototypeGetterLocal);
+                    il.Emit(OpCodes.Brfalse, prototypeDataLabel);
+                    var prototypeGetterFunctionLocal =
+                        il.DeclareLocal(runtime.TSFunctionType);
+                    il.Emit(OpCodes.Ldloc, prototypeGetterLocal);
+                    il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+                    il.Emit(OpCodes.Stloc, prototypeGetterFunctionLocal);
+                    il.Emit(OpCodes.Ldloc, prototypeGetterFunctionLocal);
+                    il.Emit(OpCodes.Brfalse, prototypeDataLabel);
+                    il.Emit(OpCodes.Ldloc, prototypeGetterFunctionLocal);
+                    il.Emit(OpCodes.Ldloc, rxLocal);
+                    il.Emit(OpCodes.Call,
+                        EmitGenerics.MakeGenericMethod(
+                            _types.GetMethod(typeof(System.Array), "Empty"),
+                            _types.Object));
+                    il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvokeWithThis);
+                    il.Emit(OpCodes.Br, prototypeDoneLabel);
+
+                    il.MarkLabel(prototypeDataLabel);
+                    var prototypeValueLabel = il.DefineLabel();
+                    il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
+                    il.Emit(OpCodes.Callvirt,
+                        runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+                    il.Emit(OpCodes.Brfalse, prototypeValueLabel);
+                    il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+                    il.Emit(OpCodes.Br, prototypeDoneLabel);
+                    il.MarkLabel(prototypeValueLabel);
+                    il.Emit(OpCodes.Ldloc, prototypeDescriptorLocal);
+                    il.Emit(OpCodes.Callvirt,
+                        runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+                    il.MarkLabel(prototypeDoneLabel);
                 });
             }
             PrototypeMethodBranch("exec");

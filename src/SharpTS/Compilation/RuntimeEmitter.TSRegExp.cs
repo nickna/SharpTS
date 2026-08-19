@@ -145,12 +145,6 @@ public partial class RuntimeEmitter
         // RegExp.prototype well-known-symbol-keyed helpers (ECMA-262 §22.2.5).
         // Static `(rx, ...)` shape so they can be wrapped by $TSFunction with
         // the regex bound as `_target`.
-        EmitTSRegExpSymMatchHelper(typeBuilder, runtime);
-        EmitTSRegExpSymMatchAllHelper(typeBuilder, runtime);
-        EmitTSRegExpSymReplaceHelper(typeBuilder, runtime);
-        EmitTSRegExpSymSearchHelper(typeBuilder, runtime);
-        EmitTSRegExpSymSplitHelper(typeBuilder, runtime);
-
         // RegExp.prototype accessor-descriptor getters (ECMA-262 §22.2.5.{3-12}).
         // Each spec-aligned accessor lives on RegExp.prototype as a real
         // accessor with a getter that throws TypeError on non-RegExp `this`.
@@ -165,6 +159,14 @@ public partial class RuntimeEmitter
         // pattern (`var o={}; o.exec=RegExp.prototype.exec; o.exec(s)`)
         // checks this surface.
         EmitTSRegExpProtoMethods(typeBuilder, runtime);
+
+        // Emit symbol helpers after ProtoExec so guarded native scans can
+        // compare the current exec descriptor by MethodInfo.
+        EmitTSRegExpSymMatchHelper(typeBuilder, runtime);
+        EmitTSRegExpSymMatchAllHelper(typeBuilder, runtime);
+        EmitTSRegExpSymReplaceHelper(typeBuilder, runtime);
+        EmitTSRegExpSymSearchHelper(typeBuilder, runtime);
+        EmitTSRegExpSymSplitHelper(typeBuilder, runtime);
 
         typeBuilder.CreateType();
     }
@@ -3273,6 +3275,74 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, fullUnicodeLocal);
         il.MarkLabel(unicodeDoneLabel);
 
+        // Ordinary @@match lookup has already selected this intrinsic and the
+        // flags Get above has remained observable. A genuine non-sticky RegExp
+        // with the intrinsic exec descriptor can now scan natively. Global
+        // match only needs full-match strings, so this avoids constructing a
+        // full exec array for every engine match.
+        var nativeRegexLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var nativeMatchLabel = il.DefineLabel();
+        var slowMatchLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rxObjLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Stloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Brfalse, slowMatchLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldfld, _tsRegExpStickyField);
+        il.Emit(OpCodes.Brtrue, slowMatchLabel);
+        // .NET advances zero-width matches by UTF-16 code unit. Unicode-mode
+        // RegExpExec must instead use AdvanceStringIndex and may skip an entire
+        // surrogate pair, so retain the protocol loop for u/v regexes.
+        il.Emit(OpCodes.Ldloc, flagsLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'u');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
+        il.Emit(OpCodes.Brtrue, slowMatchLabel);
+        il.Emit(OpCodes.Ldloc, flagsLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'v');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
+        il.Emit(OpCodes.Brtrue, slowMatchLabel);
+        il.Emit(OpCodes.Ldloc, flagsLocal);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, slowMatchLabel);
+        EmitBranchIfIntrinsicRegExpExec(
+            il, runtime, nativeRegexLocal, nativeMatchLabel, slowMatchLabel);
+
+        il.MarkLabel(nativeMatchLabel);
+        var nativeGlobalLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Brtrue, nativeGlobalLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nativeGlobalLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _tsRegExpSetLastIndexStrictMethod);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Call, _tsRegExpMatchAllMethod);
+        il.Emit(OpCodes.Stloc, arrLocal);
+        var nativeHasMatchesLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, arrLocal);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, nativeHasMatchesLabel);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nativeHasMatchesLabel);
+        il.Emit(OpCodes.Ldloc, arrLocal);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(slowMatchLabel);
+
         // if (!flags.Contains('g')) return RegExpExec(rx, S);
         var globalPathLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, flagsLocal);
@@ -3763,11 +3833,159 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.ToJsString);
         il.Emit(OpCodes.Stloc, replaceFlagsLocal);
 
+        // Guarded native replacement. All preceding coercions and the flags
+        // Get remain observable; only repeated intrinsic RegExpExec/result
+        // materialization is skipped. Custom or accessor exec descriptors,
+        // altered flags, and sticky regexes retain the complete protocol path.
+        var nativeRegexLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var nativeReplaceLabel = il.DefineLabel();
+        var slowReplaceLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
+        il.Emit(OpCodes.Stloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Brfalse, slowReplaceLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldfld, _tsRegExpStickyField);
+        il.Emit(OpCodes.Brtrue, slowReplaceLabel);
+        // See @@match: Unicode zero-width advancement is not equivalent to
+        // Regex.Replace's UTF-16 stepping, so u/v remain on the spec path.
+        il.Emit(OpCodes.Ldloc, replaceFlagsLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'u');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
+        il.Emit(OpCodes.Brtrue, slowReplaceLabel);
+        il.Emit(OpCodes.Ldloc, replaceFlagsLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'v');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
+        il.Emit(OpCodes.Brtrue, slowReplaceLabel);
+        // Keep replacement strings containing substitution tokens on the
+        // GetSubstitution path. In particular, .NET interprets ambiguous $0N
+        // forms differently and does not use JavaScript's $<name> syntax.
+        var nativeReplacementShapeReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
+        il.Emit(OpCodes.Brtrue, nativeReplacementShapeReadyLabel);
+        il.Emit(OpCodes.Ldloc, rLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'$');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", _types.Char));
+        il.Emit(OpCodes.Brtrue, slowReplaceLabel);
+        il.MarkLabel(nativeReplacementShapeReadyLabel);
+
+        // Functional replacement of a named-group regex needs the final
+        // groups-object argument, which the allocation-light helper omits.
+        var nativeCaptureShapeReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
+        il.Emit(OpCodes.Brfalse, nativeCaptureShapeReadyLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpSourceGetter);
+        il.Emit(OpCodes.Call, _tsRegExpHasNamedGroupsMethod);
+        il.Emit(OpCodes.Brtrue, slowReplaceLabel);
+        il.MarkLabel(nativeCaptureShapeReadyLabel);
+        il.Emit(OpCodes.Ldloc, replaceFlagsLocal);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpFlagsGetter);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, slowReplaceLabel);
+        EmitBranchIfIntrinsicRegExpExec(
+            il, runtime, nativeRegexLocal, nativeReplaceLabel, slowReplaceLabel);
+
+        il.MarkLabel(nativeReplaceLabel);
+        var nativeGlobalLocal = il.DeclareLocal(_types.Boolean);
+        var nativeNonGlobalLabel = il.DefineLabel();
+        var nativeStateReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSRegExpGlobalGetter);
+        il.Emit(OpCodes.Stloc, nativeGlobalLocal);
+        il.Emit(OpCodes.Ldloc, nativeGlobalLocal);
+        il.Emit(OpCodes.Brfalse, nativeNonGlobalLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, _tsRegExpSetLastIndexStrictMethod);
+        il.Emit(OpCodes.Br, nativeStateReadyLabel);
+        il.MarkLabel(nativeNonGlobalLabel);
+        // RegExpBuiltinExec performs ToLength(Get(lastIndex)) even when the
+        // non-global matcher subsequently ignores the numeric value.
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Call, _tsRegExpResolveLastIndexMethod);
+        il.MarkLabel(nativeStateReadyLabel);
+
+        var nativeStringReplaceLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
+        il.Emit(OpCodes.Brfalse, nativeStringReplaceLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Ldloc, fnReplaceLocal);
+        il.Emit(OpCodes.Ldloc, nativeGlobalLocal);
+        il.Emit(OpCodes.Call, _tsRegExpReplaceWithFnMethod);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nativeStringReplaceLabel);
+        il.Emit(OpCodes.Ldloc, nativeRegexLocal);
+        il.Emit(OpCodes.Ldloc, sLocal);
+        il.Emit(OpCodes.Ldloc, rLocal);
+        il.Emit(OpCodes.Ldloc, nativeGlobalLocal);
+        il.Emit(OpCodes.Call, _tsRegExpReplaceMethod);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(slowReplaceLabel);
+
         // From this point onward use one RegExpExec-driven algorithm for both
         // built-in regexes and overridden `exec` methods. The old typed
         // Replace/ReplaceWithFn forks skipped result coercion, global match
         // collection, and observable lastIndex operations.
         EmitSymReplaceSpecPath(il, runtime, sLocal, rLocal, fnReplaceLocal);
+    }
+
+    /// <summary>
+    /// Branches to <paramref name="intrinsicLabel"/> only when a native RegExp
+    /// has no own <c>exec</c> descriptor and RegExp.prototype still exposes the
+    /// intrinsic data method. Descriptor inspection is deliberately
+    /// non-observable: invoking an accessor here would change the number and
+    /// order of Gets performed by RegExpExec.
+    /// </summary>
+    private void EmitBranchIfIntrinsicRegExpExec(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        LocalBuilder regexLocal,
+        Label intrinsicLabel,
+        Label fallbackLabel)
+    {
+        var descriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var functionLocal = il.DeclareLocal(runtime.TSFunctionType);
+
+        il.Emit(OpCodes.Ldloc, regexLocal);
+        il.Emit(OpCodes.Ldstr, "exec");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, fallbackLabel);
+
+        il.Emit(OpCodes.Call, runtime.RegExpPrototypePopulateMethod);
+        il.Emit(OpCodes.Ldsfld, runtime.RegExpPrototypeField);
+        il.Emit(OpCodes.Ldstr, "exec");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, fallbackLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, fallbackLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, fallbackLabel);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Callvirt,
+            runtime.CompiledPropertyDescriptorValue.GetGetMethod()!);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Stloc, functionLocal);
+        il.Emit(OpCodes.Ldloc, functionLocal);
+        il.Emit(OpCodes.Brfalse, fallbackLabel);
+        il.Emit(OpCodes.Ldloc, functionLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSFunctionGetMethodInfo);
+        _types.EmitLoadMethodInfo(il, runtime.TSRegExpProtoExec);
+        il.Emit(OpCodes.Call,
+            _types.GetMethod(_types.Object, "Equals", _types.Object, _types.Object));
+        il.Emit(OpCodes.Brtrue, intrinsicLabel);
+        il.Emit(OpCodes.Br, fallbackLabel);
     }
 
     private void EmitSymReplaceSpecPath(

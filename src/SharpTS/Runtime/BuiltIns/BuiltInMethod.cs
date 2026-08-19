@@ -248,6 +248,16 @@ public class BuiltInMethod : ISharpTSCallable, IBuiltInFunctionMetadata
         return this;
     }
 
+    /// <summary>
+    /// Returns whether two built-in function objects wrap the same host
+    /// implementation. Realm-local intrinsic functions are copied with
+    /// <see cref="Bind(object?)"/>, so reference identity alone cannot be used
+    /// by guarded fast paths to recognize an unchanged intrinsic.
+    /// </summary>
+    internal bool HasSameImplementation(BuiltInMethod other)
+        => Equals(_implementationV2, other._implementationV2)
+            && Equals(_implementation, other._implementation);
+
     /// <summary>ECMA-262 §17 `name` value — the registered method name.</summary>
     public string FunctionName => _name;
 

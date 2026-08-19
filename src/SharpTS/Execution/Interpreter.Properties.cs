@@ -1257,6 +1257,20 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(rxGetter.CallBoxed(this, []));
             if (regex.TryGetProperty(memberName, out var ownValue))
                 return RuntimeValue.FromBoxed(ownValue);
+            if (memberName == "exec")
+            {
+                // RegExpExec performs ordinary prototype lookup. Resolve the
+                // current descriptor before the category registry's intrinsic
+                // fallback so prototype data replacements and accessors are
+                // invoked with the RegExp instance as their receiver.
+                var regexpPrototype = GetRegExpPrototype();
+                return TryReadDescriptor(
+                    regexpPrototype.GetOwnPropertyDescriptor(memberName),
+                    regex,
+                    out var prototypeExec)
+                    ? RuntimeValue.FromBoxed(prototypeExec)
+                    : RuntimeValue.Undefined;
+            }
             if (memberName == "flags")
             {
                 var regexpPrototype = GetRegExpPrototype();

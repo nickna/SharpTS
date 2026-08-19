@@ -541,6 +541,40 @@ public static class RegExpBuiltIns
     }
 
     /// <summary>
+    /// A bulk native match/replace scan is valid only while <c>RegExpExec</c>
+    /// would resolve the unchanged intrinsic <c>RegExp.prototype.exec</c>.
+    /// Inspect descriptors directly rather than performing Get: an accessor
+    /// returning the intrinsic is still observable once per RegExpExec call and
+    /// therefore must retain the protocol path.
+    /// </summary>
+    private static bool HasIntrinsicExec(Interpreter interp, SharpTSRegExp regex)
+    {
+        if (regex.HasOwnProperty("exec")) return false;
+
+        var prototype = interp.GetRegExpPrototype();
+        var descriptor = prototype.GetOwnPropertyDescriptor("exec");
+        return descriptor is { HasGet: false, HasSet: false, Value: BuiltInMethod method }
+            && method.HasSameImplementation(_protoExec);
+    }
+
+    /// <summary>
+    /// Confirms that the already-observed flags string describes the regex's
+    /// actual internal matcher. A custom flags getter may return a different
+    /// value; its lookup remains observable, but such a mismatch must stay on
+    /// the general protocol algorithm.
+    /// </summary>
+    private static bool FlagsMatchInternalSlots(SharpTSRegExp regex, string flags)
+        => flags.Length == regex.Flags.Length
+            && flags.Contains('d') == regex.Flags.Contains('d')
+            && flags.Contains('g') == regex.Global
+            && flags.Contains('i') == regex.IgnoreCase
+            && flags.Contains('m') == regex.Multiline
+            && flags.Contains('s') == regex.Flags.Contains('s')
+            && flags.Contains('u') == regex.Unicode
+            && flags.Contains('v') == regex.Flags.Contains('v')
+            && flags.Contains('y') == regex.Sticky;
+
+    /// <summary>
     /// ECMA-262 §22.2.5.2.2 RegExpBuiltinExec for interpreter RegExp objects.
     /// The observable lastIndex operations deliberately use the descriptor
     /// store: its raw value is ToLength-coerced once on every execution, and
@@ -755,6 +789,28 @@ public static class RegExpBuiltIns
         // 4. Let flags be ? ToString(? Get(rx, "flags")).
         var flags = ToStr(interp, interp.GetProperty(recv, "flags"));
 
+        // The String method has already completed the observable @@match Get
+        // and selected this intrinsic function. After the intrinsic flags Get,
+        // a genuine RegExp whose exec method is also unchanged can use the
+        // native engine directly. Global match needs only full-match strings,
+        // so MatchAll deliberately avoids allocating intermediate exec arrays.
+        if (recv is SharpTSRegExp nativeRegex
+            && !nativeRegex.Sticky
+            && !flags.Contains('u')
+            && !flags.Contains('v')
+            && FlagsMatchInternalSlots(nativeRegex, flags)
+            && HasIntrinsicExec(interp, nativeRegex))
+        {
+            if (!nativeRegex.Global)
+                return RuntimeValue.FromBoxed(RegExpBuiltinExec(interp, nativeRegex, s));
+
+            SetLastIndexOrThrow(interp, nativeRegex, 0);
+            var nativeMatches = nativeRegex.MatchAll(s);
+            return nativeMatches.Count == 0
+                ? RuntimeValue.Null
+                : RuntimeValue.FromObject(new SharpTSArray(nativeMatches));
+        }
+
         // 5. If flags does not contain "g", return ? RegExpExec(rx, S).
         if (!flags.Contains('g'))
             return RuntimeValue.FromBoxed(RegExpExec(interp, recv, s));
@@ -847,6 +903,61 @@ public static class RegExpBuiltIns
         var flags = ToStr(interp, interp.GetProperty(recv, "flags"));
         bool global = flags.Contains('g');
         bool fullUnicode = global && flags.Contains('u');
+
+        // As with @@match, all observable lookups that precede matching have
+        // completed. The native replacement helpers are safe only when the
+        // flags still describe the internal matcher and RegExpExec would use
+        // the unchanged intrinsic exec method. Preserve lastIndex semantics:
+        // global replace performs the required strict reset, while non-global
+        // replacement still ToLength-coerces the raw value once.
+        if (recv is SharpTSRegExp nativeRegex
+            && !nativeRegex.Sticky
+            && !flags.Contains('u')
+            && !flags.Contains('v')
+            // .NET and ECMAScript differ for several ambiguous numeric
+            // substitution forms (notably $0/$00/$0N). Keep those on the
+            // existing GetSubstitution implementation.
+            && (isCallable || !replaceStr.Contains('$'))
+            // A functional replacer receives the named-captures object as its
+            // final argument. The bulk helper intentionally builds only the
+            // common unnamed-capture argument shape.
+            && (!isCallable || !SharpTSRegExp.HasNamedGroups(nativeRegex.Source))
+            && FlagsMatchInternalSlots(nativeRegex, flags)
+            && HasIntrinsicExec(interp, nativeRegex))
+        {
+            if (global)
+                SetLastIndexOrThrow(interp, nativeRegex, 0);
+            else
+                _ = ToLengthAsInt(interp,
+                    interp.GetPropertyValue(nativeRegex, "lastIndex"));
+
+            if (isCallable)
+            {
+                return RuntimeValue.FromString(nativeRegex.Replace(s, match =>
+                {
+                    var callbackArgs = new List<object?>(match.Groups.Count + 2)
+                    {
+                        match.Value
+                    };
+                    for (int i = 1; i < match.Groups.Count; i++)
+                    {
+                        var group = match.Groups[i];
+                        callbackArgs.Add(group.Success
+                            ? group.Value
+                            : SharpTSUndefined.Instance);
+                    }
+                    callbackArgs.Add((double)match.Index);
+                    callbackArgs.Add(s);
+
+                    object? result = FunctionBuiltIns.CallWithThis(
+                        interp, (ISharpTSCallable)replaceValue!,
+                        SharpTSUndefined.Instance, callbackArgs);
+                    return ToStr(interp, result);
+                }));
+            }
+
+            return RuntimeValue.FromString(nativeRegex.Replace(s, replaceStr));
+        }
 
         // Reset lastIndex when global.
         if (global)
