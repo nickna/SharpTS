@@ -828,10 +828,16 @@ public partial class RuntimeEmitter
             var scheduleLabel = il.DefineLabel();
             var doneLabel = il.DefineLabel();
 
-            il.Emit(OpCodes.Ldc_I4,
-                (int)TaskCreationOptions.RunContinuationsAsynchronously);
-            il.Emit(OpCodes.Newobj, _types.GetConstructor(
-                _types.TaskCompletionSourceOfObject, typeof(TaskCreationOptions)));
+            // This facade is an internal result-adoption bridge, not a Promise
+            // reaction job. Its completion must remain inline with the source
+            // combinator task: Promise.allKeyed/allSettledKeyed attach their
+            // allocation-free result mapper with ExecuteSynchronously, and a
+            // RunContinuationsAsynchronously facade would override that option.
+            // Under thread-pool pressure the emitted event loop could then drain
+            // before the mapper (and the guest .then/$DONE chain) became visible.
+            // PromiseThen still owns scheduling of observable guest reactions.
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(
+                _types.TaskCompletionSourceOfObject));
             il.Emit(OpCodes.Stloc, tcsLocal);
             il.Emit(OpCodes.Newobj,
                 typeof(System.Runtime.CompilerServices.StrongBox<bool>)
