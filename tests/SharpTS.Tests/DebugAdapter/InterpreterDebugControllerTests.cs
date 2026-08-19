@@ -7,6 +7,7 @@ using Xunit;
 
 namespace SharpTS.Tests.DebugAdapter;
 
+[Collection("DebugAdapterTests")]
 public sealed class InterpreterDebugControllerTests
 {
     [Fact]
