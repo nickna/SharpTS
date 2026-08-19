@@ -1,5 +1,5 @@
 /**
- * "SharpTS: Debug Current File" — compiles the active TypeScript file with debug symbols and
+ * "SharpTS: Debug Compiled Current File" — compiles the active TypeScript file with debug symbols and
  * launches it under the installed .NET debug adapter.
  *
  * SharpTS deliberately ships no debug adapter of its own. A compiled program is an ordinary .NET

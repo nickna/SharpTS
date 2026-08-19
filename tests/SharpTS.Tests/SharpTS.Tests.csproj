@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\SharpTS\SharpTS.csproj" />
+    <ProjectReference Include="..\..\src\SharpTS.DebugAdapter\SharpTS.DebugAdapter.csproj" />
     <ProjectReference Include="..\..\src\SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj" />
     <ProjectReference Include="..\..\src\SharpTS.LanguageServer\SharpTS.LanguageServer.csproj" />
   </ItemGroup>

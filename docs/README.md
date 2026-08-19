@@ -45,6 +45,7 @@ known gaps, use [STATUS.md](../STATUS.md).
 
 ## Tooling and debugging
 
+- [Debug interpreted TypeScript](debugging-interpreter.md)
 - [Debug compiled TypeScript](debugging-typescript.md)
 - [Language server](language-server.md)
 - [External benchmark harness](../benchmarks/cross-runtime/README.md)

@@ -112,6 +112,8 @@ public class SharpTSAsyncFunction : ISharpTSAsyncCallable, ITypeCategorized
             throw new Exception($"Cannot invoke abstract method '{_declaration.Name.Lexeme}'.");
         }
 
+        using var debugFrame = interpreter.EnterDebugFrame(
+            _declaration.Name.Lexeme, environment, _declaration);
         var result = await interpreter.ExecuteBlockAsync(_declaration.Body, environment);
         if (result.Type == ExecutionResult.ResultType.Return)
         {
@@ -250,6 +252,8 @@ public class SharpTSAsyncArrowFunction : ISharpTSAsyncCallable, ITypeCategorized
         }
         await ParameterBinder.BindAsync(_declaration.Parameters, arguments, environment, interpreter);
 
+        using var debugFrame = interpreter.EnterDebugFrame(
+            _declaration.Name?.Lexeme ?? "<async arrow>", environment, _declaration);
         if (_declaration.ExpressionBody != null)
         {
             RuntimeEnvironment previous = interpreter.Environment;

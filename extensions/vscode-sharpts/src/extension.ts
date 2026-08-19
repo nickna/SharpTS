@@ -17,6 +17,10 @@ import {
 } from 'vscode-languageclient/node';
 import { CompileCommands } from './commands/CompileCommands';
 import { DebugCommands } from './commands/DebugCommands';
+import {
+    INTERPRETER_DEBUG_TYPE,
+    InterpreterDebugCommands
+} from './commands/InterpreterDebugCommands';
 
 let client: LanguageClient | undefined;
 
@@ -27,6 +31,9 @@ export async function activate(context: vscode.ExtensionContext) {
     // core SharpTS.dll it references).
     const serverDll = path.join(context.extensionPath, 'bin', 'server', 'SharpTS.LanguageServer.dll');
     const coreDll = path.join(context.extensionPath, 'bin', 'server', 'SharpTS.dll');
+    // Co-locate the adapter and language server so their same-version SharpTS runtime dependency is
+    // bundled once instead of duplicating the largest assembly in the VSIX.
+    const adapterDll = path.join(context.extensionPath, 'bin', 'server', 'SharpTS.DebugAdapter.dll');
     const dotnetPath = config.get<string>('dotnetPath') || 'dotnet';
 
     // The language server executable *is* the server — no subcommand.
@@ -72,15 +79,30 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Compile / run commands use the core CLI (`SharpTS.dll`), not the LSP server.
     const compileCommands = new CompileCommands(coreDll);
-    // Debugging reuses that compile step with `-g`, then hands the assembly to the .NET debug
-    // adapter — SharpTS ships no adapter of its own.
+    // Compiled debugging reuses that compile step with `-g`, then hands the assembly to the .NET
+    // adapter. The bundled SharpTS adapter below is deliberately for interpreter sessions only.
     const debugCommands = new DebugCommands((extraArgs) => compileCommands.compile(extraArgs));
+    const interpreterDebugCommands = new InterpreterDebugCommands();
     context.subscriptions.push(
         vscode.commands.registerCommand('sharpts.compile', () => compileCommands.compile()),
         vscode.commands.registerCommand('sharpts.debug', () => debugCommands.debugCurrentFile()),
+        vscode.commands.registerCommand(
+            'sharpts.debugInterpreter',
+            () => interpreterDebugCommands.debugCurrentFile(),
+        ),
         vscode.commands.registerCommand('sharpts.run', () => compileCommands.run()),
         vscode.commands.registerCommand('sharpts.compileAndRun', () => compileCommands.compileAndRun()),
         vscode.commands.registerCommand('sharpts.restartServer', () => client?.restart()),
+        vscode.debug.registerDebugAdapterDescriptorFactory(INTERPRETER_DEBUG_TYPE, {
+            createDebugAdapterDescriptor: (session) => {
+                const adapterArgs = [adapterDll];
+                const logFile = session.configuration.logFile;
+                if (typeof logFile === 'string' && logFile.length > 0) {
+                    adapterArgs.push('--log', logFile);
+                }
+                return new vscode.DebugAdapterExecutable(dotnetPath, adapterArgs);
+            },
+        }),
         { dispose: () => compileCommands.dispose() }
     );
 }

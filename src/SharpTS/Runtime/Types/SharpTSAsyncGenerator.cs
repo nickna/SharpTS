@@ -43,6 +43,8 @@ public class SharpTSAsyncGenerator : ITypeCategorized
     private readonly List<Stmt> _body;
     private readonly RuntimeEnvironment _environment;
     private readonly Interpreter _interpreter;
+    private readonly string _debugFrameName;
+    private readonly object _debugDeclaration;
 
     private enum State
     {
@@ -102,11 +104,18 @@ public class SharpTSAsyncGenerator : ITypeCategorized
     /// </summary>
     internal void MarkBodyResumed() => _running = true;
 
-    public SharpTSAsyncGenerator(List<Stmt> body, RuntimeEnvironment environment, Interpreter interpreter)
+    public SharpTSAsyncGenerator(
+        List<Stmt> body,
+        RuntimeEnvironment environment,
+        Interpreter interpreter,
+        string debugFrameName,
+        object debugDeclaration)
     {
         _body = body;
         _environment = environment;
         _interpreter = interpreter;
+        _debugFrameName = debugFrameName;
+        _debugDeclaration = debugDeclaration;
     }
 
     /// <summary>Advances the generator, resuming a suspended <c>yield</c> with <c>undefined</c>.</summary>
@@ -219,6 +228,8 @@ public class SharpTSAsyncGenerator : ITypeCategorized
         SharpTSAsyncGenerator? prevGen = _interpreter.CurrentAsyncGenerator;
         _interpreter.SetEnvironment(_environment);
         _interpreter.CurrentAsyncGenerator = this;
+        using var debugFrame = _interpreter.EnterDebugFrame(
+            _debugFrameName, _environment, _debugDeclaration);
 
         object? completionValue = SharpTSUndefined.Instance;
         Exception? pendingException = null;

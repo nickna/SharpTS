@@ -61,6 +61,8 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     private readonly List<Stmt> _body;
     private readonly RuntimeEnvironment _environment;
     private readonly Interpreter _interpreter;
+    private readonly string _debugFrameName;
+    private readonly object _debugDeclaration;
 
     // Coroutine synchronization
     private Thread? _workerThread;
@@ -95,11 +97,18 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     private RuntimeEnvironment? _callerEnv;
     private Func<object?, bool, object?>? _callerYieldCallback;
 
-    public SharpTSGenerator(List<Stmt> body, RuntimeEnvironment environment, Interpreter interpreter)
+    public SharpTSGenerator(
+        List<Stmt> body,
+        RuntimeEnvironment environment,
+        Interpreter interpreter,
+        string debugFrameName,
+        object debugDeclaration)
     {
         _body = body;
         _environment = environment;
         _interpreter = interpreter;
+        _debugFrameName = debugFrameName;
+        _debugDeclaration = debugDeclaration;
     }
 
     /// <summary>
@@ -259,6 +268,8 @@ public class SharpTSGenerator : IEnumerable<object?>, IDisposable, ITypeCategori
     {
         RuntimeEnvironment previousEnv = _interpreter.Environment;
         _interpreter.SetEnvironment(_environment);
+        using var debugFrame = _interpreter.EnterDebugFrame(
+            _debugFrameName, _environment, _debugDeclaration);
 
         // Set yield callback so yield expressions suspend the thread
         // instead of throwing YieldException

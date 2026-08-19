@@ -70,14 +70,15 @@ One consequence worth knowing: because the stdlib travels in the PDB with its so
 importing a large module makes the `.pdb` noticeably bigger. It costs nothing at run time and
 nothing in the assembly; only the symbol file grows.
 
-Interpreter debugging remains out of scope.
+For a no-build workflow that executes the syntax tree directly, use the separate
+[interpreter debugger](debugging-interpreter.md).
 
 ## Editor setup
 
 None of this needs a SharpTS-specific debug adapter — the assembly is an ordinary .NET one.
 
 **VS Code** — install the C# extension, which supplies the `coreclr` adapter. With the SharpTS
-extension installed, **SharpTS: Debug Current File** does the whole round trip: it saves the file
+extension installed, **SharpTS: Debug Compiled Current File** does the whole round trip: it saves the file
 if it is dirty, compiles that saved source with `-g`, and starts a debug session on the result. It
 checks for the C# extension first and offers to install it rather than failing obscurely.
 

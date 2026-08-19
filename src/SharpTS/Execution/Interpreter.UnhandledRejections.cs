@@ -104,16 +104,29 @@ public partial class Interpreter
 
     private void ReportUnhandledRejection(Exception exception, SharpTSPromise? promise = null)
     {
+        object? debuggerReason = exception switch
+        {
+            SharpTSPromiseRejectedException rejected => rejected.Reason,
+            ThrowException thrown => thrown.Value,
+            _ => exception.Message,
+        };
+        if (DebugController?.BreakOnUnhandledRejection == true)
+        {
+            try
+            {
+                EnqueueCallback(() => NotifyDebuggerUnhandledRejection(debuggerReason));
+            }
+            catch
+            {
+                NotifyDebuggerUnhandledRejection(debuggerReason);
+            }
+        }
+
         // A process-level listener suppresses the default (stderr + nonzero
         // exit) and receives (reason, promise) instead — Node semantics.
         if (SharpTSProcess.Instance.HasListenersInternal("unhandledRejection"))
         {
-            object? reason = exception switch
-            {
-                SharpTSPromiseRejectedException rejected => rejected.Reason,
-                ThrowException thrown => thrown.Value,
-                _ => exception.Message,
-            };
+            object? reason = debuggerReason;
             if (promise != null)
                 _reportedRejections.AddOrUpdate(promise, new object());
 

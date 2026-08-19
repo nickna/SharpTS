@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>SharpTS.DebugAdapter</AssemblyName>
+    <RootNamespace>SharpTS.DebugAdapter</RootNamespace>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>sharpts-dap</ToolCommandName>
+    <PackageId>SharpTS.DebugAdapter</PackageId>
+    <Description>Debug Adapter Protocol server for the SharpTS TypeScript interpreter.</Description>
+    <PackageTags>typescript;interpreter;debugger;dap;dotnet</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <NoWarn>$(NoWarn);SHARPTS_HOSTING001</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SharpTS\SharpTS.csproj" />
+    <None Include="README.md" Pack="true" PackagePath="" />
+    <None Include="..\..\LICENSE" Pack="true" PackagePath="" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SharpTS.Tests" />
+  </ItemGroup>
+</Project>

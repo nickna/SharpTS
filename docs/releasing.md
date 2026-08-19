@@ -24,12 +24,12 @@ When adding a package:
 The tagged release is blocked if any manifest ID is not registered. This prevents an untested
 permission from publishing established packages before failing on a new ID.
 
-The contract covers `SharpTS`, `SharpTS.Sdk`, `SharpTS.Hosting`,
-`SharpTS.LanguageServer`, and `SharpTS.Gui.Sdk`. Publication uses NuGet Trusted Publishing rather
+The contract covers `SharpTS`, `SharpTS.Sdk`, `SharpTS.Hosting`, `SharpTS.LanguageServer`,
+`SharpTS.DebugAdapter`, and `SharpTS.Gui.Sdk`. Publication uses NuGet Trusted Publishing rather
 than a stored API key. The nuget.org policy is owned by `nbn` and binds GitHub Actions to repository
 `nickna/SharpTS`, workflow `publish.yml`, and the tag-restricted `nuget-release` environment. The
 release job exchanges its GitHub OIDC token immediately before publication and uses the resulting
-one-hour API key for all five package pushes.
+one-hour API key for all six package pushes.
 
 `eng/GuiVersion.props` supplies the non-publishable `0.0.0-local` fallback for source-built GUI
 workflows. Tagged and manually dispatched Publish runs stage their effective version into that

@@ -2,6 +2,7 @@ using SharpTS.Modules;
 using SharpTS.Modules.Stdlib;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
+using SharpTS.Execution.Debugging;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.Runtime.BuiltIns.Modules;
@@ -42,6 +43,7 @@ namespace SharpTS.Execution;
 public partial class Interpreter : IDisposable
 {
     private RuntimeEnvironment _environment = new();
+    internal InterpreterDebugController? DebugController { get; set; }
     // Keyed by AST-node identity, not structural value. The resolver stores and reads the
     // same Expr instance, so reference identity is the intent. Expr is a record, so the
     // default comparer would recursively hash an assignment's RHS subtree (Assign/
@@ -316,6 +318,15 @@ public partial class Interpreter : IDisposable
     internal RuntimeEnvironment Environment => _environment;
     internal TypeMap? TypeMap => _typeMap;
     internal void SetEnvironment(RuntimeEnvironment env) => _environment = env;
+
+    internal IDisposable EnterDebugFrame(string name, RuntimeEnvironment environment, object declaration) =>
+        DebugController?.EnterFrame(name, environment, declaration) ?? NoopDisposable.Instance;
+
+    private sealed class NoopDisposable : IDisposable
+    {
+        internal static NoopDisposable Instance { get; } = new();
+        public void Dispose() { }
+    }
 
     /// <summary>
     /// Registers a host-provided value as a global binding. Must be called
@@ -1198,6 +1209,7 @@ public partial class Interpreter : IDisposable
                 {
                     try
                     {
+                        DebugController?.OnSafePoint(this, statement, _environment, _currentModule);
                         object? result = Evaluate(exprStmt.Expr);
                         // Wait for top-level Promises to complete before continuing
                         if (_waitForTopLevelPromises
@@ -1277,6 +1289,7 @@ public partial class Interpreter : IDisposable
 
             if (statement is Stmt.Expression exprStmt)
             {
+                DebugController?.OnSafePoint(this, statement, _environment, _currentModule);
                 lastExprValue = Evaluate(exprStmt.Expr);
                 if (lastExprValue is SharpTSPromise promise)
                 {
@@ -1416,11 +1429,13 @@ public partial class Interpreter : IDisposable
         }
         catch (ThrowException tex)
         {
+            NotifyDebuggerUnhandledException(tex.Value);
             Out.WriteLine($"Runtime Error: {Stringify(tex.Value)}");
             throw;
         }
         catch (Exception error)
         {
+            NotifyDebuggerUnhandledException(TranslateException(error));
             Out.WriteLine($"Runtime Error: {error.Message}");
             throw;
         }
@@ -1459,6 +1474,7 @@ public partial class Interpreter : IDisposable
             {
                 if (stmt is Stmt.Expression exprStmt)
                 {
+                    DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
                     if (_waitForTopLevelPromises && result is SharpTSPromise promise)
                     {
@@ -1664,6 +1680,7 @@ public partial class Interpreter : IDisposable
                 // This provides "top-level await" behavior for modules
                 if (stmt is Stmt.Expression exprStmt)
                 {
+                    DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
                     object? result = Evaluate(exprStmt.Expr);
                     // Wait for top-level Promises to complete before continuing
                     if (_waitForTopLevelPromises && result is SharpTSPromise promise)

@@ -17,7 +17,8 @@
   ],
   "activationEvents": [
     "onLanguage:typescript",
-    "onLanguage:typescriptreact"
+    "onLanguage:typescriptreact",
+    "onDebug:sharpts-interpreter"
   ],
   "main": "./out/extension.js",
   "contributes": {
@@ -65,7 +66,11 @@
       },
       {
         "command": "sharpts.debug",
-        "title": "SharpTS: Debug Current File"
+        "title": "SharpTS: Debug Compiled Current File"
+      },
+      {
+        "command": "sharpts.debugInterpreter",
+        "title": "SharpTS: Debug Current File in Interpreter"
       },
       {
         "command": "sharpts.run",
@@ -75,6 +80,122 @@
         "command": "sharpts.compileAndRun",
         "title": "SharpTS: Compile and Run"
       }
+    ],
+    "debuggers": [
+      {
+        "type": "sharpts-interpreter",
+        "label": "SharpTS Interpreter",
+        "languages": [
+          "typescript",
+          "typescriptreact"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "required": [
+              "program"
+            ],
+            "properties": {
+              "program": {
+                "type": "string",
+                "description": "TypeScript entry point to interpret.",
+                "default": "${file}"
+              },
+              "cwd": {
+                "type": "string",
+                "description": "Working directory for the debuggee.",
+                "default": "${workspaceFolder}"
+              },
+              "args": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": [],
+                "description": "Arguments exposed through process.argv."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "default": {},
+                "description": "Environment variables for the interpreted program."
+              },
+              "project": {
+                "type": "string",
+                "description": "Optional tsconfig.json or project path."
+              },
+              "references": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "default": [],
+                "description": "Additional .NET assembly references."
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "default": false,
+                "description": "Pause before the first executable statement."
+              },
+              "justMyCode": {
+                "type": "boolean",
+                "default": true,
+                "description": "Hide built-in runtime frames and sources."
+              },
+              "diagnostics": {
+                "type": "string",
+                "enum": [
+                  "errors",
+                  "all",
+                  "none"
+                ],
+                "default": "errors",
+                "description": "Type-check diagnostics written to the Debug Console during launch."
+              },
+              "console": {
+                "type": "string",
+                "enum": [
+                  "internalConsole"
+                ],
+                "default": "internalConsole",
+                "description": "Interpreter output is sent through Debug Console output events."
+              },
+              "logFile": {
+                "type": "string",
+                "description": "Optional adapter diagnostics file. DAP traffic and environment values are never logged."
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "sharpts-interpreter",
+            "request": "launch",
+            "name": "Debug SharpTS in Interpreter",
+            "program": "${file}",
+            "cwd": "${workspaceFolder}",
+            "console": "internalConsole"
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "SharpTS: Debug in Interpreter",
+            "description": "Launch the current TypeScript file in the SharpTS interpreter.",
+            "body": {
+              "type": "sharpts-interpreter",
+              "request": "launch",
+              "name": "Debug current file in Interpreter",
+              "program": "${file}",
+              "cwd": "${workspaceFolder}",
+              "stopOnEntry": false
+            }
+          }
+        ]
+      }
     ]
   },
   "scripts": {
@@ -82,7 +203,8 @@
     "watch": "tsc -watch -p ./",
     "lint": "eslint src --ext ts",
     "bundle-server": "dotnet publish ../../src/SharpTS.LanguageServer/SharpTS.LanguageServer.csproj -c Release -o ./bin/server",
-    "prebuild": "npm run bundle-server",
+    "bundle-adapter": "dotnet publish ../../src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj -c Release -o ./bin/server",
+    "prebuild": "npm run bundle-server && npm run bundle-adapter",
     "build": "npm run compile",
     "prepackage": "npm run build",
     "package": "vsce package"
@@ -93,6 +215,7 @@
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.6.2",
     "typescript": "^5.3.0"
   }
 }

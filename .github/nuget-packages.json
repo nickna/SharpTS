@@ -2,6 +2,7 @@
   "schemaVersion": 2,
   "packages": [
     { "id": "SharpTS.LanguageServer" },
+    { "id": "SharpTS.DebugAdapter" },
     { "id": "SharpTS.Hosting" },
     { "id": "SharpTS.Sdk" },
     { "id": "SharpTS" },

@@ -482,6 +482,7 @@ public partial class Interpreter
     {
         if (tryCatch.CatchBlock != null)
         {
+            NotifyDebuggerCaughtException(errorValue);
             RuntimeEnvironment catchEnv = new(_environment);
             if (tryCatch.CatchParam != null)
             {
@@ -623,6 +624,7 @@ public partial class Interpreter
     {
         if (tryCatch.CatchBlock != null)
         {
+            NotifyDebuggerCaughtException(errorValue);
             RuntimeEnvironment catchEnv = new(_environment);
             if (tryCatch.CatchParam != null)
             {
@@ -1694,6 +1696,7 @@ public partial class Interpreter
     /// <returns>A task containing the execution result.</returns>
     internal async Task<ExecutionResult> ExecuteStatementAsync(Stmt stmt)
     {
+        DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
         return await DispatchStmtAsync(stmt);
     }
 
@@ -1708,6 +1711,7 @@ public partial class Interpreter
     /// </remarks>
     private ExecutionResult Execute(Stmt stmt)
     {
+        DebugController?.OnSafePoint(this, stmt, _environment, _currentModule);
         return DispatchStmt(stmt);
     }
 
