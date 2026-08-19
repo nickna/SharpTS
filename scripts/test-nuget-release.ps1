@@ -7,7 +7,7 @@ Import-Module (Join-Path $PSScriptRoot 'NuGetRelease.psm1') -Force
 $script:passed = 0
 $script:failed = 0
 $releaseVersion = '2.0.0'
-$packageIds = @('SharpTS.LanguageServer', 'SharpTS.Hosting', 'SharpTS.Sdk', 'SharpTS', 'SharpTS.Gui.Sdk')
+$packageIds = @('SharpTS.LanguageServer', 'SharpTS.DebugAdapter', 'SharpTS.Hosting', 'SharpTS.Sdk', 'SharpTS', 'SharpTS.Gui.Sdk')
 
 function Assert-True([bool]$Condition, [string]$Message) {
     if (-not $Condition) { throw $Message }
@@ -106,7 +106,7 @@ Invoke-Test 'preflight rejects malformed release versions' {
     finally { Remove-Item $fixture.Root -Recurse -Force }
 }
 
-Invoke-Test 'preflight requires all five tag-versioned files' {
+Invoke-Test 'preflight requires all six tag-versioned files' {
     $fixture = New-TestFixture
     try {
         $versions = New-VersionMap
@@ -161,7 +161,7 @@ Invoke-Test 'preflight rejects unexpected package artifacts' {
     finally { Remove-Item $fixture.Root -Recurse -Force }
 }
 
-Invoke-Test 'publication uses one version and all five filenames' {
+Invoke-Test 'publication uses one version and all six filenames' {
     $fixture = New-TestFixture
     try {
         $pushes = [Collections.Generic.List[object]]::new()
@@ -178,7 +178,7 @@ Invoke-Test 'publication uses one version and all five filenames' {
         $source = 'https://packages.example.test/v3/index.json'
         Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -NuGetSource $source -PushPackage $push
         $expected = @($packageIds | ForEach-Object { "$($_).$releaseVersion.nupkg" } | Sort-Object)
-        Assert-True ($pushes.Count -eq 5) 'Expected each package to be pushed once.'
+        Assert-True ($pushes.Count -eq $packageIds.Count) 'Expected each package to be pushed once.'
         Assert-True (-not (Compare-Object $expected @($pushes.File | Sort-Object) -SyncWindow 0)) 'Expected filenames differ.'
         $versions = @($pushes.Version | Select-Object -Unique)
         $keys = @($pushes.Key | Select-Object -Unique)
@@ -202,7 +202,7 @@ Invoke-Test 'publication attempts every package after a push failure' {
         Assert-ThrowsContaining {
             Publish-NuGetPackages $fixture.Manifest $fixture.PackageDirectory $releaseVersion key -PushPackage $push
         } 'SharpTS.Hosting 2.0.0: permission failure'
-        Assert-True ($attempts.Count -eq 5) 'A failed push stopped the package inventory early.'
+        Assert-True ($attempts.Count -eq $packageIds.Count) 'A failed push stopped the package inventory early.'
         Assert-True (-not (Compare-Object ($packageIds | Sort-Object) ($attempts | Sort-Object) -SyncWindow 0)) 'Not every package was attempted.'
     }
     finally { Remove-Item $fixture.Root -Recurse -Force }

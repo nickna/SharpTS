@@ -68,7 +68,9 @@ public class SharpTSAsyncGeneratorFunction : ISharpTSCallable, IReceiverBindable
 
         // Return the async generator object (not yet started). It drives the same SharpTSAsyncGenerator
         // as a function expression — only the body and captured environment differ.
-        return new SharpTSAsyncGenerator(_declaration.Body ?? [], environment, interpreter);
+        return new SharpTSAsyncGenerator(
+            _declaration.Body ?? [], environment, interpreter,
+            _declaration.Name?.Lexeme ?? "<async generator>", _declaration);
     }
 
     /// <summary>
@@ -147,7 +149,9 @@ public class SharpTSAsyncArrowGeneratorFunction : ISharpTSCallable, IReceiverBin
 
         // Generator expressions always have a block body (the parser never produces an
         // expression-bodied generator).
-        return new SharpTSAsyncGenerator(_declaration.BlockBody ?? [], environment, interpreter);
+        return new SharpTSAsyncGenerator(
+            _declaration.BlockBody ?? [], environment, interpreter,
+            _declaration.Name?.Lexeme ?? "<async generator>", _declaration);
     }
 
     /// <summary>Binds <c>this</c>. Only applicable for function expressions with HasOwnThis=true.</summary>

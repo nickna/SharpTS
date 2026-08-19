@@ -119,6 +119,7 @@ jobs:
           test -f "./nupkg/SharpTS.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Sdk package not found"; exit 1; }
           test -f "./nupkg/SharpTS.Hosting.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Hosting package not found"; exit 1; }
           test -f "./nupkg/SharpTS.LanguageServer.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.LanguageServer package not found"; exit 1; }
+          test -f "./nupkg/SharpTS.DebugAdapter.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.DebugAdapter package not found"; exit 1; }
           test -f "./nupkg/SharpTS.Gui.Sdk.${{ steps.version.outputs.VERSION }}.nupkg" || { echo "❌ SharpTS.Gui.Sdk package not found"; exit 1; }
           echo "✓ All packages created successfully"
 
@@ -647,6 +648,7 @@ jobs:
             ./nupkg/SharpTS.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.Hosting.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.LanguageServer.${{ needs.build.outputs.version }}.nupkg
+            ./nupkg/SharpTS.DebugAdapter.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.Sdk.${{ needs.build.outputs.version }}.nupkg
             ./nupkg/SharpTS.Gui.Sdk.${{ needs.build.outputs.version }}.nupkg
             ./assets/*

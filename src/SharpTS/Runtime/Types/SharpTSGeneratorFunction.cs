@@ -71,7 +71,9 @@ public class SharpTSGeneratorFunction : ISharpTSCallable, IReceiverBindable
         ParameterBinder.Bind(_declaration.Parameters, arguments, environment, interpreter);
 
         // Return a generator that will execute the body lazily
-        return new SharpTSGenerator(_declaration.Body ?? [], environment, interpreter);
+        return new SharpTSGenerator(
+            _declaration.Body ?? [], environment, interpreter,
+            _declaration.Name.Lexeme, _declaration);
     }
 
     /// <summary>
@@ -153,7 +155,9 @@ public class SharpTSArrowGeneratorFunction : ISharpTSCallable, IReceiverBindable
         // body (the parser never produces an expression-bodied generator). This native path runs the
         // generator expressions the GeneratorArrowLifter leaves in place because they close over a
         // block-scoped binding (#678); all others are lifted to declarations.
-        return new SharpTSGenerator(_declaration.BlockBody ?? [], environment, interpreter);
+        return new SharpTSGenerator(
+            _declaration.BlockBody ?? [], environment, interpreter,
+            _declaration.Name?.Lexeme ?? "<generator>", _declaration);
     }
 
     /// <summary>

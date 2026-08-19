@@ -62,7 +62,8 @@ emitted soft-dependent feature requires it.
 - Interpreter and compiled-IL execution with a documented parity contract
 - Node-compatible built-in modules and real npm package loading
 - `.NET` imports, external assemblies and NuGet references, C# consumption, and embedding APIs
-- MSBuild SDK integration, TypeScript-source debugging, and a standalone language server
+- MSBuild SDK integration, interpreted and compiled TypeScript-source debugging, and a standalone
+  language server
 - Retained Avalonia desktop applications written in TypeScript/TSX
 - Managed self-contained and Native AOT distribution options
 

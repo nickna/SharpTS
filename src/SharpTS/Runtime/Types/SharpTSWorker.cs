@@ -372,9 +372,14 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 
         // Create isolated interpreter for this worker. With stdout/stderr: true, divert the
         // worker's console output into the per-worker Readable streams instead of the shared
-        // Console (#1003); otherwise keep the default Console writers.
-        TextWriter outWriter = _stdout != null ? new WorkerStreamWriter(this, _stdout) : Console.Out;
-        TextWriter errWriter = _stderr != null ? new WorkerStreamWriter(this, _stderr) : Console.Error;
+        // Console (#1003). Otherwise inherit an interpreter parent's writers. This keeps embedded
+        // hosts (notably the DAP adapter, whose stdout is protocol-only) in control of worker output.
+        TextWriter outWriter = _stdout != null
+            ? new WorkerStreamWriter(this, _stdout)
+            : _parentInterpreter?.Out ?? Console.Out;
+        TextWriter errWriter = _stderr != null
+            ? new WorkerStreamWriter(this, _stderr)
+            : _parentInterpreter?.Error ?? Console.Error;
         using var interpreter = new Interpreter(outWriter, errWriter);
 
         // Expose this worker to terminate(): Shutdown() stops an idle event loop, and the

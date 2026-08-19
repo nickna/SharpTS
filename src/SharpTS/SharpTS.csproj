@@ -140,6 +140,7 @@
        TypeScript alone. -->
   <ItemGroup>
     <InternalsVisibleTo Include="SharpTS.Tests" />
+    <InternalsVisibleTo Include="SharpTS.DebugAdapter" />
   </ItemGroup>
 
   <!-- Embed TypeScript standard library sources. Loaded by EmbeddedStdlibProvider

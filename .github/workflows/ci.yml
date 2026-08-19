@@ -71,6 +71,34 @@ jobs:
       - name: Build
         run: dotnet build --no-restore --configuration Release
 
+      - name: Pack and smoke test interpreter debug adapter tool
+        shell: pwsh
+        run: |
+          dotnet pack src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj `
+            --no-build --configuration Release --output artifacts/dap-tool
+          dotnet tool install SharpTS.DebugAdapter `
+            --tool-path artifacts/dap-tool-install `
+            --add-source artifacts/dap-tool --prerelease --ignore-failed-sources
+          $shimName = if ($IsWindows) { 'sharpts-dap.exe' } else { 'sharpts-dap' }
+          & (Join-Path 'artifacts/dap-tool-install' $shimName) --version
+
+      - name: Setup Node for VS Code extension packaging
+        if: matrix.os == 'ubuntu-24.04'
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: extensions/vscode-sharpts/package-lock.json
+
+      - name: Package VS Code extension with interpreter adapter
+        if: matrix.os == 'ubuntu-24.04'
+        working-directory: extensions/vscode-sharpts
+        shell: bash
+        run: |
+          npm ci --ignore-scripts
+          npm run package
+          unzip -l vscode-sharpts-*.vsix | grep 'extension/bin/server/SharpTS.DebugAdapter.dll'
+
       # Discover and type-check/compile every cross-runtime workload through the
       # real runner. This catches repository moves and declaration drift without
       # paying the cost (or accepting the noise) of timing benchmarks in CI.

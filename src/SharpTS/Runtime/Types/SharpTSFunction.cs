@@ -258,6 +258,8 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
             environment.Define("arguments", new SharpTSArguments(arguments));
         }
 
+        using var debugFrame = interpreter.EnterDebugFrame(
+            _declaration.Name.Lexeme, environment, _declaration);
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
         if (result.Type == ExecutionResult.ResultType.Return)
         {
@@ -367,6 +369,8 @@ public class SharpTSFunction : ISharpTSCallable, ITypeCategorized
             environment.Define("arguments", new SharpTSArguments(argsList));
         }
 
+        using var debugFrame = interpreter.EnterDebugFrame(
+            _declaration.Name.Lexeme, environment, _declaration);
         var result = interpreter.ExecuteBlock(_declaration.Body, environment);
         if (result.Type == ExecutionResult.ResultType.Return)
         {
@@ -618,6 +622,8 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
             environment.Define("arguments", new SharpTSArguments(new List<object?>(arguments)));
         }
 
+        using var debugFrame = interpreter.EnterDebugFrame(
+            _declaration.Name?.Lexeme ?? "<arrow>", environment, _declaration);
         if (_declaration.ExpressionBody != null)
         {
             // Expression body - evaluate and return directly
@@ -691,6 +697,8 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
             environment.Define("arguments", new SharpTSArguments(argsList));
         }
 
+        using var debugFrame = interpreter.EnterDebugFrame(
+            _declaration.Name?.Lexeme ?? "<arrow>", environment, _declaration);
         if (_declaration.ExpressionBody != null)
         {
             RuntimeEnvironment previous = interpreter.Environment;
