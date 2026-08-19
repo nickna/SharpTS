@@ -1,5 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { createInterpreterDebugConfiguration } from './InterpreterDebugConfiguration';
 
 export const INTERPRETER_DEBUG_TYPE = 'sharpts-interpreter';
 
@@ -24,15 +25,14 @@ export class InterpreterDebugCommands {
         }
 
         const folder = vscode.workspace.getWorkspaceFolder(editor.document.uri);
-        await vscode.debug.startDebugging(folder, {
-            type: INTERPRETER_DEBUG_TYPE,
-            request: 'launch',
-            name: `SharpTS Interpreter: ${path.basename(editor.document.uri.fsPath)}`,
-            program: editor.document.uri.fsPath,
-            cwd: folder?.uri.fsPath ?? path.dirname(editor.document.uri.fsPath),
-            console: 'internalConsole',
-            stopOnEntry: false,
-            justMyCode: true,
-        });
+        const settings = vscode.workspace.getConfiguration('sharpts', editor.document.uri);
+        await vscode.debug.startDebugging(folder, createInterpreterDebugConfiguration(
+            editor.document.uri.fsPath,
+            folder?.uri.fsPath ?? path.dirname(editor.document.uri.fsPath),
+            {
+                projectFile: settings.get<string>('projectFile'),
+                additionalReferences: settings.get<string[]>('additionalReferences', []),
+            },
+        ));
     }
 }

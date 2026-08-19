@@ -1,3 +1,4 @@
+using SharpTS.DebugAdapter;
 using SharpTS.DebugAdapter.Adapter;
 using SharpTS.DebugAdapter.Protocol;
 using SharpTS.Execution;
@@ -10,6 +11,35 @@ namespace SharpTS.Tests.DebugAdapter;
 [Collection("DebugAdapterTests")]
 public sealed class DebugAdapterUnitTests
 {
+    [Fact]
+    public async Task DiagnosticFileLogIsReplacedAndBoundedPerSession()
+    {
+        string directory = Path.Combine(
+            Path.GetTempPath(), "sharpts-dap-log", Guid.NewGuid().ToString("N"));
+        string path = Path.Combine(directory, "adapter.log");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            await File.WriteAllTextAsync(path, "stale-session-content");
+
+            await using (var writer = new BoundedFileLogWriter(path))
+            {
+                await writer.WriteAsync(new string(
+                    'x', BoundedFileLogWriter.MaximumCharacters + 100));
+                await writer.WriteAsync("must-not-be-written");
+            }
+
+            string content = await File.ReadAllTextAsync(path);
+            Assert.Equal(BoundedFileLogWriter.MaximumCharacters, content.Length);
+            Assert.DoesNotContain("stale-session-content", content);
+            Assert.DoesNotContain("must-not-be-written", content);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task CancelRequestCanCancelQueuedLaunchWithoutBreakingSessionFraming()
     {

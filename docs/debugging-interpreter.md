@@ -43,8 +43,10 @@ sharpts-dap --version
 ```
 
 Launch `sharpts-dap` with DAP `Content-Length` framing on standard input and output. It supports one
-launch session per process. Diagnostics go to standard error; pass `--log <path>` to append them to
-a file. Protocol messages and environment values are not logged.
+launch session per process. Diagnostics go to standard error; pass `--log <path>` to write them to
+a file. A file log is replaced for each adapter process and capped at 1,048,576 characters, so
+repeated sessions cannot grow it without bound. Protocol messages and environment values are not
+logged.
 
 The `launch` request accepts:
 
@@ -119,3 +121,68 @@ and do not expose adapter standard I/O through an unauthenticated network bridge
 `terminate`, `disconnect`, client EOF, Ctrl+C, and interpreter exit release every cooperative pause,
 wake and shut down all registered interpreter event loops, and wait within the session's five-second
 ownership bound. Output is emitted only through DAP `output` events, leaving protocol stdout clean.
+
+## Extension Development Host acceptance
+
+The protocol tests cannot validate VS Code presentation. Before releasing the extension, use the
+tracked [`InterpreterDebuggerAcceptance`](../tests/fixtures/InterpreterDebuggerAcceptance) fixture
+to exercise the development extension and the production VSIX.
+
+From the repository root, install the locked extension dependencies and build both bundled servers:
+
+```bash
+cd extensions/vscode-sharpts
+npm ci --ignore-scripts
+npm run prebuild
+npm test
+```
+
+Open a fresh Extension Development Host with the fixture as its workspace (replace `code` with the
+appropriate VS Code command if necessary):
+
+```bash
+code --new-window --extensionDevelopmentPath="$PWD" ../../tests/fixtures/InterpreterDebuggerAcceptance
+```
+
+Copy `interpreter.launch.json` in the fixture to `.vscode/launch.json`. Also set
+`sharpts.projectFile` to the fixture's `tsconfig.json` and leave
+`sharpts.additionalReferences` empty. Run the checklist once with **SharpTS: Debug Current File in
+Interpreter** and once with **SharpTS interpreter acceptance** from the Run and Debug view. For the
+packaged pass, run `npm run package`, install the resulting VSIX into a clean VS Code profile with
+separate `--user-data-dir` and `--extensions-dir` directories, and repeat the same checks there.
+
+### Manual UI checklist
+
+- Record the OS, architecture, VS Code version, `dotnet --version`, commit SHA, extension version,
+  adapter `--version`, and whether the development extension or packaged VSIX is under test.
+- Make `main.ts` dirty before running the command. Confirm that only that document is saved, the
+  launched source matches the saved bytes, and the session uses the configured project.
+- Set entry and imported-source breakpoints. Set another breakpoint on the comment above the loop
+  conditional and on a closing brace; confirm VS Code shows their predictable relocated, verified
+  executable lines.
+- At a function and class-method stop, inspect Call Stack plus Arguments/Locals, Closure, Module, and
+  Global scopes where applicable. Expand arrays/objects, add watches, hover an identifier, and use
+  the Debug Console for a permitted read-only expression. Confirm mutation and call expressions are
+  rejected.
+- Enable each caught, uncaught, and unhandled-rejection exception filter in turn. The default run
+  exercises the caught error; set `SHARPTS_DAP_EXCEPTION` in the launch configuration to `uncaught`
+  or `unhandled` for separate sessions covering the other filters. Confirm exception details are
+  presented without corrupting the following continue/step flow.
+- Step in, over, and out through the loop, closure, class method, `afterAwait`, generator resume,
+  Promise callback, and timer callback. Confirm runtime continuation frames do not replace the
+  TypeScript locations.
+- Set the worker breakpoint before `worker.ts` loads. Confirm it changes from unverified to verified,
+  the worker appears as its own thread, and its stack, locals, evaluation, output, and exit event are
+  attributed to that thread.
+- While paused, change an imported source on disk. Confirm its breakpoints become unverified rather
+  than binding to changed lines; undo the edit and start a new session to rebind them.
+- Confirm `args=alpha,beta`, `env=configured`, and every expected fixture output line appears only in
+  the Debug Console. Inspect `.sharpts/debug-adapter.log` to ensure it excludes DAP messages and
+  environment values and never exceeds the documented cap.
+- Exercise pause, continue, restart, stop, and closing the Extension Development Host while paused.
+  Confirm each adapter/debuggee exits within five seconds with no orphan process or new tracked file.
+
+Attach screenshots or a concise transcript for breakpoint verification, scope grouping, exception
+presentation, worker threads, and clean termination to issue #1405. Record each checklist item as
+pass/fail with a defect link; all items must pass for both development and packaged runs before the
+issue is closed.

@@ -24,6 +24,26 @@ When adding a package:
 The tagged release is blocked if any manifest ID is not registered. This prevents an untested
 permission from publishing established packages before failing on a new ID.
 
+For the first `SharpTS.DebugAdapter` release, onboard the ID with the real first-release package,
+not a placeholder prerelease. Freeze the intended release commit and version, complete the
+interpreter debugger's automated and Extension Development Host acceptance, then pack and locally
+install that exact version:
+
+```bash
+dotnet pack src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj \
+  --configuration Release -p:MinVerVersionOverride=<version> --output ./nupkg-bootstrap
+dotnet tool install SharpTS.DebugAdapter --tool-path ./dap-bootstrap-install \
+  --add-source ./nupkg-bootstrap --version <version>
+./dap-bootstrap-install/sharpts-dap --version
+```
+
+Upload the inspected package through nuget.org, assign owner `nbn`, confirm the `SharpTS` Trusted
+Publishing policy applies, and wait for the ID and version to appear in the public flat-container
+feed. Only then tag the exact frozen commit. Run a manual Publish workflow dry run before the tagged
+workflow; the release inventory and `--skip-duplicate` handling will retain the already-published
+adapter version and publish the other artifacts. Treat any interruption as a partial publish and use
+the recovery procedure below.
+
 The contract covers `SharpTS`, `SharpTS.Sdk`, `SharpTS.Hosting`, `SharpTS.LanguageServer`,
 `SharpTS.DebugAdapter`, and `SharpTS.Gui.Sdk`. Publication uses NuGet Trusted Publishing rather
 than a stored API key. The nuget.org policy is owned by `nbn` and binds GitHub Actions to repository

@@ -153,8 +153,11 @@ The implementation was validated on Windows on 2026-08-19:
 - The VS Code extension compiled and produced an 8.71 MiB VSIX containing the adapter. Co-locating
   the language server and adapter reduced the first duplicate-runtime package attempt from 15 MiB.
 
-Two release gates cannot be completed purely in this repository: NuGet must onboard the new
-`SharpTS.DebugAdapter` package ID before a tag can pass preflight, and the VS Code presentation
+The repository now includes a reusable multi-file VS Code acceptance fixture and checklist, command
+coverage for project/reference context, bounded per-session diagnostic logs, and a macOS adapter
+package/launch CI gate alongside the Windows and Linux coverage. Two release gates cannot be
+completed purely in this repository: NuGet must onboard the new `SharpTS.DebugAdapter` package ID
+with its intended first-release package before a tag can pass preflight, and the VS Code presentation
 checklist still requires an interactive Extension Development Host. The worker-interpreter
 limitation was resolved by #1404. Cooperative suspension still cannot preempt a blocking
 managed/native call; partial-stop events report that limitation accurately.

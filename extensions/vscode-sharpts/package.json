@@ -206,11 +206,17 @@
     "bundle-adapter": "dotnet publish ../../src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj -c Release -o ./bin/server",
     "prebuild": "npm run bundle-server && npm run bundle-adapter",
     "build": "npm run compile",
+    "test": "npm run compile && node ../../tests/vscode-sharpts/InterpreterDebugConfiguration.test.cjs",
     "prepackage": "npm run build",
     "package": "vsce package"
   },
   "dependencies": {
     "vscode-languageclient": "^9.0.1"
+  },
+  "overrides": {
+    "minimatch@5.1.9": {
+      "brace-expansion": "2.1.4"
+    }
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -96,6 +96,7 @@ jobs:
         shell: bash
         run: |
           npm ci --ignore-scripts
+          npm test
           npm run package
           unzip -l vscode-sharpts-*.vsix | grep 'extension/bin/server/SharpTS.DebugAdapter.dll'
 
@@ -159,6 +160,39 @@ jobs:
       - name: Packaged SDK smoke test
         shell: pwsh
         run: ./scripts/test-packaged-sdk.ps1
+
+  # The full suite intentionally stays off macOS, but the interpreter debugger is a portable .NET
+  # tool and its product contract requires a real package/install/launch smoke on every supported
+  # desktop platform.
+  dap-macos-smoke:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore debugger tests
+        run: dotnet restore tests/SharpTS.Tests/SharpTS.Tests.csproj
+      - name: Build debugger tests
+        run: dotnet build tests/SharpTS.Tests/SharpTS.Tests.csproj --no-restore --configuration Release
+      - name: Pack and install interpreter debug adapter
+        shell: pwsh
+        run: |
+          dotnet pack src/SharpTS.DebugAdapter/SharpTS.DebugAdapter.csproj `
+            --no-build --configuration Release --output artifacts/dap-tool
+          dotnet tool install SharpTS.DebugAdapter `
+            --tool-path artifacts/dap-tool-install `
+            --add-source artifacts/dap-tool --prerelease --ignore-failed-sources
+          ./artifacts/dap-tool-install/sharpts-dap --version
+      - name: Launch real programs through raw DAP
+        run: >-
+          dotnet test tests/SharpTS.Tests/SharpTS.Tests.csproj
+          --no-build --configuration Release
+          --filter "FullyQualifiedName~SharpTS.Tests.DebugAdapter.DapEndToEndTests"
 
   # AOT-compatibility ratchet (#1324 Track 0). Builds src/SharpTS/SharpTS.csproj with the
   # AOT/trim/single-file analyzers compare the distinct IL#### inventory against
@@ -426,7 +460,7 @@ jobs:
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, aot-ratchet, native-aot-compile-smoke]
+    needs: [workflow-policy, build, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

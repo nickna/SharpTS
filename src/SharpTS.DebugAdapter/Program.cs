@@ -1,5 +1,6 @@
 using System.Text;
 using System.Reflection;
+using SharpTS.DebugAdapter;
 using SharpTS.DebugAdapter.Adapter;
 using SharpTS.DebugAdapter.Protocol;
 
@@ -28,11 +29,9 @@ if (args.Length > 0)
 Console.InputEncoding = Encoding.UTF8;
 Console.OutputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
-StreamWriter? fileLog = logPath is null
+BoundedFileLogWriter? fileLog = logPath is null
     ? null
-    : new StreamWriter(new FileStream(
-        logPath, FileMode.Append, FileAccess.Write, FileShare.Read,
-        bufferSize: 4096, FileOptions.Asynchronous)) { AutoFlush = true };
+    : new BoundedFileLogWriter(logPath);
 TextWriter diagnosticLog = fileLog ?? Console.Error;
 
 using var shutdown = new CancellationTokenSource();

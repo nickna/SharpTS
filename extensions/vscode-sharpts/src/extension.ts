@@ -7,6 +7,7 @@
  * compile/run commands, which are build operations rather than LSP concerns.
  */
 
+import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import {
@@ -95,6 +96,14 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.registerCommand('sharpts.restartServer', () => client?.restart()),
         vscode.debug.registerDebugAdapterDescriptorFactory(INTERPRETER_DEBUG_TYPE, {
             createDebugAdapterDescriptor: (session) => {
+                if (!fs.existsSync(adapterDll)) {
+                    void vscode.window.showErrorMessage(
+                        `SharpTS interpreter debug adapter is missing at "${adapterDll}". `
+                        + 'For a development checkout, run "npm run prebuild" in '
+                        + 'extensions/vscode-sharpts. For an installed extension, reinstall SharpTS.',
+                    );
+                    return undefined;
+                }
                 const adapterArgs = [adapterDll];
                 const logFile = session.configuration.logFile;
                 if (typeof logFile === 'string' && logFile.length > 0) {

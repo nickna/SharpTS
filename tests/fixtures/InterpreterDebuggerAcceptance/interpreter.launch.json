@@ -1,0 +1,24 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "sharpts-interpreter",
+      "request": "launch",
+      "name": "SharpTS interpreter acceptance",
+      "program": "${workspaceFolder}/main.ts",
+      "cwd": "${workspaceFolder}",
+      "args": ["alpha", "beta"],
+      "env": {
+        "SHARPTS_DAP_ACCEPTANCE": "configured",
+        "SHARPTS_DAP_EXCEPTION": "none"
+      },
+      "project": "${workspaceFolder}/tsconfig.json",
+      "references": [],
+      "stopOnEntry": false,
+      "justMyCode": true,
+      "diagnostics": "all",
+      "console": "internalConsole",
+      "logFile": "${workspaceFolder}/.sharpts/debug-adapter.log"
+    }
+  ]
+}
