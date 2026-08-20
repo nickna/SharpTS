@@ -200,15 +200,15 @@ public class StandaloneDllTests
     {
         var source = """
             const payload: {
-                items: { id: number; label: string; note: null }[]
+                items: { id: number; label: string; active: boolean }[]
             } = {
-                items: [{ id: 1, label: "a", note: null }]
+                items: [{ id: 1, label: "a", active: true }]
             };
             const json: string = JSON.stringify(payload);
             const parsed: any = JSON.parse(json);
             console.log(json);
             console.log(parsed.items[0].id, parsed.items[0].label,
-                parsed.items[0].note === null);
+                parsed.items[0].active);
             """;
 
         var (tempDir, dllPath) = CompileStandalone(source);
@@ -217,7 +217,7 @@ public class StandaloneDllTests
             Assert.DoesNotContain(
                 GetAssemblyReferences(dllPath), r => r == "SharpTS");
             Assert.Equal(
-                "{\"items\":[{\"id\":1,\"label\":\"a\",\"note\":null}]}\n" +
+                "{\"items\":[{\"id\":1,\"label\":\"a\",\"active\":true}]}\n" +
                 "1 a true\n",
                 ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
         }

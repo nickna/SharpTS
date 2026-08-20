@@ -1136,8 +1136,9 @@ public sealed class RuntimeFeatureDetector
         switch (shape)
         {
             case JsonSerializationShape.Record record:
-                _set.JsonScalarRecordShapeFingerprints.Add(
-                    JsonSerializationShapeAnalyzer.Fingerprint(record));
+                string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(record);
+                _set.JsonScalarRecordShapeFingerprints.Add(fingerprint);
+                _set.JsonScalarRecordShapes.TryAdd(fingerprint, record);
                 foreach (var (_, value) in record.Fields)
                     CollectClosedJsonRecordShapes(value);
                 break;

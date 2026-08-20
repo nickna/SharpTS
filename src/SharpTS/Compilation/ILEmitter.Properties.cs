@@ -423,6 +423,50 @@ public partial class ILEmitter
 
             string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(recordShape);
             if (scalarIndex >= 0 &&
+                _ctx.Runtime!.JsonTypedScalarRecordTypes.TryGetValue(
+                    fingerprint, out var jsonExactType) &&
+                _ctx.Runtime.JsonTypedScalarRecordValueFields.TryGetValue(
+                    (fingerprint, scalarIndex), out var jsonExactValueField) &&
+                jsonExactValueField.FieldType == _ctx.Types.Double)
+            {
+                // A statically-numbered slot can stay as a native double through
+                // the consumer.  The non-carrier fallback applies ToNumber just
+                // as the old boxed path's numeric consumer did.
+                var jsonExactLocal = IL.DeclareLocal(jsonExactType);
+                var numberResult = IL.DeclareLocal(_ctx.Types.Double);
+                var jsonFallback = IL.DefineLabel();
+                var jsonEnd = IL.DefineLabel();
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, jsonExactType);
+                IL.Emit(OpCodes.Stloc, jsonExactLocal);
+                IL.Emit(OpCodes.Ldloc, jsonExactLocal);
+                IL.Emit(OpCodes.Brfalse, jsonFallback);
+                IL.Emit(OpCodes.Ldloc, jsonExactLocal);
+                IL.Emit(OpCodes.Callvirt,
+                    _ctx.Runtime.JsonScalarRecordIsMaterializedGetter);
+                IL.Emit(OpCodes.Brtrue, jsonFallback);
+                if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
+                {
+                    IL.Emit(OpCodes.Ldloc, jsonExactLocal);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                    IL.Emit(OpCodes.Brtrue, jsonFallback);
+                }
+                IL.Emit(OpCodes.Ldloc, jsonExactLocal);
+                IL.Emit(OpCodes.Ldfld, jsonExactValueField);
+                IL.Emit(OpCodes.Stloc, numberResult);
+                IL.Emit(OpCodes.Br, jsonEnd);
+                IL.MarkLabel(jsonFallback);
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.ConvertToNumber);
+                IL.Emit(OpCodes.Stloc, numberResult);
+                IL.MarkLabel(jsonEnd);
+                IL.Emit(OpCodes.Ldloc, numberResult);
+                SetStackType(StackType.Double);
+                return;
+            }
+            else if (scalarIndex >= 0 &&
                 _ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(
                     fingerprint, out var exactType) &&
                 _ctx.Runtime.CompactObjectRecordValueFields.TryGetValue(

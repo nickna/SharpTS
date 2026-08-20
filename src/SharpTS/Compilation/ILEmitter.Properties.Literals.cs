@@ -234,8 +234,8 @@ public partial class ILEmitter
             record.Fields.Count != literal.Properties.Count)
             return false;
 
-        if (!_ctx.RuntimeFeatures.JsonScalarRecordShapeFingerprints.Contains(
-            JsonSerializationShapeAnalyzer.Fingerprint(record)))
+        string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(record);
+        if (!_ctx.RuntimeFeatures.JsonScalarRecordShapeFingerprints.Contains(fingerprint))
             return false;
 
         for (int i = 0; i < literal.Properties.Count; i++)
@@ -250,7 +250,32 @@ public partial class ILEmitter
         var shapeField = Emitters.JSONStaticEmitter.GetOrDefineShapeField(_ctx, record);
         Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
             _ctx, record, shapeField, closed: true);
-        if (_ctx.Runtime!.JsonScalarRecordInlineCtors.TryGetValue(
+        if (_ctx.Runtime!.JsonTypedScalarRecordCtors.TryGetValue(
+                fingerprint, out var typedCtor))
+        {
+            for (int index = 0; index < literal.Properties.Count; index++)
+            {
+                var property = literal.Properties[index];
+                EmitExpression(property.Value);
+                switch (record.Fields[index].Value)
+                {
+                    case JsonSerializationShape.Number:
+                        EnsureDouble();
+                        break;
+                    case JsonSerializationShape.Boolean:
+                        EnsureBoolean();
+                        break;
+                    case JsonSerializationShape.String:
+                        EnsureString();
+                        break;
+                    default:
+                        EmitBoxIfNeeded(property.Value);
+                        break;
+                }
+            }
+            IL.Emit(OpCodes.Newobj, typedCtor);
+        }
+        else if (_ctx.Runtime.JsonScalarRecordInlineCtors.TryGetValue(
             literal.Properties.Count, out var inlineCtor))
         {
             foreach (var property in literal.Properties)
