@@ -20,8 +20,10 @@ public partial class RuntimeEmitter
         if (_registerJsonShapeMethod is not null && _tryGetJsonShapeMethod is not null)
             return (_registerJsonShapeMethod, _tryGetJsonShapeMethod);
 
-        var tableType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>)
-            .MakeGenericType(_types.String, _types.Object);
+        var tableType = EmitGenerics.MakeGenericType(
+            typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>),
+            _types.String,
+            _types.Object);
         _jsonShapeTableField = typeBuilder.DefineField(
             "_jsonShapes", tableType, FieldAttributes.Private | FieldAttributes.Static);
 
@@ -40,11 +42,12 @@ public partial class RuntimeEmitter
         getIl.Emit(OpCodes.Ldsflda, _jsonShapeTableField);
         getIl.Emit(OpCodes.Newobj, tableType.GetConstructor(Type.EmptyTypes)!);
         getIl.Emit(OpCodes.Ldnull);
-        var compareExchange = typeof(System.Threading.Interlocked).GetMethods()
+        var compareExchangeDefinition = typeof(System.Threading.Interlocked).GetMethods()
             .Single(candidate => candidate.Name == "CompareExchange" &&
                 candidate.IsGenericMethodDefinition &&
-                candidate.GetParameters().Length == 3)
-            .MakeGenericMethod(tableType);
+                candidate.GetParameters().Length == 3);
+        var compareExchange = EmitGenerics.MakeGenericMethod(
+            compareExchangeDefinition, tableType);
         getIl.Emit(OpCodes.Call, compareExchange);
         getIl.Emit(OpCodes.Pop);
         getIl.Emit(OpCodes.Ldsfld, _jsonShapeTableField);
