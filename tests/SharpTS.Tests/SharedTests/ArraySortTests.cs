@@ -116,6 +116,33 @@ public class ArraySortTests
     }
 
     [Theory, ModeData]
+    public void Array_Sort_SimplePropertyComparator_PreservesObservableGets(
+        ExecutionMode mode)
+    {
+        var source = """
+            let reads: string[] = [];
+            let high: any = { name: "high" };
+            let low: any = { name: "low" };
+            Object.defineProperty(high, "key", {
+                get(): number { reads.push("high"); return 2; },
+                configurable: true
+            });
+            Object.defineProperty(low, "key", {
+                get(): number { reads.push("low"); return 1; },
+                configurable: true
+            });
+
+            let items: any[] = [high, low];
+            items.sort((a: any, b: any): number => a.key - b.key);
+            console.log(items[0].name + "," + items[1].name);
+            console.log(reads.length > 0);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("low,high\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void Array_Sort_ComparatorReceivesUndefinedThis(ExecutionMode mode)
     {
         var source = """
