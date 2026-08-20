@@ -651,6 +651,13 @@ public partial class ILEmitter
             if (f.Initializer != null)
                 EmitStatement(f.Initializer);
 
+            // A tightly-proven `for (let i = 0; i < n; i++) a.push(pureValue)`
+            // can reserve its boxed-array storage once. This removes geometric
+            // growth (and the 16,384-slot LOH allocation at n=10,000) without
+            // evaluating any user expression early; unsupported runtime shapes
+            // and unbounded/NaN counts simply retain normal List<T> growth.
+            EmitCountedPushReservation(f);
+
             // Per-iteration reference cells (#650): for a loop binding that the body
             // both mutates and a closure captures, wrap its initial value in a fresh
             // StrongBox and route all body/condition/increment access through the cell
@@ -728,6 +735,55 @@ public partial class ILEmitter
                 _ctx.IntegerCounterLocals.Remove(activeIntCounter);
             _integerLoopCounterName = savedIntCounterName;
         }
+    }
+
+    private void EmitCountedPushReservation(Stmt.For loop)
+    {
+        if (!CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation))
+            return;
+
+        var arrayLocal = _ctx.Locals.GetLocal(reservation.Array.Name.Lexeme);
+        if (arrayLocal is null)
+            return;
+
+        var listType = _ctx.Types.ListOfObject;
+        var listLocal = IL.DeclareLocal(listType);
+        var countLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var skipLabel = _ctx.ILBuilder.DefineLabel("counted_push_reserve_skip");
+
+        IL.Emit(OpCodes.Ldloc, arrayLocal);
+        if (arrayLocal.LocalType != listType)
+            IL.Emit(OpCodes.Isinst, listType);
+        IL.Emit(OpCodes.Stloc, listLocal);
+        IL.Emit(OpCodes.Ldloc, listLocal);
+        _ctx.ILBuilder.Emit_Brfalse(skipLabel);
+
+        SetStackUnknown();
+        EmitExpression(reservation.Bound);
+        EnsureDouble();
+        IL.Emit(OpCodes.Stloc, countLocal);
+
+        // Bound eager allocation to one million elements. The unordered branch
+        // form also rejects NaN; ceiling covers finite fractional upper bounds.
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, skipLabel);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
+        IL.Emit(OpCodes.Bgt_Un, skipLabel);
+
+        IL.Emit(OpCodes.Ldloc, listLocal);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+            listType,
+            "EnsureCapacity",
+            [_ctx.Types.Int32])!);
+        IL.Emit(OpCodes.Pop);
+
+        _ctx.ILBuilder.MarkLabel(skipLabel);
+        SetStackUnknown();
     }
 
     protected override void EmitIf(Stmt.If i)
