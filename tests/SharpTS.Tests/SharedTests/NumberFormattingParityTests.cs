@@ -62,6 +62,20 @@ public class NumberFormattingParityTests
     }
 
     [Theory, ModeData]
+    public void IntegerConcat_PreservesOrderSignAndNegativeZero(ExecutionMode mode)
+    {
+        var source = """
+            console.log("item-" + 42);
+            console.log("item-" + -42);
+            console.log(42 + "-item");
+            console.log("zero-" + -0);
+            """;
+        Assert.Equal(
+            "item-42\nitem--42\n42-item\nzero-0\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void JsonStringify_PrecisionAndSpecials(ExecutionMode mode)
     {
         // NaN/Infinity serialize as null; everything else uses Number::toString.

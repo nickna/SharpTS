@@ -1,54 +1,128 @@
+using System.Buffers;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using SharpTS.Runtime.Types;
 
 namespace SharpTS.Runtime;
 
 /// <summary>
-/// Single authoritative conversion from <see cref="JsonElement"/> trees to SharpTS runtime
-/// values (<see cref="SharpTSArray"/> / <see cref="SharpTSObject"/>, doubles, strings, bools,
-/// null). Shared by JSON.parse, fetch Request/Response bodies, and IPC deserialization.
-/// Exception translation stays at each caller (JSON.parse throws its syntax error; body
-/// readers reject their promise) — callers wrap <see cref="Parse"/> in their own try/catch.
-/// The compiled-standalone converter in Compilation/RuntimeTypes.Json.cs is intentionally
-/// separate: it produces List/Dictionary shapes and must not depend on SharpTS runtime types.
+/// One-pass JSON parser for interpreter runtime values. The parser writes
+/// directly into <see cref="SharpTSArray"/> and <see cref="SharpTSObject"/>
+/// nodes instead of materializing a <see cref="JsonDocument"/> DOM first.
 /// </summary>
 internal static class RuntimeJson
 {
-    /// <summary>Parses JSON text into SharpTS runtime values. Throws <see cref="JsonException"/> on invalid input.</summary>
+    private const int MaxCachedPropertyNames = 64;
+
+    /// <summary>
+    /// Parses JSON text into SharpTS runtime values. Throws
+    /// <see cref="JsonException"/> on invalid input.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static object? Parse(string text)
     {
-        using var doc = JsonDocument.Parse(text);
-        return FromElement(doc.RootElement);
+        int byteCount = Encoding.UTF8.GetByteCount(text);
+        byte[] rented = ArrayPool<byte>.Shared.Rent(Math.Max(byteCount, 1));
+        try
+        {
+            int written = Encoding.UTF8.GetBytes(
+                text.AsSpan(), rented.AsSpan(0, byteCount));
+            var reader = new Utf8JsonReader(
+                rented.AsSpan(0, written),
+                isFinalBlock: true,
+                state: default);
+            if (!reader.Read())
+                throw new JsonException("Expected a JSON value.");
+
+            var propertyNames = new List<string>(8);
+            object? result = ParseValue(ref reader, propertyNames);
+            if (reader.Read())
+                throw new JsonException("Additional text follows the JSON value.");
+            return result;
+        }
+        finally
+        {
+            // ArrayPool.Shared has bounded buckets and rejects oversized arrays;
+            // the parse never retains workload-sized buffers itself.
+            ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+        }
     }
 
-    /// <summary>Recursively converts a <see cref="JsonElement"/> to SharpTS runtime values.</summary>
-    public static object? FromElement(JsonElement element)
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static object? ParseValue(
+        ref Utf8JsonReader reader,
+        List<string> propertyNames)
     {
-        return element.ValueKind switch
+        return reader.TokenType switch
         {
-            JsonValueKind.Null => null,
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Number => element.GetDouble(),
-            JsonValueKind.String => element.GetString(),
-            JsonValueKind.Array => new SharpTSArray(
-                element.EnumerateArray().Select(FromElement).ToList()),
-            JsonValueKind.Object => FromObject(element),
-            _ => null
+            JsonTokenType.StartObject => ParseObject(ref reader, propertyNames),
+            JsonTokenType.StartArray => ParseArray(ref reader, propertyNames),
+            JsonTokenType.String => reader.GetString(),
+            JsonTokenType.Number => reader.GetDouble(),
+            JsonTokenType.True => true,
+            JsonTokenType.False => false,
+            JsonTokenType.Null => null,
+            _ => throw new JsonException(
+                $"Unexpected JSON token {reader.TokenType}.")
         };
     }
 
-    private static SharpTSObject FromObject(JsonElement element)
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static SharpTSObject ParseObject(
+        ref Utf8JsonReader reader,
+        List<string> propertyNames)
     {
         var fields = new Dictionary<string, object?>();
-        foreach (var property in element.EnumerateObject())
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
-            // JSON permits duplicate names. JSON.parse keeps the last value,
-            // including for "__proto__", which is an ordinary data property
-            // here rather than object-literal prototype syntax.
-            fields[property.Name] = FromElement(property.Value);
+            if (reader.TokenType != JsonTokenType.PropertyName)
+                throw new JsonException("Expected a JSON property name.");
+
+            string propertyName = GetCachedPropertyName(
+                ref reader, propertyNames);
+            if (!reader.Read())
+                throw new JsonException("Expected a JSON property value.");
+
+            // Duplicate names overwrite the value but retain the first
+            // insertion position, matching JSON.parse and the previous DOM
+            // conversion path. "__proto__" remains an ordinary data property.
+            fields[propertyName] = ParseValue(ref reader, propertyNames);
         }
 
+        if (reader.TokenType != JsonTokenType.EndObject)
+            throw new JsonException("Unexpected end of JSON object.");
         return new SharpTSObject(fields);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private static SharpTSArray ParseArray(
+        ref Utf8JsonReader reader,
+        List<string> propertyNames)
+    {
+        var result = new SharpTSArray();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+            result.Add(ParseValue(ref reader, propertyNames));
+
+        if (reader.TokenType != JsonTokenType.EndArray)
+            throw new JsonException("Unexpected end of JSON array.");
+        return result;
+    }
+
+    private static string GetCachedPropertyName(
+        ref Utf8JsonReader reader,
+        List<string> propertyNames)
+    {
+        foreach (string candidate in propertyNames)
+        {
+            if (reader.ValueTextEquals(candidate))
+                return candidate;
+        }
+
+        string propertyName = reader.GetString()
+            ?? throw new JsonException("A JSON property name was null.");
+        if (propertyNames.Count < MaxCachedPropertyNames)
+            propertyNames.Add(propertyName);
+        return propertyName;
     }
 }

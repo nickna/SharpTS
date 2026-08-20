@@ -26,7 +26,7 @@ public partial class RuntimeEmitter
         // }
         il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, EmitJsonParseHelper(typeBuilder));
+        il.Emit(OpCodes.Call, EmitJsonParseHelper(typeBuilder, runtime));
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Leave, endLabel);
 
@@ -53,7 +53,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
-    private MethodBuilder EmitJsonParseHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonParseHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Parse JSON using RuntimeTypes helper
         var method = typeBuilder.DefineMethod(
@@ -64,26 +64,35 @@ public partial class RuntimeEmitter
         );
 
         var il = method.GetILGenerator();
+        var shapeLocal = il.DeclareLocal(_types.Object);
+        var (_, tryGetShape) = EmitJsonShapeAssociationHelpers(typeBuilder);
 
-        // Call RuntimeTypes.JsonParse directly - this method exists in the emitted assembly
+        // Carry a weakly associated closed shape only when the exact string
+        // instance came from the guarded shaped serializer.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, EmitJsonParseStaticHelper(typeBuilder));
+        il.Emit(OpCodes.Ldloca, shapeLocal);
+        il.Emit(OpCodes.Call, tryGetShape);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Call, EmitJsonParseStaticHelper(typeBuilder, runtime));
         il.Emit(OpCodes.Ret);
 
         return method;
     }
 
-    private MethodBuilder EmitJsonParseStaticHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitJsonParseStaticHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var validateControlChars = EmitJsonValidateControlChars(typeBuilder);
-        var parseValue = EmitParseValueFromReaderHelper(typeBuilder);
+        var parseValue = EmitParseValueFromReaderHelper(typeBuilder, runtime);
 
         var method = typeBuilder.DefineMethod(
             "ParseJsonValue",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Object,
-            [_types.Object]
+            [_types.Object, _types.Object]
         );
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
 
         var il = method.GetILGenerator();
 
@@ -97,18 +106,25 @@ public partial class RuntimeEmitter
         // — standalone DLLs stay standalone. The token decoders (GetString/GetDouble)
         // are the SAME engine JsonDocument used, so the produced values are identical.
         var readerType = typeof(System.Text.Json.Utf8JsonReader);
+        var encodingType = typeof(System.Text.Encoding);
+        var bytePoolType = typeof(System.Buffers.ArrayPool<byte>);
+        var propertyNamesType = typeof(List<string>);
         var strLocal = il.DeclareLocal(_types.String);
         var bytesLocal = il.DeclareLocal(typeof(byte[]));
+        var byteCountLocal = il.DeclareLocal(_types.Int32);
+        var encodingLocal = il.DeclareLocal(encodingType);
         var optionsLocal = il.DeclareLocal(typeof(System.Text.Json.JsonReaderOptions));
         var readerLocal = il.DeclareLocal(readerType);
+        var propertyNamesLocal = il.DeclareLocal(propertyNamesType);
         var resultLocal = il.DeclareLocal(_types.Object);
         var notNullLabel = il.DefineLabel();
         var gotTokenLabel = il.DefineLabel();
+        var parsedLabel = il.DefineLabel();
         var okEndLabel = il.DefineLabel();
 
         // if (arg == null) return null;
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Brfalse_S, notNullLabel);
+        il.Emit(OpCodes.Brfalse, notNullLabel);
 
         // str = arg.ToString();
         il.Emit(OpCodes.Ldarg_0);
@@ -121,21 +137,56 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, strLocal);
         il.Emit(OpCodes.Call, validateControlChars);
 
-        // bytes = Encoding.UTF8.GetBytes(str)
-        il.Emit(OpCodes.Call, typeof(System.Text.Encoding).GetProperty("UTF8")!.GetGetMethod()!);
+        // encoding = Encoding.UTF8;
+        // byteCount = encoding.GetByteCount(str);
+        // bytes = ArrayPool<byte>.Shared.Rent(Math.Max(byteCount, 1));
+        il.Emit(OpCodes.Call, encodingType.GetProperty("UTF8")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, encodingLocal);
+        il.Emit(OpCodes.Ldloc, encodingLocal);
         il.Emit(OpCodes.Ldloc, strLocal);
-        il.Emit(OpCodes.Callvirt, typeof(System.Text.Encoding).GetMethod("GetBytes", [typeof(string)])!);
+        il.Emit(OpCodes.Callvirt, encodingType.GetMethod("GetByteCount", [typeof(string)])!);
+        il.Emit(OpCodes.Stloc, byteCountLocal);
+        il.Emit(OpCodes.Call, bytePoolType.GetProperty("Shared")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, byteCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, typeof(Math).GetMethod("Max", [typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Callvirt, bytePoolType.GetMethod("Rent", [typeof(int)])!);
         il.Emit(OpCodes.Stloc, bytesLocal);
 
-        // reader = new Utf8JsonReader((ReadOnlySpan<byte>)bytes, default)
+        // Return the bounded shared buffer even when transcoding or parsing throws.
+        il.BeginExceptionBlock();
+
+        // encoding.GetBytes(str, 0, str.Length, bytes, 0)
+        il.Emit(OpCodes.Ldloc, encodingLocal);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, encodingType.GetMethod(
+            "GetBytes",
+            [typeof(string), typeof(int), typeof(int), typeof(byte[]), typeof(int)])!);
+        il.Emit(OpCodes.Pop);
+
+        // reader = new Utf8JsonReader(new ReadOnlySpan<byte>(bytes, 0, byteCount), default)
         il.Emit(OpCodes.Ldloca, optionsLocal);
         il.Emit(OpCodes.Initobj, typeof(System.Text.Json.JsonReaderOptions));
         il.Emit(OpCodes.Ldloca, readerLocal);
         il.Emit(OpCodes.Ldloc, bytesLocal);
-        il.Emit(OpCodes.Call, typeof(ReadOnlySpan<byte>).GetMethod("op_Implicit", [typeof(byte[])])!);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, byteCountLocal);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<byte>).GetConstructor(
+            [typeof(byte[]), typeof(int), typeof(int)])!);
         il.Emit(OpCodes.Ldloc, optionsLocal);
         il.Emit(OpCodes.Call, readerType.GetConstructor(
             [typeof(ReadOnlySpan<byte>), typeof(System.Text.Json.JsonReaderOptions)])!);
+
+        // Reuse repeated property-name strings within this document. The cache is
+        // deliberately small and parse-scoped so it cannot retain user data.
+        il.Emit(OpCodes.Ldc_I4_8);
+        il.Emit(OpCodes.Newobj, propertyNamesType.GetConstructor([typeof(int)])!);
+        il.Emit(OpCodes.Stloc, propertyNamesLocal);
 
         // if (!reader.Read()) throw  — empty input is not a valid JSON document.
         il.Emit(OpCodes.Ldloca, readerLocal);
@@ -146,8 +197,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Throw);
 
         il.MarkLabel(gotTokenLabel);
-        // result = ParseValueFromReader(ref reader)
+        // result = ParseValueFromReader(ref reader, propertyNames)
         il.Emit(OpCodes.Ldloca, readerLocal);
+        il.Emit(OpCodes.Ldloc, propertyNamesLocal);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, parseValue);
         il.Emit(OpCodes.Stloc, resultLocal);
 
@@ -155,10 +208,22 @@ public partial class RuntimeEmitter
         // trailing token is a SyntaxError (matches JsonDocument.Parse).
         il.Emit(OpCodes.Ldloca, readerLocal);
         il.Emit(OpCodes.Call, readerType.GetMethod("Read", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Brfalse, okEndLabel);
+        il.Emit(OpCodes.Brfalse, parsedLabel);
         il.Emit(OpCodes.Ldstr, "Unexpected non-whitespace character after JSON");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
         il.Emit(OpCodes.Throw);
+
+        il.MarkLabel(parsedLabel);
+        il.Emit(OpCodes.Leave, okEndLabel);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Call, bytePoolType.GetProperty("Shared")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, bytePoolType.GetMethod(
+            "Return",
+            [typeof(byte[]), typeof(bool)])!);
+        il.EndExceptionBlock();
 
         il.MarkLabel(okEndLabel);
         il.Emit(OpCodes.Ldloc, resultLocal);
@@ -319,7 +384,8 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits <c>object? ParseValueFromReader(ref Utf8JsonReader reader)</c>: a recursive
+    /// Emits <c>object? ParseValueFromReader(ref Utf8JsonReader reader,
+    /// List&lt;string&gt; propertyNames)</c>: a recursive
     /// descent that consumes the value at the reader's current position and returns the
     /// runtime graph node for it — <c>Dictionary&lt;string,object?&gt;</c> for objects,
     /// <c>List&lt;object?&gt;</c> for arrays, a boxed double / bool, a string, or null.
@@ -329,26 +395,41 @@ public partial class RuntimeEmitter
     /// JsonDocument walker produced, so the resulting graph (consumed by the reviver and
     /// everything downstream) is byte-for-byte the same.
     /// </summary>
-    private MethodBuilder EmitParseValueFromReaderHelper(TypeBuilder typeBuilder)
+    private MethodBuilder EmitParseValueFromReaderHelper(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
     {
         var readerType = typeof(System.Text.Json.Utf8JsonReader);
+        var propertyNamesType = typeof(List<string>);
         var readMethod = readerType.GetMethod("Read", Type.EmptyTypes)!;
         var tokenTypeGetter = readerType.GetProperty("TokenType")!.GetGetMethod()!;
         var getStringMethod = readerType.GetMethod("GetString", Type.EmptyTypes)!;
         var getDoubleMethod = readerType.GetMethod("GetDouble", Type.EmptyTypes)!;
+        var getPropertyName = EmitJsonPropertyNameHelper(typeBuilder);
 
         var method = typeBuilder.DefineMethod(
             "ParseValueFromReader",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Object,
-            [readerType.MakeByRefType()]
+            [readerType.MakeByRefType(), propertyNamesType, _types.Object]
         );
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
 
         var il = method.GetILGenerator();
 
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         var nameLocal = il.DeclareLocal(_types.String);
+        var shapeLocal = il.DeclareLocal(_types.ObjectArray);
+        var childShapeLocal = il.DeclareLocal(_types.Object);
+        var parsedValueLocal = il.DeclareLocal(_types.Object);
+        var shapeIndexLocal = il.DeclareLocal(_types.Int32);
+        var valueIndexLocal = il.DeclareLocal(_types.Int32);
+        var valueCountLocal = il.DeclareLocal(_types.Int32);
+        var overflowValuesLocal = il.DeclareLocal(_types.ObjectArray);
+        var valueLocals = Enumerable.Range(0, 4)
+            .Select(_ => il.DeclareLocal(_types.Object))
+            .ToArray();
 
         var objectLabel = il.DefineLabel();
         var arrayLabel = il.DefineLabel();
@@ -357,6 +438,7 @@ public partial class RuntimeEmitter
         var trueLabel = il.DefineLabel();
         var falseLabel = il.DefineLabel();
         var nullLabel = il.DefineLabel();
+        var shapedObjectLabel = il.DefineLabel();
 
         // switch (reader.TokenType) — same dup/Beq ladder shape as the old DOM walker.
         il.Emit(OpCodes.Ldarg_0);
@@ -392,6 +474,23 @@ public partial class RuntimeEmitter
         // --- Object: { (PropertyName value)* } ---
         il.MarkLabel(objectLabel);
         il.Emit(OpCodes.Pop); // pop tokenType
+        var genericObjectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.ObjectArray);
+        il.Emit(OpCodes.Stloc, shapeLocal);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Brfalse, genericObjectLabel);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldstr, "$O");
+        // Shape tags are emitted ldstr literals in this module. Reference
+        // identity is therefore exact, verifier-safe, and avoids a checked
+        // cast plus string equality for every parsed record.
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, shapedObjectLabel);
+
+        il.MarkLabel(genericObjectLabel);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Stloc, dictLocal);
 
@@ -406,9 +505,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, tokenTypeGetter);
         il.Emit(OpCodes.Ldc_I4, (int)System.Text.Json.JsonTokenType.EndObject);
         il.Emit(OpCodes.Beq, objEnd);
-        // name = reader.GetString() (current token is the property name)
+        // name = GetJsonPropertyName(ref reader, propertyNames)
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, getStringMethod);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, getPropertyName);
         il.Emit(OpCodes.Stloc, nameLocal);
         // reader.Read() → the value's first token
         il.Emit(OpCodes.Ldarg_0);
@@ -418,6 +518,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, nameLocal);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, method); // recursive
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object]));
         il.Emit(OpCodes.Br, objLoop);
@@ -426,9 +528,147 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
 
+        // --- Closed shaped object: parse directly into fixed scalar slots. ---
+        il.MarkLabel(shapedObjectLabel);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Div);
+        il.Emit(OpCodes.Stloc, valueCountLocal);
+        var fixedValues = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueCountLocal);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Ble, fixedValues);
+        il.Emit(OpCodes.Ldloc, valueCountLocal);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, overflowValuesLocal);
+        il.MarkLabel(fixedValues);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, shapeIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, valueIndexLocal);
+
+        var shapedLoop = il.DefineLabel();
+        var shapedEnd = il.DefineLabel();
+        var shapedMismatch = il.DefineLabel();
+        il.MarkLabel(shapedLoop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, readMethod);
+        il.Emit(OpCodes.Brfalse, shapedEnd);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, tokenTypeGetter);
+        il.Emit(OpCodes.Ldc_I4, (int)System.Text.Json.JsonTokenType.EndObject);
+        il.Emit(OpCodes.Beq, shapedEnd);
+        // The shape association is identity-based on the immutable string, but
+        // retain an allocation-free key check as a corruption guard.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldloc, shapeIndexLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Call, readerType.GetMethod("ValueTextEquals", [typeof(string)])!);
+        il.Emit(OpCodes.Brfalse, shapedMismatch);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, readMethod);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldloc, shapeIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Call, method);
+        il.Emit(OpCodes.Stloc, parsedValueLocal);
+
+        var overflowStore = il.DefineLabel();
+        var storedValue = il.DefineLabel();
+        var storeLabels = valueLocals.Select(_ => il.DefineLabel()).ToArray();
+        il.Emit(OpCodes.Ldloc, overflowValuesLocal);
+        il.Emit(OpCodes.Brtrue, overflowStore);
+        il.Emit(OpCodes.Ldloc, valueIndexLocal);
+        il.Emit(OpCodes.Switch, storeLabels);
+        il.Emit(OpCodes.Br, shapedMismatch);
+        for (int index = 0; index < valueLocals.Length; index++)
+        {
+            il.MarkLabel(storeLabels[index]);
+            il.Emit(OpCodes.Ldloc, parsedValueLocal);
+            il.Emit(OpCodes.Stloc, valueLocals[index]);
+            il.Emit(OpCodes.Br, storedValue);
+        }
+        il.MarkLabel(overflowStore);
+        il.Emit(OpCodes.Ldloc, overflowValuesLocal);
+        il.Emit(OpCodes.Ldloc, valueIndexLocal);
+        il.Emit(OpCodes.Ldloc, parsedValueLocal);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.MarkLabel(storedValue);
+        il.Emit(OpCodes.Ldloc, shapeIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, shapeIndexLocal);
+        il.Emit(OpCodes.Ldloc, valueIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, valueIndexLocal);
+        il.Emit(OpCodes.Br, shapedLoop);
+
+        il.MarkLabel(shapedEnd);
+        il.Emit(OpCodes.Ldloc, valueIndexLocal);
+        il.Emit(OpCodes.Ldloc, valueCountLocal);
+        il.Emit(OpCodes.Bne_Un, shapedMismatch);
+        var overflowConstruct = il.DefineLabel();
+        var constructLabels = Enumerable.Range(0, 4)
+            .Select(_ => il.DefineLabel()).ToArray();
+        il.Emit(OpCodes.Ldloc, overflowValuesLocal);
+        il.Emit(OpCodes.Brtrue, overflowConstruct);
+        il.Emit(OpCodes.Ldloc, valueCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Switch, constructLabels);
+        il.Emit(OpCodes.Br, shapedMismatch);
+        for (int arity = 1; arity <= 4; arity++)
+        {
+            il.MarkLabel(constructLabels[arity - 1]);
+            il.Emit(OpCodes.Ldloc, shapeLocal);
+            for (int index = 0; index < arity; index++)
+                il.Emit(OpCodes.Ldloc, valueLocals[index]);
+            il.Emit(OpCodes.Newobj, runtime.JsonScalarRecordInlineCtors[arity]);
+            il.Emit(OpCodes.Ret);
+        }
+        il.MarkLabel(overflowConstruct);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldloc, overflowValuesLocal);
+        il.Emit(OpCodes.Newobj, runtime.JsonScalarRecordCtor);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(shapedMismatch);
+        il.Emit(OpCodes.Ldstr, "JSON shape association mismatch");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
+        il.Emit(OpCodes.Throw);
+
         // --- Array: [ value* ] ---
         il.MarkLabel(arrayLabel);
         il.Emit(OpCodes.Pop); // pop tokenType
+        var arrayShapeReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.ObjectArray);
+        il.Emit(OpCodes.Stloc, shapeLocal);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Brfalse, arrayShapeReady);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Ldstr, "$A");
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, arrayShapeReady);
+        il.Emit(OpCodes.Ldloc, shapeLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, childShapeLocal);
+        il.MarkLabel(arrayShapeReady);
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
         il.Emit(OpCodes.Stloc, listLocal);
 
@@ -446,6 +686,8 @@ public partial class RuntimeEmitter
         // list.Add(ParseValueFromReader(ref reader))
         il.Emit(OpCodes.Ldloc, listLocal);
         il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, childShapeLocal);
         il.Emit(OpCodes.Call, method); // recursive
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object]));
         il.Emit(OpCodes.Br, arrLoop);
@@ -485,6 +727,83 @@ public partial class RuntimeEmitter
         // --- Null / None / unhandled ---
         il.MarkLabel(nullLabel);
         il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+
+        return method;
+    }
+
+    /// <summary>
+    /// Emits a bounded, per-parse property-name cache. <c>ValueTextEquals</c>
+    /// compares the reader's UTF-8 token without allocating a candidate string,
+    /// so record arrays reuse the first materialized "id" / "label" instances.
+    /// </summary>
+    private MethodBuilder EmitJsonPropertyNameHelper(TypeBuilder typeBuilder)
+    {
+        var readerType = typeof(System.Text.Json.Utf8JsonReader);
+        var propertyNamesType = typeof(List<string>);
+        var method = typeBuilder.DefineMethod(
+            "GetJsonPropertyName",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.String,
+            [readerType.MakeByRefType(), propertyNamesType]
+        );
+
+        var il = method.GetILGenerator();
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var candidateLocal = il.DeclareLocal(_types.String);
+        var nameLocal = il.DeclareLocal(_types.String);
+        var loopLabel = il.DefineLabel();
+        var missLabel = il.DefineLabel();
+        var returnCandidateLabel = il.DefineLabel();
+        var returnNameLabel = il.DefineLabel();
+        var countGetter = propertyNamesType.GetProperty("Count")!.GetGetMethod()!;
+
+        // for (int i = 0; i < propertyNames.Count; i++)
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.MarkLabel(loopLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, countGetter);
+        il.Emit(OpCodes.Bge, missLabel);
+
+        // candidate = propertyNames[i];
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, propertyNamesType.GetMethod("get_Item", [typeof(int)])!);
+        il.Emit(OpCodes.Stloc, candidateLocal);
+
+        // if (reader.ValueTextEquals(candidate)) return candidate;
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, candidateLocal);
+        il.Emit(OpCodes.Call, readerType.GetMethod("ValueTextEquals", [typeof(string)])!);
+        il.Emit(OpCodes.Brtrue, returnCandidateLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loopLabel);
+
+        // string name = reader.GetString()!;
+        // if (propertyNames.Count < 64) propertyNames.Add(name);
+        il.MarkLabel(missLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, readerType.GetMethod("GetString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, nameLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, countGetter);
+        il.Emit(OpCodes.Ldc_I4, 64);
+        il.Emit(OpCodes.Bge, returnNameLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Callvirt, propertyNamesType.GetMethod("Add", [typeof(string)])!);
+
+        il.MarkLabel(returnNameLabel);
+        il.Emit(OpCodes.Ldloc, nameLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(returnCandidateLabel);
+        il.Emit(OpCodes.Ldloc, candidateLocal);
         il.Emit(OpCodes.Ret);
 
         return method;

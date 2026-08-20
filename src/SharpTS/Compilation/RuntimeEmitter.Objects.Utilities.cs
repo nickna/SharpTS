@@ -226,7 +226,9 @@ public partial class RuntimeEmitter
     /// _fields PLUS getter-resolved entries from _getters (accessor properties
     /// invoked via InvokeMethodValue with obj as \`this\`). For non-\$Object
     /// receivers (including null and \$IHasFields user classes), returns the
-    /// receiver's Fields dict directly. Used by JSON.stringify to honor the
+    /// receiver's Fields dict directly when it has no property descriptors;
+    /// descriptor-bearing receivers are projected through GetKeys/GetProperty.
+    /// Used by JSON.stringify to honor the
     /// ECMA-262 25.5.2.4 spec rule that EnumerableOwnPropertyNames covers both
     /// data and accessor properties.
     /// </summary>
@@ -343,6 +345,59 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         var nullReturnLabel = il.DefineLabel();
         il.Emit(OpCodes.Brfalse, nullReturnLabel);
+
+        // Compact JSON records retain ordinary-object descriptor semantics.
+        // Once a descriptor is installed, create an enumerable snapshot so
+        // hidden properties are filtered and accessors are invoked.
+        var directFieldsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+        il.Emit(OpCodes.Brfalse, directFieldsLabel);
+
+        var descriptorResultLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var descriptorKeysLocal = il.DeclareLocal(_types.ListOfObject);
+        var descriptorIndexLocal = il.DeclareLocal(_types.Int32);
+        var descriptorKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stloc, descriptorResultLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Stloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, descriptorIndexLocal);
+
+        var descriptorLoopLabel = il.DefineLabel();
+        var descriptorDoneLabel = il.DefineLabel();
+        il.MarkLabel(descriptorLoopLabel);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Ldloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, descriptorDoneLabel);
+        il.Emit(OpCodes.Ldloc, descriptorKeysLocal);
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ListOfObject, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Stloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldloc, descriptorResultLocal);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, descriptorKeyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        il.Emit(OpCodes.Ldloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, descriptorIndexLocal);
+        il.Emit(OpCodes.Br, descriptorLoopLabel);
+
+        il.MarkLabel(descriptorDoneLabel);
+        il.Emit(OpCodes.Ldloc, descriptorResultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(directFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);

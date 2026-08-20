@@ -156,7 +156,10 @@ public partial class RuntimeEmitter
         EmitTSObjectClass(moduleBuilder, runtime);
 
         if (features.UsesJSON)
+        {
+            EmitJsonScalarRecordClass(moduleBuilder, runtime);
             EmitTSRawJsonClass(moduleBuilder, runtime);
+        }
 
         // Emit $RegExp class for standalone regex support — gated on UsesRegExp.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSRegExp

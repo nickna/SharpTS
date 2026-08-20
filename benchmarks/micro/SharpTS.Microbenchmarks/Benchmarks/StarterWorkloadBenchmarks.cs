@@ -2,6 +2,7 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Order;
 using SharpTS.Execution;
 using SharpTS.Microbenchmarks.Baselines;
+using SharpTS.Microbenchmarks.Infrastructure;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -95,7 +96,7 @@ public class JsonImportedModulePhaseBenchmarks : ComputationalBenchmarkBase
     private Func<double, double> _parse = null!;
     private Func<double, double> _roundTrip = null!;
 
-    [Params(1000)]
+    [Params(1000, 10000)]
     public int N { get; set; }
 
     [GlobalSetup]
@@ -205,6 +206,41 @@ public class JsonInterpreterPhaseBenchmarks
         var tokens = new Lexer(source).ScanTokens();
         return new Parser(tokens).ParseOrThrow();
     }
+}
+
+/// <summary>
+/// Interpreter counterpart to <see cref="JsonImportedModulePhaseBenchmarks"/>.
+/// Module resolution, type checking, realm creation, and module execution occur
+/// in setup; measured calls retain the imported live binding and capturing arrow
+/// callback used by the exact cross-runtime workload.
+/// </summary>
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class JsonImportedModuleInterpreterPhaseBenchmarks : IDisposable
+{
+    private InterpretedJsonModuleBenchmark _benchmark = null!;
+
+    [Params(1000, 10000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup() => _benchmark = InterpretedJsonModuleBenchmark.Create();
+
+    [Benchmark(Baseline = true)]
+    public double Build() => _benchmark.Build(N);
+
+    [Benchmark]
+    public double BuildAndStringify() => _benchmark.Stringify(N);
+
+    [Benchmark]
+    public double BuildStringifyAndParse() => _benchmark.Parse(N);
+
+    [Benchmark]
+    public double FullRoundTrip() => _benchmark.RoundTrip(N);
+
+    [GlobalCleanup]
+    public void Dispose() => _benchmark?.Dispose();
 }
 
 [MemoryDiagnoser]

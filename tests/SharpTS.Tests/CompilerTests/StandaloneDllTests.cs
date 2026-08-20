@@ -174,6 +174,59 @@ public class StandaloneDllTests
         }
     }
 
+    [Fact]
+    public void Isolated_JsonParse_ShouldExecuteWithoutSharpTsDll()
+    {
+        var source = """
+            const parsed: any[] = JSON.parse(
+                '[{"id":1,"label":"a"},{"\\u0069d":2,"label":"b"}]');
+            console.log(parsed[0].id, parsed[1].id, parsed[1].label);
+            """;
+
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), r => r == "SharpTS");
+            Assert.Equal("1 2 b\n", ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    [Fact]
+    public void Isolated_ShapedJsonRoundTrip_ShouldExecuteWithoutSharpTsDll()
+    {
+        var source = """
+            const payload: {
+                items: { id: number; label: string; note: null }[]
+            } = {
+                items: [{ id: 1, label: "a", note: null }]
+            };
+            const json: string = JSON.stringify(payload);
+            const parsed: any = JSON.parse(json);
+            console.log(json);
+            console.log(parsed.items[0].id, parsed.items[0].label,
+                parsed.items[0].note === null);
+            """;
+
+        var (tempDir, dllPath) = CompileStandalone(source);
+        try
+        {
+            Assert.DoesNotContain(
+                GetAssemblyReferences(dllPath), r => r == "SharpTS");
+            Assert.Equal(
+                "{\"items\":[{\"id\":1,\"label\":\"a\",\"note\":null}]}\n" +
+                "1 a true\n",
+                ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000));
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
     /// <summary>
     /// Broader sibling of <see cref="CompiledDll_ShouldNotReferenceSharpTsAssembly"/>: the trivial
     /// program there only exercises one code path. This compiles a battery of diverse language

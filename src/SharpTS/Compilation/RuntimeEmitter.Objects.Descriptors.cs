@@ -1405,6 +1405,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(accessorCleanupNotTSObject);
 
+        if (runtime.JsonScalarRecordType is not null)
+        {
+            var accessorCleanupNotScalar = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Brfalse, accessorCleanupNotScalar);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "set_Item"));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(accessorCleanupNotScalar);
+        }
+
         var accessorCleanupNotArrayIndex = il.DefineLabel();
         var accessorArrayIndexLocal = il.DeclareLocal(_types.UInt32);
         il.Emit(OpCodes.Ldarg_0);
@@ -1654,6 +1672,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "set_Item", _types.Int32, _types.Object));
         il.Emit(OpCodes.Br, endLabel);
         il.MarkLabel(notListIdxLabel);
+
+        // The compact scalar carrier is an ordinary object whose canonical
+        // mutable representation is its lazily materialized Fields dictionary.
+        // Apply data descriptors there just as for $Object/dictionary targets.
+        if (runtime.JsonScalarRecordType is not null)
+        {
+            var notScalarForValueLabel = il.DefineLabel();
+            var scalarFieldsLocal =
+                il.DeclareLocal(_types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Brfalse, notScalarForValueLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+            il.Emit(OpCodes.Stloc, scalarFieldsLocal);
+            var scalarDoWriteLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, wasGenericLocal);
+            il.Emit(OpCodes.Brfalse, scalarDoWriteLabel);
+            il.Emit(OpCodes.Ldloc, scalarFieldsLocal);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "ContainsKey", _types.String));
+            il.Emit(OpCodes.Brtrue, endLabel);
+            il.MarkLabel(scalarDoWriteLabel);
+            il.Emit(OpCodes.Ldloc, scalarFieldsLocal);
+            il.Emit(OpCodes.Ldloc, propNameLocal);
+            il.Emit(OpCodes.Ldloc, valueToWriteLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.DictionaryStringObject, "set_Item"));
+            il.Emit(OpCodes.Br, endLabel);
+            il.MarkLabel(notScalarForValueLabel);
+        }
 
         // Also write the value to $Object._fields when target is $Object.
         // Same generic-skip semantics as the dict path.

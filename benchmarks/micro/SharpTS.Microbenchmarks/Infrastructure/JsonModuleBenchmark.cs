@@ -15,20 +15,32 @@ internal static class JsonModuleBenchmark
         "SharpTS.Microbenchmarks.TypeScriptSources.BenchmarkCallback.ts";
     private const string DriverResource =
         "SharpTS.Microbenchmarks.TypeScriptSources.JsonBenchmarkDriver.ts";
+    private const string InterpreterBridgeResource =
+        "SharpTS.Microbenchmarks.TypeScriptSources.JsonInterpreterBridge.ts";
 
     internal static readonly HashSet<string> ModuleOnlyResources =
-        [CallbackResource, DriverResource];
+        [CallbackResource, DriverResource, InterpreterBridgeResource];
 
     internal static string Compile(string assemblyName)
         => CompilationCache.GetOrCompileModules(
             LoadSources(), "json-driver.ts", assemblyName);
 
-    private static Dictionary<string, string> LoadSources() => new()
+    internal static Dictionary<string, string> LoadSources(
+        bool includeInterpreterBridge = false)
     {
-        ["algorithms.ts"] = ReadResource(AlgorithmsResource),
-        ["benchmark-callback.ts"] = ReadResource(CallbackResource),
-        ["json-driver.ts"] = ReadResource(DriverResource),
-    };
+        var sources = new Dictionary<string, string>
+        {
+            ["algorithms.ts"] = ReadResource(AlgorithmsResource),
+            ["benchmark-callback.ts"] = ReadResource(CallbackResource),
+            ["json-driver.ts"] = ReadResource(DriverResource),
+        };
+        if (includeInterpreterBridge)
+        {
+            sources["json-interpreter-bridge.ts"] =
+                ReadResource(InterpreterBridgeResource);
+        }
+        return sources;
+    }
 
     private static string ReadResource(string name)
     {

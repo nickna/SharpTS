@@ -16,6 +16,13 @@ namespace SharpTS.Compilation;
 /// </summary>
 public sealed class RuntimeFeatureSet
 {
+    /// <summary>
+    /// Closed record shapes reachable from a direct, one-argument
+    /// <c>JSON.stringify</c> call. Object-literal emission uses this allow-list
+    /// to keep the compact JSON carrier out of unrelated object graphs.
+    /// </summary>
+    internal HashSet<string> JsonScalarRecordShapeFingerprints { get; } = [];
+
     // ── Network family ────────────────────────────────────────────────────
     public bool UsesNet { get; set; } = true;       // 'net' module / NetServer / NetSocket
     public bool UsesHttp { get; set; } = true;      // 'http'/'https' module / HttpServer

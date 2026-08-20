@@ -428,6 +428,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Beq, errorPrototypeLookupLabel);
         il.MarkLabel(notPlainTSObjectLabel);
 
+        // A compact JSON record is an ordinary object, not a class instance:
+        // own slots win, but an own miss must continue through its mutable
+        // [[Prototype]] chain. General IHasFields instances return immediately
+        // because their class lookup is handled by the generated carrier.
+        if (runtime.JsonScalarRecordType is not null)
+        {
+            var notScalarRecordLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Brfalse, notScalarRecordLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+            il.Emit(OpCodes.Brfalse, errorPrototypeLookupLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notScalarRecordLabel);
+        }
+
         // Check $IHasFields interface (covers user-defined classes and $Object subclasses with typed properties)
         var notHasFieldsLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

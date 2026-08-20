@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation.Emitters;
 
@@ -64,6 +65,16 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                 return true;
 
             case "stringify":
+                JsonSerializationShape? staticShape = null;
+                FieldBuilder? shapeField = null;
+                if (arguments.Count == 1 && ctx.ProgramType is not null &&
+                    JsonSerializationShapeAnalyzer.TryAnalyze(
+                        ctx.TypeMap?.Get(arguments[0]), out var analyzedShape))
+                {
+                    staticShape = analyzedShape;
+                    shapeField = GetOrDefineShapeField(ctx, analyzedShape);
+                }
+
                 // Arg 0: value (required)
                 if (arguments.Count > 0)
                 {
@@ -94,7 +105,17 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 else
                 {
-                    il.Emit(OpCodes.Call, ctx.Runtime!.JsonStringify);
+                    if (staticShape is not null && shapeField is not null)
+                    {
+                        bool closedShape = JsonSerializationShapeAnalyzer.IsClosed(staticShape);
+                        EmitLazyShapeDescriptor(ctx, staticShape, shapeField, closedShape);
+                        il.Emit(closedShape ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+                        il.Emit(OpCodes.Call, ctx.Runtime!.JsonStringifyShaped);
+                    }
+                    else
+                    {
+                        il.Emit(OpCodes.Call, ctx.Runtime!.JsonStringify);
+                    }
                 }
                 return true;
 
@@ -170,4 +191,103 @@ public sealed class JSONStaticEmitter : IStaticTypeEmitterStrategy
 
     public bool HasStaticProperty(string memberName) =>
         memberName is "parse" or "stringify" or "rawJSON" or "isRawJSON";
+
+    internal static FieldBuilder GetOrDefineShapeField(
+        CompilationContext ctx,
+        JsonSerializationShape shape)
+    {
+        string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(shape);
+        if (ctx.Runtime!.JsonShapeFields.TryGetValue(fingerprint, out var field))
+            return field;
+
+        field = ctx.ProgramType!.DefineField(
+            $"$jsonShape_{ctx.Runtime.JsonShapeFields.Count}",
+            ctx.Types.Object,
+            FieldAttributes.Assembly | FieldAttributes.Static);
+        ctx.Runtime.JsonShapeFields.Add(fingerprint, field);
+        return field;
+    }
+
+    internal static void EmitLazyShapeDescriptor(
+        CompilationContext ctx,
+        JsonSerializationShape shape,
+        FieldBuilder field,
+        bool closed)
+    {
+        var il = ctx.IL;
+        var ready = il.DefineLabel();
+        il.Emit(OpCodes.Ldsfld, field);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, ready);
+        il.Emit(OpCodes.Pop);
+        EmitShapeDescriptor(il, ctx, shape, closed);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stsfld, field);
+        il.MarkLabel(ready);
+    }
+
+    private static void EmitShapeDescriptor(
+        ILGenerator il,
+        CompilationContext ctx,
+        JsonSerializationShape shape,
+        bool closed)
+    {
+        switch (shape)
+        {
+            case JsonSerializationShape.Generic:
+                il.Emit(OpCodes.Ldstr, "$g");
+                return;
+            case JsonSerializationShape.Number:
+                il.Emit(OpCodes.Ldstr, closed ? "$N" : "$n");
+                return;
+            case JsonSerializationShape.String:
+                il.Emit(OpCodes.Ldstr, closed ? "$S" : "$s");
+                return;
+            case JsonSerializationShape.Boolean:
+                il.Emit(OpCodes.Ldstr, closed ? "$B" : "$b");
+                return;
+            case JsonSerializationShape.Array array:
+                il.Emit(OpCodes.Ldc_I4_2);
+                il.Emit(OpCodes.Newarr, ctx.Types.Object);
+                EmitArraySlot(il, 0, () => il.Emit(OpCodes.Ldstr, closed ? "$A" : "$a"));
+                EmitArraySlot(il, 1, () => EmitShapeReference(il, ctx, array.Element, closed));
+                return;
+            case JsonSerializationShape.Record record:
+                il.Emit(OpCodes.Ldc_I4, 1 + record.Fields.Count * 2);
+                il.Emit(OpCodes.Newarr, ctx.Types.Object);
+                EmitArraySlot(il, 0, () => il.Emit(OpCodes.Ldstr, closed ? "$O" : "$o"));
+                for (int i = 0; i < record.Fields.Count; i++)
+                {
+                    var field = record.Fields[i];
+                    EmitArraySlot(il, 1 + i * 2, () => il.Emit(OpCodes.Ldstr, field.Key));
+                    EmitArraySlot(il, 2 + i * 2,
+                        () => EmitShapeReference(il, ctx, field.Value, closed));
+                }
+                return;
+        }
+
+        void EmitArraySlot(ILGenerator generator, int index, Action emitValue)
+        {
+            generator.Emit(OpCodes.Dup);
+            generator.Emit(OpCodes.Ldc_I4, index);
+            emitValue();
+            generator.Emit(OpCodes.Stelem_Ref);
+        }
+    }
+
+    private static void EmitShapeReference(
+        ILGenerator il,
+        CompilationContext ctx,
+        JsonSerializationShape shape,
+        bool closed)
+    {
+        if (shape is JsonSerializationShape.Record or JsonSerializationShape.Array)
+        {
+            var field = GetOrDefineShapeField(ctx, shape);
+            EmitLazyShapeDescriptor(ctx, shape, field, closed);
+            return;
+        }
+
+        EmitShapeDescriptor(il, ctx, shape, closed);
+    }
 }

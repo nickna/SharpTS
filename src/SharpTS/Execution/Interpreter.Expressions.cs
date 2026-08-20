@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Parsing.Visitors;
@@ -537,11 +538,11 @@ public partial class Interpreter
     /// <summary>
     /// Applies a property key-value pair to the target fields dictionaries (sync version).
     /// </summary>
-    private void ApplyPropertyToFields(
+    private Dictionary<SharpTSSymbol, object?>? ApplyPropertyToFields(
         Expr.PropertyKey key,
         object? value,
         Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields)
+        Dictionary<SharpTSSymbol, object?>? symbolFields)
     {
         switch (key)
         {
@@ -557,25 +558,27 @@ public partial class Interpreter
             case Expr.ComputedKey ck:
                 object? keyValue = Evaluate(ck.Expression);
                 if (keyValue is SharpTSSymbol sym)
-                    symbolFields[sym] = value;
+                    (symbolFields ??= [])[sym] = value;
                 else if (keyValue is double numKey)
                     stringFields[numKey.ToString()] = value;
                 else
                     stringFields[keyValue?.ToString() ?? "undefined"] = value;
                 break;
         }
+        return symbolFields;
     }
 
     /// <summary>
     /// Applies a property key-value pair to the target fields dictionaries using an evaluation context.
     /// Shared between sync and async paths via IEvaluationContext.
     /// </summary>
-    private async ValueTask ApplyPropertyToFieldsCore(
+    private async ValueTask<Dictionary<SharpTSSymbol, object?>?>
+        ApplyPropertyToFieldsCore(
         IEvaluationContext ctx,
         Expr.PropertyKey key,
         object? value,
         Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields)
+        Dictionary<SharpTSSymbol, object?>? symbolFields)
     {
         switch (key)
         {
@@ -591,13 +594,14 @@ public partial class Interpreter
             case Expr.ComputedKey ck:
                 object? keyValue = (await ctx.EvaluateExprAsync(ck.Expression)).ToObject();
                 if (keyValue is SharpTSSymbol sym)
-                    symbolFields[sym] = value;
+                    (symbolFields ??= [])[sym] = value;
                 else if (keyValue is double numKey)
                     stringFields[numKey.ToString()] = value;
                 else
                     stringFields[keyValue?.ToString() ?? "undefined"] = value;
                 break;
         }
+        return symbolFields;
     }
 
     /// <summary>
@@ -609,7 +613,7 @@ public partial class Interpreter
     private async ValueTask<object?> EvaluateObjectCore(IEvaluationContext ctx, Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
-        Dictionary<SharpTSSymbol, object?> symbolFields = [];
+        Dictionary<SharpTSSymbol, object?>? symbolFields = null;
         List<(object key, ISharpTSCallable getter)>? getters = null;
         List<(object key, ISharpTSCallable setter)>? setters = null;
 
@@ -637,7 +641,8 @@ public partial class Interpreter
             else
             {
                 object? value = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
-                await ApplyPropertyToFieldsCore(ctx, prop.Key!, value, stringFields, symbolFields);
+                symbolFields = await ApplyPropertyToFieldsCore(
+                    ctx, prop.Key!, value, stringFields, symbolFields);
             }
         }
 
@@ -687,7 +692,7 @@ public partial class Interpreter
     private RuntimeValue EvaluateObject(Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
-        Dictionary<SharpTSSymbol, object?> symbolFields = [];
+        Dictionary<SharpTSSymbol, object?>? symbolFields = null;
         List<(object key, ISharpTSCallable getter)>? getters = null;
         List<(object key, ISharpTSCallable setter)>? setters = null;
 
@@ -715,7 +720,8 @@ public partial class Interpreter
             else
             {
                 object? value = Evaluate(prop.Value);
-                ApplyPropertyToFields(prop.Key!, value, stringFields, symbolFields);
+                symbolFields = ApplyPropertyToFields(
+                    prop.Key!, value, stringFields, symbolFields);
             }
         }
 
@@ -890,6 +896,7 @@ public partial class Interpreter
     /// <param name="obj">The object being indexed.</param>
     /// <param name="index">The index value.</param>
     /// <returns>An IndexTarget discriminated union representing the resolved target.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private IndexTarget ResolveIndexTarget(object? obj, object? index)
     {
         if (obj is SharpTSArray array)
@@ -950,8 +957,23 @@ public partial class Interpreter
     /// Supports array element access and enum reverse mapping (numeric value to name).
     /// </remarks>
     /// <seealso href="https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors#bracket_notation">MDN Bracket Notation</seealso>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGetIndex(Expr.GetIndex getIndex)
-        => EvaluateGetIndexCore(_syncContext, getIndex).GetAwaiter().GetResult();
+    {
+        // Avoid an async state machine for synchronous indexed reads. This is
+        // the inner path for record-array traversal such as back[i].value.
+        object? obj = Evaluate(getIndex.Object);
+        if (getIndex.Optional
+            && obj is null or Runtime.Types.SharpTSUndefined)
+        {
+            return RuntimeValue.Undefined;
+        }
+
+        return PerformIndexGet(
+            getIndex.Object,
+            obj,
+            Evaluate(getIndex.Index));
+    }
 
     /// <summary>
     /// Core indexed-read logic shared by the sync and async evaluators.
@@ -977,6 +999,7 @@ public partial class Interpreter
     /// receiver expression, needed only to synthesize a Get for the dot-notation
     /// fallback path.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue PerformIndexGet(Expr objectExpr, object? obj, object? index)
     {
         // ECMA-262 §13.3.3 RequireObjectCoercible: a bracket read on a nullish base
@@ -1011,6 +1034,25 @@ public partial class Interpreter
                 return RuntimeValue.FromBoxed(proxy.TrapGet(symbol, this));
             string key = index?.ToString() ?? "";
             return proxy.TrapGetRV(key, this);
+        }
+
+        // A present ordinary array element shadows every prototype property.
+        // Take that exact case before the generic symbol/property-key target
+        // resolver (which otherwise allocates and walks multiple dispatch
+        // layers). Holes and indexed accessors deliberately fall through.
+        if (obj is SharpTSArray directArray
+            && index is double directNumber
+            && double.IsFinite(directNumber)
+            && directNumber >= 0
+            && directNumber <= SharpTSArray.MaxWriteIndex
+            && Math.Truncate(directNumber) == directNumber)
+        {
+            long directIndex = (long)directNumber;
+            if (directArray.TryGetPresentDataIndex(
+                    directIndex, out object? directValue))
+            {
+                return RuntimeValue.FromBoxed(directValue);
+            }
         }
 
         if (obj is ISharpTSSymbolPropertyBag symbolBag
@@ -1272,6 +1314,7 @@ public partial class Interpreter
         return EvaluateGetOnFallback(prototype, key);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue GetArrayIndexValue(SharpTSArray array, long index)
     {
         // Arguments objects are array-like, not Array exotic objects. Adding an

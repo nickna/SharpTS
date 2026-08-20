@@ -11,6 +11,7 @@ using SharpTS.Runtime.Exceptions;
 using SharpTS.Runtime.Types;
 using SharpTS.TypeSystem;
 using System.Collections.Frozen;
+using System.Runtime.CompilerServices;
 using System.Threading;
 
 namespace SharpTS.Execution;
@@ -1770,7 +1771,57 @@ public partial class Interpreter
         // Drain labels parked by an enclosing labeled statement before running the initializer,
         // so `continue <label>`/`break <label>` resolve to this loop (#558).
         var labels = TakePendingLoopLabels();
-        return ExecuteForCore(_syncContext, forStmt, labels).GetAwaiter().GetResult();
+        return ExecuteForSync(forStmt, labels);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
+    private ExecutionResult ExecuteForSync(
+        Stmt.For forStmt,
+        IReadOnlyList<string>? labels)
+    {
+        RuntimeEnvironment loopEnv = new(_environment);
+        using (PushScope(loopEnv))
+        {
+            if (forStmt.Initializer is not null)
+                Execute(forStmt.Initializer);
+
+            List<string>? perIterationNames =
+                CollectPerIterationBindings(forStmt.Initializer);
+            if (perIterationNames is not null)
+                CreatePerIterationEnvironment(loopEnv, perIterationNames);
+
+            while (forStmt.Condition is null
+                || EvaluateRV(forStmt.Condition).IsTruthy())
+            {
+                ExecutionResult result = Execute(forStmt.Body);
+                var (shouldBreak, shouldContinue, abruptResult) =
+                    HandleLoopResult(result, labels);
+                if (shouldBreak)
+                    break;
+
+                if (shouldContinue)
+                {
+                    if (perIterationNames is not null)
+                        CreatePerIterationEnvironment(
+                            loopEnv, perIterationNames);
+                    if (forStmt.Increment is not null)
+                        EvaluateRV(forStmt.Increment);
+                    Thread.Sleep(0);
+                    continue;
+                }
+
+                if (abruptResult.HasValue)
+                    return abruptResult.Value;
+
+                if (perIterationNames is not null)
+                    CreatePerIterationEnvironment(loopEnv, perIterationNames);
+                if (forStmt.Increment is not null)
+                    EvaluateRV(forStmt.Increment);
+                ProcessPendingCallbacks();
+            }
+
+            return ExecutionResult.Success();
+        }
     }
 
     /// <summary>

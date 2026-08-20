@@ -639,7 +639,7 @@ public partial class ILCompiler
         _isStrictMode = Parsing.DirectivePrologue.HasUseStrict(statements);
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
-        _features ??= new RuntimeFeatureDetector().Detect(statements);
+        _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
         return statements;
     }
 
@@ -1294,7 +1294,7 @@ public partial class ILCompiler
         if (_features is null)
         {
             var detector = new RuntimeFeatureDetector();
-            _features = detector.Detect(allStatements);
+            _features = detector.Detect(allStatements, _typeMap);
             if (modules.Any(module => module.IsCommonJs))
                 _features.UsesCjsRequire = true;
         }

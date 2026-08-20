@@ -547,6 +547,152 @@ public class JSONTests
     }
 
     [Theory, ModeData]
+    public void JSON_Parse_OrdinaryTraversalRetainsAccessorAndPrototypeFallbacks(
+        ExecutionMode mode)
+    {
+        var source = """
+            const parsed: any = JSON.parse('{"value":7}');
+            console.log(parsed.value);
+
+            Object.defineProperty(parsed, "other", {
+                get: function (): number { return 9; },
+                enumerable: true,
+                configurable: true
+            });
+            console.log(parsed.value, parsed.other);
+
+            const inherited: any = Object.create(parsed);
+            console.log(inherited.value);
+
+            const callable: any = JSON.parse('{"value":11}');
+            callable.read = function (): number { return this.value; };
+            console.log(callable.read());
+            """;
+
+        Assert.Equal("7\n7 9\n7\n11\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void JSON_Parse_RepeatedAndEscapedPropertyNamesRetainSemantics(
+        ExecutionMode mode)
+    {
+        var source = """
+            const parsed: any[] = JSON.parse(
+                '[{"id":1,"label":"a"},{"\\u0069d":2,"label":"b"},{"id":3,"id":4}]');
+            console.log(parsed[0].id, parsed[1].id, parsed[2].id);
+            console.log(Object.keys(parsed[1]).join(","));
+            console.log(Object.keys(parsed[2]).join(","));
+            """;
+
+        Assert.Equal("1 2 4\nid,label\nid\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void JSON_ShapedRecord_FallsBackForObservableMutations(
+        ExecutionMode mode)
+    {
+        var source = """
+            const hidden: { a: number; b: number } = { a: 1, b: 2 };
+            Object.defineProperty(hidden, "a", {
+                value: 9, enumerable: false, configurable: true
+            });
+            console.log(JSON.stringify(hidden));
+
+            const inherited: { a: number } = { a: 4 };
+            Object.setPrototypeOf(inherited, {
+                toJSON: function (): any { return { hooked: this.a + 1 }; }
+            });
+            console.log(JSON.stringify(inherited));
+
+            const extended: { a: number } = { a: 1 };
+            (extended as any).z = 3;
+            console.log(JSON.stringify(extended));
+
+            const reordered: { a: number; b: number } = { a: 1, b: 2 };
+            const dynamic: any = reordered;
+            delete dynamic.a;
+            dynamic.a = 7;
+            console.log(JSON.stringify(reordered));
+
+            const ownHook: { a: number } = { a: 6 };
+            (ownHook as any).toJSON = function (): any {
+                return { custom: this.a };
+            };
+            console.log(JSON.stringify(ownHook));
+            """;
+
+        Assert.Equal(
+            "{\"b\":2}\n" +
+            "{\"hooked\":5}\n" +
+            "{\"a\":1,\"z\":3}\n" +
+            "{\"b\":2,\"a\":7}\n" +
+            "{\"custom\":6}\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void JSON_CompactRecord_RetainsOrdinaryObjectSemantics(
+        ExecutionMode mode)
+    {
+        var source = """
+            const record: { a: number; b: string; c: boolean; d: null } = {
+                a: 1, b: "x", c: true, d: null
+            };
+            console.log(record.a, record.b, record.c, record.d === null);
+            record.a = 8;
+            const dynamic: any = record;
+            delete dynamic.b;
+            Object.defineProperty(dynamic, "e", {
+                value: 5, enumerable: true, configurable: true
+            });
+            console.log(Object.keys(record).join(","));
+            console.log(JSON.stringify(record));
+            """;
+
+        Assert.Equal(
+            "1 x true true\n" +
+            "a,c,d,e\n" +
+            "{\"a\":8,\"c\":true,\"d\":null,\"e\":5}\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void JSON_ShapedRoundTrip_HandlesNestedAndNullSlots(
+        ExecutionMode mode)
+    {
+        var source = """
+            const payload: {
+                items: { id: number; label: string; active: boolean; note: null }[]
+            } = {
+                items: [
+                    { id: 1, label: "a", active: true, note: null },
+                    { id: 2, label: "b", active: false, note: null }
+                ]
+            };
+            const json: string = JSON.stringify(payload);
+            const shaped: any = JSON.parse(json);
+            const copied: string = (" " + json).slice(1);
+            const generic: any = JSON.parse(copied);
+            console.log(shaped.items[0].id, shaped.items[1].label,
+                shaped.items[0].note === null);
+            console.log(generic.items[0].id, generic.items[1].label,
+                generic.items[1].note === null);
+            shaped.items[0].id = 9;
+            Object.defineProperty(shaped.items[1], "extra", {
+                value: 3, enumerable: true, configurable: true
+            });
+            console.log(JSON.stringify(shaped));
+            """;
+
+        Assert.Equal(
+            "1 b true\n" +
+            "1 b true\n" +
+            "{\"items\":[{\"id\":9,\"label\":\"a\",\"active\":true,\"note\":null}," +
+            "{\"id\":2,\"label\":\"b\",\"active\":false,\"note\":null,\"extra\":3}]}\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void JSON_Stringify_KeySnapshotSurvivesGetterMutation(
         ExecutionMode mode)
     {

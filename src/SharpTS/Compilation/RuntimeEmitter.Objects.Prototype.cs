@@ -588,6 +588,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, tryGetValue!);
         il.Emit(OpCodes.Brtrue, foundInLocalLabel);
 
+        // The compact JSON scalar carrier implements IHasFields for ordinary
+        // object operations, but it is not a user class instance. Its default
+        // [[Prototype]] is %Object.prototype% just like a dictionary literal.
+        if (runtime.JsonScalarRecordType is not null)
+        {
+            var notScalarRecord = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Brfalse, notScalarRecord);
+            il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notScalarRecord);
+        }
+
         // An emitted class instance inherits from the stable object surfaced
         // as Constructor.prototype. Prototype objects themselves have an
         // explicit PDS entry installed by GetClassPrototype, so they return
@@ -1068,6 +1082,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notClassInstanceLabel);
+        if (runtime.JsonScalarRecordType is not null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, notClassInstanceLabel);

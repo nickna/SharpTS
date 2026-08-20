@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -28,6 +29,7 @@ namespace SharpTS.Compilation;
 public sealed class RuntimeFeatureDetector
 {
     private readonly RuntimeFeatureSet _set;
+    private TypeMap? _typeMap;
 
     public RuntimeFeatureDetector()
     {
@@ -84,8 +86,9 @@ public sealed class RuntimeFeatureDetector
         };
     }
 
-    public RuntimeFeatureSet Detect(List<Stmt> statements)
+    public RuntimeFeatureSet Detect(List<Stmt> statements, TypeMap? typeMap = null)
     {
+        _typeMap = typeMap;
         foreach (var stmt in statements)
             VisitStmt(stmt);
 
@@ -793,6 +796,20 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (_typeMap is not null
+                    && c.Arguments.Count == 1
+                    && c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "JSON" },
+                        Name.Lexeme: "stringify",
+                        Optional: false
+                    }
+                    && JsonSerializationShapeAnalyzer.TryAnalyze(
+                        _typeMap.Get(c.Arguments[0]), out var jsonShape)
+                    && JsonSerializationShapeAnalyzer.IsClosed(jsonShape))
+                {
+                    CollectClosedJsonRecordShapes(jsonShape);
+                }
                 if (c.Arguments.Count > 0
                     && c.Callee is Expr.Get
                     {
@@ -1001,6 +1018,22 @@ public sealed class RuntimeFeatureDetector
 
             // Leaves with no nested expressions worth walking.
             default:
+                break;
+        }
+    }
+
+    private void CollectClosedJsonRecordShapes(JsonSerializationShape shape)
+    {
+        switch (shape)
+        {
+            case JsonSerializationShape.Record record:
+                _set.JsonScalarRecordShapeFingerprints.Add(
+                    JsonSerializationShapeAnalyzer.Fingerprint(record));
+                foreach (var (_, value) in record.Fields)
+                    CollectClosedJsonRecordShapes(value);
+                break;
+            case JsonSerializationShape.Array array:
+                CollectClosedJsonRecordShapes(array.Element);
                 break;
         }
     }
