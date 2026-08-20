@@ -37,6 +37,9 @@ public record struct HoistedArrayEntry(LocalBuilder TypedLocal, ArrayElementsDes
 /// </summary>
 public record struct HoistedTypedArrayEntry(LocalBuilder TypedLocal, Type XArrayType, string ElementType);
 
+public record struct HoistedCompactRecordEntry(
+    LocalBuilder TypedLocal, string Fingerprint);
+
 /// <summary>
 /// Holds compilation state passed between ILCompiler and ILEmitter.
 /// </summary>
@@ -77,6 +80,13 @@ public partial class CompilationContext
     // counters. Reads convert to double on load; the increment and recognized index sites consume
     // the int directly. Populated/cleared per loop scope by EmitFor/EmitVarStatement.
     public HashSet<string> IntegerCounterLocals { get; } = new();
+
+    /// <summary>
+    /// Function parameters whose exact compact-record type test was hoisted to
+    /// the prologue. Entries are limited to parameters never reassigned in the
+    /// body, so property reads may reuse the typed local safely.
+    /// </summary>
+    public Dictionary<string, HoistedCompactRecordEntry> HoistedCompactRecordParameters { get; } = [];
 
     // Emitted runtime types and methods (for standalone DLLs)
     public EmittedRuntime? Runtime { get; set; }

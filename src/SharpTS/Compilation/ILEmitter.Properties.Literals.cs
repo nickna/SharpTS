@@ -122,6 +122,12 @@ public partial class ILEmitter
                 return;
             }
 
+            if (TryEmitCompactObjectRecordLiteral(o))
+            {
+                SetStackUnknown();
+                return;
+            }
+
             // Simple case: no spreads, no computed keys. Drop the legacy
             // `Call CreateObject` no-op identity helper. Pre-size the
             // dictionary only when property count > 3: .NET's
@@ -268,6 +274,53 @@ public partial class ILEmitter
             }
             IL.Emit(OpCodes.Newobj, _ctx.Runtime.JsonScalarRecordCtor);
         }
+        return true;
+    }
+
+    /// <summary>
+    /// Emits a provably stable small plain object literal as an exact slot-backed CLR
+    /// carrier. Open and recursive record fields are supported, but mutation, export,
+    /// and escape through an unknown call retain the ordinary dictionary path.
+    /// </summary>
+    private bool TryEmitCompactObjectRecordLiteral(Expr.ObjectLiteral literal)
+    {
+        if (_ctx.RuntimeFeatures?.UsesCompactObjectRecords != true ||
+            _ctx.ProgramType is null || literal.Properties.Count is < 1 or > 4)
+            return false;
+
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var property in literal.Properties)
+        {
+            if (property.IsSpread || property.Kind is not Expr.ObjectPropertyKind.Value ||
+                property.Key is Expr.ComputedKey)
+                return false;
+
+            string key = GetPropertyKeyString(property.Key!);
+            if (key is "toJSON" or "valueOf" or "toString" || !names.Add(key) ||
+                uint.TryParse(key, System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture, out _))
+                return false;
+        }
+
+        if (!JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
+                literal, _ctx.TypeMap, out var record))
+            return false;
+
+        string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(record);
+        if (!_ctx.RuntimeFeatures.CanAssumeCompactObjectRecordIsUnmaterialized(
+                fingerprint))
+            return false;
+
+        if (!_ctx.Runtime!.CompactObjectRecordCtors.TryGetValue(
+                fingerprint, out var exactCtor))
+            return false;
+
+        foreach (var property in literal.Properties)
+        {
+            EmitExpression(property.Value);
+            EmitBoxIfNeeded(property.Value);
+        }
+        IL.Emit(OpCodes.Newobj, exactCtor);
         return true;
     }
 

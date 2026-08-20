@@ -395,9 +395,9 @@ public partial class ILEmitter
         EmitBoxIfNeeded(g.Object);
 
         var receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
-        LocalBuilder? scalarLocal = _ctx.RuntimeFeatures?.UsesJSON == true
-            ? IL.DeclareLocal(_ctx.Runtime!.JsonScalarRecordType)
-            : null;
+        bool hasCompactCarrier =
+            (_ctx.RuntimeFeatures?.UsesJSON == true ||
+             _ctx.RuntimeFeatures?.UsesCompactObjectRecords == true);
         var dictLocal = IL.DeclareLocal(_ctx.Types.DictionaryStringObject);
         var outLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, receiverLocal);
@@ -405,11 +405,11 @@ public partial class ILEmitter
         var fallbackLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
         var notFoundLabel = IL.DefineLabel();
+        bool exactCarrierSpecialized = false;
 
-        if (scalarLocal is not null && _ctx.ProgramType is not null &&
+        if (hasCompactCarrier && _ctx.ProgramType is not null &&
             JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) &&
-            analyzedShape is JsonSerializationShape.Record recordShape &&
-            JsonSerializationShapeAnalyzer.IsClosed(recordShape))
+            analyzedShape is JsonSerializationShape.Record recordShape)
         {
             int scalarIndex = -1;
             for (int index = 0; index < recordShape.Fields.Count; index++)
@@ -421,63 +421,129 @@ public partial class ILEmitter
                 }
             }
 
-            if (scalarIndex >= 0)
+            string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(recordShape);
+            if (scalarIndex >= 0 &&
+                _ctx.Runtime!.CompactObjectRecordTypes.TryGetValue(
+                    fingerprint, out var exactType) &&
+                _ctx.Runtime.CompactObjectRecordValueFields.TryGetValue(
+                    (fingerprint, scalarIndex), out var exactValueField) &&
+                _ctx.Runtime.CompactObjectRecordAnyMaterializedFields.TryGetValue(
+                    fingerprint, out var anyMaterializedField))
             {
+                exactCarrierSpecialized = true;
+                LocalBuilder exactLocal;
+                if (g.Object is Expr.Variable receiverVariable &&
+                    _ctx.HoistedCompactRecordParameters.TryGetValue(
+                        receiverVariable.Name.Lexeme, out var hoisted) &&
+                    hoisted.Fingerprint == fingerprint)
+                {
+                    exactLocal = hoisted.TypedLocal;
+                }
+                else
+                {
+                    exactLocal = IL.DeclareLocal(exactType);
+                    IL.Emit(OpCodes.Ldloc, receiverLocal);
+                    IL.Emit(OpCodes.Isinst, exactType);
+                    IL.Emit(OpCodes.Stloc, exactLocal);
+                }
+                IL.Emit(OpCodes.Ldloc, exactLocal);
+                IL.Emit(OpCodes.Brfalse, fallbackLabel);
+                if (!_ctx.RuntimeFeatures!.CanAssumeCompactObjectRecordIsUnmaterialized(
+                        fingerprint))
+                {
+                    IL.Emit(OpCodes.Ldsfld, anyMaterializedField);
+                    IL.Emit(OpCodes.Brtrue, fallbackLabel);
+                }
+                if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
+                {
+                    IL.Emit(OpCodes.Ldloc, exactLocal);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                    IL.Emit(OpCodes.Brtrue, fallbackLabel);
+                }
+                IL.Emit(OpCodes.Ldloc, exactLocal);
+                IL.Emit(OpCodes.Ldfld, exactValueField);
+                IL.Emit(OpCodes.Br, endLabel);
+            }
+            else if (scalarIndex >= 0 &&
+                _ctx.Runtime!.JsonScalarRecordInlineTypes.TryGetValue(
+                    recordShape.Fields.Count, out var inlineType) &&
+                _ctx.Runtime.JsonScalarRecordInlineGetters.TryGetValue(
+                    (recordShape.Fields.Count, scalarIndex), out var directGetter))
+            {
+                var inlineLocal = IL.DeclareLocal(inlineType);
                 var dictionaryLabel = IL.DefineLabel();
                 var shapeField = Emitters.JSONStaticEmitter.GetOrDefineShapeField(
                     _ctx, recordShape);
+                bool closed = JsonSerializationShapeAnalyzer.IsClosed(recordShape);
+                bool carrierTypeIdentifiesShape =
+                    _ctx.RuntimeFeatures!.HasUniqueCompactObjectRecordShape(
+                        recordShape.Fields.Count,
+                        JsonSerializationShapeAnalyzer.Fingerprint(recordShape));
                 IL.Emit(OpCodes.Ldloc, receiverLocal);
-                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.JsonScalarRecordType);
-                IL.Emit(OpCodes.Stloc, scalarLocal);
-                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Isinst, inlineType);
+                IL.Emit(OpCodes.Stloc, inlineLocal);
+                IL.Emit(OpCodes.Ldloc, inlineLocal);
                 IL.Emit(OpCodes.Brfalse, dictionaryLabel);
-                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Ldloc, inlineLocal);
                 IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordIsMaterializedGetter);
                 IL.Emit(OpCodes.Brtrue, fallbackLabel);
-                IL.Emit(OpCodes.Ldloc, scalarLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
-                IL.Emit(OpCodes.Brtrue, fallbackLabel);
-                IL.Emit(OpCodes.Ldloc, scalarLocal);
-                IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPrototypeEntry);
-                IL.Emit(OpCodes.Brtrue, fallbackLabel);
-                IL.Emit(OpCodes.Ldloc, scalarLocal);
-                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordShapeGetter);
-                Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
-                    _ctx, recordShape, shapeField, closed: true);
-                IL.Emit(OpCodes.Bne_Un, fallbackLabel);
-                IL.Emit(OpCodes.Ldloc, scalarLocal);
-                IL.Emit(OpCodes.Ldc_I4, scalarIndex);
-                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordGetValue);
+                // A descriptor can replace an own slot with an accessor, so programs
+                // that mention descriptor APIs retain the per-read PDS guard. When
+                // the whole-program detector proves those APIs absent, no descriptor
+                // entry can exist and the ConditionalWeakTable probe is dead weight.
+                if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true)
+                {
+                    IL.Emit(OpCodes.Ldloc, inlineLocal);
+                    IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                    IL.Emit(OpCodes.Brtrue, fallbackLabel);
+                }
+                // Prototype mutation cannot shadow this carrier's known own slot.
+                // Deletion or any write materializes the record first and is caught
+                // by IsMaterialized above, so a separate prototype-table lookup is
+                // unnecessary for this exact-shape read.
+                if (!carrierTypeIdentifiesShape)
+                {
+                    IL.Emit(OpCodes.Ldloc, inlineLocal);
+                    IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordShapeGetter);
+                    Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
+                        _ctx, recordShape, shapeField, closed);
+                    IL.Emit(OpCodes.Bne_Un, fallbackLabel);
+                }
+                IL.Emit(OpCodes.Ldloc, inlineLocal);
+                IL.Emit(OpCodes.Call, directGetter);
                 IL.Emit(OpCodes.Br, endLabel);
                 IL.MarkLabel(dictionaryLabel);
             }
         }
 
-        // dictLocal = receiver as Dictionary<string, object>
-        IL.Emit(OpCodes.Ldloc, receiverLocal);
-        IL.Emit(OpCodes.Isinst, _ctx.Types.DictionaryStringObject);
-        IL.Emit(OpCodes.Stloc, dictLocal);
-        IL.Emit(OpCodes.Ldloc, dictLocal);
-        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        if (!exactCarrierSpecialized)
+        {
+            // dictLocal = receiver as Dictionary<string, object>
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Isinst, _ctx.Types.DictionaryStringObject);
+            IL.Emit(OpCodes.Stloc, dictLocal);
+            IL.Emit(OpCodes.Ldloc, dictLocal);
+            IL.Emit(OpCodes.Brfalse, fallbackLabel);
 
-        // dict.TryGetValue(name, out value) ? value : $Undefined
-        IL.Emit(OpCodes.Ldloc, dictLocal);
-        IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
-        IL.Emit(OpCodes.Ldloca, outLocal);
-        var tryGetValue = _ctx.Types.GetMethod(
-            _ctx.Types.DictionaryStringObject,
-            "TryGetValue",
-            _ctx.Types.String,
-            _ctx.Types.Object.MakeByRefType());
-        IL.Emit(OpCodes.Callvirt, tryGetValue);
-        IL.Emit(OpCodes.Brfalse, notFoundLabel);
-        IL.Emit(OpCodes.Ldloc, outLocal);
-        IL.Emit(OpCodes.Br, endLabel);
+            // dict.TryGetValue(name, out value) ? value : $Undefined
+            IL.Emit(OpCodes.Ldloc, dictLocal);
+            IL.Emit(OpCodes.Ldstr, g.Name.Lexeme);
+            IL.Emit(OpCodes.Ldloca, outLocal);
+            var tryGetValue = _ctx.Types.GetMethod(
+                _ctx.Types.DictionaryStringObject,
+                "TryGetValue",
+                _ctx.Types.String,
+                _ctx.Types.Object.MakeByRefType());
+            IL.Emit(OpCodes.Callvirt, tryGetValue);
+            IL.Emit(OpCodes.Brfalse, notFoundLabel);
+            IL.Emit(OpCodes.Ldloc, outLocal);
+            IL.Emit(OpCodes.Br, endLabel);
 
-        IL.MarkLabel(notFoundLabel);
-        // ECMA-262: missing property reads as undefined.
-        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
-        IL.Emit(OpCodes.Br, endLabel);
+            IL.MarkLabel(notFoundLabel);
+            // ECMA-262: missing property reads as undefined.
+            IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.UndefinedInstance);
+            IL.Emit(OpCodes.Br, endLabel);
+        }
 
         IL.MarkLabel(fallbackLabel);
         IL.Emit(OpCodes.Ldloc, receiverLocal);

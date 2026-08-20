@@ -595,7 +595,7 @@ public partial class RuntimeEmitter
         {
             var notScalarRecord = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
             il.Emit(OpCodes.Brfalse, notScalarRecord);
             il.Emit(OpCodes.Ldsfld, runtime.ObjectPrototypeField);
             il.Emit(OpCodes.Ret);
@@ -1085,7 +1085,7 @@ public partial class RuntimeEmitter
         if (runtime.JsonScalarRecordType is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
             il.Emit(OpCodes.Brtrue, notClassInstanceLabel);
         }
         il.Emit(OpCodes.Ldarg_0);

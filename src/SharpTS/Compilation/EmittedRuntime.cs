@@ -916,8 +916,15 @@ public class EmittedRuntime
     /// </summary>
     public Dictionary<string, FieldBuilder> JsonShapeFields { get; } = [];
     public TypeBuilder JsonScalarRecordType { get; set; } = null!;
+    public Type CompactObjectRecordInterface { get; set; } = null!;
     public ConstructorBuilder JsonScalarRecordCtor { get; set; } = null!;
     public Dictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors { get; } = [];
+    public Dictionary<int, TypeBuilder> JsonScalarRecordInlineTypes { get; } = [];
+    public Dictionary<(int Arity, int Index), MethodBuilder> JsonScalarRecordInlineGetters { get; } = [];
+    public Dictionary<string, TypeBuilder> CompactObjectRecordTypes { get; } = [];
+    public Dictionary<string, ConstructorBuilder> CompactObjectRecordCtors { get; } = [];
+    public Dictionary<(string Fingerprint, int Index), FieldBuilder> CompactObjectRecordValueFields { get; } = [];
+    public Dictionary<string, FieldBuilder> CompactObjectRecordAnyMaterializedFields { get; } = [];
     public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordValuesGetter { get; set; } = null!;
     public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;

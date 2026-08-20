@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
@@ -29,6 +30,8 @@ namespace SharpTS.Compilation;
 public sealed class RuntimeFeatureDetector
 {
     private readonly RuntimeFeatureSet _set;
+    private readonly HashSet<string> _sourceFunctions = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _opaqueValueBindings = new(StringComparer.Ordinal);
     private TypeMap? _typeMap;
 
     public RuntimeFeatureDetector()
@@ -56,6 +59,7 @@ public sealed class RuntimeFeatureDetector
             UsesReflectMetadata = false,
             UsesCjsRequire = false,
             UsesJSON = false,
+            UsesCompactObjectRecords = false,
             UsesIntl = false,
             UsesReflect = false,
             UsesIteratorHelpers = false,
@@ -82,6 +86,7 @@ public sealed class RuntimeFeatureDetector
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
             UsesDatePrototypeMutation = false,
+            PotentiallyMaterializesUnknownCompactObjectRecordShape = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
         };
     }
@@ -89,6 +94,7 @@ public sealed class RuntimeFeatureDetector
     public RuntimeFeatureSet Detect(List<Stmt> statements, TypeMap? typeMap = null)
     {
         _typeMap = typeMap;
+        CollectStableSourceFunctionNames(statements);
         foreach (var stmt in statements)
             VisitStmt(stmt);
 
@@ -167,6 +173,11 @@ public sealed class RuntimeFeatureDetector
         if (_set.UsesAbortSignalAny)
         {
             _set.UsesAbortController = true;
+        }
+        if (_set.UsesDynamicImport || _set.UsesSourceExecution || _set.UsesVm ||
+            _set.UsesCjsRequire)
+        {
+            _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
         }
 
         return _set;
@@ -540,9 +551,35 @@ public sealed class RuntimeFeatureDetector
                 _set.UsesCjsRequire = true;
                 break;
             case Stmt.Export exp:
+                if (exp.Declaration is Stmt.Function exportedFunction && _typeMap is not null)
+                {
+                    var functionType = _typeMap.GetFunctionType(exportedFunction.Name.Lexeme);
+                    if (functionType is not null)
+                    {
+                        MarkPotentiallyMaterialized(functionType.ReturnType);
+                        foreach (var parameterType in functionType.ParamTypes)
+                            MarkPotentiallyMaterialized(parameterType);
+                    }
+                }
+                else if (exp.Declaration is Stmt.Var exportedVar && exportedVar.Initializer is not null)
+                {
+                    MarkPotentiallyMaterialized(exportedVar.Initializer);
+                }
+                else if (exp.Declaration is Stmt.Const exportedConst)
+                {
+                    MarkPotentiallyMaterialized(exportedConst.Initializer);
+                }
                 if (exp.Declaration is not null) VisitStmt(exp.Declaration);
-                if (exp.DefaultExpr is not null) VisitExpr(exp.DefaultExpr);
-                if (exp.ExportAssignment is not null) VisitExpr(exp.ExportAssignment);
+                if (exp.DefaultExpr is not null)
+                {
+                    MarkPotentiallyMaterialized(exp.DefaultExpr);
+                    VisitExpr(exp.DefaultExpr);
+                }
+                if (exp.ExportAssignment is not null)
+                {
+                    MarkPotentiallyMaterialized(exp.ExportAssignment);
+                    VisitExpr(exp.ExportAssignment);
+                }
                 break;
 
             case Stmt.Block block:
@@ -554,10 +591,17 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Var var:
-                if (var.Initializer is not null) VisitExpr(var.Initializer);
+                if (var.Initializer is not null)
+                {
+                    if (_opaqueValueBindings.Contains(var.Name.Lexeme))
+                        MarkPotentiallyMaterialized(var.Initializer);
+                    VisitExpr(var.Initializer);
+                }
                 break;
 
             case Stmt.Const cst:
+                if (_opaqueValueBindings.Contains(cst.Name.Lexeme))
+                    MarkPotentiallyMaterialized(cst.Initializer);
                 VisitExpr(cst.Initializer);
                 break;
 
@@ -762,6 +806,7 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Set s:
+                MarkMutationTarget(s.Object);
                 if (IsDatePrototype(s.Object))
                     _set.UsesDatePrototypeMutation = true;
                 if (s.Object is Expr.Variable osv)
@@ -788,6 +833,7 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(gi.Index);
                 break;
             case Expr.SetIndex si:
+                MarkMutationTarget(si.Object);
                 if (IsDatePrototype(si.Object))
                     _set.UsesDatePrototypeMutation = true;
                 VisitExpr(si.Object);
@@ -796,6 +842,24 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (c.Callee is not Expr.Variable directSourceCall ||
+                    !_sourceFunctions.Contains(directSourceCall.Name.Lexeme))
+                {
+                    foreach (var argument in c.Arguments)
+                        MarkPotentiallyMaterialized(argument);
+                }
+                if (c.Arguments.Count > 0 && c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "Object" },
+                        Name.Lexeme: "assign" or "defineProperty" or "defineProperties"
+                    })
+                    MarkMutationTarget(c.Arguments[0]);
+                if (c.Arguments.Count > 0 && c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "Reflect" },
+                        Name.Lexeme: "set" or "deleteProperty" or "defineProperty"
+                    })
+                    MarkMutationTarget(c.Arguments[0]);
                 if (_typeMap is not null
                     && c.Arguments.Count == 1
                     && c.Callee is Expr.Get
@@ -853,21 +917,27 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.New n:
+                foreach (var argument in n.Arguments)
+                    MarkPotentiallyMaterialized(argument);
                 VisitExpr(n.Callee);
                 foreach (var a in n.Arguments) VisitExpr(a);
                 break;
 
             case Expr.Assign asg:
+                if (_opaqueValueBindings.Contains(asg.Name.Lexeme))
+                    MarkPotentiallyMaterialized(asg.Value);
                 VisitExpr(asg.Value);
                 break;
             case Expr.CompoundAssign ca:
                 VisitExpr(ca.Value);
                 break;
             case Expr.CompoundSet cs:
+                MarkMutationTarget(cs.Object);
                 VisitExpr(cs.Object);
                 VisitExpr(cs.Value);
                 break;
             case Expr.CompoundSetIndex csi:
+                MarkMutationTarget(csi.Object);
                 VisitExpr(csi.Object);
                 VisitExpr(csi.Index);
                 VisitExpr(csi.Value);
@@ -876,10 +946,12 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(la.Value);
                 break;
             case Expr.LogicalSet ls:
+                MarkMutationTarget(ls.Object);
                 VisitExpr(ls.Object);
                 VisitExpr(ls.Value);
                 break;
             case Expr.LogicalSetIndex lsi:
+                MarkMutationTarget(lsi.Object);
                 VisitExpr(lsi.Object);
                 VisitExpr(lsi.Index);
                 VisitExpr(lsi.Value);
@@ -920,12 +992,20 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(u.Right);
                 break;
             case Expr.Delete d:
+                if (d.Operand is Expr.Get deletedProperty)
+                    MarkMutationTarget(deletedProperty.Object);
+                else if (d.Operand is Expr.GetIndex deletedIndex)
+                    MarkMutationTarget(deletedIndex.Object);
+                else
+                    _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 VisitExpr(d.Operand);
                 break;
             case Expr.PrefixIncrement pi:
+                MarkMutationOperand(pi.Operand);
                 VisitExpr(pi.Operand);
                 break;
             case Expr.PostfixIncrement po:
+                MarkMutationOperand(po.Operand);
                 VisitExpr(po.Operand);
                 break;
             case Expr.GetPrivate gp:
@@ -944,8 +1024,35 @@ public sealed class RuntimeFeatureDetector
                 foreach (var e in al.Elements) VisitExpr(e);
                 break;
             case Expr.ObjectLiteral ol:
+                // Small plain records can use the emitted slot-backed ordinary-object
+                // carrier. This is deliberately only an emission gate; the literal
+                // emitter repeats the full key/duplicate validation before selecting it.
+                if (ol.Properties.Count is >= 1 and <= 4 && ol.Properties.All(prop =>
+                        !prop.IsSpread &&
+                        prop.Key is not Expr.ComputedKey &&
+                        prop.Kind == Expr.ObjectPropertyKind.Value))
+                {
+                    _set.UsesCompactObjectRecords = true;
+                    if (_typeMap is not null &&
+                        JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
+                            ol, _typeMap, out var compactShape))
+                    {
+                        if (!_set.CompactObjectRecordShapeFingerprints.TryGetValue(
+                                compactShape.Fields.Count, out var shapes))
+                        {
+                            shapes = [];
+                            _set.CompactObjectRecordShapeFingerprints.Add(
+                                compactShape.Fields.Count, shapes);
+                        }
+                        string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(compactShape);
+                        shapes.Add(fingerprint);
+                        _set.CompactObjectRecordShapes.TryAdd(fingerprint, compactShape);
+                    }
+                }
                 foreach (var prop in ol.Properties)
                 {
+                    if (prop.IsSpread)
+                        MarkPotentiallyMaterialized(prop.Value);
                     if (prop.Key is Expr.ComputedKey computed)
                         VisitExpr(computed.Expression);
                     VisitExpr(prop.Value);
@@ -970,6 +1077,7 @@ public sealed class RuntimeFeatureDetector
                 foreach (var e in ttl.Expressions) VisitExpr(e);
                 break;
             case Expr.Spread sp2:
+                MarkPotentiallyMaterialized(sp2.Expression);
                 VisitExpr(sp2.Expression);
                 break;
             case Expr.TypeAssertion ta:
@@ -983,6 +1091,7 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.DynamicImport dimp:
                 _set.UsesDynamicImport = true;
+                _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 VisitExpr(dimp.PathExpression);
                 if (dimp.PathExpression is Expr.Literal lit2 && lit2.Value is string p)
                     HandleModulePath(p);
@@ -1043,4 +1152,238 @@ public sealed class RuntimeFeatureDetector
         Object: Expr.Variable { Name.Lexeme: "Date" },
         Name.Lexeme: "prototype"
     };
+
+    private void MarkMutationOperand(Expr operand)
+    {
+        if (operand is Expr.Get property)
+            MarkMutationTarget(property.Object);
+        else if (operand is Expr.GetIndex index)
+            MarkMutationTarget(index.Object);
+    }
+
+    private void CollectStableSourceFunctionNames(IReadOnlyList<Stmt> statements)
+    {
+        var stableFunctions = new HashSet<Stmt.Function>();
+        StableFunctionBindingAnalyzer.Analyze(statements, stableFunctions);
+
+        // A simple-name call is safe to treat as a call into scanned source only when
+        // the declaration is the sole binding with that name anywhere in the tree.
+        // This deliberately rejects otherwise harmless shadows; accepting one could
+        // let a record escape through a parameter/import/local that happens to share a
+        // source function's spelling.
+        var declarations = new DeclaredNameCounter();
+        foreach (var statement in statements)
+            declarations.Visit(statement);
+        _opaqueValueBindings.UnionWith(declarations.OpaqueValueBindings);
+
+        foreach (var function in stableFunctions)
+        {
+            TypeInfo.Function? functionType = _typeMap?.GetFunctionType(function.Name.Lexeme);
+            bool hasOpaqueBoundary = functionType is not null &&
+                (ContainsOpaqueType(functionType.ReturnType) ||
+                 functionType.ParamTypes.Any(ContainsOpaqueType));
+            if (!hasOpaqueBoundary &&
+                declarations.Counts.GetValueOrDefault(function.Name.Lexeme) == 1)
+                _sourceFunctions.Add(function.Name.Lexeme);
+        }
+    }
+
+    private static bool ContainsOpaqueType(TypeInfo type) => type switch
+    {
+        TypeInfo.Any or TypeInfo.Unknown => true,
+        TypeInfo.Union union => union.Types.Any(ContainsOpaqueType),
+        _ => false
+    };
+
+    private sealed class DeclaredNameCounter : AstVisitorBase
+    {
+        public Dictionary<string, int> Counts { get; } = [];
+        public HashSet<string> OpaqueValueBindings { get; } = new(StringComparer.Ordinal);
+
+        private void Add(string name) =>
+            Counts[name] = Counts.GetValueOrDefault(name) + 1;
+
+        private void AddParameters(IEnumerable<Stmt.Parameter> parameters)
+        {
+            foreach (var parameter in parameters)
+            {
+                Add(parameter.Name.Lexeme);
+                if (IsOpaqueAnnotation(parameter.Type))
+                    OpaqueValueBindings.Add(parameter.Name.Lexeme);
+            }
+        }
+
+        private static bool IsOpaqueAnnotation(string? annotation) =>
+            annotation?.Trim() is "any" or "unknown";
+
+        protected override void VisitVar(Stmt.Var stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            if (IsOpaqueAnnotation(stmt.TypeAnnotation))
+                OpaqueValueBindings.Add(stmt.Name.Lexeme);
+            base.VisitVar(stmt);
+        }
+
+        protected override void VisitConst(Stmt.Const stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            if (IsOpaqueAnnotation(stmt.TypeAnnotation))
+                OpaqueValueBindings.Add(stmt.Name.Lexeme);
+            base.VisitConst(stmt);
+        }
+
+        protected override void VisitFunction(Stmt.Function stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            AddParameters(stmt.Parameters);
+            base.VisitFunction(stmt);
+        }
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr)
+        {
+            if (expr.Name is not null)
+                Add(expr.Name.Lexeme);
+            AddParameters(expr.Parameters);
+            base.VisitArrowFunction(expr);
+        }
+
+        protected override void VisitClass(Stmt.Class stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            base.VisitClass(stmt);
+        }
+
+        protected override void VisitEnum(Stmt.Enum stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            base.VisitEnum(stmt);
+        }
+
+        protected override void VisitNamespace(Stmt.Namespace stmt)
+        {
+            Add(stmt.Name.Lexeme);
+            base.VisitNamespace(stmt);
+        }
+
+        protected override void VisitForOf(Stmt.ForOf stmt)
+        {
+            Add(stmt.Variable.Lexeme);
+            base.VisitForOf(stmt);
+        }
+
+        protected override void VisitForIn(Stmt.ForIn stmt)
+        {
+            Add(stmt.Variable.Lexeme);
+            base.VisitForIn(stmt);
+        }
+
+        protected override void VisitTryCatch(Stmt.TryCatch stmt)
+        {
+            if (stmt.CatchParam is not null)
+                Add(stmt.CatchParam.Lexeme);
+            base.VisitTryCatch(stmt);
+        }
+
+        protected override void VisitImport(Stmt.Import stmt)
+        {
+            if (stmt.DefaultImport is not null)
+                Add(stmt.DefaultImport.Lexeme);
+            if (stmt.NamespaceImport is not null)
+                Add(stmt.NamespaceImport.Lexeme);
+            if (stmt.NamedImports is not null)
+            {
+                foreach (var specifier in stmt.NamedImports)
+                {
+                    if (!specifier.IsTypeOnly)
+                        Add((specifier.LocalName ?? specifier.Imported).Lexeme);
+                }
+            }
+            base.VisitImport(stmt);
+        }
+
+        protected override void VisitImportAlias(Stmt.ImportAlias stmt)
+        {
+            Add(stmt.AliasName.Lexeme);
+            base.VisitImportAlias(stmt);
+        }
+
+        protected override void VisitImportRequire(Stmt.ImportRequire stmt)
+        {
+            Add(stmt.AliasName.Lexeme);
+            base.VisitImportRequire(stmt);
+        }
+    }
+
+    private void MarkMutationTarget(Expr target)
+    {
+        MarkObjectLiteralShape(target);
+        TypeInfo? type = _typeMap?.Get(target);
+        if (type is TypeInfo.Any or TypeInfo.Unknown)
+            _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
+        else
+            MarkPotentiallyMaterialized(type);
+    }
+
+    private void MarkPotentiallyMaterialized(Expr expression)
+    {
+        MarkObjectLiteralShape(expression);
+        MarkPotentiallyMaterialized(_typeMap?.Get(expression));
+    }
+
+    private void MarkObjectLiteralShape(Expr expression)
+    {
+        if (expression is Expr.ObjectLiteral literal &&
+            JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
+                literal, _typeMap, out var shape))
+        {
+            _set.PotentiallyMaterializedCompactObjectRecordShapes.Add(
+                JsonSerializationShapeAnalyzer.Fingerprint(shape));
+        }
+    }
+
+    private void MarkPotentiallyMaterialized(TypeInfo? type)
+    {
+        var visited = new HashSet<TypeInfo>(ReferenceEqualityComparer.Instance);
+        MarkPotentiallyMaterialized(type, visited);
+    }
+
+    private void MarkPotentiallyMaterialized(TypeInfo? type, HashSet<TypeInfo> visited)
+    {
+        if (type is null || !visited.Add(type))
+            return;
+
+        switch (type)
+        {
+            case TypeInfo.Record record:
+                if (JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&
+                    analyzed is JsonSerializationShape.Record shape &&
+                    shape.Fields.Count is >= 1 and <= 4)
+                {
+                    _set.PotentiallyMaterializedCompactObjectRecordShapes.Add(
+                        JsonSerializationShapeAnalyzer.Fingerprint(shape));
+                }
+                foreach (var fieldType in record.Fields.Values)
+                    MarkPotentiallyMaterialized(fieldType, visited);
+                if (record.StringIndexType is not null)
+                    MarkPotentiallyMaterialized(record.StringIndexType, visited);
+                if (record.NumberIndexType is not null)
+                    MarkPotentiallyMaterialized(record.NumberIndexType, visited);
+                if (record.SymbolIndexType is not null)
+                    MarkPotentiallyMaterialized(record.SymbolIndexType, visited);
+                break;
+            case TypeInfo.Union union:
+                foreach (var member in union.Types)
+                    MarkPotentiallyMaterialized(member, visited);
+                break;
+            case TypeInfo.Array array:
+                MarkPotentiallyMaterialized(array.ElementType, visited);
+                break;
+            case TypeInfo.Tuple tuple:
+                foreach (var element in tuple.Elements)
+                    MarkPotentiallyMaterialized(element.Type, visited);
+                if (tuple.RestElementType is not null)
+                    MarkPotentiallyMaterialized(tuple.RestElementType, visited);
+                break;
+        }
+    }
 }

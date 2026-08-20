@@ -1409,7 +1409,7 @@ public partial class RuntimeEmitter
         {
             var accessorCleanupNotScalar = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
             il.Emit(OpCodes.Brfalse, accessorCleanupNotScalar);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
@@ -1682,7 +1682,7 @@ public partial class RuntimeEmitter
             var scalarFieldsLocal =
                 il.DeclareLocal(_types.DictionaryStringObject);
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
             il.Emit(OpCodes.Brfalse, notScalarForValueLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
