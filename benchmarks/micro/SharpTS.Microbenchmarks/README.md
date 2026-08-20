@@ -44,8 +44,10 @@ The `JsonImportedModule*` benchmarks compile a virtual three-module graph via
 driver whose closures capture `n`. This reproduces the imported `json.ts` call
 shape while leaving BenchmarkDotNet in control of the timing loop. The phase
 class measures cumulative build/stringify/parse/traversal work at `n=1,000`;
-the round-trip class records allocations and GC counts at `n=1,000` and
-`n=10,000`. The original direct-delegate JSON benchmarks remain as a comparison.
+the imported interpreter counterpart measures the same module/callback path.
+Both faithful phase classes cover `n=1,000` and `n=10,000`, while the compiled
+round-trip class provides a shorter hard-gate allocation/GC run at both sizes.
+The original direct-delegate JSON benchmarks remain as a comparison.
 
 ## Running
 
