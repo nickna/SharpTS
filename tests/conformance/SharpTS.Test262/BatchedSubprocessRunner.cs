@@ -22,9 +22,11 @@ namespace SharpTS.Test262;
 /// Crash recovery: each worker tracks the paths it has been given but hasn't
 /// emitted a result for ("in-flight"). On worker death (reader sees EOF) those
 /// paths are pushed back onto the shared queue so a surviving worker picks
-/// them up. If the worker dies mid-test (one path in-flight), that single path
-/// is bucketed as <c>RuntimeError:worker-crashed</c> instead of being requeued
-/// — otherwise a pathological test could ping-pong between workers forever.
+/// them up. The head path is retried once because a worker can die from
+/// cumulative non-collectible assembly pressure before starting that path. If
+/// the same path heads a second worker death, it is bucketed as
+/// <c>RuntimeError:worker-crashed</c> so a pathological test cannot ping-pong
+/// between workers forever.
 /// </para>
 /// <para>
 /// Idle watchdog: a parent thread monitors each worker's last-result timestamp.
@@ -36,6 +38,14 @@ namespace SharpTS.Test262;
 /// </remarks>
 public sealed class BatchedSubprocessRunner
 {
+    internal sealed class WorkerCrashRetryPolicy
+    {
+        private readonly ConcurrentDictionary<string, byte> _retried =
+            new(StringComparer.Ordinal);
+
+        public bool ShouldRetry(string path) => _retried.TryAdd(path, 0);
+    }
+
     /// <summary>
     /// Number of worker subprocesses to run concurrently. Each worker pulls
     /// from a shared queue; with N persistent workers, total compile + JIT
@@ -105,6 +115,7 @@ public sealed class BatchedSubprocessRunner
         if (total == 0) return new Dictionary<string, string>(StringComparer.Ordinal);
 
         var workQueue = new ConcurrentQueue<string>(absolutePaths);
+        var crashRetryPolicy = new WorkerCrashRetryPolicy();
 
         var results = new Dictionary<string, string>(StringComparer.Ordinal);
         var resultsLock = new object();
@@ -158,7 +169,10 @@ public sealed class BatchedSubprocessRunner
                 while (true)
                 {
                     if (!workQueue.TryPeek(out _)) return; // queue empty → slot done
-                    var worker = new PersistentWorker(BuildWorkerArgs(), workQueue, OnResult, IdleResultBudget, id, spawnIndex++);
+                    var worker = new PersistentWorker(
+                        BuildWorkerArgs(), workQueue, OnResult,
+                        crashRetryPolicy.ShouldRetry, IdleResultBudget,
+                        id, spawnIndex++);
                     slotDisposables.Add(worker);
                     worker.Start();
                     worker.WaitForCompletion();
@@ -187,7 +201,9 @@ public sealed class BatchedSubprocessRunner
         while (workQueue.TryPeek(out _) && safetyBudget-- > 0)
         {
             int sizeBefore = workQueue.Count;
-            using var recovery = new PersistentWorker(BuildWorkerArgs(), workQueue, OnResult, IdleResultBudget, -1);
+            using var recovery = new PersistentWorker(
+                BuildWorkerArgs(), workQueue, OnResult,
+                crashRetryPolicy.ShouldRetry, IdleResultBudget, -1);
             recovery.Start();
             recovery.WaitForCompletion();
             if (workQueue.Count >= sizeBefore) break; // not making progress
@@ -275,6 +291,7 @@ public sealed class BatchedSubprocessRunner
         private readonly Process _proc;
         private readonly ConcurrentQueue<string> _queue;
         private readonly Action<string, string> _onResult;
+        private readonly Func<string, bool> _shouldRetryAfterCrash;
         private readonly TimeSpan _idleBudget;
         private readonly int _id;
         private readonly WorkerTrace _trace;
@@ -307,11 +324,18 @@ public sealed class BatchedSubprocessRunner
         // worker-crashed during the cleanup of every clean-exiting worker.
         private bool _doneSeen;
 
-        public PersistentWorker(string[] args, ConcurrentQueue<string> queue,
-            Action<string, string> onResult, TimeSpan idleBudget, int id, int spawnIndex = 0)
+        public PersistentWorker(
+            string[] args,
+            ConcurrentQueue<string> queue,
+            Action<string, string> onResult,
+            Func<string, bool> shouldRetryAfterCrash,
+            TimeSpan idleBudget,
+            int id,
+            int spawnIndex = 0)
         {
             _queue = queue;
             _onResult = onResult;
+            _shouldRetryAfterCrash = shouldRetryAfterCrash;
             _idleBudget = idleBudget;
             _id = id;
             // Trace file is unique per spawn, not per slot: the previous worker's
@@ -530,13 +554,13 @@ public sealed class BatchedSubprocessRunner
         //    received the corresponding result line when the worker exited).
         //    Push them back to the queue so a surviving worker reprocesses.
         //
-        // 2. Worker died without emitting _done AND watchdog fired — assume
-        //    the head test was the trigger and bucket it as worker-stalled
-        //    so it can't ping-pong between workers forever. Requeue the rest.
+        // 2. Worker died without emitting _done AND watchdog fired — retry the
+        //    head once because cumulative process state may be responsible. On
+        //    a second death, bucket it as worker-stalled. Requeue the rest.
         //
         // 3. Worker died without emitting _done AND watchdog didn't fire —
-        //    spontaneous crash (segfault, OOM, etc). Same head-blame policy
-        //    as case 2 but with the worker-crashed label.
+        //    spontaneous crash (segfault, OOM, etc). Apply the same one-retry
+        //    policy as case 2, then use the worker-crashed label.
         private void HandleCompletion()
         {
             List<string> inFlight;
@@ -560,11 +584,26 @@ public sealed class BatchedSubprocessRunner
                 return;
             }
 
-            // Pessimistic: head was the test that killed us. Requeue the rest.
+            // A worker can exhaust cumulative process resources after hundreds
+            // of non-collectible assemblies and die before it starts the next
+            // queued path. Retry the head once so that unrelated path is not
+            // permanently blamed. A genuine crash/hang is bucketed when it
+            // reproduces as the head of a second worker death.
             var head = inFlight[0];
             var bucket = _killedByWatchdog
                 ? "RuntimeError:worker-stalled"
                 : "RuntimeError:worker-crashed";
+            if (_shouldRetryAfterCrash(head))
+            {
+                _trace.Log(
+                    "HandleCompletion CRASH (watchdog={0}) head={1} retrying once, requeue={2} (sample: {3})",
+                    _killedByWatchdog, Path.GetFileName(head), inFlight.Count,
+                    string.Join(",", inFlight.Take(3).Select(Path.GetFileName)));
+                foreach (var path in inFlight)
+                    _queue.Enqueue(path);
+                return;
+            }
+
             _trace.Log("HandleCompletion CRASH (watchdog={0}) head={1} as {2}, requeue={3} (sample: {4})",
                 _killedByWatchdog, Path.GetFileName(head), bucket, inFlight.Count - 1,
                 inFlight.Count > 1 ? string.Join(",", inFlight.Skip(1).Take(3).Select(Path.GetFileName)) : "(none)");

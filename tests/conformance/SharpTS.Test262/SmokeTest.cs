@@ -16,6 +16,17 @@ public class SmokeTest
 
     public SmokeTest(ITestOutputHelper output) => _output = output;
 
+    [Fact]
+    public void WorkerCrashRetryPolicy_RetriesEachPathOnce()
+    {
+        var policy = new BatchedSubprocessRunner.WorkerCrashRetryPolicy();
+
+        Assert.True(policy.ShouldRetry("first.js"));
+        Assert.False(policy.ShouldRetry("first.js"));
+        Assert.True(policy.ShouldRetry("second.js"));
+        Assert.False(policy.ShouldRetry("second.js"));
+    }
+
     /// <summary>
     /// Issue #79 smoke: one async-flagged test must execute end-to-end in
     /// both modes, hitting <c>$DONE</c> and bucketing as <c>Pass</c>. The
