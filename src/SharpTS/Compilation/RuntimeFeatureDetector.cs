@@ -1332,6 +1332,20 @@ public sealed class RuntimeFeatureDetector
 
     private void MarkObjectLiteralShape(Expr expression)
     {
+        Expr unwrapped = expression switch
+        {
+            Expr.Grouping grouping => grouping.Expression,
+            Expr.TypeAssertion assertion => assertion.Expression,
+            Expr.Satisfies satisfies => satisfies.Expression,
+            Expr.NonNullAssertion assertion => assertion.Expression,
+            _ => expression
+        };
+        if (!ReferenceEquals(unwrapped, expression))
+        {
+            MarkObjectLiteralShape(unwrapped);
+            return;
+        }
+
         if (expression is Expr.ObjectLiteral literal &&
             JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
                 literal, _typeMap, out var shape))

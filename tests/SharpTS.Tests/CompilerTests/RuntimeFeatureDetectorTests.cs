@@ -84,6 +84,7 @@ public class RuntimeFeatureDetectorTests
     [InlineData("export const node: { left: object | null; right: object | null } = { left: null, right: null };", false)]
     [InlineData("const options: { month: string; day: string } = { month: 'long', day: 'numeric' }; new Intl.DateTimeFormat('en-US', options);", false)]
     [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; const clone = { ...node };", false)]
+    [InlineData("console.log(({ left: null, right: null } as any));", false)]
     public void ProvesCompactRecordShapeStableOnlyWithoutMutationOrEscape(
         string source, bool expectedStable)
     {
