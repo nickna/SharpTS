@@ -415,6 +415,21 @@ public partial class RuntimeEmitter
         );
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
 
+        var typedRecordParsers = _features.JsonScalarRecordShapes
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Where(pair => runtime.JsonTypedScalarRecordCtors.ContainsKey(pair.Key))
+            .Select((pair, ordinal) => (
+                Fingerprint: pair.Key,
+                Shape: pair.Value,
+                Method: typeBuilder.DefineMethod(
+                    $"ParseJsonTypedScalarRecord{ordinal}",
+                    MethodAttributes.Private | MethodAttributes.Static,
+                    _types.Object,
+                    [readerType.MakeByRefType(), propertyNamesType, _types.Object])))
+            .ToArray();
+        foreach (var parser in typedRecordParsers)
+            parser.Method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+
         var il = method.GetILGenerator();
 
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -530,6 +545,20 @@ public partial class RuntimeEmitter
 
         // --- Closed shaped object: parse directly into fixed scalar slots. ---
         il.MarkLabel(shapedObjectLabel);
+        foreach (var parser in typedRecordParsers)
+        {
+            var nextParser = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldsfld,
+                runtime.JsonTypedScalarRecordShapeFields[parser.Fingerprint]);
+            il.Emit(OpCodes.Bne_Un, nextParser);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, parser.Method);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(nextParser);
+        }
         il.Emit(OpCodes.Ldloc, shapeLocal);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
@@ -729,7 +758,197 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
+        foreach (var parser in typedRecordParsers)
+            EmitTypedRecordParser(parser.Fingerprint, parser.Shape, parser.Method);
+
         return method;
+
+        void EmitTypedRecordParser(
+            string fingerprint,
+            JsonSerializationShape.Record shape,
+            MethodBuilder parserMethod)
+        {
+            var parserIl = parserMethod.GetILGenerator();
+            var descriptorLocal = parserIl.DeclareLocal(_types.ObjectArray);
+            Type[] fieldTypes = shape.Fields
+                .Select(field => GetJsonScalarRecordFieldType(field.Value))
+                .ToArray();
+            LocalBuilder[] fieldLocals = fieldTypes
+                .Select(parserIl.DeclareLocal)
+                .ToArray();
+            var mismatch = parserIl.DefineLabel();
+            var valueTextEquals = readerType.GetMethod(
+                "ValueTextEquals", [typeof(string)])!;
+
+            parserIl.Emit(OpCodes.Ldarg_2);
+            parserIl.Emit(OpCodes.Castclass, _types.ObjectArray);
+            parserIl.Emit(OpCodes.Stloc, descriptorLocal);
+
+            for (int index = 0; index < shape.Fields.Count; index++)
+            {
+                var field = shape.Fields[index];
+                parserIl.Emit(OpCodes.Ldarg_0);
+                parserIl.Emit(OpCodes.Call, readMethod);
+                parserIl.Emit(OpCodes.Brfalse, mismatch);
+                parserIl.Emit(OpCodes.Ldarg_0);
+                parserIl.Emit(OpCodes.Call, tokenTypeGetter);
+                parserIl.Emit(OpCodes.Ldc_I4,
+                    (int)System.Text.Json.JsonTokenType.PropertyName);
+                parserIl.Emit(OpCodes.Bne_Un, mismatch);
+                parserIl.Emit(OpCodes.Ldarg_0);
+                parserIl.Emit(OpCodes.Ldstr, field.Key);
+                parserIl.Emit(OpCodes.Call, valueTextEquals);
+                parserIl.Emit(OpCodes.Brfalse, mismatch);
+                parserIl.Emit(OpCodes.Ldarg_0);
+                parserIl.Emit(OpCodes.Call, readMethod);
+                parserIl.Emit(OpCodes.Brfalse, mismatch);
+
+                switch (field.Value)
+                {
+                    case JsonSerializationShape.Number:
+                        EmitRequiredToken(
+                            parserIl, tokenTypeGetter,
+                            System.Text.Json.JsonTokenType.Number, mismatch);
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Call, getDoubleMethod);
+                        parserIl.Emit(OpCodes.Stloc, fieldLocals[index]);
+                        break;
+                    case JsonSerializationShape.String:
+                        EmitRequiredToken(
+                            parserIl, tokenTypeGetter,
+                            System.Text.Json.JsonTokenType.String, mismatch);
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Call, getStringMethod);
+                        parserIl.Emit(OpCodes.Stloc, fieldLocals[index]);
+                        break;
+                    case JsonSerializationShape.Boolean:
+                    {
+                        var isFalse = parserIl.DefineLabel();
+                        var boolReady = parserIl.DefineLabel();
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Call, tokenTypeGetter);
+                        parserIl.Emit(OpCodes.Dup);
+                        parserIl.Emit(OpCodes.Ldc_I4,
+                            (int)System.Text.Json.JsonTokenType.True);
+                        parserIl.Emit(OpCodes.Beq, boolReady);
+                        parserIl.Emit(OpCodes.Ldc_I4,
+                            (int)System.Text.Json.JsonTokenType.False);
+                        parserIl.Emit(OpCodes.Bne_Un, mismatch);
+                        parserIl.Emit(OpCodes.Ldc_I4_0);
+                        parserIl.Emit(OpCodes.Stloc, fieldLocals[index]);
+                        parserIl.Emit(OpCodes.Br, isFalse);
+                        parserIl.MarkLabel(boolReady);
+                        parserIl.Emit(OpCodes.Pop);
+                        parserIl.Emit(OpCodes.Ldc_I4_1);
+                        parserIl.Emit(OpCodes.Stloc, fieldLocals[index]);
+                        parserIl.MarkLabel(isFalse);
+                        break;
+                    }
+                    case JsonSerializationShape.Array
+                    {
+                        Element: JsonSerializationShape.Record elementRecord
+                    }:
+                    {
+                        string elementFingerprint =
+                            JsonSerializationShapeAnalyzer.Fingerprint(elementRecord);
+                        MethodBuilder elementParser = typedRecordParsers
+                            .Single(candidate =>
+                                candidate.Fingerprint == elementFingerprint)
+                            .Method;
+                        var arrayDescriptorLocal =
+                            parserIl.DeclareLocal(_types.ObjectArray);
+                        var elementDescriptorLocal =
+                            parserIl.DeclareLocal(_types.Object);
+                        var elementsLocal =
+                            parserIl.DeclareLocal(_types.ListOfObject);
+                        var arrayLoop = parserIl.DefineLabel();
+                        var arrayEnd = parserIl.DefineLabel();
+
+                        EmitRequiredToken(
+                            parserIl, tokenTypeGetter,
+                            System.Text.Json.JsonTokenType.StartArray, mismatch);
+                        parserIl.Emit(OpCodes.Ldloc, descriptorLocal);
+                        parserIl.Emit(OpCodes.Ldc_I4, 2 + index * 2);
+                        parserIl.Emit(OpCodes.Ldelem_Ref);
+                        parserIl.Emit(OpCodes.Castclass, _types.ObjectArray);
+                        parserIl.Emit(OpCodes.Stloc, arrayDescriptorLocal);
+                        parserIl.Emit(OpCodes.Ldloc, arrayDescriptorLocal);
+                        parserIl.Emit(OpCodes.Ldc_I4_1);
+                        parserIl.Emit(OpCodes.Ldelem_Ref);
+                        parserIl.Emit(OpCodes.Stloc, elementDescriptorLocal);
+                        parserIl.Emit(OpCodes.Newobj,
+                            _types.GetDefaultConstructor(_types.ListOfObject));
+                        parserIl.Emit(OpCodes.Stloc, elementsLocal);
+
+                        parserIl.MarkLabel(arrayLoop);
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Call, readMethod);
+                        parserIl.Emit(OpCodes.Brfalse, mismatch);
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Call, tokenTypeGetter);
+                        parserIl.Emit(OpCodes.Ldc_I4,
+                            (int)System.Text.Json.JsonTokenType.EndArray);
+                        parserIl.Emit(OpCodes.Beq, arrayEnd);
+                        EmitRequiredToken(
+                            parserIl, tokenTypeGetter,
+                            System.Text.Json.JsonTokenType.StartObject, mismatch);
+                        parserIl.Emit(OpCodes.Ldloc, elementsLocal);
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Ldarg_1);
+                        parserIl.Emit(OpCodes.Ldloc, elementDescriptorLocal);
+                        parserIl.Emit(OpCodes.Call, elementParser);
+                        parserIl.Emit(OpCodes.Callvirt, _types.GetMethod(
+                            _types.ListOfObject, "Add", [_types.Object]));
+                        parserIl.Emit(OpCodes.Br, arrayLoop);
+
+                        parserIl.MarkLabel(arrayEnd);
+                        parserIl.Emit(OpCodes.Ldloc, elementsLocal);
+                        parserIl.Emit(OpCodes.Stloc, fieldLocals[index]);
+                        break;
+                    }
+                    default:
+                        parserIl.Emit(OpCodes.Ldarg_0);
+                        parserIl.Emit(OpCodes.Ldarg_1);
+                        parserIl.Emit(OpCodes.Ldloc, descriptorLocal);
+                        parserIl.Emit(OpCodes.Ldc_I4, 2 + index * 2);
+                        parserIl.Emit(OpCodes.Ldelem_Ref);
+                        parserIl.Emit(OpCodes.Call, method);
+                        parserIl.Emit(OpCodes.Stloc, fieldLocals[index]);
+                        break;
+                }
+            }
+
+            parserIl.Emit(OpCodes.Ldarg_0);
+            parserIl.Emit(OpCodes.Call, readMethod);
+            parserIl.Emit(OpCodes.Brfalse, mismatch);
+            EmitRequiredToken(
+                parserIl, tokenTypeGetter,
+                System.Text.Json.JsonTokenType.EndObject, mismatch);
+            parserIl.Emit(OpCodes.Ldarg_2);
+            foreach (var fieldLocal in fieldLocals)
+                parserIl.Emit(OpCodes.Ldloc, fieldLocal);
+            parserIl.Emit(OpCodes.Newobj,
+                runtime.JsonTypedScalarRecordCtors[fingerprint]);
+            parserIl.Emit(OpCodes.Ret);
+
+            parserIl.MarkLabel(mismatch);
+            parserIl.Emit(OpCodes.Ldstr, "JSON shape association mismatch");
+            parserIl.Emit(OpCodes.Newobj,
+                _types.GetConstructor(_types.Exception, _types.String));
+            parserIl.Emit(OpCodes.Throw);
+        }
+
+        void EmitRequiredToken(
+            ILGenerator targetIl,
+            MethodInfo getter,
+            System.Text.Json.JsonTokenType token,
+            Label mismatch)
+        {
+            targetIl.Emit(OpCodes.Ldarg_0);
+            targetIl.Emit(OpCodes.Call, getter);
+            targetIl.Emit(OpCodes.Ldc_I4, (int)token);
+            targetIl.Emit(OpCodes.Bne_Un, mismatch);
+        }
     }
 
     /// <summary>

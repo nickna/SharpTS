@@ -178,6 +178,85 @@ public partial class RuntimeEmitter
             inlineType.DefineMethodOverride(inlineGetValue, getValue);
         }
 
+        int typedOrdinal = 0;
+        foreach (var pair in _features.JsonScalarRecordShapes.OrderBy(
+                     pair => pair.Key, StringComparer.Ordinal))
+        {
+            string fingerprint = pair.Key;
+            JsonSerializationShape.Record shape = pair.Value;
+            if (shape.Fields.Count == 0)
+                continue;
+
+            var exactType = EmitTypeDefinitions.DefineType(
+                moduleBuilder,
+                $"$JsonTypedScalarRecord{typedOrdinal++}",
+                TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
+                TypeAttributes.BeforeFieldInit,
+                typeBuilder);
+            derivedTypes.Add(exactType);
+            runtime.JsonTypedScalarRecordTypes.Add(fingerprint, exactType);
+
+            var exactShapeField = exactType.DefineField(
+                "Shape", _types.Object,
+                FieldAttributes.Assembly | FieldAttributes.Static);
+            runtime.JsonTypedScalarRecordShapeFields.Add(fingerprint, exactShapeField);
+
+            Type[] valueTypes = shape.Fields
+                .Select(field => GetJsonScalarRecordFieldType(field.Value))
+                .ToArray();
+            var valueFields = valueTypes.Select((fieldType, index) =>
+                exactType.DefineField(
+                    $"_v{index}", fieldType, FieldAttributes.Assembly)).ToArray();
+            for (int index = 0; index < valueFields.Length; index++)
+                runtime.JsonTypedScalarRecordValueFields.Add(
+                    (fingerprint, index), valueFields[index]);
+
+            var parameterTypes = new Type[valueTypes.Length + 1];
+            parameterTypes[0] = _types.Object;
+            Array.Copy(valueTypes, 0, parameterTypes, 1, valueTypes.Length);
+            var exactCtor = exactType.DefineConstructor(
+                MethodAttributes.Public,
+                CallingConventions.Standard,
+                parameterTypes);
+            runtime.JsonTypedScalarRecordCtors.Add(fingerprint, exactCtor);
+            var exactCtorIl = exactCtor.GetILGenerator();
+            exactCtorIl.Emit(OpCodes.Ldarg_0);
+            exactCtorIl.Emit(OpCodes.Ldarg_1);
+            exactCtorIl.Emit(OpCodes.Call, baseCtor);
+            exactCtorIl.Emit(OpCodes.Ldarg_1);
+            exactCtorIl.Emit(OpCodes.Stsfld, exactShapeField);
+            for (int index = 0; index < valueFields.Length; index++)
+            {
+                exactCtorIl.Emit(OpCodes.Ldarg_0);
+                exactCtorIl.Emit(OpCodes.Ldarg, index + 2);
+                exactCtorIl.Emit(OpCodes.Stfld, valueFields[index]);
+            }
+            exactCtorIl.Emit(OpCodes.Ret);
+
+            var exactGetValue = exactType.DefineMethod(
+                "GetValue",
+                MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+                _types.Object,
+                [_types.Int32]);
+            exactGetValue.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+            var exactGetIl = exactGetValue.GetILGenerator();
+            var exactLabels = valueFields.Select(_ => exactGetIl.DefineLabel()).ToArray();
+            exactGetIl.Emit(OpCodes.Ldarg_1);
+            exactGetIl.Emit(OpCodes.Switch, exactLabels);
+            exactGetIl.Emit(OpCodes.Ldnull);
+            exactGetIl.Emit(OpCodes.Ret);
+            for (int index = 0; index < valueFields.Length; index++)
+            {
+                exactGetIl.MarkLabel(exactLabels[index]);
+                exactGetIl.Emit(OpCodes.Ldarg_0);
+                exactGetIl.Emit(OpCodes.Ldfld, valueFields[index]);
+                if (valueTypes[index].IsValueType)
+                    exactGetIl.Emit(OpCodes.Box, valueTypes[index]);
+                exactGetIl.Emit(OpCodes.Ret);
+            }
+            exactType.DefineMethodOverride(exactGetValue, getValue);
+        }
+
         runtime.JsonScalarRecordShapeGetter = EmitSimpleGetter(
             "get_Shape", _types.Object, shapeField);
 
@@ -265,6 +344,14 @@ public partial class RuntimeEmitter
             return getter;
         }
     }
+
+    private Type GetJsonScalarRecordFieldType(JsonSerializationShape shape) => shape switch
+    {
+        JsonSerializationShape.Number => _types.Double,
+        JsonSerializationShape.Boolean => _types.Boolean,
+        JsonSerializationShape.String => _types.String,
+        _ => _types.Object
+    };
 
     private void EmitEnsureMaterialized(
         ILGenerator il,

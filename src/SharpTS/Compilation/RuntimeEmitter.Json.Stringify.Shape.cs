@@ -665,6 +665,26 @@ public partial class RuntimeEmitter
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
         _appendJsonShapedValueMethod = method;
 
+        var typedRecordAppenders = _features.JsonScalarRecordShapes
+            .OrderBy(pair => pair.Key, StringComparer.Ordinal)
+            .Where(pair => runtime.JsonTypedScalarRecordTypes.ContainsKey(pair.Key))
+            .Select((pair, ordinal) => (
+                Fingerprint: pair.Key,
+                Shape: pair.Value,
+                Method: typeBuilder.DefineMethod(
+                    $"AppendJsonTypedScalarRecord{ordinal}",
+                    MethodAttributes.Private | MethodAttributes.Static,
+                    _types.Boolean,
+                    [
+                        _types.StringBuilder,
+                        runtime.JsonTypedScalarRecordTypes[pair.Key],
+                        _types.ObjectArray,
+                        _types.Int32
+                    ])))
+            .ToArray();
+        foreach (var appender in typedRecordAppenders)
+            appender.Method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+
         var il = method.GetILGenerator();
         var tagLocal = il.DeclareLocal(_types.String);
         var shapeLocal = il.DeclareLocal(_types.ObjectArray);
@@ -895,6 +915,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, runtime.JsonScalarRecordShapeGetter);
         il.Emit(OpCodes.Ldloc, shapeLocal);
         il.Emit(OpCodes.Bne_Un, invalidShape);
+        foreach (var appender in typedRecordAppenders)
+        {
+            var exactType = runtime.JsonTypedScalarRecordTypes[appender.Fingerprint];
+            var exactLocal = il.DeclareLocal(exactType);
+            var nextAppender = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, scalarLocal);
+            il.Emit(OpCodes.Isinst, exactType);
+            il.Emit(OpCodes.Stloc, exactLocal);
+            il.Emit(OpCodes.Ldloc, exactLocal);
+            il.Emit(OpCodes.Brfalse, nextAppender);
+            EmitAppendShapedPropertyPrefix(il);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, exactLocal);
+            il.Emit(OpCodes.Ldloc, shapeLocal);
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Call, appender.Method);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(nextAppender);
+        }
         il.Emit(OpCodes.Br, objectStorageReady);
 
         il.MarkLabel(dictionaryObject);
@@ -1034,7 +1073,94 @@ public partial class RuntimeEmitter
         il.MarkLabel(invalidShape);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
+
+        foreach (var appender in typedRecordAppenders)
+            EmitTypedRecordAppender(
+                appender.Fingerprint, appender.Shape, appender.Method);
         return method;
+
+        void EmitTypedRecordAppender(
+            string fingerprint,
+            JsonSerializationShape.Record shape,
+            MethodBuilder appenderMethod)
+        {
+            var appenderIl = appenderMethod.GetILGenerator();
+            EmitAppendChar(appenderIl, '{');
+            for (int index = 0; index < shape.Fields.Count; index++)
+            {
+                if (index != 0)
+                    EmitAppendChar(appenderIl, ',');
+                appenderIl.Emit(OpCodes.Ldarg_0);
+                appenderIl.Emit(OpCodes.Ldstr,
+                    Runtime.BuiltIns.JsonStringEscaper.Quote(
+                        shape.Fields[index].Key));
+                EmitStringBuilderAppendString(appenderIl);
+                EmitAppendChar(appenderIl, ':');
+
+                FieldBuilder valueField =
+                    runtime.JsonTypedScalarRecordValueFields[(fingerprint, index)];
+                switch (shape.Fields[index].Value)
+                {
+                    case JsonSerializationShape.Number:
+                        appenderIl.Emit(OpCodes.Ldarg_0);
+                        appenderIl.Emit(OpCodes.Ldarg_1);
+                        appenderIl.Emit(OpCodes.Ldfld, valueField);
+                        appenderIl.Emit(OpCodes.Call, appendNumber);
+                        break;
+                    case JsonSerializationShape.String:
+                        appenderIl.Emit(OpCodes.Ldarg_0);
+                        appenderIl.Emit(OpCodes.Ldarg_1);
+                        appenderIl.Emit(OpCodes.Ldfld, valueField);
+                        appenderIl.Emit(OpCodes.Call, _appendEscapedJsonStringMethod!);
+                        break;
+                    case JsonSerializationShape.Boolean:
+                    {
+                        var appendFalse = appenderIl.DefineLabel();
+                        var boolDone = appenderIl.DefineLabel();
+                        appenderIl.Emit(OpCodes.Ldarg_1);
+                        appenderIl.Emit(OpCodes.Ldfld, valueField);
+                        appenderIl.Emit(OpCodes.Brfalse, appendFalse);
+                        appenderIl.Emit(OpCodes.Ldarg_0);
+                        appenderIl.Emit(OpCodes.Ldstr, "true");
+                        EmitStringBuilderAppendString(appenderIl);
+                        appenderIl.Emit(OpCodes.Br, boolDone);
+                        appenderIl.MarkLabel(appendFalse);
+                        appenderIl.Emit(OpCodes.Ldarg_0);
+                        appenderIl.Emit(OpCodes.Ldstr, "false");
+                        EmitStringBuilderAppendString(appenderIl);
+                        appenderIl.MarkLabel(boolDone);
+                        break;
+                    }
+                    default:
+                    {
+                        var appended = appenderIl.DefineLabel();
+                        appenderIl.Emit(OpCodes.Ldarg_0);
+                        appenderIl.Emit(OpCodes.Ldarg_1);
+                        appenderIl.Emit(OpCodes.Ldfld, valueField);
+                        appenderIl.Emit(OpCodes.Ldarg_2);
+                        appenderIl.Emit(OpCodes.Ldc_I4, 2 + index * 2);
+                        appenderIl.Emit(OpCodes.Ldelem_Ref);
+                        appenderIl.Emit(OpCodes.Ldarg_3);
+                        appenderIl.Emit(OpCodes.Ldc_I4_1);
+                        appenderIl.Emit(OpCodes.Add);
+                        appenderIl.Emit(OpCodes.Ldnull);
+                        appenderIl.Emit(OpCodes.Ldc_I4_0);
+                        appenderIl.Emit(OpCodes.Ldc_I4_0);
+                        appenderIl.Emit(OpCodes.Ldc_I4_0);
+                        appenderIl.Emit(OpCodes.Ldc_I4_0);
+                        appenderIl.Emit(OpCodes.Call, method);
+                        appenderIl.Emit(OpCodes.Brtrue, appended);
+                        appenderIl.Emit(OpCodes.Ldc_I4_0);
+                        appenderIl.Emit(OpCodes.Ret);
+                        appenderIl.MarkLabel(appended);
+                        break;
+                    }
+                }
+            }
+            EmitAppendChar(appenderIl, '}');
+            appenderIl.Emit(OpCodes.Ldc_I4_1);
+            appenderIl.Emit(OpCodes.Ret);
+        }
     }
 
     private void EmitAppendShapedPropertyPrefix(ILGenerator il)

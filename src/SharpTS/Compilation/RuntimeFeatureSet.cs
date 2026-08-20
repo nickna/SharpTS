@@ -24,6 +24,13 @@ public sealed class RuntimeFeatureSet
     internal HashSet<string> JsonScalarRecordShapeFingerprints { get; } = [];
 
     /// <summary>
+    /// Closed JSON record shapes keyed by their structural fingerprint.  The
+    /// runtime emitter uses these to give primitive slots their native CLR
+    /// types while retaining the scalar-record materialization fallback.
+    /// </summary>
+    internal Dictionary<string, JsonSerializationShape.Record> JsonScalarRecordShapes { get; } = [];
+
+    /// <summary>
     /// Shapes of small plain-object literals, grouped by slot count. When an
     /// arity has a single shape, the JSON scalar carrier's CLR type is itself
     /// an exact shape guard and typed reads need not compare the lazy descriptor.
