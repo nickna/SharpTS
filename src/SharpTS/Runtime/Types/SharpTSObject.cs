@@ -22,7 +22,10 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     // JSON record never pays for a second collection per object. Mutations that
     // can detach property existence from _fields materialize it first.
     private List<string>? _stringPropertyOrder;
-    private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
+    // Ordinary objects overwhelmingly contain string keys only. Allocate
+    // permanent symbol storage only when the first symbol data property is
+    // created; accessor and order metadata are independently lazy as well.
+    private Dictionary<SharpTSSymbol, object?>? _symbolFields;
     private List<SharpTSSymbol>? _symbolPropertyOrder;
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
         _symbolAccessors;
@@ -165,7 +168,10 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
         => _symbolPropertyOrder is not null
             ? _symbolPropertyOrder
-            : _symbolFields.Keys;
+            : _symbolFields?.Keys ?? Enumerable.Empty<SharpTSSymbol>();
+
+    private Dictionary<SharpTSSymbol, object?> EnsureSymbolFields()
+        => _symbolFields ??= [];
 
     private List<string> EnsureStringPropertyOrder()
         => _stringPropertyOrder ??= [.. _fields.Keys];
@@ -183,11 +189,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (_symbolPropertyOrder is not null)
             return _symbolPropertyOrder;
 
-        _symbolPropertyOrder = [.. _symbolFields.Keys];
+        _symbolPropertyOrder = _symbolFields is null
+            ? []
+            : [.. _symbolFields.Keys];
         if (_symbolAccessors is not null)
         {
             foreach (SharpTSSymbol symbol in _symbolAccessors.Keys)
-                if (!_symbolFields.ContainsKey(symbol))
+                if (!(_symbolFields?.ContainsKey(symbol) ?? false))
                     _symbolPropertyOrder.Add(symbol);
         }
         return _symbolPropertyOrder;
@@ -486,7 +494,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public object? GetBySymbol(SharpTSSymbol symbol)
     {
-        return _symbolFields.TryGetValue(symbol, out var value) ? value : null;
+        return _symbolFields?.TryGetValue(symbol, out var value) == true
+            ? value
+            : null;
     }
 
     /// <summary>Installs a symbol-keyed accessor property.</summary>
@@ -496,7 +506,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         bool exists = HasSymbolProperty(symbol);
         _symbolAccessors ??= [];
         _symbolAccessors[symbol] = (getter, setter);
-        _symbolFields.Remove(symbol);
+        _symbolFields?.Remove(symbol);
         _symbolDescriptors ??= [];
         _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         if (!exists) EnsureSymbolPropertyOrder().Add(symbol);
@@ -545,7 +555,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             _symbolDescriptors ??= [];
             _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         }
-        _symbolFields[symbol] = value;
+        EnsureSymbolFields()[symbol] = value;
     }
 
     /// <summary>
@@ -585,7 +595,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             _symbolDescriptors ??= [];
             _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         }
-        _symbolFields[symbol] = value;
+        EnsureSymbolFields()[symbol] = value;
     }
 
     /// <summary>
@@ -593,7 +603,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// </summary>
     public bool HasSymbolProperty(SharpTSSymbol symbol)
     {
-        return _symbolFields.ContainsKey(symbol)
+        return (_symbolFields?.ContainsKey(symbol) ?? false)
             || (_symbolAccessors?.ContainsKey(symbol) ?? false);
     }
 
@@ -612,7 +622,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         List<SharpTSSymbol>? propertyOrder = HasSymbolProperty(symbol)
             ? EnsureSymbolPropertyOrder()
             : null;
-        bool removed = _symbolFields.Remove(symbol);
+        bool removed = _symbolFields?.Remove(symbol) ?? false;
         removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
         if (removed)
         {
@@ -645,7 +655,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         List<SharpTSSymbol>? propertyOrder = HasSymbolProperty(symbol)
             ? EnsureSymbolPropertyOrder()
             : null;
-        bool removed = _symbolFields.Remove(symbol);
+        bool removed = _symbolFields?.Remove(symbol) ?? false;
         removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
         if (removed)
         {
@@ -724,15 +734,15 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             if (descriptor.HasSet) setter = descriptor.Set;
             _symbolAccessors ??= [];
             _symbolAccessors[symbol] = (getter, setter);
-            _symbolFields.Remove(symbol);
+            _symbolFields?.Remove(symbol);
         }
         else
         {
             _symbolAccessors?.Remove(symbol);
             if (descriptor.HasValue)
-                _symbolFields[symbol] = descriptor.Value;
+                EnsureSymbolFields()[symbol] = descriptor.Value;
             else if (!hasExisting)
-                _symbolFields[symbol] = SharpTSUndefined.Instance;
+                EnsureSymbolFields()[symbol] = SharpTSUndefined.Instance;
         }
 
         if (!hasExisting) propertyOrder.Add(symbol);
@@ -963,7 +973,9 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// <summary>Gets the complete descriptor for an own symbol-keyed property.</summary>
     internal SharpTSPropertyDescriptor? GetOwnPropertyDescriptor(SharpTSSymbol symbol)
     {
-        bool hasDataProperty = _symbolFields.TryGetValue(symbol, out var value);
+        object? value = null;
+        bool hasDataProperty = _symbolFields?.TryGetValue(symbol, out value)
+            == true;
         bool isAccessor = _symbolAccessors?.ContainsKey(symbol) ?? false;
         if (!hasDataProperty && !isAccessor) return null;
 

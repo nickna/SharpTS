@@ -1441,9 +1441,12 @@ public partial class Interpreter
     /// <returns>A new SharpTSObject with all properties set.</returns>
     private static SharpTSObject BuildObjectFromFields(
         Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields)
+        Dictionary<SharpTSSymbol, object?>? symbolFields)
     {
         var result = new SharpTSObject(stringFields);
+        if (symbolFields is null)
+            return result;
+
         foreach (var (sym, val) in symbolFields)
         {
             result.SetBySymbol(sym, val);

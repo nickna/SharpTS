@@ -537,11 +537,11 @@ public partial class Interpreter
     /// <summary>
     /// Applies a property key-value pair to the target fields dictionaries (sync version).
     /// </summary>
-    private void ApplyPropertyToFields(
+    private Dictionary<SharpTSSymbol, object?>? ApplyPropertyToFields(
         Expr.PropertyKey key,
         object? value,
         Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields)
+        Dictionary<SharpTSSymbol, object?>? symbolFields)
     {
         switch (key)
         {
@@ -557,25 +557,27 @@ public partial class Interpreter
             case Expr.ComputedKey ck:
                 object? keyValue = Evaluate(ck.Expression);
                 if (keyValue is SharpTSSymbol sym)
-                    symbolFields[sym] = value;
+                    (symbolFields ??= [])[sym] = value;
                 else if (keyValue is double numKey)
                     stringFields[numKey.ToString()] = value;
                 else
                     stringFields[keyValue?.ToString() ?? "undefined"] = value;
                 break;
         }
+        return symbolFields;
     }
 
     /// <summary>
     /// Applies a property key-value pair to the target fields dictionaries using an evaluation context.
     /// Shared between sync and async paths via IEvaluationContext.
     /// </summary>
-    private async ValueTask ApplyPropertyToFieldsCore(
+    private async ValueTask<Dictionary<SharpTSSymbol, object?>?>
+        ApplyPropertyToFieldsCore(
         IEvaluationContext ctx,
         Expr.PropertyKey key,
         object? value,
         Dictionary<string, object?> stringFields,
-        Dictionary<SharpTSSymbol, object?> symbolFields)
+        Dictionary<SharpTSSymbol, object?>? symbolFields)
     {
         switch (key)
         {
@@ -591,13 +593,14 @@ public partial class Interpreter
             case Expr.ComputedKey ck:
                 object? keyValue = (await ctx.EvaluateExprAsync(ck.Expression)).ToObject();
                 if (keyValue is SharpTSSymbol sym)
-                    symbolFields[sym] = value;
+                    (symbolFields ??= [])[sym] = value;
                 else if (keyValue is double numKey)
                     stringFields[numKey.ToString()] = value;
                 else
                     stringFields[keyValue?.ToString() ?? "undefined"] = value;
                 break;
         }
+        return symbolFields;
     }
 
     /// <summary>
@@ -609,7 +612,7 @@ public partial class Interpreter
     private async ValueTask<object?> EvaluateObjectCore(IEvaluationContext ctx, Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
-        Dictionary<SharpTSSymbol, object?> symbolFields = [];
+        Dictionary<SharpTSSymbol, object?>? symbolFields = null;
         List<(object key, ISharpTSCallable getter)>? getters = null;
         List<(object key, ISharpTSCallable setter)>? setters = null;
 
@@ -637,7 +640,8 @@ public partial class Interpreter
             else
             {
                 object? value = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
-                await ApplyPropertyToFieldsCore(ctx, prop.Key!, value, stringFields, symbolFields);
+                symbolFields = await ApplyPropertyToFieldsCore(
+                    ctx, prop.Key!, value, stringFields, symbolFields);
             }
         }
 
@@ -687,7 +691,7 @@ public partial class Interpreter
     private RuntimeValue EvaluateObject(Expr.ObjectLiteral obj)
     {
         Dictionary<string, object?> stringFields = [];
-        Dictionary<SharpTSSymbol, object?> symbolFields = [];
+        Dictionary<SharpTSSymbol, object?>? symbolFields = null;
         List<(object key, ISharpTSCallable getter)>? getters = null;
         List<(object key, ISharpTSCallable setter)>? setters = null;
 
@@ -715,7 +719,8 @@ public partial class Interpreter
             else
             {
                 object? value = Evaluate(prop.Value);
-                ApplyPropertyToFields(prop.Key!, value, stringFields, symbolFields);
+                symbolFields = ApplyPropertyToFields(
+                    prop.Key!, value, stringFields, symbolFields);
             }
         }
 
