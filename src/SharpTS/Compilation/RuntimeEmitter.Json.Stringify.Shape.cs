@@ -20,10 +20,26 @@ public partial class RuntimeEmitter
         if (_registerJsonShapeMethod is not null && _tryGetJsonShapeMethod is not null)
             return (_registerJsonShapeMethod, _tryGetJsonShapeMethod);
 
+        var tableOpenType = typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>);
+        var tableOpenArguments = tableOpenType.GetGenericArguments();
         var tableType = EmitGenerics.MakeGenericType(
-            typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>),
+            tableOpenType,
             _types.String,
             _types.Object);
+        var tableConstructor = EmitterTypeHelpers.ResolveConstructor(
+            tableType,
+            tableOpenType.GetConstructor(Type.EmptyTypes)!);
+        var tableRemove = EmitterTypeHelpers.ResolveMethod(
+            tableType,
+            tableOpenType.GetMethod("Remove", [tableOpenArguments[0]])!);
+        var tableAdd = EmitterTypeHelpers.ResolveMethod(
+            tableType,
+            tableOpenType.GetMethod("Add", [tableOpenArguments[0], tableOpenArguments[1]])!);
+        var tableTryGetValue = EmitterTypeHelpers.ResolveMethod(
+            tableType,
+            tableOpenType.GetMethod(
+                "TryGetValue",
+                [tableOpenArguments[0], tableOpenArguments[1].MakeByRefType()])!);
         _jsonShapeTableField = typeBuilder.DefineField(
             "_jsonShapes", tableType, FieldAttributes.Private | FieldAttributes.Static);
 
@@ -40,7 +56,7 @@ public partial class RuntimeEmitter
         getIl.Emit(OpCodes.Brtrue, ready);
         getIl.Emit(OpCodes.Pop);
         getIl.Emit(OpCodes.Ldsflda, _jsonShapeTableField);
-        getIl.Emit(OpCodes.Newobj, tableType.GetConstructor(Type.EmptyTypes)!);
+        getIl.Emit(OpCodes.Newobj, tableConstructor);
         getIl.Emit(OpCodes.Ldnull);
         var compareExchangeDefinition = typeof(System.Threading.Interlocked).GetMethods()
             .Single(candidate => candidate.Name == "CompareExchange" &&
@@ -66,12 +82,12 @@ public partial class RuntimeEmitter
         registerIl.Emit(OpCodes.Stloc, tableLocal);
         registerIl.Emit(OpCodes.Ldloc, tableLocal);
         registerIl.Emit(OpCodes.Ldarg_0);
-        registerIl.Emit(OpCodes.Callvirt, tableType.GetMethod("Remove", [_types.String])!);
+        registerIl.Emit(OpCodes.Callvirt, tableRemove);
         registerIl.Emit(OpCodes.Pop);
         registerIl.Emit(OpCodes.Ldloc, tableLocal);
         registerIl.Emit(OpCodes.Ldarg_0);
         registerIl.Emit(OpCodes.Ldarg_1);
-        registerIl.Emit(OpCodes.Callvirt, tableType.GetMethod("Add", [_types.String, _types.Object])!);
+        registerIl.Emit(OpCodes.Callvirt, tableAdd);
         registerIl.Emit(OpCodes.Ret);
 
         var tryGet = typeBuilder.DefineMethod(
@@ -94,8 +110,7 @@ public partial class RuntimeEmitter
         tryIl.Emit(OpCodes.Brfalse, missWithResidual);
         tryIl.Emit(OpCodes.Ldloc, stringLocal);
         tryIl.Emit(OpCodes.Ldarg_1);
-        tryIl.Emit(OpCodes.Callvirt, tableType.GetMethod(
-            "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        tryIl.Emit(OpCodes.Callvirt, tableTryGetValue);
         tryIl.Emit(OpCodes.Ret);
         tryIl.MarkLabel(missWithResidual);
         tryIl.Emit(OpCodes.Pop);
