@@ -1654,6 +1654,39 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Dense-array sort entry point for a comparator arrow whose identity and
+    /// body are statically known at the call site. The delegate invokes the
+    /// emitted arrow directly, avoiding the per-comparison $TSFunction and
+    /// MethodInvoker boundary. Snapshot and write-back still use sort's normal
+    /// shape guards, including the post-comparator revalidation.
+    /// </summary>
+    private void EmitArraySortDirect(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var comparatorType = typeof(Func<object, object, object>);
+        var method = typeBuilder.DefineMethod(
+            "ArraySortDirect",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, comparatorType]);
+        runtime.ArraySortDirect = method;
+
+        var il = method.GetILGenerator();
+        var frozenLabel = il.DefineLabel();
+        EmitArrayFrozenSealedCheck(
+            il, runtime, frozenLabel,
+            checkSealed: false, checkExtensible: false);
+
+        EmitSortBody(
+            il, runtime,
+            mutateInPlace: true,
+            directComparator: true);
+
+        il.MarkLabel(frozenLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits the shape guard shared by sort's snapshot and write-back phases.
     /// It performs no indexed Get/Set/Delete operations and invokes no guest
     /// code, so a failed check can safely fall through to the observable path.
@@ -1860,7 +1893,10 @@ public partial class RuntimeEmitter
 
         // Now sort the copy using the same logic as EmitArraySort
         // We need to emit sort body but use copyLocal instead of arg0
-        EmitSortBodyOnLocal(il, runtime, copyLocal, observeProperties: false);
+        EmitSortBodyOnLocal(
+            il, runtime, copyLocal,
+            observeProperties: false,
+            directComparator: false);
     }
 
     /// <summary>
@@ -1910,13 +1946,20 @@ public partial class RuntimeEmitter
     /// Emits the body of the sort algorithm (stable bottom-up merge sort, Θ(n log n)).
     /// When mutateInPlace is true, sorts arg0 and returns arg0.
     /// </summary>
-    private void EmitSortBody(ILGenerator il, EmittedRuntime runtime, bool mutateInPlace)
+    private void EmitSortBody(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        bool mutateInPlace,
+        bool directComparator = false)
     {
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, listLocal);
 
-        EmitSortBodyOnLocal(il, runtime, listLocal, observeProperties: mutateInPlace);
+        EmitSortBodyOnLocal(
+            il, runtime, listLocal,
+            observeProperties: mutateInPlace,
+            directComparator: directComparator);
     }
 
     /// <summary>
@@ -1927,7 +1970,8 @@ public partial class RuntimeEmitter
         ILGenerator il,
         EmittedRuntime runtime,
         LocalBuilder listLocal,
-        bool observeProperties)
+        bool observeProperties,
+        bool directComparator)
     {
         // JavaScript sort algorithm:
         // 1. Partition: separate defined values from undefined values
@@ -2118,9 +2162,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, dstLocal);
 
         // argsBuf = new object[2] — allocated once here; reused for every comparator call.
-        il.Emit(OpCodes.Ldc_I4_2);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Stloc, argsLocal);
+        if (!directComparator)
+        {
+            // The general callable path reuses one argument buffer. A proven
+            // arrow delegate receives both elements directly and needs none.
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Newarr, _types.Object);
+            il.Emit(OpCodes.Stloc, argsLocal);
+        }
 
         var widthCond = il.DefineLabel();
         var widthBody = il.DefineLabel();
@@ -2203,57 +2252,75 @@ public partial class RuntimeEmitter
         // --- merge body: compare src[i] vs src[j] -> compareResultLocal ---
         il.MarkLabel(mergeBody);
 
-        var hasCompareFn = il.DefineLabel();
-        var noCompareFn = il.DefineLabel();
         var checkCompareResult = il.DefineLabel();
 
-        // compareFn is "absent" when null OR $Undefined.Instance (ECMA-262):
-        // `arr.sort(undefined)` must use the default comparator, not invoke undefined.
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, noCompareFn);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, noCompareFn);
-        il.Emit(OpCodes.Br, hasCompareFn);
+        if (directComparator)
+        {
+            // A statically resolved arrow comparator is already represented as a
+            // Func<object, object, object>. Call it directly so every comparison
+            // avoids the boxed callable-dispatch boundary and argument buffer.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, jLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Callvirt, typeof(Func<object, object, object>).GetMethod("Invoke")!);
+        }
+        else
+        {
+            var hasCompareFn = il.DefineLabel();
+            var noCompareFn = il.DefineLabel();
 
-        il.MarkLabel(noCompareFn);
-        // Default: CompareOrdinal(ToJsString(src[i]), ToJsString(src[j])). ToJsString
-        // runs the ToPrimitive protocol so `{toString:()=>"-2"}` sorts as "-2".
-        il.Emit(OpCodes.Ldloc, srcLocal);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, str1Local);
-        il.Emit(OpCodes.Ldloc, srcLocal);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, str2Local);
-        il.Emit(OpCodes.Ldloc, str1Local);
-        il.Emit(OpCodes.Ldloc, str2Local);
-        il.Emit(OpCodes.Call, typeof(string).GetMethod("CompareOrdinal", [typeof(string), typeof(string)])!);
-        il.Emit(OpCodes.Stloc, compareResultLocal);
-        il.Emit(OpCodes.Br, checkCompareResult);
+            // compareFn is "absent" when null OR $Undefined.Instance (ECMA-262):
+            // `arr.sort(undefined)` must use the default comparator, not invoke undefined.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Brfalse, noCompareFn);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brtrue, noCompareFn);
+            il.Emit(OpCodes.Br, hasCompareFn);
 
-        il.MarkLabel(hasCompareFn);
-        // result = InvokeValue(compareFn, argsBuf) with argsBuf[0]=src[i], argsBuf[1]=src[j].
-        // argsBuf is the single hoisted object[2] declared above — no per-comparison allocation.
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ldloc, srcLocal);
-        il.Emit(OpCodes.Ldloc, iLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Ldloc, srcLocal);
-        il.Emit(OpCodes.Ldloc, jLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stelem_Ref);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, argsLocal);
-        il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+            il.MarkLabel(noCompareFn);
+            // Default: CompareOrdinal(ToJsString(src[i]), ToJsString(src[j])). ToJsString
+            // runs the ToPrimitive protocol so `{toString:()=>"-2"}` sorts as "-2".
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Stloc, str1Local);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, jLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Call, runtime.ToJsString);
+            il.Emit(OpCodes.Stloc, str2Local);
+            il.Emit(OpCodes.Ldloc, str1Local);
+            il.Emit(OpCodes.Ldloc, str2Local);
+            il.Emit(OpCodes.Call, typeof(string).GetMethod("CompareOrdinal", [typeof(string), typeof(string)])!);
+            il.Emit(OpCodes.Stloc, compareResultLocal);
+            il.Emit(OpCodes.Br, checkCompareResult);
+
+            il.MarkLabel(hasCompareFn);
+            // result = InvokeValue(compareFn, argsBuf) with argsBuf[0]=src[i], argsBuf[1]=src[j].
+            // argsBuf is the single hoisted object[2] declared above — no per-comparison allocation.
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, jLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Stelem_Ref);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, argsLocal);
+            il.Emit(OpCodes.Call, runtime.InvokeMethodValue);
+        }
 
         // Convert compare result to a sign in compareResultLocal:
         // double -> sign (<0 / 0 / >0); NaN or non-double -> 0 (equal -> take left -> stable).

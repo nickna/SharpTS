@@ -207,21 +207,34 @@ public static class ArrayBuiltIns
         private readonly ISharpTSCallable _fn;
         private readonly Interpreter _interp;
         private readonly List<object?> _compareArgs = new(2) { null, null };
+        private readonly SharpTSArrowFunction? _simpleNumericArrow;
 
         public CompareFnComparer(ISharpTSCallable fn, Interpreter interp)
-            => (_fn, _interp) = (fn, interp);
+        {
+            (_fn, _interp) = (fn, interp);
+            // Keep ordinary invocation while debugging so comparator frames and
+            // expression breakpoints remain visible.
+            if (interp.DebugController is null
+                && fn is SharpTSArrowFunction { HasSimpleSortComparator: true } arrow)
+                _simpleNumericArrow = arrow;
+        }
 
         public int Compare((object? Element, long Index) x, (object? Element, long Index) y)
         {
-            _compareArgs[0] = x.Element;
-            _compareArgs[1] = y.Element;
-            // NOTE: deliberately stays on the legacy boxed Call rather than CallV2. For the
-            // common trivial comparator (`(a,b)=>a-b`), eagerly converting both boxed args to
-            // RuntimeValue here (FromBoxed) costs more than this near-free reference copy and
-            // measured ~13% SLOWER on a 100k interpreter sort — the boxed Call lets the
-            // comparator body unbox lazily. Revisit only with a non-boxing comparator path.
-            var result = _fn.Call(_interp, _compareArgs);
-            double numericResult = _interp.ToNumberWithPrimitive(result);
+            double numericResult;
+            if (_simpleNumericArrow?.TryEvaluateSimpleSortComparator(
+                    _interp, x.Element, y.Element, out numericResult) != true)
+            {
+                _compareArgs[0] = x.Element;
+                _compareArgs[1] = y.Element;
+                // NOTE: deliberately stays on the legacy boxed Call rather than CallV2. For the
+                // common trivial comparator (`(a,b)=>a-b`), eagerly converting both boxed args to
+                // RuntimeValue here (FromBoxed) costs more than this near-free reference copy and
+                // measured ~13% SLOWER on a 100k interpreter sort — the boxed Call lets the
+                // comparator body unbox lazily. Revisit only with a non-boxing comparator path.
+                var result = _fn.Call(_interp, _compareArgs);
+                numericResult = _interp.ToNumberWithPrimitive(result);
+            }
             if (!double.IsNaN(numericResult) && numericResult != 0)
                 return numericResult < 0 ? -1 : 1;
             // Stability tie-breaker: preserve original order

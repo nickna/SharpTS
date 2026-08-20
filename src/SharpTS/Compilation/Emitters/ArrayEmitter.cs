@@ -328,6 +328,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                 break;
 
             case "sort":
+                // The direct path re-emits the comparator from its AST, so an
+                // await-safe pre-spill must continue through the general path.
+                if (argLocals == null && TryEmitSortDirectCall(emitter, arguments))
+                    break;
                 if (arguments.Count == 0)
                     il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
                 else
@@ -1077,6 +1081,59 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         emitter.EmitExpression(arguments[1]);
         emitter.EmitBoxIfNeeded(arguments[1]);
         ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArrayReduceDirect);
+        return true;
+    }
+
+    /// <summary>
+    /// Sort-specific fast path for a statically resolved two-parameter arrow.
+    /// The runtime helper still snapshots the dense backing store and validates
+    /// it after every comparator call, preserving observable mutation semantics;
+    /// only the boxed callable-dispatch boundary is removed.
+    /// </summary>
+    private static bool TryEmitSortDirectCall(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (arguments.Count != 1) return false;
+        var af = ResolveCallbackArrow(emitter, arguments[0]);
+        if (af is null) return false;
+        if (af.HasOwnThis || af.IsAsync || af.IsGenerator) return false;
+        if (af.Parameters.Count != 2) return false;
+        foreach (var p in af.Parameters)
+        {
+            if (p.IsRest || p.IsOptional) return false;
+            if (p.DefaultValue != null) return false;
+        }
+        if (!ctx.ArrowMethods.TryGetValue(af, out var staticMethod)) return false;
+
+        bool allObject = staticMethod.ReturnType == ctx.Types.Object;
+        if (allObject)
+        {
+            foreach (var sp in staticMethod.GetParameters())
+            {
+                if (sp.ParameterType != ctx.Types.Object)
+                {
+                    allObject = false;
+                    break;
+                }
+            }
+        }
+
+        if (allObject)
+        {
+            if (!emitter.TryEmitArrowAsDelegate(af, typeof(Func<object, object, object>)))
+                return false;
+        }
+        else if (!TryBindTypedArrowAdapter(
+                     emitter,
+                     af,
+                     staticMethod,
+                     funcArity: 2,
+                     boolReturn: false))
+        {
+            return false;
+        }
+
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArraySortDirect);
         return true;
     }
 

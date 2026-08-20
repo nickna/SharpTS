@@ -410,6 +410,9 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     private readonly Expr.ArrowFunction _declaration;
     private readonly RuntimeEnvironment _closure;
     private readonly int _arity;
+    // null = no specialization; empty = `a - b`; otherwise `a.<property> - b.<property>`.
+    // One reference keeps the footprint of every other arrow function small.
+    private readonly string? _simpleSortProperty;
     // Receiver bound via Bind(). Stored on the function itself rather than
     // wrapping _closure with an extra scope — otherwise runtime scope depth
     // wouldn't match the resolver's static distances and outer captures break.
@@ -438,6 +441,7 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
         _boundThis = boundThis;
         _hasBoundThis = hasBoundThis;
         _arity = declaration.Parameters.Count(p => p.DefaultValue == null && !p.IsRest && !p.IsOptional);
+        _simpleSortProperty = DescribeSimpleSortComparator(declaration);
         InitializeIntrinsicProperties(declaration.Name?.Lexeme ?? "");
     }
 
@@ -564,6 +568,92 @@ public class SharpTSArrowFunction : ISharpTSCallable, ITypeCategorized
     }
 
     public int Arity() => _arity;
+
+    internal bool HasSimpleSortComparator => _simpleSortProperty is not null;
+
+    /// <summary>
+    /// Evaluates the common pure sort-comparator forms <c>a - b</c> and
+    /// <c>a.key - b.key</c> without allocating a call environment. Property
+    /// reads still use the interpreter's ordinary observable Get operation.
+    /// </summary>
+    internal bool TryEvaluateSimpleSortComparator(
+        Interpreter interpreter,
+        object? first,
+        object? second,
+        out double result)
+    {
+        if (_simpleSortProperty is null)
+        {
+            result = 0;
+            return false;
+        }
+
+        object? left = first;
+        object? right = second;
+        if (_simpleSortProperty.Length != 0)
+        {
+            left = interpreter.GetPropertyValue(left, _simpleSortProperty);
+            right = interpreter.GetPropertyValue(right, _simpleSortProperty);
+        }
+
+        result = interpreter.ToNumberWithPrimitive(left)
+            - interpreter.ToNumberWithPrimitive(right);
+        return true;
+    }
+
+    private static string? DescribeSimpleSortComparator(
+        Expr.ArrowFunction declaration)
+    {
+        if (declaration.Parameters.Count != 2
+            || declaration.ExpressionBody is not Expr.Binary
+            {
+                Operator.Type: TokenType.MINUS
+            } binary)
+        {
+            return null;
+        }
+
+        foreach (Stmt.Parameter parameter in declaration.Parameters)
+        {
+            if (parameter.DefaultValue is not null
+                || parameter.IsRest
+                || parameter.IsOptional)
+            {
+                return null;
+            }
+        }
+
+        string firstName = declaration.Parameters[0].Name.Lexeme;
+        string secondName = declaration.Parameters[1].Name.Lexeme;
+        if (binary.Left is Expr.Variable left
+            && left.Name.Lexeme == firstName
+            && binary.Right is Expr.Variable right
+            && right.Name.Lexeme == secondName)
+        {
+            return string.Empty;
+        }
+
+        if (binary.Left is Expr.Get
+            {
+                Object: Expr.Variable leftReceiver,
+                Optional: false,
+                Defaulted: false
+            } leftGet
+            && leftReceiver.Name.Lexeme == firstName
+            && binary.Right is Expr.Get
+            {
+                Object: Expr.Variable rightReceiver,
+                Optional: false,
+                Defaulted: false
+            } rightGet
+            && rightReceiver.Name.Lexeme == secondName
+            && leftGet.Name.Lexeme == rightGet.Name.Lexeme)
+        {
+            return leftGet.Name.Lexeme;
+        }
+
+        return null;
+    }
 
     internal bool IsStrict
         => _closure.IsStrictMode

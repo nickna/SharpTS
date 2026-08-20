@@ -1160,6 +1160,7 @@ public partial class RuntimeEmitter
         // EmitArrayConstructor is emitted earlier (before InvokeValue) so its
         // MethodBuilder is available to InvokeValue's Type-callee dispatch.
         EmitArraySort(typeBuilder, runtime);
+        EmitArraySortDirect(typeBuilder, runtime);
         EmitArraySortProto(typeBuilder, runtime);
         EmitArrayToSorted(typeBuilder, runtime);
         EmitArrayToSortedGeneric(typeBuilder, runtime);
