@@ -228,6 +228,10 @@ public partial class ILEmitter
             record.Fields.Count != literal.Properties.Count)
             return false;
 
+        if (!_ctx.RuntimeFeatures.JsonScalarRecordShapeFingerprints.Contains(
+            JsonSerializationShapeAnalyzer.Fingerprint(record)))
+            return false;
+
         for (int i = 0; i < literal.Properties.Count; i++)
         {
             var property = literal.Properties[i];
