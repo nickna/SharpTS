@@ -1,3 +1,4 @@
+using SharpTS.Runtime.Types;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -9,6 +10,17 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class RegExpExecSemanticsTests
 {
+    [Fact]
+    public void IntrinsicGlobalMatchBuffer_BecomesArrayBackingWithoutCopy()
+    {
+        var regexp = new SharpTSRegExp("[a-z]+", "g");
+        var matches = regexp.MatchAll("alpha beta gamma");
+        var result = new SharpTSArray(matches);
+
+        Assert.Same(matches, result.Elements);
+        Assert.Equal(new object?[] { "alpha", "beta", "gamma" }, result);
+    }
+
     [Theory, ModeData]
     public void Exec_ReturnsUndefinedForUnmatchedCaptures(
         ExecutionMode mode)
