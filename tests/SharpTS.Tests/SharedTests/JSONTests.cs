@@ -587,7 +587,7 @@ public class JSONTests
         Assert.Equal("1 2 4\nid,label\nid\n", TestHarness.Run(source, mode));
     }
 
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void JSON_ShapedRecord_FallsBackForObservableMutations(
         ExecutionMode mode)
     {
@@ -630,7 +630,7 @@ public class JSONTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void JSON_CompactRecord_RetainsOrdinaryObjectSemantics(
         ExecutionMode mode)
     {
@@ -656,7 +656,7 @@ public class JSONTests
             TestHarness.Run(source, mode));
     }
 
-    [Theory, CompiledOnlyData]
+    [Theory, ModeData]
     public void JSON_ShapedRoundTrip_HandlesNestedAndNullSlots(
         ExecutionMode mode)
     {
