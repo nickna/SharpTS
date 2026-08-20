@@ -188,9 +188,14 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
         switch (stmt)
         {
             case Stmt.Expression e:
-                EmitExpression(e.Expr);
-                // All expressions leave a value on the stack, so pop when used as a statement
-                IL.Emit(OpCodes.Pop);
+                if (!TryEmitDiscardedExpression(e.Expr))
+                {
+                    EmitExpression(e.Expr);
+                    // Ordinary expressions leave a value on the stack. A
+                    // discarded-expression intrinsic reports success only
+                    // after emitting a stack-neutral replacement.
+                    IL.Emit(OpCodes.Pop);
+                }
                 break;
 
             case Stmt.Var v:

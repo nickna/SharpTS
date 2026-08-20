@@ -257,6 +257,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayForEach { get; set; } = null!;
     public MethodBuilder ArrayForEachDirect { get; set; } = null!;
     public MethodBuilder ArrayPush { get; set; } = null!;
+    public MethodBuilder ArrayPushOneDiscarded { get; set; } = null!;
     public MethodBuilder ArrayPushDouble { get; set; } = null!;
     public MethodBuilder ArrayPushBool { get; set; } = null!;
     public MethodBuilder ArrayPushProto { get; set; } = null!;

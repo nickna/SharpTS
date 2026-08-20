@@ -86,6 +86,7 @@ public sealed class RuntimeFeatureDetector
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
             UsesDatePrototypeMutation = false,
+            UsesArrayPrototypeMutation = false,
             PotentiallyMaterializesUnknownCompactObjectRecordShape = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
         };
@@ -746,9 +747,18 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                if (IsArrayPrototype(g) || g.Name.Lexeme == "__proto__")
+                    _set.UsesArrayPrototypeMutation = true;
                 if (g.Object is Expr.Variable ov)
                 {
                     HandleMemberAccess(ov.Name.Lexeme, g.Name.Lexeme);
+                    if (ov.Name.Lexeme is "Object" or "Reflect"
+                        && g.Name.Lexeme == "setPrototypeOf")
+                        _set.UsesArrayPrototypeMutation = true;
+                    if ((ov.Name.Lexeme == "Object" && g.Name.Lexeme == "assign")
+                        || (ov.Name.Lexeme == "Reflect"
+                            && g.Name.Lexeme is "set" or "deleteProperty"))
+                        _set.UsesArrayPrototypeMutation = true;
                     if ((ov.Name.Lexeme == "Object"
                             && g.Name.Lexeme is "defineProperty" or "defineProperties" or "create")
                         || (ov.Name.Lexeme == "Reflect" && g.Name.Lexeme == "defineProperty"))
@@ -809,6 +819,10 @@ public sealed class RuntimeFeatureDetector
                 MarkMutationTarget(s.Object);
                 if (IsDatePrototype(s.Object))
                     _set.UsesDatePrototypeMutation = true;
+                if (IsArrayPrototype(s.Object)
+                    || s.Name.Lexeme == "__proto__"
+                    || (s.Name.Lexeme == "push" && CouldTargetArray(s.Object)))
+                    _set.UsesArrayPrototypeMutation = true;
                 if (s.Object is Expr.Variable osv)
                     HandleMemberAccess(osv.Name.Lexeme, s.Name.Lexeme);
                 VisitExpr(s.Object);
@@ -829,6 +843,12 @@ public sealed class RuntimeFeatureDetector
                     // Computed access may resolve to defineProperty at runtime.
                     _set.UsesDynamicPropertyDescriptors = true;
                 }
+                if (gi.Object is Expr.Variable indexedPrototypeOwner
+                    && indexedPrototypeOwner.Name.Lexeme is "Object" or "Reflect"
+                    && gi.Index is Expr.Literal { Value: "setPrototypeOf" })
+                {
+                    _set.UsesArrayPrototypeMutation = true;
+                }
                 VisitExpr(gi.Object);
                 VisitExpr(gi.Index);
                 break;
@@ -836,12 +856,28 @@ public sealed class RuntimeFeatureDetector
                 MarkMutationTarget(si.Object);
                 if (IsDatePrototype(si.Object))
                     _set.UsesDatePrototypeMutation = true;
+                if (IsArrayPrototype(si.Object)
+                    || si.Index is Expr.Literal { Value: "__proto__" }
+                    || (si.Index is Expr.Literal { Value: "push" }
+                        && CouldTargetArray(si.Object)))
+                    _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(si.Object);
                 VisitExpr(si.Index);
                 VisitExpr(si.Value);
                 break;
 
             case Expr.Call c:
+                if (c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
+                        Name.Lexeme: "setPrototypeOf"
+                    })
+                {
+                    // Alias tracking for prototype objects is deliberately not
+                    // attempted here. Any explicit prototype-chain mutation API
+                    // disables the direct append path for the whole program.
+                    _set.UsesArrayPrototypeMutation = true;
+                }
                 if (c.Callee is not Expr.Variable directSourceCall ||
                     !_sourceFunctions.Contains(directSourceCall.Name.Lexeme))
                 {
@@ -933,11 +969,16 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.CompoundSet cs:
                 MarkMutationTarget(cs.Object);
+                if (cs.Name.Lexeme == "push" && CouldTargetArray(cs.Object))
+                    _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(cs.Object);
                 VisitExpr(cs.Value);
                 break;
             case Expr.CompoundSetIndex csi:
                 MarkMutationTarget(csi.Object);
+                if (csi.Index is Expr.Literal { Value: "push" }
+                    && CouldTargetArray(csi.Object))
+                    _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(csi.Object);
                 VisitExpr(csi.Index);
                 VisitExpr(csi.Value);
@@ -947,11 +988,16 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.LogicalSet ls:
                 MarkMutationTarget(ls.Object);
+                if (ls.Name.Lexeme == "push" && CouldTargetArray(ls.Object))
+                    _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(ls.Object);
                 VisitExpr(ls.Value);
                 break;
             case Expr.LogicalSetIndex lsi:
                 MarkMutationTarget(lsi.Object);
+                if (lsi.Index is Expr.Literal { Value: "push" }
+                    && CouldTargetArray(lsi.Object))
+                    _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(lsi.Object);
                 VisitExpr(lsi.Index);
                 VisitExpr(lsi.Value);
@@ -993,9 +1039,19 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.Delete d:
                 if (d.Operand is Expr.Get deletedProperty)
+                {
                     MarkMutationTarget(deletedProperty.Object);
+                    if (deletedProperty.Name.Lexeme == "push"
+                        && CouldTargetArray(deletedProperty.Object))
+                        _set.UsesArrayPrototypeMutation = true;
+                }
                 else if (d.Operand is Expr.GetIndex deletedIndex)
+                {
                     MarkMutationTarget(deletedIndex.Object);
+                    if (deletedIndex.Index is Expr.Literal { Value: "push" }
+                        && CouldTargetArray(deletedIndex.Object))
+                        _set.UsesArrayPrototypeMutation = true;
+                }
                 else
                     _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 VisitExpr(d.Operand);
@@ -1153,6 +1209,42 @@ public sealed class RuntimeFeatureDetector
         Object: Expr.Variable { Name.Lexeme: "Date" },
         Name.Lexeme: "prototype"
     };
+
+    private static bool IsArrayPrototype(Expr expr) => expr is Expr.Get
+    {
+        Object: Expr.Variable { Name.Lexeme: "Array" },
+        Name.Lexeme: "prototype"
+    };
+
+    private bool CouldTargetArray(Expr expr)
+    {
+        // Preserve the useful static type through casts commonly used to mutate a
+        // builtin method (`(items as any).push = ...`).  If type information is not
+        // available, be conservative: the feature set is also used by callers that
+        // construct a detector without a TypeMap.
+        while (true)
+        {
+            switch (expr)
+            {
+                case Expr.Grouping grouping:
+                    expr = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expr = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expr = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expr = nonNull.Expression;
+                    continue;
+            }
+
+            break;
+        }
+
+        return _typeMap is null || _typeMap.Get(expr) is TypeInfo.Array;
+    }
 
     private void MarkMutationOperand(Expr operand)
     {

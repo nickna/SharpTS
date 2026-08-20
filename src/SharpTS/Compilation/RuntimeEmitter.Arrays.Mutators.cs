@@ -819,6 +819,74 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Appends one value when a syntactic <c>array.push(value)</c> result is
+    /// discarded. Exact, dense, ordinary <c>$Array</c> instances take the
+    /// allocation-free <see cref="EmitArrayPush"/> path. Every unusual runtime
+    /// shape rebuilds the ordinary one-element argument vector and delegates to
+    /// <see cref="EmitArrayPushProto"/>, retaining its complete Set/length order.
+    /// </summary>
+    private void EmitArrayPushOneDiscarded(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayPushOneDiscarded",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Object, _types.Object]);
+        runtime.ArrayPushOneDiscarded = method;
+
+        var il = method.GetILGenerator();
+        var fallback = il.DefineLabel();
+
+        // Subclasses can override observable array behavior. Require the exact
+        // emitted $Array carrier, not merely an `isinst` match.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldtoken, runtime.TSArrayType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, fallback);
+
+        // A numeric-mode array has no boxed base-list elements yet. Deopt before
+        // looking at Count or calling the boxed append helper.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+
+        // Sparse arrays need ArrayPushProto's full long-length/index machinery.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayLongLengthGetter);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_I8);
+        il.Emit(OpCodes.Bne_Un, fallback);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.ArrayPush);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Call, runtime.ArrayPushProto);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ret);
+    }
+
     // Variadic ArrayUnshift wired into Array.prototype. Per ECMA-262 unshift
     // takes ...items and inserts them at the start preserving order: for items
     // [a, b, c], result has [a, b, c, ...rest]. We achieve this by inserting
