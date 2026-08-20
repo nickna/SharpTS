@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.RegularExpressions;
+using SharpTS.Runtime;
 using SharpTS.TypeSystem;
 
 namespace SharpTS.Runtime.Types;
@@ -853,7 +854,7 @@ public class SharpTSRegExp : ITypeCategorized
     /// <summary>
     /// Match all occurrences in the string (used by String.match with global flag).
     /// </summary>
-    internal List<object?> MatchAll(string input)
+    internal Deque<object?> MatchAll(string input)
     {
         // String.prototype.match(/g) only needs the full-match substrings, not
         // capture groups — so use EnumerateMatches (ValueMatch structs, span-
@@ -861,15 +862,14 @@ public class SharpTSRegExp : ITypeCategorized
         // object allocation that dominates this path (~2.3x faster here), and
         // matches Matches(input)'s whole-string scan semantics exactly.
         //
-        // Returns List<object?> (not List<string>) so callers hand it straight
-        // to the SharpTSArray ctor with no element-by-element re-box into an
-        // object list. The substrings are reference types, so storing them as
-        // object? is free (no boxing). Mirrored by the emitted MatchAll
-        // (RuntimeEmitter.TSRegExp.cs) — keep both in lockstep.
-        List<object?> result = [];
+        // Build the array's Deque backing directly. Returning List<object?>
+        // forced SharpTSArray(IEnumerable<object?>) to allocate a second buffer
+        // and copy every matched string. The substrings are reference types, so
+        // storing them as object? is free (no boxing).
+        Deque<object?> result = [];
         foreach (ValueMatch m in _regex.EnumerateMatches(input))
         {
-            result.Add(input.Substring(m.Index, m.Length));
+            result.AddLast(input.Substring(m.Index, m.Length));
         }
         return result;
     }
