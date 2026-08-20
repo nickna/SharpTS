@@ -241,6 +241,23 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public RuntimeValue GetPropertyRV(string name) => RuntimeValue.FromBoxed(GetProperty(name));
 
     /// <summary>
+    /// Performs the common ordinary data-property read with one dictionary
+    /// lookup. Accessor metadata is disjoint from the data dictionary in the
+    /// normal representation; if any accessor overlay exists, callers retain
+    /// the full getter/prototype dispatch path.
+    /// </summary>
+    internal bool TryGetOrdinaryDataProperty(
+        string name,
+        out object? value)
+    {
+        if (_accessorProperties is null)
+            return _fields.TryGetValue(name, out value);
+
+        value = null;
+        return false;
+    }
+
+    /// <summary>
     /// Reflection-friendly field accessor used by the compiled-mode
     /// <c>GetFieldsProperty</c> helper. Its <c>GetMember(string)</c> reflection
     /// fallback (<c>Compilation/RuntimeEmitter.Objects.Properties.cs</c>) calls

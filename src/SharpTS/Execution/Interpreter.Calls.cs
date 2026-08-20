@@ -744,6 +744,25 @@ public partial class Interpreter
             }
         }
 
+        // The JSON construction workload creates labels such as "item-" + i.
+        // For safe integer-valued doubles, append the number span directly into
+        // the one result string instead of allocating an intermediate numeric
+        // string. Both operands are already primitives, so no ToPrimitive hook
+        // or Symbol error can be skipped by this specialization.
+        if (op.Type == TokenType.PLUS)
+        {
+            if (leftRV.IsString && rightRV.IsNumber)
+            {
+                return RuntimeValue.FromString(ConcatStringAndNumber(
+                    leftRV.AsString(), rightRV.AsNumber(), numberFirst: false));
+            }
+            if (leftRV.IsNumber && rightRV.IsString)
+            {
+                return RuntimeValue.FromString(ConcatStringAndNumber(
+                    rightRV.AsString(), leftRV.AsNumber(), numberFirst: true));
+            }
+        }
+
         object? left = leftRV.ToObject();
         object? right = rightRV.ToObject();
 
@@ -774,6 +793,30 @@ public partial class Interpreter
             OperatorDescriptor.InstanceOf => RuntimeValue.FromBoxed(EvaluateInstanceof(left, right)),
             _ => RuntimeValue.Undefined
         };
+    }
+
+    private static string ConcatStringAndNumber(
+        string text,
+        double number,
+        bool numberFirst)
+    {
+        if (number == Math.Floor(number)
+            && Math.Abs(number) < 9007199254740992.0)
+        {
+            Span<char> buffer = stackalloc char[20];
+            ((long)number).TryFormat(
+                buffer,
+                out int charsWritten,
+                provider: System.Globalization.CultureInfo.InvariantCulture);
+            return numberFirst
+                ? string.Concat(buffer[..charsWritten], text.AsSpan())
+                : string.Concat(text.AsSpan(), buffer[..charsWritten]);
+        }
+
+        string formatted = Compilation.RuntimeTypes.FormatNumber(number);
+        return numberFirst
+            ? string.Concat(formatted, text)
+            : string.Concat(text, formatted);
     }
 
     private bool TryEvaluateDotNetBinary(

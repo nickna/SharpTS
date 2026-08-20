@@ -1751,6 +1751,20 @@ public partial class Interpreter
     /// </summary>
     private RuntimeValue EvaluateGetOnRecordRV(SharpTSObject simpleObj, string memberName)
     {
+        // Parsed records and ordinary object literals have no accessor overlay.
+        // Read their data property once instead of probing getter storage,
+        // ContainsKey, and then the dictionary indexer. Callable values still
+        // retain member-access binding semantics.
+        if (simpleObj.TryGetOrdinaryDataProperty(memberName, out var ownValue))
+        {
+            if (!simpleObj.ShouldPreserveCallableValueIdentity(memberName)
+                && TryBindReceiverForMethodAccess(ownValue, simpleObj) is { } boundMethod)
+            {
+                return RuntimeValue.FromObject(boundMethod);
+            }
+            return RuntimeValue.FromBoxed(ownValue);
+        }
+
         // Check for getter first on the own object
         var getter = simpleObj.GetGetter(memberName);
         if (getter != null)

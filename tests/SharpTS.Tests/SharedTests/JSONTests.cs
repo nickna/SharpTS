@@ -547,6 +547,32 @@ public class JSONTests
     }
 
     [Theory, ModeData]
+    public void JSON_Parse_OrdinaryTraversalRetainsAccessorAndPrototypeFallbacks(
+        ExecutionMode mode)
+    {
+        var source = """
+            const parsed: any = JSON.parse('{"value":7}');
+            console.log(parsed.value);
+
+            Object.defineProperty(parsed, "other", {
+                get: function (): number { return 9; },
+                enumerable: true,
+                configurable: true
+            });
+            console.log(parsed.value, parsed.other);
+
+            const inherited: any = Object.create(parsed);
+            console.log(inherited.value);
+
+            const callable: any = JSON.parse('{"value":11}');
+            callable.read = function (): number { return this.value; };
+            console.log(callable.read());
+            """;
+
+        Assert.Equal("7\n7 9\n7\n11\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void JSON_Stringify_KeySnapshotSurvivesGetterMutation(
         ExecutionMode mode)
     {
