@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using SharpTS.Parsing;
 using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
@@ -490,8 +491,28 @@ public partial class Interpreter
     /// </remarks>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/2/objects.html">TypeScript Object Types</seealso>
     /// <seealso href="https://www.typescriptlang.org/docs/handbook/release-notes/typescript-3-7.html#optional-chaining">TypeScript Optional Chaining</seealso>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGet(Expr.Get get)
-        => EvaluateGetCore(_syncContext, get).GetAwaiter().GetResult();
+    {
+        // Keep ordinary synchronous member reads out of the shared async state
+        // machine. SyncEvaluationContext only returns completed ValueTasks, but
+        // resuming that state machine still dominates tight traversal loops.
+        if (get.Object is Expr.Variable nsVar
+            && !IsRealmIntrinsicName(nsVar.Name.Lexeme)
+            && nsVar.Name.Lexeme != BuiltInNames.Promise)
+        {
+            object? member = BuiltInRegistry.Instance.GetStaticMethod(
+                nsVar.Name.Lexeme, get.Name.Lexeme);
+            if (member is not null)
+            {
+                return member is BuiltInMethod bm && bm.IsConstant
+                    ? RuntimeValue.FromBoxed(bm.CallBoxed(this, []))
+                    : RuntimeValue.FromObject(member);
+            }
+        }
+
+        return EvaluateGetOnObject(get, Evaluate(get.Object));
+    }
 
     /// <summary>
     /// Core property-access logic shared by the sync and async evaluators; the evaluation
@@ -951,6 +972,7 @@ public partial class Interpreter
     /// Core property access logic, shared between sync and async evaluation.
     /// Uses TypeCategoryResolver for unified type dispatch.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGetOnObject(Expr.Get get, object? obj)
     {
         // Handle optional chaining - return undefined if object is null or undefined
@@ -973,6 +995,21 @@ public partial class Interpreter
         if (obj is SharpTSProxy proxy)
         {
             return proxy.TrapGetRV(get.Name.Lexeme, this);
+        }
+
+        // These two exact ordinary shapes dominate data traversal. Resolve
+        // them before namespace/category/built-in dispatch while retaining the
+        // existing record helper's accessor, prototype, and callable rules.
+        string directMemberName = get.Name.Lexeme;
+        if (obj is SharpTSArray directArray
+            && directMemberName == "length")
+        {
+            return RuntimeValue.FromNumber(directArray.LongLength);
+        }
+        if (obj?.GetType() == typeof(SharpTSObject))
+        {
+            return EvaluateGetOnRecordRV(
+                (SharpTSObject)obj, directMemberName);
         }
 
         // String.prototype / Number.prototype / Boolean.prototype resolve to
@@ -1749,6 +1786,7 @@ public partial class Interpreter
     /// (lodash.js ~2177) does `this.clear()` in its ctor where `clear` lives on
     /// `MapCache.prototype`; without the walk it resolves to undefined.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private RuntimeValue EvaluateGetOnRecordRV(SharpTSObject simpleObj, string memberName)
     {
         // Parsed records and ordinary object literals have no accessor overlay.
@@ -1757,6 +1795,9 @@ public partial class Interpreter
         // retain member-access binding semantics.
         if (simpleObj.TryGetOrdinaryDataProperty(memberName, out var ownValue))
         {
+            if (ownValue is not ISharpTSCallable)
+                return RuntimeValue.FromBoxed(ownValue);
+
             if (!simpleObj.ShouldPreserveCallableValueIdentity(memberName)
                 && TryBindReceiverForMethodAccess(ownValue, simpleObj) is { } boundMethod)
             {

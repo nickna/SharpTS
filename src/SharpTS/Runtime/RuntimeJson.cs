@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using SharpTS.Runtime.Types;
@@ -18,6 +19,7 @@ internal static class RuntimeJson
     /// Parses JSON text into SharpTS runtime values. Throws
     /// <see cref="JsonException"/> on invalid input.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static object? Parse(string text)
     {
         int byteCount = Encoding.UTF8.GetByteCount(text);
@@ -47,6 +49,7 @@ internal static class RuntimeJson
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static object? ParseValue(
         ref Utf8JsonReader reader,
         List<string> propertyNames)
@@ -65,6 +68,7 @@ internal static class RuntimeJson
         };
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static SharpTSObject ParseObject(
         ref Utf8JsonReader reader,
         List<string> propertyNames)
@@ -91,6 +95,7 @@ internal static class RuntimeJson
         return new SharpTSObject(fields);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static SharpTSArray ParseArray(
         ref Utf8JsonReader reader,
         List<string> propertyNames)

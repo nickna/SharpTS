@@ -213,6 +213,29 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     public bool HasIndex(int index) => HasIndex((long)index);
 
     /// <summary>
+    /// Reads a present indexed data property in one storage probe. Returns
+    /// false for holes, out-of-range indices, and indexed accessors so callers
+    /// can preserve the full prototype/accessor path for those cases.
+    /// </summary>
+    internal bool TryGetPresentDataIndex(long index, out object? value)
+    {
+        value = null;
+        if ((ulong)index >= (ulong)_length
+            || index <= uint.MaxValue
+                && (_indexAccessors?.ContainsKey((uint)index) ?? false))
+        {
+            return false;
+        }
+
+        object? candidate = GetCore(index);
+        if (candidate is ArrayHole)
+            return false;
+
+        value = candidate;
+        return true;
+    }
+
+    /// <summary>
     /// Makes <paramref name="index"/> a hole (ECMA-262 <c>delete arr[i]</c>).
     /// Length is unchanged. No-op for out-of-range indices or frozen arrays.
     /// </summary>

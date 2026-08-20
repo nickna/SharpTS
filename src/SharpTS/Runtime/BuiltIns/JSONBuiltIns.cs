@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using SharpTS.Execution;
@@ -70,6 +71,7 @@ public static class JSONBuiltIns
         => RuntimeValue.FromBoolean(
             args.Length > 0 && args[0].ToObject() is SharpTSRawJson);
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static RuntimeValue ParseJson(Interpreter interp, RuntimeValue _, ReadOnlySpan<RuntimeValue> args)
     {
         object? input = args.Length > 0
@@ -281,6 +283,7 @@ public static class JSONBuiltIns
         return reviver.Call(interp, [key, val]);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static RuntimeValue StringifyJson(Interpreter interp, RuntimeValue _, ReadOnlySpan<RuntimeValue> args)
     {
         var value = args[0].ToObject();
@@ -379,6 +382,7 @@ public static class JSONBuiltIns
             (_stringBuilders ??= []).Push(builder);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static bool StringifyValue(Interpreter interp, object holder, object? value, string? key,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, List<object> seen,
         int arrayIndex = -1)
@@ -622,6 +626,7 @@ public static class JSONBuiltIns
         StringifyJsonObject(interp, regex, regex.OwnEnumerableKeys(),
             replacer, allowedKeys, indentStr, depth, sb, seen);
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, List<object> seen)
     {
@@ -657,6 +662,7 @@ public static class JSONBuiltIns
         }
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static bool TryStringifyOrdinaryScalarRecord(
         SharpTSObject obj,
         StringBuilder builder)
@@ -750,6 +756,7 @@ public static class JSONBuiltIns
     /// OwnPropertyKeys-then-Get order — so the allowedKeys filter never
     /// allocates a filtered dictionary.
     /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     private static void StringifyJsonObject(Interpreter interp, object node,
         IEnumerable<string> keys,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth,
