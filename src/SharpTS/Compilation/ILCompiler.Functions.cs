@@ -504,6 +504,36 @@ public partial class ILCompiler
             resolvedParamTypes,
             argumentOffset: 0);
 
+        // Hoist exact compact-record type tests for parameters that retain their
+        // binding throughout the function. Recursive record walkers otherwise
+        // repeat the same isinst at every field read and every tree node.
+        var currentFuncType = _typeMap?.GetFunctionType(qualifiedFunctionName)
+            ?? _typeMap?.GetFunctionType(funcStmt.Name.Lexeme);
+        if (currentFuncType is not null && _runtime is not null)
+        {
+            var assignedParameters = ParameterAssignmentAnalyzer.FindAssigned(funcStmt.Body);
+            for (int i = 0; i < funcStmt.Parameters.Count && i < currentFuncType.ParamTypes.Count; i++)
+            {
+                string parameterName = funcStmt.Parameters[i].Name.Lexeme;
+                if (assignedParameters.Contains(parameterName) ||
+                    !TryGetCompactRecordShape(currentFuncType.ParamTypes[i], out var parameterShape))
+                    continue;
+
+                string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(parameterShape);
+                if (!_runtime.CompactObjectRecordTypes.TryGetValue(
+                        fingerprint, out var compactType))
+                    continue;
+
+                var typedLocal = il.DeclareLocal(compactType);
+                il.Emit(OpCodes.Ldarg, i);
+                il.Emit(OpCodes.Isinst, compactType);
+                il.Emit(OpCodes.Stloc, typedLocal);
+                ctx.HoistedCompactRecordParameters.Add(
+                    parameterName,
+                    new HoistedCompactRecordEntry(typedLocal, fingerprint));
+            }
+        }
+
         // Initialize captured parameters into the function display class. Runs
         // AFTER EmitDefaultParameters (which writes defaults back via Starg) so
         // closures see the defaulted value, not the missing-arg padding.
@@ -549,6 +579,45 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
 
+    }
+
+    private static bool TryGetCompactRecordShape(
+        SharpTS.TypeSystem.TypeInfo type, out JsonSerializationShape.Record shape)
+    {
+        if (type is SharpTS.TypeSystem.TypeInfo.Record record &&
+            JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&
+            analyzed is JsonSerializationShape.Record direct)
+        {
+            shape = direct;
+            return true;
+        }
+
+        if (type is SharpTS.TypeSystem.TypeInfo.Union union)
+        {
+            JsonSerializationShape.Record? found = null;
+            foreach (var member in union.Types)
+            {
+                if (member is SharpTS.TypeSystem.TypeInfo.Null or SharpTS.TypeSystem.TypeInfo.Undefined)
+                    continue;
+                if (member is not SharpTS.TypeSystem.TypeInfo.Record recordMember ||
+                    !JsonSerializationShapeAnalyzer.TryAnalyze(recordMember, out var memberShape) ||
+                    memberShape is not JsonSerializationShape.Record recordShape ||
+                    found is not null)
+                {
+                    shape = null!;
+                    return false;
+                }
+                found = recordShape;
+            }
+            if (found is not null)
+            {
+                shape = found;
+                return true;
+            }
+        }
+
+        shape = null!;
+        return false;
     }
 
     /// <summary>

@@ -436,7 +436,7 @@ public partial class RuntimeEmitter
         {
             var notScalarRecordLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
             il.Emit(OpCodes.Brfalse, notScalarRecordLabel);
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);

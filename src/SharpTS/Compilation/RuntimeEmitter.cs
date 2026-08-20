@@ -150,14 +150,20 @@ public partial class RuntimeEmitter
         // Emit $IHasFields interface for unified property access
         // Must come before $Object which implements it
         EmitHasFieldsInterface(moduleBuilder, runtime);
+        EmitCompactObjectRecordInterface(moduleBuilder, runtime);
 
         // Emit $Object class for standalone object support
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSObject
         EmitTSObjectClass(moduleBuilder, runtime);
 
-        if (features.UsesJSON)
+        if (features.UsesJSON || features.UsesCompactObjectRecords)
         {
             EmitJsonScalarRecordClass(moduleBuilder, runtime);
+            EmitCompactObjectRecordClasses(moduleBuilder, runtime);
+        }
+
+        if (features.UsesJSON)
+        {
             EmitTSRawJsonClass(moduleBuilder, runtime);
         }
 

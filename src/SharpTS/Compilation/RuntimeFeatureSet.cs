@@ -23,6 +23,27 @@ public sealed class RuntimeFeatureSet
     /// </summary>
     internal HashSet<string> JsonScalarRecordShapeFingerprints { get; } = [];
 
+    /// <summary>
+    /// Shapes of small plain-object literals, grouped by slot count. When an
+    /// arity has a single shape, the JSON scalar carrier's CLR type is itself
+    /// an exact shape guard and typed reads need not compare the lazy descriptor.
+    /// Ordinary stable records use the per-fingerprint types below.
+    /// </summary>
+    internal Dictionary<int, HashSet<string>> CompactObjectRecordShapeFingerprints { get; } = [];
+
+    internal Dictionary<string, JsonSerializationShape.Record> CompactObjectRecordShapes { get; } = [];
+
+    internal HashSet<string> PotentiallyMaterializedCompactObjectRecordShapes { get; } = [];
+    internal bool PotentiallyMaterializesUnknownCompactObjectRecordShape { get; set; } = true;
+
+    internal bool HasUniqueCompactObjectRecordShape(int arity, string fingerprint) =>
+        CompactObjectRecordShapeFingerprints.TryGetValue(arity, out var shapes) &&
+        shapes.Count == 1 && shapes.Contains(fingerprint);
+
+    internal bool CanAssumeCompactObjectRecordIsUnmaterialized(string fingerprint) =>
+        !PotentiallyMaterializesUnknownCompactObjectRecordShape &&
+        !PotentiallyMaterializedCompactObjectRecordShapes.Contains(fingerprint);
+
     // ── Network family ────────────────────────────────────────────────────
     public bool UsesNet { get; set; } = true;       // 'net' module / NetServer / NetSocket
     public bool UsesHttp { get; set; } = true;      // 'http'/'https' module / HttpServer
@@ -52,6 +73,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesReflectMetadata { get; set; } = true;   // Reflect.metadata / Reflect.defineMetadata
     public bool UsesCjsRequire { get; set; } = true;        // require() / module.exports
     public bool UsesJSON { get; set; } = true;              // JSON.parse / JSON.stringify
+    public bool UsesCompactObjectRecords { get; set; } = true; // compact slot-backed ordinary object literals
     public bool UsesIntl { get; set; } = true;              // Intl.NumberFormat, DateTimeFormat, Collator
     public bool UsesReflect { get; set; } = true;           // Reflect.set/get/deleteProperty/has/etc.
     public bool UsesIteratorHelpers { get; set; } = true;   // Iterator.prototype.map/filter/flatMap/take/drop

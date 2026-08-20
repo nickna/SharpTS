@@ -77,4 +77,112 @@ public class RuntimeFeatureDetectorTests
 
         Assert.Equal(expected, features.UsesDatePrototypeMutation);
     }
+
+    [Theory]
+    [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; const isLeaf = node.left === null; console.log(isLeaf);", true)]
+    [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; node.left = null;", false)]
+    [InlineData("export const node: { left: object | null; right: object | null } = { left: null, right: null };", false)]
+    [InlineData("const options: { month: string; day: string } = { month: 'long', day: 'numeric' }; new Intl.DateTimeFormat('en-US', options);", false)]
+    [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; const clone = { ...node };", false)]
+    [InlineData("console.log(({ left: null, right: null } as any));", false)]
+    public void ProvesCompactRecordShapeStableOnlyWithoutMutationOrEscape(
+        string source, bool expectedStable)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+        var shape = Assert.Single(features.CompactObjectRecordShapes);
+
+        bool actualStable = features.CanAssumeCompactObjectRecordIsUnmaterialized(shape.Key);
+        Assert.True(actualStable == expectedStable,
+            $"expectedStable={expectedStable}; actualStable={actualStable}; " +
+            $"unknown={features.PotentiallyMaterializesUnknownCompactObjectRecordShape}; " +
+            $"mutable=[{string.Join(",", features.PotentiallyMaterializedCompactObjectRecordShapes)}]; " +
+            $"shape={shape.Key}");
+    }
+
+    [Theory]
+    [InlineData("""
+        type Node = { left: Node | null; right: Node | null };
+        function consume(node: Node): void { const isLeaf = node.left === null; }
+        const node: Node = { left: null, right: null };
+        consume(node);
+        """, true)]
+    [InlineData("""
+        type Node = { left: Node | null; right: Node | null };
+        function consume(node: Node): void { const isLeaf = node.left === null; }
+        function invoke(consume: (node: Node) => void): void {
+            const node: Node = { left: null, right: null };
+            consume(node);
+        }
+        """, false)]
+    [InlineData("""
+        type Node = { left: Node | null; right: Node | null };
+        function consume(node: any): void { console.log(node); }
+        const node: Node = { left: null, right: null };
+        consume(node);
+        """, false)]
+    public void SourceCallProofRejectsShadowedFunctionBindings(
+        string source, bool expectedStable)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+        var shape = Assert.Single(features.CompactObjectRecordShapes);
+
+        Assert.Equal(
+            expectedStable,
+            features.CanAssumeCompactObjectRecordIsUnmaterialized(shape.Key));
+    }
+
+    [Fact]
+    public void EscapeProofRejectsWideningThroughAnyBinding()
+    {
+        const string source = """
+            type Node = { left: Node | null; right: Node | null };
+            const node: Node = { left: null, right: null };
+            const escaped: any = node;
+            console.log(escaped);
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+        var shape = Assert.Single(features.CompactObjectRecordShapes);
+
+        Assert.False(features.CanAssumeCompactObjectRecordIsUnmaterialized(shape.Key));
+    }
+
+    [Fact]
+    public void EscapeProofRejectsContextuallyAnyObjectLiteral()
+    {
+        const string source = """
+            const escaped: any = { left: null, right: null };
+            console.log(escaped);
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+        var shape = Assert.Single(features.CompactObjectRecordShapes);
+
+        Assert.False(features.CanAssumeCompactObjectRecordIsUnmaterialized(shape.Key));
+    }
+
+    [Fact]
+    public void EscapeProofTraversesNestedRecordFields()
+    {
+        const string source = """
+            type Node = { left: Node | null; right: Node | null };
+            type Wrapper = { node: Node };
+            const node: Node = { left: null, right: null };
+            const wrapper: Wrapper = { node };
+            console.log(wrapper);
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(2, features.CompactObjectRecordShapes.Count);
+        Assert.All(features.CompactObjectRecordShapes.Keys, fingerprint =>
+            Assert.False(features.CanAssumeCompactObjectRecordIsUnmaterialized(fingerprint)));
+    }
 }

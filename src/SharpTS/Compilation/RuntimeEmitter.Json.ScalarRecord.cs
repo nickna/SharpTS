@@ -17,53 +17,125 @@ public partial class RuntimeEmitter
         var typeBuilder = EmitTypeDefinitions.DefineType(
             moduleBuilder,
             "$JsonScalarRecord",
-            TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
+            TypeAttributes.Public | TypeAttributes.Class |
             TypeAttributes.BeforeFieldInit,
             _types.Object);
         runtime.JsonScalarRecordType = typeBuilder;
         EmitTypeDefinitions.AddInterfaceImplementation(typeBuilder, runtime.IHasFieldsInterface);
+        EmitTypeDefinitions.AddInterfaceImplementation(
+            typeBuilder, runtime.CompactObjectRecordInterface);
 
         var shapeField = typeBuilder.DefineField("_shape", _types.Object, FieldAttributes.Private);
-        var valuesField = typeBuilder.DefineField("_values", _types.ObjectArray, FieldAttributes.Private);
-        var inlineValueFields = Enumerable.Range(0, 4)
-            .Select(index => typeBuilder.DefineField(
-                $"_v{index}", _types.Object, FieldAttributes.Private))
-            .ToArray();
         var materializedField = typeBuilder.DefineField(
             "_materialized", _types.DictionaryStringObject, FieldAttributes.Private);
 
-        var ctor = typeBuilder.DefineConstructor(
-            MethodAttributes.Public,
+        var baseCtor = typeBuilder.DefineConstructor(
+            MethodAttributes.Family,
             CallingConventions.Standard,
-            [_types.Object, _types.ObjectArray]);
-        runtime.JsonScalarRecordCtor = ctor;
-        var ctorIl = ctor.GetILGenerator();
+            [_types.Object]);
+        var ctorIl = baseCtor.GetILGenerator();
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
         ctorIl.Emit(OpCodes.Ldarg_0);
         ctorIl.Emit(OpCodes.Ldarg_1);
         ctorIl.Emit(OpCodes.Stfld, shapeField);
-        ctorIl.Emit(OpCodes.Ldarg_0);
-        ctorIl.Emit(OpCodes.Ldarg_2);
-        ctorIl.Emit(OpCodes.Stfld, valuesField);
         ctorIl.Emit(OpCodes.Ret);
 
-        for (int arity = 1; arity <= inlineValueFields.Length; arity++)
+        var getValue = typeBuilder.DefineMethod(
+            "GetValue",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Object,
+            [_types.Int32]);
+        getValue.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+        runtime.JsonScalarRecordGetValue = getValue;
+        var baseGetValueIl = getValue.GetILGenerator();
+        baseGetValueIl.Emit(OpCodes.Ldnull);
+        baseGetValueIl.Emit(OpCodes.Ret);
+
+        var valuesGetter = typeBuilder.DefineMethod(
+            "get_Values",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.SpecialName |
+            MethodAttributes.HideBySig,
+            _types.ObjectArray,
+            Type.EmptyTypes);
+        runtime.JsonScalarRecordValuesGetter = valuesGetter;
+        var baseValuesIl = valuesGetter.GetILGenerator();
+        baseValuesIl.Emit(OpCodes.Ldnull);
+        baseValuesIl.Emit(OpCodes.Ret);
+
+        var derivedTypes = new List<TypeBuilder>();
+
+        var arrayType = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$JsonScalarRecordArray",
+            TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
+            TypeAttributes.BeforeFieldInit,
+            typeBuilder);
+        derivedTypes.Add(arrayType);
+        var valuesField = arrayType.DefineField("_values", _types.ObjectArray, FieldAttributes.Private);
+        var arrayCtor = arrayType.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [_types.Object, _types.ObjectArray]);
+        runtime.JsonScalarRecordCtor = arrayCtor;
+        var arrayCtorIl = arrayCtor.GetILGenerator();
+        arrayCtorIl.Emit(OpCodes.Ldarg_0);
+        arrayCtorIl.Emit(OpCodes.Ldarg_1);
+        arrayCtorIl.Emit(OpCodes.Call, baseCtor);
+        arrayCtorIl.Emit(OpCodes.Ldarg_0);
+        arrayCtorIl.Emit(OpCodes.Ldarg_2);
+        arrayCtorIl.Emit(OpCodes.Stfld, valuesField);
+        arrayCtorIl.Emit(OpCodes.Ret);
+        var arrayGetValue = arrayType.DefineMethod(
+            "GetValue",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+            _types.Object,
+            [_types.Int32]);
+        var arrayGetIl = arrayGetValue.GetILGenerator();
+        arrayGetIl.Emit(OpCodes.Ldarg_0);
+        arrayGetIl.Emit(OpCodes.Ldfld, valuesField);
+        arrayGetIl.Emit(OpCodes.Ldarg_1);
+        arrayGetIl.Emit(OpCodes.Ldelem_Ref);
+        arrayGetIl.Emit(OpCodes.Ret);
+        arrayType.DefineMethodOverride(arrayGetValue, getValue);
+        var arrayValuesGetter = arrayType.DefineMethod(
+            "get_Values",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.SpecialName |
+            MethodAttributes.HideBySig,
+            _types.ObjectArray,
+            Type.EmptyTypes);
+        var arrayValuesIl = arrayValuesGetter.GetILGenerator();
+        arrayValuesIl.Emit(OpCodes.Ldarg_0);
+        arrayValuesIl.Emit(OpCodes.Ldfld, valuesField);
+        arrayValuesIl.Emit(OpCodes.Ret);
+        arrayType.DefineMethodOverride(arrayValuesGetter, valuesGetter);
+
+        for (int arity = 1; arity <= 4; arity++)
         {
+            var inlineType = EmitTypeDefinitions.DefineType(
+                moduleBuilder,
+                $"$JsonScalarRecord{arity}",
+                TypeAttributes.Public | TypeAttributes.Class | TypeAttributes.Sealed |
+                TypeAttributes.BeforeFieldInit,
+                typeBuilder);
+            derivedTypes.Add(inlineType);
+            runtime.JsonScalarRecordInlineTypes.Add(arity, inlineType);
+            var inlineValueFields = Enumerable.Range(0, arity)
+                .Select(index => inlineType.DefineField(
+                    $"_v{index}", _types.Object, FieldAttributes.Private))
+                .ToArray();
             var parameterTypes = new Type[arity + 1];
             parameterTypes[0] = _types.Object;
             Array.Fill(parameterTypes, _types.Object, 1, arity);
-            var inlineCtor = typeBuilder.DefineConstructor(
+            var inlineCtor = inlineType.DefineConstructor(
                 MethodAttributes.Public,
                 CallingConventions.Standard,
                 parameterTypes);
             runtime.JsonScalarRecordInlineCtors.Add(arity, inlineCtor);
             var inlineIl = inlineCtor.GetILGenerator();
             inlineIl.Emit(OpCodes.Ldarg_0);
-            inlineIl.Emit(OpCodes.Call, _types.GetConstructor(_types.Object, Type.EmptyTypes)!);
-            inlineIl.Emit(OpCodes.Ldarg_0);
             inlineIl.Emit(OpCodes.Ldarg_1);
-            inlineIl.Emit(OpCodes.Stfld, shapeField);
+            inlineIl.Emit(OpCodes.Call, baseCtor);
             for (int index = 0; index < arity; index++)
             {
                 inlineIl.Emit(OpCodes.Ldarg_0);
@@ -71,43 +143,43 @@ public partial class RuntimeEmitter
                 inlineIl.Emit(OpCodes.Stfld, inlineValueFields[index]);
             }
             inlineIl.Emit(OpCodes.Ret);
+
+            var inlineGetValue = inlineType.DefineMethod(
+                "GetValue",
+                MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig,
+                _types.Object,
+                [_types.Int32]);
+            inlineGetValue.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+            var inlineGetIl = inlineGetValue.GetILGenerator();
+            var valueLabels = inlineValueFields.Select(_ => inlineGetIl.DefineLabel()).ToArray();
+            inlineGetIl.Emit(OpCodes.Ldarg_1);
+            inlineGetIl.Emit(OpCodes.Switch, valueLabels);
+            inlineGetIl.Emit(OpCodes.Ldnull);
+            inlineGetIl.Emit(OpCodes.Ret);
+            for (int index = 0; index < inlineValueFields.Length; index++)
+            {
+                inlineGetIl.MarkLabel(valueLabels[index]);
+                inlineGetIl.Emit(OpCodes.Ldarg_0);
+                inlineGetIl.Emit(OpCodes.Ldfld, inlineValueFields[index]);
+                inlineGetIl.Emit(OpCodes.Ret);
+
+                var directGetter = inlineType.DefineMethod(
+                    $"GetValue{index}",
+                    MethodAttributes.Public | MethodAttributes.HideBySig,
+                    _types.Object,
+                    Type.EmptyTypes);
+                directGetter.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+                runtime.JsonScalarRecordInlineGetters.Add((arity, index), directGetter);
+                var directIl = directGetter.GetILGenerator();
+                directIl.Emit(OpCodes.Ldarg_0);
+                directIl.Emit(OpCodes.Ldfld, inlineValueFields[index]);
+                directIl.Emit(OpCodes.Ret);
+            }
+            inlineType.DefineMethodOverride(inlineGetValue, getValue);
         }
 
         runtime.JsonScalarRecordShapeGetter = EmitSimpleGetter(
             "get_Shape", _types.Object, shapeField);
-        runtime.JsonScalarRecordValuesGetter = EmitSimpleGetter(
-            "get_Values", _types.ObjectArray, valuesField);
-
-        var getValue = typeBuilder.DefineMethod(
-            "GetValue",
-            MethodAttributes.Public | MethodAttributes.HideBySig,
-            _types.Object,
-            [_types.Int32]);
-        getValue.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
-        runtime.JsonScalarRecordGetValue = getValue;
-        var getValueIl = getValue.GetILGenerator();
-        var inline = getValueIl.DefineLabel();
-        getValueIl.Emit(OpCodes.Ldarg_0);
-        getValueIl.Emit(OpCodes.Ldfld, valuesField);
-        getValueIl.Emit(OpCodes.Dup);
-        getValueIl.Emit(OpCodes.Brfalse, inline);
-        getValueIl.Emit(OpCodes.Ldarg_1);
-        getValueIl.Emit(OpCodes.Ldelem_Ref);
-        getValueIl.Emit(OpCodes.Ret);
-        getValueIl.MarkLabel(inline);
-        getValueIl.Emit(OpCodes.Pop);
-        var valueLabels = inlineValueFields.Select(_ => getValueIl.DefineLabel()).ToArray();
-        getValueIl.Emit(OpCodes.Ldarg_1);
-        getValueIl.Emit(OpCodes.Switch, valueLabels);
-        getValueIl.Emit(OpCodes.Ldnull);
-        getValueIl.Emit(OpCodes.Ret);
-        for (int index = 0; index < inlineValueFields.Length; index++)
-        {
-            getValueIl.MarkLabel(valueLabels[index]);
-            getValueIl.Emit(OpCodes.Ldarg_0);
-            getValueIl.Emit(OpCodes.Ldfld, inlineValueFields[index]);
-            getValueIl.Emit(OpCodes.Ret);
-        }
 
         var isMaterialized = typeBuilder.DefineMethod(
             "get_IsMaterialized",
@@ -176,6 +248,8 @@ public partial class RuntimeEmitter
         typeBuilder.DefineMethodOverride(hasProperty, runtime.IHasFieldsHasProperty);
 
         typeBuilder.CreateType();
+        foreach (var derivedType in derivedTypes)
+            derivedType.CreateType();
 
         MethodBuilder EmitSimpleGetter(string name, Type returnType, FieldBuilder field)
         {
@@ -245,7 +319,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, valueIndexLocal);
-        il.Emit(OpCodes.Call, getValue);
+        il.Emit(OpCodes.Callvirt, getValue);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(
             _types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
         il.Emit(OpCodes.Ldloc, indexLocal);
@@ -325,7 +399,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, next);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, valueIndexLocal);
-        il.Emit(OpCodes.Call, getValue);
+        il.Emit(OpCodes.Callvirt, getValue);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(next);
         il.Emit(OpCodes.Ldloc, indexLocal);

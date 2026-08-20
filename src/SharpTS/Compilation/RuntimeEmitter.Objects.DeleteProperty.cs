@@ -276,7 +276,7 @@ public partial class RuntimeEmitter
         if (runtime.JsonScalarRecordType is not null)
         {
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
             il.Emit(OpCodes.Brtrue, scalarRecordDelLabel);
         }
 
