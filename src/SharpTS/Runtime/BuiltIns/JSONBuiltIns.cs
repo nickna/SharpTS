@@ -11,6 +11,12 @@ namespace SharpTS.Runtime.BuiltIns;
 /// </summary>
 public static class JSONBuiltIns
 {
+    [ThreadStatic]
+    private static Stack<List<string>>? _enumerableKeySnapshots;
+
+    [ThreadStatic]
+    private static Stack<StringBuilder>? _stringBuilders;
+
     // ECMA-262 25.5: JSON.parse / JSON.stringify are single built-in function
     // objects, so repeated access must return the SAME callable (identity
     // stability: `JSON.stringify === JSON.stringify`). Build the methods once
@@ -328,7 +334,9 @@ public static class JSONBuiltIns
         // Most JSON payloads quickly outgrow StringBuilder's 16-character
         // default buffer. A modest initial buffer avoids the first four growth
         // copies without retaining a workload-sized allocation between calls.
-        var sb = new StringBuilder(256);
+        StringBuilder sb = RentStringBuilder();
+        try
+        {
         // ECMA-262 25.5.2.3: SerializeJSONProperty maintains a stack of currently-
         // serializing objects/arrays. A cycle throws TypeError. Reference equality
         // (not .Equals) is the spec's notion of identity.
@@ -348,7 +356,27 @@ public static class JSONBuiltIns
         // value `undefined` (steps 3, 9, 11), NOT null. `StringifyValue`
         // signals that case by returning false, so surface `undefined` here.
         // (Compiled mode does the same; see RuntimeEmitter.Json.Stringify.cs.)
-        return RuntimeValue.Undefined;
+            return RuntimeValue.Undefined;
+        }
+        finally
+        {
+            ReturnStringBuilder(sb);
+        }
+    }
+
+    private static StringBuilder RentStringBuilder()
+    {
+        Stack<StringBuilder>? builders = _stringBuilders;
+        if (builders is not null && builders.Count != 0)
+            return builders.Pop();
+        return new StringBuilder(256);
+    }
+
+    private static void ReturnStringBuilder(StringBuilder builder)
+    {
+        builder.Clear();
+        if (builder.Capacity <= 1_048_576)
+            (_stringBuilders ??= []).Push(builder);
     }
 
     private static bool StringifyValue(Interpreter interp, object holder, object? value, string? key,
@@ -595,9 +623,103 @@ public static class JSONBuiltIns
             replacer, allowedKeys, indentStr, depth, sb, seen);
 
     private static void StringifyObject(Interpreter interp, SharpTSObject obj,
-        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, List<object> seen) =>
-        StringifyJsonObject(interp, obj, obj.SnapshotOwnEnumerableKeys(),
-            replacer, allowedKeys, indentStr, depth, sb, seen);
+        ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, List<object> seen)
+    {
+        if (replacer is null
+            && allowedKeys is null
+            && indentStr.Length == 0
+            && TryStringifyOrdinaryScalarRecord(obj, sb))
+        {
+            return;
+        }
+
+        // A replacer PropertyList supplies the complete iteration order, so an
+        // own-key snapshot would be unused. Otherwise retain a list for the
+        // whole object walk: nested objects rent distinct lists and getters or
+        // toJSON hooks cannot mutate the captured keys.
+        if (allowedKeys is not null)
+        {
+            StringifyJsonObject(interp, obj, allowedKeys,
+                replacer, allowedKeys, indentStr, depth, sb, seen);
+            return;
+        }
+
+        List<string> keys = RentEnumerableKeySnapshot();
+        try
+        {
+            obj.FillOwnEnumerableKeys(keys);
+            StringifyJsonObject(interp, obj, keys,
+                replacer, null, indentStr, depth, sb, seen);
+        }
+        finally
+        {
+            ReturnEnumerableKeySnapshot(keys);
+        }
+    }
+
+    private static bool TryStringifyOrdinaryScalarRecord(
+        SharpTSObject obj,
+        StringBuilder builder)
+    {
+        if (!obj.TryGetOrdinaryJsonFields(out var fields))
+            return false;
+
+        foreach (object? value in fields.Values)
+        {
+            if (value is not (null or string or bool or double
+                or SharpTSUndefined or SharpTSSymbol))
+            {
+                return false;
+            }
+        }
+
+        builder.Append('{');
+        bool first = true;
+        foreach (var property in fields)
+        {
+            object? value = property.Value;
+            if (value is SharpTSUndefined or SharpTSSymbol)
+                continue;
+
+            if (!first)
+                builder.Append(',');
+            first = false;
+            JsonStringEscaper.AppendQuoted(builder, property.Key);
+            builder.Append(':');
+
+            switch (value)
+            {
+                case null:
+                    builder.Append("null");
+                    break;
+                case string text:
+                    JsonStringEscaper.AppendQuoted(builder, text);
+                    break;
+                case bool boolean:
+                    builder.Append(boolean ? "true" : "false");
+                    break;
+                case double number:
+                    AppendJsonNumber(builder, number);
+                    break;
+            }
+        }
+        builder.Append('}');
+        return true;
+    }
+
+    private static List<string> RentEnumerableKeySnapshot()
+    {
+        Stack<List<string>>? snapshots = _enumerableKeySnapshots;
+        if (snapshots is not null && snapshots.Count != 0)
+            return snapshots.Pop();
+        return [];
+    }
+
+    private static void ReturnEnumerableKeySnapshot(List<string> keys)
+    {
+        keys.Clear();
+        (_enumerableKeySnapshots ??= []).Push(keys);
+    }
 
     private static void StringifyInstance(Interpreter interp, SharpTSInstance inst,
         ISharpTSCallable? replacer, IReadOnlyList<string>? allowedKeys, string indentStr, int depth, StringBuilder sb, List<object> seen) =>

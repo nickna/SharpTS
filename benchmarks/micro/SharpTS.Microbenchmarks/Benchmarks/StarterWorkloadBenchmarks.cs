@@ -81,6 +81,69 @@ public class JsonPhaseBenchmarks : ComputationalBenchmarkBase
 }
 
 /// <summary>
+/// Cumulative phase probes through the faithful imported-module and capturing
+/// callback path used by cross-runtime json.ts. BenchmarkDotNet owns the outer
+/// timing loop; each delegate performs exactly one callback invocation.
+/// </summary>
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class JsonImportedModulePhaseBenchmarks : ComputationalBenchmarkBase
+{
+    private Func<double, double> _build = null!;
+    private Func<double, double> _stringify = null!;
+    private Func<double, double> _parse = null!;
+    private Func<double, double> _roundTrip = null!;
+
+    [Params(1000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _build = LoadImportedJsonCompiled("importedJsonBuildPhase");
+        _stringify = LoadImportedJsonCompiled("importedJsonStringifyPhase");
+        _parse = LoadImportedJsonCompiled("importedJsonParsePhase");
+        _roundTrip = LoadImportedJsonCompiled("importedJsonRoundTrip");
+    }
+
+    [Benchmark(Baseline = true)]
+    public double Build() => _build(N);
+
+    [Benchmark]
+    public double BuildAndStringify() => _stringify(N);
+
+    [Benchmark]
+    public double BuildStringifyAndParse() => _parse(N);
+
+    [Benchmark]
+    public double FullRoundTrip() => _roundTrip(N);
+}
+
+/// <summary>
+/// Hard-gate sizes for the exact imported-module round trip. MemoryDiagnoser
+/// reports allocated bytes and Gen0/Gen1/Gen2 collections for both sizes.
+/// </summary>
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class JsonImportedModuleRoundTripBenchmarks
+    : ComputationalBenchmarkBase
+{
+    private Func<double, double> _roundTrip = null!;
+
+    [Params(1000, 10000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup() =>
+        _roundTrip = LoadImportedJsonCompiled("importedJsonRoundTrip");
+
+    [Benchmark]
+    public double SharpTS() => _roundTrip(N);
+}
+
+/// <summary>
 /// Interpreter counterpart to <see cref="JsonPhaseBenchmarks"/>. Parsing,
 /// type-checking, declaration binding, and realm construction happen in setup;
 /// the measured methods execute only the same cumulative phase functions used

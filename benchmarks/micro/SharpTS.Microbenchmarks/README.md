@@ -39,6 +39,14 @@ The computational/starter workloads load their TS from
 `SharpTS.Microbenchmarks.algorithms.ts`. That file is **shared byte-identical**
 with the cross-runtime shell harness, so both suites measure the same source.
 
+The `JsonImportedModule*` benchmarks compile a virtual three-module graph via
+`CompileModules`: the shared algorithms module, a callback boundary, and a
+driver whose closures capture `n`. This reproduces the imported `json.ts` call
+shape while leaving BenchmarkDotNet in control of the timing loop. The phase
+class measures cumulative build/stringify/parse/traversal work at `n=1,000`;
+the round-trip class records allocations and GC counts at `n=1,000` and
+`n=10,000`. The original direct-delegate JSON benchmarks remain as a comparison.
+
 ## Running
 
 ```bash

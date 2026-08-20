@@ -43,6 +43,16 @@ public abstract class ComputationalBenchmarkBase
         var tsAssembly = BenchmarkHarness.LoadCompiledAssembly(dllPath, "algorithms");
         return BenchmarkHarness.GetCompiledNumberFunc(tsAssembly, functionName);
     }
+
+    protected static Func<double, double> LoadImportedJsonCompiled(
+        string functionName)
+    {
+        string dllPath = JsonModuleBenchmark.Compile("JsonImportedModules");
+        Assembly assembly = BenchmarkHarness.LoadCompiledAssembly(
+            dllPath, "json-imported-modules");
+        BenchmarkHarness.InitializeCompiledModules(assembly);
+        return BenchmarkHarness.GetCompiledNumberFunc(assembly, functionName);
+    }
 }
 
 [MemoryDiagnoser]

@@ -415,6 +415,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
+        var allowPooledDictionaryKeysLocal = il.DeclareLocal(_types.Boolean);
 
         var nullLabel = il.DefineLabel();
         var boolLabel = il.DefineLabel();
@@ -437,6 +438,8 @@ public partial class RuntimeEmitter
         // Store value in local
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
 
         // ECMA-262 25.5.2.1: undefined values are dropped — for arrays the
         // caller maps null→"null" via `?? "null"`, for objects the caller
@@ -484,6 +487,8 @@ public partial class RuntimeEmitter
         // from TrapOwnKeys → naturally surfaces the spec-required TypeError.
         var notProxyLabelFull = il.DefineLabel();
         EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelFull, runtime);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
         il.Emit(OpCodes.Br, dictLabel);
         il.MarkLabel(notProxyLabelFull);
 
@@ -559,7 +564,8 @@ public partial class RuntimeEmitter
 
         // Dictionary<string, object?> - stringify object with full options
         il.MarkLabel(dictLabel);
-        EmitStringifyObjectFull(il, method, valueLocal, runtime);
+        EmitStringifyObjectFull(
+            il, method, valueLocal, runtime, allowPooledDictionaryKeysLocal);
 
         // Class instance
         il.MarkLabel(classInstanceLabel);
@@ -576,7 +582,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObjectFull(il, method, valueLocal, runtime);
+        EmitStringifyObjectFull(il, method, valueLocal, runtime, null);
         il.MarkLabel(noClassFieldsLabel);
         il.Emit(OpCodes.Ldstr, "{}");
         il.Emit(OpCodes.Ret);
@@ -596,6 +602,7 @@ public partial class RuntimeEmitter
         var closeLocal = il.DeclareLocal(_types.String);
         var elemLocal = il.DeclareLocal(_types.Object);
         var strResultLocal = il.DeclareLocal(_types.String);
+        var returnValueLocal = il.DeclareLocal(_types.String);
 
         // number[] unboxing: materialize a numeric-mode $Array before reading its base list.
         EmitDeoptIfNumericArray(il, runtime, () => il.Emit(OpCodes.Ldloc, valueLocal));
@@ -639,10 +646,14 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(indentDoneLabel);
 
-        // StringBuilder sb = new StringBuilder("[");
-        il.Emit(OpCodes.Ldstr, "[");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
+        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
         il.Emit(OpCodes.Stloc, sbLocal);
+        var cleanupDone = il.DefineLabel();
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldstr, "[");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
+        il.Emit(OpCodes.Pop);
 
         // for loop
         il.Emit(OpCodes.Ldc_I4_0);
@@ -753,6 +764,16 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Stloc, returnValueLocal);
+        il.Emit(OpCodes.Leave, cleanupDone);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(cleanupDone);
+        il.Emit(OpCodes.Ldloc, returnValueLocal);
         il.Emit(OpCodes.Ret);
     }
 
@@ -984,7 +1005,12 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits object stringification with full options (replacer, allowedKeys, indentation).
     /// </summary>
-    private void EmitStringifyObjectFull(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitStringifyObjectFull(
+        ILGenerator il,
+        MethodBuilder stringifyMethod,
+        LocalBuilder valueLocal,
+        EmittedRuntime runtime,
+        LocalBuilder? allowPooledDictionaryKeysLocal)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -995,6 +1021,8 @@ public partial class RuntimeEmitter
         var keyLocal = il.DeclareLocal(_types.String);
         var valLocal = il.DeclareLocal(_types.Object);
         var strResultLocal = il.DeclareLocal(_types.String);
+        var rentedKeysLocal = il.DeclareLocal(_types.Boolean);
+        var returnValueLocal = il.DeclareLocal(_types.String);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -1005,10 +1033,39 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
-        // Snapshot own enumerable keys before invoking getters or replacers.
+        // A replacer PropertyList supplies the iteration order and needs no own
+        // key snapshot. Otherwise use the same pooled ordinary-dictionary path
+        // as simple stringify, falling back for descriptors, proxies, numeric
+        // keys, class materializations, and other exotic shapes.
+        var fallbackSnapshot = il.DefineLabel();
+        var snapshotReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brtrue, snapshotReady);
+        if (allowPooledDictionaryKeysLocal is not null)
+        {
+            il.Emit(OpCodes.Ldloc, allowPooledDictionaryKeysLocal);
+            il.Emit(OpCodes.Brfalse, fallbackSnapshot);
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+            il.Emit(OpCodes.Brtrue, fallbackSnapshot);
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);
+            il.Emit(OpCodes.Stloc, sourceKeysLocal);
+            il.Emit(OpCodes.Ldloc, sourceKeysLocal);
+            il.Emit(OpCodes.Brfalse, fallbackSnapshot);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, rentedKeysLocal);
+            il.Emit(OpCodes.Br, snapshotReady);
+        }
+
+        il.MarkLabel(fallbackSnapshot);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, runtime.GetKeys);
         il.Emit(OpCodes.Stloc, sourceKeysLocal);
+        il.MarkLabel(snapshotReady);
+
+        var cleanupDone = il.DefineLabel();
+        il.BeginExceptionBlock();
 
         // Check indent
         il.Emit(OpCodes.Ldarg_3);
@@ -1026,10 +1083,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(indentDoneLabel);
 
-        // StringBuilder sb = new StringBuilder("{");
-        il.Emit(OpCodes.Ldstr, "{");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
+        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
         il.Emit(OpCodes.Stloc, sbLocal);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldstr, "{");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
+        il.Emit(OpCodes.Pop);
 
         // bool first = true;
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1089,6 +1148,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, iLocalObj);
+        var generalSourceRead = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rentedKeysLocal);
+        il.Emit(OpCodes.Brfalse, generalSourceRead);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloca, valLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brtrue, iterDoneLabel);
+
+        il.MarkLabel(generalSourceRead);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
@@ -1180,6 +1252,26 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Stloc, returnValueLocal);
+        il.Emit(OpCodes.Leave, cleanupDone);
+
+        il.BeginFinallyBlock();
+        var skipReturn = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rentedKeysLocal);
+        il.Emit(OpCodes.Brfalse, skipReturn);
+        il.Emit(OpCodes.Ldloc, sourceKeysLocal);
+        il.Emit(OpCodes.Call, _jsonReturnDictionaryKeysMethod!);
+        il.MarkLabel(skipReturn);
+        var skipBuilderReturn = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Brfalse, skipBuilderReturn);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.MarkLabel(skipBuilderReturn);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(cleanupDone);
+        il.Emit(OpCodes.Ldloc, returnValueLocal);
         il.Emit(OpCodes.Ret);
     }
 

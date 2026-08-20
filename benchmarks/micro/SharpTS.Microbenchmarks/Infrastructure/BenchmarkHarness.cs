@@ -1,5 +1,7 @@
 using System.Reflection;
 using SharpTS.Compilation;
+using SharpTS.Diagnostics;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -13,6 +15,7 @@ public static class BenchmarkHarness
 {
     private static readonly Dictionary<string, Assembly> _compiledAssemblies = new();
     private static readonly Dictionary<string, MethodInfo> _methodCache = new();
+    private static readonly HashSet<Assembly> _initializedModuleAssemblies = [];
     private static readonly object _lock = new();
 
     /// <summary>
@@ -46,6 +49,66 @@ public static class BenchmarkHarness
         compiler.Save(dllPath);
 
         // Copy SharpTS.dll runtime dependency (needed for runtime support)
+        var sharpTsDll = typeof(RuntimeTypes).Assembly.Location;
+        if (!string.IsNullOrEmpty(sharpTsDll) && File.Exists(sharpTsDll))
+        {
+            File.Copy(sharpTsDll, Path.Combine(outputDir, "SharpTS.dll"), overwrite: true);
+        }
+
+        return dllPath;
+    }
+
+    /// <summary>
+    /// Compiles an in-memory module graph through the same
+    /// <see cref="ILCompiler.CompileModules"/> pipeline used by imported CLI
+    /// programs. Module paths are resolved under a virtual absolute root; no
+    /// temporary source tree or filesystem module discovery enters the timed
+    /// benchmark process.
+    /// </summary>
+    public static string CompileTypeScriptModules(
+        IReadOnlyDictionary<string, string> sources,
+        string entryPoint,
+        string assemblyName)
+    {
+        var outputDir = Path.Combine(AppContext.BaseDirectory, "CompiledTS");
+        Directory.CreateDirectory(outputDir);
+        var dllPath = Path.Combine(outputDir, $"{assemblyName}.dll");
+
+        string virtualRoot = Path.Combine(
+            Path.GetTempPath(), $"sharpts_benchmark_{assemblyName}");
+        var virtualFiles = new Dictionary<string, string>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (var (path, source) in sources)
+        {
+            string fullPath = Path.GetFullPath(Path.Combine(
+                virtualRoot, path.TrimStart('.', '/', '\\')));
+            virtualFiles[fullPath] = source;
+        }
+
+        string entryPath = Path.GetFullPath(Path.Combine(
+            virtualRoot, entryPoint.TrimStart('.', '/', '\\')));
+        var resolver = new ModuleResolver(entryPath, virtualFiles);
+        var entryModule = resolver.LoadModule(entryPath);
+        var modules = resolver.GetModulesInOrder(entryModule);
+
+        var checker = new TypeChecker();
+        var typeMap = checker.CheckModules(modules, resolver);
+        var errors = checker.GetDiagnostics()
+            .Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        if (errors.Count != 0)
+        {
+            throw new InvalidOperationException(
+                "Module benchmark type-check failed:" + Environment.NewLine
+                + string.Join(Environment.NewLine, errors));
+        }
+
+        var statements = modules.SelectMany(module => module.Statements).ToList();
+        var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(statements);
+        var compiler = new ILCompiler(assemblyName);
+        compiler.CompileModules(modules, resolver, typeMap, deadCodeInfo);
+        compiler.Save(dllPath);
+
         var sharpTsDll = typeof(RuntimeTypes).Assembly.Location;
         if (!string.IsNullOrEmpty(sharpTsDll) && File.Exists(sharpTsDll))
         {
@@ -130,6 +193,36 @@ public static class BenchmarkHarness
                 "expected Double(Double)");
         }
         return method.CreateDelegate<Func<double, double>>();
+    }
+
+    /// <summary>
+    /// Runs a compiled module graph's entry-point initialization once so import
+    /// cells and live bindings are populated before an exported method is
+    /// invoked directly by a benchmark delegate.
+    /// </summary>
+    public static void InitializeCompiledModules(Assembly assembly)
+    {
+        lock (_lock)
+        {
+            if (!_initializedModuleAssemblies.Add(assembly))
+                return;
+
+            var programType = assembly.GetType("$Program")
+                ?? throw new InvalidOperationException(
+                    "Could not find $Program type in compiled module assembly");
+            var main = programType.GetMethod(
+                "Main", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new InvalidOperationException(
+                    "Could not find $Program.Main in compiled module assembly");
+            try
+            {
+                main.Invoke(null, null);
+            }
+            catch (TargetInvocationException ex)
+            {
+                throw ex.InnerException ?? ex;
+            }
+        }
     }
 
     /// <summary>

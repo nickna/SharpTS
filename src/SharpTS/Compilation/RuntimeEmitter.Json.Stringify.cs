@@ -10,6 +10,275 @@ public partial class RuntimeEmitter
     private MethodBuilder? _appendEscapedJsonStringMethod;
     private MethodBuilder? _jsonGetDictionaryPropertyMethod;
     private MethodBuilder? _jsonGetDictionaryToJsonMethod;
+    private MethodBuilder? _jsonTryRentDictionaryKeysMethod;
+    private MethodBuilder? _jsonReturnDictionaryKeysMethod;
+    private MethodBuilder? _jsonRentStringBuilderMethod;
+    private MethodBuilder? _jsonReturnStringBuilderMethod;
+
+    /// <summary>
+    /// Emits a JSON-only thread-local pool for ordinary dictionary key
+    /// snapshots. The list remains rented while values are read, so recursive
+    /// objects get distinct lists and getter/toJSON mutations cannot alter the
+    /// current object's captured key set.
+    /// </summary>
+    private void EmitJsonDictionaryKeyPool(TypeBuilder typeBuilder)
+    {
+        if (_jsonTryRentDictionaryKeysMethod is not null)
+            return;
+
+        Type stackType = _types.MakeGenericType(typeof(Stack<>), _types.ListOfObject);
+        var poolField = typeBuilder.DefineField(
+            "_jsonDictionaryKeySnapshots",
+            stackType,
+            FieldAttributes.Private | FieldAttributes.Static);
+        var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
+        poolField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
+
+        var returnMethod = typeBuilder.DefineMethod(
+            "ReturnJsonDictionaryKeys",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [_types.ListOfObject]);
+        _jsonReturnDictionaryKeysMethod = returnMethod;
+
+        var tryRentMethod = typeBuilder.DefineMethod(
+            "TryRentJsonDictionaryKeys",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.DictionaryStringObject]);
+        _jsonTryRentDictionaryKeysMethod = tryRentMethod;
+
+        // ReturnJsonDictionaryKeys(list): clear references and make the list
+        // available to the next non-overlapping object on this thread.
+        {
+            var il = returnMethod.GetILGenerator();
+            var poolReady = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Clear", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldsfld, poolField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, poolReady);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(stackType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Stsfld, poolField);
+            il.MarkLabel(poolReady);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(stackType, "Push", [_types.ListOfObject])!);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // TryRentJsonDictionaryKeys(dict): snapshot insertion-ordered keys into
+        // a pooled list, but reject canonical array-index keys. Numeric shapes
+        // need the general NormalizeOwnPropertyKeys path.
+        {
+            var il = tryRentMethod.GetILGenerator();
+            var poolLocal = il.DeclareLocal(stackType);
+            var resultLocal = il.DeclareLocal(_types.ListOfObject);
+            var keyLocal = il.DeclareLocal(_types.String);
+            var firstCharLocal = il.DeclareLocal(_types.Char);
+            var indexLocal = il.DeclareLocal(_types.UInt32);
+            var poolReady = il.DefineLabel();
+            var allocate = il.DefineLabel();
+            var rented = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldsfld, poolField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, poolReady);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(stackType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Stsfld, poolField);
+            il.MarkLabel(poolReady);
+            il.Emit(OpCodes.Stloc, poolLocal);
+
+            il.Emit(OpCodes.Ldloc, poolLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(stackType, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, allocate);
+            il.Emit(OpCodes.Ldloc, poolLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(stackType, "Pop", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+            il.Emit(OpCodes.Br, rented);
+
+            il.MarkLabel(allocate);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, [_types.Int32])!);
+            il.Emit(OpCodes.Stloc, resultLocal);
+
+            il.MarkLabel(rented);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "EnsureCapacity", [_types.Int32])!);
+            il.Emit(OpCodes.Pop);
+
+            Type keysType = _types.MakeGenericType(
+                typeof(Dictionary<,>.KeyCollection).GetGenericTypeDefinition(),
+                _types.String, _types.Object);
+            Type keysEnumeratorType = _types.MakeGenericType(
+                typeof(Dictionary<,>.KeyCollection.Enumerator).GetGenericTypeDefinition(),
+                _types.String, _types.Object);
+            var enumeratorLocal = il.DeclareLocal(keysEnumeratorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Keys").GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(keysType, "GetEnumerator", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stloc, enumeratorLocal);
+
+            var loop = il.DefineLabel();
+            var loopEnd = il.DefineLabel();
+            var addKey = il.DefineLabel();
+            var numericKey = il.DefineLabel();
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloca, enumeratorLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "MoveNext", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Brfalse, loopEnd);
+            il.Emit(OpCodes.Ldloca, enumeratorLocal);
+            il.Emit(OpCodes.Call, _types.GetProperty(keysEnumeratorType, "Current").GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, keyLocal);
+
+            // Reject ordinary names before entering UInt32.TryParse. JSON
+            // records overwhelmingly use identifier-like keys.
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, addKey);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32]));
+            il.Emit(OpCodes.Stloc, firstCharLocal);
+            il.Emit(OpCodes.Ldloc, firstCharLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)'0');
+            il.Emit(OpCodes.Blt, addKey);
+            il.Emit(OpCodes.Ldloc, firstCharLocal);
+            il.Emit(OpCodes.Ldc_I4, (int)'9');
+            il.Emit(OpCodes.Bgt, addKey);
+
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Ldloca, indexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.UInt32, "TryParse", [_types.String, _types.UInt32.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, addKey);
+            il.Emit(OpCodes.Ldloc, indexLocal);
+            il.Emit(OpCodes.Ldc_I4_M1);
+            il.Emit(OpCodes.Conv_U4);
+            il.Emit(OpCodes.Beq, addKey);
+            il.Emit(OpCodes.Ldloca, indexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", [_types.String, _types.String])!);
+            il.Emit(OpCodes.Brtrue, numericKey);
+
+            il.MarkLabel(addKey);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ldloc, keyLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", [_types.Object])!);
+            il.Emit(OpCodes.Br, loop);
+
+            il.MarkLabel(numericKey);
+            il.Emit(OpCodes.Ldloca, enumeratorLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "Dispose", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Call, returnMethod);
+            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(loopEnd);
+            il.Emit(OpCodes.Ldloca, enumeratorLocal);
+            il.Emit(OpCodes.Call, _types.GetMethod(keysEnumeratorType, "Dispose", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ldloc, resultLocal);
+            il.Emit(OpCodes.Ret);
+        }
+    }
+
+    /// <summary>
+    /// Emits a JSON-only thread-local pool for the builders used by recursive
+    /// array and object serialization. Builders remain rented across nested
+    /// calls, and unusually large buffers are discarded when returned.
+    /// </summary>
+    private void EmitJsonStringBuilderPool(TypeBuilder typeBuilder)
+    {
+        if (_jsonRentStringBuilderMethod is not null)
+            return;
+
+        Type stackType = _types.MakeGenericType(typeof(Stack<>), _types.StringBuilder);
+        var poolField = typeBuilder.DefineField(
+            "_jsonStringBuilders",
+            stackType,
+            FieldAttributes.Private | FieldAttributes.Static);
+        var threadStaticCtor = typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!;
+        poolField.SetCustomAttribute(threadStaticCtor, CustomAttributeEncoder.EmptyBlob);
+
+        var returnMethod = typeBuilder.DefineMethod(
+            "ReturnJsonStringBuilder",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [_types.StringBuilder]);
+        _jsonReturnStringBuilderMethod = returnMethod;
+
+        var rentMethod = typeBuilder.DefineMethod(
+            "RentJsonStringBuilder",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.StringBuilder,
+            Type.EmptyTypes);
+        _jsonRentStringBuilderMethod = rentMethod;
+
+        {
+            var il = returnMethod.GetILGenerator();
+            var poolReady = il.DefineLabel();
+            var discard = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Clear", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.StringBuilder, "Capacity").GetGetMethod()!);
+            il.Emit(OpCodes.Ldc_I4, 1_048_576);
+            il.Emit(OpCodes.Bgt, discard);
+
+            il.Emit(OpCodes.Ldsfld, poolField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, poolReady);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(stackType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Stsfld, poolField);
+            il.MarkLabel(poolReady);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(stackType, "Push", [_types.StringBuilder])!);
+            il.MarkLabel(discard);
+            il.Emit(OpCodes.Ret);
+        }
+
+        {
+            var il = rentMethod.GetILGenerator();
+            var poolLocal = il.DeclareLocal(stackType);
+            var poolReady = il.DefineLabel();
+            var allocate = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldsfld, poolField);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Brtrue, poolReady);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(stackType, Type.EmptyTypes)!);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Stsfld, poolField);
+            il.MarkLabel(poolReady);
+            il.Emit(OpCodes.Stloc, poolLocal);
+
+            il.Emit(OpCodes.Ldloc, poolLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(stackType, "Count").GetGetMethod()!);
+            il.Emit(OpCodes.Brfalse, allocate);
+            il.Emit(OpCodes.Ldloc, poolLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(stackType, "Pop", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(allocate);
+            il.Emit(OpCodes.Ldc_I4, 256);
+            il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.Int32])!);
+            il.Emit(OpCodes.Ret);
+        }
+    }
 
     /// <summary>
     /// Reads an existing ordinary dictionary property without entering the
@@ -548,6 +817,8 @@ public partial class RuntimeEmitter
         EmitAppendEscapedJsonStringHelper(typeBuilder);
         EmitJsonGetDictionaryPropertyHelper(typeBuilder, runtime);
         EmitJsonGetDictionaryToJsonHelper(typeBuilder, runtime);
+        EmitJsonDictionaryKeyPool(typeBuilder);
+        EmitJsonStringBuilderPool(typeBuilder);
 
         // Then emit the main stringify helper
         var stringifyHelper = EmitJsonStringifyHelper(typeBuilder, runtime);
@@ -610,6 +881,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
+        var allowPooledDictionaryKeysLocal = il.DeclareLocal(_types.Boolean);
 
         var nullLabel = il.DefineLabel();
         var boolLabel = il.DefineLabel();
@@ -633,6 +905,8 @@ public partial class RuntimeEmitter
         // Store value in local (we may modify it via toJSON)
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, valueLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
 
         // ECMA-262 25.5.2.1: undefined values are dropped — for arrays the
         // caller maps null→"null" via `?? "null"`, for objects the caller
@@ -709,6 +983,8 @@ public partial class RuntimeEmitter
         // existing dict path serializes the proxied view.
         var notProxyLabelSimple = il.DefineLabel();
         EmitProxyMaterializeForJson(il, valueLocal, notProxyLabelSimple, runtime);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, allowPooledDictionaryKeysLocal);
         il.Emit(OpCodes.Br, dictLabel);
         il.MarkLabel(notProxyLabelSimple);
 
@@ -788,7 +1064,8 @@ public partial class RuntimeEmitter
 
         // Dictionary<string, object> - stringify object
         il.MarkLabel(dictLabel);
-        EmitStringifyObject(il, method, valueLocal, runtime);
+        EmitStringifyObject(
+            il, method, valueLocal, runtime, allowPooledDictionaryKeysLocal);
 
         // Class instance - stringify via $IHasFields fields dictionary.
         // Use TSObjectMergeEnumerable to also include accessor (getter)
@@ -805,7 +1082,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObject(il, method, valueLocal, runtime);
+        EmitStringifyObject(il, method, valueLocal, runtime, null);
 
         il.MarkLabel(noClassFieldsLabel);
         il.Emit(OpCodes.Ldstr, "{}");
@@ -1169,6 +1446,7 @@ public partial class RuntimeEmitter
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var arrLocal = il.DeclareLocal(_types.ListOfObject);
         var iLocal = il.DeclareLocal(_types.Int32);
+        var returnValueLocal = il.DeclareLocal(_types.String);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -1189,10 +1467,17 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notEmpty);
 
-        // StringBuilder sb = new StringBuilder("[");
-        il.Emit(OpCodes.Ldstr, "[");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
+        // Rent the buffer for the whole array walk. Recursive containers rent
+        // distinct builders until their parent finishes.
+        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
         il.Emit(OpCodes.Stloc, sbLocal);
+        var cleanupDone = il.DefineLabel();
+        il.BeginExceptionBlock();
+
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldstr, "[");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
+        il.Emit(OpCodes.Pop);
 
         // for (int i = 0; i < arr.Count; i++)
         il.Emit(OpCodes.Ldc_I4_0);
@@ -1281,10 +1566,25 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Stloc, returnValueLocal);
+        il.Emit(OpCodes.Leave, cleanupDone);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(cleanupDone);
+        il.Emit(OpCodes.Ldloc, returnValueLocal);
         il.Emit(OpCodes.Ret);
     }
 
-    private void EmitStringifyObject(ILGenerator il, MethodBuilder stringifyMethod, LocalBuilder valueLocal, EmittedRuntime runtime)
+    private void EmitStringifyObject(
+        ILGenerator il,
+        MethodBuilder stringifyMethod,
+        LocalBuilder valueLocal,
+        EmittedRuntime runtime,
+        LocalBuilder? allowPooledDictionaryKeysLocal)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -1292,6 +1592,9 @@ public partial class RuntimeEmitter
         var keyLocal = il.DeclareLocal(_types.String);
         var iLocal = il.DeclareLocal(_types.Int32);
         var firstLocal = il.DeclareLocal(_types.Boolean);
+        var rentedKeysLocal = il.DeclareLocal(_types.Boolean);
+        var returnValueLocal = il.DeclareLocal(_types.String);
+        var dictValueLocal = il.DeclareLocal(_types.Object);
 
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
@@ -1300,11 +1603,38 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Stloc, dictLocal);
 
-        // Snapshot EnumerableOwnPropertyNames before invoking any getter. GetKeys
-        // applies descriptor filtering and OrdinaryOwnPropertyKeys ordering.
+        // Descriptor-free ordinary dictionaries with no canonical index keys
+        // can snapshot into a thread-local list. Exotic shapes retain GetKeys'
+        // descriptor filtering and OrdinaryOwnPropertyKeys normalization.
+        var fallbackSnapshot = il.DefineLabel();
+        var snapshotReady = il.DefineLabel();
+        if (allowPooledDictionaryKeysLocal is not null)
+        {
+            il.Emit(OpCodes.Ldloc, allowPooledDictionaryKeysLocal);
+            il.Emit(OpCodes.Brfalse, fallbackSnapshot);
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Call, runtime.PDSHasPropertyDescriptors);
+            il.Emit(OpCodes.Brtrue, fallbackSnapshot);
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Call, _jsonTryRentDictionaryKeysMethod!);
+            il.Emit(OpCodes.Stloc, keysLocal);
+            il.Emit(OpCodes.Ldloc, keysLocal);
+            il.Emit(OpCodes.Brfalse, fallbackSnapshot);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, rentedKeysLocal);
+            il.Emit(OpCodes.Br, snapshotReady);
+        }
+
+        il.MarkLabel(fallbackSnapshot);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, runtime.GetKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
+        il.MarkLabel(snapshotReady);
+
+        // The pooled list must remain rented across every value read, including
+        // recursive calls, and must be returned after abrupt completion.
+        var cleanupDone = il.DefineLabel();
+        il.BeginExceptionBlock();
 
         // if (keys.Count == 0) return "{}";
         il.Emit(OpCodes.Ldloc, keysLocal);
@@ -1312,14 +1642,17 @@ public partial class RuntimeEmitter
         var notEmpty = il.DefineLabel();
         il.Emit(OpCodes.Brtrue, notEmpty);
         il.Emit(OpCodes.Ldstr, "{}");
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Stloc, returnValueLocal);
+        il.Emit(OpCodes.Leave, cleanupDone);
 
         il.MarkLabel(notEmpty);
 
-        // StringBuilder sb = new StringBuilder("{");
-        il.Emit(OpCodes.Ldstr, "{");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, [_types.String]));
+        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
         il.Emit(OpCodes.Stloc, sbLocal);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Ldstr, "{");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String]));
+        il.Emit(OpCodes.Pop);
 
         // bool first = true;
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1352,9 +1685,26 @@ public partial class RuntimeEmitter
         // ECMA-262 25.5.2.5 step 6.a: the recursive key is the property name
         // so toJSON can branch on it.
         var dictValStrLocal = il.DeclareLocal(_types.String);
+        var generalRead = il.DefineLabel();
+        var valueReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rentedKeysLocal);
+        il.Emit(OpCodes.Brfalse, generalRead);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldloca, dictValueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brtrue, valueReady);
+
+        il.MarkLabel(generalRead);
         il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Call, _jsonGetDictionaryPropertyMethod!);
+        il.Emit(OpCodes.Stloc, dictValueLocal);
+        il.MarkLabel(valueReady);
+        il.Emit(OpCodes.Ldloc, dictValueLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -1406,6 +1756,26 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Ldloc, sbLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Stloc, returnValueLocal);
+        il.Emit(OpCodes.Leave, cleanupDone);
+
+        il.BeginFinallyBlock();
+        var skipReturn = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rentedKeysLocal);
+        il.Emit(OpCodes.Brfalse, skipReturn);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Call, _jsonReturnDictionaryKeysMethod!);
+        il.MarkLabel(skipReturn);
+        var skipBuilderReturn = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Brfalse, skipBuilderReturn);
+        il.Emit(OpCodes.Ldloc, sbLocal);
+        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.MarkLabel(skipBuilderReturn);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(cleanupDone);
+        il.Emit(OpCodes.Ldloc, returnValueLocal);
         il.Emit(OpCodes.Ret);
     }
 

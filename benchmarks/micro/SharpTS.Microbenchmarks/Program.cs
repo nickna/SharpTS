@@ -38,6 +38,7 @@ class Program
         var assembly = typeof(Program).Assembly;
         var resources = assembly.GetManifestResourceNames()
             .Where(name => name.EndsWith(".ts", StringComparison.Ordinal))
+            .Where(name => !JsonModuleBenchmark.ModuleOnlyResources.Contains(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
@@ -55,5 +56,8 @@ class Program
             BenchmarkHarness.CompileTypeScript(reader.ReadToEnd(), $"Smoke{index}");
             Console.WriteLine($"Smoke-compiled {resource}");
         }
+
+        JsonModuleBenchmark.Compile("SmokeJsonModules");
+        Console.WriteLine("Smoke-compiled imported JSON module graph");
     }
 }

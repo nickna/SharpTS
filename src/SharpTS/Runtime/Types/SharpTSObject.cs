@@ -17,9 +17,13 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropertyAccessor, ITypeCategorized
 {
     private readonly Dictionary<string, object?> _fields = fields;
-    private readonly List<string> _stringPropertyOrder = [.. fields.Keys];
+    // Dictionary preserves insertion order for the untouched, descriptor-free
+    // object-literal shape. Keep the permanent side table lazy so the common
+    // JSON record never pays for a second collection per object. Mutations that
+    // can detach property existence from _fields materialize it first.
+    private List<string>? _stringPropertyOrder;
     private readonly Dictionary<SharpTSSymbol, object?> _symbolFields = new();
-    private readonly List<SharpTSSymbol> _symbolPropertyOrder = [];
+    private List<SharpTSSymbol>? _symbolPropertyOrder;
     private Dictionary<SharpTSSymbol, (ISharpTSCallable? Get, ISharpTSCallable? Set)>?
         _symbolAccessors;
 
@@ -159,7 +163,35 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     /// Gets all symbol-keyed property names.
     /// </summary>
     public IEnumerable<SharpTSSymbol> GetSymbolPropertyNames()
-        => _symbolPropertyOrder;
+        => _symbolPropertyOrder is not null
+            ? _symbolPropertyOrder
+            : _symbolFields.Keys;
+
+    private List<string> EnsureStringPropertyOrder()
+        => _stringPropertyOrder ??= [.. _fields.Keys];
+
+    private IEnumerable<string> StringPropertyOrder
+        => _stringPropertyOrder is not null
+            ? _stringPropertyOrder
+            : _fields.Keys;
+
+    private int StringPropertyOrderCount
+        => _stringPropertyOrder?.Count ?? _fields.Count;
+
+    private List<SharpTSSymbol> EnsureSymbolPropertyOrder()
+    {
+        if (_symbolPropertyOrder is not null)
+            return _symbolPropertyOrder;
+
+        _symbolPropertyOrder = [.. _symbolFields.Keys];
+        if (_symbolAccessors is not null)
+        {
+            foreach (SharpTSSymbol symbol in _symbolAccessors.Keys)
+                if (!_symbolFields.ContainsKey(symbol))
+                    _symbolPropertyOrder.Add(symbol);
+        }
+        return _symbolPropertyOrder;
+    }
 
     /// <summary>
     /// Expose fields for Object.keys() and object rest patterns
@@ -248,7 +280,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        if (!exists) _stringPropertyOrder.Add(name);
+        if (!exists) EnsureStringPropertyOrder().Add(name);
         _fields[name] = value;
     }
 
@@ -306,7 +338,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
         }
 
-        if (!exists) _stringPropertyOrder.Add(name);
+        if (!exists) EnsureStringPropertyOrder().Add(name);
         _fields[name] = value;
     }
 
@@ -368,12 +400,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         if (_descriptors != null && _descriptors.TryGetValue(name, out var flags)
             && flags.HasExplicitDescriptor && !flags.Configurable)
             return false;
+        List<string> propertyOrder = EnsureStringPropertyOrder();
         _fields.Remove(name);
         _getters?.Remove(name);
         _setters?.Remove(name);
         _accessorProperties?.Remove(name);
         _descriptors?.Remove(name);
-        _stringPropertyOrder.Remove(name);
+        propertyOrder.Remove(name);
         return true;
     }
 
@@ -393,7 +426,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public void DefineGetter(string name, ISharpTSCallable getter)
     {
         if (!_fields.ContainsKey(name) && !IsAccessorProperty(name))
-            _stringPropertyOrder.Add(name);
+            EnsureStringPropertyOrder().Add(name);
         _accessorProperties ??= [];
         _accessorProperties.Add(name);
         _getters ??= new Dictionary<string, ISharpTSCallable>();
@@ -406,7 +439,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     public void DefineSetter(string name, ISharpTSCallable setter)
     {
         if (!_fields.ContainsKey(name) && !IsAccessorProperty(name))
-            _stringPropertyOrder.Add(name);
+            EnsureStringPropertyOrder().Add(name);
         _accessorProperties ??= [];
         _accessorProperties.Add(name);
         _setters ??= new Dictionary<string, ISharpTSCallable>();
@@ -466,7 +499,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         _symbolFields.Remove(symbol);
         _symbolDescriptors ??= [];
         _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
-        if (!exists) _symbolPropertyOrder.Add(symbol);
+        if (!exists) EnsureSymbolPropertyOrder().Add(symbol);
     }
 
     /// <summary>Returns a symbol-keyed accessor pair when one is defined.</summary>
@@ -506,13 +539,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return;
 
         _symbolAccessors?.Remove(symbol);
-        _symbolFields[symbol] = value;
         if (!exists)
         {
-            _symbolPropertyOrder.Add(symbol);
+            EnsureSymbolPropertyOrder().Add(symbol);
             _symbolDescriptors ??= [];
             _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         }
+        _symbolFields[symbol] = value;
     }
 
     /// <summary>
@@ -546,13 +579,13 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
 
         _symbolAccessors?.Remove(symbol);
-        _symbolFields[symbol] = value;
         if (!exists)
         {
-            _symbolPropertyOrder.Add(symbol);
+            EnsureSymbolPropertyOrder().Add(symbol);
             _symbolDescriptors ??= [];
             _symbolDescriptors[symbol] = PropertyDescriptorFlags.Default;
         }
+        _symbolFields[symbol] = value;
     }
 
     /// <summary>
@@ -576,11 +609,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
         }
         if (HasSymbolProperty(symbol) && !GetSymbolPropertyFlags(symbol).Configurable)
             return false;
+        List<SharpTSSymbol>? propertyOrder = HasSymbolProperty(symbol)
+            ? EnsureSymbolPropertyOrder()
+            : null;
         bool removed = _symbolFields.Remove(symbol);
         removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
         if (removed)
         {
-            _symbolPropertyOrder.Remove(symbol);
+            propertyOrder!.Remove(symbol);
             _symbolDescriptors?.Remove(symbol);
         }
         return removed;
@@ -606,11 +642,14 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 throw StrictModeErrors.TypeError("Cannot delete non-configurable symbol property of object");
             return false;
         }
+        List<SharpTSSymbol>? propertyOrder = HasSymbolProperty(symbol)
+            ? EnsureSymbolPropertyOrder()
+            : null;
         bool removed = _symbolFields.Remove(symbol);
         removed = (_symbolAccessors?.Remove(symbol) ?? false) || removed;
         if (removed)
         {
-            _symbolPropertyOrder.Remove(symbol);
+            propertyOrder!.Remove(symbol);
             _symbolDescriptors?.Remove(symbol);
         }
         return removed;
@@ -660,6 +699,10 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
 
         if (IsFrozen || !IsExtensible && !hasExisting) return false;
 
+        // Descriptor/accessor storage can move a property out of the data
+        // dictionary, so preserve its original creation position first.
+        List<SharpTSSymbol> propertyOrder = EnsureSymbolPropertyOrder();
+
         bool writable = descriptor.HasWritable
             ? descriptor.Writable
             : hasExisting ? existingFlags.Writable : false;
@@ -692,7 +735,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 _symbolFields[symbol] = SharpTSUndefined.Instance;
         }
 
-        if (!hasExisting) _symbolPropertyOrder.Add(symbol);
+        if (!hasExisting) propertyOrder.Add(symbol);
 
         return true;
     }
@@ -761,8 +804,12 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             return false;
         }
 
+        // DefineProperty may convert a data property to an accessor and remove
+        // its dictionary entry. Capture creation order before that mutation.
+        List<string> propertyOrder = EnsureStringPropertyOrder();
+
         if (!hasExisting)
-            _stringPropertyOrder.Add(name);
+            propertyOrder.Add(name);
 
         // Store the descriptor flags
         _descriptors ??= new Dictionary<string, PropertyDescriptorFlags>();
@@ -1000,46 +1047,27 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     }
 
     /// <summary>
-    /// Captures enumerable own keys into a single list in
-    /// OrdinaryOwnPropertyKeys order. JSON serialization needs a snapshot
-    /// before invoking getters; building it directly avoids the layered
-    /// iterator objects and the subsequent LINQ copy for ordinary objects.
+    /// Appends a mutation-safe enumerable-own-key snapshot to
+    /// <paramref name="destination"/> in OrdinaryOwnPropertyKeys order. The
+    /// fill-style API lets recursive JSON serialization reuse per-thread lists
+    /// instead of allocating an array or list for every object in the graph.
     /// </summary>
-    internal IReadOnlyList<string> SnapshotOwnEnumerableKeys()
+    internal void FillOwnEnumerableKeys(List<string> destination)
     {
-        // Fresh object literals have no descriptor/accessor overlay and no
-        // deleted entries. If they also have no array-index key, their creation
-        // order is already the required order; copy it directly into the
-        // snapshot array and avoid per-key dictionary/descriptor probes.
-        if (!IsPrimitiveWrapper
+        int destinationStart = destination.Count;
+        destination.EnsureCapacity(destinationStart + StringPropertyOrderCount);
+        List<(uint Index, string Key)>? indices = null;
+        bool ordinaryDataOnly = !IsPrimitiveWrapper
             && _descriptors is null
             && _accessorProperties is null
-            && _fields.Count == _stringPropertyOrder.Count)
+            && _fields.Count == StringPropertyOrderCount;
+
+        foreach (string key in StringPropertyOrder)
         {
-            bool hasArrayIndex = false;
-            foreach (string key in _stringPropertyOrder)
-            {
-                if (key.Length > 0
-                    && key[0] is >= '0' and <= '9'
-                    && TryGetArrayIndex(key, out _))
-                {
-                    hasArrayIndex = true;
-                    break;
-                }
-            }
-
-            if (!hasArrayIndex)
-                return _stringPropertyOrder.ToArray();
-        }
-
-        var ordinary = new List<string>(_stringPropertyOrder.Count);
-        List<(uint Index, string Key)>? indices = null;
-
-        foreach (string key in _stringPropertyOrder)
-        {
-            if (!HasOwnStringProperty(key)
-                || (IsPrimitiveWrapper && IsInternalSlot(key))
-                || !GetPropertyFlags(key).Enumerable)
+            if (!ordinaryDataOnly
+                && (!HasOwnStringProperty(key)
+                    || (IsPrimitiveWrapper && IsInternalSlot(key))
+                    || !GetPropertyFlags(key).Enumerable))
             {
                 continue;
             }
@@ -1051,19 +1079,47 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
             }
             else
             {
-                ordinary.Add(key);
+                destination.Add(key);
             }
         }
 
         if (indices is null)
-            return ordinary;
+            return;
 
         indices.Sort(static (left, right) => left.Index.CompareTo(right.Index));
-        var result = new List<string>(indices.Count + ordinary.Count);
-        foreach (var entry in indices)
-            result.Add(entry.Key);
-        result.AddRange(ordinary);
-        return result;
+        for (int i = 0; i < indices.Count; i++)
+            destination.Insert(destinationStart + i, indices[i].Key);
+    }
+
+    /// <summary>
+    /// Exposes the untouched ordinary data-property storage to JSON's guarded
+    /// scalar-record fast path. A materialized order table means a mutation or
+    /// descriptor operation may have changed creation order, and canonical
+    /// index keys require the general numeric-order snapshot.
+    /// </summary>
+    internal bool TryGetOrdinaryJsonFields(
+        out IReadOnlyDictionary<string, object?> fields)
+    {
+        if (!IsPrimitiveWrapper
+            && _descriptors is null
+            && _accessorProperties is null
+            && _stringPropertyOrder is null)
+        {
+            foreach (string key in _fields.Keys)
+            {
+                if (TryGetArrayIndex(key, out _))
+                {
+                    fields = null!;
+                    return false;
+                }
+            }
+
+            fields = _fields;
+            return true;
+        }
+
+        fields = null!;
+        return false;
     }
 
     internal IEnumerable<string> OwnVisibleStringKeys()
@@ -1079,7 +1135,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal IEnumerable<string> OwnStringKeys()
     {
         List<(uint Index, string Key)>? indices = null;
-        foreach (string key in _stringPropertyOrder)
+        foreach (string key in StringPropertyOrder)
         {
             if (!HasOwnStringProperty(key))
                 continue;
@@ -1097,7 +1153,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
                 yield return entry.Key;
         }
 
-        foreach (string key in _stringPropertyOrder)
+        foreach (string key in StringPropertyOrder)
         {
             if (!HasOwnStringProperty(key))
                 continue;
@@ -1115,7 +1171,7 @@ public class SharpTSObject(Dictionary<string, object?> fields) : ISharpTSPropert
     internal bool HasIndexedOwnProperty(long exclusiveLength)
     {
         if (exclusiveLength <= 0) return false;
-        foreach (string key in _stringPropertyOrder)
+        foreach (string key in StringPropertyOrder)
         {
             if (HasOwnStringProperty(key)
                 && TryGetArrayIndex(key, out uint index)

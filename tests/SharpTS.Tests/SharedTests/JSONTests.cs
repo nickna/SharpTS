@@ -444,6 +444,132 @@ public class JSONTests
     }
 
     [Theory, ModeData]
+    public void JSON_Stringify_UsesOrdinaryOwnPropertyKeyOrder(ExecutionMode mode)
+    {
+        var source = """
+            const obj: any = {};
+            obj.z = "z";
+            obj["10"] = "ten";
+            obj.a = "a";
+            obj["2"] = "two";
+            obj.a = "updated";
+            console.log(JSON.stringify(obj));
+            delete obj.z;
+            obj.z = "readded";
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "{\"2\":\"two\",\"10\":\"ten\",\"z\":\"z\",\"a\":\"updated\"}\n" +
+            "{\"2\":\"two\",\"10\":\"ten\",\"a\":\"updated\",\"z\":\"readded\"}\n",
+            output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_FiltersDescriptorsAndIncludesAccessorOnlyKeys(
+        ExecutionMode mode)
+    {
+        var source = """
+            const obj: any = { first: 1 };
+            Object.defineProperty(obj, "hidden", {
+                value: 2,
+                enumerable: false,
+                configurable: true
+            });
+            Object.defineProperty(obj, "computed", {
+                get: function (): number { return 3; },
+                enumerable: true,
+                configurable: true
+            });
+            Object.defineProperty(obj, "setterOnly", {
+                set: function (_value: any): void {},
+                enumerable: true,
+                configurable: true
+            });
+            obj.last = 4;
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"first\":1,\"computed\":3,\"last\":4}\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_IgnoresSymbolsWhileReflectPreservesSymbolOrder(
+        ExecutionMode mode)
+    {
+        var source = """
+            const first: symbol = Symbol("first");
+            const second: symbol = Symbol("second");
+            const obj: any = { a: 1 };
+            obj[first] = "one";
+            obj.b = 2;
+            obj[second] = "two";
+            Object.defineProperty(obj, first, {
+                value: "updated",
+                enumerable: false,
+                configurable: true
+            });
+            const keys: any[] = Reflect.ownKeys(obj);
+            const labels: string[] = keys.map((key: any): string => {
+                if (key === first) return "first";
+                if (key === second) return "second";
+                return key;
+            });
+            console.log(labels.join(","));
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("a,b,first,second\n{\"a\":1,\"b\":2}\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_PlainObjectSnapshotSurvivesToJsonMutation(
+        ExecutionMode mode)
+    {
+        var source = """
+            const obj: any = {};
+            obj.a = {
+                toJSON: function (): number {
+                    delete obj.b;
+                    obj.c = 3;
+                    return 1;
+                }
+            };
+            obj.b = 2;
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"a\":1}\n", output);
+    }
+
+    [Theory, ModeData]
+    public void JSON_Stringify_KeySnapshotSurvivesGetterMutation(
+        ExecutionMode mode)
+    {
+        var source = """
+            const obj: any = {};
+            Object.defineProperty(obj, "a", {
+                enumerable: true,
+                configurable: true,
+                get: function (): number {
+                    delete obj.b;
+                    obj.c = 3;
+                    return 1;
+                }
+            });
+            obj.b = 2;
+            console.log(JSON.stringify(obj));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("{\"a\":1}\n", output);
+    }
+
+    [Theory, ModeData]
     public void JSON_Stringify_EscapeFastPathFallsBackForSpecialCharacters(ExecutionMode mode)
     {
         var source = """

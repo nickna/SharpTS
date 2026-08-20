@@ -26,6 +26,19 @@ public static class CompilationCache
     }
 
     /// <summary>
+    /// Gets or compiles an in-memory TypeScript module graph.
+    /// </summary>
+    public static string GetOrCompileModules(
+        IReadOnlyDictionary<string, string> sources,
+        string entryPoint,
+        string assemblyName)
+    {
+        return _dllPaths.GetOrAdd(assemblyName, _ =>
+            BenchmarkHarness.CompileTypeScriptModules(
+                sources, entryPoint, assemblyName));
+    }
+
+    /// <summary>
     /// Clears the compilation cache. Useful for testing or rebuilding benchmarks.
     /// </summary>
     public static void Clear()
