@@ -63,6 +63,7 @@ public partial class ILCompiler
             EnumKinds = _enums.Kinds,
             // Compilation-wide services
             Runtime = _runtime,
+            ProgramType = _programType,
             RuntimeFeatures = _features,
             LexicalTdzNames = _lexicalBindingNames,
             StaticDirectEvalStatements = _staticDirectEvalStatements,

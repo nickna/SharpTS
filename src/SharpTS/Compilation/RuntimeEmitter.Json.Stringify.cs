@@ -821,7 +821,8 @@ public partial class RuntimeEmitter
         EmitJsonStringBuilderPool(typeBuilder);
 
         // Then emit the main stringify helper
-        var stringifyHelper = EmitJsonStringifyHelper(typeBuilder, runtime);
+        _ = EmitJsonStringifyHelper(typeBuilder, runtime);
+        var appendValue = EmitAppendJsonValueHelper(typeBuilder, runtime);
 
         var method = typeBuilder.DefineMethod(
             "JsonStringify",
@@ -833,41 +834,46 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
 
-        // ECMA-262 25.5.2.1 step 12: SerializeJSONProperty("", { "": value }).
-        // StringifyValue performs the single toJSON lookup using the root key.
-        var rootValueLocalSimple = il.DeclareLocal(_types.Object);
+        // One root-owned builder spans the complete recursive walk. It remains
+        // rented through toJSON/reentrant calls and is returned on every abrupt
+        // completion; the bounded pool discards unusually large buffers.
+        var builderLocal = il.DeclareLocal(_types.StringBuilder);
+        var resultRootLocal = il.DeclareLocal(_types.Object);
+        var undefinedRoot = il.DefineLabel();
+        var cleanupDone = il.DefineLabel();
+        il.Emit(OpCodes.Call, _jsonRentStringBuilderMethod!);
+        il.Emit(OpCodes.Stloc, builderLocal);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloc, builderLocal);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Stloc, rootValueLocalSimple);
-
-        // Map $Undefined → JS undefined directly here, since StringifyValue
-        // returns C# null for $Undefined and we'd map back to $Undefined below.
-        // Skip the helper for that case to short-circuit cleanly.
-        var notUndefRootLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, rootValueLocalSimple);
-        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brfalse, notUndefRootLabel);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notUndefRootLabel);
-
-        // Call our emitted StringifyValue helper. Map null → $Undefined.Instance
-        // because StringifyValue returns null for undefined inputs and the
-        // spec wants `JSON.stringify(undefined) === undefined`.
-        var resultRootLocal = il.DeclareLocal(_types.String);
-        il.Emit(OpCodes.Ldloc, rootValueLocalSimple);
-        il.Emit(OpCodes.Ldc_I4_0); // indent = 0
-        il.Emit(OpCodes.Ldc_I4_0); // depth = 0
-        il.Emit(OpCodes.Ldstr, ""); // key = "" (root per ECMA-262 25.5.2.1 step 12)
-        il.Emit(OpCodes.Call, stringifyHelper);
+        il.Emit(OpCodes.Ldc_I4_0); // depth
+        il.Emit(OpCodes.Ldstr, ""); // root key
+        il.Emit(OpCodes.Ldc_I4_0); // unused array index
+        il.Emit(OpCodes.Ldc_I4_0); // key is not an index
+        il.Emit(OpCodes.Ldc_I4_0); // no object-property prefix
+        il.Emit(OpCodes.Ldc_I4_0); // no comma
+        il.Emit(OpCodes.Call, appendValue);
+        il.Emit(OpCodes.Brfalse, undefinedRoot);
+        il.Emit(OpCodes.Ldloc, builderLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, resultRootLocal);
-        il.Emit(OpCodes.Ldloc, resultRootLocal);
-        var nonNullJsonLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, nonNullJsonLabel);
+        il.Emit(OpCodes.Leave, cleanupDone);
+
+        il.MarkLabel(undefinedRoot);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(nonNullJsonLabel);
+        il.Emit(OpCodes.Stloc, resultRootLocal);
+        il.Emit(OpCodes.Leave, cleanupDone);
+
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldloc, builderLocal);
+        il.Emit(OpCodes.Call, _jsonReturnStringBuilderMethod!);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(cleanupDone);
         il.Emit(OpCodes.Ldloc, resultRootLocal);
         il.Emit(OpCodes.Ret);
+
+        EmitJsonStringifyShapedMethod(typeBuilder, runtime, appendValue);
     }
 
     private MethodBuilder EmitJsonStringifyHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -1159,7 +1165,8 @@ public partial class RuntimeEmitter
     }
 
     private void EmitToJsonCheck(ILGenerator il, LocalBuilder valueLocal, EmittedRuntime runtime,
-        string? key = null, int? keyArgIndex = null, LocalBuilder? keyLocal = null)
+        string? key = null, int? keyArgIndex = null, LocalBuilder? keyLocal = null,
+        int? keyIndexArgIndex = null, int? keyIsIndexArgIndex = null)
     {
         var doneLabel = il.DefineLabel();
 
@@ -1212,7 +1219,20 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldc_I4_0);
-        if (keyLocal != null)
+        if (keyIndexArgIndex.HasValue && keyIsIndexArgIndex.HasValue)
+        {
+            var stringKeyLabel = il.DefineLabel();
+            var keyReadyLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg, keyIsIndexArgIndex.Value);
+            il.Emit(OpCodes.Brfalse, stringKeyLabel);
+            il.Emit(OpCodes.Ldarga, keyIndexArgIndex.Value);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+            il.Emit(OpCodes.Br, keyReadyLabel);
+            il.MarkLabel(stringKeyLabel);
+            il.Emit(OpCodes.Ldarg, keyArgIndex!.Value);
+            il.MarkLabel(keyReadyLabel);
+        }
+        else if (keyLocal != null)
             il.Emit(OpCodes.Ldloc, keyLocal);
         else if (keyArgIndex.HasValue)
             il.Emit(OpCodes.Ldarg, keyArgIndex.Value);
@@ -1379,11 +1399,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notTsObjectLabel);
 
-        // toJsonField = (($IHasFields)value).GetProperty("toJSON");
+        // Use ordinary Get so compact JSON records observe a mutable
+        // prototype's inherited toJSON hook. Class instances retain their
+        // existing IHasFields behavior inside the shared GetProperty helper.
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Ldstr, "toJSON");
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
         il.Emit(OpCodes.Stloc, toJsonFieldLocal);
         il.Emit(OpCodes.Ldloc, toJsonFieldLocal);
         il.Emit(OpCodes.Brfalse, noToJsonLabel);

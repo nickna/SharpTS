@@ -906,7 +906,21 @@ public class EmittedRuntime
     public MethodBuilder JsonParse { get; set; } = null!;
     public MethodBuilder JsonParseWithReviver { get; set; } = null!;
     public MethodBuilder JsonStringify { get; set; } = null!;
+    public MethodBuilder JsonStringifyShaped { get; set; } = null!;
     public MethodBuilder JsonStringifyFull { get; set; } = null!;
+    /// <summary>
+    /// Lazily initialized immutable shape descriptors used by statically typed
+    /// no-replacer JSON.stringify call sites. They live on $Program so every
+    /// emitted function shares one descriptor without a SharpTS dependency.
+    /// </summary>
+    public Dictionary<string, FieldBuilder> JsonShapeFields { get; } = [];
+    public TypeBuilder JsonScalarRecordType { get; set; } = null!;
+    public ConstructorBuilder JsonScalarRecordCtor { get; set; } = null!;
+    public Dictionary<int, ConstructorBuilder> JsonScalarRecordInlineCtors { get; } = [];
+    public MethodBuilder JsonScalarRecordShapeGetter { get; set; } = null!;
+    public MethodBuilder JsonScalarRecordValuesGetter { get; set; } = null!;
+    public MethodBuilder JsonScalarRecordGetValue { get; set; } = null!;
+    public MethodBuilder JsonScalarRecordIsMaterializedGetter { get; set; } = null!;
     public TypeBuilder TSRawJsonType { get; set; } = null!;
     public ConstructorBuilder TSRawJsonCtor { get; set; } = null!;
     public MethodBuilder TSRawJsonTextGetter { get; set; } = null!;

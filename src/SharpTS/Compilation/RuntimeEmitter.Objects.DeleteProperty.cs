@@ -118,6 +118,7 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var nullLabel = il.DefineLabel();
         var dictLabel = il.DefineLabel();
+        var scalarRecordDelLabel = il.DefineLabel();
         var trueLabel = il.DefineLabel();
 
         // Emits the failed-delete path: strict mode (arg 2 set) throws
@@ -271,6 +272,13 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brtrue, tsArrayDelLabel);
+
+        if (runtime.JsonScalarRecordType is not null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.JsonScalarRecordType);
+            il.Emit(OpCodes.Brtrue, scalarRecordDelLabel);
+        }
 
         // Dictionary
         il.Emit(OpCodes.Ldarg_0);
@@ -455,6 +463,35 @@ public partial class RuntimeEmitter
             EmitDeleteFail("' of object");
             il.MarkLabel(notTypeForDelLabel);
         }
+
+        var afterScalarRecordDelLabel = il.DefineLabel();
+        il.Emit(OpCodes.Br, afterScalarRecordDelLabel);
+
+        // Compact JSON records use their materialized Fields dictionary as
+        // ordinary backing storage. Descriptor configurability was already
+        // checked by the common guard above; remove both representations and
+        // compact insertion order so delete/re-add appends the key.
+        il.MarkLabel(scalarRecordDelLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
+        il.Emit(OpCodes.Pop);
+        var scalarDeleteFields =
+            il.DeclareLocal(_types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsFieldsGetter);
+        il.Emit(OpCodes.Stloc, scalarDeleteFields);
+        il.Emit(OpCodes.Ldloc, scalarDeleteFields);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "Remove", _types.String));
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, scalarDeleteFields);
+        il.Emit(OpCodes.Call, runtime.CompactDictionaryOrder);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(afterScalarRecordDelLabel);
 
         // Remaining runtime-backed objects (notably Error instances) can own
         // properties represented solely in the descriptor store. Honor the

@@ -328,10 +328,10 @@ public partial class ILEmitter
         // Skipped when optional chaining is in play — null-check semantics
         // there are non-trivial and hot-path optionals are rare.
         if (!g.Optional
-            && objType is TypeInfo.Record
+            && objType is TypeInfo.Record recordType
             && _ctx.Runtime?.UndefinedInstance != null)
         {
-            EmitTypedRecordPropertyGet(g);
+            EmitTypedRecordPropertyGet(g, recordType);
             return;
         }
 
@@ -389,12 +389,15 @@ public partial class ILEmitter
     /// instances downcast to record shape, etc.) we fall through to the
     /// existing dispatch.
     /// </summary>
-    private void EmitTypedRecordPropertyGet(Expr.Get g)
+    private void EmitTypedRecordPropertyGet(Expr.Get g, TypeInfo.Record recordType)
     {
         EmitExpression(g.Object);
         EmitBoxIfNeeded(g.Object);
 
         var receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
+        LocalBuilder? scalarLocal = _ctx.RuntimeFeatures?.UsesJSON == true
+            ? IL.DeclareLocal(_ctx.Runtime!.JsonScalarRecordType)
+            : null;
         var dictLocal = IL.DeclareLocal(_ctx.Types.DictionaryStringObject);
         var outLocal = IL.DeclareLocal(_ctx.Types.Object);
         IL.Emit(OpCodes.Stloc, receiverLocal);
@@ -402,6 +405,53 @@ public partial class ILEmitter
         var fallbackLabel = IL.DefineLabel();
         var endLabel = IL.DefineLabel();
         var notFoundLabel = IL.DefineLabel();
+
+        if (scalarLocal is not null && _ctx.ProgramType is not null &&
+            JsonSerializationShapeAnalyzer.TryAnalyze(recordType, out var analyzedShape) &&
+            analyzedShape is JsonSerializationShape.Record recordShape &&
+            JsonSerializationShapeAnalyzer.IsClosed(recordShape))
+        {
+            int scalarIndex = -1;
+            for (int index = 0; index < recordShape.Fields.Count; index++)
+            {
+                if (recordShape.Fields[index].Key == g.Name.Lexeme)
+                {
+                    scalarIndex = index;
+                    break;
+                }
+            }
+
+            if (scalarIndex >= 0)
+            {
+                var dictionaryLabel = IL.DefineLabel();
+                var shapeField = Emitters.JSONStaticEmitter.GetOrDefineShapeField(
+                    _ctx, recordShape);
+                IL.Emit(OpCodes.Ldloc, receiverLocal);
+                IL.Emit(OpCodes.Isinst, _ctx.Runtime!.JsonScalarRecordType);
+                IL.Emit(OpCodes.Stloc, scalarLocal);
+                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Brfalse, dictionaryLabel);
+                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordIsMaterializedGetter);
+                IL.Emit(OpCodes.Brtrue, fallbackLabel);
+                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPropertyDescriptors);
+                IL.Emit(OpCodes.Brtrue, fallbackLabel);
+                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.PDSHasPrototypeEntry);
+                IL.Emit(OpCodes.Brtrue, fallbackLabel);
+                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordShapeGetter);
+                Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
+                    _ctx, recordShape, shapeField, closed: true);
+                IL.Emit(OpCodes.Bne_Un, fallbackLabel);
+                IL.Emit(OpCodes.Ldloc, scalarLocal);
+                IL.Emit(OpCodes.Ldc_I4, scalarIndex);
+                IL.Emit(OpCodes.Callvirt, _ctx.Runtime.JsonScalarRecordGetValue);
+                IL.Emit(OpCodes.Br, endLabel);
+                IL.MarkLabel(dictionaryLabel);
+            }
+        }
 
         // dictLocal = receiver as Dictionary<string, object>
         IL.Emit(OpCodes.Ldloc, receiverLocal);

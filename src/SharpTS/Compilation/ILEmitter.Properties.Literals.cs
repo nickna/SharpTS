@@ -116,6 +116,12 @@ public partial class ILEmitter
         }
         else if (!hasSpreads && !hasComputedKeys)
         {
+            if (TryEmitJsonScalarRecordLiteral(o))
+            {
+                SetStackUnknown();
+                return;
+            }
+
             // Simple case: no spreads, no computed keys. Drop the legacy
             // `Call CreateObject` no-op identity helper. Pre-size the
             // dictionary only when property count > 3: .NET's
@@ -202,6 +208,63 @@ public partial class ILEmitter
         // emit `Box Double` on the fresh Dictionary pointer, producing a
         // double whose bits were the reinterpreted heap address.
         SetStackUnknown();
+    }
+
+    private bool TryEmitJsonScalarRecordLiteral(Expr.ObjectLiteral literal)
+    {
+        if (_ctx.RuntimeFeatures?.UsesJSON != true || _ctx.ProgramType is null)
+            return false;
+
+        JsonSerializationShape.Record? record = null;
+        if (JsonSerializationShapeAnalyzer.TryAnalyze(
+                _ctx.TypeMap?.Get(literal), out var analyzed) &&
+            analyzed is JsonSerializationShape.Record typedRecord)
+            record = typedRecord;
+        else if (JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
+            literal, _ctx.TypeMap, out var literalRecord))
+            record = literalRecord;
+
+        if (record is null || !JsonSerializationShapeAnalyzer.IsClosed(record) ||
+            record.Fields.Count != literal.Properties.Count)
+            return false;
+
+        for (int i = 0; i < literal.Properties.Count; i++)
+        {
+            var property = literal.Properties[i];
+            if (property.IsSpread || property.Key is Expr.ComputedKey ||
+                property.Kind is not Expr.ObjectPropertyKind.Value ||
+                GetPropertyKeyString(property.Key!) != record.Fields[i].Key)
+                return false;
+        }
+
+        var shapeField = Emitters.JSONStaticEmitter.GetOrDefineShapeField(_ctx, record);
+        Emitters.JSONStaticEmitter.EmitLazyShapeDescriptor(
+            _ctx, record, shapeField, closed: true);
+        if (_ctx.Runtime!.JsonScalarRecordInlineCtors.TryGetValue(
+            literal.Properties.Count, out var inlineCtor))
+        {
+            foreach (var property in literal.Properties)
+            {
+                EmitExpression(property.Value);
+                EmitBoxIfNeeded(property.Value);
+            }
+            IL.Emit(OpCodes.Newobj, inlineCtor);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldc_I4, literal.Properties.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+            for (int i = 0; i < literal.Properties.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                EmitExpression(literal.Properties[i].Value);
+                EmitBoxIfNeeded(literal.Properties[i].Value);
+                IL.Emit(OpCodes.Stelem_Ref);
+            }
+            IL.Emit(OpCodes.Newobj, _ctx.Runtime.JsonScalarRecordCtor);
+        }
+        return true;
     }
 
     /// <summary>
