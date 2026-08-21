@@ -9,7 +9,7 @@ using Xunit.Abstractions;
 
 namespace SharpTS.Tests.CompilerTests;
 
-/// <summary>Structural regression coverage for the allocation-free #1421 bitwise path.</summary>
+/// <summary>Structural regression coverage for #1421 bitwise and #1431 byte-array lowering.</summary>
 public sealed class NumericBitwiseLoweringTests
 {
     private readonly ITestOutputHelper _output;
@@ -47,6 +47,52 @@ public sealed class NumericBitwiseLoweringTests
             instruction.OpCode == OpCodes.Box && instruction.Operand == typeof(double));
         Assert.DoesNotContain(hotSlice, instruction =>
             instruction.Operand is MethodBase { Name: "JsToInt32" or "ConvertToNumber" });
+    }
+
+    [Fact]
+    public void OneByteTypedArrayAccessors_UseDirectElementOperations()
+    {
+        Assembly assembly = Compile("""
+            const signed = new Int8Array(1);
+            const unsigned = new Uint8Array(1);
+            const wider = new Int16Array(1);
+            signed[0] = -1;
+            unsigned[0] = 255;
+            wider[0] = -1;
+            """);
+
+        AssertDirectOneByteAccessors(assembly.GetType("$Int8Array")!, OpCodes.Ldelem_I1);
+        AssertDirectOneByteAccessors(assembly.GetType("$Uint8Array")!, OpCodes.Ldelem_U1);
+
+        Type widerType = assembly.GetType("$Int16Array")!;
+        Assert.Contains(ReadInstructions(FindAccessor(widerType, "GetUnboxed")),
+            instruction => instruction.Operand is MethodBase { Name: "ReadUnaligned" });
+        Assert.Contains(ReadInstructions(FindAccessor(widerType, "SetUnboxed")),
+            instruction => instruction.Operand is MethodBase { Name: "WriteUnaligned" });
+    }
+
+    [Fact]
+    public void OneByteTypedArrayAccessors_PreserveOffsetAliasingAndNarrowing()
+    {
+        Assembly assembly = Compile("""
+            function exercise(): number {
+                const buffer = new ArrayBuffer(8);
+                const unsigned = new Uint8Array(buffer, 2, 3);
+                const signed = new Int8Array(buffer, 2, 3);
+                unsigned[0] = 257.9;
+                unsigned[1] = -1;
+                signed[2] = 130;
+                return unsigned[0] * 100000000
+                    + unsigned[1] * 100000
+                    + signed[2] * 100
+                    + signed[0];
+            }
+            """);
+
+        double result = (double)FindFunction(assembly, "exercise")
+            .Invoke(null, null)!;
+
+        Assert.Equal(125_487_401, result);
     }
 
     [Fact]
@@ -199,6 +245,24 @@ public sealed class NumericBitwiseLoweringTests
         assembly.GetType("$Program")!
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
+
+    private static MethodInfo FindAccessor(Type type, string name) =>
+        type.GetMethod(name, BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new InvalidOperationException(
+                $"Type '{type.Name}' has no '{name}' accessor.");
+
+    private static void AssertDirectOneByteAccessors(Type type, OpCode loadOpCode)
+    {
+        var get = ReadInstructions(FindAccessor(type, "GetUnboxed")).ToArray();
+        var set = ReadInstructions(FindAccessor(type, "SetUnboxed")).ToArray();
+
+        Assert.Contains(get, instruction => instruction.OpCode == loadOpCode);
+        Assert.Contains(set, instruction => instruction.OpCode == OpCodes.Stelem_I1);
+        Assert.DoesNotContain(get, instruction =>
+            instruction.Operand is MethodBase { Name: "ReadUnaligned" });
+        Assert.DoesNotContain(set, instruction =>
+            instruction.Operand is MethodBase { Name: "WriteUnaligned" });
+    }
 
     private static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
         MethodInfo method)
