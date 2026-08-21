@@ -1,3 +1,5 @@
+using SharpTS.Parsing;
+
 namespace SharpTS.Compilation;
 
 /// <summary>
@@ -39,6 +41,22 @@ public sealed class RuntimeFeatureSet
     internal Dictionary<int, HashSet<string>> CompactObjectRecordShapeFingerprints { get; } = [];
 
     internal Dictionary<string, JsonSerializationShape.Record> CompactObjectRecordShapes { get; } = [];
+
+    /// <summary>
+    /// Object literals stored by the same guarded, discarded-result array-push
+    /// intrinsic used by the IL emitter. These literals may use their compact
+    /// carrier even though the conservative call-escape analysis keeps the
+    /// shape's materialization guard enabled.
+    /// </summary>
+    internal HashSet<Expr.ObjectLiteral> CompactObjectRecordStablePushLiterals { get; } =
+        new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Compact-record shapes used by at least one stable discarded array push.
+    /// Only these shapes specialize scalar slots to native CLR field types.
+    /// </summary>
+    internal HashSet<string> CompactObjectRecordStablePushShapes { get; } =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Generic-looking compact-record slots whose literal initializers prove that the

@@ -102,6 +102,16 @@ public sealed class RuntimeFeatureDetector
         foreach (var stmt in statements)
             VisitStmt(stmt);
 
+        // The emitter selects the discarded one-element push intrinsic only
+        // while both of these whole-program guards remain clear. Keep literal
+        // eligibility synchronized with that exact boundary even when the
+        // observable mutation appears later in source order.
+        if (_set.UsesDynamicPropertyDescriptors || _set.UsesArrayPrototypeMutation)
+        {
+            _set.CompactObjectRecordStablePushLiterals.Clear();
+            _set.CompactObjectRecordStablePushShapes.Clear();
+        }
+
         // Implications between feature flags (one feature pulls in another's
         // emit machinery). Applied after the walk so flags-set-by-trigger
         // can cascade once.
@@ -591,6 +601,7 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Expression es:
+                MarkStableDiscardedArrayPushLiteral(es.Expr);
                 VisitExpr(es.Expr);
                 break;
 
@@ -1107,6 +1118,8 @@ public sealed class RuntimeFeatureDetector
                         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(compactShape);
                         shapes.Add(fingerprint);
                         _set.CompactObjectRecordShapes.TryAdd(fingerprint, compactShape);
+                        if (_set.CompactObjectRecordStablePushLiterals.Contains(ol))
+                            _set.CompactObjectRecordStablePushShapes.Add(fingerprint);
                         AnalyzeCompactRecordSelfFields(ol, compactShape, fingerprint);
                     }
                 }
@@ -1280,6 +1293,24 @@ public sealed class RuntimeFeatureDetector
         }
 
         return _typeMap is null || _typeMap.Get(expr) is TypeInfo.Array;
+    }
+
+    private void MarkStableDiscardedArrayPushLiteral(Expr expression)
+    {
+        if (_typeMap is null || expression is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: { } receiver,
+                    Name.Lexeme: "push"
+                },
+                Arguments: [Expr.ObjectLiteral literal]
+            } || _typeMap.Get(receiver) is not TypeInfo.Array)
+            return;
+
+        _set.CompactObjectRecordStablePushLiterals.Add(literal);
     }
 
     private void MarkMutationOperand(Expr operand)

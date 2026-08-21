@@ -8,6 +8,36 @@ namespace SharpTS.Tests.CompilerTests;
 public class RuntimeFeatureDetectorTests
 {
     [Theory]
+    [InlineData("", true)]
+    [InlineData("const observed: number = items.push({ key: 2, tag: 'y' });", true)]
+    [InlineData("Object.defineProperty([], '0', { value: 1 });", false)]
+    [InlineData("const prototype = Array.prototype;", false)]
+    public void StableDiscardedArrayPush_TracksCompactLiteralEligibility(
+        string extra,
+        bool expectedEligible)
+    {
+        string source = $$"""
+            type Item = { key: number; tag: string };
+            const items: Item[] = [];
+            items.push({ key: 1, tag: "x" });
+            {{extra}}
+            """;
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(
+            expectedEligible,
+            features.CompactObjectRecordStablePushLiterals.Count == 1);
+        Assert.Equal(
+            expectedEligible,
+            features.CompactObjectRecordStablePushShapes.Count == 1);
+        var shape = features.CompactObjectRecordShapes.Single(pair =>
+            pair.Value.Fields.Any(field => field.Key == "key"));
+        Assert.False(features.CanAssumeCompactObjectRecordIsUnmaterialized(shape.Key));
+    }
+
+    [Theory]
     [InlineData("const value = { x: 1 }; JSON.stringify(value);", 1)]
     [InlineData("const value = { x: 1 }; JSON.stringify(value, null, 2);", 0)]
     [InlineData("const value = { x: 1 }; const stringify = JSON.stringify; stringify(value);", 0)]

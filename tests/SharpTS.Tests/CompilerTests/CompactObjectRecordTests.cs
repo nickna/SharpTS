@@ -108,6 +108,41 @@ public sealed class CompactObjectRecordTests
     }
 
     [Fact]
+    public void StableArrayStoredScalarRecord_BoxesOnlyAtGenericMaterializationBoundary()
+    {
+        const string source = """
+            type Item = { count: number; enabled: boolean; label: string };
+
+            function exercise(): string {
+                const items: Item[] = [];
+                items.push({ count: 1, enabled: true, label: "before" });
+                const value: any = items[0];
+                const before = value.count + ":" + value.enabled + ":" + value.label;
+                value.count = 7;
+                value.enabled = false;
+                value.label = "after";
+                return before + "|" + value.count + ":" + value.enabled + ":" + value.label;
+            }
+
+            console.log(exercise());
+            """;
+
+        Assembly assembly = Compile(source);
+        Type carrier = assembly.GetTypes().Single(type =>
+            type.Name.StartsWith("$CompactObjectRecord", StringComparison.Ordinal));
+        Assert.Equal(
+            [typeof(double), typeof(bool), typeof(string)],
+            carrier.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                .Where(field => field.Name.StartsWith("_v", StringComparison.Ordinal))
+                .Select(field => field.FieldType)
+                .ToArray());
+        Assert.Equal(
+            "1:true:before|7:false:after\n",
+            TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
     public void SameArityDifferentShapesRemainDistinct()
     {
         const string source = """
