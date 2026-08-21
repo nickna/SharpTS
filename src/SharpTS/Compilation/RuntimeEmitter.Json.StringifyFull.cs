@@ -570,11 +570,17 @@ public partial class RuntimeEmitter
         // Class instance
         il.MarkLabel(classInstanceLabel);
         var classFieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var classHolderLocal = il.DeclareLocal(_types.Object);
         var noClassFieldsLabel = il.DefineLabel();
         // Use TSObjectMergeEnumerable to include accessor (getter) properties
         // alongside data props per ECMA-262 25.5.2.4 EnumerableOwnPropertyNames.
         // For non-$Object IHasFields receivers, this falls back to the same
         // Fields getter that the original code used.
+        // Preserve the original object identity for replacer `this`.  The
+        // enumerable snapshot below is only a serialization view; exposing it
+        // as the holder breaks SameValue checks for compact-record sources.
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Stloc, classHolderLocal);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, runtime.TSObjectMergeEnumerable);
         il.Emit(OpCodes.Stloc, classFieldsLocal);
@@ -582,7 +588,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brfalse, noClassFieldsLabel);
         il.Emit(OpCodes.Ldloc, classFieldsLocal);
         il.Emit(OpCodes.Stloc, valueLocal);
-        EmitStringifyObjectFull(il, method, valueLocal, runtime, null);
+        EmitStringifyObjectFull(
+            il, method, valueLocal, runtime, null, classHolderLocal);
         il.MarkLabel(noClassFieldsLabel);
         il.Emit(OpCodes.Ldstr, "{}");
         il.Emit(OpCodes.Ret);
@@ -1010,7 +1017,8 @@ public partial class RuntimeEmitter
         MethodBuilder stringifyMethod,
         LocalBuilder valueLocal,
         EmittedRuntime runtime,
-        LocalBuilder? allowPooledDictionaryKeysLocal)
+        LocalBuilder? allowPooledDictionaryKeysLocal,
+        LocalBuilder? replacerHolderLocal = null)
     {
         var sbLocal = il.DeclareLocal(_types.StringBuilder);
         var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
@@ -1170,7 +1178,8 @@ public partial class RuntimeEmitter
 
         // SerializeJSONProperty step 2 precedes the replacer step.
         EmitToJsonCheck(il, valLocal, runtime, keyLocal: keyLocal);
-        EmitCallReplacerWithKey(il, valLocal, keyLocal, dictLocal, runtime);
+        EmitCallReplacerWithKey(
+            il, valLocal, keyLocal, replacerHolderLocal ?? dictLocal, runtime);
 
         // strResult = StringifyValueFull(val, replacer, allowedKeys, indentStr, depth + 1, keyLocal)
         // ECMA-262 25.5.2.5 SerializeJSONObject step 6.a — the recursive key

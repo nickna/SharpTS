@@ -958,7 +958,6 @@ public partial class RuntimeEmitter
         EmitSetPropertyStrict(typeBuilder, runtime);
         EmitDeleteProperty(typeBuilder, runtime);
         EmitDeletePropertyStrict(typeBuilder, runtime);
-        EmitMergeIntoObject(typeBuilder, runtime);
         EmitMergeIntoTSObject(typeBuilder, runtime);
         // (Symbol helpers EmitGetSymbolDict + EmitIsSymbol now emitted earlier
         // — before EmitToJsString — so the @@toPrimitive lookup can use them.)
@@ -1018,6 +1017,9 @@ public partial class RuntimeEmitter
         EmitGetOwnPropertySymbols(typeBuilder, runtime);
         EmitProxyOwnKeysHelperBodies(runtime);
         EmitGetKeys(typeBuilder, runtime);
+        // MergeIntoObject implements CopyDataProperties through GetKeys and
+        // GetProperty, so its body must be emitted after GetKeys is available.
+        EmitMergeIntoObject(typeBuilder, runtime);
         EmitGetValues(typeBuilder, runtime);
         EmitGetEntries(typeBuilder, runtime);
         EmitObjectFromEntries(typeBuilder, runtime);

@@ -1754,6 +1754,18 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notTSObject);
 
+        // Compact ordinary-object carriers can acquire indexed descriptors
+        // and fields while an Array algorithm is running. Keep only the
+        // snapshotted length here; LoadArrayLikeElement performs live
+        // HasProperty/Get operations for each index.
+        var notCompactRecord = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+        il.Emit(OpCodes.Brfalse, notCompactRecord);
+        EmitLazyMaterializePath(il, runtime, holeAware: false);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notCompactRecord);
+
         // Eager paths (List, $Array, string, ObjectArray, $Arguments, primitives,
         // null/undefined): defer to ArrayLikeMaterialize. The dispatch site's
         // _currentArrayLikeReceiver still points at the original receiver, but
@@ -2203,10 +2215,31 @@ public partial class RuntimeEmitter
         // distinction; with HasArrayLikeProperty, callbacks correctly fire
         // for inherited set-only accessors (val=undefined) and skip for
         // truly absent slots.
+        var notTSObject = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
-        il.Emit(OpCodes.Brfalse, returnListValLabel);
+        il.Emit(OpCodes.Brfalse, notTSObject);
         var tsoKeyStrLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, tsoKeyStrLocal);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+        il.Emit(OpCodes.Brfalse, returnHoleLabel);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Ldloc, tsoKeyStrLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Ret);
+
+        // Compact ordinary-object carriers use the same live protocol as
+        // $Object. Their placeholder list contains no element values; query
+        // the original receiver on every iteration so accessors, deletions,
+        // and newly added indexed properties remain observable.
+        il.MarkLabel(notTSObject);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+        il.Emit(OpCodes.Brfalse, returnListValLabel);
         il.Emit(OpCodes.Ldarga_S, (byte)1);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "ToString", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, tsoKeyStrLocal);
@@ -2338,6 +2371,24 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, currentLocal);
         il.Emit(OpCodes.Br, loopStart);
         il.MarkLabel(notTSObjectLabel);
+
+        // Other emitted ordinary-object carriers (notably compact records)
+        // expose their own properties through $IHasFields rather than a
+        // Dictionary or $Object field bag.  Generic Array algorithms perform
+        // HasProperty on the live receiver for every index, so consult that
+        // interface before walking the receiver's prototype chain.  This is
+        // also an existence-only operation: null/undefined-valued slots remain
+        // present without invoking any getter.
+        var notIHasFieldsLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Brfalse, notIHasFieldsLabel);
+        il.Emit(OpCodes.Ldloc, currentLocal);
+        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Brtrue, trueLabel);
+        il.MarkLabel(notIHasFieldsLabel);
 
         // $Array branch: check a real (non-hole) own index, then continue via
         // its intrinsic/custom prototype when absent.
