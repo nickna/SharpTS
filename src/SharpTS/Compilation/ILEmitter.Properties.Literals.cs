@@ -334,7 +334,8 @@ public partial class ILEmitter
 
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(record);
         if (!_ctx.RuntimeFeatures.CanAssumeCompactObjectRecordIsUnmaterialized(
-                fingerprint))
+                fingerprint) &&
+            !_ctx.RuntimeFeatures.CompactObjectRecordStablePushLiterals.Contains(literal))
             return false;
 
         if (!_ctx.Runtime!.CompactObjectRecordCtors.TryGetValue(

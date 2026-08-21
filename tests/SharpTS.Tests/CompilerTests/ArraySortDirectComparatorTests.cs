@@ -15,6 +15,73 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class ArraySortDirectComparatorTests
 {
     [Fact]
+    public void BenchmarkRecordPush_PreservesTypedCompactCarrierAndComparatorLoads()
+    {
+        Assembly assembly = Compile("""
+            function makeRecords(n: number): { key: number; tag: string }[] {
+                const out: { key: number; tag: string }[] = [];
+                let state: number = 987654321;
+                for (let i: number = 0; i < n; i++) {
+                    state = (state * 48271) % 2147483647;
+                    out.push({ key: state, tag: "t" + (state % 1000) });
+                }
+                return out;
+            }
+
+            function sortRecords(src: { key: number; tag: string }[]): number {
+                const c = src.slice();
+                c.sort((a: { key: number; tag: string }, b: { key: number; tag: string }): number => a.key - b.key);
+                return c[0].key;
+            }
+            """);
+
+        MethodInfo makeRecords = FindFunction(assembly, "makeRecords");
+        var records = Assert.IsAssignableFrom<List<object>>(
+            makeRecords.Invoke(null, [32.0]));
+        Type carrier = records[0].GetType();
+        MethodInfo sortRecords = FindFunction(assembly, "sortRecords");
+        MethodInfo arrow = assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method => method.Name.StartsWith("<>Arrow_", StringComparison.Ordinal) &&
+                !method.Name.Contains('$'));
+
+        Assert.StartsWith("$CompactObjectRecord", carrier.Name, StringComparison.Ordinal);
+        Assert.Equal(
+            [typeof(double), typeof(string)],
+            carrier.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)
+                .Where(field => field.Name.StartsWith("_v", StringComparison.Ordinal))
+                .Select(field => field.FieldType)
+                .ToArray());
+        Assert.Contains(CalledMethods(sortRecords), method =>
+            method.Name == "ArraySortDirectNumber");
+        Assert.Contains(Instructions(arrow), instruction =>
+            instruction.OpCode == OpCodes.Ldfld &&
+            instruction.Operand is FieldInfo { FieldType: { } fieldType } &&
+            fieldType == typeof(double));
+        Assert.Equal(2, CalledMethods(arrow).Count(method =>
+            method.Name == "ConvertToNumber"));
+
+        double first = Assert.IsType<double>(sortRecords.Invoke(null, [records]));
+        Assert.True(first > 0);
+    }
+
+    [Fact]
+    public void ObservedPushResult_RetainsOrdinaryRecordLiteral()
+    {
+        Assembly assembly = Compile("""
+            type Item = { key: number; tag: string };
+            function makeRecord(): Item {
+                const items: Item[] = [];
+                const length = items.push({ key: 1, tag: "x" });
+                return items[length - 1];
+            }
+            """);
+
+        object record = FindFunction(assembly, "makeRecord").Invoke(null, [])!;
+        Assert.IsType<Dictionary<string, object>>(record);
+    }
+
+    [Fact]
     public void StableNumericArrow_UsesUnboxedHelper_WhileObjectAndDynamicComparatorsDoNot()
     {
         Assembly assembly = Compile("""

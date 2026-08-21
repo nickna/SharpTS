@@ -32,6 +32,8 @@ public partial class RuntimeEmitter
             JsonSerializationShape.Record shape = pair.Value;
             if (shape.Fields.Count is < 1 or > 4)
                 continue;
+            bool specializeStablePushScalars =
+                _features.CompactObjectRecordStablePushShapes.Contains(fingerprint);
 
             var typeBuilder = EmitTypeDefinitions.DefineType(
                 moduleBuilder,
@@ -44,12 +46,14 @@ public partial class RuntimeEmitter
                 typeBuilder, runtime.CompactObjectRecordInterface);
             runtime.CompactObjectRecordTypes.Add(fingerprint, typeBuilder);
 
-            var valueFields = shape.Fields.Select((_, index) =>
+            var valueFields = shape.Fields.Select((field, index) =>
                 typeBuilder.DefineField(
                     $"_v{index}",
                     _features.CompactObjectRecordSelfFields.Contains((fingerprint, index))
                         ? typeBuilder
-                        : _types.Object,
+                        : specializeStablePushScalars
+                            ? GetJsonScalarRecordFieldType(field.Value)
+                            : _types.Object,
                     FieldAttributes.Assembly)).ToArray();
             Type weakTableType = _types.MakeGenericType(
                 _types.ConditionalWeakTableOpen, _types.Object, _types.DictionaryStringObject);
@@ -164,6 +168,8 @@ public partial class RuntimeEmitter
                     il.Emit(OpCodes.Ldstr, shape.Fields[index].Key);
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, valueFields[index]);
+                    if (valueFields[index].FieldType.IsValueType)
+                        il.Emit(OpCodes.Box, valueFields[index].FieldType);
                     il.Emit(OpCodes.Callvirt, dictSet);
                 }
                 il.Emit(OpCodes.Ldsfld, materializedTable);
@@ -209,6 +215,8 @@ public partial class RuntimeEmitter
                     il.Emit(OpCodes.Brfalse_S, next);
                     il.Emit(OpCodes.Ldarg_0);
                     il.Emit(OpCodes.Ldfld, valueFields[index]);
+                    if (valueFields[index].FieldType.IsValueType)
+                        il.Emit(OpCodes.Box, valueFields[index].FieldType);
                     il.Emit(OpCodes.Ret);
                     il.MarkLabel(next);
                 }

@@ -513,6 +513,8 @@ public partial class ILEmitter
                 }
                 IL.Emit(OpCodes.Ldloc, exactLocal);
                 IL.Emit(OpCodes.Ldfld, exactValueField);
+                if (exactValueField.FieldType.IsValueType)
+                    IL.Emit(OpCodes.Box, exactValueField.FieldType);
                 IL.Emit(OpCodes.Br, endLabel);
             }
             else if (scalarIndex >= 0 &&
