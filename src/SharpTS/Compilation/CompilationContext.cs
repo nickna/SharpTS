@@ -38,7 +38,7 @@ public record struct HoistedArrayEntry(LocalBuilder TypedLocal, ArrayElementsDes
 public record struct HoistedTypedArrayEntry(LocalBuilder TypedLocal, Type XArrayType, string ElementType);
 
 public record struct HoistedCompactRecordEntry(
-    LocalBuilder TypedLocal, string Fingerprint);
+    LocalBuilder TypedLocal, string Fingerprint, bool IsExact);
 
 /// <summary>
 /// Holds compilation state passed between ILCompiler and ILEmitter.

@@ -32,6 +32,8 @@ public sealed class RuntimeFeatureDetector
     private readonly RuntimeFeatureSet _set;
     private readonly HashSet<string> _sourceFunctions = new(StringComparer.Ordinal);
     private readonly HashSet<string> _opaqueValueBindings = new(StringComparer.Ordinal);
+    private readonly HashSet<(string Fingerprint, int Index)> _invalidCompactRecordSelfFields = [];
+    private readonly Dictionary<string, JsonSerializationShape.Record> _canonicalCompactRecordShapes = [];
     private TypeMap? _typeMap;
 
     public RuntimeFeatureDetector()
@@ -96,6 +98,7 @@ public sealed class RuntimeFeatureDetector
     {
         _typeMap = typeMap;
         CollectStableSourceFunctionNames(statements);
+        CollectCanonicalCompactRecordShapes(statements);
         foreach (var stmt in statements)
             VisitStmt(stmt);
 
@@ -1090,8 +1093,9 @@ public sealed class RuntimeFeatureDetector
                 {
                     _set.UsesCompactObjectRecords = true;
                     if (_typeMap is not null &&
-                        JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
-                            ol, _typeMap, out var compactShape))
+                        JsonSerializationShapeAnalyzer.TryAnalyzeCompactObjectLiteral(
+                            ol, _typeMap, _canonicalCompactRecordShapes.Values,
+                            out var compactShape))
                     {
                         if (!_set.CompactObjectRecordShapeFingerprints.TryGetValue(
                                 compactShape.Fields.Count, out var shapes))
@@ -1103,6 +1107,7 @@ public sealed class RuntimeFeatureDetector
                         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(compactShape);
                         shapes.Add(fingerprint);
                         _set.CompactObjectRecordShapes.TryAdd(fingerprint, compactShape);
+                        AnalyzeCompactRecordSelfFields(ol, compactShape, fingerprint);
                     }
                 }
                 foreach (var prop in ol.Properties)
@@ -1184,6 +1189,37 @@ public sealed class RuntimeFeatureDetector
             // Leaves with no nested expressions worth walking.
             default:
                 break;
+        }
+    }
+
+    private void AnalyzeCompactRecordSelfFields(
+        Expr.ObjectLiteral literal,
+        JsonSerializationShape.Record shape,
+        string fingerprint)
+    {
+        for (int index = 0; index < shape.Fields.Count; index++)
+        {
+            if (shape.Fields[index].Value is not JsonSerializationShape.Generic)
+                continue;
+
+            var key = (fingerprint, index);
+            TypeInfo? valueType = _typeMap?.Get(literal.Properties[index].Value);
+            if (JsonSerializationShapeAnalyzer.IsNullishOnly(valueType))
+                continue;
+
+            if (JsonSerializationShapeAnalyzer.TryGetRecordShape(
+                    valueType, out var valueShape) &&
+                JsonSerializationShapeAnalyzer.Fingerprint(valueShape) == fingerprint &&
+                !_invalidCompactRecordSelfFields.Contains(key))
+            {
+                _set.CompactObjectRecordSelfFields.Add(key);
+                continue;
+            }
+
+            // Every non-nullish initializer for a typed slot must agree. Once a
+            // conflicting value is observed, later literals cannot re-enable it.
+            _invalidCompactRecordSelfFields.Add(key);
+            _set.CompactObjectRecordSelfFields.Remove(key);
         }
     }
 
@@ -1278,6 +1314,46 @@ public sealed class RuntimeFeatureDetector
             if (!hasOpaqueBoundary &&
                 declarations.Counts.GetValueOrDefault(function.Name.Lexeme) == 1)
                 _sourceFunctions.Add(function.Name.Lexeme);
+        }
+    }
+
+    private void CollectCanonicalCompactRecordShapes(IReadOnlyList<Stmt> statements)
+    {
+        if (_typeMap is null)
+            return;
+        foreach (var statement in statements)
+            Collect(statement);
+
+        void Collect(Stmt statement)
+        {
+            switch (statement)
+            {
+                case Stmt.Function function:
+                    if (_typeMap.GetFunctionType(function.Name.Lexeme) is { } functionType)
+                    {
+                        Add(functionType.ReturnType);
+                        foreach (var parameterType in functionType.ParamTypes)
+                            Add(parameterType);
+                    }
+                    break;
+                case Stmt.Export { Declaration: { } declaration }:
+                    Collect(declaration);
+                    break;
+                case Stmt.Sequence sequence:
+                    foreach (var inner in sequence.Statements)
+                        Collect(inner);
+                    break;
+            }
+        }
+
+        void Add(TypeInfo type)
+        {
+            if (!JsonSerializationShapeAnalyzer.TryGetRecordShape(type, out var shape) ||
+                shape.Fields.Count is < 1 or > 4 ||
+                !shape.Fields.Any(field => field.Value is JsonSerializationShape.Generic))
+                return;
+            _canonicalCompactRecordShapes.TryAdd(
+                JsonSerializationShapeAnalyzer.Fingerprint(shape), shape);
         }
     }
 
@@ -1440,8 +1516,9 @@ public sealed class RuntimeFeatureDetector
         }
 
         if (expression is Expr.ObjectLiteral literal &&
-            JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
-                literal, _typeMap, out var shape))
+            JsonSerializationShapeAnalyzer.TryAnalyzeCompactObjectLiteral(
+                literal, _typeMap, _canonicalCompactRecordShapes.Values,
+                out var shape))
         {
             _set.PotentiallyMaterializedCompactObjectRecordShapes.Add(
                 JsonSerializationShapeAnalyzer.Fingerprint(shape));

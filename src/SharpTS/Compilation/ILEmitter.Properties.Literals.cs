@@ -327,8 +327,9 @@ public partial class ILEmitter
                 return false;
         }
 
-        if (!JsonSerializationShapeAnalyzer.TryAnalyzeObjectLiteral(
-                literal, _ctx.TypeMap, out var record))
+        if (!JsonSerializationShapeAnalyzer.TryAnalyzeCompactObjectLiteral(
+                literal, _ctx.TypeMap,
+                _ctx.RuntimeFeatures.CompactObjectRecordShapes.Values, out var record))
             return false;
 
         string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(record);
@@ -340,10 +341,15 @@ public partial class ILEmitter
                 fingerprint, out var exactCtor))
             return false;
 
-        foreach (var property in literal.Properties)
+        var ctorParameters = exactCtor.GetParameters();
+        for (int index = 0; index < literal.Properties.Count; index++)
         {
+            var property = literal.Properties[index];
             EmitExpression(property.Value);
-            EmitBoxIfNeeded(property.Value);
+            if (ctorParameters[index].ParameterType == _ctx.Types.Object)
+                EmitBoxIfNeeded(property.Value);
+            else
+                EmitConversionForParameter(property.Value, ctorParameters[index].ParameterType);
         }
         IL.Emit(OpCodes.Newobj, exactCtor);
         return true;

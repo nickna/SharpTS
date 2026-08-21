@@ -9,9 +9,9 @@ using Xunit;
 namespace SharpTS.Tests.CompilerTests;
 
 /// <summary>
-/// Regression coverage for #1412: exact small record shapes use slot-backed CLR
-/// reference types, while dynamic observation and mutation retain ordinary JS
-/// object behavior through lazy dictionary materialization.
+/// Regression coverage for #1412/#1419: exact small record shapes use slot-backed
+/// CLR reference types and stable recursive signatures preserve that type, while
+/// dynamic observation and mutation retain ordinary JS object behavior.
 /// </summary>
 public sealed class CompactObjectRecordTests
 {
@@ -40,6 +40,17 @@ public sealed class CompactObjectRecordTests
         MethodInfo buildTree = FindFunction(assembly, "buildTree");
         MethodInfo itemCheck = FindFunction(assembly, "itemCheck");
 
+        Type carrier = buildTree.ReturnType;
+        Assert.StartsWith("$CompactObjectRecord", carrier.Name, StringComparison.Ordinal);
+        Assert.Equal(carrier, Assert.Single(itemCheck.GetParameters()).ParameterType);
+        Assert.All(
+            carrier.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                .Where(field => field.Name.StartsWith("_v", StringComparison.Ordinal)),
+            field => Assert.Equal(carrier, field.FieldType));
+        Assert.All(
+            Assert.Single(carrier.GetConstructors()).GetParameters(),
+            parameter => Assert.Equal(carrier, parameter.ParameterType));
+
         Assert.Contains(ReadMembers(buildTree), member =>
             member.OpCode == OpCodes.Newobj &&
             member.Member?.DeclaringType?.Name.StartsWith(
@@ -51,6 +62,9 @@ public sealed class CompactObjectRecordTests
         Assert.DoesNotContain(ReadMembers(itemCheck), member =>
             member.Member?.DeclaringType?.IsGenericType == true &&
             member.Member.DeclaringType.GetGenericTypeDefinition() == typeof(Dictionary<,>));
+        Assert.DoesNotContain(ReadMembers(itemCheck), member => member.OpCode == OpCodes.Isinst);
+        Assert.DoesNotContain(ReadMembers(itemCheck), member =>
+            member.Member?.Name == "GetProperty");
 
         var binaryTrees = FindFunction(assembly, "binaryTrees")
             .CreateDelegate<Func<double, double>>();
@@ -59,6 +73,7 @@ public sealed class CompactObjectRecordTests
         Assert.Equal(16383, binaryTrees(12));
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.InRange(allocated, 250_000, 300_000);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(TreeSource));
     }
 
     [Fact]
@@ -102,6 +117,82 @@ public sealed class CompactObjectRecordTests
             """;
 
         Assert.Equal("1 2 a b\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void ExportedOrValueUsedFunctionRetainsObjectSignature()
+    {
+        const string source = """
+            type Node = { left: Node | null; right: Node | null };
+
+            export function exportedRead(node: Node | null): number {
+                if (node === null) return 1;
+                return exportedRead(node.left);
+            }
+
+            function aliasedRead(node: Node | null): number {
+                if (node === null) return 1;
+                return aliasedRead(node.left);
+            }
+            const alias = aliasedRead;
+            console.log(alias({ left: null, right: null }));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object),
+            Assert.Single(FindFunction(assembly, "exportedRead").GetParameters()).ParameterType);
+        Assert.Equal(typeof(object),
+            Assert.Single(FindFunction(assembly, "aliasedRead").GetParameters()).ParameterType);
+        Assert.Equal("1\n", TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void InternalWalkerCalledFromObjectBoundaryRetainsObjectSignature()
+    {
+        const string source = """
+            type Node = { left: Node | null; right: Node | null };
+
+            function walk(node: Node | null): number {
+                if (node === null) return 1;
+                return walk(node.left);
+            }
+
+            export function entry(node: Node | null): number {
+                return walk(node);
+            }
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object),
+            Assert.Single(FindFunction(assembly, "walk").GetParameters()).ParameterType);
+        Assert.Equal(typeof(object),
+            Assert.Single(FindFunction(assembly, "entry").GetParameters()).ParameterType);
+    }
+
+    [Fact]
+    public void MutatedRecursiveRecordRetainsObjectSignatures()
+    {
+        const string source = """
+            type Node = { left: Node | null; right: Node | null };
+
+            function build(): Node {
+                return { left: null, right: null };
+            }
+            function walk(node: Node | null): number {
+                if (node === null) return 1;
+                return walk(node.left);
+            }
+
+            const node = build();
+            node.left = build();
+            console.log(walk(node));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object), FindFunction(assembly, "build").ReturnType);
+        Assert.Equal(typeof(object),
+            Assert.Single(FindFunction(assembly, "walk").GetParameters()).ParameterType);
+        Assert.Equal("1\n", TestHarness.RunCompiled(source));
     }
 
     private static Assembly Compile(string source)

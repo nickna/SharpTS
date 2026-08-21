@@ -40,6 +40,13 @@ public partial class ILEmitter
             return;
         }
 
+        // A carrier-typed, immutable parameter remains the exact generated CLR
+        // record throughout the function. When flow analysis has also narrowed
+        // away null, emit the recursive slot load directly: no isinst, materialized
+        // guard, descriptor probe, or general GetProperty fallback is observable.
+        if (TryEmitExactCompactRecordParameterGet(g))
+            return;
+
         // Syntactic shortcut: `arguments.length` → load $Arguments._length
         // directly. The static-type-driven dispatch path emits .NET
         // List<object>.Count (via a helper that bypasses GetProperty),
@@ -596,6 +603,41 @@ public partial class ILEmitter
 
         IL.MarkLabel(endLabel);
         SetStackUnknown();
+    }
+
+    private bool TryEmitExactCompactRecordParameterGet(Expr.Get g)
+    {
+        if (g.Optional || g.Object is not Expr.Variable receiver ||
+            !_ctx.HoistedCompactRecordParameters.TryGetValue(
+                receiver.Name.Lexeme, out var hoisted) ||
+            !hoisted.IsExact ||
+            _ctx.TypeMap?.Get(g.Object) is not TypeInfo.Record narrowedRecord ||
+            _ctx.RuntimeFeatures?.CanAssumeCompactObjectRecordIsUnmaterialized(
+                hoisted.Fingerprint) != true ||
+            _ctx.RuntimeFeatures.UsesDynamicPropertyDescriptors ||
+            !JsonSerializationShapeAnalyzer.TryAnalyze(narrowedRecord, out var analyzed) ||
+            analyzed is not JsonSerializationShape.Record recordShape ||
+            JsonSerializationShapeAnalyzer.Fingerprint(recordShape) != hoisted.Fingerprint)
+            return false;
+
+        int index = -1;
+        for (int candidate = 0; candidate < recordShape.Fields.Count; candidate++)
+        {
+            if (recordShape.Fields[candidate].Key == g.Name.Lexeme)
+            {
+                index = candidate;
+                break;
+            }
+        }
+        if (index < 0 ||
+            !_ctx.Runtime!.CompactObjectRecordValueFields.TryGetValue(
+                (hoisted.Fingerprint, index), out var field))
+            return false;
+
+        IL.Emit(OpCodes.Ldloc, hoisted.TypedLocal);
+        IL.Emit(OpCodes.Ldfld, field);
+        SetStackTypeForFieldType(field.FieldType);
+        return true;
     }
 
     /// <summary>
