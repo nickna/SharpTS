@@ -1681,19 +1681,59 @@ public partial class RuntimeEmitter
 
     private void EmitJsToInt32(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        var numberMethod = typeBuilder.DefineMethod(
+            "JsNumberToInt32",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Int32,
+            [_types.Double]);
+        numberMethod.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+        runtime.JsNumberToInt32 = numberMethod;
+
+        EmitJsNumberToInt32Body(numberMethod.GetILGenerator());
+
         // Signature forward-declared by DefineRuntimeClassPhase1 so $RegExp
         // (which emits before $Runtime's body) can call it; reuse that slot.
         var method = (MethodBuilder)runtime.JsToInt32;
-
         var il = method.GetILGenerator();
 
+        // Dynamic operands retain the complete ToNumber / ToPrimitive pipeline,
+        // then share the exact numeric conversion used by the unboxed fast path.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ToNumber);
+        il.Emit(OpCodes.Call, numberMethod);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits ECMA-262 ToInt32 for an already-unboxed JavaScript Number. The common
+    /// in-range case is a single checked-range branch pair plus <c>conv.i4</c>;
+    /// non-finite and out-of-range values use the full modulo-2^32 algorithm.
+    /// </summary>
+    private void EmitJsNumberToInt32Body(ILGenerator il)
+    {
         const double TWO_32 = 4294967296.0;
         const double TWO_31 = 2147483648.0;
 
-        // n = ToNumber(arg0)
+        var slowLabel = il.DefineLabel();
+
+        // Fast path: conversion is well-defined for every finite value in the
+        // signed int32 range and conv.i4 supplies the required truncation.
+        // blt.un also sends NaN to the slow path (unordered comparison).
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_R8, -2147483648.0);
+        il.Emit(OpCodes.Blt_Un, slowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_R8, 2147483647.0);
+        il.Emit(OpCodes.Bgt, slowLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(slowLabel);
+
+        // Keep the argument in a local for the slow modulo path.
         var nLocal = il.DeclareLocal(_types.Double);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.ToNumber);
         il.Emit(OpCodes.Stloc, nLocal);
 
         // if (!double.IsFinite(n)) return 0

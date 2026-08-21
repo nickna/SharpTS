@@ -143,6 +143,95 @@ public class OperatorTests
         Assert.Equal("86\n", output);
     }
 
+    [Theory, ModeData]
+    public void NumericBitwise_FastPathPreservesToInt32Boundaries(ExecutionMode mode)
+    {
+        var source = """
+            function asInt32(value: number): number {
+                return value | 0;
+            }
+            console.log(asInt32(NaN));
+            console.log(asInt32(Infinity));
+            console.log(asInt32(-Infinity));
+            console.log(asInt32(-0));
+            console.log(asInt32(1.9));
+            console.log(asInt32(-1.9));
+            console.log(asInt32(4294967297));
+            console.log(asInt32(-4294967297));
+            console.log(asInt32(2147483648));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("0\n0\n0\n0\n1\n-1\n1\n-1\n-2147483648\n", output);
+    }
+
+    [Theory, ModeData]
+    public void NumericBitwise_FastPathCoversAllBinaryOperatorsAndShiftMask(ExecutionMode mode)
+    {
+        var source = """
+            function report(a: number, b: number): void {
+                console.log(a & b);
+                console.log(a | b);
+                console.log(a ^ b);
+                console.log(a << b);
+                console.log(a >> b);
+                console.log(a >>> b);
+            }
+            report(0x12345678, 255);
+            console.log(8 >>> 33);
+            console.log(1 << 33);
+            console.log(-8 >> 33);
+            console.log(-1 >>> 0);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("120\n305420031\n305419911\n0\n0\n0\n4\n2\n-4\n4294967295\n", output);
+    }
+
+    [Theory, ModeData]
+    public void DynamicBitwise_RetainsGetValueAndToNumericSemantics(ExecutionMode mode)
+    {
+        var source = """
+            const events: string[] = [];
+            const left: any = {
+                valueOf: () => { events.push("left-valueOf"); return 7; }
+            };
+            function right(): any {
+                events.push("right-expression");
+                return { valueOf: () => { events.push("right-valueOf"); return 3; } };
+            }
+            console.log(left & right());
+            console.log(events.join(","));
+
+            try { console.log((Symbol("s") as any) & 1); }
+            catch { console.log("symbol-error"); }
+            try { console.log((1n as any) & 1); }
+            catch { console.log("mixed-bigint-error"); }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "3\nright-expression,left-valueOf,right-valueOf\nsymbol-error\nmixed-bigint-error\n",
+            output);
+    }
+
+    [Theory, ModeData]
+    public void NumericBitwise_ResultFlowsThroughTypedArrayStore(ExecutionMode mode)
+    {
+        var source = """
+            function update(tape: Uint8Array, index: number, delta: number): number {
+                tape[index] = (tape[index] + delta) & 255;
+                return tape[index];
+            }
+            const tape = new Uint8Array(1);
+            console.log(update(tape, 0, -1));
+            console.log(update(tape, 0, 2));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("255\n1\n", output);
+    }
+
     #endregion
 
     #region Nullish Coalescing
