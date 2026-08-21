@@ -402,7 +402,10 @@ public partial class ILEmitter
             // initializer is created as a NUMERIC $Array; otherwise emit the initializer normally.
             if (!TryEmitNumericEmptyArrayInit(v))
             {
-                EmitExpression(v.Initializer);
+                if (_ctx.Types.IsDouble(localType) && v.Initializer is Expr.GetIndex)
+                    EmitExpressionAsDouble(v.Initializer);
+                else
+                    EmitExpression(v.Initializer);
 
                 if (_ctx.Types.IsDouble(localType))
                 {
@@ -1930,7 +1933,10 @@ public partial class ILEmitter
 
         if (r.Value != null)
         {
-            EmitExpression(r.Value);
+            if (_ctx.Types.IsDouble(returnType) && r.Value is Expr.GetIndex)
+                EmitExpressionAsDouble(r.Value);
+            else
+                EmitExpression(r.Value);
             // Only box if return type is object; otherwise use typed value directly
             if (returnType == _ctx.Types.Object)
             {

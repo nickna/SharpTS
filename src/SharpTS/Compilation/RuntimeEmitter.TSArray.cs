@@ -281,11 +281,14 @@ public partial class RuntimeEmitter
         var arrayResize = EmitGenerics.MakeGenericMethod(typeof(System.Array).GetMethod("Resize")!, _types.Double);
 
         // EnsureBoxed's builder was defined early (so base-list methods can guard
-        // on it); we only emit its body here. The other three are defined now.
+        // on it); we only emit its body here. The other accessors are defined now.
         var ensureBoxed = _tsArrayEnsureBoxedMethod;
+        var canGetDouble = typeBuilder.DefineMethod("CanGetDouble",
+            MethodAttributes.Public | MethodAttributes.HideBySig, _types.Boolean, [_types.Int32]);
+        runtime.TSArrayCanGetDouble = canGetDouble;
         var getDouble = typeBuilder.DefineMethod("GetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Double, [_types.Int32]);
-        _ = getDouble;
+        runtime.TSArrayGetDouble = getDouble;
         var setDouble = typeBuilder.DefineMethod("SetDouble",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, [_types.Int32, _types.Double]);
         runtime.TSArraySetDouble = setDouble;
@@ -296,6 +299,7 @@ public partial class RuntimeEmitter
         // sites. They are non-virtual (HideBySig), so a `callvirt` on a $Array-typed receiver
         // devirtualizes; AggressiveInlining lets the JIT fold the field loads + bounds check into the
         // caller's loop (the $Array-wrapper equivalent of List<double>.Add's inlined fast path).
+        canGetDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         getDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         setDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         pushDouble.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
@@ -345,6 +349,25 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0); il.Emit(OpCodes.Ldc_I4_0); il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
 
             il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // ── bool CanGetDouble(int index) ── numeric-mode and dense in-range guard.
+        // The compiler calls this before GetDouble so boxed arrays, holes, and OOB
+        // reads retain the ordinary property lookup path.
+        {
+            var il = canGetDouble.GetILGenerator();
+            var unavailable = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+            il.Emit(OpCodes.Brfalse, unavailable);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Clt_Un); // unsigned comparison rejects negative indices too
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(unavailable);
+            il.Emit(OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Ret);
         }
 

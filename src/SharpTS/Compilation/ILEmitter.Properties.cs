@@ -1294,6 +1294,113 @@ public partial class ILEmitter
     }
 
     /// <summary>
+    /// Emits a native-double numeric-consumer path for a statically-number[] read.
+    /// The hot arm is limited to a dense numeric-mode $Array and an exactly integral,
+    /// Int32 index. Every unsupported receiver/index shape takes the ordinary GetIndex
+    /// path and then the caller's pre-existing ToNumber coercion, so raw/any consumers
+    /// never enter this specialization and continue to observe the original JS value.
+    /// </summary>
+    private bool TryEmitNumberArrayGetIndexAsDouble(Expr.GetIndex gi)
+    {
+        if (gi.Optional
+            || gi.Object is not Expr.Variable arrayVariable
+            || ArrayElements.Resolve(_ctx.TypeMap?.Get(gi.Object)) is not
+                { Kind: ArrayElementsKind.Double }
+            || _ctx.TryGetPromotedArrayLocal(arrayVariable.Name.Lexeme) != null
+            || !IsNumericType(_ctx.TypeMap?.Get(gi.Index))
+            || _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
+            || _ctx.RuntimeFeatures?.UsesArrayPrototypeMutation == true)
+        {
+            return false;
+        }
+
+        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        if (hoisted is { Descriptor.Kind: not ArrayElementsKind.Double })
+            return false;
+
+        // Capture the receiver before evaluating the key. A hoisted exact-$Array
+        // local already captured the stable binding at loop entry; parameters and
+        // non-hoisted locals are spilled at this read site.
+        LocalBuilder? receiverLocal = null;
+        LocalBuilder? arrayLocal = null;
+        if (hoisted is null)
+        {
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, receiverLocal);
+
+            arrayLocal = IL.DeclareLocal(_ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime.TSArrayType);
+            IL.Emit(OpCodes.Stloc, arrayLocal);
+        }
+
+        EmitExpressionAsDouble(gi.Index);
+        var indexDouble = IL.DeclareLocal(_ctx.Types.Double);
+        var indexInt = IL.DeclareLocal(_ctx.Types.Int32);
+        IL.Emit(OpCodes.Stloc, indexDouble);
+        IL.Emit(OpCodes.Ldloc, indexDouble);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Stloc, indexInt);
+
+        var fallbackLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+
+        // Conv_I4 is used only as a candidate. Round-tripping to double proves
+        // exact integrality and Int32 range; Bne_Un also rejects NaN.
+        IL.Emit(OpCodes.Ldloc, indexDouble);
+        IL.Emit(OpCodes.Ldloc, indexInt);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Bne_Un, fallbackLabel);
+
+        var guardedArray = hoisted?.TypedLocal ?? arrayLocal!;
+        IL.Emit(OpCodes.Ldloc, guardedArray);
+        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+        IL.Emit(OpCodes.Ldloc, guardedArray);
+        IL.Emit(OpCodes.Ldloc, indexInt);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArrayCanGetDouble);
+        IL.Emit(OpCodes.Brfalse, fallbackLabel);
+
+        IL.Emit(OpCodes.Ldloc, guardedArray);
+        IL.Emit(OpCodes.Ldloc, indexInt);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSArrayGetDouble);
+        IL.Emit(OpCodes.Br, endLabel);
+
+        // Cold arm: preserve the numeric key exactly (including fractional,
+        // negative, and uint32-range values) and use the descriptor/prototype-
+        // aware runtime lookup before applying the numeric consumer's ToNumber.
+        IL.MarkLabel(fallbackLabel);
+        if (receiverLocal != null)
+        {
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+        }
+        else
+        {
+            // When the hoisted cast succeeded, it is the captured receiver. If it
+            // failed (ordinary object/list supplied through an alias), reload the
+            // side-effect-free variable binding for the generic fallback.
+            var haveReceiver = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, hoisted!.Value.TypedLocal);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Brtrue, haveReceiver);
+            IL.Emit(OpCodes.Pop);
+            EmitExpression(gi.Object);
+            EmitBoxIfNeeded(gi.Object);
+            IL.MarkLabel(haveReceiver);
+        }
+        IL.Emit(OpCodes.Ldloc, indexDouble);
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+        SetStackUnknown();
+        EnsureDouble();
+
+        IL.MarkLabel(endLabel);
+        SetStackType(StackType.Double);
+        return true;
+    }
+
+    /// <summary>
     /// Emits a stack-neutral statement-position write through a guarded numeric
     /// <c>$Array</c>. The ordinary result-producing path must reload and box the
     /// assigned double so arbitrary expression consumers see the JS assignment
