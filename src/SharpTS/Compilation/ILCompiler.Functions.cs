@@ -603,9 +603,29 @@ public partial class ILCompiler
 
     }
 
-    private static bool TryGetCompactRecordShape(
+    internal static bool TryGetCompactRecordShape(
         SharpTS.TypeSystem.TypeInfo type, out JsonSerializationShape.Record shape)
     {
+        if (type is SharpTS.TypeSystem.TypeInfo.Interface interfaceType &&
+            interfaceType.Extends is not { Count: > 0 })
+        {
+            var recordView = new SharpTS.TypeSystem.TypeInfo.Record(
+                interfaceType.Members,
+                interfaceType.StringIndexType,
+                interfaceType.NumberIndexType,
+                interfaceType.SymbolIndexType,
+                interfaceType.OptionalMembers,
+                CallSignatures: interfaceType.CallSignatures,
+                ConstructorSignatures: interfaceType.ConstructorSignatures,
+                MethodMembers: interfaceType.MethodMembers);
+            if (JsonSerializationShapeAnalyzer.TryAnalyze(recordView, out var interfaceAnalyzed) &&
+                interfaceAnalyzed is JsonSerializationShape.Record interfaceShape)
+            {
+                shape = interfaceShape;
+                return true;
+            }
+        }
+
         if (type is SharpTS.TypeSystem.TypeInfo.Record record &&
             JsonSerializationShapeAnalyzer.TryAnalyze(record, out var analyzed) &&
             analyzed is JsonSerializationShape.Record direct)

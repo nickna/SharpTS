@@ -292,6 +292,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayFlatHelper { get; set; } = null!;
     public MethodBuilder ArraySort { get; set; } = null!;
     public MethodBuilder ArraySortDirect { get; set; } = null!;
+    public MethodBuilder ArraySortDirectNumber { get; set; } = null!;
     public MethodBuilder ArraySortProto { get; set; } = null!;
     public MethodBuilder ArraySortCanUseDenseFastPath { get; set; } = null!;
     public MethodBuilder ArrayToSorted { get; set; } = null!;

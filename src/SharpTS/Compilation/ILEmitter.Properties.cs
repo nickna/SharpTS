@@ -611,12 +611,14 @@ public partial class ILEmitter
             !_ctx.HoistedCompactRecordParameters.TryGetValue(
                 receiver.Name.Lexeme, out var hoisted) ||
             !hoisted.IsExact ||
-            _ctx.TypeMap?.Get(g.Object) is not TypeInfo.Record narrowedRecord ||
-            _ctx.RuntimeFeatures?.CanAssumeCompactObjectRecordIsUnmaterialized(
-                hoisted.Fingerprint) != true ||
-            _ctx.RuntimeFeatures.UsesDynamicPropertyDescriptors ||
-            !JsonSerializationShapeAnalyzer.TryAnalyze(narrowedRecord, out var analyzed) ||
-            analyzed is not JsonSerializationShape.Record recordShape ||
+            _ctx.TypeMap?.Get(g.Object) is not { } narrowedRecord ||
+            _ctx.RuntimeFeatures is not { } features ||
+            (!features.CanAssumeCompactObjectRecordIsUnmaterialized(
+                hoisted.Fingerprint) &&
+                !_ctx.HoistedCompactRecordMaterializationGuards.Contains(
+                    hoisted.Fingerprint)) ||
+            features.UsesDynamicPropertyDescriptors ||
+            !ILCompiler.TryGetCompactRecordShape(narrowedRecord, out var recordShape) ||
             JsonSerializationShapeAnalyzer.Fingerprint(recordShape) != hoisted.Fingerprint)
             return false;
 

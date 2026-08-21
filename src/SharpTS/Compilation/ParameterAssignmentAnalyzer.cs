@@ -13,6 +13,13 @@ internal static class ParameterAssignmentAnalyzer
         return visitor.Assigned;
     }
 
+    public static HashSet<string> FindAssigned(Expr expression)
+    {
+        var visitor = new AssignmentVisitor();
+        visitor.Visit(expression);
+        return visitor.Assigned;
+    }
+
     private sealed class AssignmentVisitor : AstVisitorBase
     {
         public HashSet<string> Assigned { get; } = new(StringComparer.Ordinal);

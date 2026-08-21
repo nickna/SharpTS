@@ -47,7 +47,7 @@ internal sealed class ArrowBoxedAdapterEmitter
     // one containing its call site), so this per-context cache never double-defines;
     // the adapter NAME is derived from the arrow's globally-unique method name so it
     // stays collision-free across contexts that share the same $Program type.
-    private readonly Dictionary<(MethodBuilder, int, bool), MethodBuilder> _cache = [];
+    private readonly Dictionary<(MethodBuilder, int, bool, bool), MethodBuilder> _cache = [];
 
     /// <summary>
     /// Returns the boxed adapter for <paramref name="arrowMethod"/> bound to a delegate of
@@ -63,22 +63,33 @@ internal sealed class ArrowBoxedAdapterEmitter
     /// <c>Func&lt;object,bool&gt;</c> predicate helper is used, the adapter returns the unboxed
     /// <c>bool</c> directly (no rebox) so the <c>*DirectBool</c> helper skips the box + IsTruthy.
     /// </summary>
-    public MethodBuilder GetOrEmit(TypeBuilder carrierType, MethodBuilder arrowMethod, int funcArity, bool instance, bool boolReturn)
+    public MethodBuilder GetOrEmit(
+        TypeBuilder carrierType,
+        MethodBuilder arrowMethod,
+        int funcArity,
+        bool instance,
+        bool boolReturn,
+        bool numberReturn = false)
     {
-        var key = (arrowMethod, funcArity, boolReturn);
+        if (boolReturn && numberReturn)
+            throw new ArgumentException("An arrow adapter cannot have both bool and number return shapes.");
+
+        var key = (arrowMethod, funcArity, boolReturn, numberReturn);
         if (_cache.TryGetValue(key, out var existing)) return existing;
 
         var objectType = typeof(object);
         var adapterParams = new Type[funcArity];
         for (int i = 0; i < funcArity; i++) adapterParams[i] = objectType;
-        var adapterReturnType = boolReturn ? typeof(bool) : objectType;
+        var adapterReturnType = boolReturn
+            ? typeof(bool)
+            : numberReturn ? typeof(double) : objectType;
 
         // Name keyed off the arrow method's name ($Program-unique <>Arrow_N for static; "Invoke"
         // for instance, where the per-arrow display class scopes it) plus the return-shape marker.
         // Assembly-visible.
         var attrs = MethodAttributes.Assembly | (instance ? 0 : MethodAttributes.Static);
         var adapter = carrierType.DefineMethod(
-            $"{arrowMethod.Name}${(boolReturn ? "bbox" : "box")}{funcArity}",
+            $"{arrowMethod.Name}${(boolReturn ? "bbox" : numberReturn ? "nbox" : "box")}{funcArity}",
             attrs,
             adapterReturnType,
             adapterParams);
@@ -103,7 +114,7 @@ internal sealed class ArrowBoxedAdapterEmitter
 
         // bool-return: the arrow already returns bool (caller guarantees) — leave it unboxed for the
         // Func<object,bool> contract. Otherwise rebox the typed result to object for Func<object,…>.
-        if (!boolReturn)
+        if (!boolReturn && !numberReturn)
             DelegateAdapterEmitter.EmitBoxForTS(il, arrowMethod.ReturnType);
         il.Emit(OpCodes.Ret);
 
