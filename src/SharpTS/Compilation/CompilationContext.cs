@@ -38,7 +38,10 @@ public record struct HoistedArrayEntry(LocalBuilder TypedLocal, ArrayElementsDes
 public record struct HoistedTypedArrayEntry(LocalBuilder TypedLocal, Type XArrayType, string ElementType);
 
 public record struct HoistedCompactRecordEntry(
-    LocalBuilder TypedLocal, string Fingerprint, bool IsExact);
+    LocalBuilder TypedLocal,
+    string Fingerprint,
+    bool IsExact,
+    bool RequiresMaterializationGuard = false);
 
 /// <summary>
 /// Holds compilation state passed between ILCompiler and ILEmitter.
@@ -87,6 +90,13 @@ public partial class CompilationContext
     /// body, so property reads may reuse the typed local safely.
     /// </summary>
     public Dictionary<string, HoistedCompactRecordEntry> HoistedCompactRecordParameters { get; } = [];
+
+    /// <summary>
+    /// Compact-record fingerprints whose global materialization flag has been
+    /// checked on the current emitted control-flow branch. Property reads on an
+    /// exact typed local may skip repeating that global guard.
+    /// </summary>
+    public HashSet<string> HoistedCompactRecordMaterializationGuards { get; } = [];
 
     // Emitted runtime types and methods (for standalone DLLs)
     public EmittedRuntime? Runtime { get; set; }

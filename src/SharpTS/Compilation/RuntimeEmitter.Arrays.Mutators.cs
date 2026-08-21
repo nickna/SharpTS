@@ -1752,6 +1752,30 @@ public partial class RuntimeEmitter
         il.MarkLabel(frozenLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ret);
+
+        var numericComparatorType = typeof(Func<object, object, double>);
+        var numericMethod = typeBuilder.DefineMethod(
+            "ArraySortDirectNumber",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.ListOfObject,
+            [_types.ListOfObject, numericComparatorType]);
+        runtime.ArraySortDirectNumber = numericMethod;
+
+        il = numericMethod.GetILGenerator();
+        frozenLabel = il.DefineLabel();
+        EmitArrayFrozenSealedCheck(
+            il, runtime, frozenLabel,
+            checkSealed: false, checkExtensible: false);
+
+        EmitSortBody(
+            il, runtime,
+            mutateInPlace: true,
+            directComparator: true,
+            numericDirectComparator: true);
+
+        il.MarkLabel(frozenLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -2018,7 +2042,8 @@ public partial class RuntimeEmitter
         ILGenerator il,
         EmittedRuntime runtime,
         bool mutateInPlace,
-        bool directComparator = false)
+        bool directComparator = false,
+        bool numericDirectComparator = false)
     {
         var listLocal = il.DeclareLocal(_types.ListOfObject);
         il.Emit(OpCodes.Ldarg_0);
@@ -2027,7 +2052,8 @@ public partial class RuntimeEmitter
         EmitSortBodyOnLocal(
             il, runtime, listLocal,
             observeProperties: mutateInPlace,
-            directComparator: directComparator);
+            directComparator: directComparator,
+            numericDirectComparator: numericDirectComparator);
     }
 
     /// <summary>
@@ -2039,7 +2065,8 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime,
         LocalBuilder listLocal,
         bool observeProperties,
-        bool directComparator)
+        bool directComparator,
+        bool numericDirectComparator = false)
     {
         // JavaScript sort algorithm:
         // 1. Partition: separate defined values from undefined values
@@ -2251,6 +2278,7 @@ public partial class RuntimeEmitter
         var widthDouble = il.DefineLabel();
         var mergeCond = il.DefineLabel();
         var mergeBody = il.DefineLabel();
+        var takeLeft = il.DefineLabel();
         var takeRight = il.DefineLabel();
         var afterTake = il.DefineLabel();
         var drainLeftCond = il.DefineLabel();
@@ -2322,7 +2350,26 @@ public partial class RuntimeEmitter
 
         var checkCompareResult = il.DefineLabel();
 
-        if (directComparator)
+        if (numericDirectComparator)
+        {
+            // A numeric-returning typed adapter keeps the comparator result as
+            // an unboxed double through the merge loop. The merge only needs to
+            // distinguish positive from non-positive; bgt is false for NaN, so
+            // it also preserves JavaScript's NaN-as-zero stable-sort behavior.
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, iLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Ldloc, srcLocal);
+            il.Emit(OpCodes.Ldloc, jLocal);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Callvirt,
+                typeof(Func<object, object, double>).GetMethod("Invoke")!);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Bgt, takeRight);
+            il.Emit(OpCodes.Br, takeLeft);
+        }
+        else if (directComparator)
         {
             // A statically resolved arrow comparator is already represented as a
             // Func<object, object, object>. Call it directly so every comparison
@@ -2439,6 +2486,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Bgt, takeRight);
 
+        il.MarkLabel(takeLeft);
         // dst[k] = src[i]; i++
         il.Emit(OpCodes.Ldloc, dstLocal);
         il.Emit(OpCodes.Ldloc, kLocal);

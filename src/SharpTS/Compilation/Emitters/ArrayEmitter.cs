@@ -983,7 +983,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         Expr.ArrowFunction af,
         System.Reflection.Emit.MethodBuilder arrowMethod,
         int funcArity,
-        bool boolReturn)
+        bool boolReturn,
+        bool numberReturn = false)
     {
         var ctx = emitter.Context;
 
@@ -999,6 +1000,8 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // *DirectBool helper consumes an unboxed bool. Only the 1-arg predicate helpers pass it.
         Type funcType = boolReturn
             ? typeof(Func<object, bool>)
+            : numberReturn
+                ? typeof(Func<object, object, double>)
             : (funcArity == 2 ? typeof(Func<object, object, object>) : typeof(Func<object, object>));
         var funcCtor = funcType.GetConstructor([typeof(object), typeof(IntPtr)])!;
 
@@ -1008,7 +1011,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             // Emit an INSTANCE adapter, build the display instance (capturing live locals), then bind
             // (displayInstance, ldftn adapter). The display instance is built fresh at the call site,
             // exactly as the reflective $TSFunction path does.
-            var adapter = ctx.ArrowBoxedAdapters.GetOrEmit(displayClass, arrowMethod, funcArity, instance: true, boolReturn: boolReturn);
+            var adapter = ctx.ArrowBoxedAdapters.GetOrEmit(
+                displayClass, arrowMethod, funcArity,
+                instance: true, boolReturn: boolReturn,
+                numberReturn: numberReturn);
             if (!emitter.TryEmitCapturingArrowDisplayInstance(af))
                 return false;                                          // Stack: [displayInstance]
             ctx.IL.Emit(OpCodes.Ldftn, adapter);
@@ -1020,7 +1026,10 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         // Using DeclaringType (rather than ctx.ProgramType, set only on the top-level context) lets the
         // adapter fire inside function/method bodies too. Bind (null, ldftn adapter).
         if (arrowMethod.DeclaringType is not TypeBuilder programType) return false;
-        var staticAdapter = ctx.ArrowBoxedAdapters.GetOrEmit(programType, arrowMethod, funcArity, instance: false, boolReturn: boolReturn);
+        var staticAdapter = ctx.ArrowBoxedAdapters.GetOrEmit(
+            programType, arrowMethod, funcArity,
+            instance: false, boolReturn: boolReturn,
+            numberReturn: numberReturn);
         ctx.IL.Emit(OpCodes.Ldnull);
         ctx.IL.Emit(OpCodes.Ldftn, staticAdapter);
         ctx.IL.Emit(OpCodes.Newobj, funcCtor);
@@ -1118,6 +1127,7 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             }
         }
 
+        bool numberReturn = staticMethod.ReturnType == ctx.Types.Double;
         if (allObject)
         {
             if (!emitter.TryEmitArrowAsDelegate(af, typeof(Func<object, object, object>)))
@@ -1128,12 +1138,15 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
                      af,
                      staticMethod,
                      funcArity: 2,
-                     boolReturn: false))
+                     boolReturn: false,
+                     numberReturn: numberReturn))
         {
             return false;
         }
 
-        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArraySortDirect);
+        ctx.IL.Emit(OpCodes.Call, numberReturn
+            ? ctx.Runtime!.ArraySortDirectNumber
+            : ctx.Runtime!.ArraySortDirect);
         return true;
     }
 

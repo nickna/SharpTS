@@ -1722,6 +1722,74 @@ public partial class ILCompiler
             createsArgumentsBinding: arrow.HasOwnThis,
             publishedArgsLeadingSkip: arrow.HasOwnThis ? 1 : 0);
 
+        // Record-typed numeric arrow parameters retain object CLR slots because an
+        // arbitrary JavaScript value may reach the callback despite its
+        // TypeScript annotation. Hoist the exact compact-carrier tests once per
+        // invocation so repeated property reads can reuse them. For an
+        // expression-bodied arrow, whole-program shape stability lets us emit a
+        // guarded exact branch that loads compact fields directly; the fallback
+        // is the unchanged observable property path.
+        List<string>? exactRecordFastBranchParameters = null;
+        if (arrow.ExpressionBody != null &&
+            _types.IsDouble(arrowReturnType) &&
+            _runtime is not null)
+        {
+            var assignedParameters = ParameterAssignmentAnalyzer.FindAssigned(
+                arrow.ExpressionBody);
+            var arrowFunctionType =
+                _typeMap?.Get(arrow) as TypeSystem.TypeInfo.Function;
+            ParameterInfo[] methodParameters = method.GetParameters();
+            for (int i = 0; i < arrow.Parameters.Count; i++)
+            {
+                string parameterName = arrow.Parameters[i].Name.Lexeme;
+                if (assignedParameters.Contains(parameterName))
+                    continue;
+
+                TypeSystem.TypeInfo? parameterType =
+                    i < arrowFunctionType?.ParamTypes.Count
+                        ? arrowFunctionType.ParamTypes[i]
+                        : null;
+                bool requiresMaterializationGuard =
+                    parameterType is TypeSystem.TypeInfo.Interface;
+                if ((parameterType is null ||
+                     !TryGetCompactRecordShape(parameterType, out var parameterShape)) &&
+                    !TryGetArrowParameterRecordShape(
+                        arrow.ExpressionBody,
+                        parameterName,
+                        out parameterShape,
+                        out requiresMaterializationGuard))
+                    continue;
+
+                string fingerprint = JsonSerializationShapeAnalyzer.Fingerprint(
+                    parameterShape);
+                if (!_runtime.CompactObjectRecordTypes.TryGetValue(
+                        fingerprint, out var compactType))
+                    continue;
+
+                int argumentIndex = environmentArgOffset + i;
+                var typedLocal = il.DeclareLocal(compactType);
+                il.Emit(OpCodes.Ldarg, argumentIndex);
+                bool isExact = argumentIndex < methodParameters.Length &&
+                    methodParameters[argumentIndex].ParameterType == compactType;
+                if (!isExact)
+                    il.Emit(OpCodes.Isinst, compactType);
+                il.Emit(OpCodes.Stloc, typedLocal);
+                ctx.HoistedCompactRecordParameters.Add(
+                    parameterName,
+                    new HoistedCompactRecordEntry(
+                        typedLocal,
+                        fingerprint,
+                        isExact,
+                        requiresMaterializationGuard));
+
+                if (!isExact &&
+                    ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == false)
+                {
+                    (exactRecordFastBranchParameters ??= []).Add(parameterName);
+                }
+            }
+        }
+
         // Initialize captured parameters into the arrow scope display class.
         // This mirrors the equivalent code in ILCompiler.Functions.cs.
         // Without this, inner arrows that read parameters via $arrowDC get null.
@@ -1757,33 +1825,48 @@ public partial class ILCompiler
 
         if (arrow.ExpressionBody != null)
         {
-            // Expression body: emit expression and return
-            emitter.EmitExpression(arrow.ExpressionBody);
+            if (exactRecordFastBranchParameters is { Count: > 0 })
+            {
+                var fallback = il.DefineLabel();
+                foreach (string parameterName in exactRecordFastBranchParameters)
+                {
+                    HoistedCompactRecordEntry entry =
+                        ctx.HoistedCompactRecordParameters[parameterName];
+                    il.Emit(OpCodes.Ldloc, entry.TypedLocal);
+                    il.Emit(OpCodes.Brfalse, fallback);
 
-            // Handle return based on method return type
-            if (arrowReturnType == _types.Object)
-            {
-                // Return type is object - box value types
-                emitter.EmitBoxIfNeeded(arrow.ExpressionBody);
-            }
-            else if (_types.IsDouble(arrowReturnType))
-            {
-                // Return type is double - ensure unboxed double on stack
-                emitter.EnsureDouble();
-            }
-            else if (_types.IsBoolean(arrowReturnType))
-            {
-                // Return type is bool - ensure unboxed bool on stack
-                emitter.EnsureBoolean();
-            }
-            // For reference-typed returns, no conversion needed. Note that `string`
-            // return types never reach here as a narrow `string` slot:
-            // ParameterTypeResolver.ResolveReturnType maps them to object, because an
-            // inferred-string arrow body can produce $Undefined at runtime
-            // (e.g. `(n: any) => cond ? "x" : undefined`), which no string-typed slot
-            // can carry. See #318.
+                    if ((entry.RequiresMaterializationGuard ||
+                         ctx.RuntimeFeatures?.CanAssumeCompactObjectRecordIsUnmaterialized(
+                             entry.Fingerprint) != true) &&
+                        ctx.HoistedCompactRecordMaterializationGuards.Add(
+                            entry.Fingerprint))
+                    {
+                        il.Emit(OpCodes.Ldsfld,
+                            ctx.Runtime!.CompactObjectRecordAnyMaterializedFields[
+                                entry.Fingerprint]);
+                        il.Emit(OpCodes.Brtrue, fallback);
+                    }
 
-            il.Emit(OpCodes.Ret);
+                    ctx.HoistedCompactRecordParameters[parameterName] =
+                        entry with { IsExact = true };
+                }
+
+                EmitArrowExpressionReturn(
+                    il, emitter, arrow.ExpressionBody, arrowReturnType);
+
+                il.MarkLabel(fallback);
+                ctx.HoistedCompactRecordMaterializationGuards.Clear();
+                foreach (string parameterName in exactRecordFastBranchParameters)
+                {
+                    HoistedCompactRecordEntry entry =
+                        ctx.HoistedCompactRecordParameters[parameterName];
+                    ctx.HoistedCompactRecordParameters[parameterName] =
+                        entry with { IsExact = false };
+                }
+            }
+
+            EmitArrowExpressionReturn(
+                il, emitter, arrow.ExpressionBody, arrowReturnType);
         }
         else if (arrow.BlockBody != null)
         {
@@ -1818,4 +1901,70 @@ public partial class ILCompiler
         }
 
     }
+
+    private void EmitArrowExpressionReturn(
+        ILGenerator il,
+        ILEmitter emitter,
+        Expr expression,
+        Type arrowReturnType)
+    {
+        emitter.EmitExpression(expression);
+
+        if (arrowReturnType == _types.Object)
+        {
+            emitter.EmitBoxIfNeeded(expression);
+        }
+        else if (_types.IsDouble(arrowReturnType))
+        {
+            emitter.EnsureDouble();
+        }
+        else if (_types.IsBoolean(arrowReturnType))
+        {
+            emitter.EnsureBoolean();
+        }
+
+        il.Emit(OpCodes.Ret);
+    }
+
+    private bool TryGetArrowParameterRecordShape(
+        Expr expression,
+        string parameterName,
+        out JsonSerializationShape.Record shape,
+        out bool requiresMaterializationGuard)
+    {
+        shape = null!;
+        requiresMaterializationGuard = false;
+        Expr.Variable? receiver = expression switch
+        {
+            Expr.Get { Object: Expr.Variable variable }
+                when variable.Name.Lexeme == parameterName => variable,
+            Expr.Binary binary =>
+                FindArrowParameterReceiver(binary.Left, parameterName) ??
+                FindArrowParameterReceiver(binary.Right, parameterName),
+            Expr.Grouping grouping =>
+                FindArrowParameterReceiver(grouping.Expression, parameterName),
+            _ => null
+        };
+
+        if (receiver is null || _typeMap?.Get(receiver) is not { } receiverType)
+            return false;
+
+        requiresMaterializationGuard =
+            receiverType is TypeSystem.TypeInfo.Interface;
+        return TryGetCompactRecordShape(receiverType, out shape);
+    }
+
+    private static Expr.Variable? FindArrowParameterReceiver(
+        Expr expression,
+        string parameterName) => expression switch
+    {
+        Expr.Get { Object: Expr.Variable variable }
+            when variable.Name.Lexeme == parameterName => variable,
+        Expr.Binary binary =>
+            FindArrowParameterReceiver(binary.Left, parameterName) ??
+            FindArrowParameterReceiver(binary.Right, parameterName),
+        Expr.Grouping grouping =>
+            FindArrowParameterReceiver(grouping.Expression, parameterName),
+        _ => null
+    };
 }

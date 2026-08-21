@@ -116,6 +116,88 @@ public class ArraySortTests
     }
 
     [Theory, ModeData]
+    public void Array_Sort_CompactRecordComparator_ObservesMaterializedWrites(
+        ExecutionMode mode)
+    {
+        var source = """
+            interface Item { key: number; tag: string; }
+            let high: Item = { key: 2, tag: "high" };
+            let low: Item = { key: 1, tag: "low" };
+            high.key = 0;
+            let items: Item[] = [low, high];
+            items.sort((left: Item, right: Item): number => left.key - right.key);
+            console.log(items[0].tag + "," + items[1].tag);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("high,low\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_InlineRecordComparator_ObservesMaterializedWrites(
+        ExecutionMode mode)
+    {
+        var source = """
+            let high: { key: number; tag: string } = { key: 2, tag: "high" };
+            let low: { key: number; tag: string } = { key: 1, tag: "low" };
+            high.key = 0;
+            let items: { key: number; tag: string }[] = [low, high];
+            items.sort((
+                left: { key: number; tag: string },
+                right: { key: number; tag: string }
+            ): number => left.key - right.key);
+            console.log(items[0].tag + "," + items[1].tag);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("high,low\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_CompactRecordComparator_FallsBackForOtherRuntimeTypes(
+        ExecutionMode mode)
+    {
+        var source = """
+            interface Item { key: number; tag: string; }
+            class Box {
+                key: number;
+                tag: string;
+                constructor(key: number, tag: string) {
+                    this.key = key;
+                    this.tag = tag;
+                }
+            }
+            let items: Item[] = [new Box(2, "high"), new Box(1, "low")];
+            items.sort((left: Item, right: Item): number => left.key - right.key);
+            console.log(items[0].tag + "," + items[1].tag);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("low,high\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Array_Sort_CompactRecordComparator_ObservesPropertyDescriptors(
+        ExecutionMode mode)
+    {
+        var source = """
+            interface Item { key: number; tag: string; }
+            let high: Item = { key: 2, tag: "high" };
+            let low: Item = { key: 1, tag: "low" };
+            Object.defineProperty(high, "key", {
+                get(): number { return 0; },
+                configurable: true
+            });
+            let items: Item[] = [low, high];
+            items.sort((left: Item, right: Item): number => left.key - right.key);
+            console.log(items[0].tag + "," + items[1].tag);
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("high,low\n", output);
+    }
+
+    [Theory, ModeData]
     public void Array_Sort_SimplePropertyComparator_PreservesObservableGets(
         ExecutionMode mode)
     {
