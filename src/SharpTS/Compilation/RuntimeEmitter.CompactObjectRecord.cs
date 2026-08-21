@@ -45,7 +45,12 @@ public partial class RuntimeEmitter
             runtime.CompactObjectRecordTypes.Add(fingerprint, typeBuilder);
 
             var valueFields = shape.Fields.Select((_, index) =>
-                typeBuilder.DefineField($"_v{index}", _types.Object, FieldAttributes.Assembly)).ToArray();
+                typeBuilder.DefineField(
+                    $"_v{index}",
+                    _features.CompactObjectRecordSelfFields.Contains((fingerprint, index))
+                        ? typeBuilder
+                        : _types.Object,
+                    FieldAttributes.Assembly)).ToArray();
             Type weakTableType = _types.MakeGenericType(
                 _types.ConditionalWeakTableOpen, _types.Object, _types.DictionaryStringObject);
             var materializedTable = typeBuilder.DefineField(
@@ -59,7 +64,7 @@ public partial class RuntimeEmitter
             var ctor = typeBuilder.DefineConstructor(
                 MethodAttributes.Public,
                 CallingConventions.Standard,
-                Enumerable.Repeat(_types.Object, valueFields.Length).ToArray());
+                valueFields.Select(field => field.FieldType).ToArray());
             runtime.CompactObjectRecordCtors.Add(fingerprint, ctor);
             var ctorIl = ctor.GetILGenerator();
             ctorIl.Emit(OpCodes.Ldarg_0);

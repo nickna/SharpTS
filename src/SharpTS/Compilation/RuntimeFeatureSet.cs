@@ -40,6 +40,13 @@ public sealed class RuntimeFeatureSet
 
     internal Dictionary<string, JsonSerializationShape.Record> CompactObjectRecordShapes { get; } = [];
 
+    /// <summary>
+    /// Generic-looking compact-record slots whose literal initializers prove that the
+    /// value is either nullish or another instance of the same recursive shape.
+    /// These slots can carry the exact generated CLR record type instead of object.
+    /// </summary>
+    internal HashSet<(string Fingerprint, int Index)> CompactObjectRecordSelfFields { get; } = [];
+
     internal HashSet<string> PotentiallyMaterializedCompactObjectRecordShapes { get; } = [];
     internal bool PotentiallyMaterializesUnknownCompactObjectRecordShape { get; set; } = true;
 

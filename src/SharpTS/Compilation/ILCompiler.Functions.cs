@@ -136,12 +136,32 @@ public partial class ILCompiler
         var paramTypes = ParameterTypeResolver.ResolveParameters(
             funcStmt.Parameters, _typeMapper, funcType, _typeMap);
 
+        if (funcType is not null && _runtime is not null &&
+            _exactCompactRecordParameters.TryGetValue(funcStmt, out var exactParameterIndices))
+        {
+            foreach (int index in exactParameterIndices)
+            {
+                if (index < paramTypes.Length && index < funcType.ParamTypes.Count &&
+                    TryGetCompactRecordShape(funcType.ParamTypes[index], out var parameterShape) &&
+                    _runtime.CompactObjectRecordTypes.TryGetValue(
+                        JsonSerializationShapeAnalyzer.Fingerprint(parameterShape),
+                        out var compactType))
+                    paramTypes[index] = compactType;
+            }
+        }
+
         // Resolve typed return type (optimization: avoid boxing for : number returns).
         // Widen a number/boolean slot to object if the checker flagged an undefined-reachable
         // return (e.g. `return undefined as any`) — the unboxed slot would coerce it (#344).
         bool returnMayBeUndefined = ReturnSlotAnalysis.BlockReturnsMayBeUndefined(funcStmt.Body, _typeMap);
         Type returnType = ParameterTypeResolver.ResolveReturnType(
             funcType?.ReturnType, isAsync: false, _typeMapper, returnMayBeUndefined);
+        if (_runtime is not null &&
+            _exactCompactRecordReturns.TryGetValue(funcStmt, out string? returnFingerprint) &&
+            _runtime.CompactObjectRecordTypes.TryGetValue(
+                returnFingerprint,
+                out var compactReturnType))
+            returnType = compactReturnType;
 
         var methodBuilder = _programType.DefineMethod(
             qualifiedFunctionName,
@@ -526,11 +546,13 @@ public partial class ILCompiler
 
                 var typedLocal = il.DeclareLocal(compactType);
                 il.Emit(OpCodes.Ldarg, i);
-                il.Emit(OpCodes.Isinst, compactType);
+                bool isExact = methodParams[i].ParameterType == compactType;
+                if (!isExact)
+                    il.Emit(OpCodes.Isinst, compactType);
                 il.Emit(OpCodes.Stloc, typedLocal);
                 ctx.HoistedCompactRecordParameters.Add(
                     parameterName,
-                    new HoistedCompactRecordEntry(typedLocal, fingerprint));
+                    new HoistedCompactRecordEntry(typedLocal, fingerprint, isExact));
             }
         }
 

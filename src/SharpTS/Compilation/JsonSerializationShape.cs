@@ -70,6 +70,138 @@ internal static class JsonSerializationShapeAnalyzer
         return true;
     }
 
+    /// <summary>
+    /// Uses a literal's contextual record type when available, preventing recursive
+    /// initializers from producing a new fingerprint at every expansion depth.
+    /// </summary>
+    public static bool TryAnalyzeCompactObjectLiteral(
+        Expr.ObjectLiteral literal,
+        TypeMap? typeMap,
+        out JsonSerializationShape.Record shape)
+    {
+        if (typeMap?.Get(literal) is TypeInfo.Record contextualRecord &&
+            TryAnalyze(contextualRecord, out var contextual) &&
+            contextual is JsonSerializationShape.Record contextualShape &&
+            KeysMatch(literal, contextualShape))
+        {
+            shape = contextualShape;
+            return true;
+        }
+
+        return TryAnalyzeObjectLiteral(literal, typeMap, out shape);
+    }
+
+    public static bool TryAnalyzeCompactObjectLiteral(
+        Expr.ObjectLiteral literal,
+        TypeMap? typeMap,
+        IEnumerable<JsonSerializationShape.Record> canonicalShapes,
+        out JsonSerializationShape.Record shape)
+    {
+        if (!TryAnalyzeCompactObjectLiteral(literal, typeMap, out var inferred))
+        {
+            shape = null!;
+            return false;
+        }
+
+        foreach (var candidate in canonicalShapes)
+        {
+            if (MatchesRecursiveCanonicalShape(literal, typeMap, inferred, candidate))
+            {
+                shape = candidate;
+                return true;
+            }
+        }
+        shape = inferred;
+        return true;
+    }
+
+    private static bool MatchesRecursiveCanonicalShape(
+        Expr.ObjectLiteral literal,
+        TypeMap? typeMap,
+        JsonSerializationShape.Record inferred,
+        JsonSerializationShape.Record candidate)
+    {
+        if (!KeysMatch(literal, candidate) || inferred.Fields.Count != candidate.Fields.Count)
+            return false;
+        string candidateFingerprint = Fingerprint(candidate);
+        bool usedRecursiveEdge = false;
+        for (int index = 0; index < candidate.Fields.Count; index++)
+        {
+            if (Fingerprint(inferred.Fields[index].Value) ==
+                Fingerprint(candidate.Fields[index].Value))
+                continue;
+            if (candidate.Fields[index].Value is not JsonSerializationShape.Generic)
+                return false;
+            TypeInfo? valueType = typeMap?.Get(literal.Properties[index].Value);
+            if (IsNullishOnly(valueType))
+            {
+                usedRecursiveEdge = true;
+                continue;
+            }
+            if (!TryGetRecordShape(valueType, out var valueShape) ||
+                Fingerprint(valueShape) != candidateFingerprint)
+                return false;
+            usedRecursiveEdge = true;
+        }
+        return usedRecursiveEdge || Fingerprint(inferred) == candidateFingerprint;
+    }
+
+    internal static bool IsNullishOnly(TypeInfo? type) => type switch
+    {
+        TypeInfo.Null or TypeInfo.Undefined => true,
+        TypeInfo.Union union => union.FlattenedTypes.All(member =>
+            member is TypeInfo.Null or TypeInfo.Undefined),
+        _ => false
+    };
+
+    internal static bool TryGetRecordShape(
+        TypeInfo? type, out JsonSerializationShape.Record shape)
+    {
+        TypeInfo.Record? record = type as TypeInfo.Record;
+        if (type is TypeInfo.Union union)
+        {
+            var nonNullish = union.FlattenedTypes
+                .Where(member => member is not TypeInfo.Null and not TypeInfo.Undefined)
+                .ToArray();
+            if (nonNullish.Length == 1 && nonNullish[0] is TypeInfo.Record unionRecord)
+                record = unionRecord;
+        }
+        if (record is not null && TryAnalyze(record, out var analyzed) &&
+            analyzed is JsonSerializationShape.Record recordShape)
+        {
+            shape = recordShape;
+            return true;
+        }
+        shape = null!;
+        return false;
+    }
+
+    private static bool KeysMatch(
+        Expr.ObjectLiteral literal, JsonSerializationShape.Record shape)
+    {
+        if (literal.Properties.Count != shape.Fields.Count)
+            return false;
+        for (int index = 0; index < literal.Properties.Count; index++)
+        {
+            var property = literal.Properties[index];
+            if (property.IsSpread || property.Kind is not Expr.ObjectPropertyKind.Value ||
+                property.Key is Expr.ComputedKey)
+                return false;
+            string key = property.Key switch
+            {
+                Expr.IdentifierKey identifier => identifier.Name.Lexeme,
+                Expr.LiteralKey literalKey when literalKey.Literal.Type == TokenType.STRING
+                    => (string)literalKey.Literal.Literal!,
+                Expr.LiteralKey literalKey when literalKey.Literal.Type == TokenType.NUMBER
+                    => Convert.ToString(literalKey.Literal.Literal, CultureInfo.InvariantCulture)!,
+                _ => ""
+            };
+            if (key != shape.Fields[index].Key)
+                return false;
+        }
+        return true;
+    }
+
     public static string Fingerprint(JsonSerializationShape shape)
     {
         var builder = new System.Text.StringBuilder();

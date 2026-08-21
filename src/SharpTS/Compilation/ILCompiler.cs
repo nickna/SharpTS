@@ -66,6 +66,10 @@ public partial class ILCompiler
     // MethodBuilder, preserving value dispatch for imported and otherwise replaceable bindings.
     private readonly HashSet<Stmt.Function> _stableSelfCallFunctions =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.Function, HashSet<int>> _exactCompactRecordParameters =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.Function, string> _exactCompactRecordReturns =
+        new(ReferenceEqualityComparer.Instance);
     private TypeBuilder _programType = null!;
 
     // Organized state containers (see ILCompiler.State.cs for definitions)
@@ -664,6 +668,9 @@ public partial class ILCompiler
     {
         PreScanBuiltInModuleImports(statements);
         StableFunctionBindingAnalyzer.Analyze(statements, _stableSelfCallFunctions);
+        ExactCompactRecordFunctionAnalyzer.Analyze(
+            statements, _typeMap, _features, _stableSelfCallFunctions,
+            _exactCompactRecordParameters, _exactCompactRecordReturns);
     }
 
     #region Compile Phases
@@ -1317,6 +1324,9 @@ public partial class ILCompiler
         {
             PreScanBuiltInModuleImports(m.Statements, m.Path);
             StableFunctionBindingAnalyzer.Analyze(m.Statements, _stableSelfCallFunctions);
+            ExactCompactRecordFunctionAnalyzer.Analyze(
+                m.Statements, _typeMap, _features, _stableSelfCallFunctions,
+                _exactCompactRecordParameters, _exactCompactRecordReturns);
         }
         ModulePhase4_DefineModuleTypes(modules);
         // Captured top-level vars continue to share the entry-point display class
