@@ -52,7 +52,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt,
             _types.GetMethod(_types.String, "ToCharArray", Type.EmptyTypes));
         il.Emit(OpCodes.Newobj,
-            _types.GetConstructor(_types.String, _types.Char.MakeArrayType()));
+            _types.GetConstructor(_types.String, _types.MakeArrayType(_types.Char)));
         il.Emit(OpCodes.Call, runtime.JsonParse);
         il.Emit(OpCodes.Stloc, parsedLocal);
         il.Emit(OpCodes.Br, parsedReadyLabel);

@@ -560,16 +560,10 @@ public partial class RuntimeEmitter
             MethodImplAttributes.AggressiveInlining |
             MethodImplAttributes.AggressiveOptimization);
 
-        MethodInfo deserializeString = typeof(JsonSerializer)
-            .GetMethods(BindingFlags.Public | BindingFlags.Static)
-            .Single(candidate =>
-                candidate.Name == "Deserialize" &&
-                candidate.IsGenericMethodDefinition &&
-                candidate.GetParameters() is var parameters &&
-                parameters.Length == 2 &&
-                parameters[0].ParameterType == typeof(string) &&
-                parameters[1].ParameterType == typeof(JsonSerializerOptions))
-            .MakeGenericMethod(typeof(string));
+        MethodInfo deserializeString = _types.GetMethod(
+            typeof(JsonSerializer),
+            "Deserialize",
+            [typeof(string), typeof(Type), typeof(JsonSerializerOptions)]);
 
         var il = method.GetILGenerator();
         var quoteStart = il.DeclareLocal(_types.Int32);
@@ -660,8 +654,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Callvirt,
             _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32]));
+        il.Emit(OpCodes.Ldtoken, _types.String);
+        il.Emit(OpCodes.Call,
+            _types.GetMethod(_types.Type, "GetTypeFromHandle", [_types.RuntimeTypeHandle]));
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Call, deserializeString);
+        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(mismatch);
