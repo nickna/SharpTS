@@ -1293,6 +1293,105 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
     }
 
+    /// <summary>
+    /// Emits a stack-neutral statement-position write through a guarded numeric
+    /// <c>$Array</c>. The ordinary result-producing path must reload and box the
+    /// assigned double so arbitrary expression consumers see the JS assignment
+    /// value. A discarded expression has no such consumer, so this specialization
+    /// keeps the fast arm unboxed while retaining the guarded generic fallback
+    /// for non-<c>$Array</c> values passed through a cast. Loop-local receivers
+    /// reuse the existing hoisted guard; parameters use the same guard per write.
+    /// </summary>
+    private bool TryEmitDiscardedNumberArraySetIndex(Expr.SetIndex si)
+    {
+        if (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == true
+            || si.Object is not Expr.Variable arrayVariable)
+            return false;
+
+        var hoisted = _ctx.TryGetHoistedArray(arrayVariable.Name.Lexeme);
+        if (hoisted is not { Descriptor.Kind: ArrayElementsKind.Double }
+            && ArrayElements.Resolve(_ctx.TypeMap?.Get(si.Object)) is not
+                { Kind: ArrayElementsKind.Double })
+            return false;
+
+        // Parameters and captured bindings do not have a local eligible for the
+        // loop-preamble hoist. Spill those receivers once per write, preserving
+        // receiver-before-index-before-RHS evaluation, then guard the same
+        // $Array fast arm the ordinary result-producing emitter uses.
+        LocalBuilder? receiverLocal = null;
+        if (hoisted is null)
+        {
+            EmitExpression(si.Object);
+            EmitBoxIfNeeded(si.Object);
+            receiverLocal = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, receiverLocal);
+        }
+
+        // Preserve reference evaluation order for the remaining operands:
+        // index before RHS. Keep the original numeric key as a double for the
+        // array-like fallback (3.5 must remain property "3.5" there); only the
+        // guarded $Array arm narrows it exactly as the ordinary fast path does.
+        EmitExpressionAsDouble(si.Index);
+        var indexLocal = IL.DeclareLocal(_ctx.Types.Double);
+        IL.Emit(OpCodes.Stloc, indexLocal);
+
+        EmitExpression(si.Value);
+        EnsureDouble();
+        var valueLocal = IL.DeclareLocal(_ctx.Types.Double);
+        IL.Emit(OpCodes.Stloc, valueLocal);
+
+        var fallbackLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+        if (hoisted is { } cached)
+        {
+            IL.Emit(OpCodes.Ldloc, cached.TypedLocal);
+            IL.Emit(OpCodes.Brfalse, fallbackLabel);
+            IL.Emit(OpCodes.Ldloc, cached.TypedLocal);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldloc, receiverLocal!);
+            IL.Emit(OpCodes.Isinst, _ctx.Runtime!.TSArrayType);
+            IL.Emit(OpCodes.Brfalse, fallbackLabel);
+            IL.Emit(OpCodes.Ldloc, receiverLocal!);
+            IL.Emit(OpCodes.Castclass, _ctx.Runtime!.TSArrayType);
+        }
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Ldloc, valueLocal);
+        IL.Emit(OpCodes.Callvirt, _ctx.Runtime!.TSArraySetDouble);
+        IL.Emit(OpCodes.Br, endLabel);
+
+        // A value asserted to number[] can still be an arbitrary array-like at
+        // runtime. Reuse the spec-complete setter on that guarded cold arm.
+        IL.MarkLabel(fallbackLabel);
+        if (receiverLocal != null)
+        {
+            IL.Emit(OpCodes.Ldloc, receiverLocal);
+        }
+        else
+        {
+            EmitExpression(si.Object);
+            EmitBoxIfNeeded(si.Object);
+        }
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        IL.Emit(OpCodes.Ldloc, valueLocal);
+        IL.Emit(OpCodes.Box, _ctx.Types.Double);
+        if (_ctx.IsStrictMode)
+        {
+            IL.Emit(OpCodes.Ldc_I4_1);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndexStrict);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.SetIndex);
+        }
+
+        IL.MarkLabel(endLabel);
+        return true;
+    }
+
     protected override void EmitSetIndex(Expr.SetIndex si)
     {
         if (TryResolveExternalReceiverType(si.Object, out var externalIndexerType) &&

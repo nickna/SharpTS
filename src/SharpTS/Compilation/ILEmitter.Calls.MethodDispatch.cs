@@ -12,6 +12,13 @@ public partial class ILEmitter
 {
     protected override bool TryEmitDiscardedExpression(Expr expression)
     {
+        // A statement-position numeric index assignment has no result consumer.
+        // Own that narrow shape before the general expression emitter reloads
+        // and boxes the assigned double solely for Stmt.Expression to pop it.
+        if (expression is Expr.SetIndex setIndex
+            && TryEmitDiscardedNumberArraySetIndex(setIndex))
+            return true;
+
         if (expression is not Expr.Call
             {
                 Optional: false,
