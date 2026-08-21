@@ -23,6 +23,12 @@ public static class ArrayHoistAnalyzer
         var visitor = new ArrayAccessVisitor(typeMap);
         visitor.Visit(body);
 
+        // Direct eval executes in the current lexical environment and can
+        // replace an array binding without an Assign node in the outer AST.
+        // A loop-entry receiver cache would then become stale.
+        if (visitor.ContainsDirectEval)
+            return new();
+
         // Remove any variables that are reassigned within the loop
         foreach (var reassigned in visitor.ReassignedVariables)
             visitor.ArrayVariables.Remove(reassigned);
@@ -44,6 +50,9 @@ public static class ArrayHoistAnalyzer
         if (condition != null) visitor.VisitExpr(condition);
         if (increment != null) visitor.VisitExpr(increment);
 
+        if (visitor.ContainsDirectEval)
+            return new();
+
         foreach (var reassigned in visitor.ReassignedVariables)
             visitor.ArrayVariables.Remove(reassigned);
 
@@ -59,6 +68,8 @@ public static class ArrayHoistAnalyzer
 
         /// <summary>Variables that are reassigned within the loop body.</summary>
         public HashSet<string> ReassignedVariables { get; } = new();
+
+        public bool ContainsDirectEval { get; private set; }
 
         public ArrayAccessVisitor(TypeMap typeMap) => _typeMap = typeMap;
 
@@ -94,6 +105,13 @@ public static class ArrayHoistAnalyzer
         {
             ReassignedVariables.Add(expr.Name.Lexeme);
             base.VisitCompoundAssign(expr);
+        }
+
+        protected override void VisitCall(Expr.Call expr)
+        {
+            if (expr.Callee is Expr.Variable { Name.Lexeme: "eval" })
+                ContainsDirectEval = true;
+            base.VisitCall(expr);
         }
 
         protected override void VisitVar(Stmt.Var stmt)

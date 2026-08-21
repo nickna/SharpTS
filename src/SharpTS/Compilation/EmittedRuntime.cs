@@ -1528,6 +1528,8 @@ public class EmittedRuntime
     // Unboxed packed-double elements-kind accessors (number[] unboxing project).
     // GetDouble/SetDouble/PushDouble are the fast paths the compiler emits at
     // statically-number[] sites; EnsureBoxed is the deopt (numeric -> boxed).
+    public MethodBuilder TSArrayCanGetDouble { get; set; } = null!;
+    public MethodBuilder TSArrayGetDouble { get; set; } = null!;
     public MethodBuilder TSArraySetDouble { get; set; } = null!;
     public MethodBuilder TSArrayPushDouble { get; set; } = null!;
     public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;

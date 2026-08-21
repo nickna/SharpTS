@@ -415,7 +415,20 @@ public partial class ILEmitter
             return;
         }
 
-        EmitExpression(a.Value);
+        // Direct numeric locals already coerce their RHS to double below. Ask the
+        // expression emitter for that representation up front for number[] reads,
+        // allowing the guarded GetDouble arm to avoid a box/unbox round trip.
+        var assignmentLocal = _ctx.Locals.GetLocal(a.Name.Lexeme);
+        if (a.Value is Expr.GetIndex
+            && assignmentLocal != null
+            && _ctx.Types.IsDouble(assignmentLocal.LocalType))
+        {
+            EmitExpressionAsDouble(a.Value);
+        }
+        else
+        {
+            EmitExpression(a.Value);
+        }
 
         if (_ctx.LexicalInitializerTdzName == a.Name.Lexeme)
         {

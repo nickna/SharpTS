@@ -228,7 +228,7 @@ public sealed class NumericBitwiseLoweringTests
 
         Assert.Equal(168, result);
         _output.WriteLine($"Brainfuck N=5,000 runBF allocated {allocated:N0} bytes.");
-        Assert.InRange(allocated, 0, 35_000_000);
+        Assert.InRange(allocated, 0, 8_192);
     }
 
     private static Assembly Compile(string source)

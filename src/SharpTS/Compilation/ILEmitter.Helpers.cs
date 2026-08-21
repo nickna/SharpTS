@@ -322,6 +322,12 @@ public partial class ILEmitter
 
     public override void EmitExpressionAsDouble(Expr expr)
     {
+        // A number[] read consumed as a number can keep the numeric-mode $Array
+        // result native while its guarded cold arm performs the same ordinary
+        // property lookup + ToNumber coercion this method used previously.
+        if (expr is Expr.GetIndex getIndex && TryEmitNumberArrayGetIndexAsDouble(getIndex))
+            return;
+
         // Emit expression and ensure result is a double on the stack
         if (expr is Expr.Literal lit && lit.Value is double d)
         {
