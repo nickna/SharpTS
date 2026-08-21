@@ -754,16 +754,13 @@ public partial class RuntimeEmitter
 
     // double GetUnboxed(int index) / void SetUnboxed(int index, double value) on each concrete
     // numeric $XArray (#3, generalizing the Float64-only #878 path). They mirror the byte logic
-    // of the boxed Get/Set above but take/return a native `double` — no Box, no Convert.ToDouble
-    // coercion — reinterpreting over the byte[] backing store via Unsafe.Read/WriteUnaligned (no
-    // per-element allocation). The IL emitter binds them at statically-typed typed-array index
-    // sites, eliminating the GetIndex/SetIndex dispatch, the isinst ladder, and the per-element
-    // box on BOTH read and write. AggressiveInlining + a non-virtual `call` let the JIT fold them
-    // into the caller's loop and hoist the _buffer load / bounds check. The single ldelema
-    // bounds-checks the first byte; a correctly-sized buffer (length a multiple of bytesPerElement,
-    // byteOffset aligned) guarantees the rest are in range, so OOB faults exactly as the boxed
-    // path does today (semantics unchanged). The double→element narrowing matches the boxed Set's
-    // conv opcodes so the fast path and the boxed fallback always agree.
+    // of the boxed Get/Set above but take/return a native `double` — no Box or Convert.ToDouble.
+    // One-byte arrays use direct byte[] element operations (#1431); wider elements reinterpret the
+    // backing store via Unsafe.Read/WriteUnaligned. The IL emitter binds these methods at statically
+    // typed index sites, eliminating runtime dispatch and per-element boxing. AggressiveInlining +
+    // a non-virtual `call` let the JIT fold them into the caller's loop. Direct ldelem/stelem and
+    // the wider path's ldelema both preserve the current bounds fault. The double→element narrowing
+    // matches the boxed Set's conv opcodes so the fast path and boxed fallback agree.
     private void EmitUnboxedNumericAccessors(
         TypeBuilder typeBuilder, EmittedRuntime runtime, string elementType,
         int bytesPerElement, bool signed, bool isFloat)
@@ -776,8 +773,17 @@ public partial class RuntimeEmitter
         );
         getU.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         var gil = getU.GetILGenerator();
-        EmitElementRef(gil, bytesPerElement);
-        EmitReadElementAsDouble(gil, bytesPerElement, signed, isFloat);
+        if (bytesPerElement == 1)
+        {
+            EmitOneByteArrayAndIndex(gil);
+            gil.Emit(signed ? OpCodes.Ldelem_I1 : OpCodes.Ldelem_U1);
+            gil.Emit(OpCodes.Conv_R8);
+        }
+        else
+        {
+            EmitElementRef(gil, bytesPerElement);
+            EmitReadElementAsDouble(gil, bytesPerElement, signed, isFloat);
+        }
         gil.Emit(OpCodes.Ret);
         runtime.TypedArrayGetUnboxedByElement[elementType] = getU;
 
@@ -789,9 +795,20 @@ public partial class RuntimeEmitter
         );
         setU.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         var sil = setU.GetILGenerator();
-        EmitElementRef(sil, bytesPerElement);   // ref byte destination
-        sil.Emit(OpCodes.Ldarg_2);              // double value
-        EmitNarrowDoubleAndWrite(sil, bytesPerElement, signed, isFloat);
+        if (bytesPerElement == 1)
+        {
+            EmitOneByteArrayAndIndex(sil);
+            sil.Emit(OpCodes.Ldarg_2);
+            sil.Emit(OpCodes.Conv_I4);
+            sil.Emit(signed ? OpCodes.Conv_I1 : OpCodes.Conv_U1);
+            sil.Emit(OpCodes.Stelem_I1);
+        }
+        else
+        {
+            EmitElementRef(sil, bytesPerElement);   // ref byte destination
+            sil.Emit(OpCodes.Ldarg_2);              // double value
+            EmitNarrowDoubleAndWrite(sil, bytesPerElement, signed, isFloat);
+        }
         sil.Emit(OpCodes.Ret);
         runtime.TypedArraySetUnboxedByElement[elementType] = setU;
 
@@ -801,6 +818,19 @@ public partial class RuntimeEmitter
             _ = getU;
             _ = setU;
         }
+    }
+
+    // Pushes the byte[] and absolute element index for a one-byte typed-array access.
+    // Keeping the array reference (rather than taking a managed ref and calling Unsafe) lets
+    // RyuJIT optimize the ordinary ldelem/stelem sequence in hot loops.
+    private void EmitOneByteArrayAndIndex(ILGenerator il)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _typedArrayBufferField!);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _typedArrayByteOffsetField!);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Add);
     }
 
     // Pushes `ref byte` at _buffer[_byteOffset + index * bytesPerElement] (this=arg0, index=arg1).
