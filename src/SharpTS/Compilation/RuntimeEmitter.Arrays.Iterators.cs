@@ -56,6 +56,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);
+        il.Emit(OpCodes.Isinst, runtime.CompactObjectRecordInterface);
+        il.Emit(OpCodes.Brtrue, isLazyTrue);
+        il.Emit(OpCodes.Ldloc, rcvrLocal);
         il.Emit(OpCodes.Isinst, runtime.TSArrayType);
         il.Emit(OpCodes.Brtrue, isLazyTrue);
         il.Emit(OpCodes.Ldloc, rcvrLocal);

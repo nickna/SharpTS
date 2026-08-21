@@ -6789,6 +6789,58 @@ public void Promise_combinators_share_iterator_and_resolution_semantics(string r
         string relativePath)
         => AssertPassInBothModes(relativePath);
 
+    public static TheoryData<string> Issue1429CompiledRuntimeBoundaryCases => new()
+    {
+        "built-ins/Array/prototype/every/15.4.4.16-7-c-iii-28.js",
+        "built-ins/Array/prototype/fill/return-abrupt-from-setting-property-value.js",
+        "built-ins/Array/prototype/indexOf/15.4.4.14-9-a-2.js",
+        "built-ins/Array/prototype/indexOf/length-near-integer-limit.js",
+        "built-ins/Array/prototype/lastIndexOf/15.4.4.15-8-a-2.js",
+        "built-ins/Array/prototype/lastIndexOf/length-near-integer-limit.js",
+        "built-ins/Array/prototype/push/length-near-integer-limit-set-failure.js",
+        "built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-17.js",
+        "built-ins/Array/prototype/reduceRight/15.4.4.22-9-b-4.js",
+        "built-ins/Array/prototype/reduceRight/15.4.4.22-9-c-i-31.js",
+        "built-ins/Array/prototype/some/15.4.4.17-7-c-iii-28.js",
+        "built-ins/JSON/stringify/replacer-function-arguments.js",
+        "built-ins/Object/create/15.2.3.5-4-258.js",
+        "built-ins/Object/create/15.2.3.5-4-293.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-218.js",
+        "built-ins/Object/defineProperties/15.2.3.7-5-b-253.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-105.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-121.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-122.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-132.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-135.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-141.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-148.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-248.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-43.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-74.js",
+        "built-ins/Object/defineProperties/15.2.3.7-6-a-95.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-13.js",
+        "built-ins/Object/defineProperty/15.2.3.6-3-8.js",
+        "built-ins/Object/defineProperty/15.2.3.6-4-20.js",
+        "built-ins/Object/preventExtensions/15.2.3.10-3-23.js",
+        "built-ins/RegExp/prototype/Symbol.search/set-lastindex-restore-err.js",
+        "language/expressions/call/spread-mult-obj-ident.js",
+        "language/expressions/call/spread-obj-mult-spread.js",
+        "language/expressions/call/spread-obj-override-immutable.js",
+        "language/expressions/call/spread-obj-overrides-prev-properties.js",
+        "language/expressions/call/spread-sngl-obj-ident.js",
+        "language/expressions/new/spread-mult-obj-ident.js",
+        "language/expressions/new/spread-obj-mult-spread.js",
+        "language/expressions/new/spread-obj-override-immutable.js",
+        "language/expressions/new/spread-obj-overrides-prev-properties.js",
+        "language/expressions/new/spread-sngl-obj-ident.js",
+    };
+
+    [Theory]
+    [MemberData(nameof(Issue1429CompiledRuntimeBoundaryCases))]
+    public void Issue_1429_compiled_runtime_boundaries_preserve_ordinary_object_semantics(
+        string relativePath)
+        => AssertPass(relativePath, Test262ExecutionMode.Compiled);
+
     private void AssertPass(
         string relativePath,
         Test262ExecutionMode mode,

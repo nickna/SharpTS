@@ -33,50 +33,53 @@ public partial class RuntimeEmitter
         runtime.MergeIntoObject = method;
 
         var il = method.GetILGenerator();
-        var dictLabel = il.DefineLabel();
-
-        // Check if source is dict
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brtrue, dictLabel);
-
-        // Not a dict - do nothing
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(dictLabel);
-        // Iterate and copy
-        // We need the Enumerator type for Dictionary<string, object>
-        // Since TypeProvider might not expose nested types directly, we resolve it from the Dictionary type
-        var dictType = _types.DictionaryStringObject;
-        var enumeratorType = typeof(Dictionary<string, object>.Enumerator);
-        var keyValuePairType = _types.KeyValuePairStringObject;
-
-        var enumeratorLocal = il.DeclareLocal(enumeratorType);
+        var listType = _types.ListOfObject;
+        var keysLocal = il.DeclareLocal(listType);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var keyLocal = il.DeclareLocal(_types.String);
         var loopStart = il.DefineLabel();
         var loopEnd = il.DefineLabel();
 
+        // CopyDataProperties silently ignores null and undefined sources.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, dictType);
-        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(dictType, "GetEnumerator"));
-        il.Emit(OpCodes.Stloc, enumeratorLocal);
+        il.Emit(OpCodes.Brfalse, loopEnd);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, loopEnd);
+
+        // Snapshot enumerable own string keys, then perform a live [[Get]] for
+        // each key.  Besides matching CopyDataProperties semantics for
+        // accessors/descriptors, this supports every ordinary emitted carrier,
+        // including compact records whose slots live behind $IHasFields.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetKeys);
+        il.Emit(OpCodes.Stloc, keysLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
 
         il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.GetMethodNoParams(enumeratorType, "MoveNext"));
-        il.Emit(OpCodes.Brfalse, loopEnd);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Bge, loopEnd);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Stloc, keyLocal);
 
-        // Get current and add to target
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloca, enumeratorLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
-        var kvpLocal = il.DeclareLocal(keyValuePairType);
-        il.Emit(OpCodes.Stloc, kvpLocal);
-        il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Key")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldloca, kvpLocal);
-        il.Emit(OpCodes.Call, _types.GetProperty(keyValuePairType, "Value")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "set_Item", _types.String, _types.Object));
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
 
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Br, loopStart);
 
         il.MarkLabel(loopEnd);

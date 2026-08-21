@@ -133,11 +133,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notHasFieldsLabel);
 
-        // Check extensibility before setting (handles sealed/non-extensible objects)
+        // Existing compact/class carrier slots remain writable after
+        // preventExtensions. Only a missing property needs the extensibility
+        // check before IHasFields.SetProperty materializes or adds it.
+        var hasExistingHasFieldsPropertyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Brtrue, hasExistingHasFieldsPropertyLabel);
+
+        // Check extensibility before adding (handles sealed/non-extensible objects)
         il.Emit(OpCodes.Ldarg_0); // obj
         il.Emit(OpCodes.Ldarg_1); // name
         il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
         il.Emit(OpCodes.Brfalse, endLabel); // Cannot add property, silently return
+
+        il.MarkLabel(hasExistingHasFieldsPropertyLabel);
 
         // Call interface method: ((IHasFields)obj).SetProperty(name, value)
         il.Emit(OpCodes.Ldarg_0);
@@ -376,6 +388,54 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(notFrozenLabel);
 
+        // Honor own descriptors before receiver-specific storage. Generic
+        // Array mutators use this helper with Throw=true, so callable setters
+        // must run and getter-only/non-writable descriptors must reject the
+        // write even when the receiver is a compact IHasFields carrier.
+        var strictExistingDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+        var strictExistingSetterLocal = il.DeclareLocal(_types.Object);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, strictExistingSetterLocal);
+        il.Emit(OpCodes.Call, runtime.PDSTryGetSetter);
+        var noStrictExistingSetterLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, noStrictExistingSetterLabel);
+        EmitInvokePdsSetterWithValueAndReturn(il, runtime, strictExistingSetterLocal);
+        il.MarkLabel(noStrictExistingSetterLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, strictExistingDescriptorLocal);
+        var noStrictExistingDescriptorLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, strictExistingDescriptorLocal);
+        il.Emit(OpCodes.Brfalse, noStrictExistingDescriptorLabel);
+
+        var strictExistingRejectLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, strictExistingDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, strictExistingRejectLabel);
+        il.Emit(OpCodes.Ldloc, strictExistingDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, strictExistingRejectLabel);
+        il.Emit(OpCodes.Ldloc, strictExistingDescriptorLocal);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorWritable.GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, strictExistingRejectLabel);
+        il.Emit(OpCodes.Ldloc, strictExistingDescriptorLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorValue.GetSetMethod()!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(strictExistingRejectLabel);
+        il.Emit(OpCodes.Ldarg_3);
+        var strictExistingSilentLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, strictExistingSilentLabel);
+        EmitThrowTypeErrorWithName(il, runtime,
+            "Cannot assign to read only property '", "' of object");
+        il.MarkLabel(strictExistingSilentLabel);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(noStrictExistingDescriptorLabel);
+
         // No reflection setter fallback in standalone mode.
 
         // Try _fields dictionary - walk up type hierarchy to find non-null _fields
@@ -408,11 +468,22 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brfalse, notHasFieldsLabel);
 
-        // Check extensibility before setting (handles sealed/non-extensible objects)
+        // Existing carrier slots remain writable on a non-extensible object;
+        // only missing properties need the add-property gate.
+        var strictHasExistingHasFieldsPropertyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsHasProperty);
+        il.Emit(OpCodes.Brtrue, strictHasExistingHasFieldsPropertyLabel);
+
+        // Check extensibility before adding (handles sealed/non-extensible objects)
         il.Emit(OpCodes.Ldarg_0); // obj
         il.Emit(OpCodes.Ldarg_1); // name
         il.Emit(OpCodes.Call, runtime.PDSCanAddProperty);
         il.Emit(OpCodes.Brfalse, endLabel); // Cannot add property, silently return
+
+        il.MarkLabel(strictHasExistingHasFieldsPropertyLabel);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);

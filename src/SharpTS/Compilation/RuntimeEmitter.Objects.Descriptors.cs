@@ -215,28 +215,27 @@ public partial class RuntimeEmitter
         // object never reaches the PDS — re-coercing a stored object value
         // on a later redefine is what produced the unbounded
         // ObjectDefineProperty ⇄ ToNumber recursion of issue #180.
-        // Only fires for $Array receivers with
+        // Only fires for compiled Array receivers with
         // propName == "length" and a value-typed descriptor.
         var skipArrayLenCheck = il.DefineLabel();
         var lenWasCoercedLocal = il.DeclareLocal(_types.Boolean);
         var coercedLenLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Isinst, _types.ListOfObject);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldstr, "length");
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
-        il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
         var lenValLocal = il.DeclareLocal(_types.Object);
         il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldloca, lenValLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", _types.String, _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
         il.Emit(OpCodes.Brfalse, skipArrayLenCheck);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldstr, "value");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, lenValLocal);
         // First coercion (ToUint32's inner ToNumber) — valueOf call #1.
         var lenNumLocal = il.DeclareLocal(_types.Double);
         var newLenLocal = il.DeclareLocal(_types.Double);
@@ -429,63 +428,8 @@ public partial class RuntimeEmitter
             il.MarkLabel(notDefined);
         }
 
-        // Walks the descriptor's prototype chain via the PDS (the compiled
-        // prototype link) and branches to `target` if any level has a PDS
-        // accessor descriptor (getter OR setter) for `field`. Detects an
-        // inherited setter-only `value` whose Get yields undefined (#801). Uses
-        // only PDS primitives, which are emitted before this method.
         var getterGet = runtime.CompiledPropertyDescriptorGetter.GetGetMethod()!;
         var setterGet = runtime.CompiledPropertyDescriptorSetter.GetGetMethod()!;
-        void EmitBranchIfAccessorOnChain(string field, Label target)
-        {
-            var curLocal = il.DeclareLocal(_types.Object);
-            var pdescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-            var depthLocal = il.DeclareLocal(_types.Int32);
-            var loopLabel = il.DefineLabel();
-            var notFoundLabel = il.DefineLabel();
-            var noPdescLabel = il.DefineLabel();
-
-            il.Emit(OpCodes.Ldarg_2);
-            il.Emit(OpCodes.Stloc, curLocal);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Stloc, depthLocal);
-
-            il.MarkLabel(loopLabel);
-            // cur == null → not found
-            il.Emit(OpCodes.Ldloc, curLocal);
-            il.Emit(OpCodes.Brfalse, notFoundLabel);
-            // depth guard (cycle safety)
-            il.Emit(OpCodes.Ldloc, depthLocal);
-            il.Emit(OpCodes.Ldc_I4, 64);
-            il.Emit(OpCodes.Bge, notFoundLabel);
-            il.Emit(OpCodes.Ldloc, depthLocal);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Add);
-            il.Emit(OpCodes.Stloc, depthLocal);
-            // pdesc = PDSGetPropertyDescriptor(cur, field)
-            il.Emit(OpCodes.Ldloc, curLocal);
-            il.Emit(OpCodes.Ldstr, field);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-            il.Emit(OpCodes.Stloc, pdescLocal);
-            il.Emit(OpCodes.Ldloc, pdescLocal);
-            il.Emit(OpCodes.Brfalse, noPdescLabel);
-            // pdesc.Getter != null → accessor present
-            il.Emit(OpCodes.Ldloc, pdescLocal);
-            il.Emit(OpCodes.Callvirt, getterGet);
-            il.Emit(OpCodes.Brtrue, target);
-            // pdesc.Setter != null → accessor present
-            il.Emit(OpCodes.Ldloc, pdescLocal);
-            il.Emit(OpCodes.Callvirt, setterGet);
-            il.Emit(OpCodes.Brtrue, target);
-            il.MarkLabel(noPdescLabel);
-            // cur = PDSGetPrototype(cur)
-            il.Emit(OpCodes.Ldloc, curLocal);
-            il.Emit(OpCodes.Call, runtime.PDSGetPrototype);
-            il.Emit(OpCodes.Stloc, curLocal);
-            il.Emit(OpCodes.Br, loopLabel);
-
-            il.MarkLabel(notFoundLabel);
-        }
 
         void EmitGetAndStash(string field)
         {
@@ -494,25 +438,43 @@ public partial class RuntimeEmitter
             var fieldValLocal = il.DeclareLocal(_types.Object);
 
             // fieldVal = GetProperty(descriptor, field)
+            // ArraySetLength already performed the single observable [[Get]]
+            // of Desc.[[Value]] before its two numeric coercions. Reuse that
+            // cached result during ToPropertyDescriptor normalization so an
+            // accessor-backed descriptor is not invoked twice.
+            if (field == "value")
+            {
+                var loadValueNormallyLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, lenWasCoercedLocal);
+                il.Emit(OpCodes.Brfalse, loadValueNormallyLabel);
+                il.Emit(OpCodes.Ldloc, lenValLocal);
+                il.Emit(OpCodes.Stloc, fieldValLocal);
+                il.Emit(OpCodes.Br, stashLabel);
+                il.MarkLabel(loadValueNormallyLabel);
+            }
             il.Emit(OpCodes.Ldarg_2);
             il.Emit(OpCodes.Ldstr, field);
             il.Emit(OpCodes.Call, runtime.GetProperty);
             il.Emit(OpCodes.Stloc, fieldValLocal);
             // Defined value → stash it.
             EmitBranchIfDefined(fieldValLocal, stashLabel);
-            // Undefined Get result: still present if an own/inherited accessor exists.
-            EmitBranchIfAccessorOnChain(field, stashLabel);
+            // A null/undefined Get result is still specified when HasProperty
+            // succeeds.  Use the shared existence-only walk so ordinary
+            // $IHasFields slots (including compact-record `{ get: null }`),
+            // inherited data properties, and accessor descriptors are all
+            // distinguished from an absent field without firing a getter.
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Ldstr, field);
+            il.Emit(OpCodes.Call, runtime.HasArrayLikeProperty);
+            il.Emit(OpCodes.Brtrue, stashLabel);
             il.Emit(OpCodes.Br, skipLabel);
 
-            // stash: synthDict[field] = fieldVal, normalizing null → $Undefined so
-            // an accessor-only (setter-only) field records a present undefined value.
+            // stash: synthDict[field] = fieldVal.  CLR null is JavaScript null
+            // and must remain distinct from the emitted $Undefined singleton;
+            // setter-only accessors already return that singleton from
+            // GetProperty.  Rewriting a proven-present null here incorrectly
+            // accepted descriptors such as `{ get: null }`.
             il.MarkLabel(stashLabel);
-            var haveValLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, fieldValLocal);
-            il.Emit(OpCodes.Brtrue, haveValLabel);
-            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-            il.Emit(OpCodes.Stloc, fieldValLocal);
-            il.MarkLabel(haveValLabel);
             il.Emit(OpCodes.Ldloc, synthDictLocal);
             il.Emit(OpCodes.Ldstr, field);
             il.Emit(OpCodes.Ldloc, fieldValLocal);
@@ -863,6 +825,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
+        il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
+        // Compact records and other emitted ordinary-object carriers keep
+        // their live own slots behind $IHasFields.  A partial descriptor such
+        // as `{ writable: false }` must preserve that existing slot value just
+        // as it does for Dictionary/$Object receivers.  Without this synthesis
+        // the new PDS descriptor shadows the live value with undefined.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
         il.Emit(OpCodes.Brtrue, receiverIsSynthableLabel);
         var checkSynthListLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
