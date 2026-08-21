@@ -59,6 +59,24 @@ public sealed class JsonTypedScalarRecordTests
                     member.Member?.DeclaringType == itemCarrier));
         Assert.DoesNotContain(ReadMembers(parser), member => member.OpCode == OpCodes.Box);
 
+        MethodInfo associatedParser = assembly.GetType("$Runtime")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method =>
+                method.Name.StartsWith("ParseJsonAssociatedRecord", StringComparison.Ordinal) &&
+                ReadMembers(method).Any(member =>
+                    member.OpCode == OpCodes.Newobj &&
+                    member.Member?.DeclaringType == itemCarrier));
+        var associatedMembers = ReadMembers(associatedParser).ToArray();
+        Assert.DoesNotContain(associatedMembers, member => member.OpCode == OpCodes.Box);
+        Assert.DoesNotContain(associatedMembers, member =>
+            member.Member?.DeclaringType == typeof(System.Text.Encoding) ||
+            member.Member?.DeclaringType == typeof(System.Text.Json.Utf8JsonReader));
+
+        MethodInfo parseJsonValue = assembly.GetType("$Runtime")!
+            .GetMethod("ParseJsonValue", BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.Contains(ReadMembers(parseJsonValue), member =>
+            member.Member?.Name == "TryParseJsonAssociated");
+
         MethodInfo appender = assembly.GetType("$Runtime")!
             .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method =>
@@ -146,6 +164,68 @@ public sealed class JsonTypedScalarRecordTests
 
         var errors = TestHarness.CompileAndVerifyOnly(source);
         Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+    }
+
+    [Fact]
+    public void AssociatedParserHandlesEscapedStringsBooleansAndRecordArrays()
+    {
+        const string source = """
+            type Item = { id: number; name: string; enabled: boolean };
+            type Payload = { items: Item[] };
+            const name: string = "quote\" slash\\ line\n snowman ☃";
+            const populated: Payload = {
+                items: [
+                    { id: -1.25, name: name, enabled: true },
+                    { id: 1e100, name: "exponent", enabled: false },
+                    { id: 9007199254740992, name: "wide", enabled: true }
+                ]
+            };
+            const populatedJson: string = JSON.stringify(populated);
+            const populatedBack: any = JSON.parse(populatedJson);
+            const populatedAgain: any = JSON.parse(populatedJson);
+            const empty: Payload = { items: [] };
+            const emptyJson: string = JSON.stringify(empty);
+            const emptyBack: any = JSON.parse(emptyJson);
+            console.log(
+                populatedBack.items[0].id,
+                populatedBack.items[0].name === name,
+                populatedBack.items[0].enabled,
+                populatedBack.items[1].id === 1e100,
+                populatedBack.items[1].enabled,
+                populatedBack.items[2].id === 9007199254740992,
+                populatedBack !== populatedAgain,
+                populatedBack.items !== populatedAgain.items,
+                populatedBack.items[0] !== populatedAgain.items[0],
+                emptyBack.items.length
+            );
+            """;
+
+        Assert.Equal(
+            "-1.25 true true true false true true true true 0\n",
+            TestHarness.RunCompiled(source));
+        var errors = TestHarness.CompileAndVerifyOnly(source);
+        Assert.True(errors.Count == 0, string.Join(Environment.NewLine, errors));
+    }
+
+    [Fact]
+    public void ReviverBypassesAssociatedParserAndWalksOrdinaryGraph()
+    {
+        const string source = """
+            type Item = { id: number; name: string; value: number };
+            type Payload = { items: Item[] };
+            const payload: Payload = {
+                items: [{ id: 1, name: "a", value: 2 }]
+            };
+            const json: string = JSON.stringify(payload);
+            const parsed: any = JSON.parse(
+                json,
+                (key: string, value: any): any =>
+                    key === "value" ? value + 1 : value
+            );
+            console.log(parsed.items[0].value);
+            """;
+
+        Assert.Equal("3\n", TestHarness.RunCompiled(source));
     }
 
     private static Assembly Compile(string source)
