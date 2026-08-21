@@ -85,6 +85,7 @@ public partial class RuntimeEmitter
     {
         var validateControlChars = EmitJsonValidateControlChars(typeBuilder);
         var parseValue = EmitParseValueFromReaderHelper(typeBuilder, runtime);
+        var tryParseAssociated = EmitJsonAssociatedParseHelper(typeBuilder, runtime);
 
         var method = typeBuilder.DefineMethod(
             "ParseJsonValue",
@@ -118,6 +119,7 @@ public partial class RuntimeEmitter
         var propertyNamesLocal = il.DeclareLocal(propertyNamesType);
         var resultLocal = il.DeclareLocal(_types.Object);
         var notNullLabel = il.DefineLabel();
+        var genericParseLabel = il.DefineLabel();
         var gotTokenLabel = il.DefineLabel();
         var parsedLabel = il.DefineLabel();
         var okEndLabel = il.DefineLabel();
@@ -130,6 +132,23 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
         il.Emit(OpCodes.Stloc, strLocal);
+
+        // Exact strings returned by the guarded shaped serializer carry an
+        // identity-associated descriptor. Parse supported closed record graphs
+        // directly from UTF-16, avoiding validation, transcoding, token-state,
+        // and scalar boxing. Any unassociated or unsupported input stays on the
+        // standards-complete Utf8JsonReader path below.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, genericParseLabel);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloca, resultLocal);
+        il.Emit(OpCodes.Call, tryParseAssociated);
+        il.Emit(OpCodes.Brfalse, genericParseLabel);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(genericParseLabel);
 
         // ECMA-262 25.5.1: control chars (U+0000–U+001F except \t \n \r whitespace) are
         // forbidden in the JSON grammar. Kept as an explicit pre-pass so behavior is

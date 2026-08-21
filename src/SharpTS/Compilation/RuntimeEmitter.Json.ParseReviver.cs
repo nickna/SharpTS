@@ -39,11 +39,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Brfalse, noReviverLabel);
 
-        // parsed = JsonParse(text)
+        // parsed = JsonParse(unassociatedCopy(text)). A reviver must walk the
+        // ordinary Dictionary/List graph. Breaking string identity here keeps
+        // the closed-shape fast path exclusive to the no-reviver overload.
         var parsedLocal = il.DeclareLocal(_types.Object);
+        var parseNormallyLabel = il.DefineLabel();
+        var parsedReadyLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, parseNormallyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Callvirt,
+            _types.GetMethod(_types.String, "ToCharArray", Type.EmptyTypes));
+        il.Emit(OpCodes.Newobj,
+            _types.GetConstructor(_types.String, _types.Char.MakeArrayType()));
+        il.Emit(OpCodes.Call, runtime.JsonParse);
+        il.Emit(OpCodes.Stloc, parsedLocal);
+        il.Emit(OpCodes.Br, parsedReadyLabel);
+
+        il.MarkLabel(parseNormallyLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.JsonParse);
         il.Emit(OpCodes.Stloc, parsedLocal);
+        il.MarkLabel(parsedReadyLabel);
 
         // root = new Dictionary<string, object?> { [""] = parsed };
         var rootLocal = il.DeclareLocal(_types.DictionaryStringObject);
