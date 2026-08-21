@@ -10,6 +10,51 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    protected override bool TryEmitDiscardedExpression(Expr expression)
+    {
+        if (expression is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Name.Lexeme: "push"
+                } methodGet,
+                Arguments: { Count: 1 } arguments
+            })
+            return false;
+
+        // Only a statically known Array gets the guarded intrinsic. `any`,
+        // unions, tuples, imported live values, and method aliases keep normal
+        // property/call dispatch. Descriptor and prototype-chain APIs globally
+        // disable this path; the emitted helper repeats receiver-local guards
+        // for sparse and subclassed arrays before appending directly.
+        TypeSystem.TypeInfo? receiverType = _ctx.TypeMap?.Get(methodGet.Object);
+        if (receiverType is not TypeSystem.TypeInfo.Array
+            || arguments[0] is Expr.Spread
+            || _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+            || _ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+            return false;
+
+        // Preserve the still-cheaper typed-array paths: promoted locals append
+        // directly to List<T>, while escaping number[] receivers call
+        // $Array.PushDouble without boxing or representation deoptimization.
+        if (methodGet.Object is Expr.Variable pushVariable
+            && _ctx.TryGetPromotedArrayLocal(pushVariable.Name.Lexeme) is not null)
+            return false;
+        if (ArrayElements.Resolve(receiverType) is { Kind: ArrayElementsKind.Double }
+            && IsNumericType(_ctx.TypeMap?.Get(arguments[0])))
+            return false;
+
+        EmitExpression(methodGet.Object);
+        EmitBoxIfNeeded(methodGet.Object);
+        EmitExpression(arguments[0]);
+        EmitBoxIfNeeded(arguments[0]);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayPushOneDiscarded);
+        SetStackUnknown();
+        return true;
+    }
+
     private void EmitMethodCall(
         Expr.Get methodGet,
         List<Expr> arguments,

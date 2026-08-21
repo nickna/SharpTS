@@ -1110,6 +1110,7 @@ public partial class RuntimeEmitter
         EmitArrayPushTyped(typeBuilder, runtime, ArrayElements.Double);
         EmitArrayPushTyped(typeBuilder, runtime, ArrayElements.Bool);
         EmitArrayPushProto(typeBuilder, runtime);
+        EmitArrayPushOneDiscarded(typeBuilder, runtime);
         EmitArrayFind(typeBuilder, runtime);
         EmitArrayFindDirect(typeBuilder, runtime);
         EmitArrayFindDirectBool(typeBuilder, runtime);

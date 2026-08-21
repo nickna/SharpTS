@@ -79,6 +79,26 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("const p = Array.prototype;", true)]
+    [InlineData("Object.setPrototypeOf({}, null);", true)]
+    [InlineData("Reflect.setPrototypeOf({}, null);", true)]
+    [InlineData("const setProto = Object.setPrototypeOf;", true)]
+    [InlineData("const setProto = Reflect['setPrototypeOf'];", true)]
+    [InlineData("const value = ([] as any).__proto__;", true)]
+    [InlineData("const values: object[] = []; (values as any).push = () => 0;", true)]
+    [InlineData("const values: object[] = []; delete (values as any)['push'];", true)]
+    [InlineData("Reflect.set([], 'push', () => 0);", true)]
+    [InlineData("Object.assign([], { push: () => 0 });", true)]
+    [InlineData("const values: number[] = []; values.push(1);", false)]
+    public void DetectsArrayPrototypeMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.Equal(expected, features.UsesArrayPrototypeMutation);
+    }
+
+    [Theory]
     [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; const isLeaf = node.left === null; console.log(isLeaf);", true)]
     [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; node.left = null;", false)]
     [InlineData("export const node: { left: object | null; right: object | null } = { left: null, right: null };", false)]

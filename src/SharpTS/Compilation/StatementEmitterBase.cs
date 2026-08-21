@@ -255,8 +255,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         switch (stmt)
         {
             case Stmt.Expression e:
-                EmitExpression(e.Expr);
-                IL.Emit(OpCodes.Pop);
+                if (!TryEmitDiscardedExpression(e.Expr))
+                {
+                    EmitExpression(e.Expr);
+                    IL.Emit(OpCodes.Pop);
+                }
                 break;
 
             case Stmt.Var v:
@@ -359,6 +362,13 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
                 throw new CompileException($"Unhandled statement type in ILEmitter: {stmt.GetType().Name}");
         }
     }
+
+    /// <summary>
+    /// Gives an emitter a chance to lower an expression whose JavaScript value
+    /// is discarded without first manufacturing a stack result. The default
+    /// keeps the ordinary expression-plus-pop behavior.
+    /// </summary>
+    protected virtual bool TryEmitDiscardedExpression(Expr expression) => false;
 
     /// <summary>
     /// Emits a 'using' or 'await using' declaration.
