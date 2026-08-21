@@ -383,6 +383,12 @@ public partial class ILEmitter
 
     private void EmitBitwiseBinary(Expr.Binary b)
     {
+        if (IsStaticallyNumericBitwise(b))
+        {
+            EmitNumericBitwiseBinary(b);
+            return;
+        }
+
         // GetValue both operands before ToNumeric either operand.  Besides
         // preserving observable coercion order, this prevents a throwing RHS
         // from being masked by an eager LHS valueOf call.
@@ -428,6 +434,63 @@ public partial class ILEmitter
 
         // Convert back to double (for signed operations)
         EmitConvR8AndBox();
+    }
+
+    /// <summary>
+    /// Emits a Number-only bitwise expression without crossing the object stack.
+    /// Static numeric proof is essential: objects, Symbol, BigInt, and mixed unions
+    /// must retain the observable ToNumeric pipeline in <see cref="EmitBitwiseBinary"/>.
+    /// </summary>
+    private void EmitNumericBitwiseBinary(Expr.Binary b)
+    {
+        // Spill the converted left value before evaluating the right operand to
+        // preserve JavaScript's left-to-right evaluation order.
+        EmitExpressionAsDouble(b.Left);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.JsNumberToInt32);
+        var left = IL.DeclareLocal(_ctx.Types.Int32);
+        IL.Emit(OpCodes.Stloc, left);
+
+        EmitExpressionAsDouble(b.Right);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.JsNumberToInt32);
+        var right = IL.DeclareLocal(_ctx.Types.Int32);
+        IL.Emit(OpCodes.Stloc, right);
+
+        IL.Emit(OpCodes.Ldloc, left);
+        IL.Emit(OpCodes.Ldloc, right);
+
+        switch (b.Operator.Type)
+        {
+            case TokenType.AMPERSAND:
+                IL.Emit(OpCodes.And);
+                break;
+            case TokenType.PIPE:
+                IL.Emit(OpCodes.Or);
+                break;
+            case TokenType.CARET:
+                IL.Emit(OpCodes.Xor);
+                break;
+            case TokenType.LESS_LESS:
+                IL.Emit(OpCodes.Ldc_I4, 0x1F);
+                IL.Emit(OpCodes.And);
+                IL.Emit(OpCodes.Shl);
+                break;
+            case TokenType.GREATER_GREATER:
+                IL.Emit(OpCodes.Ldc_I4, 0x1F);
+                IL.Emit(OpCodes.And);
+                IL.Emit(OpCodes.Shr);
+                break;
+            case TokenType.GREATER_GREATER_GREATER:
+                IL.Emit(OpCodes.Ldc_I4, 0x1F);
+                IL.Emit(OpCodes.And);
+                IL.Emit(OpCodes.Shr_Un);
+                IL.Emit(OpCodes.Conv_U8);
+                IL.Emit(OpCodes.Conv_R8);
+                SetStackType(StackType.Double);
+                return;
+        }
+
+        IL.Emit(OpCodes.Conv_R8);
+        SetStackType(StackType.Double);
     }
 
     /// <summary>
@@ -2503,6 +2566,13 @@ public partial class ILEmitter
         var rightType = _ctx.TypeMap.Get(b.Right);
 
         return IsStringTypeInfo(leftType) && IsStringTypeInfo(rightType);
+    }
+
+    private bool IsStaticallyNumericBitwise(Expr.Binary b)
+    {
+        if (_ctx.TypeMap == null) return false;
+        return IsNumericTypeInfo(_ctx.TypeMap.Get(b.Left))
+            && IsNumericTypeInfo(_ctx.TypeMap.Get(b.Right));
     }
 
     private bool IsStringComparison(Expr.Binary b)

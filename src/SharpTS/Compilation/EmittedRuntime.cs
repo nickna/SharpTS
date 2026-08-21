@@ -181,6 +181,8 @@ public class EmittedRuntime
     public MethodBuilder StringifyCoerce { get; set; } = null!;
     public MethodBuilder ToNumber { get; set; } = null!;
     public MethodBuilder ConvertToNumber { get; set; } = null!;
+    /// <summary>$Runtime.JsNumberToInt32(double) - allocation-free ECMA-262 ToInt32 for statically numeric operands.</summary>
+    public MethodBuilder JsNumberToInt32 { get; set; } = null!;
     public MethodBuilder JsToInt32 { get; set; } = null!;
     public MethodBuilder JsLessThan { get; set; } = null!;
     public MethodBuilder JsLessOrEqual { get; set; } = null!;
