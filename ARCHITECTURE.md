@@ -15,6 +15,13 @@ Per-file catalogs and current feature coverage belong in source, tests, and [STA
 - Repository infrastructure stays at the root under `.github/`, `docs/`, `scripts/`, `eng/`,
   `distribution/`, and `external/`.
 
+Shipping projects are grouped by role rather than flattened at the repository root. `src/SharpTS/`
+owns the core front end, both execution engines, runtime, and `sharpts` CLI. `SharpTS.Hosting*`
+owns hosted ABI and Native AOT integration; `SharpTS.Gui*` owns the desktop bridge, host, generator,
+and SDK; `SharpTS.Sdk*` owns MSBuild integration. `SharpTS.LanguageServer` (`sharpts-lsp`) and
+`SharpTS.DebugAdapter` (`sharpts-dap`) are separate tools that consume the core project without
+making their protocols part of the core CLI.
+
 ## System data flow
 
 ```text
@@ -52,6 +59,7 @@ they are not interpreter features.
 | `Cli/`, `Repl/`, `Packaging/` | User command orchestration, presentation, REPL, NuGet packaging | Core phase logic or process exits from library APIs |
 | `Hosting/`, `SharpTS.Hosting*` | Versioned hosted ABI, Native AOT catalogs, host lifecycle | Undeclared open-world native reflection |
 | `SharpTS.Gui*` | GUI bridge, generated descriptor contract, host, SDK, tests | A public raw-Avalonia/custom-provider API |
+| `SharpTS.LanguageServer`, `SharpTS.DebugAdapter` | Standalone LSP and DAP protocol hosts over core services | Front-end or interpreter semantics |
 
 Large subsystems use partial classes grouped by concern. A partial file is an organizational unit,
 not a new architectural layer.
@@ -131,6 +139,20 @@ contracts. Async state must preserve runtime context and unhandled-rejection lif
 provide dispatch/lifetime services, but backend-specific scheduling differences require an
 explicit tested deviation.
 
+### Interpreter debugging
+
+Interpreter debugging is an optional cooperative control surface, not a third execution backend.
+Core hooks in `Execution/Debugging/` observe TypeScript statement/callback boundaries, retain AST
+and lexical-environment identity, and coordinate safe-point suspension across the main interpreter
+and workers. With no controller attached, they must not change guest behavior.
+
+`SharpTS.DebugAdapter` owns Debug Adapter Protocol framing, launch/session lifetime, thread and
+handle mapping, read-only inspection, and client-facing errors. It drives the interpreter in
+process because paused runtime objects must retain identity, but DAP transport types and protocol
+state do not belong in the interpreter. Suspension is cooperative and all-stop: a managed/native
+call can run until the next safe point, while protocol I/O, termination, and disconnect remain
+responsive. See [Debugging interpreted TypeScript](docs/debugging-interpreter.md).
+
 ## IL compiler architecture
 
 The compiler analyzes the checked program, defines the required CLR types/members, emits bodies,
@@ -141,6 +163,19 @@ metadata handles before all bodies exist.
 Key compiler analyses include module bindings, closure/capture shape, runtime feature detection,
 typed/local representation opportunities, and hosted output. Optimizations may use static type
 facts but must preserve JavaScript object identity, coercion, evaluation order, and exceptions.
+
+### Specialized representations
+
+The compiler may replace ordinary boxed JavaScript storage with generated CLR locals, fields,
+arrays, or compact record carriers when conservative whole-program analysis proves the value's
+shape, element kind, call-only use, and escape behavior. These representations are internal
+implementation details, not a guest-visible object ABI.
+
+Every specialization needs an ordinary representation or materialization path for dynamic access,
+mutation, export, reflection-like operations, unknown calls, and other proof boundaries. Uncertainty
+disables the optimization. Generated record shapes and JSON-specialized carriers must preserve
+property order, aliases, recursive identity, `null`/`undefined`, and observable JavaScript object
+semantics when materialized.
 
 ### Emitted-runtime constraint
 
@@ -212,9 +247,13 @@ Changes should preserve these rules:
 8. Optimizations preserve aliases, evaluation order, exceptions, and backend parity.
 9. Library services return structured results; the CLI owns presentation and process exit.
 10. Native AOT support is closed-world and explicit.
-11. GUI application extension stays within the documented TypeScript API; internal native-provider
+11. Interpreter debugging is cooperative and optional; DAP protocol ownership stays outside the
+    execution engine.
+12. Specialized CLR representations require conservative proofs and a semantics-preserving
+    materialization or fallback boundary.
+13. GUI application extension stays within the documented TypeScript API; internal native-provider
     seams have no public compatibility promise.
-12. Volatile counts, benchmark snapshots, and exhaustive file lists do not define architecture.
+14. Volatile counts, benchmark snapshots, and exhaustive file lists do not define architecture.
 
 ## Where to continue
 
@@ -222,5 +261,6 @@ Changes should preserve these rules:
 - [Contributor workflow](CONTRIBUTING.md)
 - [Implementation status](STATUS.md)
 - [Execution modes](docs/execution-modes.md)
+- [Interpreter debugging](docs/debugging-interpreter.md)
 - [MSBuild SDK](docs/msbuild-sdk.md)
 - [Benchmark methodology](benchmarks/cross-runtime/README.md)

@@ -65,7 +65,7 @@ known gaps, use [STATUS.md](../STATUS.md).
 
 ### Design and planning records
 
-- [Active shaped-object representation plan](plans/shaped-objects-representation.md)
+- [Compact-record specialization and shaped-object outcome](plans/archive/shaped-objects-representation.md)
 - [Number-array representation decision](design/number-array-unboxing.md)
 - [Runtime tree-shaking outcome](plans/archive/runtime-tree-shaking-outcome.md)
 - [Duplicate-logic consolidation](plans/archive/duplicate-logic-consolidation.md)

@@ -32,7 +32,7 @@ Thank you for your interest in contributing to SharpTS! This project is a TypeSc
 
 3. Run the REPL to verify everything works:
    ```bash
-   dotnet run
+   dotnet run --project src/SharpTS
    ```
 
 ### Understanding the Codebase
@@ -195,9 +195,20 @@ families, not single files. A new feature typically touches, in order:
 5. **`Execution/Interpreter.*.cs`** — runtime behavior (`Evaluate`/`Execute`)
 6. **`Compilation/`** — IL emission (`ILEmitter.*.cs` for statement/expression
    codegen; `RuntimeEmitter.*.cs` if the emitted runtime needs new surface).
-   Read the standalone-DLL constraint in CLAUDE.md first: compiled output must
-   never gain a metadata reference to SharpTS.dll.
+   Read the [emitted-runtime constraint](ARCHITECTURE.md#emitted-runtime-constraint)
+   first: compiled output must never gain an accidental metadata reference to
+   SharpTS.dll.
 7. **`tests/SharpTS.Tests/SharedTests/`** — dual-mode tests (see above)
+
+Compiler representation optimizations must retain the ordinary JavaScript representation whenever
+their proof does not hold or a value becomes observable through a dynamic boundary. Add semantic
+parity tests before measuring the optimized path, plus compiler-only tests for proof and fallback
+behavior.
+
+Interpreter debugger changes span the cooperative hooks in `src/SharpTS/Execution/Debugging/`, the
+DAP transport and session ownership in `src/SharpTS.DebugAdapter/`, and debugger tests in
+`tests/SharpTS.Tests/DebugAdapter/`. Keep protocol framing out of the interpreter and keep guest
+execution off the DAP reader thread. See [Debugging interpreted TypeScript](docs/debugging-interpreter.md).
 
 ## Areas Needing Help
 

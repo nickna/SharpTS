@@ -47,5 +47,5 @@ change. Prefer over-emission to a false negative, add a focused compile-and-load
 dual-mode suite. Performance and artifact-size comparisons belong in the benchmark documentation,
 not this decision record; see the [benchmark harness](../../../benchmarks/cross-runtime/README.md).
 
-Future representation work that affects runtime emission is tracked in the
-[active shaped-object plan](../shaped-objects-representation.md).
+The later representation investigation and the compact-record specialization that resulted from it
+are recorded in the [shaped-object outcome](shaped-objects-representation.md).

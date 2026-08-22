@@ -11,9 +11,9 @@ in [CONTRIBUTING.md](CONTRIBUTING.md); task-oriented user documentation starts a
 dotnet build
 dotnet test
 dotnet test --filter "FullyQualifiedName~SomeTest"
-dotnet run -- script.ts
-dotnet run -- --compile script.ts
-dotnet run -- --compile script.ts --verify
+dotnet run --project src/SharpTS -- script.ts
+dotnet run --project src/SharpTS -- --compile script.ts
+dotnet run --project src/SharpTS -- --compile script.ts --verify
 ```
 
 The Test262 and TypeScript-conformance projects are not part of the solution-level test run. Follow
@@ -33,6 +33,11 @@ affects their domains.
   [ARCHITECTURE.md](ARCHITECTURE.md#emitted-runtime-constraint).
 - Record real soft runtime requirements through the existing capability mechanism. Do not mark
   pure-BCL helpers or graceful-fallback-only probes as required.
+- Keep speculative compiled representations behind conservative whole-program proofs. Materialize
+  or use the ordinary runtime representation whenever a value can escape or become dynamic.
+- Keep interpreter debugging cooperative: add safe points at TypeScript execution boundaries, keep
+  DAP protocol concerns in `src/SharpTS.DebugAdapter/`, and cover debugger-only behavior in
+  `tests/SharpTS.Tests/DebugAdapter/`.
 - Preserve structured diagnostics in core services; console formatting and exit codes belong in
   the CLI.
 - Keep embedded Node module declarations, interpreter values, compiled emitters, and dual-mode

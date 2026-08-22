@@ -17,7 +17,7 @@ other, so shared tests and conformance baselines enforce their parity contract.
 | --- | :---: | :---: | --- |
 | Run a script or module graph | ✅ | ✅ | Compiled output can target a DLL or executable. |
 | Async functions, promises, generators, and top-level module work | ✅ | ✅ | Hosted output has additional lifecycle rules. |
-| TypeScript-source debugging | — | ✅ | `--debug`/`-g` emits a portable PDB. |
+| TypeScript-source debugging | ✅ | ✅ | Interpreter uses the DAP server; compiled mode uses `--debug`/`-g` portable PDBs. |
 | Project checking and declarations | ✅ | ✅ | These use the shared front end rather than an execution backend. |
 | External .NET interop | ✅ | ✅ | Deployment requirements differ; see [.NET types](docs/dotnet-types.md). |
 | Node-compatible built-ins | ✅ | ✅ | Per-API ceilings and deviations are documented below and in the API guide. |
@@ -112,12 +112,14 @@ See [.NET types](docs/dotnet-types.md), [.NET integration](docs/dotnet-integrati
 | Avalonia TypeScript/TSX applications | Supported | Retained/reactive application API, interpreted and compiled guests, Headless tests, Windows publishing, experimental Apple Silicon candidate. |
 | Public custom controls | ❌ | No supported public third-party provider or descriptor-registration API; internal provider seams have no compatibility promise. |
 | TypeScript-source PDBs | ✅ | Portable PDBs with source documents, sequence points, locals/scopes, and async metadata. |
-| VS Code extension | ✅ | Diagnostics, interop IntelliSense, and Debug Current File. |
+| Interpreter debug adapter | ✅ | Standalone DAP tool with cooperative breakpoints, stepping, inspection, exceptions, and worker threads. |
+| VS Code extension | ✅ | Diagnostics, interop IntelliSense, and separate interpreted and compiled debug commands. |
 | Standalone language server | ✅ | Diagnostics, navigation, references, safe rename domains, completion, hover, signatures, and quick fixes. |
 | General property/member rename | Deferred | Refused when workspace completeness cannot make the edit safe. |
 
-See the [GUI overview](docs/gui/README.md), [language server guide](docs/language-server.md), and
-[debugging guide](docs/debugging-typescript.md).
+See the [GUI overview](docs/gui/README.md), [language server guide](docs/language-server.md), and the
+[interpreted](docs/debugging-interpreter.md) and [compiled](docs/debugging-typescript.md) debugging
+guides.
 
 ## 7. Conformance baselines
 
