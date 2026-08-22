@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 
 namespace SharpTS.Compilation;
 
@@ -60,6 +61,8 @@ public partial class AsyncStateAnalyzer
         if (stmt.Initializer != null)
             Visit(stmt.Initializer);
 
+        int awaitCountAtLoopHead = _awaitPoints.Count;
+
         // Track variables used in condition and increment
         if (stmt.Condition != null)
             Visit(stmt.Condition);
@@ -69,6 +72,68 @@ public partial class AsyncStateAnalyzer
 
         if (stmt.Increment != null)
             Visit(stmt.Increment);
+
+        // A suspension in the loop condition/body/increment creates a backedge
+        // into a later MoveNext invocation. The ordinary forward walk sees the
+        // condition before that suspension, so a local used only by the next
+        // condition evaluation would otherwise remain an IL local and reset on
+        // resume (#1443). Treat every directly referenced function local in the
+        // repeating region as live across the suspension. This is conservative
+        // but preserves lexical identity through the existing rename map.
+        if (_awaitPoints.Count > awaitCountAtLoopHead)
+        {
+            var usages = new LoopBackedgeVariableCollector(_renames);
+            if (stmt.Condition != null)
+                usages.Visit(stmt.Condition);
+            usages.Visit(stmt.Body);
+            if (stmt.Increment != null)
+                usages.Visit(stmt.Increment);
+
+            foreach (var name in usages.Names)
+                if (_declaredVariables.Contains(name))
+                    _variablesUsedAfterAwait.Add(name);
+        }
+    }
+
+    /// <summary>
+    /// Collects direct state-machine variable references from a repeating loop
+    /// region without recording suspension points a second time. Nested
+    /// callables have their own state and are handled by the normal capture
+    /// analysis, so their bodies are deliberately skipped.
+    /// </summary>
+    private sealed class LoopBackedgeVariableCollector(
+        IReadOnlyDictionary<object, string> renames) : AstVisitorBase
+    {
+        public HashSet<string> Names { get; } = [];
+
+        private void Record(object node, string lexeme) =>
+            Names.Add(renames.TryGetValue(node, out var renamed) ? renamed : lexeme);
+
+        protected override void VisitVariable(Expr.Variable expr) =>
+            Record(expr, expr.Name.Lexeme);
+
+        protected override void VisitAssign(Expr.Assign expr)
+        {
+            Record(expr, expr.Name.Lexeme);
+            base.VisitAssign(expr);
+        }
+
+        protected override void VisitCompoundAssign(Expr.CompoundAssign expr)
+        {
+            Record(expr, expr.Name.Lexeme);
+            base.VisitCompoundAssign(expr);
+        }
+
+        protected override void VisitLogicalAssign(Expr.LogicalAssign expr)
+        {
+            Record(expr, expr.Name.Lexeme);
+            base.VisitLogicalAssign(expr);
+        }
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expr) { }
+        protected override void VisitFunction(Stmt.Function stmt) { }
+        protected override void VisitClass(Stmt.Class stmt) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expr) { }
     }
 
     protected override void VisitReturn(Stmt.Return stmt)
