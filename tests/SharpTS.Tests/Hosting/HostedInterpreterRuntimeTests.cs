@@ -598,6 +598,58 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
+    public void PromiseReactions_RunAfterHostedInterpreterModuleJob()
+    {
+        const string source = """
+            const order: string[] = ["start"];
+            Promise.resolve(1).then((): void => { order.push("then"); });
+            order.push("after");
+            queueMicrotask((): void => console.log(order.join(":")));
+            export {};
+            """;
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = new StringWriter();
+        using var runtime = CreateRuntime(
+            source, dispatcher, new RecordingLifetime(), new RecordingErrorSink(), output);
+
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal(["start:after:then"], Lines(output));
+    }
+
+    [Fact]
+    public void PromiseReactions_RunAfterHostedCompiledModuleJob()
+    {
+        SharpTSProgram program = CreateProgram("""
+            const order: string[] = ["start"];
+            Promise.resolve(1).then((): void => { order.push("then"); });
+            order.push("after");
+            queueMicrotask((): void => console.log(order.join(":")));
+            export {};
+            """);
+        var compiler = new ILCompiler($"hosted_promise_jobs_{Guid.NewGuid():N}");
+        compiler.EnableHostedOutput();
+        compiler.CompileModules(
+            program.RuntimeModules.ToList(), program.Resolver, program.TypeMap);
+
+        var dispatcher = new DeterministicHostDispatcher();
+        using var output = Infrastructure.AsyncLocalConsoleRedirector.Capture();
+        using ISharpTSHostedRuntime runtime = SharpTSHostedAssembly.CreateRuntime(
+            System.Reflection.Assembly.Load(compiler.SaveToBytes()),
+            dispatcher,
+            new RecordingLifetime(),
+            new RecordingErrorSink());
+
+        Task initialization = runtime.InitializeAsync();
+        dispatcher.RunUntil(() => initialization.IsCompleted);
+        initialization.GetAwaiter().GetResult();
+
+        Assert.Equal("start:after:then\n", output.GetOutput().Replace("\r\n", "\n"));
+    }
+
+    [Fact]
     public void OffThreadNotifications_CoalesceWakeAndRunOnePerTurn()
     {
         var dispatcher = new DeterministicHostDispatcher();

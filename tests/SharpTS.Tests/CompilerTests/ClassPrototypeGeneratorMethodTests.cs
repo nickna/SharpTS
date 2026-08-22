@@ -22,7 +22,7 @@ public sealed class ClassPrototypeGeneratorMethodTests
             console.log(first.generatorMethod().next().value);
             """;
 
-        Assert.Equal("true\nplain\nasync\ngenerator\n", TestHarness.RunCompiled(source));
+        Assert.Equal("true\nplain\ngenerator\nasync\n", TestHarness.RunCompiled(source));
     }
 
     [Fact]

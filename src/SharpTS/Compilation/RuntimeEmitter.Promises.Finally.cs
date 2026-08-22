@@ -11,7 +11,10 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Defines the PromiseFinally state machine type structure.
     /// </summary>
-    private PromiseFinallyStateMachine DefinePromiseFinallyStateMachine(ModuleBuilder moduleBuilder, EmittedRuntime runtime)
+    private PromiseFinallyStateMachine DefinePromiseFinallyStateMachine(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime,
+        Type promiseJobAwaiterType)
     {
         var builderType = typeof(AsyncTaskMethodBuilder<object>);
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -31,6 +34,8 @@ public partial class RuntimeEmitter
         var onFinallyField = smType.DefineField("onFinally", typeof(object), FieldAttributes.Public);
         var promiseAwaiterField = smType.DefineField("<>u__1", awaiterType, FieldAttributes.Private);
         var callbackAwaiterField = smType.DefineField("<>u__2", awaiterType, FieldAttributes.Private);
+        var jobAwaiterField = smType.DefineField(
+            "<>u__3", promiseJobAwaiterType, FieldAttributes.Private);
         var valueField = smType.DefineField("<value>5__1", typeof(object), FieldAttributes.Private);
         var exceptionField = smType.DefineField("<exception>5__2", typeof(Exception), FieldAttributes.Private);
 
@@ -63,6 +68,7 @@ public partial class RuntimeEmitter
             OnFinallyField = onFinallyField,
             PromiseAwaiterField = promiseAwaiterField,
             CallbackAwaiterField = callbackAwaiterField,
+            JobAwaiterField = jobAwaiterField,
             ValueField = valueField,
             ExceptionField = exceptionField,
             MoveNextMethod = moveNext,
@@ -123,7 +129,10 @@ public partial class RuntimeEmitter
     /// Simplified: await promise, invoke callback, return original value.
     /// Note: Exception capture from original promise is not fully implemented.
     /// </summary>
-    private void EmitPromiseFinallyMoveNext(PromiseFinallyStateMachine sm, EmittedRuntime runtime)
+    private void EmitPromiseFinallyMoveNext(
+        PromiseFinallyStateMachine sm,
+        EmittedRuntime runtime,
+        Type promiseJobAwaiterType)
     {
         var il = sm.MoveNextMethod.GetILGenerator();
         var awaiterType = typeof(TaskAwaiter<object?>);
@@ -135,6 +144,8 @@ public partial class RuntimeEmitter
         // Labels
         var state0Label = il.DefineLabel();  // Resume after promise await
         var state1Label = il.DefineLabel();  // Resume after callback await
+        var state2Label = il.DefineLabel();  // Resume in queued Promise job
+        var queueJobLabel = il.DefineLabel();
         var continue0Label = il.DefineLabel();
         var continue1Label = il.DefineLabel();
         var setResultLabel = il.DefineLabel();
@@ -151,6 +162,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, sm.StateField);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Beq, state1Label);  // state == 1
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.StateField);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Beq, state2Label);  // state == 2
 
         // ========== STATE -1: Initial - await input promise ==========
 
@@ -168,7 +183,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
         il.Emit(OpCodes.Call, awaiterType.GetProperty("IsCompleted")!.GetGetMethod()!);
-        il.Emit(OpCodes.Brtrue, continue0Label);
+        il.Emit(OpCodes.Brtrue, queueJobLabel);
 
         // Not completed - suspend at state 0
         il.Emit(OpCodes.Ldarg_0);
@@ -191,7 +206,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Stfld, sm.StateField);
 
-        // ========== Continue after promise await ==========
+        il.MarkLabel(queueJobLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.JobAwaiterField);
+        il.Emit(OpCodes.Ldarg_0);
+        var jobAwaitMethod = EmitGenerics.MakeGenericMethod(
+            _types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
+                .First(m => m.Name == "AwaitUnsafeOnCompleted" && m.IsGenericMethod),
+            promiseJobAwaiterType,
+            sm.Type);
+        il.Emit(OpCodes.Call, jobAwaitMethod);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.MarkLabel(state2Label);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+
+        // ========== Continue inside Promise job ==========
         il.MarkLabel(continue0Label);
 
         // GetResult from promise - store in value field

@@ -213,7 +213,38 @@ public static class BenchmarkHarness
                 $"{method.ReturnType.Name}({string.Join(", ", parameters.Select(p => p.ParameterType.Name))}); " +
                 "expected Task<Object>(Object)");
         }
-        return method.CreateDelegate<Func<object?, Task<object?>>>();
+        var invoke = method.CreateDelegate<Func<object?, Task<object?>>>();
+        var eventLoopType = assembly.GetType("$EventLoop")
+            ?? throw new InvalidOperationException(
+                "Compiled async benchmark assembly has no $EventLoop type");
+        var getInstance = eventLoopType.GetMethod(
+            "GetInstance", BindingFlags.Public | BindingFlags.Static)
+            ?? throw new InvalidOperationException("Compiled $EventLoop has no GetInstance method");
+        var run = eventLoopType.GetMethod(
+            "Run", BindingFlags.Public | BindingFlags.Instance)
+            ?? throw new InvalidOperationException("Compiled $EventLoop has no Run method");
+        object eventLoop = getInstance.Invoke(null, null)
+            ?? throw new InvalidOperationException("Compiled $EventLoop.GetInstance returned null");
+
+        // Direct reflection calls bypass the generated program entry point,
+        // which normally performs the JavaScript job checkpoint. Pump once per
+        // invocation so queued Promise reactions run under the same scheduler
+        // measured by real standalone output (#1440). Run drains an entire
+        // nested microtask chain; the reflection call itself is constant setup
+        // overhead rather than per-link dynamic dispatch.
+        return argument =>
+        {
+            Task<object?> task = invoke(argument);
+            try
+            {
+                run.Invoke(eventLoop, null);
+            }
+            catch (TargetInvocationException ex)
+            {
+                throw ex.InnerException ?? ex;
+            }
+            return task;
+        };
     }
 
     /// <summary>

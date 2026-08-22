@@ -775,41 +775,44 @@ public static class PromiseBuiltIns
             error = ex;
         }
 
-        // Call the finally callback (with no arguments)
-        if (onFinally != null)
+        return await interpreter.QueuePromiseReaction(async () =>
         {
-            try
+            // Call the finally callback (with no arguments)
+            if (onFinally != null)
             {
-                var result = CallCallback(onFinally, [], interpreter);
-                // PromiseResolve observes an overridden `then`, not only the
-                // promise's internal host task.
-                if (RuntimeValue.FromBoxed(result).IsObject)
+                try
                 {
-                    await TaskFromResolvedValue(interpreter, result);
+                    var result = CallCallback(onFinally, [], interpreter);
+                    // PromiseResolve observes an overridden `then`, not only the
+                    // promise's internal host task.
+                    if (RuntimeValue.FromBoxed(result).IsObject)
+                    {
+                        await TaskFromResolvedValue(interpreter, result);
+                    }
+                }
+                catch (Exceptions.ThrowException thrown)
+                {
+                    throw new SharpTSPromiseRejectedException(thrown.Value);
+                }
+                catch (SharpTSPromiseRejectedException)
+                {
+                    throw;
+                }
+                catch (Exception callbackError)
+                {
+                    // If callback throws, that becomes the new rejection reason
+                    throw new SharpTSPromiseRejectedException(callbackError.Message);
                 }
             }
-            catch (Exceptions.ThrowException thrown)
-            {
-                throw new SharpTSPromiseRejectedException(thrown.Value);
-            }
-            catch (SharpTSPromiseRejectedException)
-            {
-                throw;
-            }
-            catch (Exception callbackError)
-            {
-                // If callback throws, that becomes the new rejection reason
-                throw new SharpTSPromiseRejectedException(callbackError.Message);
-            }
-        }
 
-        // Re-throw original error or return original value
-        if (error != null)
-        {
-            throw error;
-        }
+            // Re-throw original error or return original value
+            if (error != null)
+            {
+                throw error;
+            }
 
-        return value;
+            return value;
+        });
     }
 
     #endregion

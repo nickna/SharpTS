@@ -1036,6 +1036,8 @@ public class EmittedRuntime
     public MethodBuilder PromiseThenPrimitive { get; set; } = null!;
     public MethodBuilder PromiseCatch { get; set; } = null!;
     public MethodBuilder PromiseFinally { get; set; } = null!;
+    /// <summary>Keeps standalone event-loop execution alive until a discarded top-level Promise reaction settles, without pumping it before the current script job completes.</summary>
+    public MethodBuilder TrackTopLevelPromiseReaction { get; set; } = null!;
     public MethodBuilder PromiseAllSettled { get; set; } = null!;
     public MethodBuilder PromiseAllSettledKeyed { get; set; } = null!;
     public MethodBuilder PromiseKeyedMapResult { get; set; } = null!;
@@ -1118,6 +1120,7 @@ public class EmittedRuntime
 
     // Microtask support
     public MethodBuilder QueueMicrotask { get; set; } = null!;
+    public MethodBuilder QueuePromiseJob { get; set; } = null!;
     public MethodBuilder ProcessMicrotasks { get; set; } = null!;
     public MethodBuilder HasMicrotasks { get; set; } = null!;
 
