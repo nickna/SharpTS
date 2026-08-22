@@ -9,6 +9,8 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    private readonly Stack<(string Name, LocalBuilder Key, LocalBuilder Value)> _stableMapEntryBindings = new();
+
     protected override void EmitConditionCheck(Expr condition)
     {
         EmitExpression(condition);
@@ -998,6 +1000,19 @@ public partial class ILEmitter
         TypeInfo? iterableType = _ctx.TypeMap?.Get(f.Iterable);
         EmitExpression(f.Iterable);
 
+        if (iterableType is TypeInfo.Map
+            && _ctx.TypeMap?.IsStableNumericMapIteration(f) == true)
+        {
+            // The analyzer proved that the receiver is a fresh, non-escaping
+            // Map<number, number> and that the entry binding is observed only
+            // through literal [0]/[1] reads.
+            EmitBoxIfNeeded(f.Iterable);
+            var stableMapIterable = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, stableMapIterable);
+            EmitStableNumericMapIteration(f, stableMapIterable, labelNames);
+            return;
+        }
+
         // For Map/Set, convert to a List first
         if (iterableType is TypeInfo.Map)
         {
@@ -1278,6 +1293,85 @@ public partial class ILEmitter
 
         // Common exit point for both paths
         builder.MarkLabel(afterLoopLabel);
+        _ctx.Locals.ExitScope();
+    }
+
+    /// <summary>
+    /// Direct backing-dictionary loop for the non-escaping numeric Map shape
+    /// marked by <see cref="StableMapIterationAnalyzer"/>. Key/value objects are
+    /// held in locals and exposed to literal entry-index reads by
+    /// <c>TryEmitStableMapEntryIndex</c>; no JavaScript entry array is created.
+    /// </summary>
+    private void EmitStableNumericMapIteration(
+        Stmt.ForOf f,
+        LocalBuilder iterableLocal,
+        IReadOnlyList<string>? labelNames)
+    {
+        var builder = _ctx.ILBuilder;
+        var dictType = _ctx.Types.DictionaryObjectObject;
+        var kvpType = EmitGenerics.MakeGenericType(
+            _ctx.Types.KeyValuePairOpen, _ctx.Types.Object, _ctx.Types.Object);
+        var enumeratorType = EmitGenerics.MakeGenericType(
+            typeof(Dictionary<,>.Enumerator).GetGenericTypeDefinition(),
+            _ctx.Types.Object, _ctx.Types.Object);
+
+        var startLabel = builder.DefineLabel("forof_stable_map_start");
+        var endLabel = builder.DefineLabel("forof_stable_map_end");
+        var continueLabel = builder.DefineLabel("forof_stable_map_continue");
+
+        var dictLocal = IL.DeclareLocal(dictType);
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Castclass, dictType);
+        IL.Emit(OpCodes.Stloc, dictLocal);
+
+        var enumeratorLocal = IL.DeclareLocal(enumeratorType);
+        var currentLocal = IL.DeclareLocal(kvpType);
+        var keyLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var valueLocal = IL.DeclareLocal(_ctx.Types.Double);
+
+        IL.Emit(OpCodes.Ldloc, dictLocal);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(dictType, "GetEnumerator")!);
+        IL.Emit(OpCodes.Stloc, enumeratorLocal);
+
+        _ctx.EnterLoop(endLabel, continueLabel, labelNames ?? CompilationContext.NoLabels);
+        builder.MarkLabel(startLabel);
+        EmitCancellationCheck();
+
+        IL.Emit(OpCodes.Ldloca, enumeratorLocal);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(enumeratorType, "MoveNext")!);
+        builder.Emit_Brfalse(endLabel);
+
+        IL.Emit(OpCodes.Ldloca, enumeratorLocal);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(enumeratorType, "Current")!.GetGetMethod()!);
+        IL.Emit(OpCodes.Stloc, currentLocal);
+
+        IL.Emit(OpCodes.Ldloca, currentLocal);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
+        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+        IL.Emit(OpCodes.Stloc, keyLocal);
+
+        IL.Emit(OpCodes.Ldloca, currentLocal);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
+        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+        IL.Emit(OpCodes.Stloc, valueLocal);
+
+        _stableMapEntryBindings.Push((f.Variable.Lexeme, keyLocal, valueLocal));
+        try
+        {
+            EmitStatement(f.Body);
+        }
+        finally
+        {
+            _stableMapEntryBindings.Pop();
+        }
+
+        builder.MarkLabel(continueLabel);
+        builder.Emit_Br(startLabel);
+
+        builder.MarkLabel(endLabel);
+        IL.Emit(OpCodes.Ldloca, enumeratorLocal);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(enumeratorType, "Dispose")!);
+        _ctx.ExitLoop();
         _ctx.Locals.ExitScope();
     }
 

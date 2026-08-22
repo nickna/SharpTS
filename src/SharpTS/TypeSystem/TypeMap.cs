@@ -23,6 +23,7 @@ public class TypeMap
     private readonly Dictionary<Token, TokenType> _promotableArrayLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Associates an expression with its resolved type.
@@ -185,6 +186,23 @@ public class TypeMap
     /// the generated types). Empty when no object local was promoted.
     /// </summary>
     public IEnumerable<ObjectShapeInfo> PromotableObjectLocalShapes => _promotableObjectLocals.Values;
+
+    /// <summary>
+    /// Marks a <c>for...of</c> over a fresh, non-escaping <c>Map&lt;number, number&gt;</c>
+    /// whose entry binding is observed only through literal <c>[0]</c>/<c>[1]</c> reads.
+    /// The compiler may lower this shape directly over the backing dictionary without
+    /// materializing JavaScript entry arrays. This is a compiler hint only; the public
+    /// TypeScript type remains the ordinary Map iterator type.
+    /// </summary>
+    public void MarkStableNumericMapIteration(Stmt.ForOf loop) =>
+        _stableNumericMapIterations.Add(loop);
+
+    /// <summary>
+    /// True when <paramref name="loop"/> satisfies the non-escape and entry-use proof
+    /// recorded by the IL compiler's stable Map iteration analyzer.
+    /// </summary>
+    public bool IsStableNumericMapIteration(Stmt.ForOf loop) =>
+        _stableNumericMapIterations.Contains(loop);
 
     /// <summary>
     /// Gets the resolved type for an expression, or null if not found.
