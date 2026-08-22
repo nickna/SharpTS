@@ -650,6 +650,7 @@ public partial class ILCompiler
     private void AnalyzeClosuresAndPromotions(List<Stmt> statements)
     {
         Phase2_AnalyzeClosures(statements);
+        StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NonEscapingArrowLocalAnalyzer.Analyze(

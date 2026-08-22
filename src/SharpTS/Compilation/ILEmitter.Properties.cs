@@ -951,6 +951,9 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (TryEmitStableMapEntryIndex(gi))
+            return;
+
         // A literal string key on a built-in constructor/namespace is the
         // computed-property spelling of the same ordinary property access:
         // Number["MAX_VALUE"] === Number.MAX_VALUE, Math["PI"] === Math.PI,
@@ -1291,6 +1294,34 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, idxRecvLocal);
         IL.Emit(OpCodes.Ldloc, idxKeyLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+    }
+
+    /// <summary>
+    /// Loads the key/value local for a proven non-escaping Map entry binding.
+    /// The analyzer admits only non-optional literal index 0/1 reads, so this
+    /// preserves evaluation order while avoiding a per-iteration entry array.
+    /// </summary>
+    private bool TryEmitStableMapEntryIndex(Expr.GetIndex expression)
+    {
+        if (expression.Optional
+            || expression.Object is not Expr.Variable variable
+            || expression.Index is not Expr.Literal { Value: double index }
+            || index is not (0d or 1d))
+        {
+            return false;
+        }
+
+        foreach (var binding in _stableMapEntryBindings)
+        {
+            if (binding.Name != variable.Name.Lexeme)
+                continue;
+
+            IL.Emit(OpCodes.Ldloc, index == 0d ? binding.Key : binding.Value);
+            SetStackType(StackType.Double);
+            return true;
+        }
+
+        return false;
     }
 
     /// <summary>
