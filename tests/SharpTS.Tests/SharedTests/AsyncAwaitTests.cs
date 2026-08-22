@@ -9,6 +9,21 @@ namespace SharpTS.Tests.SharedTests;
 /// </summary>
 public class AsyncAwaitTests
 {
+    private const string SuspendingForLoopSource = """
+        async function next(value: number): Promise<number> {
+            return await Promise.resolve(value).then(
+                (current: number): number => current);
+        }
+        async function main(): Promise<void> {
+            const values: number[] = [10, 20, 30];
+            for (let i: number = 0; i < values.length; i++) {
+                console.log(await next(values[i]));
+            }
+            console.log("done");
+        }
+        main();
+        """;
+
     #region Basic Async Functions
 
     [Theory, ModeData]
@@ -119,6 +134,23 @@ public class AsyncAwaitTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("6\n", output);
+    }
+
+    [Theory, ModeData]
+    public void AwaitInForLoop_PreservesBackedgeLocalsAcrossRealSuspension(
+        ExecutionMode mode)
+    {
+        Assert.Equal(
+            "10\n20\n30\ndone\n",
+            TestHarness.Run(SuspendingForLoopSource, mode));
+    }
+
+    [Fact]
+    public void AwaitInForLoop_StandaloneCompletesEveryIteration()
+    {
+        Assert.Equal(
+            "10\n20\n30\ndone\n",
+            TestHarness.RunCompiledStandalone(SuspendingForLoopSource));
     }
 
     [Theory, ModeData]
