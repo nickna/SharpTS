@@ -104,6 +104,85 @@ export function arrayMethodWork(n: number): number {
 // and typed-array kernels lean on hand-tuned engine builtins, binary-trees on
 // the GC. Each still funnels to a `number` so the BDN harness can reflect it.
 
+// Map insertion, lookup, and deletion with numeric keys and values. The
+// checksum observes both successful lookups and deletes while leaving half of
+// the entries live, so runtimes cannot discard any phase.
+export function mapOperations(n: number): number {
+    const map = new Map<number, number>();
+    for (let i: number = 0; i < n; i++) {
+        map.set(i, i * 3 + 1);
+    }
+
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const value = map.get(i);
+        if (value !== null && value !== undefined) {
+            sum = sum + value;
+        }
+    }
+
+    let deleted: number = 0;
+    for (let i: number = 0; i < n; i = i + 2) {
+        if (map.delete(i)) {
+            deleted = deleted + 1;
+        }
+    }
+    return sum + deleted + map.size;
+}
+
+// Map iteration is kept separate from lookup so iterator materialization and
+// entry-pair representation remain visible in the cross-runtime results.
+export function mapIteration(n: number): number {
+    const map = new Map<number, number>();
+    for (let i: number = 0; i < n; i++) {
+        map.set(i, i * 3 + 1);
+    }
+
+    let sum: number = 0;
+    for (const entry of map) {
+        sum = sum + entry[0] + entry[1];
+    }
+    return sum + map.size;
+}
+
+// Set insertion, lookup, and deletion. The even-number delete pass observes
+// mutation and size independently from the preceding membership checks.
+export function setOperations(n: number): number {
+    const set = new Set<number>();
+    for (let i: number = 0; i < n; i++) {
+        set.add(i);
+    }
+
+    let found: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        if (set.has(i)) {
+            found = found + 1;
+        }
+    }
+
+    let deleted: number = 0;
+    for (let i: number = 0; i < n; i = i + 2) {
+        if (set.delete(i)) {
+            deleted = deleted + 1;
+        }
+    }
+    return found + deleted + set.size;
+}
+
+// Set iteration has its own workload so it is not hidden by hash lookups.
+export function setIteration(n: number): number {
+    const set = new Set<number>();
+    for (let i: number = 0; i < n; i++) {
+        set.add(i);
+    }
+
+    let sum: number = 0;
+    for (const value of set) {
+        sum = sum + value;
+    }
+    return sum + set.size;
+}
+
 // JSON round-trip: build a record array, stringify, parse it back, sum a field.
 // The single most common server hot path; V8/JSC JSON are hand-tuned C++.
 export function jsonRoundTrip(n: number): number {
