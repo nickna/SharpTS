@@ -51,6 +51,7 @@ internal class PromiseThenStateMachine
     public required FieldBuilder OnFulfilledField { get; init; }    // callback
     public required FieldBuilder OnRejectedField { get; init; }     // error callback
     public required FieldBuilder PromiseAwaiterField { get; init; } // TaskAwaiter<object?> for input
+    public required FieldBuilder JobAwaiterField { get; init; }     // forced Promise-job boundary
     public required FieldBuilder FlattenAwaiterField { get; init; } // TaskAwaiter<object?> for flattening
     public required FieldBuilder ValueField { get; init; }          // intermediate value
     public required FieldBuilder ExceptionField { get; init; }      // stored exception
@@ -70,6 +71,7 @@ internal class PrimitivePromiseThenStateMachine
     public required FieldBuilder PromiseField { get; init; }
     public required FieldBuilder OnFulfilledField { get; init; }
     public required FieldBuilder PromiseAwaiterField { get; init; }
+    public required FieldBuilder JobAwaiterField { get; init; }
     public required MethodBuilder MoveNextMethod { get; init; }
     public required Type BuilderType { get; init; }
 }
@@ -85,6 +87,7 @@ internal class PromiseFinallyStateMachine
     public required FieldBuilder PromiseField { get; init; }        // Task<object?> input promise
     public required FieldBuilder OnFinallyField { get; init; }      // callback (no args)
     public required FieldBuilder PromiseAwaiterField { get; init; } // TaskAwaiter<object?> for input
+    public required FieldBuilder JobAwaiterField { get; init; }     // forced Promise-job boundary
     public required FieldBuilder CallbackAwaiterField { get; init; } // TaskAwaiter<object?> for callback result
     public required FieldBuilder ValueField { get; init; }          // preserved value
     public required FieldBuilder ExceptionField { get; init; }      // preserved exception
@@ -178,6 +181,8 @@ public partial class RuntimeEmitter
     {
         var taskType = _types.TaskOfObject;
         var moduleBuilder = (ModuleBuilder)typeBuilder.Module;
+        var promiseJobAwaiterType = DefinePromiseJobAwaiter(moduleBuilder, runtime);
+        EmitTrackTopLevelPromiseReaction(typeBuilder, runtime);
 
         // Static value-form methods need NewPromiseCapability before the
         // executor-support bodies are filled at the end of this emitter.
@@ -694,7 +699,8 @@ public partial class RuntimeEmitter
         EmitCallbackHelpers(typeBuilder, runtime);
 
         // Promise.prototype.then - async state machine with callback invocation
-        var promiseThenSM = DefinePromiseThenStateMachine(moduleBuilder, runtime);
+        var promiseThenSM = DefinePromiseThenStateMachine(
+            moduleBuilder, runtime, promiseJobAwaiterType);
         var then = typeBuilder.DefineMethod(
             "PromiseThen",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -703,7 +709,7 @@ public partial class RuntimeEmitter
         );
         runtime.PromiseThen = then;
         EmitPromiseThenWrapper(then.GetILGenerator(), promiseThenSM);
-        EmitPromiseThenMoveNext(promiseThenSM, runtime);
+        EmitPromiseThenMoveNext(promiseThenSM, runtime, promiseJobAwaiterType);
         promiseThenSM.Type.CreateType();
 
         // Stable intrinsic Promise.then with a fulfillment-only callback whose
@@ -711,7 +717,7 @@ public partial class RuntimeEmitter
         // input await and callback exception-to-rejection behavior, but has no
         // rejection dispatch or second thenable-flattening await.
         var primitivePromiseThenSM = DefinePrimitivePromiseThenStateMachine(
-            moduleBuilder);
+            moduleBuilder, promiseJobAwaiterType);
         var primitiveThen = typeBuilder.DefineMethod(
             "PromiseThenPrimitive",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -721,7 +727,8 @@ public partial class RuntimeEmitter
         runtime.PromiseThenPrimitive = primitiveThen;
         EmitPrimitivePromiseThenWrapper(
             primitiveThen.GetILGenerator(), primitivePromiseThenSM);
-        EmitPrimitivePromiseThenMoveNext(primitivePromiseThenSM);
+        EmitPrimitivePromiseThenMoveNext(
+            primitivePromiseThenSM, promiseJobAwaiterType);
         primitivePromiseThenSM.Type.CreateType();
 
         // Promise.prototype.catch - delegates to PromiseThen(promise, null, onRejected)
@@ -742,7 +749,8 @@ public partial class RuntimeEmitter
         }
 
         // Promise.prototype.finally - async state machine with callback invocation
-        var promiseFinallySM = DefinePromiseFinallyStateMachine(moduleBuilder, runtime);
+        var promiseFinallySM = DefinePromiseFinallyStateMachine(
+            moduleBuilder, runtime, promiseJobAwaiterType);
         var finallyMethod = typeBuilder.DefineMethod(
             "PromiseFinally",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -751,11 +759,61 @@ public partial class RuntimeEmitter
         );
         runtime.PromiseFinally = finallyMethod;
         EmitPromiseFinallyWrapper(finallyMethod.GetILGenerator(), promiseFinallySM);
-        EmitPromiseFinallyMoveNext(promiseFinallySM, runtime);
+        EmitPromiseFinallyMoveNext(
+            promiseFinallySM, runtime, promiseJobAwaiterType);
         promiseFinallySM.Type.CreateType();
 
         // PromiseFromExecutor - emitted in RuntimeEmitter.Promises.Executor.cs
         EmitPromiseExecutorSupport(typeBuilder, runtime, moduleBuilder);
+    }
+
+    /// <summary>
+    /// Emits a lifetime-only tracker for SharpTS's standalone entry point. A
+    /// discarded top-level then/catch/finally result must not be synchronously
+    /// pumped between script statements, but a pending native source (for
+    /// example timers/promises) must still keep the process alive until its
+    /// reaction job can run.
+    /// </summary>
+    private void EmitTrackTopLevelPromiseReaction(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "TrackTopLevelPromiseReaction",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            [_types.TaskOfObject]);
+        runtime.TrackTopLevelPromiseReaction = method;
+
+        var il = method.GetILGenerator();
+        var done = il.DefineLabel();
+        var eventLoopLocal = il.DeclareLocal(runtime.EventLoopType);
+        var awaiterLocal = il.DeclareLocal(typeof(TaskAwaiter<object?>));
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt,
+            typeof(Task).GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, done);
+
+        il.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+        il.Emit(OpCodes.Stloc, eventLoopLocal);
+        il.Emit(OpCodes.Ldloc, eventLoopLocal);
+        il.Emit(OpCodes.Callvirt, runtime.EventLoopRef);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
+        il.Emit(OpCodes.Stloc, awaiterLocal);
+        il.Emit(OpCodes.Ldloca, awaiterLocal);
+        il.Emit(OpCodes.Ldloc, eventLoopLocal);
+        il.Emit(OpCodes.Ldftn, runtime.EventLoopUnref);
+        il.Emit(OpCodes.Newobj,
+            typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call,
+            typeof(TaskAwaiter<object?>).GetMethod("UnsafeOnCompleted")!);
+
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

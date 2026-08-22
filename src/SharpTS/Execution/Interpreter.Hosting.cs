@@ -452,15 +452,12 @@ public partial class Interpreter
 
     internal Task<object?> QueuePromiseReaction(Func<Task<object?>> reaction)
     {
-        // The ordinary console runtime already schedules continuations through
-        // its event-loop SynchronizationContext and must retain that path (it
-        // also carries AsyncLocalStorage state). Hosted execution has no private
-        // SynchronizationContext, so it explicitly models promise reactions as
-        // guest microtasks instead.
-        if (_hostedOwnerThreadId == null)
-            return reaction();
-
+        // Promise reactions are always jobs, including when the input promise is
+        // already settled.  Relying on an async-method await is insufficient:
+        // TaskAwaiter continues inline for a completed task, which lets a then
+        // handler run in the middle of the current JavaScript job (#1440).
         var completion = new TaskCompletionSource<object?>();
+        ExecutionContext? registrationContext = ExecutionContext.Capture();
         lock (_microtaskQueueLock)
         {
             _microtaskQueue.Enqueue(() =>
@@ -468,7 +465,19 @@ public partial class Interpreter
                 Task<object?> reactionTask;
                 try
                 {
-                    reactionTask = reaction();
+                    if (registrationContext == null)
+                    {
+                        reactionTask = reaction();
+                    }
+                    else
+                    {
+                        Task<object?>? contextualTask = null;
+                        ExecutionContext.Run(
+                            registrationContext,
+                            _ => contextualTask = reaction(),
+                            null);
+                        reactionTask = contextualTask!;
+                    }
                 }
                 catch (Exception exception)
                 {

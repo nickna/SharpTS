@@ -489,6 +489,12 @@ public partial class Interpreter : IDisposable
         }
     }
 
+    private bool HasMicrotasks()
+    {
+        lock (_microtaskQueueLock)
+            return _microtaskQueue.Count != 0;
+    }
+
     /// <summary>
     /// Enqueues a callback to be executed on the main event loop thread.
     /// Thread-safe - can be called from any thread (HTTP accept loop, async I/O, etc).
@@ -728,6 +734,7 @@ public partial class Interpreter : IDisposable
     {
         if (HasActiveHandles) return true;
         if (_callbackQueue.Count > 0) return true;
+        if (HasMicrotasks()) return true;
         lock (_virtualTimersLock)
         {
             while (_virtualTimerQueue.TryPeek(out var timer, out _))
@@ -823,7 +830,7 @@ public partial class Interpreter : IDisposable
             DebuggerIdleCheckpoint();
 
             // Exit immediately if there's no work keeping the loop alive
-            if (!HasActiveHandles && _callbackQueue.Count == 0)
+            if (!HasActiveHandles && _callbackQueue.Count == 0 && !HasMicrotasks())
             {
                 break;
             }
@@ -859,7 +866,7 @@ public partial class Interpreter : IDisposable
 
             // Exit condition: no active handles AND queue is empty
             // This ensures all queued callbacks are processed before exiting (like Node.js)
-            if (!HasActiveHandles && _callbackQueue.Count == 0)
+            if (!HasActiveHandles && _callbackQueue.Count == 0 && !HasMicrotasks())
             {
                 break;
             }
@@ -913,7 +920,8 @@ public partial class Interpreter : IDisposable
             }
 
             ProcessMicrotasks();
-            if (!hadListeners || (!HasActiveHandles && _callbackQueue.Count == 0))
+            if (!hadListeners ||
+                (!HasActiveHandles && _callbackQueue.Count == 0 && !HasMicrotasks()))
                 break; // no listeners, or listeners scheduled nothing new
 
             RunEventLoopCore(shutdownToken);

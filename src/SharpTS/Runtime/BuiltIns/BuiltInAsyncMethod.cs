@@ -188,7 +188,7 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
         {
             var task = _implementation(interpreter, _receiver, arguments);
             KeepEventLoopAliveUntilComplete(interpreter, task);
-            return WrapResult(interpreter, factory, task);
+            return SuppressLegacyReactionWait(WrapResult(interpreter, factory, task));
         }
         catch (Exception ex)
         {
@@ -200,11 +200,22 @@ public class BuiltInAsyncMethod : ISharpTSCallable, ISharpTSAsyncCallable, IBuil
                 _ => ex.Message
             };
             if (factory == null)
-                return SharpTSPromise.Reject(errorValue);
+                return SuppressLegacyReactionWait(SharpTSPromise.Reject(errorValue));
             var tcs = new TaskCompletionSource<object?>();
             tcs.SetException(new SharpTSPromiseRejectedException(errorValue));
-            return WrapResult(interpreter, factory, tcs.Task);
+            return SuppressLegacyReactionWait(WrapResult(interpreter, factory, tcs.Task));
         }
+    }
+
+    private object? SuppressLegacyReactionWait(object? result)
+    {
+        // A discarded reaction result must never turn the containing expression
+        // statement into an implicit top-level await. That legacy interpreter
+        // convention would drain the just-queued job before the following
+        // synchronous statement, reversing ECMAScript ordering (#1440).
+        if (_name is "then" or "catch" or "finally" && result is SharpTSPromise promise)
+            promise.SuppressImplicitTopLevelWait = true;
+        return result;
     }
 
     private static object? WrapResult(

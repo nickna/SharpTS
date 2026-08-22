@@ -695,16 +695,104 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitQueueMicrotaskMethod(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
-        // Static field: Queue<$TSFunction> _microtaskQueue
-        var queueType = _types.MakeGenericType(_types.QueueOpen, runtime.TSFunctionType);
+        // queueMicrotask callbacks and Promise reactions are the same FIFO class
+        // of ECMAScript job. Store Actions so emitted async state-machine
+        // continuations and guest $TSFunction callbacks cannot overtake one
+        // another (#1440).
+        var queueType = _types.MakeGenericType(_types.QueueOpen, typeof(Action));
         var microtaskQueueField = runtimeType.DefineField(
             "_microtaskQueue",
             queueType,
             FieldAttributes.Private | FieldAttributes.Static
         );
-        _ = microtaskQueueField;
+        var microtaskDrainScheduledField = runtimeType.DefineField(
+            "_microtaskDrainScheduled",
+            _types.Boolean,
+            FieldAttributes.Private | FieldAttributes.Static);
+        var microtaskDrainActionField = runtimeType.DefineField(
+            "_microtaskDrainAction",
+            typeof(Action),
+            FieldAttributes.Private | FieldAttributes.Static);
 
-        // Emit QueueMicrotask method
+        // Reserve the drain method before filling QueuePromiseJob: standalone
+        // output posts this method as an event-loop marker so Promise-only
+        // programs cannot look quiescent before their first checkpoint.
+        runtime.ProcessMicrotasks = runtimeType.DefineMethod(
+            "ProcessMicrotasks",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            Type.EmptyTypes);
+
+        var moduleBuilder = (ModuleBuilder)runtimeType.Module;
+        var closure = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$MicrotaskCallback",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var callbackField = closure.DefineField(
+            "Callback", runtime.TSFunctionType, FieldAttributes.Public);
+        var closureCtor = closure.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        {
+            var ctorIl = closureCtor.GetILGenerator();
+            ctorIl.Emit(OpCodes.Ldarg_0);
+            ctorIl.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+            ctorIl.Emit(OpCodes.Ret);
+        }
+        var runMethod = closure.DefineMethod(
+            "Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        {
+            var runIl = runMethod.GetILGenerator();
+            runIl.Emit(OpCodes.Ldarg_0);
+            runIl.Emit(OpCodes.Ldfld, callbackField);
+            runIl.Emit(OpCodes.Ldc_I4_0);
+            runIl.Emit(OpCodes.Newarr, _types.Object);
+            runIl.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
+            runIl.Emit(OpCodes.Pop);
+            runIl.Emit(OpCodes.Ret);
+        }
+        closure.CreateType();
+
+        // Fill the predeclared raw Promise-job enqueue helper.
+        var enqueueMethod = EmitterTypeHelpers.ResolveMethod(
+            queueType, _types.GetMethod(_types.QueueOpen, "Enqueue")!);
+        var queueIl = runtime.QueuePromiseJob.GetILGenerator();
+        var queueReady = queueIl.DefineLabel();
+        queueIl.Emit(OpCodes.Ldsfld, microtaskQueueField);
+        queueIl.Emit(OpCodes.Brtrue_S, queueReady);
+        var queueCtor = EmitterTypeHelpers.ResolveConstructor(
+            queueType, _types.GetConstructor(_types.QueueOpen, Type.EmptyTypes)!);
+        queueIl.Emit(OpCodes.Newobj, queueCtor);
+        queueIl.Emit(OpCodes.Stsfld, microtaskQueueField);
+        queueIl.MarkLabel(queueReady);
+        queueIl.Emit(OpCodes.Ldsfld, microtaskQueueField);
+        queueIl.Emit(OpCodes.Ldarg_0);
+        queueIl.Emit(OpCodes.Callvirt, enqueueMethod);
+        if (!_emitHosted)
+        {
+            var drainAlreadyScheduled = queueIl.DefineLabel();
+            var drainActionReady = queueIl.DefineLabel();
+            queueIl.Emit(OpCodes.Ldsfld, microtaskDrainScheduledField);
+            queueIl.Emit(OpCodes.Brtrue, drainAlreadyScheduled);
+            queueIl.Emit(OpCodes.Ldc_I4_1);
+            queueIl.Emit(OpCodes.Stsfld, microtaskDrainScheduledField);
+            queueIl.Emit(OpCodes.Ldsfld, microtaskDrainActionField);
+            queueIl.Emit(OpCodes.Brtrue, drainActionReady);
+            queueIl.Emit(OpCodes.Ldnull);
+            queueIl.Emit(OpCodes.Ldftn, runtime.ProcessMicrotasks);
+            queueIl.Emit(OpCodes.Newobj,
+                typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+            queueIl.Emit(OpCodes.Stsfld, microtaskDrainActionField);
+            queueIl.MarkLabel(drainActionReady);
+            queueIl.Emit(OpCodes.Call, runtime.EventLoopGetInstance);
+            queueIl.Emit(OpCodes.Ldsfld, microtaskDrainActionField);
+            queueIl.Emit(OpCodes.Callvirt, runtime.EventLoopSchedule);
+            queueIl.MarkLabel(drainAlreadyScheduled);
+        }
+        queueIl.Emit(OpCodes.Ret);
+
+        // Emit QueueMicrotask($TSFunction) as a thin adapter to the raw Action
+        // queue used by Promise state-machine continuations.
         var method = runtimeType.DefineMethod(
             "QueueMicrotask",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -714,31 +802,25 @@ public partial class RuntimeEmitter
         runtime.QueueMicrotask = method;
 
         var il = method.GetILGenerator();
-        var hasQueueLabel = il.DefineLabel();
-
-        // if (_microtaskQueue == null) _microtaskQueue = new Queue<$TSFunction>();
-        il.Emit(OpCodes.Ldsfld, microtaskQueueField);
-        il.Emit(OpCodes.Brtrue_S, hasQueueLabel);
-
-        // _microtaskQueue = new Queue<$TSFunction>();
-        var queueOpenCtor = _types.GetConstructor(_types.QueueOpen, Type.EmptyTypes)!;
-        var queueCtor = EmitterTypeHelpers.ResolveConstructor(queueType, queueOpenCtor);
-        il.Emit(OpCodes.Newobj, queueCtor);
-        il.Emit(OpCodes.Stsfld, microtaskQueueField);
-
-        il.MarkLabel(hasQueueLabel);
-
-        // _microtaskQueue.Enqueue(callback);
-        var queueOpenEnqueue = _types.GetMethod(_types.QueueOpen, "Enqueue")!;
-        var enqueueMethod = EmitterTypeHelpers.ResolveMethod(queueType, queueOpenEnqueue);
-        il.Emit(OpCodes.Ldsfld, microtaskQueueField);
-        il.Emit(OpCodes.Ldarg_0); // callback
-        il.Emit(OpCodes.Callvirt, enqueueMethod);
-
+        var closureLocal = il.DeclareLocal(closure);
+        il.Emit(OpCodes.Newobj, closureCtor);
+        il.Emit(OpCodes.Stloc, closureLocal);
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stfld, callbackField);
+        il.Emit(OpCodes.Ldloc, closureLocal);
+        il.Emit(OpCodes.Ldftn, runMethod);
+        il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
         il.Emit(OpCodes.Ret);
 
         // Emit ProcessMicrotasks method
-        EmitProcessMicrotasksMethod(runtimeType, runtime, microtaskQueueField, queueType);
+        EmitProcessMicrotasksMethod(
+            runtimeType,
+            runtime,
+            microtaskQueueField,
+            microtaskDrainScheduledField,
+            queueType);
         EmitHasMicrotasksMethod(runtimeType, runtime, microtaskQueueField, queueType);
     }
 
@@ -760,8 +842,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldsfld, microtaskQueueField);
         il.Emit(OpCodes.Brfalse, none);
         var countGetter = EmitterTypeHelpers.ResolveMethod(
-            queueType,
-            _types.GetProperty(_types.QueueOpen, "Count")!.GetGetMethod()!);
+            queueType, _types.GetProperty(_types.QueueOpen, "Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Ldsfld, microtaskQueueField);
         il.Emit(OpCodes.Callvirt, countGetter);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -776,28 +857,27 @@ public partial class RuntimeEmitter
     /// Emits: public static void ProcessMicrotasks()
     /// Processes all pending microtasks until the queue is empty.
     /// </summary>
-    private void EmitProcessMicrotasksMethod(TypeBuilder runtimeType, EmittedRuntime runtime, FieldBuilder microtaskQueueField, Type queueType)
+    private void EmitProcessMicrotasksMethod(
+        TypeBuilder runtimeType,
+        EmittedRuntime runtime,
+        FieldBuilder microtaskQueueField,
+        FieldBuilder microtaskDrainScheduledField,
+        Type queueType)
     {
-        var method = runtimeType.DefineMethod(
-            "ProcessMicrotasks",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
-            Type.EmptyTypes
-        );
-        runtime.ProcessMicrotasks = method;
+        var method = runtime.ProcessMicrotasks;
 
         var il = method.GetILGenerator();
 
         var loopStartLabel = il.DefineLabel();
         var doneLabel = il.DefineLabel();
 
-        // Get generic methods for Queue<$TSFunction>
+        // Get generic methods for Queue<Action>
         var queueOpenCountGetter = _types.GetProperty(_types.QueueOpen, "Count")!.GetGetMethod()!;
         var countGetter = EmitterTypeHelpers.ResolveMethod(queueType, queueOpenCountGetter);
         var queueOpenDequeue = _types.GetMethod(_types.QueueOpen, "Dequeue")!;
         var dequeueMethod = EmitterTypeHelpers.ResolveMethod(queueType, queueOpenDequeue);
 
-        var callbackLocal = il.DeclareLocal(runtime.TSFunctionType);
+        var callbackLocal = il.DeclareLocal(typeof(Action));
 
         il.MarkLabel(loopStartLabel);
 
@@ -815,14 +895,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, dequeueMethod);
         il.Emit(OpCodes.Stloc, callbackLocal);
 
-        // try { callback.Invoke(new object[0]); } catch { }
-        var tryStart = il.BeginExceptionBlock();
-
+        // try { callback.Invoke(); } catch { }
+        il.BeginExceptionBlock();
         il.Emit(OpCodes.Ldloc, callbackLocal);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object); // new object[0]
-        il.Emit(OpCodes.Callvirt, runtime.TSFunctionInvoke);
-        il.Emit(OpCodes.Pop); // Discard result
+        il.Emit(OpCodes.Callvirt, typeof(Action).GetMethod("Invoke")!);
 
         il.BeginCatchBlock(typeof(Exception));
         il.Emit(OpCodes.Pop); // Discard exception
@@ -832,6 +908,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, loopStartLabel);
 
         il.MarkLabel(doneLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stsfld, microtaskDrainScheduledField);
         il.Emit(OpCodes.Ret);
     }
 

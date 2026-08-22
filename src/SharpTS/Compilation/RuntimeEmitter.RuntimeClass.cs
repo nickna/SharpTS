@@ -767,6 +767,14 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object, _types.Object]);
+        // Promise reaction state machines are emitted before the microtask
+        // infrastructure. Reserve the shared FIFO job-enqueue token now; its
+        // body is filled by EmitQueueMicrotaskMethod later in this method.
+        runtime.QueuePromiseJob ??= typeBuilder.DefineMethod(
+            "QueuePromiseJob",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [typeof(Action)]);
         // Promise resolving callbacks are callable built-ins. Define their
         // representation before TypeOf so it can classify them as functions;
         // InvokeValue consumes the same types later in this method.

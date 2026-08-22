@@ -436,6 +436,52 @@ public partial class ILCompiler
     /// </remarks>
     private void EmitExpressionWithAsyncWait(ILGenerator il, ILEmitter emitter, Stmt.Expression exprStmt)
     {
+        // SharpTS historically pumps promise-valued expression statements as a
+        // convenience for discarded top-level async-function calls. A direct
+        // Promise reaction is different: pumping its returned promise here
+        // executes the reaction before the next statement in the same script
+        // job. Leave then/catch/finally results to the normal microtask
+        // checkpoint (#1440). Explicit `await` remains on the path below.
+        if (exprStmt.Expr is Expr.Call
+            {
+                Callee: Expr.Get { Name.Lexeme: "then" or "catch" or "finally" }
+            })
+        {
+            emitter.MarkStatementStart(exprStmt);
+            emitter.EmitExpression(exprStmt.Expr);
+            emitter.Helpers.EnsureBoxed();
+            var reactionResult = il.DeclareLocal(_types.Object);
+            il.Emit(OpCodes.Stloc, reactionResult);
+
+            var done = il.DefineLabel();
+            var task = il.DeclareLocal(_types.TaskOfObject);
+            il.Emit(OpCodes.Ldloc, reactionResult);
+            il.Emit(OpCodes.Call, _runtime.ShouldAutoAwaitPromiseMethod);
+            il.Emit(OpCodes.Brfalse, done);
+
+            il.Emit(OpCodes.Ldloc, reactionResult);
+            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            il.Emit(OpCodes.Stloc, task);
+            il.Emit(OpCodes.Ldloc, task);
+            var haveTask = il.DefineLabel();
+            il.Emit(OpCodes.Brtrue, haveTask);
+
+            il.Emit(OpCodes.Ldloc, reactionResult);
+            il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
+            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Ldloc, reactionResult);
+            il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
+            il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Stloc, task);
+
+            il.MarkLabel(haveTask);
+            il.Emit(OpCodes.Ldloc, task);
+            il.Emit(OpCodes.Call, _runtime.TrackTopLevelPromiseReaction);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(done);
+            return;
+        }
+
         // This path drives expression emission itself instead of going through EmitStatement, so it
         // has to mark the statement or every top-level expression would be unsteppable.
         emitter.MarkStatementStart(exprStmt);
