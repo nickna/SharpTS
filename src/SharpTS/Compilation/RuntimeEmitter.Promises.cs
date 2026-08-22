@@ -59,6 +59,22 @@ internal class PromiseThenStateMachine
 }
 
 /// <summary>
+/// Holds information about the fulfillment-only Promise.then state machine used
+/// when the receiver and primitive callback result are statically stable.
+/// </summary>
+internal class PrimitivePromiseThenStateMachine
+{
+    public required TypeBuilder Type { get; init; }
+    public required FieldBuilder StateField { get; init; }
+    public required FieldBuilder BuilderField { get; init; }
+    public required FieldBuilder PromiseField { get; init; }
+    public required FieldBuilder OnFulfilledField { get; init; }
+    public required FieldBuilder PromiseAwaiterField { get; init; }
+    public required MethodBuilder MoveNextMethod { get; init; }
+    public required Type BuilderType { get; init; }
+}
+
+/// <summary>
 /// Holds information about the PromiseFinally state machine.
 /// </summary>
 internal class PromiseFinallyStateMachine
@@ -689,6 +705,24 @@ public partial class RuntimeEmitter
         EmitPromiseThenWrapper(then.GetILGenerator(), promiseThenSM);
         EmitPromiseThenMoveNext(promiseThenSM, runtime);
         promiseThenSM.Type.CreateType();
+
+        // Stable intrinsic Promise.then with a fulfillment-only callback whose
+        // static result is primitive/non-thenable. This state machine keeps the
+        // input await and callback exception-to-rejection behavior, but has no
+        // rejection dispatch or second thenable-flattening await.
+        var primitivePromiseThenSM = DefinePrimitivePromiseThenStateMachine(
+            moduleBuilder);
+        var primitiveThen = typeBuilder.DefineMethod(
+            "PromiseThenPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [taskType, typeof(Func<double, double>)]
+        );
+        runtime.PromiseThenPrimitive = primitiveThen;
+        EmitPrimitivePromiseThenWrapper(
+            primitiveThen.GetILGenerator(), primitivePromiseThenSM);
+        EmitPrimitivePromiseThenMoveNext(primitivePromiseThenSM);
+        primitivePromiseThenSM.Type.CreateType();
 
         // Promise.prototype.catch - delegates to PromiseThen(promise, null, onRejected)
         var catchMethod = typeBuilder.DefineMethod(

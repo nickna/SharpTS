@@ -88,6 +88,7 @@ public sealed class RuntimeFeatureDetector
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
             UsesDatePrototypeMutation = false,
+            UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
             PotentiallyMaterializesUnknownCompactObjectRecordShape = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
@@ -763,6 +764,8 @@ public sealed class RuntimeFeatureDetector
             case Expr.Get g:
                 if (IsArrayPrototype(g) || g.Name.Lexeme == "__proto__")
                     _set.UsesArrayPrototypeMutation = true;
+                if (IsPromisePrototype(g))
+                    _set.UsesPromisePrototypeMutation = true;
                 if (g.Object is Expr.Variable ov)
                 {
                     HandleMemberAccess(ov.Name.Lexeme, g.Name.Lexeme);
@@ -833,6 +836,9 @@ public sealed class RuntimeFeatureDetector
                 MarkMutationTarget(s.Object);
                 if (IsDatePrototype(s.Object))
                     _set.UsesDatePrototypeMutation = true;
+                if (IsPromiseMutationTarget(s.Object)
+                    || s.Name.Lexeme is "then" or "constructor" or "__proto__")
+                    _set.UsesPromisePrototypeMutation = true;
                 if (IsArrayPrototype(s.Object)
                     || s.Name.Lexeme == "__proto__"
                     || (s.Name.Lexeme == "push" && CouldTargetArray(s.Object)))
@@ -870,6 +876,12 @@ public sealed class RuntimeFeatureDetector
                 MarkMutationTarget(si.Object);
                 if (IsDatePrototype(si.Object))
                     _set.UsesDatePrototypeMutation = true;
+                if (IsPromiseMutationTarget(si.Object)
+                    || si.Index is Expr.Literal
+                    {
+                        Value: "then" or "constructor" or "__proto__"
+                    })
+                    _set.UsesPromisePrototypeMutation = true;
                 if (IsArrayPrototype(si.Object)
                     || si.Index is Expr.Literal { Value: "__proto__" }
                     || (si.Index is Expr.Literal { Value: "push" }
@@ -881,6 +893,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Call c:
+                if (c.Callee is Expr.Variable { Name.Lexeme: "eval" })
+                    _set.UsesPromisePrototypeMutation = true;
                 if (c.Callee is Expr.Get
                     {
                         Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
@@ -891,6 +905,18 @@ public sealed class RuntimeFeatureDetector
                     // attempted here. Any explicit prototype-chain mutation API
                     // disables the direct append path for the whole program.
                     _set.UsesArrayPrototypeMutation = true;
+                }
+                if (c.Callee is Expr.Get
+                    {
+                        Object: Expr.Variable { Name.Lexeme: "Object" or "Reflect" },
+                        Name.Lexeme: "assign" or "defineProperty" or "defineProperties"
+                            or "set" or "deleteProperty" or "setPrototypeOf"
+                    })
+                {
+                    // Aliases can hide either Promise.prototype or an intrinsic
+                    // promise receiver from this syntax-only pass. Retaining
+                    // value dispatch is conservative and preserves observability.
+                    _set.UsesPromisePrototypeMutation = true;
                 }
                 if (c.Callee is not Expr.Variable directSourceCall ||
                     !_sourceFunctions.Contains(directSourceCall.Name.Lexeme))
@@ -974,6 +1000,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Assign asg:
+                if (asg.Name.Lexeme == "Promise")
+                    _set.UsesPromisePrototypeMutation = true;
                 if (_opaqueValueBindings.Contains(asg.Name.Lexeme))
                     MarkPotentiallyMaterialized(asg.Value);
                 VisitExpr(asg.Value);
@@ -983,6 +1011,9 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.CompoundSet cs:
                 MarkMutationTarget(cs.Object);
+                if (IsPromiseMutationTarget(cs.Object)
+                    || cs.Name.Lexeme is "then" or "constructor" or "__proto__")
+                    _set.UsesPromisePrototypeMutation = true;
                 if (cs.Name.Lexeme == "push" && CouldTargetArray(cs.Object))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(cs.Object);
@@ -990,6 +1021,12 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.CompoundSetIndex csi:
                 MarkMutationTarget(csi.Object);
+                if (IsPromiseMutationTarget(csi.Object)
+                    || csi.Index is Expr.Literal
+                    {
+                        Value: "then" or "constructor" or "__proto__"
+                    })
+                    _set.UsesPromisePrototypeMutation = true;
                 if (csi.Index is Expr.Literal { Value: "push" }
                     && CouldTargetArray(csi.Object))
                     _set.UsesArrayPrototypeMutation = true;
@@ -1002,6 +1039,9 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.LogicalSet ls:
                 MarkMutationTarget(ls.Object);
+                if (IsPromiseMutationTarget(ls.Object)
+                    || ls.Name.Lexeme is "then" or "constructor" or "__proto__")
+                    _set.UsesPromisePrototypeMutation = true;
                 if (ls.Name.Lexeme == "push" && CouldTargetArray(ls.Object))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(ls.Object);
@@ -1009,6 +1049,12 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.LogicalSetIndex lsi:
                 MarkMutationTarget(lsi.Object);
+                if (IsPromiseMutationTarget(lsi.Object)
+                    || lsi.Index is Expr.Literal
+                    {
+                        Value: "then" or "constructor" or "__proto__"
+                    })
+                    _set.UsesPromisePrototypeMutation = true;
                 if (lsi.Index is Expr.Literal { Value: "push" }
                     && CouldTargetArray(lsi.Object))
                     _set.UsesArrayPrototypeMutation = true;
@@ -1055,6 +1101,9 @@ public sealed class RuntimeFeatureDetector
                 if (d.Operand is Expr.Get deletedProperty)
                 {
                     MarkMutationTarget(deletedProperty.Object);
+                    if (IsPromiseMutationTarget(deletedProperty.Object)
+                        || deletedProperty.Name.Lexeme is "then" or "constructor" or "__proto__")
+                        _set.UsesPromisePrototypeMutation = true;
                     if (deletedProperty.Name.Lexeme == "push"
                         && CouldTargetArray(deletedProperty.Object))
                         _set.UsesArrayPrototypeMutation = true;
@@ -1062,6 +1111,12 @@ public sealed class RuntimeFeatureDetector
                 else if (d.Operand is Expr.GetIndex deletedIndex)
                 {
                     MarkMutationTarget(deletedIndex.Object);
+                    if (IsPromiseMutationTarget(deletedIndex.Object)
+                        || deletedIndex.Index is Expr.Literal
+                        {
+                            Value: "then" or "constructor" or "__proto__"
+                        })
+                        _set.UsesPromisePrototypeMutation = true;
                     if (deletedIndex.Index is Expr.Literal { Value: "push" }
                         && CouldTargetArray(deletedIndex.Object))
                         _set.UsesArrayPrototypeMutation = true;
@@ -1258,6 +1313,39 @@ public sealed class RuntimeFeatureDetector
         Object: Expr.Variable { Name.Lexeme: "Date" },
         Name.Lexeme: "prototype"
     };
+
+    private static bool IsPromisePrototype(Expr expr) => expr is Expr.Get
+    {
+        Object: Expr.Variable { Name.Lexeme: "Promise" },
+        Name.Lexeme: "prototype"
+    };
+
+    private bool IsPromiseMutationTarget(Expr expr)
+    {
+        while (true)
+        {
+            switch (expr)
+            {
+                case Expr.Grouping grouping:
+                    expr = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expr = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expr = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expr = nonNull.Expression;
+                    continue;
+            }
+            break;
+        }
+
+        return expr is Expr.Variable { Name.Lexeme: "Promise" }
+            || IsPromisePrototype(expr)
+            || _typeMap?.Get(expr) is TypeInfo.Promise;
+    }
 
     private static bool IsArrayPrototype(Expr expr) => expr is Expr.Get
     {

@@ -546,6 +546,196 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Defines the smaller fulfillment-only state machine used after the compiler
+    /// proves that a direct intrinsic Promise.then callback returns a primitive.
+    /// </summary>
+    private PrimitivePromiseThenStateMachine DefinePrimitivePromiseThenStateMachine(
+        ModuleBuilder moduleBuilder)
+    {
+        var builderType = typeof(AsyncTaskMethodBuilder<object>);
+        var awaiterType = typeof(TaskAwaiter<object?>);
+        var smType = moduleBuilder.DefineType(
+            "$PromiseThenPrimitive_SM",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
+            typeof(ValueType),
+            [typeof(IAsyncStateMachine)]);
+
+        var stateField = smType.DefineField(
+            "<>1__state", typeof(int), FieldAttributes.Public);
+        var builderField = smType.DefineField(
+            "<>t__builder", builderType, FieldAttributes.Public);
+        var promiseField = smType.DefineField(
+            "promise", typeof(Task<object?>), FieldAttributes.Public);
+        var onFulfilledField = smType.DefineField(
+            "onFulfilled", typeof(Func<double, double>), FieldAttributes.Public);
+        var promiseAwaiterField = smType.DefineField(
+            "<>u__1", awaiterType, FieldAttributes.Private);
+
+        var moveNext = smType.DefineMethod(
+            "MoveNext",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final
+                | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            typeof(void),
+            Type.EmptyTypes);
+        smType.DefineMethodOverride(moveNext, _types.AsyncStateMachineMoveNext);
+
+        var setStateMachine = smType.DefineMethod(
+            "SetStateMachine",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Final
+                | MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            typeof(void),
+            [typeof(IAsyncStateMachine)]);
+        smType.DefineMethodOverride(setStateMachine, _types.AsyncStateMachineSetStateMachine);
+        setStateMachine.GetILGenerator().Emit(OpCodes.Ret);
+
+        return new PrimitivePromiseThenStateMachine
+        {
+            Type = smType,
+            StateField = stateField,
+            BuilderField = builderField,
+            PromiseField = promiseField,
+            OnFulfilledField = onFulfilledField,
+            PromiseAwaiterField = promiseAwaiterField,
+            MoveNextMethod = moveNext,
+            BuilderType = builderType
+        };
+    }
+
+    private void EmitPrimitivePromiseThenWrapper(
+        ILGenerator il,
+        PrimitivePromiseThenStateMachine sm)
+    {
+        var smLocal = il.DeclareLocal(sm.Type);
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Initobj, sm.Type);
+
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stfld, sm.PromiseField);
+
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, sm.OnFulfilledField);
+
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            sm.BuilderType, "Create", BindingFlags.Public | BindingFlags.Static)!);
+        il.Emit(OpCodes.Stfld, sm.BuilderField);
+
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloca, smLocal);
+        var startMethod = EmitGenerics.MakeGenericMethod(
+            _types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
+                .First(method => method.Name == "Start" && method.IsGenericMethod),
+            sm.Type);
+        il.Emit(OpCodes.Call, startMethod);
+
+        il.Emit(OpCodes.Ldloca, smLocal);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Call, _types.GetProperty(
+            sm.BuilderType, "Task", BindingFlags.Public | BindingFlags.Instance)!
+            .GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitPrimitivePromiseThenMoveNext(
+        PrimitivePromiseThenStateMachine sm)
+    {
+        var il = sm.MoveNextMethod.GetILGenerator();
+        var awaiterType = typeof(TaskAwaiter<object?>);
+        var awaiterLocal = il.DeclareLocal(awaiterType);
+        var valueLocal = il.DeclareLocal(typeof(object));
+        var resultLocal = il.DeclareLocal(typeof(object));
+        var exceptionLocal = il.DeclareLocal(typeof(Exception));
+        var resumeLabel = il.DefineLabel();
+        var continueLabel = il.DefineLabel();
+        var returnLabel = il.DefineLabel();
+
+        il.BeginExceptionBlock();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.StateField);
+        il.Emit(OpCodes.Brfalse, resumeLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.PromiseField);
+        il.Emit(OpCodes.Callvirt, _types.TaskOfObjectGetAwaiter);
+        il.Emit(OpCodes.Stloc, awaiterLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, awaiterLocal);
+        il.Emit(OpCodes.Stfld, sm.PromiseAwaiterField);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
+        il.Emit(OpCodes.Call, awaiterType.GetProperty("IsCompleted")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, continueLabel);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
+        il.Emit(OpCodes.Ldarg_0);
+        var awaitMethod = EmitGenerics.MakeGenericMethod(
+            _types.GetMethods(sm.BuilderType, BindingFlags.Public | BindingFlags.Instance)
+                .First(method => method.Name == "AwaitUnsafeOnCompleted" && method.IsGenericMethod),
+            awaiterType,
+            sm.Type);
+        il.Emit(OpCodes.Call, awaitMethod);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.MarkLabel(resumeLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+
+        il.MarkLabel(continueLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.PromiseAwaiterField);
+        il.Emit(OpCodes.Call, awaiterType.GetMethod("GetResult")!);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.OnFulfilledField);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Unbox_Any, typeof(double));
+        il.Emit(OpCodes.Callvirt, typeof(Func<double, double>).GetMethod("Invoke")!);
+        il.Emit(OpCodes.Box, typeof(double));
+        il.Emit(OpCodes.Stloc, resultLocal);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, -2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetResult")!);
+        il.Emit(OpCodes.Leave, returnLabel);
+
+        il.BeginCatchBlock(typeof(Exception));
+        il.Emit(OpCodes.Stloc, exceptionLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, -2);
+        il.Emit(OpCodes.Stfld, sm.StateField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldflda, sm.BuilderField);
+        il.Emit(OpCodes.Ldloc, exceptionLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(sm.BuilderType, "SetException")!);
+        il.Emit(OpCodes.Leave, returnLabel);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ret);
+    }
+
     #endregion
 }
 

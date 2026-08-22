@@ -193,12 +193,13 @@ public partial class ILEmitter
 
         // Promise instance methods: then(), catch(), finally()
         // These work on Task<object?> returned by async functions
-        if (methodName is "then" or "catch" or "finally")
+        if (methodName is "then" or "catch" or "finally"
+            && _ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true)
         {
             // Check if we know it's a Promise at compile time
             if (objType is TypeSystem.TypeInfo.Promise)
             {
-                EmitPromiseInstanceMethodCall(methodGet.Object, methodName, arguments);
+                EmitPromiseInstanceMethodCall(methodGet, methodName, arguments);
                 return;
             }
         }

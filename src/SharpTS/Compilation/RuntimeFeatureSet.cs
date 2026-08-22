@@ -138,6 +138,10 @@ public sealed class RuntimeFeatureSet
     // A Date.prototype write makes statically typed Date method calls observable
     // through the prototype object, so the direct DateEmitter fast path is unsafe.
     public bool UsesDatePrototypeMutation { get; set; } = true;
+    // Promise method/constructor/species mutation makes direct then lowering
+    // observable through ordinary property lookup. Such programs must retain
+    // value dispatch for then/catch/finally calls.
+    public bool UsesPromisePrototypeMutation { get; set; } = true;
     // Any observable access to Array.prototype, push-binding mutation,
     // prototype-chain mutation API, or __proto__ access makes a backing-list-only
     // array append unsafe. The discarded-result push fast path requires this false.

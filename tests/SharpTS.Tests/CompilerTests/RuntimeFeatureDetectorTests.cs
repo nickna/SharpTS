@@ -109,6 +109,22 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("const p = Promise.resolve(1); p.then(x => x + 1);", false)]
+    [InlineData("const prototype = Promise.prototype;", true)]
+    [InlineData("const p: any = Promise.resolve(1); p.then = () => Promise.resolve(2);", true)]
+    [InlineData("Promise[Symbol.species] = Promise;", true)]
+    [InlineData("Object.defineProperty({}, 'x', { value: 1 });", true)]
+    [InlineData("eval('void 0');", true)]
+    public void DetectsPromisePrototypeMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(expected, features.UsesPromisePrototypeMutation);
+    }
+
+    [Theory]
     [InlineData("const p = Array.prototype;", true)]
     [InlineData("Object.setPrototypeOf({}, null);", true)]
     [InlineData("Reflect.setPrototypeOf({}, null);", true)]
