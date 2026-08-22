@@ -50,13 +50,39 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         => TryEmitArrowAsDelegate(af, delegateType);
 
     /// <summary>
-    /// Default: state-machine emitters and other contexts decline this fast
-    /// path. <see cref="ILEmitter"/> overrides to support it (handles both
-    /// non-capturing static methods and capturing display-class instance
-    /// methods). Callers must be prepared for false and fall back to the
-    /// legacy <c>$TSFunction</c> wrap.
+    /// Emits a synchronous unnamed arrow as a typed delegate. State-machine
+    /// emitters populate capturing display classes through their variable-
+    /// storage hooks; <see cref="ILEmitter"/> overrides this with its richer
+    /// direct-local/display-chain implementation.
     /// </summary>
-    protected virtual bool TryEmitArrowAsDelegate(Expr.ArrowFunction af, Type delegateType) => false;
+    protected virtual bool TryEmitArrowAsDelegate(Expr.ArrowFunction af, Type delegateType)
+    {
+        if (af.IsAsync || af.IsGenerator || af.Name != null
+            || Ctx.ArrowMethods == null
+            || !Ctx.ArrowMethods.TryGetValue(af, out var method))
+        {
+            return false;
+        }
+
+        var delegateCtor = Types.TryGetConstructor(
+            delegateType, typeof(object), typeof(IntPtr));
+        if (delegateCtor == null)
+            return false;
+
+        if (Ctx.DisplayClassConstructors?.TryGetValue(af, out var displayCtor) == true)
+        {
+            EmitCapturingArrowDisplayViaHooks(af, displayCtor);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldnull);
+        }
+
+        IL.Emit(OpCodes.Ldftn, method);
+        IL.Emit(OpCodes.Newobj, delegateCtor);
+        SetStackUnknown();
+        return true;
+    }
 
     bool IEmitterContext.TryEmitCapturingArrowDisplayInstance(Expr.ArrowFunction af)
         => TryEmitCapturingArrowDisplayInstance(af);
@@ -1764,6 +1790,16 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
     private void EmitCapturingArrowViaHooks(Expr.ArrowFunction af, MethodBuilder method, ConstructorBuilder displayCtor)
     {
+        EmitCapturingArrowDisplayViaHooks(af, displayCtor);
+        Types.EmitLoadMethodInfoViaHandle(IL, method);
+        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
+        SetStackUnknown();
+    }
+
+    private void EmitCapturingArrowDisplayViaHooks(
+        Expr.ArrowFunction af,
+        ConstructorBuilder displayCtor)
+    {
         IL.Emit(OpCodes.Newobj, displayCtor);
 
         // Thread the entry-point display class into the arrow's $entryPointDC field so the arrow
@@ -1841,9 +1877,6 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             }
         }
 
-        Types.EmitLoadMethodInfoViaHandle(IL, method);
-        IL.Emit(OpCodes.Newobj, Ctx.Runtime!.TSFunctionCtor);
-        SetStackUnknown();
     }
 
     // EmitCall is virtual with a default implementation in ExpressionEmitterBase.CallHelpers.cs

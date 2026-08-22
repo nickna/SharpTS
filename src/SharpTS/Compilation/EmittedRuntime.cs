@@ -1032,6 +1032,8 @@ public class EmittedRuntime
     public MethodBuilder PromiseAllKeyed { get; set; } = null!;
     public MethodBuilder PromiseRace { get; set; } = null!;
     public MethodBuilder PromiseThen { get; set; } = null!;
+    /// <summary>$Runtime.PromiseThenPrimitive(Task&lt;object?&gt;, Func&lt;double,double&gt;) -> Task&lt;object?&gt; — stable intrinsic fulfillment-only numeric continuation whose primitive callback result cannot require thenable adoption.</summary>
+    public MethodBuilder PromiseThenPrimitive { get; set; } = null!;
     public MethodBuilder PromiseCatch { get; set; } = null!;
     public MethodBuilder PromiseFinally { get; set; } = null!;
     public MethodBuilder PromiseAllSettled { get; set; } = null!;

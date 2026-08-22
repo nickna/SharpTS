@@ -1534,9 +1534,10 @@ public abstract partial class ExpressionEmitterBase
 
         // Promise instance methods: promise.then/catch/finally
         string methodName = methodGet.Name.Lexeme;
-        if (methodName is "then" or "catch" or "finally")
+        if (methodName is "then" or "catch" or "finally"
+            && Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true)
         {
-            EmitPromiseInstanceMethodCall(methodGet.Object, methodName, c.Arguments);
+            EmitPromiseInstanceMethodCall(methodGet, methodName, c.Arguments);
             return true;
         }
 
@@ -2389,8 +2390,48 @@ public abstract partial class ExpressionEmitterBase
         return true;
     }
 
-    protected void EmitPromiseInstanceMethodCall(Expr promise, string methodName, List<Expr> arguments)
+    protected void EmitPromiseInstanceMethodCall(
+        Expr.Get methodGet,
+        string methodName,
+        List<Expr> arguments)
     {
+        Expr promise = methodGet.Object;
+
+        // #1438: a whole-program proof established that this receiver is a
+        // fresh intrinsic Promise binding which never aliases or escapes, and
+        // that its sole inline fulfillment callback returns a primitive. The
+        // callback result therefore cannot require Promise Resolve/thenable
+        // adoption, while the intrinsic receiver cannot require constructor /
+        // species observation or derived-result wrapping.
+        if (methodName == "then"
+            && Ctx.TypeMap?.IsStablePrimitivePromiseThen(methodGet) == true)
+        {
+            EmitExpression(promise);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, Types.TaskOfObject);
+            var promiseLocal = IL.DeclareLocal(Types.TaskOfObject);
+            IL.Emit(OpCodes.Stloc, promiseLocal);
+            IL.Emit(OpCodes.Ldloc, promiseLocal);
+
+            var handler = (Expr.ArrowFunction)arguments[0];
+            if (TryEmitArrowAsDelegate(handler, typeof(Func<double, double>)))
+            {
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThenPrimitive);
+            }
+            else
+            {
+                // Defensive fallback if a future emitter cannot materialize the
+                // proven arrow as a typed delegate. The receiver is still stable,
+                // but callback behavior remains on the general state machine.
+                EmitExpression(handler);
+                EnsureBoxed();
+                IL.Emit(OpCodes.Ldnull);
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.PromiseThen);
+            }
+            SetStackUnknown();
+            return;
+        }
+
         // Receivers may be raw Task<object?> OR $Promise objects (#242 Promise
         // subclasses derive from $Promise) — keep the receiver for derived-result
         // wrapping and unwrap to the task for the PromiseThen/Catch/Finally

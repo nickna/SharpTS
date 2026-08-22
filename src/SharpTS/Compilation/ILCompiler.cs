@@ -651,6 +651,8 @@ public partial class ILCompiler
     {
         Phase2_AnalyzeClosures(statements);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        StablePrimitivePromiseThenAnalyzer.Analyze(
+            statements, _typeMap, _closures.Analyzer);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NonEscapingArrowLocalAnalyzer.Analyze(

@@ -24,6 +24,7 @@ public class TypeMap
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Associates an expression with its resolved type.
@@ -203,6 +204,22 @@ public class TypeMap
     /// </summary>
     public bool IsStableNumericMapIteration(Stmt.ForOf loop) =>
         _stableNumericMapIterations.Contains(loop);
+
+    /// <summary>
+    /// Marks a direct <c>Promise.prototype.then</c> access whose receiver is a fresh,
+    /// non-escaping intrinsic Promise binding and whose sole inline fulfillment
+    /// callback has a statically primitive result. The compiler may skip species,
+    /// dynamic callback-shape, and thenable-adoption machinery for this exact call.
+    /// </summary>
+    public void MarkStablePrimitivePromiseThen(Expr.Get method) =>
+        _stablePrimitivePromiseThenCalls.Add(method);
+
+    /// <summary>
+    /// True when <paramref name="method"/> satisfies the whole-program stability and
+    /// primitive-result proof recorded by the Promise.then analyzer.
+    /// </summary>
+    public bool IsStablePrimitivePromiseThen(Expr.Get method) =>
+        _stablePrimitivePromiseThenCalls.Contains(method);
 
     /// <summary>
     /// Gets the resolved type for an expression, or null if not found.
