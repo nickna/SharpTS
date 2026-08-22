@@ -27,7 +27,7 @@ the timed region**.
 | Path | Purpose |
 |------|---------|
 | `Program.cs` | BenchmarkDotNet entry point (GitHub-Markdown + HTML exporters, `MemoryDiagnoser`, rank/ops-per-sec columns). |
-| `Benchmarks/*.cs` | One file per workload family (computational, starter workloads, arrays, Map/Set, property access, object literals, regex). |
+| `Benchmarks/*.cs` | One file per workload family (computational, async/Promise, starter workloads, arrays, Map/Set, property access, object literals, regex). |
 | `Baselines/*.cs` | Native-type C# ceilings plus `object?`/boxing controls for the dynamic-typing tax. |
 | `Infrastructure/BenchmarkHarness.cs` | Compile TS → DLL, load it, resolve compiled methods/delegates. |
 | `Infrastructure/CompilationCache.cs` | Compile each TS source once, reuse across benchmark classes. |

@@ -271,3 +271,57 @@ function itemCheck(node: TreeNode | null): number {
 export function binaryTrees(depth: number): number {
     return itemCheck(buildTree(depth));
 }
+
+// ── Async / Promise workloads ─────────────────────────────────────────────
+
+// Await already-resolved promises serially. This isolates the cost of promise
+// creation plus async suspension/resumption without I/O or timer latency.
+export async function asyncSequentialAwait(n: number): Promise<number> {
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + await Promise.resolve(i);
+    }
+    return sum;
+}
+
+async function asyncIdentity(value: number): Promise<number> {
+    return value;
+}
+
+// Repeatedly invoke an async function whose body completes immediately. Unlike
+// asyncSequentialAwait, this exercises generated async-function state machines
+// without routing each value through Promise.resolve.
+export async function asyncFunctionCalls(n: number): Promise<number> {
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + await asyncIdentity(i);
+    }
+    return sum;
+}
+
+// Construct and settle a serial continuation chain. Capturing `i` on every
+// iteration keeps closure and continuation allocation visible.
+export async function promiseThenChain(n: number): Promise<number> {
+    let chain: Promise<number> = Promise.resolve(0);
+    for (let i: number = 0; i < n; i++) {
+        chain = chain.then((sum: number): number => sum + i);
+    }
+    return await chain;
+}
+
+// Resolve a fan-out of already-settled promises and consume every result. This
+// isolates Promise.all bookkeeping and result-array materialization.
+export async function promiseAllFanOut(n: number): Promise<number> {
+    const promises: Promise<number>[] = [];
+    for (let i: number = 0; i < n; i++) {
+        promises.push(Promise.resolve(i));
+    }
+    const values: number[] = await (
+        Promise.all(promises) as Promise<number[]>
+    );
+    let sum: number = 0;
+    for (let i: number = 0; i < values.length; i++) {
+        sum = sum + values[i];
+    }
+    return sum;
+}

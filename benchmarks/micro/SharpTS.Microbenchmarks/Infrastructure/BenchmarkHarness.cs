@@ -196,6 +196,27 @@ public static class BenchmarkHarness
     }
 
     /// <summary>
+    /// Returns a strongly-typed delegate for a compiled async TypeScript
+    /// <c>number -&gt; Promise&lt;number&gt;</c> function. Async stubs intentionally use
+    /// the runtime's dynamic ABI: <c>Task&lt;object&gt; f(object)</c>.
+    /// </summary>
+    public static Func<object?, Task<object?>> GetCompiledAsyncNumberFunc(
+        Assembly assembly, string functionName)
+    {
+        var method = GetCompiledMethod(assembly, functionName);
+        var parameters = method.GetParameters();
+        if (method.ReturnType != typeof(Task<object>) ||
+            parameters.Length != 1 || parameters[0].ParameterType != typeof(object))
+        {
+            throw new InvalidOperationException(
+                $"Compiled async benchmark '{functionName}' has signature " +
+                $"{method.ReturnType.Name}({string.Join(", ", parameters.Select(p => p.ParameterType.Name))}); " +
+                "expected Task<Object>(Object)");
+        }
+        return method.CreateDelegate<Func<object?, Task<object?>>>();
+    }
+
+    /// <summary>
     /// Runs a compiled module graph's entry-point initialization once so import
     /// cells and live bindings are populated before an exported method is
     /// invoked directly by a benchmark delegate.

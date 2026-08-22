@@ -125,3 +125,98 @@ export function bench(name: string, param: number, fn: () => number): void {
 
     console.log("BENCH:" + name + ":" + param + ":" + round(mean) + ":" + round(min) + ":" + round(stdev));
 }
+
+// Async counterpart to `bench`. Each invocation is awaited inside the timed
+// region so the result includes promise creation, continuation scheduling, and
+// settlement rather than only the synchronous prefix before the first await.
+// Fast async functions are auto-batched with sequential awaits; this preserves
+// deterministic checksums and avoids introducing Promise.all into every probe.
+export async function benchAsync(
+    name: string,
+    param: number,
+    fn: () => Promise<number>,
+): Promise<void> {
+    let guard: number = 0;
+    const samples: number[] = [];
+    let total: number = 0;
+
+    const probeStart: number = performance.now();
+    guard = guard + await fn();
+    const firstMs: number = performance.now() - probeStart;
+
+    if (firstMs >= MIN_SAMPLE_MS) {
+        samples.push(firstMs);
+        total = firstMs;
+        while (samples.length < MAX_SAMPLES) {
+            if (total >= HARD_CAP_MS) {
+                break;
+            }
+            if (total >= BUDGET_MS && samples.length >= MIN_SAMPLES) {
+                break;
+            }
+            const t0: number = performance.now();
+            guard = guard + await fn();
+            const elapsed: number = performance.now() - t0;
+            samples.push(elapsed);
+            total = total + elapsed;
+        }
+    } else {
+        const warmStart: number = performance.now();
+        while (performance.now() - warmStart < WARMUP_CAP_MS) {
+            guard = guard + await fn();
+        }
+
+        let inner: number = 1;
+        while (inner < MAX_INNER) {
+            const c0: number = performance.now();
+            for (let k: number = 0; k < inner; k++) {
+                guard = guard + await fn();
+            }
+            const dc: number = performance.now() - c0;
+            if (dc >= MIN_SAMPLE_MS) {
+                break;
+            }
+            inner = inner * 2;
+        }
+
+        while (samples.length < MAX_SAMPLES) {
+            const t0: number = performance.now();
+            for (let k: number = 0; k < inner; k++) {
+                guard = guard + await fn();
+            }
+            const elapsed: number = performance.now() - t0;
+            samples.push(elapsed / inner);
+            total = total + elapsed;
+
+            if (total >= HARD_CAP_MS) {
+                break;
+            }
+            if (total >= BUDGET_MS && samples.length >= MIN_SAMPLES) {
+                break;
+            }
+        }
+    }
+
+    let sum: number = 0;
+    let min: number = samples[0];
+    for (let i: number = 0; i < samples.length; i++) {
+        sum = sum + samples[i];
+        if (samples[i] < min) {
+            min = samples[i];
+        }
+    }
+    const mean: number = sum / samples.length;
+
+    let varSum: number = 0;
+    for (let i: number = 0; i < samples.length; i++) {
+        const d: number = samples[i] - mean;
+        varSum = varSum + d * d;
+    }
+    const stdev: number = samples.length > 1 ? Math.sqrt(varSum / (samples.length - 1)) : 0;
+
+    if (guard === -1) {
+        console.log("guard:" + guard);
+    }
+
+    console.log("BENCH:" + name + ":" + param + ":" + round(mean) + ":" + round(min) + ":" + round(stdev));
+}

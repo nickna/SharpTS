@@ -26,8 +26,8 @@ pipeline), so it reflects what a user actually experiences invoking each runtime
 |------|---------|
 | `run-benchmarks.ps1` | Builds SharpTS (Release), runs every `scripts/*.ts` on all runtimes, writes `results.txt`. |
 | `format-results.ps1` | Renders `results.txt` as a Markdown table (used for the CI job summary). |
-| `scripts/*.ts` | One workload per file (fibonacci, sort, json, regex, closures, …). |
-| `scripts/lib/bench.ts` | Shared cross-runtime timing harness (auto-batching, warmup, mean/min/stdev). |
+| `scripts/*.ts` | One workload per file (fibonacci, sort, json, regex, async/promises, …). |
+| `scripts/lib/bench.ts` | Shared synchronous and asynchronous timing harnesses (auto-batching, warmup, mean/min/stdev). |
 | `scripts/lib/algorithms.ts` | Algorithm bodies **shared byte-identical** with the microbenchmark suite (embedded there as a resource). |
 
 ## Running
