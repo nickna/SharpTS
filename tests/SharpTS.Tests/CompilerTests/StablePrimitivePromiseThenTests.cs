@@ -243,6 +243,73 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.NotEmpty(FindCallers(assembly, "InvokeMethodValue"));
     }
 
+    [Fact]
+    public void PrimitiveResolve_UsesFreshCompletedTaskWithoutDynamicResolution()
+    {
+        Assembly assembly = Compile("""
+            function make(): Promise<number> {
+                return Promise.resolve(1);
+            }
+            """);
+
+        MethodInfo caller = assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static)
+            .Single(method => method.Name.EndsWith("make", StringComparison.Ordinal));
+        Assert.Contains(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "FromResult",
+                DeclaringType: { } declaringType
+            }
+            && declaringType == typeof(Task));
+        Assert.DoesNotContain(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase { Name: "PromiseResolve" });
+    }
+
+    [Fact]
+    public void PromiseAllRuntime_HasNativeTaskArrayNormalizationPath()
+    {
+        Assembly assembly = Compile("""
+            async function gather(): Promise<number[]> {
+                return await Promise.all([Promise.resolve(1)]);
+            }
+            """);
+
+        MethodInfo normalize = assembly.GetType("$Runtime")!
+            .GetMethod("NormalizePromiseList")!;
+        Assert.Contains(ReadInstructions(normalize), instruction =>
+            instruction.OpCode == OpCodes.Newarr
+            && instruction.Operand is Type type
+            && type == typeof(Task<object?>));
+
+        MethodInfo moveNext = assembly.GetType("$PromiseAll_SM")!
+            .GetMethod("MoveNext")!;
+        Assert.Contains(ReadInstructions(moveNext), instruction =>
+            instruction.OpCode == OpCodes.Isinst
+            && instruction.Operand is Type type
+            && type == typeof(Task<object?>[]));
+    }
+
+    [Fact]
+    public void StablePromiseAllFanOut_VerifiesIlAndStandaloneOutput()
+    {
+        const string source = """
+            async function gather(): Promise<void> {
+                const promises: Promise<number>[] = [];
+                for (let i: number = 0; i < 4; i++) {
+                    promises.push(Promise.resolve(i));
+                }
+                const values: number[] = await Promise.all(promises);
+                console.log(values[0] + values[1] + values[2] + values[3]);
+            }
+            gather();
+            """;
+
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("6\n", TestHarness.RunCompiledStandalone(source));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

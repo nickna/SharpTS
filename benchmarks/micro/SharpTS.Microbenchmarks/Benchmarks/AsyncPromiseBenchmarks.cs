@@ -106,3 +106,32 @@ public class PromiseAllBenchmarks : AsyncPromiseBenchmarkBase
     [Benchmark]
     public Task<object?> Equivalent() => AsyncPromiseCSharp.EquivalentAll((double)N);
 }
+
+[MemoryDiagnoser]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class PromiseAllPhaseBenchmarks : AsyncPromiseBenchmarkBase
+{
+    private Func<object?, Task<object?>> _resolveFanOut = null!;
+    private Func<object?, Task<object?>> _repeatedResolved = null!;
+    private Func<object?, Task<object?>> _repeatedResolvedBuild = null!;
+
+    [Params(1000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _resolveFanOut = LoadCompiledAsync("promiseResolveFanOutPhase");
+        _repeatedResolved = LoadCompiledAsync("promiseAllRepeatedResolvedPhase");
+        _repeatedResolvedBuild = LoadCompiledAsync("promiseRepeatedResolvedBuildPhase");
+    }
+
+    [Benchmark]
+    public Task<object?> ResolveFanOut() => _resolveFanOut((double)N);
+
+    [Benchmark]
+    public Task<object?> RepeatedResolvedAll() => _repeatedResolved((double)N);
+
+    [Benchmark]
+    public Task<object?> RepeatedResolvedBuild() => _repeatedResolvedBuild((double)N);
+}

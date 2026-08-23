@@ -325,3 +325,36 @@ export async function promiseAllFanOut(n: number): Promise<number> {
     }
     return sum;
 }
+
+// Promise.all phase probes used by the microbenchmark suite. The first keeps
+// the exact input-construction loop but omits aggregation; the second reuses a
+// single settled promise so Promise.all's per-element bookkeeping remains
+// visible without paying for n Promise.resolve allocations.
+export async function promiseResolveFanOutPhase(n: number): Promise<number> {
+    const promises: Promise<number>[] = [];
+    for (let i: number = 0; i < n; i++) {
+        promises.push(Promise.resolve(i));
+    }
+    return promises.length;
+}
+
+export async function promiseAllRepeatedResolvedPhase(n: number): Promise<number> {
+    const promise: Promise<number> = Promise.resolve(1);
+    const promises: Promise<number>[] = [];
+    for (let i: number = 0; i < n; i++) {
+        promises.push(promise);
+    }
+    const values: number[] = await (
+        Promise.all(promises) as Promise<number[]>
+    );
+    return values.length;
+}
+
+export async function promiseRepeatedResolvedBuildPhase(n: number): Promise<number> {
+    const promise: Promise<number> = Promise.resolve(1);
+    const promises: Promise<number>[] = [];
+    for (let i: number = 0; i < n; i++) {
+        promises.push(promise);
+    }
+    return promises.length;
+}

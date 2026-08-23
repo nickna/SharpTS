@@ -69,6 +69,41 @@ public sealed class StableDiscardedArrayPushTests
             instruction.Operand is MethodBase { Name: "ArrayPushOneDiscarded" });
     }
 
+    [Fact]
+    public void AsyncDiscardedStablePush_UsesVoidGuardedHelperWithoutArgumentArray()
+    {
+        Assembly assembly = Compile("""
+            async function append(items: Promise<number>[]): Promise<void> {
+                items.push(Promise.resolve(1));
+            }
+            """);
+
+        MethodInfo moveNext = Assert.Single(FindCallers(
+            assembly, "ArrayPushOneDiscarded"));
+        var instructions = ReadInstructions(moveNext).ToArray();
+
+        Assert.Equal("MoveNext", moveNext.Name);
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "ArrayPushProto" });
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.OpCode == OpCodes.Newarr
+            && instruction.Operand is Type type && type == typeof(object));
+    }
+
+    [Fact]
+    public void AsyncAwaitedPushArgument_RetainsSpillSafeGeneralPath()
+    {
+        Assembly assembly = Compile("""
+            async function value(): Promise<string> { return "ok"; }
+            async function append(items: string[]): Promise<void> {
+                items.push(await value());
+            }
+            """);
+
+        Assert.Empty(FindCallers(assembly, "ArrayPushOneDiscarded"));
+        Assert.NotEmpty(FindCallers(assembly, "ArrayPushProto"));
+    }
+
     [Theory]
     [InlineData("Object.defineProperty([], '0', { value: 1 });")]
     [InlineData("const p = Array.prototype;")]
@@ -141,12 +176,30 @@ public sealed class StableDiscardedArrayPushTests
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
 
+    private static List<MethodInfo> FindCallers(Assembly assembly, string methodName) =>
+        assembly.GetTypes()
+            .Where(type => type.Name != "$Runtime")
+            .SelectMany(type => type.GetMethods(
+                BindingFlags.Public | BindingFlags.NonPublic |
+                BindingFlags.Static | BindingFlags.Instance))
+            .Where(method => method.GetMethodBody() != null)
+            .Where(method => ReadInstructions(method).Any(instruction =>
+                instruction.Operand is MethodBase called
+                && called.Name == methodName))
+            .ToList();
+
     private static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
         MethodInfo method)
     {
         byte[] il = method.GetMethodBody()?.GetILAsByteArray()
             ?? throw new InvalidOperationException($"Method '{method.Name}' has no IL body.");
         Module module = method.Module;
+        Type[]? typeArguments = method.DeclaringType?.IsGenericType == true
+            ? method.DeclaringType.GetGenericArguments()
+            : null;
+        Type[]? methodArguments = method.IsGenericMethod
+            ? method.GetGenericArguments()
+            : null;
 
         for (int offset = 0; offset < il.Length;)
         {
@@ -160,8 +213,8 @@ public sealed class StableDiscardedArrayPushTests
             {
                 int token = BitConverter.ToInt32(il, offset);
                 operand = opCode.OperandType == OperandType.InlineMethod
-                    ? module.ResolveMethod(token)
-                    : module.ResolveType(token);
+                    ? module.ResolveMethod(token, typeArguments, methodArguments)
+                    : module.ResolveType(token, typeArguments, methodArguments);
             }
 
             int operandSize = opCode.OperandType switch
