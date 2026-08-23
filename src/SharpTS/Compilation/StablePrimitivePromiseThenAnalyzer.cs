@@ -36,6 +36,7 @@ internal static class StablePrimitivePromiseThenAnalyzer
             if (!visitor.Candidates.Contains(key)
                 || visitor.Disqualified.Contains(key)
                 || visitor.DeclarationCounts.GetValueOrDefault(key) != 1
+                || visitor.TerminalCounts.GetValueOrDefault(key) != 1
                 || closures?.IsVariableCaptured(key.Name) == true)
             {
                 continue;
@@ -140,12 +141,15 @@ internal static class StablePrimitivePromiseThenAnalyzer
         private readonly TypeMap _typeMap = typeMap;
         private int _scope;
         private int _nextScope;
+        private Expr.Assign? _linearAssignmentStatement;
 
         public HashSet<(int Scope, string Name)> Candidates { get; } = [];
         public HashSet<(int Scope, string Name)> Disqualified { get; } = [];
         public Dictionary<(int Scope, string Name), int> DeclarationCounts { get; } = [];
+        public Dictionary<(int Scope, string Name), int> TerminalCounts { get; } = [];
         public Dictionary<(int Scope, string Name), List<Expr.Get>> Calls { get; } = [];
         public HashSet<Expr.Get> DirectSeedCalls { get; } = new(ReferenceEqualityComparer.Instance);
+        private HashSet<(int Scope, string Name)> Terminated { get; } = [];
 
         protected override void VisitFunction(Stmt.Function statement) =>
             InScope(() => base.VisitFunction(statement));
@@ -183,13 +187,34 @@ internal static class StablePrimitivePromiseThenAnalyzer
                 Visit(initializer);
         }
 
+        protected override void VisitExpression(Stmt.Expression statement)
+        {
+            var saved = _linearAssignmentStatement;
+            _linearAssignmentStatement = Unwrap(statement.Expr) as Expr.Assign;
+            try
+            {
+                Visit(statement.Expr);
+            }
+            finally
+            {
+                _linearAssignmentStatement = saved;
+            }
+        }
+
         protected override void VisitAssign(Expr.Assign expression)
         {
             var key = (_scope, expression.Name.Lexeme);
-            if (TryGetEligibleThen(expression.Value, _typeMap, out var call, out var method)
+            // The assignment's resulting value is itself observable when it is
+            // nested in another expression (for example, consume(chain = ...)).
+            // Only a discarded expression statement proves that no intermediate
+            // Promise identity escapes the linear binding.
+            if (ReferenceEquals(expression, _linearAssignmentStatement)
+                && TryGetEligibleThen(expression.Value, _typeMap, out var call, out var method)
                 && method.Object is Expr.Variable receiver
                 && receiver.Name.Lexeme == expression.Name.Lexeme)
             {
+                if (Terminated.Contains(key))
+                    Disqualified.Add(key);
                 RecordCall(key, method);
                 VisitEligibleArguments(call);
                 return;
@@ -205,7 +230,10 @@ internal static class StablePrimitivePromiseThenAnalyzer
             {
                 if (method.Object is Expr.Variable receiver)
                 {
-                    RecordCall((_scope, receiver.Name.Lexeme), method);
+                    // Only `chain = chain.then(handler)` is a linear append.
+                    // A bare or sibling call observes a distinct intermediate
+                    // Promise and therefore cannot share the fused carrier.
+                    Disqualified.Add((_scope, receiver.Name.Lexeme));
                     VisitEligibleArguments(call);
                     return;
                 }
@@ -237,16 +265,29 @@ internal static class StablePrimitivePromiseThenAnalyzer
 
         protected override void VisitAwait(Expr.Await expression)
         {
-            if (Unwrap(expression.Expression) is Expr.Variable)
+            if (Unwrap(expression.Expression) is Expr.Variable variable)
+            {
+                RecordTerminal((_scope, variable.Name.Lexeme));
                 return;
+            }
             base.VisitAwait(expression);
         }
 
         protected override void VisitReturn(Stmt.Return statement)
         {
-            if (statement.Value is not null && Unwrap(statement.Value) is Expr.Variable)
+            if (statement.Value is not null
+                && Unwrap(statement.Value) is Expr.Variable variable)
+            {
+                RecordTerminal((_scope, variable.Name.Lexeme));
                 return;
+            }
             base.VisitReturn(statement);
+        }
+
+        private void RecordTerminal((int Scope, string Name) key)
+        {
+            TerminalCounts[key] = TerminalCounts.GetValueOrDefault(key) + 1;
+            Terminated.Add(key);
         }
 
         protected override void VisitVariable(Expr.Variable expression) =>

@@ -867,6 +867,297 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private PrimitivePromiseChainClass DefinePrimitivePromiseChainClass(
+        ModuleBuilder moduleBuilder,
+        TypeBuilder runtimeType,
+        EmittedRuntime runtime)
+    {
+        var chainType = moduleBuilder.DefineType(
+            "$PrimitivePromiseChain",
+            TypeAttributes.Public | TypeAttributes.Sealed |
+                TypeAttributes.BeforeFieldInit,
+            typeof(object));
+        var handlerType = typeof(Func<double, double>);
+        var handlersType = typeof(List<Func<double, double>>);
+        var tcsType = typeof(TaskCompletionSource<object?>);
+        var tableType = _types.MakeGenericType(
+            typeof(Dictionary<,>), _types.TaskOfObject, chainType);
+        var tableField = runtimeType.DefineField(
+            "_primitivePromiseChains",
+            tableType,
+            FieldAttributes.Assembly | FieldAttributes.Static);
+        var tableRemove = EmitterTypeHelpers.ResolveMethod(
+            tableType,
+            typeof(Dictionary<,>).GetMethods()
+                .Single(method => method.Name == "Remove"
+                    && method.GetParameters().Length == 1));
+
+        var handlersField = chainType.DefineField(
+            "_handlers", handlersType,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var completionField = chainType.DefineField(
+            "_completion", tcsType,
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var runActionField = chainType.DefineField(
+            "_runAction", typeof(Action),
+            FieldAttributes.Private | FieldAttributes.InitOnly);
+        var indexField = chainType.DefineField(
+            "_index", typeof(int), FieldAttributes.Private);
+        var valueField = chainType.DefineField(
+            "_value", typeof(double), FieldAttributes.Private);
+        var exceptionField = chainType.DefineField(
+            "_exception", typeof(Exception), FieldAttributes.Private);
+
+        var runOne = chainType.DefineMethod(
+            "RunOne",
+            MethodAttributes.Private | MethodAttributes.HideBySig,
+            typeof(void),
+            Type.EmptyTypes);
+        var constructor = chainType.DefineConstructor(
+            MethodAttributes.Public,
+            CallingConventions.Standard,
+            [typeof(double)]);
+        var append = chainType.DefineMethod(
+            "Append",
+            MethodAttributes.Public | MethodAttributes.HideBySig,
+            typeof(void),
+            [handlerType]);
+        var taskGetter = chainType.DefineMethod(
+            "GetTask",
+            MethodAttributes.Public | MethodAttributes.HideBySig,
+            _types.TaskOfObject,
+            Type.EmptyTypes);
+
+        {
+            var il = constructor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetDefaultConstructor(typeof(object)));
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, handlersType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stfld, handlersField);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, tcsType.GetConstructor(Type.EmptyTypes)!);
+            il.Emit(OpCodes.Stfld, completionField);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, valueField);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldftn, runOne);
+            il.Emit(OpCodes.Newobj, typeof(Action).GetConstructor(
+                [typeof(object), typeof(IntPtr)])!);
+            il.Emit(OpCodes.Stfld, runActionField);
+            il.Emit(OpCodes.Ret);
+        }
+
+        {
+            var il = append.GetILGenerator();
+            var done = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, handlersField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, handlersType.GetMethod("Add")!);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, handlersField);
+            il.Emit(OpCodes.Callvirt,
+                handlersType.GetProperty("Count")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Bne_Un, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, runActionField);
+            il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
+
+        {
+            var il = taskGetter.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, completionField);
+            il.Emit(OpCodes.Callvirt, tcsType.GetProperty("Task")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ret);
+        }
+
+        {
+            var il = runOne.GetILGenerator();
+            var exceptionLocal = il.DeclareLocal(typeof(Exception));
+            var afterHandler = il.DefineLabel();
+            var complete = il.DefineLabel();
+            var reject = il.DefineLabel();
+            var tableRemoved = il.DefineLabel();
+
+            // A rejected link still consumes one fulfillment reaction job per
+            // remaining handler. This preserves the observable number and FIFO
+            // position of Promise jobs without invoking those handlers.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, exceptionField);
+            il.Emit(OpCodes.Brtrue, afterHandler);
+
+            il.BeginExceptionBlock();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, handlersField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, indexField);
+            il.Emit(OpCodes.Callvirt,
+                handlersType.GetProperty("Item")!.GetGetMethod()!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, valueField);
+            il.Emit(OpCodes.Callvirt, handlerType.GetMethod("Invoke")!);
+            il.Emit(OpCodes.Stfld, valueField);
+            il.Emit(OpCodes.Leave, afterHandler);
+            il.BeginCatchBlock(typeof(Exception));
+            il.Emit(OpCodes.Stloc, exceptionLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, exceptionLocal);
+            il.Emit(OpCodes.Stfld, exceptionField);
+            il.Emit(OpCodes.Leave, afterHandler);
+            il.EndExceptionBlock();
+
+            il.MarkLabel(afterHandler);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldfld, indexField);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stfld, indexField);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, indexField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, handlersField);
+            il.Emit(OpCodes.Callvirt,
+                handlersType.GetProperty("Count")!.GetGetMethod()!);
+            il.Emit(OpCodes.Bge, complete);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, runActionField);
+            il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(complete);
+            // All proven appends happen in the originating JavaScript job, so
+            // the final Task-to-carrier association is dead once the last
+            // reaction runs. Removing it prevents completed chains from
+            // accumulating in long-lived benchmark/server processes.
+            il.Emit(OpCodes.Ldsfld, tableField);
+            il.Emit(OpCodes.Brfalse, tableRemoved);
+            il.Emit(OpCodes.Ldsfld, tableField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, completionField);
+            il.Emit(OpCodes.Callvirt,
+                tcsType.GetProperty("Task")!.GetGetMethod()!);
+            il.Emit(OpCodes.Callvirt, tableRemove);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(tableRemoved);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, handlersField);
+            il.Emit(OpCodes.Callvirt, handlersType.GetMethod("Clear")!);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, exceptionField);
+            il.Emit(OpCodes.Brtrue, reject);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, completionField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, valueField);
+            il.Emit(OpCodes.Box, typeof(double));
+            il.Emit(OpCodes.Callvirt, tcsType.GetMethod(
+                "SetResult", [typeof(object)])!);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(reject);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, completionField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, exceptionField);
+            il.Emit(OpCodes.Callvirt, tcsType.GetMethod(
+                "SetException", [typeof(Exception)])!);
+            il.Emit(OpCodes.Ret);
+        }
+
+        return new PrimitivePromiseChainClass
+        {
+            Type = chainType,
+            TableType = tableType,
+            TableField = tableField,
+            Constructor = constructor,
+            AppendMethod = append,
+            TaskGetter = taskGetter
+        };
+    }
+
+    private void EmitPrimitivePromiseChainAppend(
+        ILGenerator il,
+        PrimitivePromiseChainClass chain,
+        MethodBuilder fallback)
+    {
+        var chainLocal = il.DeclareLocal(chain.Type);
+        var tableReady = il.DefineLabel();
+        var createChain = il.DefineLabel();
+        var append = il.DefineLabel();
+        var fallbackLabel = il.DefineLabel();
+
+        var tableConstructor = EmitterTypeHelpers.ResolveConstructor(
+            chain.TableType,
+            typeof(Dictionary<,>).GetConstructor(Type.EmptyTypes)!);
+        var tryGetValue = EmitterTypeHelpers.ResolveMethod(
+            chain.TableType,
+            typeof(Dictionary<,>).GetMethod("TryGetValue")!);
+        var add = EmitterTypeHelpers.ResolveMethod(
+            chain.TableType,
+            typeof(Dictionary<,>).GetMethod("Add")!);
+
+        il.Emit(OpCodes.Ldsfld, chain.TableField);
+        il.Emit(OpCodes.Brtrue, tableReady);
+        il.Emit(OpCodes.Newobj, tableConstructor);
+        il.Emit(OpCodes.Stsfld, chain.TableField);
+        il.MarkLabel(tableReady);
+
+        il.Emit(OpCodes.Ldsfld, chain.TableField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, chainLocal);
+        il.Emit(OpCodes.Callvirt, tryGetValue);
+        il.Emit(OpCodes.Brfalse, createChain);
+        il.Emit(OpCodes.Br, append);
+
+        il.MarkLabel(createChain);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.Task, "IsCompletedSuccessfully").GetGetMethod()!);
+        il.Emit(OpCodes.Brfalse, fallbackLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
+        il.Emit(OpCodes.Unbox_Any, typeof(double));
+        il.Emit(OpCodes.Newobj, chain.Constructor);
+        il.Emit(OpCodes.Stloc, chainLocal);
+
+        il.Emit(OpCodes.Ldsfld, chain.TableField);
+        il.Emit(OpCodes.Ldloc, chainLocal);
+        il.Emit(OpCodes.Callvirt, chain.TaskGetter);
+        il.Emit(OpCodes.Ldloc, chainLocal);
+        il.Emit(OpCodes.Callvirt, add);
+
+        il.MarkLabel(append);
+        il.Emit(OpCodes.Ldloc, chainLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, chain.AppendMethod);
+        il.Emit(OpCodes.Ldloc, chainLocal);
+        il.Emit(OpCodes.Callvirt, chain.TaskGetter);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallbackLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, fallback);
+        il.Emit(OpCodes.Ret);
+    }
+
     #endregion
 }
 

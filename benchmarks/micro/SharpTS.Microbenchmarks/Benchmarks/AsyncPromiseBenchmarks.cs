@@ -82,6 +82,10 @@ public class PromiseThenChainBenchmarks : AsyncPromiseBenchmarkBase
 
     [Benchmark]
     public Task<object?> Equivalent() => AsyncPromiseCSharp.EquivalentThenChain((double)N);
+
+    [Benchmark]
+    public Task<object?> FifoScheduled() =>
+        AsyncPromiseCSharp.FifoScheduledThenChain((double)N);
 }
 
 [MemoryDiagnoser]
