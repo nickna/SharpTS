@@ -243,6 +243,7 @@ public partial class RuntimeEmitter
         var listType = _types.ListOfObject;
         var listLocal = il.DeclareLocal(listType);
         var resultLocal = il.DeclareLocal(listType);
+        var taskArrayLocal = il.DeclareLocal(typeof(Task<object?>[]));
         var indexLocal = il.DeclareLocal(_types.Int32);
         var elementLocal = il.DeclareLocal(_types.Object);
         var resolvedElementLocal = il.DeclareLocal(_types.Object);
@@ -341,6 +342,86 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
         il.Emit(OpCodes.Call, runtime.IterateToList);
         il.Emit(OpCodes.Stloc, listLocal);
+
+        // The overwhelmingly common Promise.all case is a dense intrinsic
+        // array whose elements are already native promises. Preserve the own
+        // `then` checks required by PerformPromiseAll, but keep the proven
+        // tasks in their final array shape so the state machine can hand them
+        // straight to Task.WhenAll without two intermediate List copies.
+        var ordinaryListNormalizationLabel = il.DefineLabel();
+        var fastTaskScanLoopLabel = il.DefineLabel();
+        var fastTaskScanTSPromiseLabel = il.DefineLabel();
+        var fastTaskScanStoreLabel = il.DefineLabel();
+        var fastTaskScanDoneLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Bne_Un, ordinaryListNormalizationLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
+        il.Emit(OpCodes.Ldloc, invokeResolveLocal);
+        il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
+
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Newarr, _types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, taskArrayLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(fastTaskScanLoopLabel);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, taskArrayLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, fastTaskScanDoneLabel);
+        il.Emit(OpCodes.Ldloc, listLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, elementLocal);
+
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Brfalse, fastTaskScanTSPromiseLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldstr, "then");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
+        il.Emit(OpCodes.Br, fastTaskScanStoreLabel);
+
+        il.MarkLabel(fastTaskScanTSPromiseLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Brfalse, ordinaryListNormalizationLabel);
+        il.Emit(OpCodes.Ldloc, elementLocal);
+        il.Emit(OpCodes.Ldstr, "then");
+        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+        il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
+        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+        il.Emit(OpCodes.Stloc, resolvedElementLocal);
+
+        il.MarkLabel(fastTaskScanStoreLabel);
+        il.Emit(OpCodes.Ldloc, taskArrayLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, resolvedElementLocal);
+        il.Emit(OpCodes.Castclass, _types.TaskOfObject);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, fastTaskScanLoopLabel);
+
+        il.MarkLabel(fastTaskScanDoneLabel);
+        il.Emit(OpCodes.Ldloc, taskArrayLocal);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(ordinaryListNormalizationLabel);
 
         // var result = new List<object?>(); for each element: $Promise → .Task
         il.Emit(OpCodes.Newobj, _types.GetConstructor(listType, _types.EmptyTypes));
@@ -680,7 +761,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldstr, "then");
             targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
-            targetIl.Emit(OpCodes.Br, ordinaryResolutionLabel);
+            targetIl.Emit(OpCodes.Br, useOrdinaryCoercionLabel);
 
             targetIl.MarkLabel(checkNativePromiseObjectLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);
@@ -690,6 +771,7 @@ public partial class RuntimeEmitter
             targetIl.Emit(OpCodes.Ldstr, "then");
             targetIl.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             targetIl.Emit(OpCodes.Brtrue, invokeObservableThenLabel);
+            targetIl.Emit(OpCodes.Br, useOrdinaryCoercionLabel);
 
             targetIl.MarkLabel(ordinaryResolutionLabel);
             targetIl.Emit(OpCodes.Ldloc, resolvedElementLocal);

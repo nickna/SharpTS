@@ -472,6 +472,28 @@ public class PromiseMethodTests
         Assert.Equal("6\n", output);
     }
 
+    [Theory, ModeData]
+    public void All_IntrinsicTasksStillObserveOwnThenOverride(ExecutionMode mode)
+    {
+        var source = """
+            async function main(): Promise<void> {
+                const promise: any = Promise.resolve(1);
+                let calls: number = 0;
+                promise.then = function (resolve: any): void {
+                    calls = calls + 1;
+                    resolve(9);
+                };
+                const values: number[] = await Promise.all([promise]);
+                console.log(values[0]);
+                console.log(calls);
+            }
+            main();
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("9\n1\n", output);
+    }
+
     #endregion
 
     #region Promise.race() Tests
@@ -529,6 +551,33 @@ public class PromiseMethodTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n", output);
+    }
+
+    [Theory, ModeData]
+    public void Resolve_PrimitivesRetainFreshPromiseIdentity(ExecutionMode mode)
+    {
+        var source = """
+            const numberFirst: any = Promise.resolve(1);
+            const numberSecond: any = Promise.resolve(1);
+            numberFirst.marker = 42;
+            console.log(numberFirst === numberSecond);
+            console.log(Object.hasOwn(numberSecond, "marker"));
+
+            const booleanFirst: any = Promise.resolve(true);
+            const booleanSecond: any = Promise.resolve(true);
+            booleanFirst.marker = 42;
+            console.log(booleanFirst === booleanSecond);
+            console.log(Object.hasOwn(booleanSecond, "marker"));
+
+            const stringFirst: any = Promise.resolve("value");
+            const stringSecond: any = Promise.resolve("value");
+            stringFirst.marker = 42;
+            console.log(stringFirst === stringSecond);
+            console.log(Object.hasOwn(stringSecond, "marker"));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("false\nfalse\nfalse\nfalse\nfalse\nfalse\n", output);
     }
 
     [Theory, ModeData]

@@ -27,6 +27,17 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 {
                     emitter.EmitExpression(arguments[0]);
                     emitter.EmitBoxIfNeeded(arguments[0]);
+
+                    // A statically non-null primitive cannot be a thenable.
+                    // Task.FromResult<object> creates a fresh Task for every
+                    // non-null boxed value, preserving JavaScript Promise
+                    // identity without the heavier TCS + dynamic `then` path.
+                    if (IsFreshCompletedTaskSafe(ctx.TypeMap?.Get(arguments[0])))
+                    {
+                        il.Emit(OpCodes.Call, EmitGenerics.MakeGenericMethod(
+                            typeof(Task).GetMethod("FromResult")!, typeof(object)));
+                        return true;
+                    }
                 }
                 else
                 {
@@ -197,4 +208,14 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
         ctx.IL.Emit(OpCodes.Call,
             ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle", ctx.Types.RuntimeTypeHandle));
     }
+
+    private static bool IsFreshCompletedTaskSafe(TypeSystem.TypeInfo? type) => type is
+        TypeSystem.TypeInfo.Primitive
+        {
+            Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN
+        }
+        or TypeSystem.TypeInfo.NumberLiteral
+        or TypeSystem.TypeInfo.BooleanLiteral
+        or TypeSystem.TypeInfo.String
+        or TypeSystem.TypeInfo.StringLiteral;
 }

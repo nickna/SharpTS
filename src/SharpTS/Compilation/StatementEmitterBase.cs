@@ -1,6 +1,7 @@
 using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 
 namespace SharpTS.Compilation;
 
@@ -366,9 +367,71 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// <summary>
     /// Gives an emitter a chance to lower an expression whose JavaScript value
     /// is discarded without first manufacturing a stack result. The default
-    /// keeps the ordinary expression-plus-pop behavior.
+    /// recognizes the object-backed array push shape shared by async/generator
+    /// state machines; specialized synchronous emitters may add narrower typed
+    /// paths before delegating here.
     /// </summary>
-    protected virtual bool TryEmitDiscardedExpression(Expr expression) => false;
+    protected virtual bool TryEmitDiscardedExpression(Expr expression)
+    {
+        if (expression is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Name.Lexeme: "push"
+                } methodGet,
+                Arguments: { Count: 1 } arguments
+            }
+            || Ctx.TypeMap?.Get(methodGet.Object) is not TypeSystem.TypeInfo.Array receiverType
+            || ArrayElements.Resolve(receiverType) is not { Kind: ArrayElementsKind.Object }
+            || arguments[0] is Expr.Spread
+            || ExpressionSuspensionDetector.Contains(arguments[0])
+            || Ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+            || Ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            return false;
+        }
+
+        EmitExpression(methodGet.Object);
+        EnsureBoxed();
+        EmitExpression(arguments[0]);
+        EnsureBoxed();
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayPushOneDiscarded);
+        SetStackUnknown();
+        return true;
+    }
+
+    private sealed class ExpressionSuspensionDetector : AstVisitorBase
+    {
+        public bool Found { get; private set; }
+
+        public static bool Contains(Expr expression)
+        {
+            var detector = new ExpressionSuspensionDetector();
+            detector.Visit(expression);
+            return detector.Found;
+        }
+
+        protected override void VisitAwait(Expr.Await expression)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
+
+        protected override void VisitYield(Expr.Yield expression)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
+
+        // Creating a nested callable does not execute its body while the
+        // receiver is live on this state machine's evaluation stack.
+        protected override void VisitFunction(Stmt.Function statement) { }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClass(Stmt.Class statement) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
+    }
 
     /// <summary>
     /// Emits a 'using' or 'await using' declaration.

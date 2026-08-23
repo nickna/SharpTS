@@ -57,10 +57,12 @@ public partial class RuntimeEmitter
         var il = sm.MoveNextMethod.GetILGenerator();
         var listType = typeof(List<object?>);
         var taskListType = typeof(List<Task<object?>>);
+        var taskArrayType = typeof(Task<object?>[]);
 
         // Local variables
         var exceptionLocal = il.DeclareLocal(typeof(Exception));
         var resultLocal = il.DeclareLocal(typeof(object));
+        var taskArrayLocal = il.DeclareLocal(taskArrayType);
 
         // Labels
         var state0Label = il.DefineLabel();
@@ -80,6 +82,22 @@ public partial class RuntimeEmitter
 
         EmitNormalizeCombinatorIterable(il, runtime, sm.IterableField, sm.ConstructorField,
             sm.CapabilityField, combinatorKind: 3);
+
+        // NormalizePromiseList returns an exact task array for the stable
+        // intrinsic Promise.all case. It has already checked every element's
+        // observable own `then`, so bypass the generic list conversion.
+        var genericListLabel = il.DefineLabel();
+        var haveTaskArrayLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sm.IterableField);
+        il.Emit(OpCodes.Isinst, taskArrayType);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brfalse, genericListLabel);
+        il.Emit(OpCodes.Stloc, taskArrayLocal);
+        il.Emit(OpCodes.Br, haveTaskArrayLabel);
+
+        il.MarkLabel(genericListLabel);
+        il.Emit(OpCodes.Pop);
 
         // ECMA-262 §27.2.4.1 Promise.all: If iterable is not Object → throw TypeError.
         // Without this, a non-iterable arg falls through to Castclass which throws
@@ -110,6 +128,10 @@ public partial class RuntimeEmitter
                    m.GetParameters()[0].ParameterType.IsArray), typeof(object));
         il.Emit(OpCodes.Ldloc, tasksLocal);
         il.Emit(OpCodes.Callvirt, taskListType.GetMethod("ToArray")!);
+        il.Emit(OpCodes.Stloc, taskArrayLocal);
+
+        il.MarkLabel(haveTaskArrayLabel);
+        il.Emit(OpCodes.Ldloc, taskArrayLocal);
         il.Emit(OpCodes.Call, whenAllMethod);
 
         // Await the WhenAll task (suspends at state 0 when not yet complete)
