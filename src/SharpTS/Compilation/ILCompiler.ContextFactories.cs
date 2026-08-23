@@ -57,6 +57,10 @@ public partial class ILCompiler
             MethodsCapturingArguments = _functions.MethodsCapturingArguments,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
+            SuspensionFreePrimitiveAsyncCores =
+                _async.StableSuspensionFreePrimitiveCores.Count > 0
+                    ? _async.StableSuspensionFreePrimitiveCores
+                    : null,
             // Enum tables
             EnumMembers = _enums.Members,
             EnumReverse = _enums.Reverse,

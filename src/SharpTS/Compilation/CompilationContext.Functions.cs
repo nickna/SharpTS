@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
 
@@ -10,6 +11,19 @@ public partial class CompilationContext
     // ============================================
 
     public Dictionary<string, MethodBuilder> Functions { get; }
+
+    /// <summary>
+    /// Assembly-internal typed cores for primitive async functions proven to have no suspension points.
+    /// An immediately awaited, statically direct call may target the core without materializing
+    /// the public function's otherwise-observable Promise wrapper.
+    /// </summary>
+    public Dictionary<string, MethodBuilder>? SuspensionFreePrimitiveAsyncCores { get; set; }
+
+    /// <summary>
+    /// Await nodes whose direct-core proof was established before state-machine layout. These
+    /// nodes do not consume a state number or force locals into hoisted object fields.
+    /// </summary>
+    public IReadOnlySet<Expr.Await>? SuspensionFreePrimitiveAsyncCoreAwaits { get; set; }
 
     /// <summary>
     /// The exact emitted method that may bypass a value-backed module binding for recursive
