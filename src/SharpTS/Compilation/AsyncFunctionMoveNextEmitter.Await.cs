@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
 
 namespace SharpTS.Compilation;
@@ -40,14 +41,100 @@ public abstract partial class AsyncFunctionMoveNextEmitter
     /// <summary>The builder's <c>AwaitUnsafeOnCompleted&lt;TAwaiter, TStateMachine&gt;</c>, specialized for this machine.</summary>
     protected abstract MethodInfo BuilderAwaitUnsafeOnCompletedMethod();
 
+    /// <summary>
+    /// True only for an async declaration whose exception routing can accept a direct synchronous
+    /// core call. Async arrows and functions with JavaScript try/catch retain the ordinary await path.
+    /// </summary>
+    protected virtual bool AllowSuspensionFreePrimitiveAsyncCoreAwait => false;
+
     protected override void EmitAwait(Expr.Await a)
     {
+        if (AllowSuspensionFreePrimitiveAsyncCoreAwait
+            && Ctx.SuspensionFreePrimitiveAsyncCoreAwaits?.Contains(a) == true)
+        {
+            if (TryEmitSuspensionFreePrimitiveAsyncCoreCall(a.Expression))
+                return;
+            throw new CompileException(
+                "A pre-proven suspension-free async core call could not be emitted.");
+        }
+
         // 1. Emit the awaited expression (should produce Task<object> or $Promise or any value)
         EmitExpression(a.Expression);
         EnsureBoxed();
 
         // 2+. Coerce to Task<object>, suspend/resume, and leave the awaited result on the stack.
         EmitAwaitFromValueOnStack(NextAwaitState());
+    }
+
+    private bool TryEmitSuspensionFreePrimitiveAsyncCoreCall(Expr expression)
+    {
+        if (expression is not Expr.Call
+            {
+                Callee: Expr.Variable functionVariable,
+                Arguments: var arguments
+            }
+            || arguments.Any(argument => argument is Expr.Spread)
+            || AnyContainsSuspension(arguments))
+        {
+            return false;
+        }
+
+        string simpleName = functionVariable.Name.Lexeme;
+        string resolvedName = Ctx.ResolveFunctionName(simpleName);
+        bool isSameScopeDeclaration = string.Equals(
+            resolvedName,
+            Ctx.GetQualifiedFunctionName(simpleName),
+            StringComparison.Ordinal);
+        bool shadowedByLocalBinding = Resolver.HasVariable(simpleName);
+        if (shadowedByLocalBinding
+            && isSameScopeDeclaration
+            && Ctx.TopLevelStaticVars?.ContainsKey(simpleName) == true
+            && !Ctx.TryGetParameter(simpleName, out _)
+            && !Ctx.CellBindingLocals.ContainsKey(simpleName)
+            && !Ctx.Locals.HasLocal(simpleName)
+            && Ctx.CapturedFunctionLocals?.Contains(simpleName) != true
+            && Ctx.CapturedArrowLocals?.Contains(simpleName) != true
+            && Ctx.ParentArrowCapturedLocals?.Contains(simpleName) != true
+            && Ctx.ExtraArrowScopeBindings?.ContainsKey(simpleName) != true
+            && Ctx.CapturedFields?.ContainsKey(simpleName) != true)
+        {
+            shadowedByLocalBinding = false;
+        }
+
+        Dictionary<string, MethodBuilder>? stableCores =
+            Ctx.SuspensionFreePrimitiveAsyncCores;
+        if (stableCores == null
+            || !stableCores.TryGetValue(resolvedName, out MethodBuilder? coreMethod)
+            || !isSameScopeDeclaration
+            || arguments.Count != coreMethod.GetParameters().Length
+            || shadowedByLocalBinding)
+        {
+            return false;
+        }
+
+        ParameterInfo[] parameters = coreMethod.GetParameters();
+        var argumentLocals = new LocalBuilder[arguments.Count];
+        for (int index = 0; index < arguments.Count; index++)
+        {
+            EmitExpression(arguments[index]);
+            EmitConversionForParameter(arguments[index], parameters[index].ParameterType);
+            var argumentLocal = IL.DeclareLocal(parameters[index].ParameterType);
+            IL.Emit(OpCodes.Stloc, argumentLocal);
+            argumentLocals[index] = argumentLocal;
+        }
+        foreach (LocalBuilder argumentLocal in argumentLocals)
+            IL.Emit(OpCodes.Ldloc, argumentLocal);
+
+        IL.Emit(OpCodes.Call, coreMethod);
+        if (coreMethod.ReturnType == typeof(double))
+            SetStackType(StackType.Double);
+        else if (coreMethod.ReturnType == typeof(bool))
+            SetStackType(StackType.Boolean);
+        else if (coreMethod.ReturnType == typeof(string))
+            SetStackType(StackType.String);
+        else
+            SetStackUnknown();
+        return true;
     }
 
     /// <summary>

@@ -19,4 +19,6 @@ public partial class AsyncMoveNextEmitter
     protected override FieldBuilder AsyncStateField => _builder.StateField;
     protected override FieldBuilder AsyncBuilderField => _builder.BuilderField;
     protected override MethodInfo BuilderAwaitUnsafeOnCompletedMethod() => _builder.GetBuilderAwaitUnsafeOnCompletedMethod();
+    protected override bool AllowSuspensionFreePrimitiveAsyncCoreAwait =>
+        !_analysis.HasTryCatch;
 }

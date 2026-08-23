@@ -78,6 +78,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
     private bool _usesThis = false;
     private int _asyncArrowNestingLevel = 0;
     private Expr.ArrowFunction? _currentParentArrow = null;  // Track parent for nested arrows
+    private IReadOnlySet<Expr.Await>? _nonSuspendingAwaits;
 
     // Try block tracking
     private int _tryBlockCounter = 0;
@@ -113,9 +114,12 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
     /// <summary>
     /// Analyzes an async function to determine await points and hoisted variables.
     /// </summary>
-    public AsyncFunctionAnalysis Analyze(Stmt.Function func)
+    public AsyncFunctionAnalysis Analyze(
+        Stmt.Function func,
+        IReadOnlySet<Expr.Await>? nonSuspendingAwaits = null)
     {
         Reset();
+        _nonSuspendingAwaits = nonSuspendingAwaits;
 
         // Disambiguate block-scoped let/const declarations that shadow an enclosing binding so the
         // hoisting decision below is made per-binding rather than per-name (#766, async analog of #711).
@@ -216,6 +220,7 @@ public partial class AsyncStateAnalyzer : AstVisitorBase
         _tryBlockIdStack.Clear();
         _currentTryRegion = TryRegion.None;
         _tryBlockAwaitFlags.Clear();
+        _nonSuspendingAwaits = null;
     }
 
     /// <summary>

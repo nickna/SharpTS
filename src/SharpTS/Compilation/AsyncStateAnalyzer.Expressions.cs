@@ -11,7 +11,8 @@ public partial class AsyncStateAnalyzer
         // Visit await expression BEFORE marking _seenAwait, so variables in the await
         // expression are not incorrectly marked as "used after await"
         base.VisitAwait(expr);
-        RecordAwaitPoint(expr);
+        if (_nonSuspendingAwaits?.Contains(expr) != true)
+            RecordAwaitPoint(expr);
     }
 
     /// <summary>

@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Diagnostics.Exceptions;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
+using TypeSystem = SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -21,6 +23,22 @@ public partial class ILCompiler
         // (the builder's counter already disambiguates `<name>d__N`).
         var ctx = GetDefinitionContext();
         string qualifiedFunctionName = ctx.GetQualifiedFunctionName(funcStmt.Name.Lexeme);
+
+        HashSet<Expr.Await> directCoreAwaits = FindDirectCoreAwaits(
+            funcStmt, ctx, analysis);
+        if (directCoreAwaits.Count > 0)
+        {
+            analysis = _async.Analyzer.Analyze(funcStmt, directCoreAwaits);
+            _async.DirectCoreAwaits[qualifiedFunctionName] = directCoreAwaits;
+        }
+
+        if (CanEmitSuspensionFreePrimitiveAsyncFunction(
+                funcStmt, qualifiedFunctionName, analysis))
+        {
+            DefineSuspensionFreePrimitiveAsyncFunction(
+                funcStmt, qualifiedFunctionName);
+            return;
+        }
 
         // Create state machine builder
         var smBuilder = new AsyncStateMachineBuilder(_moduleBuilder, _types, _async.StateMachineCounter++);
@@ -54,6 +72,7 @@ public partial class ILCompiler
         _functions.Builders[qualifiedFunctionName] = stubMethod;
         _async.StateMachines[qualifiedFunctionName] = smBuilder;
         _async.Functions[qualifiedFunctionName] = funcStmt;
+        _async.Analyses[qualifiedFunctionName] = analysis;
 
         // #925: an async function used as a value (imported cross-module, stored, passed as a
         // callback → $TSFunction.Invoke) must pad omitted trailing optional args with the `undefined`
@@ -75,6 +94,223 @@ public partial class ILCompiler
 
         // Build state machines for any async arrows found in this function
         DefineAsyncArrowStateMachines(analysis.AsyncArrows, smBuilder);
+    }
+
+    private HashSet<Expr.Await> FindDirectCoreAwaits(
+        Stmt.Function function,
+        CompilationContext definitionContext,
+        AsyncStateAnalyzer.AsyncFunctionAnalysis analysis)
+    {
+        if (analysis.HasTryCatch || analysis.AsyncArrows.Count != 0 || function.Body == null)
+            return [];
+
+        var localBindings = new FunctionLocalBindingCollector(function.Parameters);
+        foreach (Stmt statement in function.Body)
+            localBindings.Visit(statement);
+
+        var collector = new DirectCoreAwaitCollector(
+            definitionContext,
+            _async.StableSuspensionFreePrimitiveCores,
+            localBindings.Names);
+        foreach (Stmt statement in function.Body)
+            collector.Visit(statement);
+        return collector.Awaits;
+    }
+
+    private sealed class FunctionLocalBindingCollector(
+        IEnumerable<Stmt.Parameter> parameters) : AstVisitorBase
+    {
+        public HashSet<string> Names { get; } =
+            new(parameters.Select(parameter => parameter.Name.Lexeme), StringComparer.Ordinal);
+
+        protected override void VisitVar(Stmt.Var statement)
+        {
+            Names.Add(statement.Name.Lexeme);
+            base.VisitVar(statement);
+        }
+
+        protected override void VisitConst(Stmt.Const statement)
+        {
+            Names.Add(statement.Name.Lexeme);
+            base.VisitConst(statement);
+        }
+
+        protected override void VisitForOf(Stmt.ForOf statement)
+        {
+            Names.Add(statement.Variable.Lexeme);
+            base.VisitForOf(statement);
+        }
+
+        protected override void VisitForIn(Stmt.ForIn statement)
+        {
+            if (statement.IsDeclaration)
+                Names.Add(statement.Variable.Lexeme);
+            base.VisitForIn(statement);
+        }
+
+        protected override void VisitTryCatch(Stmt.TryCatch statement)
+        {
+            if (statement.CatchParam != null)
+                Names.Add(statement.CatchParam.Lexeme);
+            base.VisitTryCatch(statement);
+        }
+
+        protected override void VisitFunction(Stmt.Function statement) =>
+            Names.Add(statement.Name.Lexeme);
+
+        protected override void VisitClass(Stmt.Class statement) =>
+            Names.Add(statement.Name.Lexeme);
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
+    }
+
+    private sealed class DirectCoreAwaitCollector(
+        CompilationContext context,
+        IReadOnlyDictionary<string, MethodBuilder> stableCores,
+        IReadOnlySet<string> localBindings) : AstVisitorBase
+    {
+        public HashSet<Expr.Await> Awaits { get; } =
+            new(ReferenceEqualityComparer.Instance);
+
+        protected override void VisitAwait(Expr.Await expression)
+        {
+            if (expression.Expression is Expr.Call
+                {
+                    Callee: Expr.Variable variable,
+                    Arguments: var arguments
+                }
+                && !localBindings.Contains(variable.Name.Lexeme)
+                && !arguments.Any(argument => argument is Expr.Spread)
+                && !arguments.Any(ContainsSuspension)
+                && context.ResolveFunctionName(variable.Name.Lexeme) is var resolvedName
+                && string.Equals(
+                    resolvedName,
+                    context.GetQualifiedFunctionName(variable.Name.Lexeme),
+                    StringComparison.Ordinal)
+                && stableCores.TryGetValue(resolvedName, out MethodBuilder? core)
+                && arguments.Count == core.GetParameters().Length)
+            {
+                Awaits.Add(expression);
+            }
+            base.VisitAwait(expression);
+        }
+
+        private static bool ContainsSuspension(Expr expression)
+        {
+            var detector = new SuspensionDetector();
+            detector.Visit(expression);
+            return detector.Found;
+        }
+
+        protected override void VisitFunction(Stmt.Function statement) { }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClass(Stmt.Class statement) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
+
+        private sealed class SuspensionDetector : AstVisitorBase
+        {
+            public bool Found { get; private set; }
+            protected override void VisitAwait(Expr.Await expression) => Found = true;
+            protected override void VisitYield(Expr.Yield expression) => Found = true;
+            protected override void VisitFunction(Stmt.Function statement) { }
+            protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+            protected override void VisitClass(Stmt.Class statement) { }
+            protected override void VisitClassExpr(Expr.ClassExpr expression) { }
+        }
+    }
+
+    /// <summary>
+    /// A primitive async function with no suspension points does not need an
+    /// <see cref="System.Runtime.CompilerServices.AsyncTaskMethodBuilder{TResult}"/> state
+    /// machine. Keep the proof deliberately narrow: a free function with a final primitive
+    /// return, simple required parameters, no closure/dynamic-receiver machinery, and only awaits
+    /// already proven to target stable suspension-free primitive cores. Its public
+    /// Task&lt;object?&gt; ABI remains identical to the ordinary async stub.
+    /// </summary>
+    private bool CanEmitSuspensionFreePrimitiveAsyncFunction(
+        Stmt.Function function,
+        string qualifiedFunctionName,
+        AsyncStateAnalyzer.AsyncFunctionAnalysis analysis)
+    {
+        if (analysis.AwaitPointCount != 0
+            || analysis.AsyncArrows.Count != 0
+            || analysis.HasTryCatch
+            || analysis.UsesThis
+            || function.TypeParams is { Count: > 0 }
+            || function.Decorators is { Count: > 0 }
+            || function.Parameters.Any(parameter =>
+                parameter.DefaultValue != null
+                || parameter.IsRest
+                || parameter.IsOptional
+                || parameter.Decorators is { Count: > 0 })
+            || function.Body is not { Count: > 0 }
+            || function.Body[^1] is not Stmt.Return { Value: not null } statement
+            || ReferencesArgumentsIdentifier(function.Body)
+            || _closures.Analyzer.GetCapturedLocals(function).Count != 0)
+        {
+            return false;
+        }
+
+        var functionType = _typeMap?.GetFunctionType(qualifiedFunctionName)
+            ?? _typeMap?.GetFunctionType(function.Name.Lexeme);
+        if (functionType?.ReturnType is not TypeSystem.TypeInfo.Promise promised
+            || !IsStableNonThenablePrimitive(promised.ValueType))
+        {
+            return false;
+        }
+
+        return IsStableNonThenablePrimitive(_typeMap?.Get(statement.Value));
+    }
+
+    private static bool IsStableNonThenablePrimitive(TypeSystem.TypeInfo? type) => type is
+        TypeSystem.TypeInfo.Primitive
+        {
+            Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN
+        }
+        or TypeSystem.TypeInfo.NumberLiteral
+        or TypeSystem.TypeInfo.BooleanLiteral
+        or TypeSystem.TypeInfo.String
+        or TypeSystem.TypeInfo.StringLiteral;
+
+    private void DefineSuspensionFreePrimitiveAsyncFunction(
+        Stmt.Function function,
+        string qualifiedFunctionName)
+    {
+        var functionType = _typeMap?.GetFunctionType(qualifiedFunctionName)
+            ?? _typeMap?.GetFunctionType(function.Name.Lexeme)
+            ?? throw new CompileException(
+                $"Missing type information for async function '{function.Name.Lexeme}'.");
+        var promisedType = ((TypeSystem.TypeInfo.Promise)functionType.ReturnType).ValueType;
+        Type[] coreParameterTypes = ParameterTypeResolver.ResolveParameters(
+            function.Parameters, _typeMapper, functionType, _typeMap);
+        Type coreReturnType = ParameterTypeResolver.ResolveReturnType(
+            promisedType, isAsync: false, _typeMapper);
+
+        var coreMethod = _programType.DefineMethod(
+            $"$asyncCore${qualifiedFunctionName}",
+            MethodAttributes.Assembly | MethodAttributes.Static | MethodAttributes.HideBySig,
+            coreReturnType,
+            coreParameterTypes);
+        MarkCompilerGenerated(coreMethod);
+
+        var stubMethod = _programType.DefineMethod(
+            qualifiedFunctionName,
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.TaskOfObject,
+            BuildStateMachineStubParamTypes(function));
+
+        _functions.Builders[qualifiedFunctionName] = stubMethod;
+        _async.SuspensionFreePrimitiveFunctions[qualifiedFunctionName] = function;
+        _async.SuspensionFreePrimitiveCores[qualifiedFunctionName] = coreMethod;
+        if (_stableSelfCallFunctions.Contains(function))
+            _async.StableSuspensionFreePrimitiveCores[qualifiedFunctionName] = coreMethod;
+        _closures.FunctionAstNodes[qualifiedFunctionName] = function;
+
+        MarkPadsUndefined(stubMethod);
+        MarkFunctionLength(stubMethod, function.Parameters);
+        MarkFunctionName(stubMethod, function.RuntimeName ?? function.Name.Lexeme);
+        MarkNonConstructible(stubMethod);
     }
 
     /// <summary>
@@ -729,6 +965,8 @@ public partial class ILCompiler
 
     private void EmitAsyncStateMachineBodies()
     {
+        EmitSuspensionFreePrimitiveAsyncFunctionBodies();
+
         var savedPath = _modules.CurrentPath;
         var savedNamespacePath = _currentNamespacePath;
         foreach (var (funcName, smBuilder) in _async.StateMachines)
@@ -742,7 +980,7 @@ public partial class ILCompiler
             _currentNamespacePath = _functionDefinitionNamespace.GetValueOrDefault(funcName);
             var func = _async.Functions[funcName];
             var stubMethod = _functions.Builders[funcName];
-            var analysis = _async.Analyzer.Analyze(func);
+            var analysis = _async.Analyses[funcName];
 
             // Emit stub method body
             EmitAsyncStubMethod(
@@ -763,6 +1001,8 @@ public partial class ILCompiler
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
             ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
+            ctx.SuspensionFreePrimitiveAsyncCoreAwaits =
+                _async.DirectCoreAwaits.GetValueOrDefault(funcName);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -814,6 +1054,131 @@ public partial class ILCompiler
             if (arrowBuilder.IsStandalone) continue;
             arrowBuilder.CreateType();
         }
+    }
+
+    /// <summary>
+    /// Emits the typed core and public Task&lt;object?&gt; wrapper for the narrow no-suspension
+    /// primitive shape. The body runs synchronously, as an async function body does before its first
+    /// await. A successful value becomes a fresh completed task; a synchronous exception becomes
+    /// a fresh faulted task instead of escaping from the call.
+    /// </summary>
+    private void EmitSuspensionFreePrimitiveAsyncFunctionBodies()
+    {
+        if (_async.SuspensionFreePrimitiveFunctions.Count == 0)
+            return;
+
+        var savedPath = _modules.CurrentPath;
+        var savedNamespacePath = _currentNamespacePath;
+        MethodInfo fromResult = EmitGenerics.MakeGenericMethod(
+            typeof(Task).GetMethod(nameof(Task.FromResult))!, _types.Object);
+        MethodInfo fromException = EmitGenerics.MakeGenericMethod(
+            _types.GetMethods(typeof(Task), BindingFlags.Public | BindingFlags.Static)
+                .Single(method => method.Name == nameof(Task.FromException)
+                    && method.IsGenericMethodDefinition
+                    && method.GetParameters() is [{ ParameterType: var parameterType }]
+                    && parameterType == typeof(Exception)),
+            _types.Object);
+
+        foreach (var (functionName, function) in
+                 _async.SuspensionFreePrimitiveFunctions)
+        {
+            if (_functionDefinitionModule.TryGetValue(functionName, out var functionModule))
+                _modules.CurrentPath = NormalizeToEmissionPath(functionModule);
+            _currentNamespacePath =
+                _functionDefinitionNamespace.GetValueOrDefault(functionName);
+
+            MethodBuilder coreMethod =
+                _async.SuspensionFreePrimitiveCores[functionName];
+            ILGenerator coreIl = coreMethod.GetILGenerator();
+            var coreContext = CreateSuspensionFreePrimitiveFunctionContext(
+                coreIl, coreMethod, function);
+            coreContext.CurrentMethodReturnType = coreMethod.ReturnType;
+            coreContext.SuspensionFreePrimitiveAsyncCoreAwaits =
+                _async.DirectCoreAwaits.GetValueOrDefault(functionName);
+            ParameterInfo[] coreParameters = coreMethod.GetParameters();
+            for (int index = 0; index < function.Parameters.Count; index++)
+            {
+                coreContext.DefineParameter(
+                    function.Parameters[index].Name.Lexeme,
+                    index,
+                    coreParameters[index].ParameterType);
+            }
+            var coreEmitter = new SuspensionFreeAsyncCoreEmitter(coreContext);
+            foreach (Stmt statement in function.Body!)
+                coreEmitter.EmitStatement(statement);
+
+            MethodBuilder stubMethod = _functions.Builders[functionName];
+            ILGenerator il = stubMethod.GetILGenerator();
+            var ctx = CreateSuspensionFreePrimitiveFunctionContext(
+                il, stubMethod, function);
+
+            ParameterInfo[] emittedParameters = stubMethod.GetParameters();
+            for (int index = 0; index < function.Parameters.Count; index++)
+            {
+                Type parameterType = index < emittedParameters.Length
+                    ? emittedParameters[index].ParameterType
+                    : _types.Object;
+                ctx.DefineParameter(
+                    function.Parameters[index].Name.Lexeme,
+                    index,
+                    parameterType);
+            }
+
+            var emitter = new ILEmitter(ctx);
+            var resultTask = il.DeclareLocal(_types.TaskOfObject);
+            Label completed = il.BeginExceptionBlock();
+
+            for (int index = 0; index < function.Parameters.Count; index++)
+            {
+                var parameterExpression = new Expr.Variable(
+                    function.Parameters[index].Name);
+                emitter.EmitExpression(parameterExpression);
+                emitter.EmitConversionForParameter(
+                    parameterExpression,
+                    coreParameters[index].ParameterType);
+            }
+            il.Emit(OpCodes.Call, coreMethod);
+            if (coreMethod.ReturnType.IsValueType)
+                il.Emit(OpCodes.Box, coreMethod.ReturnType);
+            il.Emit(OpCodes.Call, fromResult);
+            il.Emit(OpCodes.Stloc, resultTask);
+            il.Emit(OpCodes.Leave, completed);
+
+            il.BeginCatchBlock(typeof(Exception));
+            il.Emit(OpCodes.Call, fromException);
+            il.Emit(OpCodes.Stloc, resultTask);
+            il.Emit(OpCodes.Leave, completed);
+            il.EndExceptionBlock();
+
+            il.Emit(OpCodes.Ldloc, resultTask);
+            il.Emit(OpCodes.Ret);
+        }
+
+        _modules.CurrentPath = savedPath;
+        _currentNamespacePath = savedNamespacePath;
+    }
+
+    private CompilationContext CreateSuspensionFreePrimitiveFunctionContext(
+        ILGenerator il,
+        MethodBuilder method,
+        Stmt.Function function)
+    {
+        var ctx = CreateModuleMemberContext(il, method);
+        ctx.FunctionOverloads = _functions.Overloads;
+        ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0
+            ? _async.ArrowBuilders : null;
+        ctx.UnionGenerator = _unionGenerator;
+        ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+        ApplyCommonJsModuleAccess(ctx);
+        ApplyCapturedTopLevelVariableAccess(ctx);
+        ctx.TopLevelStaticVars =
+            BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
+        ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0
+            ? _closures.ArrowEntryPointDCFields : null;
+        ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0
+            ? _closures.ArrowFunctionDCFields : null;
+        ApplyInnerFunctionSupport(ctx);
+        return ctx;
     }
 
     private void EmitAsyncArrowMoveNext(AsyncArrowStateMachineBuilder arrowBuilder, Expr.ArrowFunction arrow, CompilationContext parentCtx)
