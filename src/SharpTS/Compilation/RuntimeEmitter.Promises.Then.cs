@@ -1127,12 +1127,12 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(createChain);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.TaskOfObject.GetProperty(
-            "IsCompletedSuccessfully")!.GetGetMethod()!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.Task, "IsCompletedSuccessfully").GetGetMethod()!);
         il.Emit(OpCodes.Brfalse, fallbackLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt,
-            _types.TaskOfObject.GetProperty("Result")!.GetGetMethod()!);
+            _types.GetProperty(_types.TaskOfObject, "Result").GetGetMethod()!);
         il.Emit(OpCodes.Unbox_Any, typeof(double));
         il.Emit(OpCodes.Newobj, chain.Constructor);
         il.Emit(OpCodes.Stloc, chainLocal);
