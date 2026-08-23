@@ -1029,6 +1029,7 @@ public class EmittedRuntime
     public MethodBuilder PromiseAllSettledKeyedStatic { get; set; } = null!;
     public MethodBuilder PromiseAnyStatic { get; set; } = null!;
     public MethodBuilder PromiseAll { get; set; } = null!;
+    public MethodBuilder PromiseAllPrimitive { get; set; } = null!;
     public MethodBuilder PromiseAllKeyed { get; set; } = null!;
     public MethodBuilder PromiseRace { get; set; } = null!;
     public MethodBuilder PromiseThen { get; set; } = null!;
@@ -1046,7 +1047,7 @@ public class EmittedRuntime
     public MethodBuilder PromiseWithResolvers { get; set; } = null!;
     /// <summary>$Runtime.UnwrapPromiseReceiver(object) -> Task&lt;object?&gt; — $Promise (incl. #242 subclasses) → .Task; anything else is cast to Task&lt;object?&gt;. Used by then/catch/finally emission so promise-typed receivers work regardless of representation.</summary>
     public MethodBuilder UnwrapPromiseReceiverMethod { get; set; } = null!;
-    /// <summary>$Runtime.NormalizePromiseList(object, object, object, int) -> object — incrementally resolves and wires Promise combinator elements while preserving observable iterator order. Kind 3 is Promise.all with a shared result-capability reject callback.</summary>
+    /// <summary>$Runtime.NormalizePromiseList(object, object, object, int, bool) -> object — incrementally resolves and wires Promise combinator elements while preserving observable iterator order. Kind 3 is Promise.all; the final flag selects a compiler-proven stable primitive input.</summary>
     public MethodBuilder NormalizePromiseListMethod { get; set; } = null!;
     /// <summary>$Runtime.WrapDerivedPromiseResult(Task&lt;object?&gt; result, object receiver) -> object — completes species-based result construction for subclass then/catch/finally results after ObservePromiseConstructor has performed the synchronous own-constructor access (#242). For a $Promise SUBCLASS species, constructs a receiver-typed promise around the result task via the subclass's (object executor) constructor (PromiseFromExecutor adopts the task); for a general non-Promise species, routes to NewPromiseCapabilityResult (#349); for %Promise% (or no subclass receiver) returns the task unchanged.</summary>
     public MethodBuilder WrapDerivedPromiseResultMethod { get; set; } = null!;

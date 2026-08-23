@@ -87,7 +87,8 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits NormalizePromiseList(object iterable, object constructor, object capability) -> object:
+    /// Emits NormalizePromiseList(object iterable, object constructor, object capability,
+    /// int kind, bool stablePrimitive) -> object:
     /// materializes supported finite iterables and returns a list normalized through constructor C's
     /// current <c>resolve</c> method. The built-in path unwraps
     /// $Promise elements (including #242 subclasses) to their backing Task;
@@ -384,6 +385,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Brfalse, fastTaskScanTSPromiseLabel);
+        il.Emit(OpCodes.Ldarg_S, 4);
+        il.Emit(OpCodes.Brtrue, fastTaskScanStoreLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "then");
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
@@ -396,10 +399,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, resolvedElementLocal);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Brfalse, ordinaryListNormalizationLabel);
+        var stableTSPromiseTaskLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_S, 4);
+        il.Emit(OpCodes.Brtrue, stableTSPromiseTaskLabel);
         il.Emit(OpCodes.Ldloc, elementLocal);
         il.Emit(OpCodes.Ldstr, "then");
         il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
         il.Emit(OpCodes.Brtrue, ordinaryListNormalizationLabel);
+        il.MarkLabel(stableTSPromiseTaskLabel);
         il.Emit(OpCodes.Ldloc, resolvedElementLocal);
         il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
         il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);

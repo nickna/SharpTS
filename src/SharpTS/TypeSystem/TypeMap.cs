@@ -25,6 +25,8 @@ public class TypeMap
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr> _stablePrimitivePromiseAllIterables = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllResultUses = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Associates an expression with its resolved type.
@@ -220,6 +222,28 @@ public class TypeMap
     /// </summary>
     public bool IsStablePrimitivePromiseThen(Expr.Get method) =>
         _stablePrimitivePromiseThenCalls.Contains(method);
+
+    /// <summary>
+    /// Marks the exact iterable expression of a proven fresh, non-escaping
+    /// <c>Promise&lt;number&gt;[]</c> consumed once by intrinsic <c>Promise.all</c>.
+    /// The compiler may return its result in the internal unboxed numeric-list
+    /// representation and omit per-element own-<c>then</c> probes.
+    /// </summary>
+    public void MarkStablePrimitivePromiseAllIterable(Expr iterable) =>
+        _stablePrimitivePromiseAllIterables.Add(iterable);
+
+    public bool IsStablePrimitivePromiseAllIterable(Expr iterable) =>
+        _stablePrimitivePromiseAllIterables.Contains(iterable);
+
+    /// <summary>
+    /// Marks a permitted length/index receiver use of the non-escaping numeric
+    /// result produced by a stable primitive <c>Promise.all</c> call.
+    /// </summary>
+    public void MarkStablePrimitivePromiseAllResultUse(Expr.Variable variable) =>
+        _stablePrimitivePromiseAllResultUses.Add(variable);
+
+    public bool IsStablePrimitivePromiseAllResultUse(Expr.Variable variable) =>
+        _stablePrimitivePromiseAllResultUses.Contains(variable);
 
     /// <summary>
     /// Gets the resolved type for an expression, or null if not found.

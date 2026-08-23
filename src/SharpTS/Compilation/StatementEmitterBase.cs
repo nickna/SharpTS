@@ -587,6 +587,9 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitFor(Stmt.For f)
     {
+        if (TryEmitStablePrimitivePromiseAllReduction(f))
+            return;
+
         // Create scope for loop variables (ES6 let/const block scoping)
         Ctx.Locals.EnterScope();
 
@@ -647,6 +650,208 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
         // Exit loop scope
         Ctx.Locals.ExitScope();
+    }
+
+    /// <summary>
+    /// Emits the canonical reduction of a proven stable primitive Promise.all result as a
+    /// native loop. The ordinary state-machine path boxes the counter, accumulator, and indexed
+    /// value on every iteration; here the non-escaping <c>List&lt;double&gt;</c> carrier lets all three
+    /// remain unboxed until the final accumulator store.
+    /// </summary>
+    private bool TryEmitStablePrimitivePromiseAllReduction(Stmt.For loop)
+    {
+        if (!TryMatchStablePrimitivePromiseAllReduction(
+                loop,
+                out string counterName,
+                out string resultName,
+                out string accumulatorName)
+            || !Resolver.HasVariable(resultName)
+            || !Resolver.HasVariable(accumulatorName)
+            || Ctx.ClosureAnalyzer?.IsVariableCaptured(accumulatorName) == true)
+        {
+            return false;
+        }
+
+        Ctx.Locals.EnterScope();
+
+        var valuesLocal = IL.DeclareLocal(Ctx.Types.ListOfDouble);
+        var accumulatorLocal = IL.DeclareLocal(Ctx.Types.Double);
+        var counterLocal = IL.DeclareLocal(Ctx.Types.Int32);
+
+        var resultStackType = Resolver.TryLoadVariable(resultName);
+        if (resultStackType is null)
+            throw new InvalidOperationException($"Unable to load stable Promise.all result '{resultName}'.");
+        SetStackType(resultStackType.Value);
+        EnsureBoxed();
+        IL.Emit(OpCodes.Castclass, Ctx.Types.ListOfDouble);
+        IL.Emit(OpCodes.Stloc, valuesLocal);
+
+        var accumulatorStackType = Resolver.TryLoadVariable(accumulatorName);
+        if (accumulatorStackType is null)
+            throw new InvalidOperationException($"Unable to load Promise.all accumulator '{accumulatorName}'.");
+        SetStackType(accumulatorStackType.Value);
+        EnsureDouble();
+        IL.Emit(OpCodes.Stloc, accumulatorLocal);
+
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, counterLocal);
+
+        var startLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+        var continueLabel = IL.DefineLabel();
+
+        EnterLoop(endLabel, continueLabel);
+        IL.MarkLabel(startLabel);
+        EmitCancellationCheckWithAccumulatorFlush(accumulatorName, accumulatorLocal);
+
+        IL.Emit(OpCodes.Ldloc, counterLocal);
+        IL.Emit(OpCodes.Ldloc, valuesLocal);
+        IL.Emit(OpCodes.Callvirt,
+            Ctx.Types.GetProperty(Ctx.Types.ListOfDouble, "Count").GetGetMethod()!);
+        IL.Emit(OpCodes.Bge, endLabel);
+
+        IL.Emit(OpCodes.Ldloc, accumulatorLocal);
+        IL.Emit(OpCodes.Ldloc, valuesLocal);
+        IL.Emit(OpCodes.Ldloc, counterLocal);
+        IL.Emit(OpCodes.Callvirt,
+            Ctx.Types.GetMethod(Ctx.Types.ListOfDouble, "get_Item", Ctx.Types.Int32));
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, accumulatorLocal);
+
+        IL.MarkLabel(continueLabel);
+        IL.Emit(OpCodes.Ldloc, counterLocal);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counterLocal);
+        IL.Emit(OpCodes.Br, startLabel);
+
+        IL.MarkLabel(endLabel);
+        ExitLoop();
+        EmitBoxedAccumulatorStore(accumulatorName, accumulatorLocal);
+        Ctx.Locals.ExitScope();
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryMatchStablePrimitivePromiseAllReduction(
+        Stmt.For loop,
+        out string counterName,
+        out string resultName,
+        out string accumulatorName)
+    {
+        counterName = resultName = accumulatorName = string.Empty;
+
+        if (loop.Initializer is not Stmt.Var
+            {
+                IsVar: false,
+                TypeAnnotation: "number",
+                Initializer: Expr.Literal { Value: double initialValue }
+            } counterDeclaration
+            || initialValue != 0.0)
+        {
+            return false;
+        }
+
+        counterName = counterDeclaration.Name.Lexeme;
+        if (loop.Condition is not Expr.Binary
+            {
+                Left: Expr.Variable conditionCounter,
+                Operator.Type: TokenType.LESS,
+                Right: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable lengthReceiver,
+                    Name.Lexeme: "length"
+                }
+            }
+            || conditionCounter.Name.Lexeme != counterName
+            || Ctx.TypeMap?.IsStablePrimitivePromiseAllResultUse(lengthReceiver) != true
+            || !IsIncrementOf(loop.Increment, counterName))
+        {
+            return false;
+        }
+
+        Stmt body = loop.Body is Stmt.Block { Statements: [var onlyStatement] }
+            ? onlyStatement
+            : loop.Body;
+        if (body is not Stmt.Expression
+            {
+                Expr: Expr.Assign
+                {
+                    Name: var accumulatorToken,
+                    Value: Expr.Binary
+                    {
+                        Left: Expr.Variable accumulatorRead,
+                        Operator.Type: TokenType.PLUS,
+                        Right: Expr.GetIndex
+                        {
+                            Optional: false,
+                            Object: Expr.Variable indexReceiver,
+                            Index: Expr.Variable indexCounter
+                        }
+                    }
+                }
+            }
+            || accumulatorRead.Name.Lexeme != accumulatorToken.Lexeme
+            || indexCounter.Name.Lexeme != counterName
+            || indexReceiver.Name.Lexeme != lengthReceiver.Name.Lexeme
+            || Ctx.TypeMap?.IsStablePrimitivePromiseAllResultUse(indexReceiver) != true
+            || !IsNumberType(Ctx.TypeMap.Get(accumulatorRead)))
+        {
+            return false;
+        }
+
+        resultName = lengthReceiver.Name.Lexeme;
+        accumulatorName = accumulatorToken.Lexeme;
+        return true;
+    }
+
+    private static bool IsIncrementOf(Expr? expression, string name) => expression switch
+    {
+        Expr.PostfixIncrement
+        {
+            Operator.Type: TokenType.PLUS_PLUS,
+            Operand: Expr.Variable variable
+        } => variable.Name.Lexeme == name,
+        Expr.PrefixIncrement
+        {
+            Operator.Type: TokenType.PLUS_PLUS,
+            Operand: Expr.Variable variable
+        } => variable.Name.Lexeme == name,
+        _ => false
+    };
+
+    private static bool IsNumberType(SharpTS.TypeSystem.TypeInfo? type) => type is
+        SharpTS.TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+        or SharpTS.TypeSystem.TypeInfo.NumberLiteral;
+
+    private void EmitBoxedAccumulatorStore(string name, LocalBuilder accumulator)
+    {
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        IL.Emit(OpCodes.Box, Ctx.Types.Double);
+        if (!Resolver.TryStoreVariable(name))
+            throw new InvalidOperationException($"Unable to store Promise.all accumulator '{name}'.");
+    }
+
+    private void EmitCancellationCheckWithAccumulatorFlush(string name, LocalBuilder accumulator)
+    {
+        if (Ctx.Runtime?.BuildCancellationExceptionMethod == null
+            || Ctx.Runtime.CancelRequestedField == null)
+        {
+            return;
+        }
+
+        var notCancelled = IL.DefineLabel();
+        IL.Emit(OpCodes.Volatile);
+        IL.Emit(OpCodes.Ldsfld, Ctx.Runtime.CancelRequestedField);
+        IL.Emit(OpCodes.Brfalse, notCancelled);
+
+        // The generic loop stores after each iteration. Mirror its observable partial value on
+        // the cold cancellation path without introducing a hot-path box.
+        EmitBoxedAccumulatorStore(name, accumulator);
+        IL.Emit(OpCodes.Call, Ctx.Runtime.BuildCancellationExceptionMethod);
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(notCancelled);
     }
 
     /// <summary>

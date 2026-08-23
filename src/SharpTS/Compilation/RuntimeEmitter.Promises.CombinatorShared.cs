@@ -96,7 +96,9 @@ public partial class RuntimeEmitter
         FieldBuilder? constructorField = null, System.Action? emitConstructorValue = null,
         FieldBuilder? capabilityField = null, System.Action? emitCapabilityValue = null,
         MethodInfo? markNonAutoAwaitMethod = null,
-        MethodInfo? adoptResultMethod = null)
+        MethodInfo? adoptResultMethod = null,
+        FieldBuilder? stablePrimitiveField = null,
+        System.Action? emitStablePrimitiveValue = null)
     {
         var smLocal = il.DeclareLocal(smType);
 
@@ -126,6 +128,13 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloca, smLocal);
             emitCapabilityValue();
             il.Emit(OpCodes.Stfld, capabilityField);
+        }
+
+        if (stablePrimitiveField is not null && emitStablePrimitiveValue is not null)
+        {
+            il.Emit(OpCodes.Ldloca, smLocal);
+            emitStablePrimitiveValue();
+            il.Emit(OpCodes.Stfld, stablePrimitiveField);
         }
 
         // sm.<>t__builder = AsyncTaskMethodBuilder<object>.Create();
@@ -189,7 +198,8 @@ public partial class RuntimeEmitter
     /// </summary>
     private static void EmitNormalizeCombinatorIterable(ILGenerator il, EmittedRuntime runtime,
         FieldBuilder iterableField, FieldBuilder constructorField,
-        FieldBuilder? capabilityField = null, int combinatorKind = 0)
+        FieldBuilder? capabilityField = null, int combinatorKind = 0,
+        FieldBuilder? stablePrimitiveField = null)
     {
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_0);
@@ -206,6 +216,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldfld, capabilityField);
         }
         il.Emit(OpCodes.Ldc_I4, combinatorKind);
+        if (stablePrimitiveField is null)
+        {
+            il.Emit(OpCodes.Ldc_I4_0);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, stablePrimitiveField);
+        }
         il.Emit(OpCodes.Call, runtime.NormalizePromiseListMethod);
         il.Emit(OpCodes.Stfld, iterableField);
     }
