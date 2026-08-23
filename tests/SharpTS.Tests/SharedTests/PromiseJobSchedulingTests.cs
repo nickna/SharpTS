@@ -96,6 +96,73 @@ public sealed class PromiseJobSchedulingTests
         Assert.Equal("sync\n42:1\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void StablePrimitiveChain_QueuesEachLinkAsItsOwnFifoJob(
+        ExecutionMode mode)
+    {
+        const string source = """
+            const order: string[] = [];
+            async function run(): Promise<void> {
+                let chain: Promise<number> = Promise.resolve(0);
+                chain = chain.then((value: number): number => {
+                    order.push("first");
+                    queueMicrotask((): void => { order.push("inside"); });
+                    return value + 1;
+                });
+                queueMicrotask((): void => { order.push("between"); });
+                chain = chain.then((value: number): number => {
+                    order.push("second");
+                    return value + 1;
+                });
+                await chain;
+                order.push("after-await");
+                console.log(order.join(":"));
+            }
+            run();
+            """;
+
+        Assert.Equal(
+            "first:between:inside:second:after-await\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StablePrimitiveChain_PropagatesRejectionThroughQueuedLinks(
+        ExecutionMode mode)
+    {
+        const string source = """
+            const order: string[] = [];
+            async function run(): Promise<void> {
+                let chain: Promise<number> = Promise.resolve(0);
+                chain = chain.then((_value: number): number => {
+                    order.push("throw");
+                    queueMicrotask((): void => { order.push("inside"); });
+                    throw new Error("boom");
+                });
+                queueMicrotask((): void => { order.push("between"); });
+                chain = chain.then((value: number): number => {
+                    order.push("skipped-1");
+                    return value;
+                });
+                chain = chain.then((value: number): number => {
+                    order.push("skipped-2");
+                    return value;
+                });
+                try {
+                    await chain;
+                } catch (_error) {
+                    order.push("caught");
+                }
+                console.log(order.join(":"));
+            }
+            run();
+            """;
+
+        Assert.Equal(
+            "throw:between:inside:caught\n",
+            TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void StandaloneCompiledOutput_DrainsQueuedPromiseJobs()
     {

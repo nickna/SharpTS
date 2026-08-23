@@ -84,6 +84,65 @@ public static class AsyncPromiseCSharp
         return await chain;
     }
 
+    /// <summary>
+    /// Scheduler-equivalent control for the fused SharpTS path: retain one
+    /// final Task and execute exactly one numeric reaction per FIFO job.
+    /// Unlike the ContinueWith ceilings above, this includes explicit Promise-
+    /// job queueing while excluding emitted-runtime lookup overhead.
+    /// </summary>
+    public static Task<object?> FifoScheduledThenChain(object? n)
+    {
+        int count = (int)Convert.ToDouble(n);
+        var chain = new FifoThenChain(0d);
+        for (int i = 0; i < count; i++)
+        {
+            double captured = i;
+            chain.Append(value => value + captured);
+        }
+        return chain.Run();
+    }
+
+    private sealed class FifoThenChain
+    {
+        private readonly List<Func<double, double>> _handlers = [];
+        private readonly Queue<Action> _jobs = [];
+        private readonly TaskCompletionSource<object?> _completion = new();
+        private readonly Action _runOne;
+        private int _index;
+        private double _value;
+
+        public FifoThenChain(double value)
+        {
+            _value = value;
+            _runOne = RunOne;
+        }
+
+        public void Append(Func<double, double> handler) => _handlers.Add(handler);
+
+        public Task<object?> Run()
+        {
+            if (_handlers.Count == 0)
+            {
+                _completion.SetResult(_value);
+                return _completion.Task;
+            }
+
+            _jobs.Enqueue(_runOne);
+            while (_jobs.TryDequeue(out Action? job))
+                job();
+            return _completion.Task;
+        }
+
+        private void RunOne()
+        {
+            _value = _handlers[_index++](_value);
+            if (_index < _handlers.Count)
+                _jobs.Enqueue(_runOne);
+            else
+                _completion.SetResult(_value);
+        }
+    }
+
     public static async Task<double> IdiomaticAll(int n)
     {
         var promises = new Task<double>[n];

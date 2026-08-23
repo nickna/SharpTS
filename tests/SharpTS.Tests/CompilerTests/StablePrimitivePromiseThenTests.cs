@@ -57,6 +57,29 @@ public sealed class StablePrimitivePromiseThenTests
     }
 
     [Theory, ModeData]
+    public void StableNumericChain_ReturnsFreshFinalPromiseForEveryInvocation(
+        ExecutionMode mode)
+    {
+        const string source = """
+            function make(n: number): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(0);
+                for (let i: number = 0; i < n; i++) {
+                    chain = chain.then((value: number): number => value + 1);
+                }
+                return chain;
+            }
+            const first: any = make(0);
+            const second: any = make(3);
+            Promise.all([first, second]).then((values: number[]): void => {
+                console.log(String(first === second));
+                console.log(values.join(":"));
+            });
+            """;
+
+        Assert.Equal("false\n0:3\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void StableNumericChain_InImportedModulePreservesResult(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -134,9 +157,19 @@ public sealed class StablePrimitivePromiseThenTests
             instruction.OpCode == OpCodes.Newarr
             && instruction.Operand == typeof(object));
 
-        MethodInfo continuationMoveNext = assembly.GetType("$PromiseThenPrimitive_SM")!
-            .GetMethod("MoveNext")!;
-        var continuationInstructions = ReadInstructions(continuationMoveNext).ToArray();
+        MethodInfo runtimeEntry = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseThenPrimitive")!;
+        var runtimeInstructions = ReadInstructions(runtimeEntry).ToArray();
+        Assert.Contains(runtimeInstructions, instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "Append",
+                DeclaringType.Name: "$PrimitivePromiseChain"
+            });
+
+        MethodInfo runOne = assembly.GetType("$PrimitivePromiseChain")!
+            .GetMethod("RunOne", BindingFlags.NonPublic | BindingFlags.Instance)!;
+        var continuationInstructions = ReadInstructions(runOne).ToArray();
         Assert.Contains(continuationInstructions, instruction =>
             instruction.Operand is MethodBase
             {
@@ -148,6 +181,7 @@ public sealed class StablePrimitivePromiseThenTests
             instruction.Operand is MethodBase
             {
                 Name: "PromiseResolveValue" or "InvokeCallback"
+                    or "AwaitUnsafeOnCompleted"
             });
         Assert.DoesNotContain(continuationInstructions, instruction =>
             instruction.OpCode == OpCodes.Newarr
@@ -178,6 +212,46 @@ public sealed class StablePrimitivePromiseThenTests
             const alias: Promise<number> = chain;
             chain = chain.then((value: number): number => value + 1);
             await alias;
+            return await chain;
+        }
+        work();
+        """,
+        """
+        async function work(): Promise<number> {
+            let chain: Promise<number> = Promise.resolve(1);
+            const sibling: Promise<number> = chain.then(
+                (value: number): number => value + 1);
+            chain = chain.then((value: number): number => value + 2);
+            await sibling;
+            return await chain;
+        }
+        work();
+        """,
+        """
+        function consume(_promise: Promise<number>): void {}
+        async function work(): Promise<number> {
+            let chain: Promise<number> = Promise.resolve(1);
+            consume(chain = chain.then(
+                (value: number): number => value + 1));
+            return await chain;
+        }
+        work();
+        """,
+        """
+        async function work(): Promise<number> {
+            let chain: Promise<number> = Promise.resolve(1);
+            chain = chain.then((value: number): number => value + 1);
+            await chain;
+            chain = chain.then((value: number): number => value + 1);
+            return await chain;
+        }
+        work();
+        """,
+        """
+        async function work(): Promise<number> {
+            let chain: Promise<number> = Promise.resolve(1);
+            chain = chain.then((value: number): number => value + 1);
+            await chain;
             return await chain;
         }
         work();
