@@ -384,6 +384,150 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.Equal("6\n", TestHarness.RunCompiledStandalone(source));
     }
 
+    [Fact]
+    public void StablePromiseAllFanOut_UsesPrimitiveResultCarrier()
+    {
+        Assembly assembly = Compile("""
+            async function gather(n: number): Promise<number> {
+                const promises: Promise<number>[] = [];
+                for (let i: number = 0; i < n; i++) {
+                    promises.push(Promise.resolve(i));
+                }
+                const values: number[] = await Promise.all(promises);
+                let sum: number = 0;
+                for (let i: number = 0; i < values.length; i++) {
+                    sum = sum + values[i];
+                }
+                return sum;
+            }
+            gather(10);
+            """);
+
+        MethodInfo caller = FindSingleCaller(assembly, "PromiseAllPrimitive");
+        var instructions = ReadInstructions(caller).ToList();
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "GetIndex" or "GetLength" });
+        Assert.Contains(instructions, instruction =>
+            instruction.OpCode == OpCodes.Castclass
+            && instruction.Operand is Type type
+            && type == typeof(List<double>));
+
+        int itemRead = instructions.FindIndex(instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "get_Item",
+                DeclaringType: { } declaringType
+            }
+            && declaringType == typeof(List<double>));
+        Assert.True(itemRead >= 0);
+        Assert.Equal(OpCodes.Add, instructions[itemRead + 1].OpCode);
+    }
+
+    [Theory, ModeData]
+    public void StablePromiseAllReductionLoop_PreservesOutput(ExecutionMode mode)
+    {
+        const string source = """
+            async function gather(n: number): Promise<void> {
+                const promises: Promise<number>[] = [];
+                for (let i: number = 0; i < n; i++) {
+                    promises.push(Promise.resolve(i));
+                }
+                const values: number[] = await Promise.all(promises);
+                let sum: number = 0;
+                for (let i: number = 0; i < values.length; i++) {
+                    sum = sum + values[i];
+                }
+                console.log(sum);
+            }
+            gather(1000);
+            """;
+
+        Assert.Equal("499500\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StablePromiseAllFanOut_PreservesOutOfBoundsUndefined(ExecutionMode mode)
+    {
+        const string source = """
+            async function gather(): Promise<void> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(1));
+                const values: number[] = await Promise.all(promises);
+                console.log(String(values[4]));
+            }
+            gather();
+            """;
+
+        Assert.Equal("undefined\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StablePromiseAllFanOut_PreservesNonIndexNumericKeys(ExecutionMode mode)
+    {
+        const string source = """
+            async function gather(): Promise<void> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(1));
+                const values: number[] = await Promise.all(promises);
+                console.log(String(values[0.5]));
+                console.log(String(values[NaN]));
+                console.log(String(values[-1]));
+                console.log(String(values[Infinity]));
+                console.log(values[-0]);
+            }
+            gather();
+            """;
+
+        Assert.Equal(
+            "undefined\nundefined\nundefined\nundefined\n1\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void RuntimeUncertainPromiseAllElement_RetainsOrdinaryResult()
+    {
+        const string source = """
+            function uncertain(): number {
+                return undefined as any;
+            }
+            async function gather(): Promise<void> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(uncertain()));
+                const values: number[] = await Promise.all(promises);
+                console.log(String(values[0]));
+            }
+            gather();
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseAllPrimitive"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseAll"));
+        Assert.Equal("undefined\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Theory]
+    [InlineData("const alias: Promise<number>[] = promises;")]
+    [InlineData("consume(values);")]
+    public void ObservablePromiseAllShapes_RetainOrdinaryResult(string observableUse)
+    {
+        string source = $$"""
+            function consume(_value: number[]): void {}
+            async function gather(): Promise<number> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(1));
+                {{(observableUse.Contains("alias", StringComparison.Ordinal) ? observableUse : "")}}
+                const values: number[] = await Promise.all(promises);
+                {{(observableUse.Contains("values", StringComparison.Ordinal) ? observableUse : "")}}
+                return values.length;
+            }
+            gather();
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseAllPrimitive"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseAll"));
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

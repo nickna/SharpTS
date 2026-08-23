@@ -525,6 +525,60 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitGetIndex(Expr.GetIndex gi)
     {
+        // Stable primitive Promise.all result: the analyzer proved this local
+        // cannot escape and is observed only through numeric index reads and
+        // length, so PromiseAllPrimitive returns an internal List<double>.
+        // State-machine locals normally use object fields; cast that field
+        // directly instead of routing every read through Runtime.GetIndex.
+        if (!gi.Optional
+            && gi.Object is Expr.Variable stableAllResult
+            && Ctx.TypeMap?.IsStablePrimitivePromiseAllResultUse(stableAllResult) == true
+            && Ctx.TypeMap.Get(gi.Index) is SharpTS.TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                or SharpTS.TypeSystem.TypeInfo.NumberLiteral)
+        {
+            EmitExpressionAsDouble(gi.Index);
+            var numericIndexLocal = IL.DeclareLocal(Types.Double);
+            IL.Emit(OpCodes.Stloc, numericIndexLocal);
+            var indexLocal = IL.DeclareLocal(Types.Int32);
+            var listLocal = IL.DeclareLocal(Types.ListOfDouble);
+            EmitExpression(gi.Object);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, Types.ListOfDouble);
+            IL.Emit(OpCodes.Stloc, listLocal);
+
+            var outOfBoundsLabel = IL.DefineLabel();
+            var doneLabel = IL.DefineLabel();
+            IL.Emit(OpCodes.Ldloc, numericIndexLocal);
+            IL.Emit(OpCodes.Ldc_R8, 0.0);
+            IL.Emit(OpCodes.Blt_Un, outOfBoundsLabel);
+            IL.Emit(OpCodes.Ldloc, numericIndexLocal);
+            IL.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
+            IL.Emit(OpCodes.Bgt_Un, outOfBoundsLabel);
+            IL.Emit(OpCodes.Ldloc, numericIndexLocal);
+            IL.Emit(OpCodes.Ldloc, numericIndexLocal);
+            IL.Emit(OpCodes.Call, Types.GetMethod(Types.Math, "Truncate", Types.Double));
+            IL.Emit(OpCodes.Bne_Un, outOfBoundsLabel);
+            IL.Emit(OpCodes.Ldloc, numericIndexLocal);
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Stloc, indexLocal);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Ldloc, listLocal);
+            IL.Emit(OpCodes.Callvirt,
+                Types.GetProperty(Types.ListOfDouble, "Count").GetGetMethod()!);
+            IL.Emit(OpCodes.Bge_Un, outOfBoundsLabel);
+            IL.Emit(OpCodes.Ldloc, listLocal);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Callvirt,
+                Types.GetMethod(Types.ListOfDouble, "get_Item", Types.Int32));
+            IL.Emit(OpCodes.Box, Types.Double);
+            IL.Emit(OpCodes.Br, doneLabel);
+            IL.MarkLabel(outOfBoundsLabel);
+            IL.Emit(OpCodes.Ldsfld, Ctx.Runtime!.UndefinedInstance);
+            IL.MarkLabel(doneLabel);
+            SetStackUnknown();
+            return;
+        }
+
         // globalThis[key] → GlobalThisGetProperty(key)
         if (gi.Object is Expr.Variable gtGetIdx && gtGetIdx.Name.Lexeme == "globalThis")
         {
@@ -2695,6 +2749,21 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         // snapshot. Lives here in the shared base (not just ILEmitter) so state-machine bodies
         // (async/generator MoveNext emitters) observe live bindings too (#656).
         if (TryEmitNamespaceVarGet(g)) return;
+
+        if (!g.Optional
+            && g.Name.Lexeme == "length"
+            && g.Object is Expr.Variable stableAllResult
+            && Ctx.TypeMap?.IsStablePrimitivePromiseAllResultUse(stableAllResult) == true)
+        {
+            EmitExpression(g.Object);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, Types.ListOfDouble);
+            IL.Emit(OpCodes.Callvirt,
+                Types.GetProperty(Types.ListOfDouble, "Count").GetGetMethod()!);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
 
         if (TryEmitSymbolWellKnown(g)) return;
         if (TryEmitStaticClassMethodValue(g)) return;

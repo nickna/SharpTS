@@ -117,7 +117,9 @@ public class PromiseAllPhaseBenchmarks : AsyncPromiseBenchmarkBase
 {
     private Func<object?, Task<object?>> _resolveFanOut = null!;
     private Func<object?, Task<object?>> _repeatedResolved = null!;
+    private Func<object?, Task<object?>> _distinctResolved = null!;
     private Func<object?, Task<object?>> _repeatedResolvedBuild = null!;
+    private Func<double, double> _resultConsumption = null!;
 
     [Params(1000)]
     public int N { get; set; }
@@ -127,7 +129,13 @@ public class PromiseAllPhaseBenchmarks : AsyncPromiseBenchmarkBase
     {
         _resolveFanOut = LoadCompiledAsync("promiseResolveFanOutPhase");
         _repeatedResolved = LoadCompiledAsync("promiseAllRepeatedResolvedPhase");
+        _distinctResolved = LoadCompiledAsync("promiseAllDistinctResolvedPhase");
         _repeatedResolvedBuild = LoadCompiledAsync("promiseRepeatedResolvedBuildPhase");
+        _resultConsumption = Infrastructure.BenchmarkHarness.GetCompiledNumberFunc(
+            Infrastructure.BenchmarkHarness.LoadCompiledAssembly(
+                Infrastructure.CompilationCache.GetOrCompile(LoadTypeScriptSource(), "Algorithms"),
+                "algorithms"),
+            "promiseAllResultConsumptionPhase");
     }
 
     [Benchmark]
@@ -137,5 +145,11 @@ public class PromiseAllPhaseBenchmarks : AsyncPromiseBenchmarkBase
     public Task<object?> RepeatedResolvedAll() => _repeatedResolved((double)N);
 
     [Benchmark]
+    public Task<object?> DistinctResolvedAll() => _distinctResolved((double)N);
+
+    [Benchmark]
     public Task<object?> RepeatedResolvedBuild() => _repeatedResolvedBuild((double)N);
+
+    [Benchmark]
+    public double ResultConsumption() => _resultConsumption(N);
 }

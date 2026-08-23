@@ -73,7 +73,11 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 }
                 EmitBasePromiseConstructor(ctx);
                 il.Emit(OpCodes.Ldnull); // no materialized capability on intrinsic Promise.all
-                il.Emit(OpCodes.Call, ctx.Runtime!.PromiseAll);
+                il.Emit(OpCodes.Call,
+                    arguments.Count > 0
+                    && ctx.TypeMap?.IsStablePrimitivePromiseAllIterable(arguments[0]) == true
+                        ? ctx.Runtime!.PromiseAllPrimitive
+                        : ctx.Runtime!.PromiseAll);
                 return true;
 
             case "allKeyed":

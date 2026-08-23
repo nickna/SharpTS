@@ -350,6 +350,29 @@ export async function promiseAllRepeatedResolvedPhase(n: number): Promise<number
     return values.length;
 }
 
+export async function promiseAllDistinctResolvedPhase(n: number): Promise<number> {
+    const promises: Promise<number>[] = [];
+    for (let i: number = 0; i < n; i++) {
+        promises.push(Promise.resolve(i));
+    }
+    const values: number[] = await (
+        Promise.all(promises) as Promise<number[]>
+    );
+    return values.length;
+}
+
+export function promiseAllResultConsumptionPhase(n: number): number {
+    const values: number[] = [];
+    for (let i: number = 0; i < n; i++) {
+        values.push(i);
+    }
+    let sum: number = 0;
+    for (let i: number = 0; i < values.length; i++) {
+        sum = sum + values[i];
+    }
+    return sum;
+}
+
 export async function promiseRepeatedResolvedBuildPhase(n: number): Promise<number> {
     const promise: Promise<number> = Promise.resolve(1);
     const promises: Promise<number>[] = [];

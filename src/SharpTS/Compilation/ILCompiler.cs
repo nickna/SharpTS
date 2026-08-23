@@ -653,6 +653,8 @@ public partial class ILCompiler
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StablePrimitivePromiseThenAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer);
+        StablePrimitivePromiseAllAnalyzer.Analyze(
+            statements, _typeMap, _closures.Analyzer);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NonEscapingArrowLocalAnalyzer.Analyze(

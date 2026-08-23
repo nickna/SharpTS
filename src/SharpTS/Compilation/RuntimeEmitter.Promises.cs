@@ -15,6 +15,7 @@ internal class EmittedStateMachine
     public required FieldBuilder IterableField { get; init; }
     public required FieldBuilder ConstructorField { get; init; }
     public FieldBuilder? CapabilityField { get; init; }
+    public FieldBuilder? StablePrimitiveField { get; init; }
     public required FieldBuilder AwaiterField { get; init; }
     public required MethodBuilder MoveNextMethod { get; init; }
     public required Type BuilderType { get; init; }
@@ -560,7 +561,7 @@ public partial class RuntimeEmitter
             "NormalizePromiseList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object, _types.Object, _types.Object, _types.Int32]);
+            [_types.Object, _types.Object, _types.Object, _types.Int32, _types.Boolean]);
         runtime.AdoptPromiseCombinatorResultMethod = typeBuilder.DefineMethod(
             "AdoptPromiseCombinatorResult",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -581,7 +582,16 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object]
         );
         runtime.PromiseAll = all;
-        EmitPromiseAllWrapper(all.GetILGenerator(), promiseAllSM, runtime);
+        EmitPromiseAllWrapper(all.GetILGenerator(), promiseAllSM, runtime, stablePrimitive: false);
+
+        var allPrimitive = typeBuilder.DefineMethod(
+            "PromiseAllPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            taskType,
+            [_types.Object, _types.Object, _types.Object]
+        );
+        runtime.PromiseAllPrimitive = allPrimitive;
+        EmitPromiseAllWrapper(allPrimitive.GetILGenerator(), promiseAllSM, runtime, stablePrimitive: true);
         EmitPromiseAllMoveNext(promiseAllSM, runtime);
         promiseAllSM.Type.CreateType();
 
