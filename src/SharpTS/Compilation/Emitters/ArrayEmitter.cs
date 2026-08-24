@@ -26,6 +26,20 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (methodName == "push"
+            && receiver is Expr.Variable stableReceiver
+            && ctx.TypeMap?.IsStablePrimitivePromiseAllPushReceiver(stableReceiver) == true
+            && arguments is [var value])
+        {
+            emitter.EmitExpression(receiver);
+            emitter.EnsureBoxed();
+            il.Emit(OpCodes.Castclass, ctx.Types.ListOfDouble);
+            emitter.EmitExpressionAsDouble(value);
+            il.Emit(OpCodes.Call, ctx.Runtime!.ArrayPushDouble);
+            emitter.SetStackType(StackType.Double);
+            return true;
+        }
+
         // Methods whose spec says "return this" — the caller expects the same reference the receiver
         // started with (sort/reverse/fill/copyWithin). Since we unwrap to a List, the helper returns the
         // inner List, not the $Array wrapper; to preserve `arr === arr.sort()` we stash the wrapper and

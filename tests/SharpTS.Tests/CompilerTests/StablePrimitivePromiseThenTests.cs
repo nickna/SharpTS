@@ -423,6 +423,84 @@ public sealed class StablePrimitivePromiseThenTests
         Assert.Equal(OpCodes.Add, instructions[itemRead + 1].OpCode);
     }
 
+    [Fact]
+    public void StablePromiseAllFanOut_AvoidsPerElementTasksAndWhenAll()
+    {
+        Assembly assembly = Compile("""
+            async function gather(n: number): Promise<number> {
+                const promises: Promise<number>[] = [];
+                for (let i: number = 0; i < n; i++) {
+                    promises.push(Promise.resolve(i));
+                }
+                const values: number[] = await Promise.all(promises);
+                return values.length;
+            }
+            gather(10);
+            """);
+
+        MethodInfo caller = FindSingleCaller(assembly, "PromiseAllPrimitive");
+        Assert.DoesNotContain(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "FromResult" or "PromiseResolve"
+            });
+        Assert.Contains(ReadInstructions(caller), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "Add",
+                DeclaringType: { } declaringType
+            }
+            && declaringType == typeof(List<double>));
+
+        MethodInfo primitiveAll = assembly.GetType("$Runtime")!
+            .GetMethod("PromiseAllPrimitive")!;
+        var instructions = ReadInstructions(primitiveAll).ToList();
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "WhenAll" or "get_Result" or
+                    "FromResult" or "AdoptPromiseCombinatorResult" or
+                    "MarkNonAutoAwaitPromise"
+            });
+        Assert.Single(instructions, instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "QueuePromiseJob"
+            });
+    }
+
+    [Theory, ModeData]
+    public void StablePromiseAllFanOut_PreservesPromiseJobOrdering(ExecutionMode mode)
+    {
+        const string source = """
+            async function gather(): Promise<void> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(1));
+                Promise.resolve(0).then((): void => console.log("queued"));
+                const values: number[] = await Promise.all(promises);
+                console.log("all:" + values.length);
+            }
+            gather();
+            """;
+
+        Assert.Equal("queued\nall:1\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void StablePromiseAllFanOut_PreservesEmptyInput(ExecutionMode mode)
+    {
+        const string source = """
+            async function gather(): Promise<void> {
+                const promises: Promise<number>[] = [];
+                const values: number[] = await Promise.all(promises);
+                console.log(values.length);
+            }
+            gather();
+            """;
+
+        Assert.Equal("0\n", TestHarness.Run(source, mode));
+    }
+
     [Theory, ModeData]
     public void StablePromiseAllReductionLoop_PreservesOutput(ExecutionMode mode)
     {
@@ -518,6 +596,27 @@ public sealed class StablePrimitivePromiseThenTests
                 {{(observableUse.Contains("alias", StringComparison.Ordinal) ? observableUse : "")}}
                 const values: number[] = await Promise.all(promises);
                 {{(observableUse.Contains("values", StringComparison.Ordinal) ? observableUse : "")}}
+                return values.length;
+            }
+            gather();
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Empty(FindCallers(assembly, "PromiseAllPrimitive"));
+        Assert.NotEmpty(FindCallers(assembly, "PromiseAll"));
+    }
+
+    [Fact]
+    public void ArrayPrototypePushMutation_RetainsOrdinaryPromiseAllPath()
+    {
+        const string source = """
+            (Array.prototype as any).push = function(value: any): number {
+                return 0;
+            };
+            async function gather(): Promise<number> {
+                const promises: Promise<number>[] = [];
+                promises.push(Promise.resolve(1));
+                const values: number[] = await Promise.all(promises);
                 return values.length;
             }
             gather();

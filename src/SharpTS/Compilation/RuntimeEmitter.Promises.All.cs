@@ -7,6 +7,59 @@ public partial class RuntimeEmitter
 {
     #region PromiseAll State Machine
 
+    private sealed record PrimitiveAllSettlement(
+        TypeBuilder Type,
+        ConstructorBuilder Constructor,
+        FieldBuilder CompletionField,
+        MethodBuilder RunMethod);
+
+    private PrimitiveAllSettlement DefineCompletedPrimitivePromiseAllSettlement(
+        ModuleBuilder moduleBuilder)
+    {
+        var type = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
+            "$PrimitivePromiseAllSettlement",
+            TypeAttributes.Public | TypeAttributes.Sealed |
+                TypeAttributes.BeforeFieldInit,
+            _types.Object);
+        var completionField = type.DefineField(
+            "Completion", _types.TaskCompletionSourceOfObject,
+            FieldAttributes.Public);
+        var resultField = type.DefineField(
+            "Result", _types.Object, FieldAttributes.Public);
+        var constructor = type.DefineConstructor(
+            MethodAttributes.Public, CallingConventions.Standard,
+            [_types.Object]);
+        {
+            var il = constructor.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, _types.GetDefaultConstructor(_types.Object));
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(
+                _types.TaskCompletionSourceOfObject));
+            il.Emit(OpCodes.Stfld, completionField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Stfld, resultField);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var run = type.DefineMethod(
+            "Run", MethodAttributes.Public, _types.Void, Type.EmptyTypes);
+        {
+            var il = run.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, completionField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, resultField);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                _types.TaskCompletionSourceOfObject, "SetResult", _types.Object));
+            il.Emit(OpCodes.Ret);
+        }
+
+        return new PrimitiveAllSettlement(type, constructor, completionField, run);
+    }
+
     /// <summary>
     /// Defines the PromiseAll state machine type structure.
     /// </summary>
@@ -57,6 +110,46 @@ public partial class RuntimeEmitter
             stablePrimitiveField: sm.StablePrimitiveField,
             emitStablePrimitiveValue: () => il.Emit(
                 stablePrimitive ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0));
+
+    /// <summary>
+    /// Emits the compiler-proven completed primitive Promise.all path. The
+    /// analyzer guarantees a fresh, non-escaping Promise&lt;number&gt;[] whose
+    /// elements all come from the intrinsic Promise.resolve(number), so the
+    /// fulfilled values are carried directly in its private typed backing list
+    /// and no per-element promise identity or then observation is possible. Copy
+    /// those values into the typed result carrier without constructing input
+    /// Tasks, a Task array, Task.WhenAll state machine, object result array, or
+    /// numeric reconversion pass. One FIFO job fulfills the result, preserving
+    /// the asynchronous ordering of await/then observation without building the
+    /// generic fan-in graph or capability-adoption facade.
+    /// </summary>
+    private void EmitCompletedPrimitivePromiseAll(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        PrimitiveAllSettlement settlement)
+    {
+        var listType = typeof(List<double>);
+        var enumerableType = typeof(IEnumerable<double>);
+        var settlementLocal = il.DeclareLocal(settlement.Type);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, listType);
+        il.Emit(OpCodes.Newobj, listType.GetConstructor([enumerableType])!);
+        il.Emit(OpCodes.Newobj, settlement.Constructor);
+        il.Emit(OpCodes.Stloc, settlementLocal);
+
+        il.Emit(OpCodes.Ldloc, settlementLocal);
+        il.Emit(OpCodes.Ldftn, settlement.RunMethod);
+        il.Emit(OpCodes.Newobj,
+            typeof(Action).GetConstructor([typeof(object), typeof(IntPtr)])!);
+        il.Emit(OpCodes.Call, runtime.QueuePromiseJob);
+
+        il.Emit(OpCodes.Ldloc, settlementLocal);
+        il.Emit(OpCodes.Ldfld, settlement.CompletionField);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.TaskCompletionSourceOfObject, "Task").GetGetMethod()!);
+        il.Emit(OpCodes.Ret);
+    }
 
     /// <summary>
     /// Emits the MoveNext body for PromiseAll state machine.

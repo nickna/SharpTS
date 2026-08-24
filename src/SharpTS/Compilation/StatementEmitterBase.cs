@@ -373,6 +373,29 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// </summary>
     protected virtual bool TryEmitDiscardedExpression(Expr expression)
     {
+        if (expression is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable stableReceiver,
+                    Name.Lexeme: "push"
+                },
+                Arguments: [var stableValue]
+            }
+            && Ctx.TypeMap?.IsStablePrimitivePromiseAllPushReceiver(stableReceiver) == true)
+        {
+            EmitExpression(stableReceiver);
+            EnsureBoxed();
+            IL.Emit(OpCodes.Castclass, Ctx.Types.ListOfDouble);
+            EmitExpressionAsDouble(stableValue);
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.ArrayPushDouble);
+            IL.Emit(OpCodes.Pop);
+            SetStackUnknown();
+            return true;
+        }
+
         if (expression is not Expr.Call
             {
                 Optional: false,
@@ -587,6 +610,8 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     /// </summary>
     protected virtual void EmitFor(Stmt.For f)
     {
+        if (TryEmitStablePrimitivePromiseAllFill(f))
+            return;
         if (TryEmitStablePrimitivePromiseAllReduction(f))
             return;
 
@@ -650,6 +675,109 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
 
         // Exit loop scope
         Ctx.Locals.ExitScope();
+    }
+
+    /// <summary>
+    /// Emits the canonical producer loop of a proven stable primitive Promise.all
+    /// input with a native counter and direct typed-list append. The condition is
+    /// still evaluated on every iteration and cancellation remains observable at
+    /// the same loop boundary as the general emitter.
+    /// </summary>
+    private bool TryEmitStablePrimitivePromiseAllFill(Stmt.For loop)
+    {
+        if (loop.Initializer is not Stmt.Var
+            {
+                IsVar: false,
+                TypeAnnotation: "number",
+                Initializer: Expr.Literal { Value: double initialValue }
+            } counterDeclaration
+            || initialValue != 0.0
+            || loop.Condition is not Expr.Binary
+            {
+                Left: Expr.Variable conditionCounter,
+                Operator.Type: TokenType.LESS,
+                Right: var bound
+            }
+            || conditionCounter.Name.Lexeme != counterDeclaration.Name.Lexeme
+            || !IsIncrementOf(loop.Increment, counterDeclaration.Name.Lexeme)
+            || bound is not (Expr.Variable or Expr.Literal)
+            || bound is Expr.Variable boundVariable
+                && boundVariable.Name.Lexeme == counterDeclaration.Name.Lexeme
+            || !IsNumberType(Ctx.TypeMap?.Get(bound)))
+        {
+            return false;
+        }
+
+        Stmt body = loop.Body is Stmt.Block { Statements: [var onlyStatement] }
+            ? onlyStatement
+            : loop.Body;
+        if (body is not Stmt.Expression
+            {
+                Expr: Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable receiver,
+                        Name.Lexeme: "push"
+                    },
+                    Arguments:
+                    [
+                        Expr.Call
+                        {
+                            Optional: false,
+                            Callee: Expr.Get
+                            {
+                                Optional: false,
+                                Object: Expr.Variable { Name.Lexeme: "Promise" },
+                                Name.Lexeme: "resolve"
+                            },
+                            Arguments: [Expr.Variable seed]
+                        }
+                    ]
+                }
+            }
+            || seed.Name.Lexeme != counterDeclaration.Name.Lexeme
+            || Ctx.TypeMap?.IsStablePrimitivePromiseAllPushReceiver(receiver) != true
+            || Ctx.TypeMap.IsStablePrimitivePromiseAllSeedValue(seed) != true)
+        {
+            return false;
+        }
+
+        var valuesLocal = IL.DeclareLocal(Ctx.Types.ListOfDouble);
+        var counterLocal = IL.DeclareLocal(Ctx.Types.Double);
+
+        EmitExpression(receiver);
+        EnsureBoxed();
+        IL.Emit(OpCodes.Castclass, Ctx.Types.ListOfDouble);
+        IL.Emit(OpCodes.Stloc, valuesLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Stloc, counterLocal);
+
+        var startLabel = IL.DefineLabel();
+        var endLabel = IL.DefineLabel();
+        IL.MarkLabel(startLabel);
+        EmitCancellationCheck();
+
+        IL.Emit(OpCodes.Ldloc, counterLocal);
+        EmitExpressionAsDouble(bound);
+        IL.Emit(OpCodes.Bge_Un, endLabel);
+
+        IL.Emit(OpCodes.Ldloc, valuesLocal);
+        IL.Emit(OpCodes.Ldloc, counterLocal);
+        IL.Emit(OpCodes.Callvirt,
+            Ctx.Types.GetMethod(Ctx.Types.ListOfDouble, "Add", Ctx.Types.Double));
+
+        IL.Emit(OpCodes.Ldloc, counterLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1.0);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counterLocal);
+        IL.Emit(OpCodes.Br, startLabel);
+
+        IL.MarkLabel(endLabel);
+        SetStackUnknown();
+        return true;
     }
 
     /// <summary>

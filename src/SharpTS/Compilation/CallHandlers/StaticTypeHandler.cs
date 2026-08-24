@@ -31,7 +31,17 @@ public class StaticTypeHandler : ICallHandler
         if (!staticStrategy.TryEmitStaticCall(emitter, staticGet.Name.Lexeme, call.Arguments))
             return false;
 
-        emitter.SetStackUnknown();
+        if (staticVar.Name.Lexeme == "Promise"
+            && staticGet.Name.Lexeme == "resolve"
+            && call.Arguments is [var resolvedValue]
+            && ctx.TypeMap?.IsStablePrimitivePromiseAllSeedValue(resolvedValue) == true)
+        {
+            emitter.SetStackType(StackType.Double);
+        }
+        else
+        {
+            emitter.SetStackUnknown();
+        }
         return true;
     }
 }

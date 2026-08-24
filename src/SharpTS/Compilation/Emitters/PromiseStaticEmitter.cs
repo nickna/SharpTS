@@ -25,6 +25,18 @@ public sealed class PromiseStaticEmitter : IStaticTypeEmitterStrategy
                 // Promise.resolve(value?) - returns Task<object?> directly
                 if (arguments.Count > 0)
                 {
+                    // The whole-program Promise.all proof established that
+                    // this fresh promise and its private input array cannot be
+                    // observed independently. Its producer is a promoted
+                    // List<double>, so carry the unboxed fulfilled primitive
+                    // directly instead of allocating a completed Task.
+                    if (ctx.TypeMap?.IsStablePrimitivePromiseAllSeedValue(arguments[0]) == true)
+                    {
+                        emitter.EmitExpressionAsDouble(arguments[0]);
+                        emitter.SetStackType(StackType.Double);
+                        return true;
+                    }
+
                     emitter.EmitExpression(arguments[0]);
                     emitter.EmitBoxIfNeeded(arguments[0]);
 
