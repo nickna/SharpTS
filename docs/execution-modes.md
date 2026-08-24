@@ -55,6 +55,7 @@ portable choice for hosting, C# references, and other platforms.
 | `-o <path>` | Set the output path. |
 | `-t, --target dll\|exe` | Select a DLL (default) or executable. |
 | `--bundler auto\|sdk\|builtin` | Choose executable bundling. `auto` permits fallback; an explicit mode fails instead of changing technique. |
+| `--gc-profile workstation\|adaptive\|throughput` | Select deployment GC policy. Workstation is the conservative default; adaptive is recommended for measured allocation-heavy services; throughput is an expert fixed-server opt-in. |
 | `--preserveConstEnums` | Keep `const enum` declarations instead of inlining them. |
 | `--ref-asm` | Shape output for use as a C# reference assembly. |
 | `--sdk-path <path>` | Override the .NET SDK reference-assembly location. |
@@ -62,6 +63,22 @@ portable choice for hosting, C# references, and other platforms.
 | `--msbuild-errors` | Format compiler diagnostics for MSBuild. |
 | `--quiet` | Suppress success messages. |
 | `--standalone` | Suppress automatic copies of soft runtime and external interop dependencies. |
+
+### GC deployment profiles
+
+GC selection is deployment policy, not a JavaScript semantic or IL optimization. The default
+`workstation` profile minimizes startup and memory risk for interactive, one-shot, and unknown
+programs. `adaptive` enables concurrent server GC with dynamic adaptation (DATAS) and is the
+recommended starting point for sustained allocation-heavy services:
+
+```bash
+sharpts --compile service.ts --gc-profile adaptive -o service.dll
+```
+
+`throughput` disables DATAS and uses fixed server heaps. It can consume hundreds of megabytes more
+than the other profiles and should be selected only after deployment-specific measurement. The
+profile is propagated identically into DLL runtimeconfig files and both executable bundlers. See
+the [benchmark decision record](../benchmarks/gc-profiles/decision.md) for cross-platform evidence.
 
 ### Conditional runtime dependencies
 

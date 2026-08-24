@@ -276,6 +276,29 @@ public class CliBundlerTests
         Assert.Contains("Hello, World!", output);
     }
 
+    [Theory]
+    [InlineData("builtin")]
+    [InlineData("sdk")]
+    public void Compile_TargetExe_GcProfile_ReachesBundledRuntimeConfig(string bundler)
+    {
+        if (bundler == "sdk" && !SdkBundlerDetector.IsSdkAvailable)
+            return;
+
+        using var tempDir = CliTestHelper.CreateTempDirectory();
+        var scriptPath = tempDir.CreateFile("app.ts", CliFixtures.SimpleHelloWorld);
+
+        var result = CliTestHelper.RunCli(
+            $"-c \"{scriptPath}\" -t exe --bundler {bundler} --gc-profile adaptive",
+            tempDir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        var bundleText = System.Text.Encoding.UTF8.GetString(
+            File.ReadAllBytes(tempDir.GetPath("app.exe")));
+        Assert.Contains("\"System.GC.Server\": true", bundleText);
+        Assert.Contains("\"System.GC.Concurrent\": true", bundleText);
+        Assert.Contains("\"System.GC.DynamicAdaptationMode\": 1", bundleText);
+    }
+
     [Fact]
     public void Compile_TargetExe_BundlerAuto_WorksLikeDefault()
     {

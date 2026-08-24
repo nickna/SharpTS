@@ -98,7 +98,8 @@ Use `win-arm64` for Windows ARM64 and `osx-arm64` only for the experimental Appl
 Cross-publishing is not native certification.
 
 Key build properties include `SharpTSEntryPoint`, `SharpTSTsConfigPath`, `SharpTSVerifyIL`,
-`SharpTSGuiPublishMode`, and `SharpTSGuiIncludeSourcePayload`. Files under `Assets` are embedded at
+`SharpTSGcProfile` (`workstation`, `adaptive`, or `throughput`), `SharpTSGuiPublishMode`, and
+`SharpTSGuiIncludeSourcePayload`. Files under `Assets` are embedded at
 stable `asset:///` paths; remote build-time assets require a logical name and integrity digest.
 
 The repository [GUI documentation](https://github.com/nickna/SharpTS/blob/main/docs/gui/README.md)

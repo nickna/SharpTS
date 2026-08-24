@@ -241,6 +241,7 @@ static int RunCompileCommand(ParsedCommand.Compile compile)
                 compile.CompileOptions.References,
                 compile.CompileOptions.Target,
                 compile.CompileOptions.Bundler,
+                compile.CompileOptions.GcProfile,
                 compile.CompileOptions.Hosted,
                 compileOptions,
                 timings,
@@ -681,7 +682,7 @@ static async Task RunPromptAsync(GlobalOptions options)
     await repl.RunAsync();
 }
 
-static int CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, bool hosted, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
+static int CompileFile(string inputPath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, bool emitDecoratorMetadata, PackOptions packOptions, OutputOptions outputOptions, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GcProfile gcProfile, bool hosted, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
 {
     try
     {
@@ -750,7 +751,7 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
         // keeping declaration-only inputs out of emitted IL.
         CompileModuleFile(absolutePath, outputPath, preserveConstEnums, useReferenceAssemblies,
             sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target,
-            bundlerMode, hosted, externalRefs, globalOptions, timings, project);
+            bundlerMode, gcProfile, hosted, externalRefs, globalOptions, timings, project);
 
         // These modes stopped before any assembly was written, so there is nothing to pack.
         if (globalOptions.NoEmit || globalOptions.EmitDeclarationOnly) return 0;
@@ -797,7 +798,7 @@ static int CompileFile(string inputPath, string outputPath, bool preserveConstEn
     }
 }
 
-static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, bool hosted, ReferenceSet externalRefs, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
+static void CompileModuleFile(string absolutePath, string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GcProfile gcProfile, bool hosted, ReferenceSet externalRefs, GlobalOptions globalOptions, ExecutionTimingCollector? timings, TsConfigResult? project = null)
 {
     var loaded = MeasurePhase(timings, ExecutionPhaseTiming.LoadModules, () =>
     {
@@ -943,7 +944,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
         () => new DeadCodeAnalyzer(typeMap).Analyze(allStatements));
 
     // Compilation
-    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, hosted, externalRefs, timings,
+    EmitCompiledAssembly(outputPath, preserveConstEnums, useReferenceAssemblies, sdkPath, verifyIL, decoratorMode, outputOptions, metadata, references, target, bundlerMode, gcProfile, hosted, externalRefs, timings,
         compiler => compiler.CompileModules(emittedModules, resolver, typeMap, deadCodeInfo));
 }
 
@@ -955,7 +956,7 @@ static void CompileModuleFile(string absolutePath, string outputPath, bool prese
 /// the configured compiler and performs the one step that differs between the drivers
 /// (whole-module-graph vs single-file compile).
 /// </summary>
-static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, bool hosted, ReferenceSet externalRefs, ExecutionTimingCollector? timings, Action<ILCompiler> compileBody)
+static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, bool useReferenceAssemblies, string? sdkPath, bool verifyIL, DecoratorMode decoratorMode, OutputOptions outputOptions, AssemblyMetadata? metadata, IReadOnlyList<string> references, OutputTarget target, BundlerMode bundlerMode, GcProfile gcProfile, bool hosted, ReferenceSet externalRefs, ExecutionTimingCollector? timings, Action<ILCompiler> compileBody)
 {
     string assemblyName = Path.GetFileNameWithoutExtension(outputPath);
 
@@ -1007,7 +1008,8 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
                             // SharpTS targets net10.0. Do not let a Native AOT host's
                             // Environment.Version (the ILC runtime-pack version) leak into the
                             // generated application's runtimeconfig.
-                            FrameworkVersion = new Version(10, 0)
+                            FrameworkVersion = new Version(10, 0),
+                            RuntimeConfigProperties = GcProfileSettings.RuntimeConfigProperties(gcProfile)
                         },
                         bundlerMode));
 
@@ -1060,7 +1062,7 @@ static void EmitCompiledAssembly(string outputPath, bool preserveConstEnums, boo
 
         MeasurePhase(timings,
             ExecutionPhaseTiming.GenerateRuntimeConfig,
-            () => GenerateRuntimeConfig(outputPath));
+            () => GenerateRuntimeConfig(outputPath, gcProfile));
         if (compiler.RequiredSharpTSRuntimeReasons.Count > 0)
             MeasurePhase(timings, ExecutionPhaseTiming.CopyRuntime,
                 () => CopySharpTSRuntimeIfNeeded(compiler, outputPath, outputOptions));
@@ -1428,21 +1430,28 @@ static void CopyExternalReferencesIfNeeded(ILCompiler compiler, ReferenceSet ext
     }
 }
 
-static void GenerateRuntimeConfig(string outputPath)
+static void GenerateRuntimeConfig(string outputPath, GcProfile gcProfile)
 {
     string runtimeConfigPath = Path.ChangeExtension(outputPath, ".runtimeconfig.json");
-    string runtimeConfig = """
-        {
-          "runtimeOptions": {
-            "tfm": "net10.0",
-            "framework": {
-              "name": "Microsoft.NETCore.App",
-              "version": "10.0.0"
-            }
-          }
-        }
-        """;
-    File.WriteAllText(runtimeConfigPath, runtimeConfig);
+    using var stream = File.Create(runtimeConfigPath);
+    using var writer = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+    writer.WriteStartObject();
+    writer.WriteStartObject("runtimeOptions");
+    writer.WriteString("tfm", "net10.0");
+    writer.WriteStartObject("framework");
+    writer.WriteString("name", "Microsoft.NETCore.App");
+    writer.WriteString("version", "10.0.0");
+    writer.WriteEndObject();
+    writer.WriteStartObject("configProperties");
+    foreach (var (name, value) in GcProfileSettings.RuntimeConfigProperties(gcProfile))
+    {
+        if (value is bool boolean) writer.WriteBoolean(name, boolean);
+        else if (value is int integer) writer.WriteNumber(name, integer);
+        else throw new InvalidOperationException($"Unsupported GC runtime property '{name}'.");
+    }
+    writer.WriteEndObject();
+    writer.WriteEndObject();
+    writer.WriteEndObject();
 }
 
 static void VerifyCompiledAssembly(string outputPath, string? sdkPath, ReferenceSet? externalRefs = null)
@@ -1613,10 +1622,10 @@ static void PrintHelp()
     Console.WriteLine("  sharpts --build [project ...] [--watch] [--force]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
     Console.WriteLine("  sharpts new avalonia -n <name> [-o directory] [--sdk-version version]");
-    Console.WriteLine("  sharpts app run [entry.tsx] [--host avalonia|console] [--mode mode] [-- args]");
-    Console.WriteLine("  sharpts app build [entry.tsx] [--host avalonia|console]");
+    Console.WriteLine("  sharpts app run [entry.tsx] [--host avalonia|console] [--mode mode] [--gc-profile profile] [-- args]");
+    Console.WriteLine("  sharpts app build [entry.tsx] [--host avalonia|console] [--gc-profile profile]");
     Console.WriteLine("  sharpts app publish [entry.tsx] [--rid rid] [--self-contained true|false]");
-    Console.WriteLine("                      [--single-file true|false] [-o directory]");
+    Console.WriteLine("                      [--single-file true|false] [--gc-profile profile] [-o directory]");
     Console.WriteLine("  sharpts --gen-decl <TypeName|Namespace|AssemblyPath> [--json] [-o output.txt]");
     Console.WriteLine();
     Console.WriteLine("Options:");
@@ -1697,6 +1706,7 @@ static void PrintHelp()
     Console.WriteLine("  -o <path>                     Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>           Output type: dll (default) or exe");
     Console.WriteLine("  --bundler <mode>              Bundler selection: auto (default), sdk, or builtin");
+    Console.WriteLine("  --gc-profile <profile>        GC policy: workstation (default), adaptive, or throughput");
     Console.WriteLine("  --preserveConstEnums          Preserve const enum declarations");
     Console.WriteLine("  --declaration                 Emit .d.ts declarations alongside the assembly");
     Console.WriteLine("  --emitDeclarationOnly         Emit declarations without a .NET assembly");
@@ -1742,6 +1752,7 @@ static void PrintCompileUsage()
     Console.WriteLine("  -o <path>              Output file path (default: <input>.dll or .exe)");
     Console.WriteLine("  -t, --target <type>    Output type: dll (default) or exe");
     Console.WriteLine("  --bundler <mode>       Bundler selection: auto (default), sdk, or builtin");
+    Console.WriteLine("  --gc-profile <profile> GC policy: workstation (default), adaptive, or throughput");
     Console.WriteLine("  -r, --reference <dll>  Add assembly reference (repeatable)");
     Console.WriteLine("  --preserveConstEnums   Preserve const enum declarations");
     Console.WriteLine("  --declaration          Emit .d.ts declarations alongside the assembly");

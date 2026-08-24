@@ -119,7 +119,21 @@ public sealed class GuiApplicationCliTests
         Assert.Equal(firstWrite, File.GetLastWriteTimeUtc(repeated));
         Assert.Contains("<AssemblyName>app_with_spaces</AssemblyName>", first);
         Assert.Contains("<EnableDefaultCompileItems>false</EnableDefaultCompileItems>", first);
+        Assert.Contains("<SharpTSGcProfile>workstation</SharpTSGcProfile>", first);
         Assert.DoesNotContain("BaseIntermediateOutputPath", first);
         Assert.Contains($"SharpTS.Gui.Sdk/{TestSdkVersion}", first);
+    }
+
+    [Fact]
+    public void MaterializeProject_PersistsSelectedGcProfile()
+    {
+        using var directory = CliTestHelper.CreateTempDirectory();
+        string entry = directory.CreateFile("main.tsx", "export {};\n");
+
+        string project = GuiApplicationCli.MaterializeProject(
+            directory.Path, entry, TestSdkVersion, GcProfile.Adaptive);
+
+        Assert.Contains("<SharpTSGcProfile>adaptive</SharpTSGcProfile>",
+            File.ReadAllText(project));
     }
 }

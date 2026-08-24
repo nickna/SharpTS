@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Xunit;
 
 namespace SharpTS.Tests.IntegrationTests;
@@ -18,6 +19,37 @@ public class CliCompileTests
         Assert.Equal(0, result.ExitCode);
         Assert.True(File.Exists(tempDir.GetPath("hello.dll")));
         Assert.True(File.Exists(tempDir.GetPath("hello.runtimeconfig.json")));
+    }
+
+    [Fact]
+    public void Compile_DefaultGcProfile_EmitsWorkstationRuntimeConfig()
+    {
+        using var tempDir = CliTestHelper.CreateTempDirectory();
+        var scriptPath = tempDir.CreateFile("app.ts", CliFixtures.SimpleHelloWorld);
+
+        var result = CliTestHelper.RunCli($"-c \"{scriptPath}\"", tempDir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        AssertGcProfile(tempDir.GetPath("app.runtimeconfig.json"), server: false, dynamicAdaptation: null);
+    }
+
+    [Theory]
+    [InlineData("workstation", false, null)]
+    [InlineData("adaptive", true, 1)]
+    [InlineData("throughput", true, 0)]
+    public void Compile_GcProfileOverride_EmitsExpectedRuntimeConfig(
+        string profile,
+        bool server,
+        int? dynamicAdaptation)
+    {
+        using var tempDir = CliTestHelper.CreateTempDirectory();
+        var scriptPath = tempDir.CreateFile("app.ts", CliFixtures.SimpleHelloWorld);
+
+        var result = CliTestHelper.RunCli(
+            $"-c \"{scriptPath}\" --gc-profile {profile}", tempDir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        AssertGcProfile(tempDir.GetPath("app.runtimeconfig.json"), server, dynamicAdaptation);
     }
 
     [Fact]
@@ -177,6 +209,26 @@ public class CliCompileTests
         Assert.Equal(1, result.ExitCode);
         // Errors are written to stderr
         Assert.Contains("Error", result.StandardError);
+    }
+
+    private static void AssertGcProfile(string runtimeConfigPath, bool server, int? dynamicAdaptation)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(runtimeConfigPath));
+        var properties = document.RootElement
+            .GetProperty("runtimeOptions")
+            .GetProperty("configProperties");
+
+        Assert.Equal(server, properties.GetProperty("System.GC.Server").GetBoolean());
+        Assert.True(properties.GetProperty("System.GC.Concurrent").GetBoolean());
+        if (dynamicAdaptation is int expected)
+        {
+            Assert.Equal(expected,
+                properties.GetProperty("System.GC.DynamicAdaptationMode").GetInt32());
+        }
+        else
+        {
+            Assert.False(properties.TryGetProperty("System.GC.DynamicAdaptationMode", out _));
+        }
     }
 
     [Fact]

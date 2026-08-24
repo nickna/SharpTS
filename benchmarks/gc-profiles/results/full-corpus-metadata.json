@@ -1,0 +1,76 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-08-24T19:35:08.4923503Z",
+  "commit": "5c5333d53baa046fac6013188ebbb32c32851928",
+  "branch": "codex/workload-aware-gc-profile",
+  "worktreeClean": true,
+  "dotnet": "10.0.400",
+  "node": "v24.19.0",
+  "host": {
+    "os": "Microsoft Windows 10.0.29639",
+    "architecture": "X64",
+    "processorCount": 28,
+    "dotnetRuntimes": [
+      "Microsoft.AspNetCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+      "Microsoft.AspNetCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+      "Microsoft.NETCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+      "Microsoft.NETCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+      "Microsoft.WindowsDesktop.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+      "Microsoft.WindowsDesktop.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]"
+    ]
+  },
+  "docker": {
+    "imageId": "sha256:be808bdbae457fc0cde42bfec29850db925945519c3609f71b92f5f33bab6184",
+    "imageRepoDigest": "sharpts-gc-profile-bench@sha256:be808bdbae457fc0cde42bfec29850db925945519c3609f71b92f5f33bab6184",
+    "clientVersion": "29.7.2",
+    "serverVersion": "29.7.2",
+    "serverPlatform": "Docker Desktop 4.86.0 (236216)",
+    "containerDotNetRuntimes": [
+      "Microsoft.NETCore.App 10.0.11 [/usr/share/dotnet/shared/Microsoft.NETCore.App]"
+    ],
+    "containerNode": "v24.19.0",
+    "containerOs": "Ubuntu 24.04.4 LTS",
+    "containerArchitecture": "x86_64"
+  },
+  "platforms": [
+    "windows",
+    "ubuntu"
+  ],
+  "launches": 3,
+  "workloads": [
+    "array-methods",
+    "async-promises",
+    "binary-trees",
+    "brainfuck",
+    "classes",
+    "closures",
+    "count-primes",
+    "factorial",
+    "fibonacci",
+    "int-arrays",
+    "json",
+    "map-set",
+    "num-arrays",
+    "objects",
+    "regex",
+    "sort",
+    "strings",
+    "typed-arrays"
+  ],
+  "profiles": {
+    "workstation": {
+      "System.GC.Server": false,
+      "System.GC.Concurrent": true
+    },
+    "adaptive": {
+      "System.GC.Server": true,
+      "System.GC.Concurrent": true,
+      "System.GC.DynamicAdaptationMode": 1
+    },
+    "throughput": {
+      "System.GC.Server": true,
+      "System.GC.Concurrent": true,
+      "System.GC.DynamicAdaptationMode": 0
+    }
+  }
+}

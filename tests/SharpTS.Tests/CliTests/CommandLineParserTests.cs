@@ -221,6 +221,49 @@ public class CommandLineParserTests
     }
 
     [Fact]
+    public void Parse_Compile_GcProfileDefaultsToWorkstation()
+    {
+        var compile = Assert.IsType<ParsedCommand.Compile>(_parser.Parse(["-c", "file.ts"]));
+
+        Assert.Equal(GcProfile.Workstation, compile.CompileOptions.GcProfile);
+    }
+
+    [Theory]
+    [InlineData("workstation", GcProfile.Workstation)]
+    [InlineData("adaptive", GcProfile.Adaptive)]
+    [InlineData("throughput", GcProfile.Throughput)]
+    [InlineData("ADAPTIVE", GcProfile.Adaptive)]
+    public void Parse_Compile_GcProfileParsesKnownValues(string value, GcProfile expected)
+    {
+        var compile = Assert.IsType<ParsedCommand.Compile>(
+            _parser.Parse(["-c", "file.ts", "--gc-profile", value]));
+
+        Assert.Equal(expected, compile.CompileOptions.GcProfile);
+    }
+
+    [Theory]
+    [InlineData("unknown")]
+    [InlineData("")]
+    public void Parse_Compile_GcProfileRejectsUnknownValues(string value)
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(
+            _parser.Parse(["-c", "file.ts", "--gc-profile", value]));
+
+        Assert.Equal(64, error.ExitCode);
+        Assert.Contains("Invalid GC profile", error.Message);
+    }
+
+    [Fact]
+    public void Parse_Compile_GcProfileRequiresValue()
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(
+            _parser.Parse(["-c", "file.ts", "--gc-profile"]));
+
+        Assert.Equal(64, error.ExitCode);
+        Assert.Contains("requires a value", error.Message);
+    }
+
+    [Fact]
     public void Parse_Compile_Hosted_RequiresDllAndSetsHiddenOption()
     {
         var result = _parser.Parse(["-c", "file.ts", "--hosted"]);
@@ -606,6 +649,7 @@ public class CommandLineParserTests
         var command = Assert.IsType<ParsedCommand.Application>(_parser.Parse([
             "app", "publish", "main.tsx", "--host", "avalonia", "--rid", "win-x64",
             "--self-contained", "true", "--single-file", "false", "--source", "feed", "-o", "dist",
+            "--gc-profile", "adaptive",
         ]));
         Assert.Equal("publish", command.Action);
         Assert.Equal("avalonia", command.Host);
@@ -614,6 +658,26 @@ public class CommandLineParserTests
         Assert.False(command.SingleFile);
         Assert.Equal("feed", command.GuiSdkSource);
         Assert.Equal("dist", command.OutputDirectory);
+        Assert.Equal(GcProfile.Adaptive, command.GcProfile);
+    }
+
+    [Fact]
+    public void Parse_ApplicationGcProfileDefaultsToWorkstation()
+    {
+        var command = Assert.IsType<ParsedCommand.Application>(
+            _parser.Parse(["app", "build", "main.tsx"]));
+
+        Assert.Equal(GcProfile.Workstation, command.GcProfile);
+    }
+
+    [Fact]
+    public void Parse_ApplicationGcProfileRejectsUnknownValue()
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(
+            _parser.Parse(["app", "publish", "--gc-profile", "server"]));
+
+        Assert.Equal(64, error.ExitCode);
+        Assert.Contains("Invalid GC profile", error.Message);
     }
 
     [Fact]

@@ -3,5 +3,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <SharpTSEntryPoint>main.tsx</SharpTSEntryPoint>
     <SharpTSVerifyIL>true</SharpTSVerifyIL>
+    <SharpTSGcProfile>adaptive</SharpTSGcProfile>
   </PropertyGroup>
 </Project>
