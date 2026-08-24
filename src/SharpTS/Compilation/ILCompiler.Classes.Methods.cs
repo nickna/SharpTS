@@ -586,7 +586,7 @@ public partial class ILCompiler
 
         // Emit the compiler-only constructor used to create Constructor.prototype
         // without running JavaScript constructor bodies or field initializers.
-        EmitClassPrototypeConstructor(typeBuilder, fieldsField);
+        EmitClassPrototypeConstructor(typeBuilder);
 
         // Emit method bodies (skip overload signatures with no body, and computed
         // symbol-keyed methods — emitted by EmitSymbolMethods below).
