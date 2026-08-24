@@ -272,6 +272,50 @@ export function binaryTrees(depth: number): number {
     return itemCheck(buildTree(depth));
 }
 
+// Exact class-field workloads. Keeping construction, direct field traffic,
+// and method traffic separate makes representation/dispatch regressions
+// attributable instead of averaging them together.
+class BenchmarkCounter {
+    value: number;
+
+    constructor(value: number) {
+        this.value = value;
+    }
+
+    step(): number {
+        this.value = this.value + 1;
+        return this.value;
+    }
+}
+
+export function classFieldReuse(n: number): number {
+    const counter: BenchmarkCounter = new BenchmarkCounter(0);
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        counter.value = counter.value + 1;
+        sum = sum + counter.value;
+    }
+    return sum;
+}
+
+export function classMethodReuse(n: number): number {
+    const counter: BenchmarkCounter = new BenchmarkCounter(0);
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + counter.step();
+    }
+    return sum;
+}
+
+export function classConstruction(n: number): number {
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const counter: BenchmarkCounter = new BenchmarkCounter(i);
+        sum = sum + counter.value;
+    }
+    return sum;
+}
+
 // ── Async / Promise workloads ─────────────────────────────────────────────
 
 // Await already-resolved promises serially. This isolates the cost of promise

@@ -96,6 +96,22 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("const value = { x: 1 }; value.x = 2;", false)]
+    [InlineData("Object.freeze({ x: 1 });", true)]
+    [InlineData("const O = Object; O.seal({ x: 1 });", true)]
+    [InlineData("Reflect.preventExtensions({ x: 1 });", true)]
+    [InlineData("globalThis.Object.freeze({ x: 1 });", true)]
+    [InlineData("this.Object.freeze({ x: 1 });", true)]
+    [InlineData("eval('Object.freeze({ x: 1 })');", true)]
+    public void DetectsObjectIntegrityMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.Equal(expected, features.UsesObjectIntegrityMutation);
+    }
+
+    [Theory]
     [InlineData("Date.prototype.toString = Object.prototype.toString;", true)]
     [InlineData("Date.prototype['valueOf'] = function() { return 0; };", true)]
     [InlineData("Object.defineProperty(Date.prototype, 'x', { value: 1 });", true)]

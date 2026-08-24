@@ -135,6 +135,10 @@ public sealed class RuntimeFeatureSet
     // Object/Reflect descriptor APIs can install indexed accessors on arrays.
     // Such programs must not use backing-list-only indexed-read fast paths.
     public bool UsesDynamicPropertyDescriptors { get; set; } = true;
+    // Object.freeze/seal/preventExtensions (or an opaque route to those intrinsics)
+    // can populate the emitted runtime's object-integrity tables. Direct typed
+    // class setters may omit that table probe only while this is false.
+    public bool UsesObjectIntegrityMutation { get; set; } = true;
     // A Date.prototype write makes statically typed Date method calls observable
     // through the prototype object, so the direct DateEmitter fast path is unsafe.
     public bool UsesDatePrototypeMutation { get; set; } = true;

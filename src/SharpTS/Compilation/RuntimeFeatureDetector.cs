@@ -87,6 +87,7 @@ public sealed class RuntimeFeatureDetector
             UsesMap = false,
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
+            UsesObjectIntegrityMutation = false,
             UsesDatePrototypeMutation = false,
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
@@ -280,6 +281,15 @@ public sealed class RuntimeFeatureDetector
     {
         switch (name)
         {
+            // A value-form reference can alias the integrity mutators
+            // (`const O = Object; O.freeze(value)`). Conservatively disable
+            // the direct class-setter shortcut for any opaque Object access
+            // or dynamic source execution.
+            case "Object":
+            case "eval":
+            case "Function":
+                _set.UsesObjectIntegrityMutation = true; break;
+
             // Fetch family
             case "fetch":
             case "Headers":
@@ -412,6 +422,7 @@ public sealed class RuntimeFeatureDetector
             // We flag Reflect generally; the metadata-specific arms are still
             // flagged separately via HandleMemberAccess for finer granularity.
             case "Reflect":
+                _set.UsesObjectIntegrityMutation = true;
                 _set.UsesReflect = true; break;
 
             // Date — bare identifier covers `new Date()`, `Date.now()`,
@@ -490,6 +501,7 @@ public sealed class RuntimeFeatureDetector
             // valve; the fine-grained ones still get set by their own triggers.
             case "globalThis":
             case "global":
+                _set.UsesObjectIntegrityMutation = true;
                 _set.UsesFetch = true;
                 _set.UsesTextEncoding = true;
                 _set.UsesWebStreams = true;
@@ -762,6 +774,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                if (g.Name.Lexeme is "Object" or "Reflect")
+                    _set.UsesObjectIntegrityMutation = true;
                 if (IsArrayPrototype(g) || g.Name.Lexeme == "__proto__")
                     _set.UsesArrayPrototypeMutation = true;
                 if (IsPromisePrototype(g))
