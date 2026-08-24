@@ -1,8 +1,9 @@
 {
   "schemaVersion": 1,
-  "createdAtUtc": "2026-08-24T17:23:26.6104531Z",
-  "commit": "4189deb66260242c2bb448af8d3cfd185bc3d390",
+  "createdAtUtc": "2026-08-24T19:35:08.4923503Z",
+  "commit": "5c5333d53baa046fac6013188ebbb32c32851928",
   "branch": "codex/workload-aware-gc-profile",
+  "worktreeClean": true,
   "dotnet": "10.0.400",
   "node": "v24.19.0",
   "host": {
@@ -19,8 +20,8 @@
     ]
   },
   "docker": {
-    "imageId": "sha256:7b974ae9bf316b04f5772905d1cf7022d16e77dbd9b084f1e81e2cbf6e6c5a5d",
-    "imageRepoDigest": "sharpts-gc-profile-bench@sha256:7b974ae9bf316b04f5772905d1cf7022d16e77dbd9b084f1e81e2cbf6e6c5a5d",
+    "imageId": "sha256:be808bdbae457fc0cde42bfec29850db925945519c3609f71b92f5f33bab6184",
+    "imageRepoDigest": "sharpts-gc-profile-bench@sha256:be808bdbae457fc0cde42bfec29850db925945519c3609f71b92f5f33bab6184",
     "clientVersion": "29.7.2",
     "serverVersion": "29.7.2",
     "serverPlatform": "Docker Desktop 4.86.0 (236216)",
