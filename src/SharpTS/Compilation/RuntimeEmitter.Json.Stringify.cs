@@ -7,6 +7,10 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    private delegate int JsonIndexOfAnyDelegate(
+        ReadOnlySpan<char> span,
+        SearchValues<char> values);
+
     private MethodBuilder? _escapeJsonStringMethod;
     private MethodBuilder? _appendEscapedJsonStringMethod;
     private MethodBuilder? _jsonGetDictionaryPropertyMethod;
@@ -769,20 +773,10 @@ public partial class RuntimeEmitter
 
         MethodInfo asSpan = typeof(MemoryExtensions).GetMethod(
             "AsSpan", [typeof(string)])!;
-        MethodInfo indexOfAny = typeof(MemoryExtensions).GetMethods(
-                BindingFlags.Public | BindingFlags.Static)
-            .Single(candidate =>
-                candidate.Name == "IndexOfAny" &&
-                candidate.IsGenericMethodDefinition &&
-                candidate.GetParameters() is var parameters &&
-                parameters.Length == 2 &&
-                parameters[0].ParameterType.IsGenericType &&
-                parameters[0].ParameterType.GetGenericTypeDefinition() ==
-                    typeof(ReadOnlySpan<>) &&
-                parameters[1].ParameterType.IsGenericType &&
-                parameters[1].ParameterType.GetGenericTypeDefinition() ==
-                    typeof(SearchValues<>))
-            .MakeGenericMethod(typeof(char));
+        // The strongly typed method group yields the closed generic MethodInfo
+        // without MakeGenericMethod, keeping the compiler NativeAOT-safe.
+        MethodInfo indexOfAny =
+            ((JsonIndexOfAnyDelegate)MemoryExtensions.IndexOfAny).Method;
 
         il.Emit(OpCodes.Ldsfld, searchValuesField);
         il.Emit(OpCodes.Dup);
