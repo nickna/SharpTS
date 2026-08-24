@@ -128,10 +128,10 @@ function Get-WslHome {
 }
 
 function Initialize-WslPaths {
-    $home = Get-WslHome
-    if (-not $script:WslBareRepository) { $script:WslBareRepository = "$home/src/SharpTS-perf.git" }
-    if (-not $script:WslBaselinePath) { $script:WslBaselinePath = "$home/src/SharpTS-perf-baseline" }
-    if (-not $script:WslCandidatePath) { $script:WslCandidatePath = "$home/src/SharpTS-perf-candidate" }
+    $wslUserHome = Get-WslHome
+    if (-not $script:WslBareRepository) { $script:WslBareRepository = "$wslUserHome/src/SharpTS-perf.git" }
+    if (-not $script:WslBaselinePath) { $script:WslBaselinePath = "$wslUserHome/src/SharpTS-perf-baseline" }
+    if (-not $script:WslCandidatePath) { $script:WslCandidatePath = "$wslUserHome/src/SharpTS-perf-candidate" }
 }
 
 function Get-WslEnvironmentPrefix {

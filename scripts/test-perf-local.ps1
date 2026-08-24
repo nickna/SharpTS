@@ -11,9 +11,18 @@ foreach ($relativePath in @(
     $path = (Resolve-Path (Join-Path $PSScriptRoot $relativePath)).Path
     $tokens = $null
     $errors = $null
-    [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors) | Out-Null
+    $syntaxTree = [Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$errors)
     if ($errors.Count -gt 0) {
         throw "PowerShell parser errors in '$path': $($errors.Message -join '; ')"
+    }
+    $reservedHomeAssignments = @($syntaxTree.FindAll({
+        param($node)
+        $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+            $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+            $node.Left.VariablePath.UserPath -ieq 'HOME'
+    }, $true))
+    if ($reservedHomeAssignments.Count -gt 0) {
+        throw "'$path' assigns PowerShell's reserved HOME variable."
     }
 }
 
