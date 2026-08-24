@@ -231,6 +231,21 @@ public sealed class NumericBitwiseLoweringTests
         Assert.InRange(allocated, 0, 8_192);
     }
 
+    [Fact]
+    public void StringCharCodeAtHelper_IsAggressivelyInlined()
+    {
+        Assembly assembly = Compile("""
+            function read(program: string, index: number): number {
+                return program.charCodeAt(index);
+            }
+            """);
+
+        MethodInfo helper = assembly.GetType("$Runtime")!
+            .GetMethod("StringCharCodeAt", BindingFlags.Public | BindingFlags.Static)!;
+
+        Assert.True((helper.MethodImplementationFlags & MethodImplAttributes.AggressiveInlining) != 0);
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();

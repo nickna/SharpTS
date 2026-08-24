@@ -1134,6 +1134,11 @@ public partial class RuntimeEmitter
             _types.Double,
             [_types.String, _types.Double]
         );
+        // Statically typed string sites call this helper for every character in
+        // lexer/interpreter-style loops. Keep JS's NaN bounds semantics here,
+        // but let RyuJIT fold the tiny helper into the caller so Length and
+        // get_Chars can optimize with the surrounding loop.
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
         runtime.StringCharCodeAt = method;
 
         var il = method.GetILGenerator();
