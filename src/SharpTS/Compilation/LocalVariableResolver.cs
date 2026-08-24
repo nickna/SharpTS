@@ -220,7 +220,11 @@ public class LocalVariableResolver : IVariableResolver
                 _ctx.EmitLexicalTdzValueCheck(_il, name);
                 return StackType.Unknown;
             }
-            _ctx.EmitLexicalTdzValueCheck(_il, name);
+            // A typed capture field is emitted only for a proven initialized
+            // numeric loop snapshot, so it cannot contain the object-valued TDZ
+            // sentinel. Running isinst on its native double would also be invalid IL.
+            if (!field.FieldType.IsValueType)
+                _ctx.EmitLexicalTdzValueCheck(_il, name);
             return MapTypeToStackType(field.FieldType);
         }
 

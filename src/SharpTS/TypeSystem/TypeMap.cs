@@ -25,6 +25,7 @@ public class TypeMap
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ArrowFunction, HashSet<string>> _stableNumericCaptureFields = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stableExactPrimitiveMethodCalls = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _stablePrimitivePromiseAllIterables = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrayLiteral> _stablePrimitivePromiseAllInputInitializers = new(ReferenceEqualityComparer.Instance);
@@ -226,6 +227,22 @@ public class TypeMap
     /// </summary>
     public bool IsStablePrimitivePromiseThen(Expr.Get method) =>
         _stablePrimitivePromiseThenCalls.Contains(method);
+
+    /// <summary>
+    /// Marks a captured binding whose value-snapshot field may use an unboxed
+    /// <c>double</c>. Keying by the exact arrow node keeps same-named bindings in
+    /// unrelated scopes independent.
+    /// </summary>
+    public void MarkStableNumericCaptureField(Expr.ArrowFunction arrow, string name)
+    {
+        if (!_stableNumericCaptureFields.TryGetValue(arrow, out var names))
+            _stableNumericCaptureFields[arrow] = names = [];
+        names.Add(name);
+    }
+
+    public bool IsStableNumericCaptureField(Expr.ArrowFunction arrow, string name) =>
+        _stableNumericCaptureFields.TryGetValue(arrow, out var names)
+        && names.Contains(name);
 
     /// <summary>
     /// Marks a class method access whose receiver is provably the exact instance
