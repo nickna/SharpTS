@@ -112,6 +112,20 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("class Counter { step(): number { return 1; } } new Counter().step();", false)]
+    [InlineData("class Counter { step(): number { return 1; } } const p = Counter.prototype;", true)]
+    [InlineData("class Counter { step(): number { return 1; } } const c = new Counter(); c.step = () => 2;", true)]
+    [InlineData("const value = ({} as any).__proto__;", true)]
+    public void DetectsClassPrototypeMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(expected, features.UsesClassPrototypeMutation);
+    }
+
+    [Theory]
     [InlineData("Date.prototype.toString = Object.prototype.toString;", true)]
     [InlineData("Date.prototype['valueOf'] = function() { return 0; };", true)]
     [InlineData("Object.defineProperty(Date.prototype, 'x', { value: 1 });", true)]

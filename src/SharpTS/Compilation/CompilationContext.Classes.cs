@@ -25,6 +25,14 @@ public partial class CompilationContext
     public bool IsInstanceMethod { get; set; }
 
     /// <summary>
+    /// Primitive-returning non-virtual method companions keyed by qualified class
+    /// and JavaScript method name. Only analyzer-marked exact receiver calls may
+    /// bypass the public virtual object-returning method.
+    /// </summary>
+    public Dictionary<string, Dictionary<string, MethodBuilder>>?
+        TypedPrimitiveInstanceMethodCores { get; set; }
+
+    /// <summary>
     /// True when the current method body is an inner <c>function</c> declaration
     /// emitted onto a display class. In that case <see cref="IsInstanceMethod"/> is
     /// also true (arg0 is the display-class self — needed for capture access), but

@@ -655,6 +655,7 @@ public partial class ILCompiler
             statements, _typeMap, _closures.Analyzer);
         StablePrimitivePromiseAllAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer, _features);
+        StableExactClassMethodCallAnalyzer.Analyze(statements, _typeMap, _features);
         ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NonEscapingArrowLocalAnalyzer.Analyze(

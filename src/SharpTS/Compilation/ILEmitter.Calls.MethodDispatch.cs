@@ -176,7 +176,7 @@ public partial class ILEmitter
         // Try direct dispatch for known class instance methods
         TypeSystem.TypeInfo? objType = _ctx.TypeMap?.Get(methodGet.Object);
         if (TryEmitDirectMethodCall(
-                methodGet.Object, objType, methodName, arguments,
+                methodGet, methodGet.Object, objType, methodName, arguments,
                 genericTypeArguments, contextualResultType))
             return;
 
@@ -416,7 +416,8 @@ public partial class ILEmitter
     /// Try to emit a direct method call for known class instance types.
     /// Returns true if direct dispatch was emitted, false to fall back to runtime dispatch.
     /// </summary>
-    private bool TryEmitDirectMethodCall(Expr receiver, TypeSystem.TypeInfo? receiverType,
+    private bool TryEmitDirectMethodCall(Expr.Get methodGet, Expr receiver,
+        TypeSystem.TypeInfo? receiverType,
         string methodName, List<Expr> arguments, List<string>? genericTypeArguments,
         TypeSystem.TypeInfo? contextualResultType)
     {
@@ -472,6 +473,14 @@ public partial class ILEmitter
         if (methodBuilder == null)
             return false;
 
+        MethodBuilder dispatchBuilder = methodBuilder;
+        MethodBuilder? typedCore = null;
+        bool useTypedCore = _ctx.TypeMap?.IsStableExactPrimitiveMethodCall(methodGet) == true
+            && _ctx.TypedPrimitiveInstanceMethodCores?.TryGetValue(className, out var classCores) == true
+            && classCores.TryGetValue(methodName, out typedCore);
+        if (useTypedCore)
+            dispatchBuilder = typedCore!;
+
         // Get the class type builder to cast the receiver
         if (!_ctx.Classes.TryGetValue(className, out var classType))
             return false;
@@ -479,11 +488,11 @@ public partial class ILEmitter
         // Generic classes need instantiated tokens (Stack<!T>), only expressible inside
         // the class's own bodies; otherwise fall back to runtime dispatch (#178)
         if (!EmitterTypeHelpers.TryResolveInstanceDispatch(
-                classType, methodBuilder, _ctx.EmittingTypeBuilder, out var castType, out var callTarget))
+                classType, dispatchBuilder, _ctx.EmittingTypeBuilder, out var castType, out var callTarget))
             return false;
 
         // Get target parameter types for proper conversion
-        var targetParams = methodBuilder.GetParameters();
+        var targetParams = dispatchBuilder.GetParameters();
         int expectedParamCount = targetParams.Length;
 
         // Detect rest parameter: the ParameterTypeResolver compiles rest params to a
@@ -611,9 +620,13 @@ public partial class ILEmitter
             }
         }
 
-        // Emit the virtual call
-        IL.Emit(OpCodes.Callvirt, callTarget);
-        SetStackUnknown();
+        IL.Emit(useTypedCore ? OpCodes.Call : OpCodes.Callvirt, callTarget);
+        if (useTypedCore && _ctx.Types.IsDouble(dispatchBuilder.ReturnType))
+            SetStackType(StackType.Double);
+        else if (useTypedCore && _ctx.Types.IsBoolean(dispatchBuilder.ReturnType))
+            SetStackType(StackType.Boolean);
+        else
+            SetStackUnknown();
         return true;
     }
 

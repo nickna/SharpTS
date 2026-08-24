@@ -139,6 +139,10 @@ public sealed class RuntimeFeatureSet
     // can populate the emitted runtime's object-integrity tables. Direct typed
     // class setters may omit that table probe only while this is false.
     public bool UsesObjectIntegrityMutation { get; set; } = true;
+    // Any observable access to a class prototype (or an opaque Object/eval/
+    // Function route checked alongside this flag) can replace a method binding.
+    // Exact-instance typed companion calls require this to remain false.
+    public bool UsesClassPrototypeMutation { get; set; } = true;
     // A Date.prototype write makes statically typed Date method calls observable
     // through the prototype object, so the direct DateEmitter fast path is unsafe.
     public bool UsesDatePrototypeMutation { get; set; } = true;

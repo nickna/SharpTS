@@ -88,6 +88,7 @@ public sealed class RuntimeFeatureDetector
             UsesSet = false,
             UsesDynamicPropertyDescriptors = false,
             UsesObjectIntegrityMutation = false,
+            UsesClassPrototypeMutation = false,
             UsesDatePrototypeMutation = false,
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
@@ -776,6 +777,8 @@ public sealed class RuntimeFeatureDetector
             case Expr.Get g:
                 if (g.Name.Lexeme is "Object" or "Reflect")
                     _set.UsesObjectIntegrityMutation = true;
+                if (g.Name.Lexeme is "prototype" or "__proto__")
+                    _set.UsesClassPrototypeMutation = true;
                 if (IsArrayPrototype(g) || g.Name.Lexeme == "__proto__")
                     _set.UsesArrayPrototypeMutation = true;
                 if (IsPromisePrototype(g))
@@ -848,6 +851,8 @@ public sealed class RuntimeFeatureDetector
 
             case Expr.Set s:
                 MarkMutationTarget(s.Object);
+                if (CouldTargetClassMethod(s.Object, s.Name.Lexeme))
+                    _set.UsesClassPrototypeMutation = true;
                 if (IsDatePrototype(s.Object))
                     _set.UsesDatePrototypeMutation = true;
                 if (IsPromiseMutationTarget(s.Object)
@@ -888,6 +893,10 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.SetIndex si:
                 MarkMutationTarget(si.Object);
+                if (si.Index is Expr.Literal { Value: string methodName }
+                        ? CouldTargetClassMethod(si.Object, methodName)
+                        : IsClassInstance(si.Object))
+                    _set.UsesClassPrototypeMutation = true;
                 if (IsDatePrototype(si.Object))
                     _set.UsesDatePrototypeMutation = true;
                 if (IsPromiseMutationTarget(si.Object)
@@ -1327,6 +1336,18 @@ public sealed class RuntimeFeatureDetector
         Object: Expr.Variable { Name.Lexeme: "Date" },
         Name.Lexeme: "prototype"
     };
+
+    private bool CouldTargetClassMethod(Expr receiver, string methodName) =>
+        _typeMap?.Get(receiver) is TypeInfo.Instance instance
+        && instance.ResolvedClassType switch
+        {
+            TypeInfo.Class c => c.Methods.ContainsKey(methodName),
+            TypeInfo.MutableClass c => c.Methods.ContainsKey(methodName),
+            _ => false
+        };
+
+    private bool IsClassInstance(Expr receiver) =>
+        _typeMap?.Get(receiver) is TypeInfo.Instance;
 
     private static bool IsPromisePrototype(Expr expr) => expr is Expr.Get
     {

@@ -1,6 +1,8 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
+using SharpTS.TypeSystem;
 using TSTypeInfo = SharpTS.TypeSystem.TypeInfo;
 
 namespace SharpTS.Compilation;
@@ -221,6 +223,33 @@ public partial class ILCompiler
                 paramTypes
             );
 
+            if (TryResolveTypedPrimitiveMethodCoreReturnType(
+                    classStmt, method, out Type? coreReturnType))
+            {
+                int coreId = _classes.TypedPrimitiveMethodCoreBuilders.Count;
+                string coreName;
+                do
+                {
+                    coreName = $"$typed${method.Name.Lexeme}${coreId++}";
+                }
+                while (classStmt.Methods.Any(candidate =>
+                    candidate.Name.Lexeme == coreName));
+                var coreBuilder = typeBuilder.DefineMethod(
+                    coreName,
+                    MethodAttributes.Assembly | MethodAttributes.HideBySig,
+                    coreReturnType,
+                    paramTypes);
+                MarkCompilerGenerated(coreBuilder);
+                _classes.TypedPrimitiveMethodCoreBuilders[method] = coreBuilder;
+                if (!_classes.TypedPrimitiveInstanceMethodCores.TryGetValue(
+                        qualifiedClassName, out var classCores))
+                {
+                    classCores = [];
+                    _classes.TypedPrimitiveInstanceMethodCores[qualifiedClassName] = classCores;
+                }
+                classCores[method.Name.Lexeme] = coreBuilder;
+            }
+
             // Track instance method for direct dispatch
             if (!_classes.InstanceMethods.TryGetValue(qualifiedClassName, out var classMethods))
             {
@@ -373,6 +402,94 @@ public partial class ILCompiler
             // Create PropertyBuilders for explicit accessors
             CreateExplicitAccessorProperties(typeBuilder, className);
         }
+    }
+
+    private bool TryResolveTypedPrimitiveMethodCoreReturnType(
+        Stmt.Class classStatement,
+        Stmt.Function method,
+        out Type returnType)
+    {
+        returnType = _types.Object;
+        if (classStatement.Decorators is { Count: > 0 }
+            || classStatement.TypeParams is { Count: > 0 }
+            || classStatement.Fields.Any(field => field.IsDeclare)
+            || method.Body is not { Count: > 0 } body
+            || method.IsStatic
+            || method.IsPrivate
+            || method.IsAbstract
+            || method.IsAsync
+            || method.IsGenerator
+            || method.ComputedKey is not null
+            || method.Decorators is { Count: > 0 }
+            || method.TypeParams is { Count: > 0 }
+            || method.HasDynamicThis
+            || method.Parameters.Any(parameter =>
+                parameter.DefaultValue is not null
+                || parameter.IsOptional
+                || parameter.IsRest
+                || parameter.Decorators is { Count: > 0 })
+            || body[^1] is not Stmt.Return { Value: not null }
+            || ReferencesArgumentsIdentifier(body)
+            || classStatement.Methods.Count(candidate =>
+                !candidate.IsStatic && candidate.Name.Lexeme == method.Name.Lexeme) != 1)
+        {
+            return false;
+        }
+
+        var classType = _typeMap?.GetClassType(classStatement.Name.Lexeme);
+        if (classType?.Methods.GetValueOrDefault(method.Name.Lexeme) is not { } methodType)
+            return false;
+        var functionType = methodType switch
+        {
+            TSTypeInfo.Function function => function,
+            TSTypeInfo.OverloadedFunction overload => overload.Implementation,
+            _ => null
+        };
+        if (functionType is null
+            || ReturnSlotAnalysis.BlockReturnsMayBeUndefined(body, _typeMap))
+            return false;
+
+        returnType = ParameterTypeResolver.ResolveReturnType(
+            functionType.ReturnType, isAsync: false, _typeMapper);
+        if (returnType != _types.Double && returnType != _types.Boolean)
+            return false;
+
+        var validator = new PrimitiveMethodReturnValidator(_typeMap, returnType == _types.Double);
+        foreach (var statement in body)
+            validator.Visit(statement);
+        return validator.IsValid && validator.SawReturn;
+    }
+
+    private sealed class PrimitiveMethodReturnValidator(TypeMap? typeMap, bool expectsNumber)
+        : AstVisitorBase
+    {
+        public bool IsValid { get; private set; } = true;
+        public bool SawReturn { get; private set; }
+
+        protected override void VisitReturn(Stmt.Return statement)
+        {
+            SawReturn = true;
+            if (statement.Value is null)
+            {
+                IsValid = false;
+                return;
+            }
+
+            TSTypeInfo? valueType = typeMap?.Get(statement.Value);
+            bool matches = expectsNumber
+                ? valueType is TSTypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                    or TSTypeInfo.NumberLiteral
+                : valueType is TSTypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN }
+                    or TSTypeInfo.BooleanLiteral;
+            if (!matches)
+                IsValid = false;
+        }
+
+        // Returns in nested callables/classes do not belong to this method.
+        protected override void VisitFunction(Stmt.Function statement) { }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClass(Stmt.Class statement) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
     }
 
     /// <summary>
@@ -979,11 +1096,15 @@ public partial class ILCompiler
             return;
         }
 
+        _classes.TypedPrimitiveMethodCoreBuilders.TryGetValue(method, out var typedCoreBuilder);
+        MethodBuilder bodyBuilder = typedCoreBuilder ?? methodBuilder;
+
         // Check if method has @lock decorator
         bool hasLock = HasLockDecorator(method);
 
-        var il = methodBuilder.GetILGenerator();
-        var ctx = CreateModuleMemberContext(il, methodBuilder);
+        var il = bodyBuilder.GetILGenerator();
+        var ctx = CreateModuleMemberContext(il, bodyBuilder);
+        ctx.CurrentMethodReturnType = bodyBuilder.ReturnType;
         ctx.FieldsField = fieldsField;
         ctx.IsInstanceMethod = true;
         // Async arrow support (for async arrows inside non-async methods)
@@ -1015,7 +1136,7 @@ public partial class ILCompiler
         }
 
         // Define parameters with their types
-        var methodParams = methodBuilder.GetParameters();
+        var methodParams = bodyBuilder.GetParameters();
         for (int i = 0; i < method.Parameters.Count; i++)
         {
             // Instance methods have 'this' at index 0, so params start at index 1
@@ -1080,7 +1201,7 @@ public partial class ILCompiler
             ctx.ILBuilder.BeginExceptionBlock();
         }
 
-        var defaultParamTypes = methodBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
+        var defaultParamTypes = bodyBuilder.GetParameters().Select(p => p.ParameterType).ToArray();
         EmitFunctionEnvironmentPrologue(
             il,
             ctx,
@@ -1090,7 +1211,7 @@ public partial class ILCompiler
             defaultParamTypes,
             argumentOffset: 1);
         InitializeSyncMethodCapturedParameters(
-            ctx, il, method, methodBuilder, argumentOffset: 1);
+            ctx, il, method, bodyBuilder, argumentOffset: 1);
 
         // Abstract methods have no body to emit
         if (method.Body != null)
@@ -1163,9 +1284,26 @@ public partial class ILCompiler
             // Falling off the end completes with `undefined` (ECMA-262). Route through
             // EmitDefaultReturnValue so an `object` slot materializes the `$Undefined`
             // sentinel instead of CLR null. (#588)
-            EmitDefaultReturnValue(il, methodBuilder.ReturnType);
+            EmitDefaultReturnValue(il, bodyBuilder.ReturnType);
             il.Emit(OpCodes.Ret);
         }
 
+        if (typedCoreBuilder is not null)
+            EmitTypedPrimitiveMethodWrapper(methodBuilder, typedCoreBuilder);
+
+    }
+
+    private void EmitTypedPrimitiveMethodWrapper(
+        MethodBuilder wrapper,
+        MethodBuilder core)
+    {
+        var il = wrapper.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        var parameters = core.GetParameters();
+        for (int i = 0; i < parameters.Length; i++)
+            il.Emit(OpCodes.Ldarg, i + 1);
+        il.Emit(OpCodes.Call, core);
+        il.Emit(OpCodes.Box, core.ReturnType);
+        il.Emit(OpCodes.Ret);
     }
 }

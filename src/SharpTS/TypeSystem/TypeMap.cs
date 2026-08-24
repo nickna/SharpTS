@@ -25,6 +25,7 @@ public class TypeMap
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.Get> _stableExactPrimitiveMethodCalls = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _stablePrimitivePromiseAllIterables = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrayLiteral> _stablePrimitivePromiseAllInputInitializers = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllPushReceivers = new(ReferenceEqualityComparer.Instance);
@@ -225,6 +226,18 @@ public class TypeMap
     /// </summary>
     public bool IsStablePrimitivePromiseThen(Expr.Get method) =>
         _stablePrimitivePromiseThenCalls.Contains(method);
+
+    /// <summary>
+    /// Marks a class method access whose receiver is provably the exact instance
+    /// created for a stable local binding (or an immediate <c>new C().m()</c>).
+    /// The compiler may target a private typed method companion without changing
+    /// the public virtual method ABI used by uncertain and value-backed calls.
+    /// </summary>
+    public void MarkStableExactPrimitiveMethodCall(Expr.Get method) =>
+        _stableExactPrimitiveMethodCalls.Add(method);
+
+    public bool IsStableExactPrimitiveMethodCall(Expr.Get method) =>
+        _stableExactPrimitiveMethodCalls.Contains(method);
 
     /// <summary>
     /// Marks the exact iterable expression of a proven fresh, non-escaping
