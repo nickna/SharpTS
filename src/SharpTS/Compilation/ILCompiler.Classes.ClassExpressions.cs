@@ -486,7 +486,7 @@ public partial class ILCompiler
         var fieldsField = _classes.InstanceFieldsField[className];
 
         // Emit the constructor-free prototype path before the .cctor that uses it.
-        EmitClassPrototypeConstructor(typeBuilder, fieldsField);
+        EmitClassPrototypeConstructor(typeBuilder);
 
         // Emit static constructor and prototype registration.
         EmitClassExpressionStaticConstructor(classExpr, typeBuilder);
@@ -683,10 +683,10 @@ public partial class ILCompiler
                 ctx.GenericTypeParameters[gp.Name] = gp;
         }
 
-        // Initialize _fields dictionary FIRST
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stfld, fieldsField);
+        // Dynamic property storage is materialized only by the first expando write.
+        // This is also safe for base-constructor virtual dispatch because SetProperty
+        // calls the derived type's ensure helper before touching its private field.
+        var ensureFields = _classes.HasFieldsStubs[className].EnsureFields;
 
         // Emit constructor body first if present (contains super() call)
         var emitter = new ILEmitter(ctx);
@@ -838,7 +838,7 @@ public partial class ILCompiler
                 {
                     // Fallback to _fields dictionary
                     il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, fieldsField);
+                    il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
                     il.Emit(OpCodes.Ldstr, fieldName);
                     emitter.EmitExpression(field.Initializer!);
                     emitter.EmitBoxIfNeeded(field.Initializer!);
@@ -854,7 +854,7 @@ public partial class ILCompiler
                 string fieldName = field.Name.Lexeme;
                 // Store null in _fields dictionary
                 il.Emit(OpCodes.Ldarg_0);
-                il.Emit(OpCodes.Ldfld, fieldsField);
+                il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
                 il.Emit(OpCodes.Ldstr, fieldName);
                 il.Emit(OpCodes.Ldnull);
                 il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);

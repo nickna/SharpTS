@@ -15,6 +15,20 @@ public partial class ILCompiler
     {
         var methodAttrs = MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.HideBySig;
 
+        // The expando dictionary is deliberately absent from a newly constructed instance.
+        // JavaScript cannot observe the backing store itself, so allocate it only when a
+        // dynamic own property is actually created or the compatibility Fields surface is
+        // requested. Keeping this helper on the emitted type also makes base-constructor
+        // virtual dispatch safe: an override can materialize its own store before the
+        // derived constructor has resumed after super().
+        var ensureFields = typeBuilder.DefineMethod(
+            "$EnsureFields",
+            MethodAttributes.Private | MethodAttributes.HideBySig,
+            _types.DictionaryStringObject,
+            Type.EmptyTypes
+        );
+        EmitEnsureFieldsBody(ensureFields, fieldsField);
+
         // get_Fields: Dictionary<string, object?> Fields { get; }
         var fieldsGetter = typeBuilder.DefineMethod(
             "get_Fields",
@@ -64,12 +78,35 @@ public partial class ILCompiler
         // Store stubs for later body emission
         _classes.HasFieldsStubs[className] = new HasFieldsMethodStubs
         {
+            EnsureFields = ensureFields,
             GetFields = fieldsGetter,
             GetProperty = getPropertyMethod,
             SetProperty = setPropertyMethod,
             HasProperty = hasPropertyMethod,
             FieldsField = fieldsField
         };
+    }
+
+    private void EmitEnsureFieldsBody(MethodBuilder method, FieldInfo fieldsField)
+    {
+        var il = method.GetILGenerator();
+        var readyLabel = il.DefineLabel();
+        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+
+        // return _fields ??= new Dictionary<string, object?>();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brtrue_S, readyLabel);
+        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Stfld, fieldsField);
+        il.MarkLabel(readyLabel);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>
@@ -85,13 +122,13 @@ public partial class ILCompiler
         var fieldsField = stubs.FieldsField;
 
         // Emit get_Fields body: returns a dictionary combining typed backing fields + dynamic _fields
-        EmitGetFieldsBody(stubs.GetFields, className, fieldsField);
+        EmitGetFieldsBody(stubs.GetFields, className, stubs.EnsureFields);
 
         // Emit GetProperty body with compile-time dispatch
         EmitGetPropertyBody(stubs.GetProperty, className, classStmt, fieldsField);
 
         // Emit SetProperty body with compile-time dispatch for typed properties
-        EmitSetPropertyBody(stubs.SetProperty, className, classStmt, fieldsField);
+        EmitSetPropertyBody(stubs.SetProperty, className, classStmt, stubs.EnsureFields);
 
         // Emit HasProperty body with compile-time dispatch for typed backing fields
         EmitHasPropertyBody(stubs.HasProperty, className, fieldsField);
@@ -101,22 +138,28 @@ public partial class ILCompiler
     /// Emits the get_Fields body that returns a combined dictionary of typed backing fields + dynamic _fields.
     /// Typed properties stored in backing fields are not in the _fields dictionary, so we must include them.
     /// </summary>
-    private void EmitGetFieldsBody(MethodBuilder method, string className, FieldInfo fieldsField)
+    private void EmitGetFieldsBody(
+        MethodBuilder method,
+        string className,
+        MethodInfo ensureFields)
     {
         _typedInterop.PropertyBackingFields.TryGetValue(className, out var backingFields);
-        EmitGetFieldsBodyCore(method, backingFields, fieldsField);
+        EmitGetFieldsBodyCore(method, backingFields, ensureFields);
     }
 
-    private void EmitGetFieldsBodyCore(MethodBuilder method, Dictionary<string, FieldBuilder>? backingFields, FieldInfo fieldsField)
+    private void EmitGetFieldsBodyCore(
+        MethodBuilder method,
+        Dictionary<string, FieldBuilder>? backingFields,
+        MethodInfo ensureFields)
     {
         var il = method.GetILGenerator();
 
         // Check if this class has typed backing fields
         if (backingFields == null || backingFields.Count == 0)
         {
-            // No typed backing fields - just return _fields directly
+            // No typed backing fields - materialize the compatibility dictionary on demand.
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, fieldsField);
+            il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
             il.Emit(OpCodes.Ret);
             return;
         }
@@ -126,9 +169,9 @@ public partial class ILCompiler
         var copyCtor = _types.GetConstructor(_types.DictionaryStringObject, [iDictType])!;
         var setItem = _types.GetMethod(_types.DictionaryStringObject, "set_Item");
 
-        // var result = new Dictionary<string, object?>(this._fields);
+        // var result = new Dictionary<string, object?>(this.EnsureFields());
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
         il.Emit(OpCodes.Newobj, copyCtor);
 
         // result["propName"] = this._BackingField; for each typed property
@@ -162,6 +205,7 @@ public partial class ILCompiler
     {
         var il = method.GetILGenerator();
         var returnTrueLabel = il.DefineLabel();
+        var haveFieldsLabel = il.DefineLabel();
 
         // Check typed backing field names
         if (backingFields != null)
@@ -178,9 +222,17 @@ public partial class ILCompiler
             }
         }
 
-        // Fall back to _fields.ContainsKey(name)
+        // A missing expando store is observably equivalent to an empty one. Do not
+        // allocate merely to answer a property probe.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue_S, haveFieldsLabel);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(haveFieldsLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
         il.Emit(OpCodes.Ret);
@@ -248,10 +300,15 @@ public partial class ILCompiler
         il.MarkLabel(notCtorLabel);
     }
 
-    private void EmitGetPropertyBody(MethodBuilder method, string className, Stmt.Class classStmt, FieldInfo fieldsField)
+    private void EmitGetPropertyBody(
+        MethodBuilder method,
+        string className,
+        Stmt.Class classStmt,
+        FieldInfo fieldsField)
     {
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
+        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var returnValueLabel = il.DefineLabel();
         var tryFieldsLabel = il.DefineLabel();
         var tryMethodsLabel = il.DefineLabel();
@@ -293,6 +350,10 @@ public partial class ILCompiler
         il.MarkLabel(tryFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brfalse, tryMethodsLabel);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
@@ -447,7 +508,11 @@ public partial class ILCompiler
     /// Emits the SetProperty method body with compile-time dispatch.
     /// Handles typed properties with backing fields first, then falls back to _fields dictionary.
     /// </summary>
-    private void EmitSetPropertyBody(MethodBuilder method, string className, Stmt.Class classStmt, FieldInfo fieldsField)
+    private void EmitSetPropertyBody(
+        MethodBuilder method,
+        string className,
+        Stmt.Class classStmt,
+        MethodInfo ensureFields)
     {
         var il = method.GetILGenerator();
         var setFieldsLabel = il.DefineLabel();
@@ -530,7 +595,7 @@ public partial class ILCompiler
         // 2. Fall back to _fields dictionary
         il.MarkLabel(setFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);
@@ -592,13 +657,15 @@ public partial class ILCompiler
 
         // Emit get_Fields body: returns a dictionary combining typed backing fields + dynamic _fields
         _classExprs.BackingFields.TryGetValue(classExpr, out var backingFields);
-        EmitGetFieldsBodyCore(stubs.GetFields, backingFields, fieldsField);
+        EmitGetFieldsBodyCore(stubs.GetFields, backingFields, stubs.EnsureFields);
 
         // Emit GetProperty body with compile-time dispatch
-        EmitGetPropertyBodyForClassExpr(stubs.GetProperty, className, classExpr, fieldsField);
+        EmitGetPropertyBodyForClassExpr(
+            stubs.GetProperty, className, classExpr, fieldsField);
 
         // Emit SetProperty body with compile-time dispatch
-        EmitSetPropertyBodyForClassExpr(stubs.SetProperty, className, classExpr, fieldsField);
+        EmitSetPropertyBodyForClassExpr(
+            stubs.SetProperty, className, classExpr, stubs.EnsureFields);
 
         // Emit HasProperty body with compile-time dispatch for typed backing fields
         EmitHasPropertyBodyCore(stubs.HasProperty, backingFields, fieldsField);
@@ -608,10 +675,15 @@ public partial class ILCompiler
     /// Emits the GetProperty method body for a class expression with compile-time dispatch.
     /// Uses _classExprs.InstanceMethods for method lookup.
     /// </summary>
-    private void EmitGetPropertyBodyForClassExpr(MethodBuilder method, string className, Expr.ClassExpr classExpr, FieldInfo fieldsField)
+    private void EmitGetPropertyBodyForClassExpr(
+        MethodBuilder method,
+        string className,
+        Expr.ClassExpr classExpr,
+        FieldInfo fieldsField)
     {
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Object);
+        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
         var returnValueLabel = il.DefineLabel();
         var tryFieldsLabel = il.DefineLabel();
         var tryMethodsLabel = il.DefineLabel();
@@ -647,6 +719,10 @@ public partial class ILCompiler
         il.MarkLabel(tryFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Stloc, fieldsLocal);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        il.Emit(OpCodes.Brfalse, tryMethodsLabel);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
@@ -917,7 +993,11 @@ public partial class ILCompiler
     /// Emits the SetProperty method body for a class expression with compile-time dispatch.
     /// Handles typed properties with backing fields first, then falls back to _fields dictionary.
     /// </summary>
-    private void EmitSetPropertyBodyForClassExpr(MethodBuilder method, string className, Expr.ClassExpr classExpr, FieldInfo fieldsField)
+    private void EmitSetPropertyBodyForClassExpr(
+        MethodBuilder method,
+        string className,
+        Expr.ClassExpr classExpr,
+        MethodInfo ensureFields)
     {
         var il = method.GetILGenerator();
         var setFieldsLabel = il.DefineLabel();
@@ -999,7 +1079,7 @@ public partial class ILCompiler
         // 2. Fall back to _fields dictionary
         il.MarkLabel(setFieldsLabel);
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
+        il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", [_types.String, _types.Object])!);

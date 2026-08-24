@@ -17,7 +17,7 @@ public partial class ILCompiler
             [_runtime.ClassPrototypeMarkerType]);
     }
 
-    private void EmitClassPrototypeConstructor(TypeBuilder typeBuilder, FieldInfo fieldsField)
+    private void EmitClassPrototypeConstructor(TypeBuilder typeBuilder)
     {
         DefineClassPrototypeConstructor(typeBuilder);
         var constructor = _classes.PrototypeConstructors[typeBuilder];
@@ -26,10 +26,9 @@ public partial class ILCompiler
         EmitClassPrototypeBaseConstructorCall(il, typeBuilder);
 
         // Only compiler bookkeeping is initialized. JavaScript fields, private
-        // slots, decorators, and constructor bodies deliberately do not run.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stfld, fieldsField);
+        // slots, decorators, constructor bodies, and dynamic property storage
+        // deliberately do not run. The latter materializes through $EnsureFields
+        // if the prototype later receives an ordinary dynamic property.
         il.Emit(OpCodes.Ret);
     }
 

@@ -101,6 +101,7 @@ public partial class ILCompiler
     /// </summary>
     private sealed class HasFieldsMethodStubs
     {
+        public required MethodBuilder EnsureFields { get; init; }
         public required MethodBuilder GetFields { get; init; }
         public required MethodBuilder GetProperty { get; init; }
         public required MethodBuilder SetProperty { get; init; }

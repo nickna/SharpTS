@@ -96,11 +96,10 @@ public partial class ILCompiler
                 ctx.GenericTypeParameters[gp.Name] = gp;
         }
 
-        // Initialize _extras dictionary FIRST (before calling parent constructor)
-        // This allows parent constructor to access fields via SetFieldsProperty
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stfld, fieldsField);
+        // Dynamic property storage stays absent until a write needs it. Generated
+        // SetProperty overrides use $EnsureFields, including when a base constructor
+        // dispatches through the derived override before this constructor resumes.
+        var ensureFields = _classes.HasFieldsStubs[className].EnsureFields;
 
         // Initialize @lock decorator fields if present
         if (_locks.SyncLockFields.TryGetValue(className, out var syncLockField))
@@ -319,7 +318,7 @@ public partial class ILCompiler
                 {
                     // Fallback: store in _extras dictionary (for fields without backing fields)
                     il.Emit(OpCodes.Ldarg_0);
-                    il.Emit(OpCodes.Ldfld, fieldsField);
+                    il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
                     il.Emit(OpCodes.Ldstr, fieldName);
                     // number[] unboxing: an `arr: number[] = []` field is created as a numeric $Array
                     // (escaping by nature — a field is aliasable), so `this.arr[i]=v` writes unboxed.
@@ -342,7 +341,7 @@ public partial class ILCompiler
             string fieldName = field.Name.Lexeme;
             // Store null in _extras dictionary
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldfld, fieldsField);
+            il.Emit(OpCodes.Call, EmitterTypeHelpers.SelfMethodReference(ensureFields));
             il.Emit(OpCodes.Ldstr, fieldName);
             il.Emit(OpCodes.Ldnull);
             il.Emit(OpCodes.Callvirt, _types.DictionaryStringObjectSetItem);
