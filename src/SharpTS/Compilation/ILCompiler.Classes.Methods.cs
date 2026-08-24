@@ -412,6 +412,7 @@ public partial class ILCompiler
         returnType = _types.Object;
         if (classStatement.Decorators is { Count: > 0 }
             || classStatement.TypeParams is { Count: > 0 }
+            || classStatement.Fields.Any(field => field.IsDeclare)
             || method.Body is not { Count: > 0 } body
             || method.IsStatic
             || method.IsPrivate

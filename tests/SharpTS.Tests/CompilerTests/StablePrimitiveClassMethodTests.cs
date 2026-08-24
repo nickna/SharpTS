@@ -180,6 +180,28 @@ public sealed class StablePrimitiveClassMethodTests
     }
 
     [Fact]
+    public void DeclaredPrimitiveField_PreservesAbsentValueThroughObjectWrapper()
+    {
+        const string source = """
+            class Model {
+                declare private value: number;
+                getValue(): number { return this.value; }
+            }
+            const model = new Model();
+            console.log(model.getValue());
+            """;
+
+        Assert.Equal("null\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+
+        Assembly assembly = Compile(source);
+        Type modelType = assembly.GetType("Model")!;
+        Assert.DoesNotContain(modelType.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic),
+            method => method.Name.StartsWith("$typed$getValue$", StringComparison.Ordinal));
+        Assert.Equal(typeof(object), modelType.GetMethod("getValue")!.ReturnType);
+    }
+
+    [Fact]
     public void VirtualOverridesAndExtractedMethods_PreserveBehavior()
     {
         const string source = """
