@@ -1,0 +1,69 @@
+using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Order;
+using SharpTS.Microbenchmarks.Baselines;
+
+namespace SharpTS.Microbenchmarks.Benchmarks;
+
+public abstract class ClassFieldBenchmarkBase : ComputationalBenchmarkBase
+{
+    protected Func<double, double> SharpTs = null!;
+
+    [Params(100_000)]
+    public int N { get; set; }
+
+    protected void Load(string functionName) => SharpTs = LoadCompiled(functionName);
+}
+
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class ClassFieldReuseBenchmarks : ClassFieldBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup() => Load("classFieldReuse");
+
+    [Benchmark]
+    public double SharpTS() => SharpTs(N);
+
+    [Benchmark(Baseline = true)]
+    public double IdiomaticCSharp() => ClassFieldCSharp.FieldReuse(N);
+
+    [Benchmark]
+    public object? BoxedEquivalentCSharp() => ClassFieldCSharp.BoxedFieldReuse(N);
+}
+
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class ClassMethodReuseBenchmarks : ClassFieldBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup() => Load("classMethodReuse");
+
+    [Benchmark]
+    public double SharpTS() => SharpTs(N);
+
+    [Benchmark(Baseline = true)]
+    public double IdiomaticCSharp() => ClassFieldCSharp.MethodReuse(N);
+
+    [Benchmark]
+    public object? BoxedEquivalentCSharp() => ClassFieldCSharp.BoxedMethodReuse(N);
+}
+
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class ClassConstructionBenchmarks : ClassFieldBenchmarkBase
+{
+    [GlobalSetup]
+    public void Setup() => Load("classConstruction");
+
+    [Benchmark]
+    public double SharpTS() => SharpTs(N);
+
+    [Benchmark(Baseline = true)]
+    public double IdiomaticCSharp() => ClassFieldCSharp.Construction(N);
+
+    [Benchmark]
+    public object? BoxedEquivalentCSharp() => ClassFieldCSharp.BoxedConstruction(N);
+}
