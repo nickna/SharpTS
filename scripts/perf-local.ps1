@@ -6,7 +6,7 @@ param(
 
     [string[]]$Platforms = @('windows', 'wsl'),
 
-    [string[]]$Workloads = @('int-arrays', 'brainfuck', 'accumulate'),
+    [string[]]$Workloads = @('int-arrays', 'brainfuck', 'count-primes'),
 
     [ValidateRange(1, 20)]
     [int]$Runs = 3,

@@ -10,7 +10,9 @@ The defaults target the current numeric-loop tranche:
 
 - `int-arrays`
 - `brainfuck`
-- `accumulate`
+- `count-primes`
+
+The `int-arrays` script reports both `int32-kernel` and `accumulate` cases.
 
 Node 22.23.2 is the competitive reference. Bun is deliberately absent from the
 acceptance comparison: a locally installed Bun can still be run directly with
@@ -73,7 +75,7 @@ workloads. Commit a coherent checkpoint before adding WSL:
 ./scripts/perf-local.ps1 -Action sync
 ./scripts/perf-local.ps1 -Action measure `
   -Platforms windows,wsl `
-  -Workloads int-arrays,brainfuck,accumulate `
+  -Workloads int-arrays,brainfuck,count-primes `
   -Runs 5 `
   -Enforce
 ```
