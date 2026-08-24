@@ -67,6 +67,19 @@ if ($regression.status -ne 'regression' -or $regression.changePercent -ne 20) {
     throw "Material regression was not detected: $($regression | ConvertTo-Json -Compress)"
 }
 
+$driftSamples = @(
+    ConvertFrom-SharpTSBenchmarkResults 'compiled|drift:1:10:9:1' linux baseline 1
+    ConvertFrom-SharpTSBenchmarkResults 'compiled|drift:1:11:10:1' linux candidate 1
+    ConvertFrom-SharpTSBenchmarkResults 'compiled|drift:1:20:19:1' linux baseline 2
+    ConvertFrom-SharpTSBenchmarkResults 'compiled|drift:1:15:14:1' linux candidate 2
+    ConvertFrom-SharpTSBenchmarkResults 'compiled|drift:1:30:29:1' linux baseline 3
+    ConvertFrom-SharpTSBenchmarkResults 'compiled|drift:1:28:27:1' linux candidate 3
+)
+$drift = @(Get-SharpTSPerfComparisons $driftSamples)[0]
+if ($drift.status -ne 'neutral' -or $drift.changePercent -ne -6.67) {
+    throw "Paired launch comparison did not suppress cross-launch drift: $($drift | ConvertTo-Json -Compress)"
+}
+
 $markdown = ConvertTo-SharpTSPerfMarkdown $comparisons ([ordered]@{
     baselineCommit = 'baseline'
     candidateCommit = 'candidate'

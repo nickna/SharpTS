@@ -80,8 +80,10 @@ workloads. Commit a coherent checkpoint before adding WSL:
   -Enforce
 ```
 
-Each launch alternates which variant runs first. The report uses the median of
-the launches and records raw data, commits, dirty state, host facts, JSON, and a
+Each launch alternates which variant runs first. The report uses medians for the
+displayed timings and the median of per-launch paired changes for decisions, so
+thermal or host-load drift cannot turn mismatched independent medians into a
+false result. It records raw data, commits, dirty state, host facts, JSON, and a
 Markdown summary under the ignored `.perf-local/` directory. A regression is
 material only when it exceeds both defaults: 10% and 0.05 ms. Override either
 threshold explicitly when a workload needs a different noise floor.

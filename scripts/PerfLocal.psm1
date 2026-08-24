@@ -77,12 +77,35 @@ function Get-SharpTSPerfComparisons {
         $baselineMedian = Get-SharpTSMedian @($baseline.meanMilliseconds)
         $candidateMedian = Get-SharpTSMedian @($candidate.meanMilliseconds)
         $nodeMedian = if ($node.Count -gt 0) { Get-SharpTSMedian @($node.meanMilliseconds) } else { [double]::NaN }
-        $deltaMilliseconds = $candidateMedian - $baselineMedian
-        $changePercent = if ($baselineMedian -eq 0) {
-            [double]::NaN
-        } else {
-            (($candidateMedian / $baselineMedian) - 1.0) * 100.0
+
+        # Preserve the alternating launch pairs. Independent medians can report
+        # a large change when CPU frequency or host load drifts during a run,
+        # even if every nearby baseline/candidate pair agrees.
+        $pairedDeltas = [Collections.Generic.List[double]]::new()
+        $pairedChanges = [Collections.Generic.List[double]]::new()
+        $pairedNodeRatios = [Collections.Generic.List[double]]::new()
+        foreach ($launch in @($baseline.launch | Sort-Object -Unique)) {
+            $baselineLaunch = @($baseline | Where-Object launch -eq $launch)
+            $candidateLaunch = @($candidate | Where-Object launch -eq $launch)
+            if ($candidateLaunch.Count -eq 0) { continue }
+            $baselineValue = Get-SharpTSMedian @($baselineLaunch.meanMilliseconds)
+            $candidateValue = Get-SharpTSMedian @($candidateLaunch.meanMilliseconds)
+            $pairedDeltas.Add($candidateValue - $baselineValue)
+            if ($baselineValue -ne 0) {
+                $pairedChanges.Add((($candidateValue / $baselineValue) - 1.0) * 100.0)
+            }
+
+            $nodeLaunch = @($node | Where-Object launch -eq $launch)
+            if ($nodeLaunch.Count -gt 0) {
+                $nodeValue = Get-SharpTSMedian @($nodeLaunch.meanMilliseconds)
+                if ($nodeValue -ne 0) { $pairedNodeRatios.Add($candidateValue / $nodeValue) }
+            }
         }
+        if ($pairedDeltas.Count -eq 0 -or $pairedChanges.Count -eq 0) {
+            throw "Missing paired launch samples for $($group.Name)"
+        }
+        $deltaMilliseconds = Get-SharpTSMedian $pairedDeltas.ToArray()
+        $changePercent = Get-SharpTSMedian $pairedChanges.ToArray()
         $material = [Math]::Abs($deltaMilliseconds) -ge $RegressionMinimumMilliseconds
         $status = if ($material -and $changePercent -gt $RegressionThresholdPercent) {
             'regression'
@@ -102,10 +125,10 @@ function Get-SharpTSPerfComparisons {
             deltaMilliseconds = [Math]::Round($deltaMilliseconds, 6)
             changePercent = [Math]::Round($changePercent, 2)
             nodeMedianMilliseconds = if ([double]::IsNaN($nodeMedian)) { $null } else { [Math]::Round($nodeMedian, 6) }
-            candidateVsNode = if ([double]::IsNaN($nodeMedian) -or $nodeMedian -eq 0) {
+            candidateVsNode = if ($pairedNodeRatios.Count -eq 0) {
                 $null
             } else {
-                [Math]::Round($candidateMedian / $nodeMedian, 3)
+                [Math]::Round((Get-SharpTSMedian $pairedNodeRatios.ToArray()), 3)
             }
             baselineSamples = $baseline.Count
             candidateSamples = $candidate.Count
