@@ -33,6 +33,7 @@ $compiledRoot = Join-Path $OutputDirectory 'compiled'
 $measurementsPath = Join-Path $OutputDirectory 'measurements.json'
 $summaryPath = Join-Path $OutputDirectory 'summary.md'
 $metadataPath = Join-Path $OutputDirectory 'metadata.json'
+$dockerImage = 'sharpts-gc-profile-bench:local'
 
 $profiles = [ordered]@{
     workstation = [ordered]@{
@@ -190,6 +191,42 @@ foreach ($source in $sources) {
     }
 }
 
+$dockerMetadata = $null
+if ($Platforms -contains 'ubuntu') {
+    Write-Host '=== Building pinned Ubuntu benchmark image ==='
+    Invoke-Checked docker @(
+        'build', '-t', $dockerImage, '-f', (Join-Path $scriptRoot 'Dockerfile'), $scriptRoot) | Out-Null
+    $dockerVersion = ((Invoke-Checked docker @('version', '--format', '{{json .}}')) -join '') |
+        ConvertFrom-Json
+    $imageId = @(Invoke-Checked docker @(
+        'image', 'inspect', $dockerImage, '--format', '{{.Id}}'))[0].ToString().Trim()
+    $repoDigestOutput = @(Invoke-Checked docker @(
+        'image', 'inspect', $dockerImage,
+        '--format', '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}'))
+    $imageRepoDigest = if ($repoDigestOutput.Count -gt 0) {
+        $repoDigestOutput[0].ToString().Trim()
+    }
+    else {
+        $null
+    }
+    $dockerMetadata = [ordered]@{
+        imageId = $imageId
+        imageRepoDigest = $imageRepoDigest
+        clientVersion = $dockerVersion.Client.Version
+        serverVersion = $dockerVersion.Server.Version
+        serverPlatform = $dockerVersion.Server.Platform.Name
+        containerDotNetRuntimes = @(Invoke-Checked docker @(
+            'run', '--rm', $dockerImage, 'dotnet', '--list-runtimes'))
+        containerNode = @(Invoke-Checked docker @(
+            'run', '--rm', $dockerImage, 'node', '--version'))[0].ToString().Trim()
+        containerOs = @(Invoke-Checked docker @(
+            'run', '--rm', $dockerImage, 'sh', '-lc',
+            '. /etc/os-release && printf "%s" "$PRETTY_NAME"'))[0].ToString().Trim()
+        containerArchitecture = @(Invoke-Checked docker @(
+            'run', '--rm', $dockerImage, 'uname', '-m'))[0].ToString().Trim()
+    }
+}
+
 $gitCommit = @(Invoke-Checked git @('rev-parse', 'HEAD'))[0].ToString().Trim()
 $gitBranch = @(Invoke-Checked git @('branch', '--show-current'))[0].ToString().Trim()
 $dotnetVersion = @(Invoke-Checked dotnet @('--version'))[0].ToString().Trim()
@@ -201,6 +238,13 @@ $metadata = [ordered]@{
     branch = $gitBranch
     dotnet = $dotnetVersion
     node = $nodeVersion
+    host = [ordered]@{
+        os = [Runtime.InteropServices.RuntimeInformation]::OSDescription
+        architecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+        processorCount = [Environment]::ProcessorCount
+        dotnetRuntimes = @(Invoke-Checked dotnet @('--list-runtimes'))
+    }
+    docker = $dockerMetadata
     platforms = $Platforms
     launches = $Launches
     workloads = @($benchmarkScripts.BaseName)
@@ -293,8 +337,6 @@ function Get-LinuxTimeMetrics([string]$Path) {
 
 function Invoke-UbuntuMatrix {
     Write-Host '=== Ubuntu 24.04 x64 matrix (Docker) ==='
-    $image = 'sharpts-gc-profile-bench:local'
-    Invoke-Checked docker @('build', '-t', $image, '-f', (Join-Path $scriptRoot 'Dockerfile'), $scriptRoot) | Out-Null
     $container = "sharpts-gc-$([Guid]::NewGuid().ToString('N').Substring(0, 10))"
     $compiledMount = "type=bind,source=$compiledRoot,target=/bench"
     $scriptsMount = "type=bind,source=$scriptsRoot,target=/scripts,readonly"
@@ -304,7 +346,7 @@ function Invoke-UbuntuMatrix {
         '--mount', $compiledMount,
         '--mount', $scriptsMount,
         '--mount', $startupMount,
-        $image) | Out-Null
+        $dockerImage) | Out-Null
     try {
         foreach ($source in $sources) {
             $name = $source.BaseName
@@ -377,6 +419,8 @@ foreach ($measurement in $measurements) {
             parameter = [double]::Parse($parts[2], [Globalization.CultureInfo]::InvariantCulture)
             meanMilliseconds = [double]::Parse($parts[3], [Globalization.CultureInfo]::InvariantCulture)
             minimumMilliseconds = [double]::Parse($parts[4], [Globalization.CultureInfo]::InvariantCulture)
+            standardDeviationMilliseconds = [double]::Parse(
+                $parts[5], [Globalization.CultureInfo]::InvariantCulture)
             elapsedMilliseconds = [double]$measurement.elapsedMilliseconds
             peakWorkingSetBytes = [long]$measurement.peakWorkingSetBytes
         })
@@ -390,8 +434,8 @@ $lines.Add("Generated from commit ``$($metadata.commit)`` with $Launches launche
 $lines.Add('')
 $lines.Add('## Largest-input benchmark results')
 $lines.Add('')
-$lines.Add('| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median process | Median peak RSS |')
-$lines.Add('|---|---|---:|---|---:|---:|---:|---:|')
+$lines.Add('| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median stdev | Median process | Median peak RSS |')
+$lines.Add('|---|---|---:|---|---:|---:|---:|---:|---:|')
 
 $namedGroups = $benchRows | Group-Object platform, name
 foreach ($namedGroup in $namedGroups | Sort-Object Name) {
@@ -401,9 +445,10 @@ foreach ($namedGroup in $namedGroups | Sort-Object Name) {
         $first = $runtimeGroup.Group[0]
         $mean = Get-Median @($runtimeGroup.Group.meanMilliseconds)
         $minimum = Get-Median @($runtimeGroup.Group.minimumMilliseconds)
+        $stdev = Get-Median @($runtimeGroup.Group.standardDeviationMilliseconds)
         $elapsed = Get-Median @($runtimeGroup.Group.elapsedMilliseconds)
         $peakMb = (Get-Median @($runtimeGroup.Group.peakWorkingSetBytes)) / 1MB
-        $lines.Add("| $($first.platform) | $($first.name) | $maximum | $($first.runtimeProfile) | $($mean.ToString('F4')) ms | $($minimum.ToString('F4')) ms | $($elapsed.ToString('F1')) ms | $($peakMb.ToString('F1')) MB |")
+        $lines.Add("| $($first.platform) | $($first.name) | $maximum | $($first.runtimeProfile) | $($mean.ToString('F4')) ms | $($minimum.ToString('F4')) ms | $($stdev.ToString('F4')) ms | $($elapsed.ToString('F1')) ms | $($peakMb.ToString('F1')) MB |")
     }
 }
 
@@ -426,4 +471,3 @@ foreach ($group in $startupMeasurements | Group-Object platform, runtime, profil
 Write-Host ''
 Write-Host "Measurements: $measurementsPath"
 Write-Host "Summary:      $summaryPath"
-

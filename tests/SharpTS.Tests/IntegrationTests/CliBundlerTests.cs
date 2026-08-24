@@ -281,6 +281,9 @@ public class CliBundlerTests
     [InlineData("sdk")]
     public void Compile_TargetExe_GcProfile_ReachesBundledRuntimeConfig(string bundler)
     {
+        if (bundler == "sdk" && !SdkBundlerDetector.IsSdkAvailable)
+            return;
+
         using var tempDir = CliTestHelper.CreateTempDirectory();
         var scriptPath = tempDir.CreateFile("app.ts", CliFixtures.SimpleHelloWorld);
 

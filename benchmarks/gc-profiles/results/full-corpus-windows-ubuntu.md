@@ -4,232 +4,232 @@ Generated from commit `4189deb66260242c2bb448af8d3cfd185bc3d390` with 3 launches
 
 ## Largest-input benchmark results
 
-| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median process | Median peak RSS |
-|---|---|---:|---|---:|---:|---:|---:|
-| ubuntu | accumulate | 1000000 | adaptive | 7.6276 ms | 5.9078 ms | 2210.0 ms | 84.5 MB |
-| ubuntu | accumulate | 1000000 | node | 3.7336 ms | 3.0685 ms | 2280.0 ms | 196.7 MB |
-| ubuntu | accumulate | 1000000 | throughput | 9.8233 ms | 7.8585 ms | 2170.0 ms | 634.6 MB |
-| ubuntu | accumulate | 1000000 | workstation | 6.8312 ms | 5.8160 ms | 2090.0 ms | 69.0 MB |
-| ubuntu | array-methods | 100000 | adaptive | 2.9556 ms | 1.1957 ms | 1080.0 ms | 85.1 MB |
-| ubuntu | array-methods | 100000 | node | 2.6378 ms | 2.2864 ms | 1180.0 ms | 121.9 MB |
-| ubuntu | array-methods | 100000 | throughput | 3.4910 ms | 1.4123 ms | 1120.0 ms | 656.1 MB |
-| ubuntu | array-methods | 100000 | workstation | 1.4722 ms | 1.1346 ms | 1070.0 ms | 59.5 MB |
-| ubuntu | async-function-calls | 1000 | adaptive | 0.0006 ms | 0.0005 ms | 4740.0 ms | 84.8 MB |
-| ubuntu | async-function-calls | 1000 | node | 0.0256 ms | 0.0220 ms | 4920.0 ms | 113.1 MB |
-| ubuntu | async-function-calls | 1000 | throughput | 0.0006 ms | 0.0005 ms | 4670.0 ms | 678.0 MB |
-| ubuntu | async-function-calls | 1000 | workstation | 0.0005 ms | 0.0005 ms | 4670.0 ms | 69.5 MB |
-| ubuntu | async-resolved-await | 1000 | adaptive | 0.0635 ms | 0.0468 ms | 4740.0 ms | 84.8 MB |
-| ubuntu | async-resolved-await | 1000 | node | 0.0281 ms | 0.0238 ms | 4920.0 ms | 113.1 MB |
-| ubuntu | async-resolved-await | 1000 | throughput | 0.0520 ms | 0.0434 ms | 4670.0 ms | 678.0 MB |
-| ubuntu | async-resolved-await | 1000 | workstation | 0.0461 ms | 0.0373 ms | 4670.0 ms | 69.5 MB |
-| ubuntu | binary-trees | 16 | adaptive | 1.6018 ms | 1.0850 ms | 1080.0 ms | 73.5 MB |
-| ubuntu | binary-trees | 16 | node | 1.4171 ms | 1.0530 ms | 1180.0 ms | 206.8 MB |
-| ubuntu | binary-trees | 16 | throughput | 1.5428 ms | 1.0550 ms | 1130.0 ms | 674.5 MB |
-| ubuntu | binary-trees | 16 | workstation | 1.6721 ms | 0.9728 ms | 1080.0 ms | 65.9 MB |
-| ubuntu | brainfuck | 5000 | adaptive | 30.0669 ms | 28.5958 ms | 1210.0 ms | 100.2 MB |
-| ubuntu | brainfuck | 5000 | node | 19.3162 ms | 18.4211 ms | 1070.0 ms | 86.6 MB |
-| ubuntu | brainfuck | 5000 | throughput | 32.0177 ms | 29.9515 ms | 1270.0 ms | 236.4 MB |
-| ubuntu | brainfuck | 5000 | workstation | 31.1017 ms | 28.7086 ms | 1040.0 ms | 61.5 MB |
-| ubuntu | class-construction | 100000 | adaptive | 0.4250 ms | 0.3085 ms | 3620.0 ms | 62.3 MB |
-| ubuntu | class-construction | 100000 | node | 0.4369 ms | 0.3471 ms | 3720.0 ms | 83.2 MB |
-| ubuntu | class-construction | 100000 | throughput | 0.5544 ms | 0.4023 ms | 3640.0 ms | 680.1 MB |
-| ubuntu | class-construction | 100000 | workstation | 0.4783 ms | 0.3583 ms | 3570.0 ms | 59.0 MB |
-| ubuntu | class-field-reuse | 100000 | adaptive | 0.0599 ms | 0.0581 ms | 3620.0 ms | 62.3 MB |
-| ubuntu | class-field-reuse | 100000 | node | 0.1068 ms | 0.0957 ms | 3720.0 ms | 83.2 MB |
-| ubuntu | class-field-reuse | 100000 | throughput | 0.0660 ms | 0.0604 ms | 3640.0 ms | 680.1 MB |
-| ubuntu | class-field-reuse | 100000 | workstation | 0.0610 ms | 0.0568 ms | 3570.0 ms | 59.0 MB |
-| ubuntu | class-method-reuse | 100000 | adaptive | 0.0565 ms | 0.0531 ms | 3620.0 ms | 62.3 MB |
-| ubuntu | class-method-reuse | 100000 | node | 0.0987 ms | 0.0937 ms | 3720.0 ms | 83.2 MB |
-| ubuntu | class-method-reuse | 100000 | throughput | 0.0629 ms | 0.0585 ms | 3640.0 ms | 680.1 MB |
-| ubuntu | class-method-reuse | 100000 | workstation | 0.0753 ms | 0.0587 ms | 3570.0 ms | 59.0 MB |
-| ubuntu | closures | 100000 | adaptive | 1.1651 ms | 0.9303 ms | 1080.0 ms | 51.9 MB |
-| ubuntu | closures | 100000 | node | 0.7735 ms | 0.6957 ms | 1170.0 ms | 82.9 MB |
-| ubuntu | closures | 100000 | throughput | 1.3808 ms | 0.9867 ms | 1100.0 ms | 668.2 MB |
-| ubuntu | closures | 100000 | workstation | 1.0595 ms | 0.8406 ms | 1080.0 ms | 57.0 MB |
-| ubuntu | count-primes | 100000 | adaptive | 1.1544 ms | 0.9409 ms | 1090.0 ms | 53.5 MB |
-| ubuntu | count-primes | 100000 | node | 1.3435 ms | 1.1172 ms | 1190.0 ms | 112.5 MB |
-| ubuntu | count-primes | 100000 | throughput | 1.4253 ms | 1.1219 ms | 1100.0 ms | 641.1 MB |
-| ubuntu | count-primes | 100000 | workstation | 1.3138 ms | 1.1072 ms | 1090.0 ms | 60.3 MB |
-| ubuntu | factorial | 10000 | adaptive | 0.0084 ms | 0.0078 ms | 1020.0 ms | 46.6 MB |
-| ubuntu | factorial | 10000 | node | 0.0082 ms | 0.0077 ms | 1280.0 ms | 81.8 MB |
-| ubuntu | factorial | 10000 | throughput | 0.0084 ms | 0.0078 ms | 1020.0 ms | 150.5 MB |
-| ubuntu | factorial | 10000 | workstation | 0.0083 ms | 0.0078 ms | 1020.0 ms | 59.0 MB |
-| ubuntu | fibonacci | 35 | adaptive | 27.0339 ms | 26.2183 ms | 1230.0 ms | 46.6 MB |
-| ubuntu | fibonacci | 35 | node | 63.1104 ms | 60.3981 ms | 1680.0 ms | 80.6 MB |
-| ubuntu | fibonacci | 35 | throughput | 25.2397 ms | 24.5756 ms | 1240.0 ms | 92.6 MB |
-| ubuntu | fibonacci | 35 | workstation | 29.0633 ms | 27.0719 ms | 1220.0 ms | 59.3 MB |
-| ubuntu | int32-kernel | 1000000 | adaptive | 4.6379 ms | 3.2968 ms | 2210.0 ms | 84.5 MB |
-| ubuntu | int32-kernel | 1000000 | node | 2.3124 ms | 1.8641 ms | 2280.0 ms | 196.7 MB |
-| ubuntu | int32-kernel | 1000000 | throughput | 5.1719 ms | 3.6375 ms | 2170.0 ms | 634.6 MB |
-| ubuntu | int32-kernel | 1000000 | workstation | 3.9600 ms | 3.6547 ms | 2090.0 ms | 69.0 MB |
-| ubuntu | json | 10000 | adaptive | 1.8140 ms | 1.0425 ms | 1080.0 ms | 110.4 MB |
-| ubuntu | json | 10000 | node | 2.4590 ms | 2.1303 ms | 1170.0 ms | 117.8 MB |
-| ubuntu | json | 10000 | throughput | 2.1934 ms | 1.1636 ms | 1090.0 ms | 742.0 MB |
-| ubuntu | json | 10000 | workstation | 2.0308 ms | 0.9002 ms | 1070.0 ms | 71.2 MB |
-| ubuntu | map-iteration | 10000 | adaptive | 0.8180 ms | 0.3456 ms | 4750.0 ms | 115.1 MB |
-| ubuntu | map-iteration | 10000 | node | 0.5214 ms | 0.4441 ms | 4910.0 ms | 153.2 MB |
-| ubuntu | map-iteration | 10000 | throughput | 0.8900 ms | 0.3458 ms | 4860.0 ms | 718.4 MB |
-| ubuntu | map-iteration | 10000 | workstation | 0.4363 ms | 0.2416 ms | 4810.0 ms | 62.0 MB |
-| ubuntu | map-operations | 10000 | adaptive | 1.0932 ms | 0.5488 ms | 4750.0 ms | 115.1 MB |
-| ubuntu | map-operations | 10000 | node | 0.6469 ms | 0.5143 ms | 4910.0 ms | 153.2 MB |
-| ubuntu | map-operations | 10000 | throughput | 1.2379 ms | 0.5543 ms | 4860.0 ms | 718.4 MB |
-| ubuntu | map-operations | 10000 | workstation | 0.8460 ms | 0.4344 ms | 4810.0 ms | 62.0 MB |
-| ubuntu | num-push | 1000000 | adaptive | 9.2625 ms | 7.5497 ms | 2200.0 ms | 311.4 MB |
-| ubuntu | num-push | 1000000 | node | 12.9469 ms | 11.3808 ms | 2090.0 ms | 357.2 MB |
-| ubuntu | num-push | 1000000 | throughput | 12.5156 ms | 7.8406 ms | 2020.0 ms | 766.3 MB |
-| ubuntu | num-push | 1000000 | workstation | 8.5962 ms | 7.1624 ms | 2080.0 ms | 109.4 MB |
-| ubuntu | num-write | 1000000 | adaptive | 9.8614 ms | 7.7998 ms | 2200.0 ms | 311.4 MB |
-| ubuntu | num-write | 1000000 | node | 13.1238 ms | 11.5895 ms | 2090.0 ms | 357.2 MB |
-| ubuntu | num-write | 1000000 | throughput | 11.7888 ms | 8.0699 ms | 2020.0 ms | 766.3 MB |
-| ubuntu | num-write | 1000000 | workstation | 8.2762 ms | 6.9473 ms | 2080.0 ms | 109.4 MB |
-| ubuntu | objects | 100000 | adaptive | 0.0844 ms | 0.0773 ms | 1160.0 ms | 46.9 MB |
-| ubuntu | objects | 100000 | node | 0.2586 ms | 0.0802 ms | 1220.0 ms | 83.1 MB |
-| ubuntu | objects | 100000 | throughput | 0.0844 ms | 0.0772 ms | 1150.0 ms | 98.8 MB |
-| ubuntu | objects | 100000 | workstation | 0.0818 ms | 0.0772 ms | 1140.0 ms | 59.3 MB |
-| ubuntu | promise-all | 1000 | adaptive | 0.0105 ms | 0.0073 ms | 4740.0 ms | 84.8 MB |
-| ubuntu | promise-all | 1000 | node | 0.0347 ms | 0.0282 ms | 4920.0 ms | 113.1 MB |
-| ubuntu | promise-all | 1000 | throughput | 0.0085 ms | 0.0067 ms | 4670.0 ms | 678.0 MB |
-| ubuntu | promise-all | 1000 | workstation | 0.0070 ms | 0.0057 ms | 4670.0 ms | 69.5 MB |
-| ubuntu | promise-then-chain | 1000 | adaptive | 0.0646 ms | 0.0452 ms | 4740.0 ms | 84.8 MB |
-| ubuntu | promise-then-chain | 1000 | node | 0.0273 ms | 0.0228 ms | 4920.0 ms | 113.1 MB |
-| ubuntu | promise-then-chain | 1000 | throughput | 0.0557 ms | 0.0447 ms | 4670.0 ms | 678.0 MB |
-| ubuntu | promise-then-chain | 1000 | workstation | 0.0449 ms | 0.0377 ms | 4670.0 ms | 69.5 MB |
-| ubuntu | regex | 10000 | adaptive | 3.4035 ms | 2.5930 ms | 3040.0 ms | 168.3 MB |
-| ubuntu | regex | 10000 | node | 2.1383 ms | 1.6137 ms | 1170.0 ms | 202.3 MB |
-| ubuntu | regex | 10000 | throughput | 3.4673 ms | 2.6719 ms | 3980.0 ms | 433.2 MB |
-| ubuntu | regex | 10000 | workstation | 2.6674 ms | 2.2386 ms | 1660.0 ms | 65.7 MB |
-| ubuntu | set-iteration | 10000 | adaptive | 0.7019 ms | 0.3123 ms | 4750.0 ms | 115.1 MB |
-| ubuntu | set-iteration | 10000 | node | 0.3950 ms | 0.3316 ms | 4910.0 ms | 153.2 MB |
-| ubuntu | set-iteration | 10000 | throughput | 0.7741 ms | 0.3331 ms | 4860.0 ms | 718.4 MB |
-| ubuntu | set-iteration | 10000 | workstation | 0.3615 ms | 0.2086 ms | 4810.0 ms | 62.0 MB |
-| ubuntu | set-operations | 10000 | adaptive | 0.7626 ms | 0.3647 ms | 4750.0 ms | 115.1 MB |
-| ubuntu | set-operations | 10000 | node | 0.5531 ms | 0.4673 ms | 4910.0 ms | 153.2 MB |
-| ubuntu | set-operations | 10000 | throughput | 0.7784 ms | 0.4134 ms | 4860.0 ms | 718.4 MB |
-| ubuntu | set-operations | 10000 | workstation | 0.5301 ms | 0.2975 ms | 4810.0 ms | 62.0 MB |
-| ubuntu | sort | 10000 | adaptive | 4.1929 ms | 3.4909 ms | 980.0 ms | 54.4 MB |
-| ubuntu | sort | 10000 | node | 3.0524 ms | 2.7512 ms | 1170.0 ms | 85.0 MB |
-| ubuntu | sort | 10000 | throughput | 4.7053 ms | 4.2716 ms | 980.0 ms | 348.1 MB |
-| ubuntu | sort | 10000 | workstation | 4.5373 ms | 3.8116 ms | 970.0 ms | 60.0 MB |
-| ubuntu | strings | 10000 | adaptive | 0.0586 ms | 0.0524 ms | 1120.0 ms | 46.8 MB |
-| ubuntu | strings | 10000 | node | 0.0793 ms | 0.0657 ms | 1280.0 ms | 110.9 MB |
-| ubuntu | strings | 10000 | throughput | 0.0800 ms | 0.0606 ms | 1180.0 ms | 593.3 MB |
-| ubuntu | strings | 10000 | workstation | 0.0565 ms | 0.0512 ms | 1190.0 ms | 59.6 MB |
-| ubuntu | typed-arrays | 1000000 | adaptive | 5.7564 ms | 3.4213 ms | 1100.0 ms | 221.1 MB |
-| ubuntu | typed-arrays | 1000000 | node | 3.5751 ms | 2.8864 ms | 1210.0 ms | 202.0 MB |
-| ubuntu | typed-arrays | 1000000 | throughput | 6.9968 ms | 3.8542 ms | 1130.0 ms | 540.1 MB |
-| ubuntu | typed-arrays | 1000000 | workstation | 4.1550 ms | 3.0743 ms | 1100.0 ms | 69.9 MB |
-| windows | accumulate | 1000000 | adaptive | 9.2255 ms | 8.1091 ms | 2237.1 ms | 188.1 MB |
-| windows | accumulate | 1000000 | node | 6.8962 ms | 5.6667 ms | 2086.7 ms | 148.0 MB |
-| windows | accumulate | 1000000 | throughput | 10.2668 ms | 6.9420 ms | 2286.2 ms | 523.9 MB |
-| windows | accumulate | 1000000 | workstation | 9.3450 ms | 8.4877 ms | 2221.0 ms | 61.1 MB |
-| windows | array-methods | 100000 | adaptive | 3.9592 ms | 1.2747 ms | 1198.9 ms | 63.5 MB |
-| windows | array-methods | 100000 | node | 4.5841 ms | 3.7532 ms | 1207.2 ms | 95.2 MB |
-| windows | array-methods | 100000 | throughput | 4.9212 ms | 1.3643 ms | 1243.1 ms | 627.1 MB |
-| windows | array-methods | 100000 | workstation | 2.6224 ms | 1.6465 ms | 1145.5 ms | 63.1 MB |
-| windows | async-function-calls | 1000 | adaptive | 0.0010 ms | 0.0005 ms | 4966.9 ms | 79.1 MB |
-| windows | async-function-calls | 1000 | node | 0.0477 ms | 0.0425 ms | 4942.0 ms | 91.5 MB |
-| windows | async-function-calls | 1000 | throughput | 0.0010 ms | 0.0010 ms | 4989.7 ms | 655.0 MB |
-| windows | async-function-calls | 1000 | workstation | 0.0010 ms | 0.0010 ms | 4974.1 ms | 57.9 MB |
-| windows | async-resolved-await | 1000 | adaptive | 0.0716 ms | 0.0319 ms | 4966.9 ms | 79.1 MB |
-| windows | async-resolved-await | 1000 | node | 0.0528 ms | 0.0455 ms | 4942.0 ms | 91.5 MB |
-| windows | async-resolved-await | 1000 | throughput | 0.0786 ms | 0.0618 ms | 4989.7 ms | 655.0 MB |
-| windows | async-resolved-await | 1000 | workstation | 0.0738 ms | 0.0659 ms | 4974.1 ms | 57.9 MB |
-| windows | binary-trees | 16 | adaptive | 1.7054 ms | 0.8179 ms | 1216.4 ms | 68.9 MB |
-| windows | binary-trees | 16 | node | 2.5314 ms | 1.9772 ms | 1213.7 ms | 122.8 MB |
-| windows | binary-trees | 16 | throughput | 1.8579 ms | 0.9671 ms | 1246.7 ms | 649.8 MB |
-| windows | binary-trees | 16 | workstation | 2.4178 ms | 1.2192 ms | 1196.2 ms | 56.2 MB |
-| windows | brainfuck | 5000 | adaptive | 48.7580 ms | 47.4407 ms | 1524.5 ms | 82.2 MB |
-| windows | brainfuck | 5000 | node | 32.7334 ms | 32.1825 ms | 1097.7 ms | 61.4 MB |
-| windows | brainfuck | 5000 | throughput | 45.5324 ms | 30.7258 ms | 1530.7 ms | 239.0 MB |
-| windows | brainfuck | 5000 | workstation | 48.1055 ms | 47.6812 ms | 1247.0 ms | 50.7 MB |
-| windows | class-construction | 100000 | adaptive | 0.3836 ms | 0.1884 ms | 3724.1 ms | 56.8 MB |
-| windows | class-construction | 100000 | node | 0.4559 ms | 0.3355 ms | 3640.8 ms | 62.5 MB |
-| windows | class-construction | 100000 | throughput | 0.5333 ms | 0.2782 ms | 3782.2 ms | 672.7 MB |
-| windows | class-construction | 100000 | workstation | 0.3654 ms | 0.3180 ms | 3712.2 ms | 50.6 MB |
-| windows | class-field-reuse | 100000 | adaptive | 0.1083 ms | 0.0989 ms | 3724.1 ms | 56.8 MB |
-| windows | class-field-reuse | 100000 | node | 0.1836 ms | 0.1491 ms | 3640.8 ms | 62.5 MB |
-| windows | class-field-reuse | 100000 | throughput | 0.1076 ms | 0.1002 ms | 3782.2 ms | 672.7 MB |
-| windows | class-field-reuse | 100000 | workstation | 0.1075 ms | 0.1003 ms | 3712.2 ms | 50.6 MB |
-| windows | class-method-reuse | 100000 | adaptive | 0.1068 ms | 0.0934 ms | 3724.1 ms | 56.8 MB |
-| windows | class-method-reuse | 100000 | node | 0.1895 ms | 0.1800 ms | 3640.8 ms | 62.5 MB |
-| windows | class-method-reuse | 100000 | throughput | 0.1069 ms | 0.0946 ms | 3782.2 ms | 672.7 MB |
-| windows | class-method-reuse | 100000 | workstation | 0.1078 ms | 0.0923 ms | 3712.2 ms | 50.6 MB |
-| windows | closures | 100000 | adaptive | 0.9528 ms | 0.6058 ms | 1270.0 ms | 52.7 MB |
-| windows | closures | 100000 | node | 1.2174 ms | 1.0439 ms | 1221.6 ms | 62.4 MB |
-| windows | closures | 100000 | throughput | 1.7157 ms | 0.7694 ms | 1236.3 ms | 653.0 MB |
-| windows | closures | 100000 | workstation | 1.3273 ms | 1.1421 ms | 1188.0 ms | 48.7 MB |
-| windows | count-primes | 100000 | adaptive | 1.1839 ms | 0.6551 ms | 1253.5 ms | 46.5 MB |
-| windows | count-primes | 100000 | node | 1.5357 ms | 1.1450 ms | 1229.5 ms | 98.5 MB |
-| windows | count-primes | 100000 | throughput | 1.4606 ms | 0.7680 ms | 1290.3 ms | 640.4 MB |
-| windows | count-primes | 100000 | workstation | 1.4037 ms | 1.1679 ms | 1179.2 ms | 51.7 MB |
-| windows | factorial | 10000 | adaptive | 0.0117 ms | 0.0090 ms | 1159.3 ms | 38.9 MB |
-| windows | factorial | 10000 | node | 0.0121 ms | 0.0110 ms | 1169.9 ms | 62.7 MB |
-| windows | factorial | 10000 | throughput | 0.0117 ms | 0.0111 ms | 1206.7 ms | 139.9 MB |
-| windows | factorial | 10000 | workstation | 0.0116 ms | 0.0111 ms | 1241.8 ms | 50.5 MB |
-| windows | fibonacci | 35 | adaptive | 49.8214 ms | 47.3115 ms | 1385.2 ms | 39.6 MB |
-| windows | fibonacci | 35 | node | 137.7797 ms | 136.9157 ms | 2413.5 ms | 59.9 MB |
-| windows | fibonacci | 35 | throughput | 49.1160 ms | 45.9741 ms | 1518.8 ms | 83.3 MB |
-| windows | fibonacci | 35 | workstation | 42.7110 ms | 40.9202 ms | 1475.5 ms | 50.4 MB |
-| windows | int32-kernel | 1000000 | adaptive | 6.0782 ms | 3.0043 ms | 2237.1 ms | 188.1 MB |
-| windows | int32-kernel | 1000000 | node | 4.4152 ms | 3.6065 ms | 2086.7 ms | 148.0 MB |
-| windows | int32-kernel | 1000000 | throughput | 7.2411 ms | 3.0265 ms | 2286.2 ms | 523.9 MB |
-| windows | int32-kernel | 1000000 | workstation | 6.1532 ms | 5.3717 ms | 2221.0 ms | 61.1 MB |
-| windows | json | 10000 | adaptive | 3.0410 ms | 0.8661 ms | 1104.4 ms | 88.2 MB |
-| windows | json | 10000 | node | 4.7097 ms | 3.9563 ms | 1209.7 ms | 79.2 MB |
-| windows | json | 10000 | throughput | 2.9309 ms | 0.9926 ms | 1221.4 ms | 684.4 MB |
-| windows | json | 10000 | workstation | 3.8262 ms | 0.8653 ms | 1120.1 ms | 61.7 MB |
-| windows | map-iteration | 10000 | adaptive | 1.0082 ms | 0.2212 ms | 4925.2 ms | 93.8 MB |
-| windows | map-iteration | 10000 | node | 0.7082 ms | 0.5767 ms | 4866.2 ms | 108.5 MB |
-| windows | map-iteration | 10000 | throughput | 1.1681 ms | 0.2800 ms | 4876.3 ms | 745.8 MB |
-| windows | map-iteration | 10000 | workstation | 0.6830 ms | 0.3828 ms | 4754.0 ms | 53.2 MB |
-| windows | map-operations | 10000 | adaptive | 1.5827 ms | 0.4053 ms | 4925.2 ms | 93.8 MB |
-| windows | map-operations | 10000 | node | 0.9006 ms | 0.7312 ms | 4866.2 ms | 108.5 MB |
-| windows | map-operations | 10000 | throughput | 1.6684 ms | 0.4371 ms | 4876.3 ms | 745.8 MB |
-| windows | map-operations | 10000 | workstation | 1.2252 ms | 0.6979 ms | 4754.0 ms | 53.2 MB |
-| windows | num-push | 1000000 | adaptive | 10.3451 ms | 5.1595 ms | 2318.8 ms | 267.0 MB |
-| windows | num-push | 1000000 | node | 13.0345 ms | 9.8498 ms | 2222.0 ms | 320.0 MB |
-| windows | num-push | 1000000 | throughput | 12.7967 ms | 4.4678 ms | 2272.8 ms | 664.7 MB |
-| windows | num-push | 1000000 | workstation | 9.1550 ms | 7.3673 ms | 2191.9 ms | 103.9 MB |
-| windows | num-write | 1000000 | adaptive | 10.9323 ms | 4.7215 ms | 2318.8 ms | 267.0 MB |
-| windows | num-write | 1000000 | node | 13.5119 ms | 10.2734 ms | 2222.0 ms | 320.0 MB |
-| windows | num-write | 1000000 | throughput | 14.9378 ms | 5.6977 ms | 2272.8 ms | 664.7 MB |
-| windows | num-write | 1000000 | workstation | 9.6534 ms | 7.8583 ms | 2191.9 ms | 103.9 MB |
-| windows | objects | 100000 | adaptive | 0.1838 ms | 0.1636 ms | 1298.9 ms | 37.9 MB |
-| windows | objects | 100000 | node | 0.3433 ms | 0.1626 ms | 1195.4 ms | 62.5 MB |
-| windows | objects | 100000 | throughput | 0.1756 ms | 0.1635 ms | 1314.5 ms | 72.1 MB |
-| windows | objects | 100000 | workstation | 0.1732 ms | 0.1635 ms | 1297.0 ms | 50.2 MB |
-| windows | promise-all | 1000 | adaptive | 0.0111 ms | 0.0048 ms | 4966.9 ms | 79.1 MB |
-| windows | promise-all | 1000 | node | 0.0609 ms | 0.0528 ms | 4942.0 ms | 91.5 MB |
-| windows | promise-all | 1000 | throughput | 0.0117 ms | 0.0051 ms | 4989.7 ms | 655.0 MB |
-| windows | promise-all | 1000 | workstation | 0.0107 ms | 0.0095 ms | 4974.1 ms | 57.9 MB |
-| windows | promise-then-chain | 1000 | adaptive | 0.0658 ms | 0.0355 ms | 4966.9 ms | 79.1 MB |
-| windows | promise-then-chain | 1000 | node | 0.0444 ms | 0.0360 ms | 4942.0 ms | 91.5 MB |
-| windows | promise-then-chain | 1000 | throughput | 0.0810 ms | 0.0380 ms | 4989.7 ms | 655.0 MB |
-| windows | promise-then-chain | 1000 | workstation | 0.0795 ms | 0.0678 ms | 4974.1 ms | 57.9 MB |
-| windows | regex | 10000 | adaptive | 5.6724 ms | 3.0666 ms | 3432.1 ms | 153.8 MB |
-| windows | regex | 10000 | node | 3.8257 ms | 2.9650 ms | 1307.2 ms | 121.8 MB |
-| windows | regex | 10000 | throughput | 7.0097 ms | 3.2191 ms | 4215.2 ms | 386.5 MB |
-| windows | regex | 10000 | workstation | 6.1272 ms | 5.0966 ms | 1958.7 ms | 98.5 MB |
-| windows | set-iteration | 10000 | adaptive | 1.0207 ms | 0.2585 ms | 4925.2 ms | 93.8 MB |
-| windows | set-iteration | 10000 | node | 0.5826 ms | 0.4789 ms | 4866.2 ms | 108.5 MB |
-| windows | set-iteration | 10000 | throughput | 0.9119 ms | 0.2655 ms | 4876.3 ms | 745.8 MB |
-| windows | set-iteration | 10000 | workstation | 0.5951 ms | 0.4001 ms | 4754.0 ms | 53.2 MB |
-| windows | set-operations | 10000 | adaptive | 1.1083 ms | 0.2652 ms | 4925.2 ms | 93.8 MB |
-| windows | set-operations | 10000 | node | 0.7877 ms | 0.6741 ms | 4866.2 ms | 108.5 MB |
-| windows | set-operations | 10000 | throughput | 1.0673 ms | 0.2842 ms | 4876.3 ms | 745.8 MB |
-| windows | set-operations | 10000 | workstation | 0.7810 ms | 0.4787 ms | 4754.0 ms | 53.2 MB |
-| windows | sort | 10000 | adaptive | 5.6435 ms | 3.2484 ms | 1096.4 ms | 54.3 MB |
-| windows | sort | 10000 | node | 5.3971 ms | 4.9596 ms | 1194.3 ms | 65.7 MB |
-| windows | sort | 10000 | throughput | 6.7845 ms | 6.3762 ms | 1087.4 ms | 220.4 MB |
-| windows | sort | 10000 | workstation | 6.5764 ms | 5.5904 ms | 1075.3 ms | 51.8 MB |
-| windows | strings | 10000 | adaptive | 0.0710 ms | 0.0457 ms | 1219.6 ms | 39.3 MB |
-| windows | strings | 10000 | node | 0.1610 ms | 0.1359 ms | 1317.7 ms | 90.4 MB |
-| windows | strings | 10000 | throughput | 0.1244 ms | 0.1100 ms | 1362.3 ms | 439.1 MB |
-| windows | strings | 10000 | workstation | 0.1108 ms | 0.1005 ms | 1318.8 ms | 50.0 MB |
-| windows | typed-arrays | 1000000 | adaptive | 5.7237 ms | 3.0964 ms | 1208.7 ms | 239.3 MB |
-| windows | typed-arrays | 1000000 | node | 5.8914 ms | 4.6569 ms | 1290.5 ms | 131.4 MB |
-| windows | typed-arrays | 1000000 | throughput | 6.4372 ms | 2.8012 ms | 1198.3 ms | 475.2 MB |
-| windows | typed-arrays | 1000000 | workstation | 5.4099 ms | 4.4427 ms | 1197.0 ms | 71.3 MB |
+| Platform | Benchmark | Input | Runtime/profile | Median mean | Median minimum | Median stdev | Median process | Median peak RSS |
+|---|---|---:|---|---:|---:|---:|---:|---:|
+| ubuntu | accumulate | 1000000 | adaptive | 7.6276 ms | 5.9078 ms | 1.1836 ms | 2210.0 ms | 84.5 MB |
+| ubuntu | accumulate | 1000000 | node | 3.7336 ms | 3.0685 ms | 0.7092 ms | 2280.0 ms | 196.7 MB |
+| ubuntu | accumulate | 1000000 | throughput | 9.8233 ms | 7.8585 ms | 5.2362 ms | 2170.0 ms | 634.6 MB |
+| ubuntu | accumulate | 1000000 | workstation | 6.8312 ms | 5.8160 ms | 0.8730 ms | 2090.0 ms | 69.0 MB |
+| ubuntu | array-methods | 100000 | adaptive | 2.9556 ms | 1.1957 ms | 2.3203 ms | 1080.0 ms | 85.1 MB |
+| ubuntu | array-methods | 100000 | node | 2.6378 ms | 2.2864 ms | 0.4149 ms | 1180.0 ms | 121.9 MB |
+| ubuntu | array-methods | 100000 | throughput | 3.4910 ms | 1.4123 ms | 4.7811 ms | 1120.0 ms | 656.1 MB |
+| ubuntu | array-methods | 100000 | workstation | 1.4722 ms | 1.1346 ms | 0.2223 ms | 1070.0 ms | 59.5 MB |
+| ubuntu | async-function-calls | 1000 | adaptive | 0.0006 ms | 0.0005 ms | 0.0004 ms | 4740.0 ms | 84.8 MB |
+| ubuntu | async-function-calls | 1000 | node | 0.0256 ms | 0.0220 ms | 0.0039 ms | 4920.0 ms | 113.1 MB |
+| ubuntu | async-function-calls | 1000 | throughput | 0.0006 ms | 0.0005 ms | 0.0000 ms | 4670.0 ms | 678.0 MB |
+| ubuntu | async-function-calls | 1000 | workstation | 0.0005 ms | 0.0005 ms | 0.0000 ms | 4670.0 ms | 69.5 MB |
+| ubuntu | async-resolved-await | 1000 | adaptive | 0.0635 ms | 0.0468 ms | 0.0441 ms | 4740.0 ms | 84.8 MB |
+| ubuntu | async-resolved-await | 1000 | node | 0.0281 ms | 0.0238 ms | 0.0024 ms | 4920.0 ms | 113.1 MB |
+| ubuntu | async-resolved-await | 1000 | throughput | 0.0520 ms | 0.0434 ms | 0.0461 ms | 4670.0 ms | 678.0 MB |
+| ubuntu | async-resolved-await | 1000 | workstation | 0.0461 ms | 0.0373 ms | 0.0077 ms | 4670.0 ms | 69.5 MB |
+| ubuntu | binary-trees | 16 | adaptive | 1.6018 ms | 1.0850 ms | 0.8671 ms | 1080.0 ms | 73.5 MB |
+| ubuntu | binary-trees | 16 | node | 1.4171 ms | 1.0530 ms | 0.4352 ms | 1180.0 ms | 206.8 MB |
+| ubuntu | binary-trees | 16 | throughput | 1.5428 ms | 1.0550 ms | 1.8273 ms | 1130.0 ms | 674.5 MB |
+| ubuntu | binary-trees | 16 | workstation | 1.6721 ms | 0.9728 ms | 1.1046 ms | 1080.0 ms | 65.9 MB |
+| ubuntu | brainfuck | 5000 | adaptive | 30.0669 ms | 28.5958 ms | 1.1950 ms | 1210.0 ms | 100.2 MB |
+| ubuntu | brainfuck | 5000 | node | 19.3162 ms | 18.4211 ms | 0.6354 ms | 1070.0 ms | 86.6 MB |
+| ubuntu | brainfuck | 5000 | throughput | 32.0177 ms | 29.9515 ms | 1.8083 ms | 1270.0 ms | 236.4 MB |
+| ubuntu | brainfuck | 5000 | workstation | 31.1017 ms | 28.7086 ms | 1.1989 ms | 1040.0 ms | 61.5 MB |
+| ubuntu | class-construction | 100000 | adaptive | 0.4250 ms | 0.3085 ms | 0.0990 ms | 3620.0 ms | 62.3 MB |
+| ubuntu | class-construction | 100000 | node | 0.4369 ms | 0.3471 ms | 0.0544 ms | 3720.0 ms | 83.2 MB |
+| ubuntu | class-construction | 100000 | throughput | 0.5544 ms | 0.4023 ms | 0.7309 ms | 3640.0 ms | 680.1 MB |
+| ubuntu | class-construction | 100000 | workstation | 0.4783 ms | 0.3583 ms | 0.0508 ms | 3570.0 ms | 59.0 MB |
+| ubuntu | class-field-reuse | 100000 | adaptive | 0.0599 ms | 0.0581 ms | 0.0033 ms | 3620.0 ms | 62.3 MB |
+| ubuntu | class-field-reuse | 100000 | node | 0.1068 ms | 0.0957 ms | 0.0095 ms | 3720.0 ms | 83.2 MB |
+| ubuntu | class-field-reuse | 100000 | throughput | 0.0660 ms | 0.0604 ms | 0.0068 ms | 3640.0 ms | 680.1 MB |
+| ubuntu | class-field-reuse | 100000 | workstation | 0.0610 ms | 0.0568 ms | 0.0039 ms | 3570.0 ms | 59.0 MB |
+| ubuntu | class-method-reuse | 100000 | adaptive | 0.0565 ms | 0.0531 ms | 0.0037 ms | 3620.0 ms | 62.3 MB |
+| ubuntu | class-method-reuse | 100000 | node | 0.0987 ms | 0.0937 ms | 0.0051 ms | 3720.0 ms | 83.2 MB |
+| ubuntu | class-method-reuse | 100000 | throughput | 0.0629 ms | 0.0585 ms | 0.0038 ms | 3640.0 ms | 680.1 MB |
+| ubuntu | class-method-reuse | 100000 | workstation | 0.0753 ms | 0.0587 ms | 0.0072 ms | 3570.0 ms | 59.0 MB |
+| ubuntu | closures | 100000 | adaptive | 1.1651 ms | 0.9303 ms | 0.1332 ms | 1080.0 ms | 51.9 MB |
+| ubuntu | closures | 100000 | node | 0.7735 ms | 0.6957 ms | 0.0896 ms | 1170.0 ms | 82.9 MB |
+| ubuntu | closures | 100000 | throughput | 1.3808 ms | 0.9867 ms | 1.5699 ms | 1100.0 ms | 668.2 MB |
+| ubuntu | closures | 100000 | workstation | 1.0595 ms | 0.8406 ms | 0.1137 ms | 1080.0 ms | 57.0 MB |
+| ubuntu | count-primes | 100000 | adaptive | 1.1544 ms | 0.9409 ms | 0.2443 ms | 1090.0 ms | 53.5 MB |
+| ubuntu | count-primes | 100000 | node | 1.3435 ms | 1.1172 ms | 0.2896 ms | 1190.0 ms | 112.5 MB |
+| ubuntu | count-primes | 100000 | throughput | 1.4253 ms | 1.1219 ms | 1.5035 ms | 1100.0 ms | 641.1 MB |
+| ubuntu | count-primes | 100000 | workstation | 1.3138 ms | 1.1072 ms | 0.3199 ms | 1090.0 ms | 60.3 MB |
+| ubuntu | factorial | 10000 | adaptive | 0.0084 ms | 0.0078 ms | 0.0008 ms | 1020.0 ms | 46.6 MB |
+| ubuntu | factorial | 10000 | node | 0.0082 ms | 0.0077 ms | 0.0005 ms | 1280.0 ms | 81.8 MB |
+| ubuntu | factorial | 10000 | throughput | 0.0084 ms | 0.0078 ms | 0.0006 ms | 1020.0 ms | 150.5 MB |
+| ubuntu | factorial | 10000 | workstation | 0.0083 ms | 0.0078 ms | 0.0007 ms | 1020.0 ms | 59.0 MB |
+| ubuntu | fibonacci | 35 | adaptive | 27.0339 ms | 26.2183 ms | 0.6811 ms | 1230.0 ms | 46.6 MB |
+| ubuntu | fibonacci | 35 | node | 63.1104 ms | 60.3981 ms | 1.6984 ms | 1680.0 ms | 80.6 MB |
+| ubuntu | fibonacci | 35 | throughput | 25.2397 ms | 24.5756 ms | 0.6798 ms | 1240.0 ms | 92.6 MB |
+| ubuntu | fibonacci | 35 | workstation | 29.0633 ms | 27.0719 ms | 1.1343 ms | 1220.0 ms | 59.3 MB |
+| ubuntu | int32-kernel | 1000000 | adaptive | 4.6379 ms | 3.2968 ms | 1.0757 ms | 2210.0 ms | 84.5 MB |
+| ubuntu | int32-kernel | 1000000 | node | 2.3124 ms | 1.8641 ms | 0.3246 ms | 2280.0 ms | 196.7 MB |
+| ubuntu | int32-kernel | 1000000 | throughput | 5.1719 ms | 3.6375 ms | 3.9004 ms | 2170.0 ms | 634.6 MB |
+| ubuntu | int32-kernel | 1000000 | workstation | 3.9600 ms | 3.6547 ms | 0.4935 ms | 2090.0 ms | 69.0 MB |
+| ubuntu | json | 10000 | adaptive | 1.8140 ms | 1.0425 ms | 1.3717 ms | 1080.0 ms | 110.4 MB |
+| ubuntu | json | 10000 | node | 2.4590 ms | 2.1303 ms | 0.2956 ms | 1170.0 ms | 117.8 MB |
+| ubuntu | json | 10000 | throughput | 2.1934 ms | 1.1636 ms | 4.5537 ms | 1090.0 ms | 742.0 MB |
+| ubuntu | json | 10000 | workstation | 2.0308 ms | 0.9002 ms | 1.2819 ms | 1070.0 ms | 71.2 MB |
+| ubuntu | map-iteration | 10000 | adaptive | 0.8180 ms | 0.3456 ms | 0.6962 ms | 4750.0 ms | 115.1 MB |
+| ubuntu | map-iteration | 10000 | node | 0.5214 ms | 0.4441 ms | 0.1151 ms | 4910.0 ms | 153.2 MB |
+| ubuntu | map-iteration | 10000 | throughput | 0.8900 ms | 0.3458 ms | 1.9430 ms | 4860.0 ms | 718.4 MB |
+| ubuntu | map-iteration | 10000 | workstation | 0.4363 ms | 0.2416 ms | 0.1347 ms | 4810.0 ms | 62.0 MB |
+| ubuntu | map-operations | 10000 | adaptive | 1.0932 ms | 0.5488 ms | 1.2405 ms | 4750.0 ms | 115.1 MB |
+| ubuntu | map-operations | 10000 | node | 0.6469 ms | 0.5143 ms | 0.1482 ms | 4910.0 ms | 153.2 MB |
+| ubuntu | map-operations | 10000 | throughput | 1.2379 ms | 0.5543 ms | 1.9326 ms | 4860.0 ms | 718.4 MB |
+| ubuntu | map-operations | 10000 | workstation | 0.8460 ms | 0.4344 ms | 0.3366 ms | 4810.0 ms | 62.0 MB |
+| ubuntu | num-push | 1000000 | adaptive | 9.2625 ms | 7.5497 ms | 2.5323 ms | 2200.0 ms | 311.4 MB |
+| ubuntu | num-push | 1000000 | node | 12.9469 ms | 11.3808 ms | 1.9165 ms | 2090.0 ms | 357.2 MB |
+| ubuntu | num-push | 1000000 | throughput | 12.5156 ms | 7.8406 ms | 8.8171 ms | 2020.0 ms | 766.3 MB |
+| ubuntu | num-push | 1000000 | workstation | 8.5962 ms | 7.1624 ms | 0.9497 ms | 2080.0 ms | 109.4 MB |
+| ubuntu | num-write | 1000000 | adaptive | 9.8614 ms | 7.7998 ms | 4.0102 ms | 2200.0 ms | 311.4 MB |
+| ubuntu | num-write | 1000000 | node | 13.1238 ms | 11.5895 ms | 1.4000 ms | 2090.0 ms | 357.2 MB |
+| ubuntu | num-write | 1000000 | throughput | 11.7888 ms | 8.0699 ms | 8.9612 ms | 2020.0 ms | 766.3 MB |
+| ubuntu | num-write | 1000000 | workstation | 8.2762 ms | 6.9473 ms | 0.8063 ms | 2080.0 ms | 109.4 MB |
+| ubuntu | objects | 100000 | adaptive | 0.0844 ms | 0.0773 ms | 0.0108 ms | 1160.0 ms | 46.9 MB |
+| ubuntu | objects | 100000 | node | 0.2586 ms | 0.0802 ms | 0.1217 ms | 1220.0 ms | 83.1 MB |
+| ubuntu | objects | 100000 | throughput | 0.0844 ms | 0.0772 ms | 0.0078 ms | 1150.0 ms | 98.8 MB |
+| ubuntu | objects | 100000 | workstation | 0.0818 ms | 0.0772 ms | 0.0039 ms | 1140.0 ms | 59.3 MB |
+| ubuntu | promise-all | 1000 | adaptive | 0.0105 ms | 0.0073 ms | 0.0074 ms | 4740.0 ms | 84.8 MB |
+| ubuntu | promise-all | 1000 | node | 0.0347 ms | 0.0282 ms | 0.0025 ms | 4920.0 ms | 113.1 MB |
+| ubuntu | promise-all | 1000 | throughput | 0.0085 ms | 0.0067 ms | 0.0098 ms | 4670.0 ms | 678.0 MB |
+| ubuntu | promise-all | 1000 | workstation | 0.0070 ms | 0.0057 ms | 0.0005 ms | 4670.0 ms | 69.5 MB |
+| ubuntu | promise-then-chain | 1000 | adaptive | 0.0646 ms | 0.0452 ms | 0.0541 ms | 4740.0 ms | 84.8 MB |
+| ubuntu | promise-then-chain | 1000 | node | 0.0273 ms | 0.0228 ms | 0.0032 ms | 4920.0 ms | 113.1 MB |
+| ubuntu | promise-then-chain | 1000 | throughput | 0.0557 ms | 0.0447 ms | 0.0700 ms | 4670.0 ms | 678.0 MB |
+| ubuntu | promise-then-chain | 1000 | workstation | 0.0449 ms | 0.0377 ms | 0.0075 ms | 4670.0 ms | 69.5 MB |
+| ubuntu | regex | 10000 | adaptive | 3.4035 ms | 2.5930 ms | 2.7324 ms | 3040.0 ms | 168.3 MB |
+| ubuntu | regex | 10000 | node | 2.1383 ms | 1.6137 ms | 0.6336 ms | 1170.0 ms | 202.3 MB |
+| ubuntu | regex | 10000 | throughput | 3.4673 ms | 2.6719 ms | 2.4615 ms | 3980.0 ms | 433.2 MB |
+| ubuntu | regex | 10000 | workstation | 2.6674 ms | 2.2386 ms | 0.4041 ms | 1660.0 ms | 65.7 MB |
+| ubuntu | set-iteration | 10000 | adaptive | 0.7019 ms | 0.3123 ms | 0.6888 ms | 4750.0 ms | 115.1 MB |
+| ubuntu | set-iteration | 10000 | node | 0.3950 ms | 0.3316 ms | 0.0839 ms | 4910.0 ms | 153.2 MB |
+| ubuntu | set-iteration | 10000 | throughput | 0.7741 ms | 0.3331 ms | 1.2396 ms | 4860.0 ms | 718.4 MB |
+| ubuntu | set-iteration | 10000 | workstation | 0.3615 ms | 0.2086 ms | 0.1409 ms | 4810.0 ms | 62.0 MB |
+| ubuntu | set-operations | 10000 | adaptive | 0.7626 ms | 0.3647 ms | 1.0579 ms | 4750.0 ms | 115.1 MB |
+| ubuntu | set-operations | 10000 | node | 0.5531 ms | 0.4673 ms | 0.1044 ms | 4910.0 ms | 153.2 MB |
+| ubuntu | set-operations | 10000 | throughput | 0.7784 ms | 0.4134 ms | 1.1255 ms | 4860.0 ms | 718.4 MB |
+| ubuntu | set-operations | 10000 | workstation | 0.5301 ms | 0.2975 ms | 0.2180 ms | 4810.0 ms | 62.0 MB |
+| ubuntu | sort | 10000 | adaptive | 4.1929 ms | 3.4909 ms | 0.5927 ms | 980.0 ms | 54.4 MB |
+| ubuntu | sort | 10000 | node | 3.0524 ms | 2.7512 ms | 0.2106 ms | 1170.0 ms | 85.0 MB |
+| ubuntu | sort | 10000 | throughput | 4.7053 ms | 4.2716 ms | 0.2984 ms | 980.0 ms | 348.1 MB |
+| ubuntu | sort | 10000 | workstation | 4.5373 ms | 3.8116 ms | 0.8300 ms | 970.0 ms | 60.0 MB |
+| ubuntu | strings | 10000 | adaptive | 0.0586 ms | 0.0524 ms | 0.0045 ms | 1120.0 ms | 46.8 MB |
+| ubuntu | strings | 10000 | node | 0.0793 ms | 0.0657 ms | 0.0094 ms | 1280.0 ms | 110.9 MB |
+| ubuntu | strings | 10000 | throughput | 0.0800 ms | 0.0606 ms | 0.1084 ms | 1180.0 ms | 593.3 MB |
+| ubuntu | strings | 10000 | workstation | 0.0565 ms | 0.0512 ms | 0.0065 ms | 1190.0 ms | 59.6 MB |
+| ubuntu | typed-arrays | 1000000 | adaptive | 5.7564 ms | 3.4213 ms | 1.7962 ms | 1100.0 ms | 221.1 MB |
+| ubuntu | typed-arrays | 1000000 | node | 3.5751 ms | 2.8864 ms | 0.8797 ms | 1210.0 ms | 202.0 MB |
+| ubuntu | typed-arrays | 1000000 | throughput | 6.9968 ms | 3.8542 ms | 4.6787 ms | 1130.0 ms | 540.1 MB |
+| ubuntu | typed-arrays | 1000000 | workstation | 4.1550 ms | 3.0743 ms | 1.0093 ms | 1100.0 ms | 69.9 MB |
+| windows | accumulate | 1000000 | adaptive | 9.2255 ms | 8.1091 ms | 3.1242 ms | 2237.1 ms | 188.1 MB |
+| windows | accumulate | 1000000 | node | 6.8962 ms | 5.6667 ms | 1.7626 ms | 2086.7 ms | 148.0 MB |
+| windows | accumulate | 1000000 | throughput | 10.2668 ms | 6.9420 ms | 7.3982 ms | 2286.2 ms | 523.9 MB |
+| windows | accumulate | 1000000 | workstation | 9.3450 ms | 8.4877 ms | 0.7318 ms | 2221.0 ms | 61.1 MB |
+| windows | array-methods | 100000 | adaptive | 3.9592 ms | 1.2747 ms | 5.0173 ms | 1198.9 ms | 63.5 MB |
+| windows | array-methods | 100000 | node | 4.5841 ms | 3.7532 ms | 1.0479 ms | 1207.2 ms | 95.2 MB |
+| windows | array-methods | 100000 | throughput | 4.9212 ms | 1.3643 ms | 7.7116 ms | 1243.1 ms | 627.1 MB |
+| windows | array-methods | 100000 | workstation | 2.6224 ms | 1.6465 ms | 1.0796 ms | 1145.5 ms | 63.1 MB |
+| windows | async-function-calls | 1000 | adaptive | 0.0010 ms | 0.0005 ms | 0.0003 ms | 4966.9 ms | 79.1 MB |
+| windows | async-function-calls | 1000 | node | 0.0477 ms | 0.0425 ms | 0.0035 ms | 4942.0 ms | 91.5 MB |
+| windows | async-function-calls | 1000 | throughput | 0.0010 ms | 0.0010 ms | 0.0001 ms | 4989.7 ms | 655.0 MB |
+| windows | async-function-calls | 1000 | workstation | 0.0010 ms | 0.0010 ms | 0.0001 ms | 4974.1 ms | 57.9 MB |
+| windows | async-resolved-await | 1000 | adaptive | 0.0716 ms | 0.0319 ms | 0.0728 ms | 4966.9 ms | 79.1 MB |
+| windows | async-resolved-await | 1000 | node | 0.0528 ms | 0.0455 ms | 0.0074 ms | 4942.0 ms | 91.5 MB |
+| windows | async-resolved-await | 1000 | throughput | 0.0786 ms | 0.0618 ms | 0.0066 ms | 4989.7 ms | 655.0 MB |
+| windows | async-resolved-await | 1000 | workstation | 0.0738 ms | 0.0659 ms | 0.0094 ms | 4974.1 ms | 57.9 MB |
+| windows | binary-trees | 16 | adaptive | 1.7054 ms | 0.8179 ms | 0.8458 ms | 1216.4 ms | 68.9 MB |
+| windows | binary-trees | 16 | node | 2.5314 ms | 1.9772 ms | 0.8152 ms | 1213.7 ms | 122.8 MB |
+| windows | binary-trees | 16 | throughput | 1.8579 ms | 0.9671 ms | 0.7769 ms | 1246.7 ms | 649.8 MB |
+| windows | binary-trees | 16 | workstation | 2.4178 ms | 1.2192 ms | 1.9024 ms | 1196.2 ms | 56.2 MB |
+| windows | brainfuck | 5000 | adaptive | 48.7580 ms | 47.4407 ms | 0.9749 ms | 1524.5 ms | 82.2 MB |
+| windows | brainfuck | 5000 | node | 32.7334 ms | 32.1825 ms | 0.4008 ms | 1097.7 ms | 61.4 MB |
+| windows | brainfuck | 5000 | throughput | 45.5324 ms | 30.7258 ms | 7.6252 ms | 1530.7 ms | 239.0 MB |
+| windows | brainfuck | 5000 | workstation | 48.1055 ms | 47.6812 ms | 0.5491 ms | 1247.0 ms | 50.7 MB |
+| windows | class-construction | 100000 | adaptive | 0.3836 ms | 0.1884 ms | 0.2831 ms | 3724.1 ms | 56.8 MB |
+| windows | class-construction | 100000 | node | 0.4559 ms | 0.3355 ms | 0.0620 ms | 3640.8 ms | 62.5 MB |
+| windows | class-construction | 100000 | throughput | 0.5333 ms | 0.2782 ms | 0.1836 ms | 3782.2 ms | 672.7 MB |
+| windows | class-construction | 100000 | workstation | 0.3654 ms | 0.3180 ms | 0.0380 ms | 3712.2 ms | 50.6 MB |
+| windows | class-field-reuse | 100000 | adaptive | 0.1083 ms | 0.0989 ms | 0.0234 ms | 3724.1 ms | 56.8 MB |
+| windows | class-field-reuse | 100000 | node | 0.1836 ms | 0.1491 ms | 0.0662 ms | 3640.8 ms | 62.5 MB |
+| windows | class-field-reuse | 100000 | throughput | 0.1076 ms | 0.1002 ms | 0.0081 ms | 3782.2 ms | 672.7 MB |
+| windows | class-field-reuse | 100000 | workstation | 0.1075 ms | 0.1003 ms | 0.0103 ms | 3712.2 ms | 50.6 MB |
+| windows | class-method-reuse | 100000 | adaptive | 0.1068 ms | 0.0934 ms | 0.0143 ms | 3724.1 ms | 56.8 MB |
+| windows | class-method-reuse | 100000 | node | 0.1895 ms | 0.1800 ms | 0.0400 ms | 3640.8 ms | 62.5 MB |
+| windows | class-method-reuse | 100000 | throughput | 0.1069 ms | 0.0946 ms | 0.0134 ms | 3782.2 ms | 672.7 MB |
+| windows | class-method-reuse | 100000 | workstation | 0.1078 ms | 0.0923 ms | 0.0136 ms | 3712.2 ms | 50.6 MB |
+| windows | closures | 100000 | adaptive | 0.9528 ms | 0.6058 ms | 0.5710 ms | 1270.0 ms | 52.7 MB |
+| windows | closures | 100000 | node | 1.2174 ms | 1.0439 ms | 0.3566 ms | 1221.6 ms | 62.4 MB |
+| windows | closures | 100000 | throughput | 1.7157 ms | 0.7694 ms | 0.6495 ms | 1236.3 ms | 653.0 MB |
+| windows | closures | 100000 | workstation | 1.3273 ms | 1.1421 ms | 0.2663 ms | 1188.0 ms | 48.7 MB |
+| windows | count-primes | 100000 | adaptive | 1.1839 ms | 0.6551 ms | 1.0514 ms | 1253.5 ms | 46.5 MB |
+| windows | count-primes | 100000 | node | 1.5357 ms | 1.1450 ms | 0.7425 ms | 1229.5 ms | 98.5 MB |
+| windows | count-primes | 100000 | throughput | 1.4606 ms | 0.7680 ms | 0.3326 ms | 1290.3 ms | 640.4 MB |
+| windows | count-primes | 100000 | workstation | 1.4037 ms | 1.1679 ms | 0.3711 ms | 1179.2 ms | 51.7 MB |
+| windows | factorial | 10000 | adaptive | 0.0117 ms | 0.0090 ms | 0.0015 ms | 1159.3 ms | 38.9 MB |
+| windows | factorial | 10000 | node | 0.0121 ms | 0.0110 ms | 0.0027 ms | 1169.9 ms | 62.7 MB |
+| windows | factorial | 10000 | throughput | 0.0117 ms | 0.0111 ms | 0.0008 ms | 1206.7 ms | 139.9 MB |
+| windows | factorial | 10000 | workstation | 0.0116 ms | 0.0111 ms | 0.0009 ms | 1241.8 ms | 50.5 MB |
+| windows | fibonacci | 35 | adaptive | 49.8214 ms | 47.3115 ms | 2.2447 ms | 1385.2 ms | 39.6 MB |
+| windows | fibonacci | 35 | node | 137.7797 ms | 136.9157 ms | 2.6619 ms | 2413.5 ms | 59.9 MB |
+| windows | fibonacci | 35 | throughput | 49.1160 ms | 45.9741 ms | 1.3646 ms | 1518.8 ms | 83.3 MB |
+| windows | fibonacci | 35 | workstation | 42.7110 ms | 40.9202 ms | 1.9018 ms | 1475.5 ms | 50.4 MB |
+| windows | int32-kernel | 1000000 | adaptive | 6.0782 ms | 3.0043 ms | 2.1615 ms | 2237.1 ms | 188.1 MB |
+| windows | int32-kernel | 1000000 | node | 4.4152 ms | 3.6065 ms | 1.4159 ms | 2086.7 ms | 148.0 MB |
+| windows | int32-kernel | 1000000 | throughput | 7.2411 ms | 3.0265 ms | 8.1395 ms | 2286.2 ms | 523.9 MB |
+| windows | int32-kernel | 1000000 | workstation | 6.1532 ms | 5.3717 ms | 0.6323 ms | 2221.0 ms | 61.1 MB |
+| windows | json | 10000 | adaptive | 3.0410 ms | 0.8661 ms | 3.9950 ms | 1104.4 ms | 88.2 MB |
+| windows | json | 10000 | node | 4.7097 ms | 3.9563 ms | 0.8973 ms | 1209.7 ms | 79.2 MB |
+| windows | json | 10000 | throughput | 2.9309 ms | 0.9926 ms | 5.5858 ms | 1221.4 ms | 684.4 MB |
+| windows | json | 10000 | workstation | 3.8262 ms | 0.8653 ms | 3.6355 ms | 1120.1 ms | 61.7 MB |
+| windows | map-iteration | 10000 | adaptive | 1.0082 ms | 0.2212 ms | 2.1606 ms | 4925.2 ms | 93.8 MB |
+| windows | map-iteration | 10000 | node | 0.7082 ms | 0.5767 ms | 0.2224 ms | 4866.2 ms | 108.5 MB |
+| windows | map-iteration | 10000 | throughput | 1.1681 ms | 0.2800 ms | 2.5985 ms | 4876.3 ms | 745.8 MB |
+| windows | map-iteration | 10000 | workstation | 0.6830 ms | 0.3828 ms | 0.1299 ms | 4754.0 ms | 53.2 MB |
+| windows | map-operations | 10000 | adaptive | 1.5827 ms | 0.4053 ms | 2.3153 ms | 4925.2 ms | 93.8 MB |
+| windows | map-operations | 10000 | node | 0.9006 ms | 0.7312 ms | 0.2549 ms | 4866.2 ms | 108.5 MB |
+| windows | map-operations | 10000 | throughput | 1.6684 ms | 0.4371 ms | 3.9443 ms | 4876.3 ms | 745.8 MB |
+| windows | map-operations | 10000 | workstation | 1.2252 ms | 0.6979 ms | 0.5758 ms | 4754.0 ms | 53.2 MB |
+| windows | num-push | 1000000 | adaptive | 10.3451 ms | 5.1595 ms | 6.7197 ms | 2318.8 ms | 267.0 MB |
+| windows | num-push | 1000000 | node | 13.0345 ms | 9.8498 ms | 4.1526 ms | 2222.0 ms | 320.0 MB |
+| windows | num-push | 1000000 | throughput | 12.7967 ms | 4.4678 ms | 14.0316 ms | 2272.8 ms | 664.7 MB |
+| windows | num-push | 1000000 | workstation | 9.1550 ms | 7.3673 ms | 1.8351 ms | 2191.9 ms | 103.9 MB |
+| windows | num-write | 1000000 | adaptive | 10.9323 ms | 4.7215 ms | 7.0290 ms | 2318.8 ms | 267.0 MB |
+| windows | num-write | 1000000 | node | 13.5119 ms | 10.2734 ms | 2.8827 ms | 2222.0 ms | 320.0 MB |
+| windows | num-write | 1000000 | throughput | 14.9378 ms | 5.6977 ms | 16.0952 ms | 2272.8 ms | 664.7 MB |
+| windows | num-write | 1000000 | workstation | 9.6534 ms | 7.8583 ms | 1.7455 ms | 2191.9 ms | 103.9 MB |
+| windows | objects | 100000 | adaptive | 0.1838 ms | 0.1636 ms | 0.0185 ms | 1298.9 ms | 37.9 MB |
+| windows | objects | 100000 | node | 0.3433 ms | 0.1626 ms | 0.2096 ms | 1195.4 ms | 62.5 MB |
+| windows | objects | 100000 | throughput | 0.1756 ms | 0.1635 ms | 0.0251 ms | 1314.5 ms | 72.1 MB |
+| windows | objects | 100000 | workstation | 0.1732 ms | 0.1635 ms | 0.0160 ms | 1297.0 ms | 50.2 MB |
+| windows | promise-all | 1000 | adaptive | 0.0111 ms | 0.0048 ms | 0.0051 ms | 4966.9 ms | 79.1 MB |
+| windows | promise-all | 1000 | node | 0.0609 ms | 0.0528 ms | 0.0093 ms | 4942.0 ms | 91.5 MB |
+| windows | promise-all | 1000 | throughput | 0.0117 ms | 0.0051 ms | 0.0020 ms | 4989.7 ms | 655.0 MB |
+| windows | promise-all | 1000 | workstation | 0.0107 ms | 0.0095 ms | 0.0013 ms | 4974.1 ms | 57.9 MB |
+| windows | promise-then-chain | 1000 | adaptive | 0.0658 ms | 0.0355 ms | 0.0364 ms | 4966.9 ms | 79.1 MB |
+| windows | promise-then-chain | 1000 | node | 0.0444 ms | 0.0360 ms | 0.0065 ms | 4942.0 ms | 91.5 MB |
+| windows | promise-then-chain | 1000 | throughput | 0.0810 ms | 0.0380 ms | 0.0156 ms | 4989.7 ms | 655.0 MB |
+| windows | promise-then-chain | 1000 | workstation | 0.0795 ms | 0.0678 ms | 0.0110 ms | 4974.1 ms | 57.9 MB |
+| windows | regex | 10000 | adaptive | 5.6724 ms | 3.0666 ms | 2.3432 ms | 3432.1 ms | 153.8 MB |
+| windows | regex | 10000 | node | 3.8257 ms | 2.9650 ms | 1.2461 ms | 1307.2 ms | 121.8 MB |
+| windows | regex | 10000 | throughput | 7.0097 ms | 3.2191 ms | 9.4576 ms | 4215.2 ms | 386.5 MB |
+| windows | regex | 10000 | workstation | 6.1272 ms | 5.0966 ms | 0.9979 ms | 1958.7 ms | 98.5 MB |
+| windows | set-iteration | 10000 | adaptive | 1.0207 ms | 0.2585 ms | 1.6273 ms | 4925.2 ms | 93.8 MB |
+| windows | set-iteration | 10000 | node | 0.5826 ms | 0.4789 ms | 0.2316 ms | 4866.2 ms | 108.5 MB |
+| windows | set-iteration | 10000 | throughput | 0.9119 ms | 0.2655 ms | 1.9910 ms | 4876.3 ms | 745.8 MB |
+| windows | set-iteration | 10000 | workstation | 0.5951 ms | 0.4001 ms | 0.1246 ms | 4754.0 ms | 53.2 MB |
+| windows | set-operations | 10000 | adaptive | 1.1083 ms | 0.2652 ms | 2.0950 ms | 4925.2 ms | 93.8 MB |
+| windows | set-operations | 10000 | node | 0.7877 ms | 0.6741 ms | 0.2264 ms | 4866.2 ms | 108.5 MB |
+| windows | set-operations | 10000 | throughput | 1.0673 ms | 0.2842 ms | 2.3344 ms | 4876.3 ms | 745.8 MB |
+| windows | set-operations | 10000 | workstation | 0.7810 ms | 0.4787 ms | 0.4275 ms | 4754.0 ms | 53.2 MB |
+| windows | sort | 10000 | adaptive | 5.6435 ms | 3.2484 ms | 1.6927 ms | 1096.4 ms | 54.3 MB |
+| windows | sort | 10000 | node | 5.3971 ms | 4.9596 ms | 0.4193 ms | 1194.3 ms | 65.7 MB |
+| windows | sort | 10000 | throughput | 6.7845 ms | 6.3762 ms | 0.3010 ms | 1087.4 ms | 220.4 MB |
+| windows | sort | 10000 | workstation | 6.5764 ms | 5.5904 ms | 1.3005 ms | 1075.3 ms | 51.8 MB |
+| windows | strings | 10000 | adaptive | 0.0710 ms | 0.0457 ms | 0.0385 ms | 1219.6 ms | 39.3 MB |
+| windows | strings | 10000 | node | 0.1610 ms | 0.1359 ms | 0.0316 ms | 1317.7 ms | 90.4 MB |
+| windows | strings | 10000 | throughput | 0.1244 ms | 0.1100 ms | 0.0097 ms | 1362.3 ms | 439.1 MB |
+| windows | strings | 10000 | workstation | 0.1108 ms | 0.1005 ms | 0.0144 ms | 1318.8 ms | 50.0 MB |
+| windows | typed-arrays | 1000000 | adaptive | 5.7237 ms | 3.0964 ms | 4.8336 ms | 1208.7 ms | 239.3 MB |
+| windows | typed-arrays | 1000000 | node | 5.8914 ms | 4.6569 ms | 1.9134 ms | 1290.5 ms | 131.4 MB |
+| windows | typed-arrays | 1000000 | throughput | 6.4372 ms | 2.8012 ms | 8.4197 ms | 1198.3 ms | 475.2 MB |
+| windows | typed-arrays | 1000000 | workstation | 5.4099 ms | 4.4427 ms | 0.7654 ms | 1197.0 ms | 71.3 MB |
 
 ## Cold startup
 

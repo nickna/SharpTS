@@ -5,6 +5,32 @@
   "branch": "codex/workload-aware-gc-profile",
   "dotnet": "10.0.400",
   "node": "v24.19.0",
+  "host": {
+    "os": "Microsoft Windows 10.0.29639",
+    "architecture": "X64",
+    "processorCount": 28,
+    "dotnetRuntimes": [
+      "Microsoft.AspNetCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+      "Microsoft.AspNetCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.AspNetCore.App]",
+      "Microsoft.NETCore.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+      "Microsoft.NETCore.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.NETCore.App]",
+      "Microsoft.WindowsDesktop.App 8.0.30 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]",
+      "Microsoft.WindowsDesktop.App 10.0.11 [C:\\Program Files\\dotnet\\shared\\Microsoft.WindowsDesktop.App]"
+    ]
+  },
+  "docker": {
+    "imageId": "sha256:7b974ae9bf316b04f5772905d1cf7022d16e77dbd9b084f1e81e2cbf6e6c5a5d",
+    "imageRepoDigest": "sharpts-gc-profile-bench@sha256:7b974ae9bf316b04f5772905d1cf7022d16e77dbd9b084f1e81e2cbf6e6c5a5d",
+    "clientVersion": "29.7.2",
+    "serverVersion": "29.7.2",
+    "serverPlatform": "Docker Desktop 4.86.0 (236216)",
+    "containerDotNetRuntimes": [
+      "Microsoft.NETCore.App 10.0.11 [/usr/share/dotnet/shared/Microsoft.NETCore.App]"
+    ],
+    "containerNode": "v24.19.0",
+    "containerOs": "Ubuntu 24.04.4 LTS",
+    "containerArchitecture": "x86_64"
+  },
   "platforms": [
     "windows",
     "ubuntu"
@@ -47,4 +73,3 @@
     }
   }
 }
-

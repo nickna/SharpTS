@@ -39,6 +39,11 @@ The complete result table is preserved in
 [full-corpus-metadata.json](results/full-corpus-metadata.json), and the focused confirmation in
 [json-windows-confirmation.md](results/json-windows-confirmation.md).
 
+The process matrix records mean, minimum, standard deviation, process elapsed time, and peak RSS
+for every launch. Allocation and generation counts come from the faithful BenchmarkDotNet phase
+diagnostic cited below; the cross-runtime `BENCH` protocol does not expose managed GC counters to
+Node and therefore does not pretend its sixth timing field is allocation data.
+
 ## Evidence
 
 The focused Windows JSON N=10,000 confirmation measured:
