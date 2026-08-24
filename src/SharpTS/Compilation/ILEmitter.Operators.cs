@@ -63,6 +63,15 @@ public partial class ILEmitter
                     break;
                 }
 
+                // A proven integer loop counter already has native Int64
+                // storage. Format it directly into the final string, avoiding
+                // boxing and $Runtime.Add. Other statically narrowed numbers
+                // can still be object-backed (for example a number|string
+                // parameter after typeof narrowing), so they stay on the
+                // sound dynamic path.
+                if (TryEmitIntegerCounterStringConcat(b))
+                    break;
+
                 // If both operands are statically string, emit a direct
                 // String.Concat(string, string) — skipping the dynamic
                 // $Runtime.Add type-dispatch + ToNumber/ToString probing every
@@ -1271,6 +1280,25 @@ public partial class ILEmitter
         }
         return false;
     }
+
+    /// <summary>
+    /// Reports whether <paramref name="e"/> is one of the pure expressions that
+    /// <see cref="TryEmitIntegerCounterValueI8"/> can load from native Int64 storage.
+    /// This non-emitting probe keeps callers from partially emitting a fallback.
+    /// </summary>
+    private bool IsIntegerCounterValueI8(Expr e) => e switch
+    {
+        Expr.Variable v => IsIntegerCounterLocal(v.Name.Lexeme),
+        Expr.Binary { Operator.Type: TokenType.PLUS or TokenType.MINUS } b
+            when b.Left is Expr.Variable lv
+                 && IsIntegerCounterLocal(lv.Name.Lexeme)
+                 && TryGetIntLiteralValue(b.Right, out _) => true,
+        Expr.Binary { Operator.Type: TokenType.PLUS } b
+            when b.Right is Expr.Variable rv
+                 && IsIntegerCounterLocal(rv.Name.Lexeme)
+                 && TryGetIntLiteralValue(b.Left, out _) => true,
+        _ => false
+    };
 
     /// <summary>
     /// Native int64 increment for an integer-counter local: <c>i++</c>/<c>i--</c> (postfix) or
@@ -2566,6 +2594,51 @@ public partial class ILEmitter
         var rightType = _ctx.TypeMap.Get(b.Right);
 
         return IsStringTypeInfo(leftType) && IsStringTypeInfo(rightType);
+    }
+
+    private bool TryEmitIntegerCounterStringConcat(Expr.Binary b)
+    {
+        if (_ctx.TypeMap is null)
+            return false;
+
+        bool leftString = IsStringTypeInfo(_ctx.TypeMap.Get(b.Left));
+        bool rightString = IsStringTypeInfo(_ctx.TypeMap.Get(b.Right));
+        bool leftCounter = IsIntegerCounterValueI8(b.Left);
+        bool rightCounter = IsIntegerCounterValueI8(b.Right);
+        if (!(leftString && rightCounter) && !(leftCounter && rightString))
+            return false;
+
+        if (leftString)
+        {
+            EmitExpression(b.Left);
+            EnsureString();
+            _ = TryEmitIntegerCounterValueI8(b.Right);
+            // Integer loop counters already live as Int64. Formatting that
+            // value directly avoids a double conversion plus the general
+            // ECMAScript number formatter on every iteration. The counter
+            // analysis restricts values to the exact-integer Number range,
+            // where invariant Int64 decimal text is byte-for-byte identical.
+            IL.Emit(OpCodes.Ldc_I4_0);
+        }
+        else
+        {
+            // Preserve source evaluation order: evaluate the counter before
+            // the string expression, then arrange the helper arguments.
+            _ = TryEmitIntegerCounterValueI8(b.Left);
+            var left = IL.DeclareLocal(_ctx.Types.Int64);
+            IL.Emit(OpCodes.Stloc, left);
+            EmitExpression(b.Right);
+            EnsureString();
+            var right = IL.DeclareLocal(_ctx.Types.String);
+            IL.Emit(OpCodes.Stloc, right);
+            IL.Emit(OpCodes.Ldloc, right);
+            IL.Emit(OpCodes.Ldloc, left);
+            IL.Emit(OpCodes.Ldc_I4_1);
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatStringInt64);
+        SetStackType(StackType.String);
+        return true;
     }
 
     private bool IsStaticallyNumericBitwise(Expr.Binary b)
