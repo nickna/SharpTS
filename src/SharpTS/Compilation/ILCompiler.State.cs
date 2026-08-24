@@ -77,6 +77,8 @@ public partial class ILCompiler
         public Dictionary<string, List<(Parsing.Stmt.Function Method, Parsing.Expr Key, MethodBuilder Builder)>> SymbolMethods { get; } = [];
         public Dictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedClassKeys { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
+        public HashSet<Stmt.Class> CompactStorageClasses { get; } =
+            new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
 
         // ES2022 Private Class Elements Support

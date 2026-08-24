@@ -76,6 +76,15 @@ public partial class ILCompiler
 
         var emitter = new ILEmitter(ctx);
 
+        // A compact class uses weak side storage; initialize its table before
+        // user-observable static initialization can construct or mutate an instance.
+        var dynamicFieldsTable = _classes.InstanceFieldsField[qualifiedClassName];
+        if (dynamicFieldsTable.IsStatic)
+        {
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(dynamicFieldsTable.FieldType));
+            il.Emit(OpCodes.Stsfld, dynamicFieldsTable);
+        }
+
         // ECMAScript creates Constructor.prototype as part of class evaluation.
         // Register it before user static fields/blocks so they can observe it.
         EmitClassPrototypeRegistration(

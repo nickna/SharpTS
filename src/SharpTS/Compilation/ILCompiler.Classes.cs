@@ -257,13 +257,22 @@ public partial class ILCompiler
         _typedInterop.ReadonlyPropertyNames[className] = [];
         _typedInterop.PropertyTypes[className] = [];
 
-        // Add _fields dictionary for dynamic property storage
-        // Note: We keep this as _fields for now to maintain compatibility with RuntimeEmitter.Objects.cs
-        // In Phase 4, both this and the runtime will be updated to use _extras
+        // Proven non-escaping exact classes keep rare dynamic own properties in weak side
+        // storage instead of reserving a reference slot on every instance. All other classes
+        // retain the direct instance dictionary slot so dynamic property traffic stays fast.
+        bool useCompactStorage = _classes.CompactStorageClasses.Contains(classStmt);
+        var dynamicFieldsType = useCompactStorage
+            ? EmitGenerics.MakeGenericType(
+                typeof(System.Runtime.CompilerServices.ConditionalWeakTable<,>),
+                typeof(object),
+                typeof(Dictionary<string, object>))
+            : typeof(Dictionary<string, object>);
         var fieldsField = typeBuilder.DefineField(
             "_fields",
-            typeof(Dictionary<string, object>),
-            FieldAttributes.Private
+            dynamicFieldsType,
+            useCompactStorage
+                ? FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly
+                : FieldAttributes.Private
         );
         _typedInterop.ExtrasFields[className] = fieldsField;
         _classes.InstanceFieldsField[className] = fieldsField;

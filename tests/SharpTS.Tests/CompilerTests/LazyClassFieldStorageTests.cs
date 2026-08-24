@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Reflection.Emit;
+using System.Runtime.CompilerServices;
 using SharpTS.Compilation;
 using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
@@ -18,6 +19,8 @@ public sealed class LazyClassFieldStorageTests
                 value: number;
                 constructor(value: number) { this.value = value; }
             }
+            const counter = new Counter(1);
+            counter.value;
             """);
 
         Type counterType = assembly.GetType("Counter")!;
@@ -32,14 +35,18 @@ public sealed class LazyClassFieldStorageTests
             instruction.Operand is MethodBase { Name: "$EnsureFields" });
 
         object instance = constructor.Invoke([1d]);
+        Assert.Null(counterType.GetField(
+            "_fields", BindingFlags.Instance | BindingFlags.NonPublic));
         FieldInfo fields = counterType.GetField(
-            "_fields", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        Assert.Null(fields.GetValue(instance));
+            "_fields", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var stores = Assert.IsType<ConditionalWeakTable<object, Dictionary<string, object>>>(
+            fields.GetValue(null));
+        Assert.False(stores.TryGetValue(instance, out _));
 
         _ = counterType.GetMethod("GetProperty")!.Invoke(instance, ["missing"]);
         Assert.False((bool)counterType.GetMethod("HasProperty")!.Invoke(
             instance, ["missing"])!);
-        Assert.Null(fields.GetValue(instance));
+        Assert.False(stores.TryGetValue(instance, out _));
     }
 
     [Fact]
@@ -49,22 +56,94 @@ public sealed class LazyClassFieldStorageTests
             class Counter {
                 value: number = 1;
             }
+            const counter = new Counter();
+            counter.value;
             """);
 
         Type counterType = assembly.GetType("Counter")!;
         object instance = Assert.Single(counterType.GetConstructors()).Invoke([]);
         FieldInfo fields = counterType.GetField(
-            "_fields", BindingFlags.Instance | BindingFlags.NonPublic)!;
+            "_fields", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var stores = Assert.IsType<ConditionalWeakTable<object, Dictionary<string, object>>>(
+            fields.GetValue(null));
         MethodInfo setProperty = counterType.GetMethod("SetProperty")!;
 
-        Assert.Null(fields.GetValue(instance));
+        Assert.False(stores.TryGetValue(instance, out _));
         setProperty.Invoke(instance, ["extra", 2d]);
-        var first = Assert.IsType<Dictionary<string, object>>(fields.GetValue(instance));
+        Assert.True(stores.TryGetValue(instance, out var first));
         Assert.Equal(2d, first["extra"]);
 
         setProperty.Invoke(instance, ["second", 3d]);
-        Assert.Same(first, fields.GetValue(instance));
+        Assert.True(stores.TryGetValue(instance, out var second));
+        Assert.Same(first, second);
         Assert.Equal(3d, first["second"]);
+    }
+
+    [Fact]
+    public void DynamicOrEscapingUse_RetainsDirectInstanceStore()
+    {
+        Assembly assembly = Compile("""
+            class DynamicCounter {
+                value: number;
+                constructor(value: number) { this.value = value; }
+            }
+            function create(value: number): any {
+                const counter: any = new DynamicCounter(value);
+                counter.extra = value;
+                return counter;
+            }
+            """);
+
+        Type counterType = assembly.GetType("DynamicCounter")!;
+        FieldInfo fields = counterType.GetField(
+            "_fields", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.Equal(typeof(Dictionary<string, object>), fields.FieldType);
+        Assert.Null(counterType.GetField(
+            "_fields", BindingFlags.Static | BindingFlags.NonPublic));
+
+        object instance = Assert.Single(counterType.GetConstructors()).Invoke([1d]);
+        counterType.GetMethod("SetProperty")!.Invoke(instance, ["extra", 2d]);
+        var store = Assert.IsType<Dictionary<string, object>>(fields.GetValue(instance));
+        Assert.Equal(2d, store["extra"]);
+    }
+
+    [Fact]
+    public void CapturedExactLocal_RetainsDirectInstanceStore()
+    {
+        Assembly assembly = Compile("""
+            class CapturedCounter {
+                value: number;
+                constructor(value: number) { this.value = value; }
+            }
+            function readLater(): number {
+                const counter = new CapturedCounter(1);
+                const read = (): number => counter.value;
+                return read();
+            }
+            """);
+
+        Type counterType = assembly.GetType("CapturedCounter")!;
+        FieldInfo fields = counterType.GetField(
+            "_fields", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.Equal(typeof(Dictionary<string, object>), fields.FieldType);
+    }
+
+    [Fact]
+    public void ClassUsedAsValue_RetainsDirectInstanceStore()
+    {
+        Assembly assembly = Compile("""
+            class AliasedCounter {
+                value: number = 1;
+            }
+            const Constructor: any = AliasedCounter;
+            const counter: any = new Constructor();
+            counter.extra = 2;
+            """);
+
+        Type counterType = assembly.GetType("AliasedCounter")!;
+        FieldInfo fields = counterType.GetField(
+            "_fields", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.Equal(typeof(Dictionary<string, object>), fields.FieldType);
     }
 
     [Fact]
