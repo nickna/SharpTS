@@ -431,7 +431,7 @@ public class DebugSymbolsTests
         const string source = """
             async function asyncWork(input: number): Promise<number> {
               const before = input + 1;
-              const awaited = await Promise.resolve(before);
+              const awaited = await new Promise<number>((resolve): void => resolve(before));
               return awaited + 1;
             }
             function* numbers(limit: number): Generator<number> {
@@ -495,7 +495,7 @@ public class DebugSymbolsTests
             async function work(seed: number): Promise<number> {
               let carried = seed;
               const increment = () => ++carried;
-              await Promise.resolve(0);
+              await new Promise<number>((resolve): void => resolve(0));
               return increment();
             }
             function* sequence(limit: number): Generator<number> {
