@@ -24,12 +24,12 @@ public partial class ILCompiler
         var ctx = GetDefinitionContext();
         string qualifiedFunctionName = ctx.GetQualifiedFunctionName(funcStmt.Name.Lexeme);
 
-        HashSet<Expr.Await> directCoreAwaits = FindDirectCoreAwaits(
+        HashSet<Expr.Await> suspensionFreeAwaits = FindSuspensionFreeAwaits(
             funcStmt, ctx, analysis);
-        if (directCoreAwaits.Count > 0)
+        if (suspensionFreeAwaits.Count > 0)
         {
-            analysis = _async.Analyzer.Analyze(funcStmt, directCoreAwaits);
-            _async.DirectCoreAwaits[qualifiedFunctionName] = directCoreAwaits;
+            analysis = _async.Analyzer.Analyze(funcStmt, suspensionFreeAwaits);
+            _async.SuspensionFreeAwaits[qualifiedFunctionName] = suspensionFreeAwaits;
         }
 
         if (CanEmitSuspensionFreePrimitiveAsyncFunction(
@@ -96,7 +96,7 @@ public partial class ILCompiler
         DefineAsyncArrowStateMachines(analysis.AsyncArrows, smBuilder);
     }
 
-    private HashSet<Expr.Await> FindDirectCoreAwaits(
+    private HashSet<Expr.Await> FindSuspensionFreeAwaits(
         Stmt.Function function,
         CompilationContext definitionContext,
         AsyncStateAnalyzer.AsyncFunctionAnalysis analysis)
@@ -108,10 +108,12 @@ public partial class ILCompiler
         foreach (Stmt statement in function.Body)
             localBindings.Visit(statement);
 
-        var collector = new DirectCoreAwaitCollector(
+        var collector = new SuspensionFreeAwaitCollector(
             definitionContext,
             _async.StableSuspensionFreePrimitiveCores,
-            localBindings.Names);
+            localBindings.Names,
+            _typeMap,
+            _features?.UsesPromisePrototypeMutation != true);
         foreach (Stmt statement in function.Body)
             collector.Visit(statement);
         return collector.Awaits;
@@ -165,16 +167,38 @@ public partial class ILCompiler
         protected override void VisitClassExpr(Expr.ClassExpr expression) { }
     }
 
-    private sealed class DirectCoreAwaitCollector(
+    private sealed class SuspensionFreeAwaitCollector(
         CompilationContext context,
         IReadOnlyDictionary<string, MethodBuilder> stableCores,
-        IReadOnlySet<string> localBindings) : AstVisitorBase
+        IReadOnlySet<string> localBindings,
+        TypeSystem.TypeMap? typeMap,
+        bool promiseBehaviorStable) : AstVisitorBase
     {
         public HashSet<Expr.Await> Awaits { get; } =
             new(ReferenceEqualityComparer.Instance);
 
         protected override void VisitAwait(Expr.Await expression)
         {
+            if (promiseBehaviorStable
+                && !localBindings.Contains("Promise")
+                && expression.Expression is Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Optional: false,
+                        Object: Expr.Variable { Name.Lexeme: "Promise" },
+                        Name.Lexeme: "resolve"
+                    },
+                    Arguments: [var resolvedValue]
+                }
+                && resolvedValue is not Expr.Spread
+                && !ContainsSuspension(resolvedValue)
+                && IsStableNonThenablePrimitive(typeMap?.Get(resolvedValue)))
+            {
+                Awaits.Add(expression);
+            }
+
             if (expression.Expression is Expr.Call
                 {
                     Callee: Expr.Variable variable,
@@ -225,7 +249,7 @@ public partial class ILCompiler
     /// <see cref="System.Runtime.CompilerServices.AsyncTaskMethodBuilder{TResult}"/> state
     /// machine. Keep the proof deliberately narrow: a free function with a final primitive
     /// return, simple required parameters, no closure/dynamic-receiver machinery, and only awaits
-    /// already proven to target stable suspension-free primitive cores. Its public
+    /// already proven non-suspending (stable primitive cores or intrinsic primitive resolves). Its public
     /// Task&lt;object?&gt; ABI remains identical to the ordinary async stub.
     /// </summary>
     private bool CanEmitSuspensionFreePrimitiveAsyncFunction(
@@ -1001,8 +1025,8 @@ public partial class ILCompiler
             ctx.CommonJsGetExportsMethods = _modules.CommonJsGetExportsMethods;
             // Check for function-level "use strict" directive
             ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(func.Body);
-            ctx.SuspensionFreePrimitiveAsyncCoreAwaits =
-                _async.DirectCoreAwaits.GetValueOrDefault(funcName);
+            ctx.SuspensionFreePrimitiveAsyncAwaits =
+                _async.SuspensionFreeAwaits.GetValueOrDefault(funcName);
             // Entry-point display class for captured top-level variables
             ApplyCapturedTopLevelVariableAccess(ctx);
             ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0 ? _closures.ArrowEntryPointDCFields : null;
@@ -1093,8 +1117,8 @@ public partial class ILCompiler
             var coreContext = CreateSuspensionFreePrimitiveFunctionContext(
                 coreIl, coreMethod, function);
             coreContext.CurrentMethodReturnType = coreMethod.ReturnType;
-            coreContext.SuspensionFreePrimitiveAsyncCoreAwaits =
-                _async.DirectCoreAwaits.GetValueOrDefault(functionName);
+            coreContext.SuspensionFreePrimitiveAsyncAwaits =
+                _async.SuspensionFreeAwaits.GetValueOrDefault(functionName);
             ParameterInfo[] coreParameters = coreMethod.GetParameters();
             for (int index = 0; index < function.Parameters.Count; index++)
             {
