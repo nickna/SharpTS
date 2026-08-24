@@ -11,6 +11,7 @@
     <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''">main.tsx</SharpTSEntryPoint>
     <SharpTSTsConfigPath Condition="'$(SharpTSTsConfigPath)' == '' and Exists('$(MSBuildProjectDirectory)\tsconfig.json')">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
     <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
+    <SharpTSGcProfile Condition="'$(SharpTSGcProfile)' == ''">workstation</SharpTSGcProfile>
     <SharpTSGuiIncludeSourcePayload Condition="'$(SharpTSGuiIncludeSourcePayload)' == ''">true</SharpTSGuiIncludeSourcePayload>
 
     <SharpTSGuiSdkRoot>$(MSBuildThisFileDirectory)..\</SharpTSGuiSdkRoot>

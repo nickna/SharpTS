@@ -55,6 +55,10 @@ Use `--target exe` for an executable target, or the `SharpTS.Sdk` MSBuild SDK fo
 project builds. Compiled output embeds the runtime it needs and only copies `SharpTS.dll` when an
 emitted soft-dependent feature requires it.
 
+Allocation-heavy services can opt into adaptive server GC with
+`--gc-profile adaptive`; workstation GC remains the conservative default. See the
+[GC profile decision](benchmarks/gc-profiles/decision.md) for measured tradeoffs.
+
 ## Major feature areas
 
 - TypeScript syntax, type checking, modules, projects, declarations, JSX/TSX, async functions,

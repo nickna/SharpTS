@@ -96,6 +96,19 @@ function Invoke-Application([string]$Executable, [string[]]$Arguments, [string]$
     }
 }
 
+function Assert-AdaptiveGcProfile([string]$RuntimeConfigPath) {
+    if (-not (Test-Path -LiteralPath $RuntimeConfigPath -PathType Leaf)) {
+        throw "GC profile runtimeconfig was not created: $RuntimeConfigPath"
+    }
+    $runtimeConfig = Get-Content -LiteralPath $RuntimeConfigPath -Raw | ConvertFrom-Json
+    $properties = $runtimeConfig.runtimeOptions.configProperties
+    if ($properties.'System.GC.Server' -ne $true -or
+        $properties.'System.GC.Concurrent' -ne $true -or
+        $properties.'System.GC.DynamicAdaptationMode' -ne 1) {
+        throw "Runtimeconfig does not contain the adaptive SharpTS GC profile: $RuntimeConfigPath"
+    }
+}
+
 function RendererTrace($Events) {
     @($Events | Where-Object {
         $_.Stage -like "reconcile-*" -or
@@ -369,6 +382,7 @@ Invoke-DotNet @("build", $consumerProject, "-c", $Configuration, "--no-restore")
 
 $buildOutput = Join-Path $consumerRoot "bin\$Configuration\net10.0"
 $buildLauncher = Join-Path $buildOutput "SharpTS.Gui.Sdk.Consumer.dll"
+Assert-AdaptiveGcProfile (Join-Path $buildOutput "SharpTS.Gui.Sdk.Consumer.runtimeconfig.json")
 $dotnetRunTrace = Join-Path $artifactRoot "dotnet-run-interpreted-trace.json"
 Invoke-DotNet @("run", "--project", $consumerProject, "-c", $Configuration, "--no-build", "--", "--mode", "interpreted", "--headless", "--trace", $dotnetRunTrace, "--", "--smoke-close") $consumerRoot
 $buildTraces = @{}
@@ -385,6 +399,7 @@ Invoke-DotNet @("restore", $consumerProject, "-r", $RuntimeIdentifier, "--config
 Invoke-DotNet @(
     "publish", $consumerProject, "-c", $Configuration, "-r", $RuntimeIdentifier,
     "--self-contained", "false", "--no-restore", "-p:SharpTSGuiPublishMode=Directory", "-o", $directoryPublishRoot) $consumerRoot
+Assert-AdaptiveGcProfile (Join-Path $directoryPublishRoot "SharpTS.Gui.Sdk.Consumer.runtimeconfig.json")
 
 $directoryLauncher = Join-Path $directoryPublishRoot "SharpTS.Gui.Sdk.Consumer.dll"
 if ($canExecute) {
@@ -504,7 +519,7 @@ Invoke-DotNet @(
 
 Invoke-DotNet @(
     $sharpTsCli, "app", "compile", "headless.tests.tsx", "--source", $feed,
-    "--configuration", $Configuration) $cliRoot
+    "--configuration", $Configuration, "--gc-profile", "adaptive") $cliRoot
 $generatedProject = Join-Path $cliRoot ".sharpts-gui.generated.csproj"
 if (-not (Test-Path -LiteralPath $generatedProject)) {
     throw "TypeScript-only CLI did not materialize its internal SDK project."
@@ -512,6 +527,9 @@ if (-not (Test-Path -LiteralPath $generatedProject)) {
 $generatedProjectText = Get-Content -LiteralPath $generatedProject -Raw
 if ($generatedProjectText -notmatch [regex]::Escape("SharpTS.Gui.Sdk/$version")) {
     throw "TypeScript-only CLI generated project did not pin the candidate GUI SDK version."
+}
+if ($generatedProjectText -notmatch '<SharpTSGcProfile>adaptive</SharpTSGcProfile>') {
+    throw "TypeScript-only CLI generated project did not preserve the selected GC profile."
 }
 $generatedProjectWrite = (Get-Item -LiteralPath $generatedProject -Force).LastWriteTimeUtc
 $cliGuest = Get-ChildItem -LiteralPath (Join-Path $cliRoot ".sharpts\gui\obj") -Force -Recurse -File -Filter "SharpTS.Gui.Guest.dll" |
@@ -522,7 +540,7 @@ if ($null -eq $cliGuest) {
 $cliGuestWrite = $cliGuest.LastWriteTimeUtc
 Invoke-DotNet @(
     $sharpTsCli, "app", "build", "headless.tests.tsx", "--source", $feed,
-    "--configuration", $Configuration) $cliRoot
+    "--configuration", $Configuration, "--gc-profile", "adaptive") $cliRoot
 if ((Get-Item -LiteralPath $generatedProject -Force).LastWriteTimeUtc -ne $generatedProjectWrite) {
     throw "TypeScript-only CLI rewrote an unchanged generated project."
 }
@@ -534,14 +552,15 @@ foreach ($mode in @("interpreted", "compiled")) {
     $cliRunTrace = Join-Path $artifactRoot "cli-run-$mode-trace.json"
     Invoke-DotNet @(
         $sharpTsCli, "app", "run", "headless.tests.tsx", "--source", $feed,
-        "--mode", $mode, "--", "--headless", "--trace", $cliRunTrace) $cliRoot
+        "--mode", $mode, "--gc-profile", "adaptive", "--", "--headless", "--trace", $cliRunTrace) $cliRoot
     Assert-GuestTrace $cliRunTrace "TypeScript-only CLI $mode run"
 }
 
 Invoke-DotNet @(
     $sharpTsCli, "app", "publish", "headless.tests.tsx", "--source", $feed,
     "--rid", $RuntimeIdentifier, "--self-contained", "false", "--single-file", "false",
-    "--output", $cliDirectoryPublishRoot) $cliRoot
+    "--gc-profile", "adaptive", "--output", $cliDirectoryPublishRoot) $cliRoot
+Assert-AdaptiveGcProfile (Join-Path $cliDirectoryPublishRoot "cli_app_with_spaces.runtimeconfig.json")
 $cliDirectoryLauncher = Join-Path $cliDirectoryPublishRoot "cli_app_with_spaces.dll"
 if (-not (Test-Path -LiteralPath $cliDirectoryLauncher)) {
     throw "TypeScript-only CLI directory publish did not create its app host assembly."
@@ -583,7 +602,7 @@ if (Compare-Object $sdkNativeClosure $cliNativeClosure -SyncWindow 0) {
 Invoke-DotNet @(
     $sharpTsCli, "app", "publish", "headless.tests.tsx", "--source", $feed,
     "--rid", $RuntimeIdentifier, "--self-contained", "true", "--single-file", "true",
-    "--output", $cliSingleFilePublishRoot) $cliRoot
+    "--gc-profile", "adaptive", "--output", $cliSingleFilePublishRoot) $cliRoot
 $cliSingleFile = Join-Path $cliSingleFilePublishRoot $cliExecutableName
 if (-not (Test-Path -LiteralPath $cliSingleFile)) {
     throw "TypeScript-only CLI self-contained single-file publish did not create an executable."

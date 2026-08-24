@@ -30,6 +30,7 @@
     <SharpTSDeclarationDir Condition="'$(SharpTSDeclarationDir)' == ''"></SharpTSDeclarationDir>
     <SharpTSVerifyIL Condition="'$(SharpTSVerifyIL)' == ''">false</SharpTSVerifyIL>
     <SharpTSUseReferenceAssemblies Condition="'$(SharpTSUseReferenceAssemblies)' == ''">false</SharpTSUseReferenceAssemblies>
+    <SharpTSGcProfile Condition="'$(SharpTSGcProfile)' == ''">workstation</SharpTSGcProfile>
 
     <!-- Entry point file (required - user must specify or will be read from tsconfig.json) -->
     <SharpTSEntryPoint Condition="'$(SharpTSEntryPoint)' == ''"></SharpTSEntryPoint>

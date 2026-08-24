@@ -88,7 +88,7 @@ internal static class GuiApplicationCli
 
         string version = command.GuiSdkVersion ?? manifest?.Application?.GuiSdkVersion ?? DefaultSdkVersion;
         string? source = command.GuiSdkSource ?? manifest?.Application?.GuiSdkSource;
-        string project = MaterializeProject(root, entry, version);
+        string project = MaterializeProject(root, entry, version, command.GcProfile);
         var restore = new List<string> { "restore", project };
         AddGeneratedProjectProperties(restore, root);
         if (!string.IsNullOrWhiteSpace(command.RuntimeIdentifier))
@@ -156,7 +156,11 @@ internal static class GuiApplicationCli
         return InvokeDotNet(args, root);
     }
 
-    internal static string MaterializeProject(string root, string entry, string version)
+    internal static string MaterializeProject(
+        string root,
+        string entry,
+        string version,
+        GcProfile gcProfile = GcProfile.Workstation)
     {
         string relativeEntry = Path.GetRelativePath(root, entry).Replace('/', '\\');
         if (relativeEntry.StartsWith("..", StringComparison.Ordinal))
@@ -173,6 +177,7 @@ internal static class GuiApplicationCli
                 <SharpTSEntryPoint>{{SecurityElement.Escape(relativeEntry)}}</SharpTSEntryPoint>
                 <SharpTSTsConfigPath Condition="Exists('$(MSBuildProjectDirectory)\tsconfig.json')">$(MSBuildProjectDirectory)\tsconfig.json</SharpTSTsConfigPath>
                 <SharpTSVerifyIL>true</SharpTSVerifyIL>
+                <SharpTSGcProfile>{{GcProfileSettings.CliValue(gcProfile)}}</SharpTSGcProfile>
               </PropertyGroup>
             </Project>
             """;

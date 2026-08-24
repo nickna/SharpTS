@@ -71,6 +71,7 @@ consumer properties; underscore-prefixed values and tool/task paths are implemen
 | `SharpTSDeclarationDir` | Empty | Pass `--declarationDir` when nonempty. Otherwise compiler `rootDir`/`outDir` rules apply. |
 | `SharpTSVerifyIL` | `false` | Pass `--verify` when true. |
 | `SharpTSUseReferenceAssemblies` | `false` | Pass `--ref-asm` for C#-reference-compatible output when true. |
+| `SharpTSGcProfile` | `workstation` | Deployment GC policy: `workstation`, `adaptive`, or `throughput`. Propagated to build, publish, package, and bundle runtime configuration. |
 
 Choose decorator behavior with `SharpTSDecorators`, `SharpTSExperimentalDecorators`, and the
 corresponding `tsconfig` settings.
@@ -78,6 +79,23 @@ corresponding `tsconfig` settings.
 The SDK also defines `UsingSharpTSSdk=true` as an identification marker and resolves
 `SharpTSToolPath`, `SharpTSCompilerExe`, and `SharpTSTasksAssembly` from its own package. Consumers
 should not pin or override those internal locations.
+
+### GC deployment policy
+
+Use `SharpTSGcProfile=adaptive` for a measured, sustained allocation-heavy service:
+
+```xml
+<PropertyGroup>
+  <SharpTSGcProfile>adaptive</SharpTSGcProfile>
+</PropertyGroup>
+```
+
+The default `workstation` profile is intentionally conservative for interactive and unknown
+workloads. `adaptive` enables concurrent server GC with DATAS. `throughput` disables DATAS and is
+an expert opt-in because fixed server heaps can reserve substantially more memory. Profile names
+are validated during the build; an invalid value does not fall back silently. See the
+[cross-platform decision record](../benchmarks/gc-profiles/decision.md) for timing, startup, and
+peak-working-set measurements.
 
 ## `tsconfig.json` mapping and precedence
 
@@ -140,6 +158,7 @@ Example:
     <SharpTSDeclarationDir>$(MSBuildProjectDirectory)/types</SharpTSDeclarationDir>
     <SharpTSUseReferenceAssemblies>true</SharpTSUseReferenceAssemblies>
     <SharpTSVerifyIL>true</SharpTSVerifyIL>
+    <SharpTSGcProfile>adaptive</SharpTSGcProfile>
   </PropertyGroup>
 </Project>
 ```

@@ -11,6 +11,7 @@
     <SharpTSOutputPath Condition="'$(SharpTSOutputPath)' == ''">$(OutputPath)</SharpTSOutputPath>
     <SharpTSOutputFileName Condition="'$(SharpTSOutputFileName)' == ''">$(AssemblyName).dll</SharpTSOutputFileName>
     <_SharpTSRuntimeConfigFileName>$([System.IO.Path]::ChangeExtension('$(SharpTSOutputFileName)', '.runtimeconfig.json'))</_SharpTSRuntimeConfigFileName>
+    <_SharpTSGcProfileNormalized>$([System.String]::Copy('$(SharpTSGcProfile)').ToLowerInvariant())</_SharpTSGcProfileNormalized>
   </PropertyGroup>
 
   <!-- Publish consumes @(IntermediateAssembly) as the primary build product.
@@ -63,6 +64,8 @@
            Text="SharpTSEntryPoint must be specified. Set it in your project file or ensure tsconfig.json has a 'files' array." />
     <Error Condition="!Exists('$(SharpTSEntryPoint)') and !Exists('$(MSBuildProjectDirectory)\$(SharpTSEntryPoint)')"
            Text="Entry point file '$(SharpTSEntryPoint)' does not exist." />
+    <Error Condition="'$(_SharpTSGcProfileNormalized)' != 'workstation' and '$(_SharpTSGcProfileNormalized)' != 'adaptive' and '$(_SharpTSGcProfileNormalized)' != 'throughput'"
+           Text="SharpTSGcProfile must be workstation, adaptive, or throughput; received '$(SharpTSGcProfile)'." />
   </Target>
 
   <!-- Resolve entry point to absolute path -->
@@ -91,6 +94,7 @@
       <_SharpTSArgs>$(_SharpTSArgs) -o "$(SharpTSOutputPath)$(SharpTSOutputFileName)"</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --msbuild-errors</_SharpTSArgs>
       <_SharpTSArgs>$(_SharpTSArgs) --quiet</_SharpTSArgs>
+      <_SharpTSArgs>$(_SharpTSArgs) --gc-profile &quot;$(_SharpTSGcProfileNormalized)&quot;</_SharpTSArgs>
       <!-- The CLI owns project-system semantics (paths, moduleResolution, declaration
            packages, and the extends chain). Explicit MSBuild-derived flags below still win. -->
       <_SharpTSArgs Condition="Exists('$(SharpTSTsConfigPath)')">$(_SharpTSArgs) --project "$(SharpTSTsConfigPath)"</_SharpTSArgs>

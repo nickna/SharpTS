@@ -60,6 +60,17 @@ function Assert-SmokeOutput {
     }
 }
 
+function Assert-AdaptiveGcProfile {
+    param([Parameter(Mandatory)] [string]$RuntimeConfigPath)
+    $runtimeConfig = Get-Content -LiteralPath $RuntimeConfigPath -Raw | ConvertFrom-Json
+    $properties = $runtimeConfig.runtimeOptions.configProperties
+    if ($properties.'System.GC.Server' -ne $true -or
+        $properties.'System.GC.Concurrent' -ne $true -or
+        $properties.'System.GC.DynamicAdaptationMode' -ne 1) {
+        throw "Runtimeconfig does not contain the adaptive SharpTS GC profile: $RuntimeConfigPath"
+    }
+}
+
 $oldNuGetPackages = $env:NUGET_PACKAGES
 $oldCliHome = $env:DOTNET_CLI_HOME
 $oldPath = $env:PATH
@@ -144,6 +155,7 @@ try {
     <TargetFramework>net10.0</TargetFramework>
     <AssemblyName>SharpTS.Sdk.Smoke</AssemblyName>
     <SharpTSEntryPoint>main.ts</SharpTSEntryPoint>
+    <SharpTSGcProfile>adaptive</SharpTSGcProfile>
   </PropertyGroup>
 </Project>
 "@
@@ -185,6 +197,7 @@ try {
     )
     Assert-PathExists $buildOutput
     Assert-PathExists $runtimeConfig
+    Assert-AdaptiveGcProfile $runtimeConfig
     Assert-SmokeOutput (Invoke-DotNet -WorkingDirectory $consumerPath -Arguments @($buildOutput) -CaptureOutput)
 
     Invoke-DotNet -WorkingDirectory $consumerPath -Arguments @(
@@ -204,7 +217,9 @@ try {
     )
     $publishedAssembly = Join-Path $publishPath "SharpTS.Sdk.Smoke.dll"
     Assert-PathExists $publishedAssembly
-    Assert-PathExists (Join-Path $publishPath "SharpTS.Sdk.Smoke.runtimeconfig.json")
+    $publishedRuntimeConfig = Join-Path $publishPath "SharpTS.Sdk.Smoke.runtimeconfig.json"
+    Assert-PathExists $publishedRuntimeConfig
+    Assert-AdaptiveGcProfile $publishedRuntimeConfig
     Assert-SmokeOutput (Invoke-DotNet -WorkingDirectory $consumerPath -Arguments @($publishedAssembly) -CaptureOutput)
 
     Write-Host "Packaged SharpTS.Sdk smoke test passed for version $PackageVersion."

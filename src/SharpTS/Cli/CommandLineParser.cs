@@ -142,6 +142,7 @@ public record GlobalOptions(
 /// <param name="Timings">Print a human-readable compilation timing table.</param>
 /// <param name="TimingsJson">Print the compilation timing report as JSON.</param>
 /// <param name="Hosted">Emit the experimental versioned hosted runtime ABI.</param>
+/// <param name="GcProfile">Deployment-time garbage-collection profile.</param>
 public record CompileOptions(
     OutputTarget Target = OutputTarget.Dll,
     bool PreserveConstEnums = false,
@@ -156,7 +157,8 @@ public record CompileOptions(
     bool EmitDebugSymbols = false,
     bool Timings = false,
     bool TimingsJson = false,
-    bool Hosted = false
+    bool Hosted = false,
+    GcProfile GcProfile = GcProfile.Workstation
 )
 {
     public IReadOnlyList<string> References { get; init; } = References ?? [];
@@ -207,7 +209,8 @@ public abstract record ParsedCommand
         string? GuiSdkVersion,
         string? GuiSdkSource,
         string? Mode,
-        string[] ApplicationArgs) : ParsedCommand;
+        string[] ApplicationArgs,
+        GcProfile GcProfile = GcProfile.Workstation) : ParsedCommand;
 
     /// <summary>Start interactive REPL mode.</summary>
     /// <param name="Options">Global options for the session</param>
@@ -426,6 +429,7 @@ public class CommandLineParser
         string action = args[1] == "compile" ? "build" : args[1];
         string? entry = null, host = null, rid = null, output = null, sdkVersion = null,
             sdkSource = null, mode = null;
+        GcProfile gcProfile = GcProfile.Workstation;
         bool? selfContained = null, singleFile = null;
         string configuration = action == "run" ? "Debug" : "Release";
         for (int i = 2; i < args.Length; i++)
@@ -439,6 +443,14 @@ public class CommandLineParser
             else if (args[i] == "--sdk-version" && i + 1 < args.Length) sdkVersion = args[++i];
             else if (args[i] == "--source" && i + 1 < args.Length) sdkSource = args[++i];
             else if (args[i] == "--mode" && i + 1 < args.Length) mode = args[++i];
+            else if (args[i] == "--gc-profile" && i + 1 < args.Length)
+            {
+                value = args[++i];
+                if (!GcProfileSettings.TryParse(value, out gcProfile))
+                    return new ParsedCommand.Error(
+                        $"Error: Invalid GC profile '{value}'. Use 'workstation', 'adaptive', or 'throughput'.",
+                        64);
+            }
             else if (args[i] == "--self-contained" && i + 1 < args.Length)
             {
                 value = args[++i];
@@ -454,7 +466,7 @@ public class CommandLineParser
             else return new ParsedCommand.Error($"Error: Unknown or incomplete app option '{args[i]}'.", 64);
         }
         return new ParsedCommand.Application(action, entry, host, rid, selfContained, singleFile,
-            configuration, output, sdkVersion, sdkSource, mode, applicationArgs);
+            configuration, output, sdkVersion, sdkSource, mode, applicationArgs, gcProfile);
     }
 
     /// <summary>
@@ -754,6 +766,7 @@ public class CommandLineParser
         bool hosted = false;
         string? sdkPath = null;
         BundlerMode bundlerMode = BundlerMode.Auto;
+        GcProfile gcProfile = GcProfile.Workstation;
 
         // Packaging options
         bool pack = false;
@@ -819,6 +832,26 @@ public class CommandLineParser
                 {
                     return new ParsedCommand.Error(
                         $"Error: Invalid bundler '{bundlerArg}'. Use 'auto', 'sdk', or 'builtin'.",
+                        64,
+                        ShowCompileUsage: true
+                    );
+                }
+            }
+            else if (args[i] == "--gc-profile")
+            {
+                if (i + 1 >= args.Length)
+                {
+                    return new ParsedCommand.Error(
+                        "Error: --gc-profile requires a value (workstation, adaptive, or throughput)",
+                        64,
+                        ShowCompileUsage: true
+                    );
+                }
+                var profileArg = args[++i];
+                if (!GcProfileSettings.TryParse(profileArg, out gcProfile))
+                {
+                    return new ParsedCommand.Error(
+                        $"Error: Invalid GC profile '{profileArg}'. Use 'workstation', 'adaptive', or 'throughput'.",
                         64,
                         ShowCompileUsage: true
                     );
@@ -895,7 +928,7 @@ public class CommandLineParser
                 // whose value was missing — was dropped in silence while the compile proceeded.
                 // Global flags are already stripped by ParseGlobalOptions, so anything reaching
                 // here is genuinely unrecognized by compile mode.
-                bool needsValue = args[i] is "-o" or "-t" or "--target" or "--bundler"
+                bool needsValue = args[i] is "-o" or "-t" or "--target" or "--bundler" or "--gc-profile"
                     or "--sdk-path" or "--push" or "--api-key" or "--package-id" or "--version";
 
                 return new ParsedCommand.Error(
@@ -958,7 +991,8 @@ public class CommandLineParser
             EmitDebugSymbols: emitDebugSymbols,
             Timings: timings,
             TimingsJson: timingsJson,
-            Hosted: hosted
+            Hosted: hosted,
+            GcProfile: gcProfile
         );
 
         var packOptions = new PackOptions(

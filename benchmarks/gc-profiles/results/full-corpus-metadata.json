@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "createdAtUtc": "2026-08-24T17:23:26.6104531Z",
+  "commit": "4189deb66260242c2bb448af8d3cfd185bc3d390",
+  "branch": "codex/workload-aware-gc-profile",
+  "dotnet": "10.0.400",
+  "node": "v24.19.0",
+  "platforms": [
+    "windows",
+    "ubuntu"
+  ],
+  "launches": 3,
+  "workloads": [
+    "array-methods",
+    "async-promises",
+    "binary-trees",
+    "brainfuck",
+    "classes",
+    "closures",
+    "count-primes",
+    "factorial",
+    "fibonacci",
+    "int-arrays",
+    "json",
+    "map-set",
+    "num-arrays",
+    "objects",
+    "regex",
+    "sort",
+    "strings",
+    "typed-arrays"
+  ],
+  "profiles": {
+    "workstation": {
+      "System.GC.Server": false,
+      "System.GC.Concurrent": true
+    },
+    "adaptive": {
+      "System.GC.Server": true,
+      "System.GC.Concurrent": true,
+      "System.GC.DynamicAdaptationMode": 1
+    },
+    "throughput": {
+      "System.GC.Server": true,
+      "System.GC.Concurrent": true,
+      "System.GC.DynamicAdaptationMode": 0
+    }
+  }
+}
+

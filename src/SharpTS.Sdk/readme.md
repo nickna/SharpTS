@@ -30,7 +30,8 @@ Key properties are `SharpTSEntryPoint`, `SharpTSTsConfigPath`, `SharpTSOutputPat
 `SharpTSOutputFileName`, `SharpTSPreserveConstEnums`, `SharpTSExperimentalDecorators`,
 `SharpTSDecorators`, `SharpTSEmitDecoratorMetadata`, `SharpTSGenerateDeclarations`,
 `SharpTSEmitDeclarationOnly`, `SharpTSDeclarationDir`, `SharpTSVerifyIL`, and
-`SharpTSUseReferenceAssemblies`.
+`SharpTSUseReferenceAssemblies`. `SharpTSGcProfile` selects `workstation` (default), `adaptive`, or
+`throughput` deployment GC policy; use `adaptive` for measured allocation-heavy services.
 
 The canonical [MSBuild SDK guide](../../docs/msbuild-sdk.md) documents exact defaults, `tsconfig`
 mapping and precedence, output behavior, extension points, and troubleshooting.

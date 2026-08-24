@@ -376,6 +376,27 @@ public class IntegrationTests
     }
 
     [Fact]
+    public void Pack_GcProfileOverride_IsPreservedInRuntimeConfig()
+    {
+        using var tempDir = CliTestHelper.CreateTempDirectory();
+        var (scriptPath, _) = CreateStandardTestSetup(tempDir);
+
+        var result = CliTestHelper.RunCli(
+            $"--compile \"{scriptPath}\" --pack --gc-profile adaptive", tempDir.Path);
+
+        Assert.Equal(0, result.ExitCode);
+        var nupkgPath = FindNupkg(tempDir.Path, "TestPackage", "1.0.0")!;
+        using var document = System.Text.Json.JsonDocument.Parse(
+            ReadPackageFile(nupkgPath, "lib/net10.0/lib.runtimeconfig.json"));
+        var properties = document.RootElement
+            .GetProperty("runtimeOptions")
+            .GetProperty("configProperties");
+        Assert.True(properties.GetProperty("System.GC.Server").GetBoolean());
+        Assert.Equal(1,
+            properties.GetProperty("System.GC.DynamicAdaptationMode").GetInt32());
+    }
+
+    [Fact]
     public void Pack_WithReadme_IncludesReadmeAtRoot()
     {
         using var tempDir = CliTestHelper.CreateTempDirectory();
