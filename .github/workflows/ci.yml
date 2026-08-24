@@ -106,6 +106,7 @@ jobs:
       - name: Smoke test benchmark harnesses
         shell: pwsh
         run: |
+          ./scripts/test-perf-local.ps1
           ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke -NoBuild
           dotnet run --configuration Release --no-build `
             --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke

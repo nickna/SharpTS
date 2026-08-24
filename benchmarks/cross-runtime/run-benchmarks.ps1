@@ -1,14 +1,40 @@
 [CmdletBinding()]
 param(
     [switch]$Smoke,
-    [switch]$NoBuild
+    [switch]$NoBuild,
+
+    [string[]]$Workloads = @(),
+
+    [string[]]$Runtimes = @('interpreter', 'compiled', 'node', 'bun'),
+
+    [ValidateRange(1, 20)]
+    [int]$Launches = 1,
+
+    [string]$OutputDirectory,
+
+    # Keep the harness on the candidate branch while measuring a frozen
+    # baseline worktree that may predate these filtering options.
+    [string]$RepositoryRoot,
+
+    [string]$NodeExecutable = 'node'
 )
 
 $ErrorActionPreference = 'Stop'
 
-$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$RepoRoot = (Resolve-Path (Join-Path $ScriptDir '../..')).Path
-$OutputDir = if ($env:OUTPUT_DIR) { $env:OUTPUT_DIR } else { Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results' }
+$HarnessDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$RepoRoot = if ($RepositoryRoot) {
+    (Resolve-Path -LiteralPath $RepositoryRoot).Path
+} else {
+    (Resolve-Path (Join-Path $HarnessDir '../..')).Path
+}
+$ScriptDir = Join-Path $RepoRoot 'benchmarks/cross-runtime'
+$OutputDir = if ($OutputDirectory) {
+    [IO.Path]::GetFullPath($OutputDirectory)
+} elseif ($env:OUTPUT_DIR) {
+    [IO.Path]::GetFullPath($env:OUTPUT_DIR)
+} else {
+    Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results'
+}
 $ScriptsDir = Join-Path $ScriptDir 'scripts'
 $SharpTSProject = Join-Path $RepoRoot 'src/SharpTS/SharpTS.csproj'
 
@@ -16,9 +42,38 @@ if (-not (Test-Path -LiteralPath $SharpTSProject -PathType Leaf)) {
     throw "Could not find SharpTS.csproj from runner root '$RepoRoot'"
 }
 
-$scripts = @(Get-ChildItem -Path $ScriptsDir -Filter '*.ts' | Sort-Object Name)
-if ($scripts.Count -eq 0) {
+$availableScripts = @(Get-ChildItem -Path $ScriptsDir -Filter '*.ts' | Sort-Object Name)
+if ($availableScripts.Count -eq 0) {
     throw "No benchmark workloads found in '$ScriptsDir'"
+}
+
+$Workloads = @($Workloads | ForEach-Object { $_ -split ',' } |
+    ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique)
+if ($Workloads.Count -gt 0) {
+    $requested = [Collections.Generic.HashSet[string]]::new(
+        $Workloads,
+        [StringComparer]::OrdinalIgnoreCase)
+    $scripts = @($availableScripts | Where-Object { $requested.Contains($_.BaseName) })
+    $missing = @($Workloads | Where-Object {
+        $name = $_
+        -not ($scripts | Where-Object { $_.BaseName -eq $name })
+    })
+    if ($missing.Count -gt 0) {
+        throw "Unknown workload(s): $($missing -join ', '). Available: $($availableScripts.BaseName -join ', ')"
+    }
+} else {
+    $scripts = $availableScripts
+}
+
+$Runtimes = @($Runtimes | ForEach-Object { $_ -split ',' } |
+    ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ } | Select-Object -Unique)
+$knownRuntimes = @('interpreter', 'compiled', 'node', 'bun')
+$unknownRuntimes = @($Runtimes | Where-Object { $_ -notin $knownRuntimes })
+if ($unknownRuntimes.Count -gt 0) {
+    throw "Unknown runtime(s): $($unknownRuntimes -join ', '). Available: $($knownRuntimes -join ', ')"
+}
+if (-not $Smoke -and $Runtimes.Count -eq 0) {
+    throw 'At least one runtime must be selected.'
 }
 
 $failures = [System.Collections.Generic.List[string]]::new()
@@ -68,10 +123,10 @@ if (-not $NoBuild) {
 # Detect Node.js version for --experimental-strip-types
 $node = $null
 $nodeFlags = @()
-if (-not $Smoke) {
-    $node = Get-Command node -ErrorAction SilentlyContinue
+if (-not $Smoke -and $Runtimes -contains 'node') {
+    $node = Get-Command $NodeExecutable -ErrorAction SilentlyContinue
     if ($node) {
-        $nodeVersion = Invoke-Captured { node -v }
+        $nodeVersion = Invoke-Captured { & $node.Source -v }
         if ($nodeVersion.ExitCode -eq 0) {
             $nodeVersionFull = ([string]$nodeVersion.Output[0]) -replace '^v', ''
             $nodeMajor = [int]($nodeVersionFull -split '\.')[0]
@@ -86,6 +141,12 @@ if (-not $Smoke) {
     } else {
         Write-Warning 'Node.js is not installed; Node workloads will be reported as failures'
     }
+}
+
+$bun = if (-not $Smoke -and $Runtimes -contains 'bun') {
+    Get-Command bun -ErrorAction SilentlyContinue
+} else {
+    $null
 }
 
 # Tag and persist a runtime's BENCH output. If none was produced (a crash, a
@@ -154,23 +215,18 @@ try {
             continue
         }
 
-        # --- Interpreter ---
-        Write-Host '  [interpreter] running...'
-        $interp = Invoke-Captured {
-            dotnet run -c Release --no-build --project $SharpTSProject -- $script.FullName
-        }
-        Complete-Runtime $benchName 'interpreter' $interp $ResultsFile
+        $compiledReady = $false
+        if ($Runtimes -contains 'compiled') {
+            Write-Host '  [compiled] compiling...'
+            $compile = Invoke-Captured {
+                dotnet run -c Release --no-build --project $SharpTSProject -- --compile $script.FullName -o $dllPath
+            }
 
-        # --- Compiled ---
-        Write-Host '  [compiled] compiling...'
-        $compile = Invoke-Captured {
-            dotnet run -c Release --no-build --project $SharpTSProject -- --compile $script.FullName -o $dllPath
-        }
-
-        if ($compile.ExitCode -eq 0 -and (Test-Path -LiteralPath $dllPath -PathType Leaf)) {
-            $rcPath = Join-Path $compiledDir "$benchName.runtimeconfig.json"
-            if (-not (Test-Path $rcPath)) {
-                @'
+            if ($compile.ExitCode -eq 0 -and (Test-Path -LiteralPath $dllPath -PathType Leaf)) {
+                $compiledReady = $true
+                $rcPath = Join-Path $compiledDir "$benchName.runtimeconfig.json"
+                if (-not (Test-Path $rcPath)) {
+                    @'
 {
   "runtimeOptions": {
     "tfm": "net10.0",
@@ -181,33 +237,52 @@ try {
   }
 }
 '@ | Set-Content $rcPath
+                }
+            } else {
+                Add-Failure "$benchName [compiled] failed to compile (exit code $($compile.ExitCode))"
+                Show-Diagnostics 'compiled' $compile.Output
             }
-
-            Write-Host '  [compiled] running...'
-            $compiled = Invoke-Captured { dotnet $dllPath }
-            Complete-Runtime $benchName 'compiled' $compiled $ResultsFile
-        } else {
-            Add-Failure "$benchName [compiled] failed to compile (exit code $($compile.ExitCode))"
-            Show-Diagnostics 'compiled' $compile.Output
         }
 
-        # --- Node.js ---
-        if ($node) {
-            Write-Host '  [node] running...'
-            $nodeArgs = $nodeFlags + @($script.FullName)
-            $nodeResult = Invoke-Captured { & node @nodeArgs }
-            Complete-Runtime $benchName 'node' $nodeResult $ResultsFile
-        } else {
-            Add-Failure "$benchName [node] could not run because Node.js is unavailable"
-        }
+        for ($launch = 1; $launch -le $Launches; $launch++) {
+            $offset = ($launch - 1) % $Runtimes.Count
+            $orderedRuntimes = @($Runtimes[$offset..($Runtimes.Count - 1)])
+            if ($offset -gt 0) { $orderedRuntimes += $Runtimes[0..($offset - 1)] }
 
-        # --- Bun ---
-        if (Get-Command bun -ErrorAction SilentlyContinue) {
-            Write-Host '  [bun] running...'
-            $bunResult = Invoke-Captured { & bun run $script.FullName }
-            Complete-Runtime $benchName 'bun' $bunResult $ResultsFile
-        } else {
-            Write-Host '  [bun] not installed, skipping'
+            foreach ($runtime in $orderedRuntimes) {
+                Write-Host "  [$runtime] launch $launch/$Launches..."
+                switch ($runtime) {
+                    'interpreter' {
+                        $result = Invoke-Captured {
+                            dotnet run -c Release --no-build --project $SharpTSProject -- $script.FullName
+                        }
+                        Complete-Runtime $benchName 'interpreter' $result $ResultsFile
+                    }
+                    'compiled' {
+                        if ($compiledReady) {
+                            $result = Invoke-Captured { dotnet $dllPath }
+                            Complete-Runtime $benchName 'compiled' $result $ResultsFile
+                        }
+                    }
+                    'node' {
+                        if ($node) {
+                            $nodeArgs = $nodeFlags + @($script.FullName)
+                            $result = Invoke-Captured { & $node.Source @nodeArgs }
+                            Complete-Runtime $benchName 'node' $result $ResultsFile
+                        } else {
+                            Add-Failure "$benchName [node] could not run because Node.js is unavailable"
+                        }
+                    }
+                    'bun' {
+                        if ($bun) {
+                            $result = Invoke-Captured { & bun run $script.FullName }
+                            Complete-Runtime $benchName 'bun' $result $ResultsFile
+                        } else {
+                            Write-Host '  [bun] not installed, skipping'
+                        }
+                    }
+                }
+            }
         }
     }
 } finally {
