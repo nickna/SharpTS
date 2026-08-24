@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
@@ -742,46 +743,69 @@ public partial class RuntimeEmitter
             MethodAttributes.Private | MethodAttributes.Static,
             _types.Void,
             [_types.StringBuilder, _types.String]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
         var il = method.GetILGenerator();
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var charLocal = il.DeclareLocal(_types.Char);
-        var loop = il.DefineLabel();
-        var next = il.DefineLabel();
+        Type searchValuesType = typeof(SearchValues<char>);
+        var searchValuesField = typeBuilder.DefineField(
+            "_jsonEscapeSearchValues",
+            searchValuesType,
+            FieldAttributes.Private | FieldAttributes.Static);
+        var searchValuesLocal = il.DeclareLocal(searchValuesType);
+        var spanLocal = il.DeclareLocal(typeof(ReadOnlySpan<char>));
+        var searchReady = il.DefineLabel();
         var fast = il.DefineLabel();
         var slow = il.DefineLabel();
 
+        // SearchValues performs a single vectorized scan for every character
+        // that requires JSON escaping: controls, quote, backslash, and UTF-16
+        // surrogate code units. The table is immutable and initialized once.
+        var escapeCharacters = new char[32 + 2 + 0x800];
+        for (int index = 0; index < 32; index++)
+            escapeCharacters[index] = (char)index;
+        escapeCharacters[32] = '"';
+        escapeCharacters[33] = '\\';
+        for (int index = 0; index < 0x800; index++)
+            escapeCharacters[34 + index] = (char)(0xD800 + index);
+
+        MethodInfo asSpan = typeof(MemoryExtensions).GetMethod(
+            "AsSpan", [typeof(string)])!;
+        MethodInfo indexOfAny = typeof(MemoryExtensions).GetMethods(
+                BindingFlags.Public | BindingFlags.Static)
+            .Single(candidate =>
+                candidate.Name == "IndexOfAny" &&
+                candidate.IsGenericMethodDefinition &&
+                candidate.GetParameters() is var parameters &&
+                parameters.Length == 2 &&
+                parameters[0].ParameterType.IsGenericType &&
+                parameters[0].ParameterType.GetGenericTypeDefinition() ==
+                    typeof(ReadOnlySpan<>) &&
+                parameters[1].ParameterType.IsGenericType &&
+                parameters[1].ParameterType.GetGenericTypeDefinition() ==
+                    typeof(SearchValues<>))
+            .MakeGenericMethod(typeof(char));
+
+        il.Emit(OpCodes.Ldsfld, searchValuesField);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, searchReady);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldstr, new string(escapeCharacters));
+        il.Emit(OpCodes.Call, asSpan);
+        il.Emit(OpCodes.Call, typeof(SearchValues).GetMethod(
+            "Create", [typeof(ReadOnlySpan<char>)])!);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stsfld, searchValuesField);
+        il.MarkLabel(searchReady);
+        il.Emit(OpCodes.Stloc, searchValuesLocal);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, asSpan);
+        il.Emit(OpCodes.Stloc, spanLocal);
+        il.Emit(OpCodes.Ldloc, spanLocal);
+        il.Emit(OpCodes.Ldloc, searchValuesLocal);
+        il.Emit(OpCodes.Call, indexOfAny);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.MarkLabel(loop);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, fast);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32]));
-        il.Emit(OpCodes.Stloc, charLocal);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)'"');
-        il.Emit(OpCodes.Beq, slow);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, (int)'\\');
-        il.Emit(OpCodes.Beq, slow);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, 32);
-        il.Emit(OpCodes.Blt, slow);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, 0xD800);
-        il.Emit(OpCodes.Blt, next);
-        il.Emit(OpCodes.Ldloc, charLocal);
-        il.Emit(OpCodes.Ldc_I4, 0xE000);
-        il.Emit(OpCodes.Blt, slow);
-        il.MarkLabel(next);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loop);
+        il.Emit(OpCodes.Bge, slow);
+        il.Emit(OpCodes.Br, fast);
 
         il.MarkLabel(fast);
         il.Emit(OpCodes.Ldarg_0);

@@ -63,6 +63,14 @@ public partial class ILEmitter
                     break;
                 }
 
+                // A primitive string/number pair has no observable ToPrimitive
+                // work. Keep the number native, format it with the emitted
+                // ECMAScript Number::toString implementation, and concatenate
+                // the two strings directly. This avoids boxing the number and
+                // routing every mixed pair through $Runtime.Add.
+                if (TryEmitPrimitiveStringNumberConcat(b))
+                    break;
+
                 // If both operands are statically string, emit a direct
                 // String.Concat(string, string) — skipping the dynamic
                 // $Runtime.Add type-dispatch + ToNumber/ToString probing every
@@ -2566,6 +2574,79 @@ public partial class ILEmitter
         var rightType = _ctx.TypeMap.Get(b.Right);
 
         return IsStringTypeInfo(leftType) && IsStringTypeInfo(rightType);
+    }
+
+    private bool TryEmitPrimitiveStringNumberConcat(Expr.Binary b)
+    {
+        if (_ctx.TypeMap is null)
+            return false;
+
+        bool leftString = IsStringTypeInfo(_ctx.TypeMap.Get(b.Left));
+        bool rightString = IsStringTypeInfo(_ctx.TypeMap.Get(b.Right));
+        bool leftNumber = IsNumericTypeInfo(_ctx.TypeMap.Get(b.Left));
+        bool rightNumber = IsNumericTypeInfo(_ctx.TypeMap.Get(b.Right));
+        if (!(leftString && rightNumber) && !(leftNumber && rightString))
+            return false;
+
+        if (leftString)
+        {
+            EmitExpression(b.Left);
+            EnsureString();
+            if (TryEmitIntegerCounterValueI8(b.Right))
+            {
+                // Integer loop counters already live as Int64. Formatting that
+                // value directly avoids a double conversion plus the general
+                // ECMAScript number formatter on every iteration. The counter
+                // analysis restricts values to the exact-integer Number range,
+                // where invariant Int64 decimal text is byte-for-byte identical.
+                IL.Emit(OpCodes.Ldc_I4_0);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatStringInt64);
+                SetStackType(StackType.String);
+                return true;
+            }
+            else
+            {
+                EmitExpressionAsDouble(b.Right);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.FormatNumber);
+            }
+        }
+        else
+        {
+            // Preserve source evaluation order even though primitive number
+            // formatting itself is unobservable.
+            bool integerCounter = TryEmitIntegerCounterValueI8(b.Left);
+            var left = IL.DeclareLocal(integerCounter ? _ctx.Types.Int64 : _ctx.Types.Double);
+            if (!integerCounter)
+                EmitExpressionAsDouble(b.Left);
+            IL.Emit(OpCodes.Stloc, left);
+            EmitExpression(b.Right);
+            EnsureString();
+            var right = IL.DeclareLocal(_ctx.Types.String);
+            IL.Emit(OpCodes.Stloc, right);
+            if (integerCounter)
+            {
+                IL.Emit(OpCodes.Ldloc, right);
+                IL.Emit(OpCodes.Ldloc, left);
+                IL.Emit(OpCodes.Ldc_I4_1);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatStringInt64);
+                SetStackType(StackType.String);
+                return true;
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, left);
+                IL.Emit(OpCodes.Call, _ctx.Runtime!.FormatNumber);
+            }
+            IL.Emit(OpCodes.Ldloc, right);
+        }
+
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+            _ctx.Types.String,
+            "Concat",
+            _ctx.Types.String,
+            _ctx.Types.String));
+        SetStackType(StackType.String);
+        return true;
     }
 
     private bool IsStaticallyNumericBitwise(Expr.Binary b)

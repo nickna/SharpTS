@@ -96,6 +96,115 @@ public sealed class JsonTypedScalarRecordTests
     }
 
     [Fact]
+    public void ClosedRecordArraySelectsExactWriterOutsideTheElementLoop()
+    {
+        Assembly assembly = Compile(Source);
+        Type runtime = assembly.GetType("$Runtime")!;
+        Type itemCarrier = assembly.GetTypes().Single(type =>
+            type.Name.StartsWith("$JsonTypedScalarRecord", StringComparison.Ordinal) &&
+            type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)
+                .Count(field => field.Name.StartsWith("_v", StringComparison.Ordinal)) == 3);
+        MethodInfo recordAppender = runtime
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method =>
+                method.Name.StartsWith("AppendJsonTypedScalarRecord", StringComparison.Ordinal) &&
+                method.GetParameters()[1].ParameterType == itemCarrier);
+        MethodInfo arrayAppender = runtime
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method =>
+                method.Name.StartsWith("AppendJsonTypedScalarRecordArray", StringComparison.Ordinal) &&
+                ReadMembers(method).Any(member => member.Member == recordAppender));
+
+        var members = ReadMembers(arrayAppender).ToArray();
+        Assert.Contains(members, member => member.Member == recordAppender);
+        Assert.DoesNotContain(members, member =>
+            member.Member?.Name == "AppendJsonShapedValue" ||
+            member.Member?.Name == "PDSHasPropertyDescriptors" ||
+            member.Member?.Name == "PDSHasPrototypeEntry");
+        Assert.DoesNotContain(members, member =>
+            member.Member?.DeclaringType == typeof(string) &&
+            member.Member.Name == "op_Equality");
+        Assert.DoesNotContain(members, member => member.OpCode == OpCodes.Box);
+
+        MethodInfo dispatcher = runtime.GetMethod(
+            "AppendJsonShapedValue",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        Assert.Contains(ReadMembers(dispatcher), member => member.Member == arrayAppender);
+    }
+
+    [Fact]
+    public void ClosedRecordArrayFallsBackAfterElementMaterialization()
+    {
+        const string source = """
+            type Item = { id: number; name: string; value: number };
+            const items: Item[] = [
+                { id: 1, name: "a", value: 2 },
+                { id: 3, name: "b", value: 4 }
+            ];
+            const changed: any = items[1];
+            changed.value = "changed";
+            delete changed.name;
+            changed.extra = true;
+            console.log(JSON.stringify({ items: items }));
+            """;
+
+        Assert.Equal(
+            "{\"items\":[{\"id\":1,\"name\":\"a\",\"value\":2},{\"id\":3,\"value\":\"changed\",\"extra\":true}]}\n",
+            TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void ClosedRecordArrayFallsBackForDescriptorAndPrototypeSemantics()
+    {
+        const string source = """
+            type Item = { id: number; name: string; value: number };
+            const first: Item = { id: 1, name: "a", value: 2 };
+            const second: Item = { id: 3, name: "b", value: 4 };
+            Object.defineProperty(second, "value", {
+                get: (): number => 99,
+                enumerable: true,
+                configurable: true
+            });
+            Object.setPrototypeOf(first, {
+                toJSON: function(): any { return { observed: this.name }; }
+            });
+            console.log(JSON.stringify({ items: [first, second] }));
+            """;
+
+        Assert.Equal(
+            "{\"items\":[{\"observed\":\"a\"},{\"id\":3,\"name\":\"b\",\"value\":99}]}\n",
+            TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
+    public void IntegerCounterStringConcatFormatsIntoTheFinalString()
+    {
+        const string source = """
+            function labels(): string {
+                const values: string[] = [];
+                for (let i: number = -2; i < 3; i++) {
+                    values.push("item-" + i);
+                    values.push(i + "!");
+                }
+                return values.join("|");
+            }
+            console.log(labels());
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo labels = FindFunction(assembly, "labels");
+        var members = ReadMembers(labels).ToArray();
+        Assert.Contains(members, member => member.Member?.Name == "ConcatStringInt64");
+        Assert.DoesNotContain(members, member =>
+            member.Member?.DeclaringType?.Name == "$Runtime" &&
+            member.Member.Name is ("Add" or "FormatNumber"));
+        Assert.DoesNotContain(members, member => member.OpCode == OpCodes.Box);
+        Assert.Equal(
+            "item--2|-2!|item--1|-1!|item-0|0!|item-1|1!|item-2|2!\n",
+            TestHarness.RunCompiled(source));
+    }
+
+    [Fact]
     public void DynamicMutationMaterializesAndPreservesJsonObjectSemantics()
     {
         const string source = """

@@ -1,11 +1,107 @@
 using System;
 using System.Globalization;
+using System.Reflection;
 using System.Reflection.Emit;
 
 namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    /// <summary>
+    /// Concatenates a proven integer loop counter with a string without first
+    /// allocating the counter's decimal representation. A bounded thread-local
+    /// buffer supplies the formatting span; <see cref="string.Concat(ReadOnlySpan{char}, ReadOnlySpan{char})"/>
+    /// then creates only the final JavaScript string.
+    /// </summary>
+    private void EmitConcatStringInt64Method(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ConcatStringInt64",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String, _types.Int64, _types.Boolean]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        runtime.ConcatStringInt64 = method;
+
+        var bufferField = typeBuilder.DefineField(
+            "_concatInt64Buffer",
+            typeof(char[]),
+            FieldAttributes.Private | FieldAttributes.Static);
+        bufferField.SetCustomAttribute(
+            typeof(ThreadStaticAttribute).GetConstructor(Type.EmptyTypes)!,
+            CustomAttributeEncoder.EmptyBlob);
+
+        var il = method.GetILGenerator();
+        var bufferLocal = il.DeclareLocal(typeof(char[]));
+        var spanLocal = il.DeclareLocal(typeof(Span<char>));
+        var formatLocal = il.DeclareLocal(typeof(ReadOnlySpan<char>));
+        var numberSpanLocal = il.DeclareLocal(typeof(ReadOnlySpan<char>));
+        var charsWrittenLocal = il.DeclareLocal(_types.Int32);
+        var bufferReady = il.DefineLabel();
+        var textFirst = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldsfld, bufferField);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Brtrue, bufferReady);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldc_I4, 20);
+        il.Emit(OpCodes.Newarr, _types.Char);
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Stsfld, bufferField);
+        il.MarkLabel(bufferReady);
+        il.Emit(OpCodes.Stloc, bufferLocal);
+
+        il.Emit(OpCodes.Ldloc, bufferLocal);
+        il.Emit(OpCodes.Call, typeof(Span<char>).GetMethod(
+            "op_Implicit", [typeof(char[])])!);
+        il.Emit(OpCodes.Stloc, spanLocal);
+        il.Emit(OpCodes.Ldloca, formatLocal);
+        il.Emit(OpCodes.Initobj, typeof(ReadOnlySpan<char>));
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Ldloc, spanLocal);
+        il.Emit(OpCodes.Ldloca, charsWrittenLocal);
+        il.Emit(OpCodes.Ldloc, formatLocal);
+        il.Emit(OpCodes.Call, typeof(CultureInfo)
+            .GetProperty("InvariantCulture")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, typeof(long).GetMethod(
+            "TryFormat",
+            [
+                typeof(Span<char>),
+                typeof(int).MakeByRefType(),
+                typeof(ReadOnlySpan<char>),
+                typeof(IFormatProvider)
+            ])!);
+        il.Emit(OpCodes.Pop);
+
+        il.Emit(OpCodes.Ldloc, bufferLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, charsWrittenLocal);
+        il.Emit(OpCodes.Newobj, typeof(ReadOnlySpan<char>).GetConstructor(
+            [typeof(char[]), typeof(int), typeof(int)])!);
+        il.Emit(OpCodes.Stloc, numberSpanLocal);
+
+        MethodInfo asSpan = typeof(MemoryExtensions).GetMethod(
+            "AsSpan", [typeof(string)])!;
+        MethodInfo concat = typeof(string).GetMethod(
+            "Concat", [typeof(ReadOnlySpan<char>), typeof(ReadOnlySpan<char>)])!;
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, textFirst);
+        il.Emit(OpCodes.Ldloc, numberSpanLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, asSpan);
+        il.Emit(OpCodes.Call, concat);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(textFirst);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, asSpan);
+        il.Emit(OpCodes.Ldloc, numberSpanLocal);
+        il.Emit(OpCodes.Call, concat);
+        il.Emit(OpCodes.Ret);
+    }
+
     /// <summary>
     /// Emits the body of <c>$Runtime.FormatNumber(double) -> string</c>, a byte-for-byte
     /// port of <see cref="RuntimeTypes.FormatNumber(double)"/> (ECMA-262 7.1.12.1

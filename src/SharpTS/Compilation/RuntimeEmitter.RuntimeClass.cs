@@ -710,6 +710,7 @@ public partial class RuntimeEmitter
         DeclareUnwrapIfBoxed(typeBuilder, runtime);
 
         EmitFormatNumberMethod(typeBuilder, runtime);
+        EmitConcatStringInt64Method(typeBuilder, runtime);
         EmitStringify(typeBuilder, runtime);
         // EmitStringRaw is moved later in this method (after ToJsString/
         // ToNumber/GetProperty are emitted) so the spec-form String.raw can

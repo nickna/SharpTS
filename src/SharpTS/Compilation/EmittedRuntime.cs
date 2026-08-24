@@ -173,6 +173,9 @@ public class EmittedRuntime
     /// Byte-for-byte equivalent of SharpTS.Compilation.RuntimeTypes.FormatNumber so interpreted
     /// and compiled output match. Emitted in RuntimeEmitter.NumberFormat.cs.</summary>
     public MethodBuilder FormatNumber { get; set; } = null!;
+    /// <summary>$Runtime.ConcatStringInt64(string, long, bool) -> string —
+    /// allocation-minimal concatenation for proven integer loop counters.</summary>
+    public MethodBuilder ConcatStringInt64 { get; set; } = null!;
     public MethodBuilder Stringify { get; set; } = null!;
     public MethodBuilder ToJsString { get; set; } = null!;
     /// <summary>$Runtime.StringFromValue(object) -> string — ECMA-262 §22.1.1.1 String(value) call form: Symbol → SymbolDescriptiveString (via $TSSymbol.ToString()); everything else → ToJsString. Only the String() constructor-call form is exempt from ToString's Symbol TypeError; implicit coercions (template literals, concat) must keep throwing.</summary>
