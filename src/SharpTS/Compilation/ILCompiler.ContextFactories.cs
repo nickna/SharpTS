@@ -55,6 +55,10 @@ public partial class ILCompiler
             FunctionNames = _functions.Names,
             FunctionsCapturingArguments = _functions.CapturingArguments,
             MethodsCapturingArguments = _functions.MethodsCapturingArguments,
+            TypedPrimitiveInstanceMethodCores =
+                _classes.TypedPrimitiveInstanceMethodCores.Count > 0
+                    ? _classes.TypedPrimitiveInstanceMethodCores
+                    : null,
             FunctionGenericParams = _functions.GenericParams,
             IsGenericFunction = _functions.IsGeneric,
             SuspensionFreePrimitiveAsyncCores =

@@ -50,6 +50,13 @@ public partial class ILCompiler
         public Dictionary<string, Dictionary<string, FieldBuilder>> StaticFields { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> StaticMethods { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> InstanceMethods { get; } = [];
+        /// <summary>
+        /// Assembly-internal primitive-returning companions for eligible public
+        /// instance methods. The public method remains the virtual object ABI.
+        /// </summary>
+        public Dictionary<string, Dictionary<string, MethodBuilder>> TypedPrimitiveInstanceMethodCores { get; } = [];
+        public Dictionary<Stmt.Function, MethodBuilder> TypedPrimitiveMethodCoreBuilders { get; } =
+            new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, Dictionary<string, MethodBuilder>> InstanceGetters { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> InstanceSetters { get; } = [];
         public Dictionary<string, Dictionary<string, MethodBuilder>> StaticGetters { get; } = [];
