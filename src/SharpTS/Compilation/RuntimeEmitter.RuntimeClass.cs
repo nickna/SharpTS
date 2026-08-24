@@ -758,6 +758,7 @@ public partial class RuntimeEmitter
             MethodAttributes.Public | MethodAttributes.Static,
             _types.TaskOfObject,
             [_types.Object]);
+        EmitManagedAwaitableInterop(typeBuilder, runtime);
         runtime.PromiseResolveValueMethod ??= typeBuilder.DefineMethod(
             "PromiseResolveValue",
             MethodAttributes.Public | MethodAttributes.Static,

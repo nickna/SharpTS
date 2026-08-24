@@ -125,6 +125,7 @@ function ConformanceApp(): JSX.Element {
                                         trace("late-reactive-work-ignored");
                                         desktopRoot.dispose();
                                     }) as any, 10);
+                                    return Promise.reject(new Error("expected async event failure"));
                                 }}
                         >{currentPhase === 0 ? "Old callback" : "Latest callback"}</Button>
                         {currentPhase === 0 ? <Button key="transient" ref={transientRef}>Removed later</Button> : null}
@@ -165,7 +166,13 @@ function ConformanceApp(): JSX.Element {
 }
 
 const desktopApplication = createDesktopApplication();
-desktopRoot = desktopApplication.createWindow(<ConformanceApp />, { main: true });
+desktopRoot = desktopApplication.createWindow(<ConformanceApp />, {
+    main: true,
+    onUnhandledError: (error, failedWindow) => {
+        trace("event-error:" + String(error));
+        trace("event-error-window-alive:" + String(!failedWindow.isDisposed));
+    },
+});
 testDriver = createDesktopTestDriver(desktopRoot);
 if (inspectDesktopTree().windows.length !== 1) {
     throw new Error("GUI devtools inspector did not report the mounted window.");

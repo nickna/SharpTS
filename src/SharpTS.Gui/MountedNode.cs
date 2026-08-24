@@ -29,10 +29,33 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public Action<string?>? LatestNullableStringChanged { get; set; }
     public Func<string, bool, bool, bool, bool, bool, bool>? LatestKeyDown { get; set; }
     public Func<string, bool, bool, bool, bool, bool, bool>? LatestKeyUp { get; set; }
+    public Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? LatestPointerDown { get; set; }
+    public Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? LatestPointerMove { get; set; }
+    public Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? LatestPointerUp { get; set; }
+    public Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? LatestPointerCancel { get; set; }
+    public Func<bool>? LatestCloseRequested { get; set; }
     public Func<string[], string?, string, bool, bool, bool, bool, string>? LatestDragOver { get; set; }
     public Action<string[], string?, string, bool, bool, bool, bool>? LatestDrop { get; set; }
     public EventHandler<Avalonia.Input.KeyEventArgs>? KeyDownHandler { get; set; }
     public EventHandler<Avalonia.Input.KeyEventArgs>? KeyUpHandler { get; set; }
+    public EventHandler<Avalonia.Input.PointerPressedEventArgs>? PointerDownHandler { get; set; }
+    public EventHandler<Avalonia.Input.PointerEventArgs>? PointerMoveHandler { get; set; }
+    public EventHandler<Avalonia.Input.PointerReleasedEventArgs>? PointerUpHandler { get; set; }
+    public EventHandler<Avalonia.Input.PointerCaptureLostEventArgs>? PointerCancelHandler { get; set; }
+    public EventHandler<Avalonia.Controls.WindowClosingEventArgs>? WindowClosingHandler { get; set; }
+    public Avalonia.Input.IPointer? CapturedPointer { get; set; }
+    public bool SuppressPointerCancel { get; set; }
+    public bool HasPointerState { get; set; }
+    public double LastPointerId { get; set; }
+    public string LastPointerType { get; set; } = "unknown";
+    public double LastPointerX { get; set; }
+    public double LastPointerY { get; set; }
+    public double LastPointerButtons { get; set; }
+    public double LastPointerPressure { get; set; }
+    public bool LastPointerCtrl { get; set; }
+    public bool LastPointerAlt { get; set; }
+    public bool LastPointerShift { get; set; }
+    public bool LastPointerMeta { get; set; }
     public EventHandler<Avalonia.Input.DragEventArgs>? DragOverHandler { get; set; }
     public EventHandler<Avalonia.Input.DragEventArgs>? DropHandler { get; set; }
     public EventHandler<RoutedEventArgs>? RoutedHandler { get; set; }

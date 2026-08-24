@@ -20,6 +20,36 @@ export type Dock = "left" | "top" | "right" | "bottom";
 export type FontWeight = "normal" | "medium" | "semibold" | "bold";
 /** Supported horizontal text alignment values. @category Core and Composition */
 export type TextAlignment = "left" | "center" | "right" | "justify";
+/** Pointer device category reported by native desktop input. @category Core and Composition */
+export type PointerType = "mouse" | "pen" | "touch" | "unknown";
+/** Button whose state changed for a pointer event. @category Core and Composition */
+export type PointerButton = "none" | "left" | "middle" | "right" | "x1" | "x2";
+
+/** Normalized native pointer event in local device-independent coordinates. @category Core and Composition */
+export interface PointerEvent {
+    /** Stable native pointer identifier for the duration of the gesture. */
+    readonly pointerId: number;
+    /** Device category that produced the event. */
+    readonly pointerType: PointerType;
+    /** Local horizontal position in device-independent pixels. */
+    readonly x: number;
+    /** Local vertical position in device-independent pixels. */
+    readonly y: number;
+    /** Button whose state changed, or none for movement/cancellation. */
+    readonly button: PointerButton;
+    /** Standard button bitmask: left=1, right=2, middle=4, x1=8, x2=16. */
+    readonly buttons: number;
+    /** Normalized pressure from zero to one. */
+    readonly pressure: number;
+    /** Whether Control is pressed. */
+    readonly ctrl: boolean;
+    /** Whether Alt is pressed. */
+    readonly alt: boolean;
+    /** Whether Shift is pressed. */
+    readonly shift: boolean;
+    /** Whether the platform meta key is pressed. */
+    readonly meta: boolean;
+}
 
 /** An independently formatted run rendered by RichTextBlock. @category Core and Composition */
 export interface RichTextRun {
@@ -35,11 +65,21 @@ export interface RichTextRun {
     fontStyle?: "normal" | "italic";
 }
 
-/** Retained vector command rendered by DrawingCanvas. @category Core and Composition */
+/** Retained drawing command rendered by DrawingCanvas. @category Core and Composition */
 export type DrawingCommand =
-    { kind: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; strokeThickness?: number } |
-    { kind: "rectangle"; x: number; y: number; width: number; height: number; fill?: string; stroke?: string; strokeThickness?: number } |
-    { kind: "ellipse"; centerX: number; centerY: number; radiusX: number; radiusY: number; fill?: string; stroke?: string; strokeThickness?: number };
+    { kind: "line"; x1: number; y1: number; x2: number; y2: number; stroke: string; strokeThickness?: number; opacity?: number; composite?: DrawingCompositeMode } |
+    { kind: "rectangle"; x: number; y: number; width: number; height: number; fill?: string; stroke?: string; strokeThickness?: number; opacity?: number; composite?: DrawingCompositeMode } |
+    { kind: "ellipse"; centerX: number; centerY: number; radiusX: number; radiusY: number; fill?: string; stroke?: string; strokeThickness?: number; opacity?: number; composite?: DrawingCompositeMode } |
+    { kind: "polyline"; points: readonly DrawingPoint[]; stroke: string; strokeThickness?: number; lineCap?: DrawingLineCap; lineJoin?: DrawingLineJoin; opacity?: number; composite?: DrawingCompositeMode } |
+    { kind: "image"; source: string; x: number; y: number; width: number; height: number; opacity?: number; composite?: "sourceOver" };
+/** A logical point used by polyline drawing commands. @category Core and Composition */
+export interface DrawingPoint { readonly x: number; readonly y: number; }
+/** Supported stroke end-cap shapes. @category Core and Composition */
+export type DrawingLineCap = "butt" | "round" | "square";
+/** Supported stroke join shapes. @category Core and Composition */
+export type DrawingLineJoin = "miter" | "round" | "bevel";
+/** Supported drawing compositing operations. @category Core and Composition */
+export type DrawingCompositeMode = "sourceOver" | "destinationOut";
 
 /** @internal */
 export interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
@@ -209,12 +249,22 @@ export interface CommonProps<THandle = unknown> {
     onKeyDown?: (event: KeyEvent) => boolean;
     /** Handles a normalized key-up event. */
     onKeyUp?: (event: KeyEvent) => boolean;
+    /** Captures a pressed pointer until release, cancellation, unmount, or disposal. */
+    capturePointerOnPress?: boolean;
+    /** Handles a normalized pointer press. */
+    onPointerDown?: (event: PointerEvent) => boolean;
+    /** Handles normalized pointer movement. */
+    onPointerMove?: (event: PointerEvent) => boolean;
+    /** Handles a normalized pointer release. */
+    onPointerUp?: (event: PointerEvent) => boolean;
+    /** Handles cancellation or loss of an active pointer capture using its last known local state. */
+    onPointerCancel?: (event: PointerEvent) => boolean;
     /** Allows native drag data to be dropped on this control. */
     allowDrop?: boolean;
     /** Chooses the accepted native drag effect. */
     onDragOver?: (event: DropEvent) => DropEffect;
     /** Receives normalized text and local-file drop data. */
-    onDrop?: (event: DropEvent) => void;
+    onDrop?: (event: DropEvent) => void | Promise<unknown>;
 }
 
 /** @internal */

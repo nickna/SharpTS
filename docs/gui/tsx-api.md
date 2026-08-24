@@ -134,6 +134,22 @@ weight, alignment, and corner radius where supported. Colors accept Avalonia col
 `onKeyUp` receive normalized key names and Ctrl/Alt/Shift/Meta/repeat flags; returning `true` marks
 the native event handled.
 
+Common `onPointerDown`, `onPointerMove`, `onPointerUp`, and `onPointerCancel` callbacks receive
+local DIP coordinates, pointer ID/type, changed button, the standard button bitmask, normalized
+pressure, and modifier flags. Returning `true` handles the native event. Set
+`capturePointerOnPress` for drag gestures that must continue outside the control; capture is
+released on up, cancellation, unmount, or disposal. Retained controls read the latest callbacks
+without accumulating native subscriptions. Cancellation reports the pointer's last known local
+coordinates, buttons, pressure, and modifiers. `Window.onCloseRequested` may return `true` to cancel
+the native close request, which supports an asynchronous prompt followed by a one-shot call to the
+existing window object's `close()` method.
+
+Native notification callbacks run as posted guest tasks, after the routed native event has
+unwound. Return-valued key, pointer, drag-over, and close predicates remain synchronous, but their
+microtask checkpoint is deferred until the next hosted turn. Synchronous throws and rejected
+promises from event callbacks are delivered to the window or application `onUnhandledError`
+handler; an event failure does not implicitly dispose an otherwise healthy window.
+
 ## Typed item templates and drawing
 
 `createVirtualList`, `createTree`, and `createVirtualDataGrid` infer the item type from `items` and
@@ -143,9 +159,14 @@ materialize only the requested visible range plus `overscan`, preserving keyed n
 while a caller advances `startIndex`. Tree nodes use native `TreeViewItem` expansion events.
 
 `RichTextBlock` accepts independently styled text runs. `Canvas` supports `canvasLeft` and
-`canvasTop` attached props. `DrawingCanvas` retains validated line, rectangle, and ellipse commands
-and redraws only when its command contract changes. All of these controls remain in the generated
-descriptor/hash/documentation contract and are available to completion and hover.
+`canvasTop` attached props. `DrawingCanvas` retains validated line, rectangle, ellipse,
+round-polyline, and image commands and redraws only when its command contract changes.
+`coordinateWidth` and `coordinateHeight` are whole-number dimensions that separate logical drawing
+coordinates from displayed DIPs. Per-command opacity,
+`sourceOver`, and `destinationOut` are supported; every canvas renders through an isolated layer so
+eraser commands cannot damage sibling canvases beneath it. Image commands accept packaged assets,
+local files, or bounded PNG data URIs. All of these controls remain in the generated descriptor/
+hash/documentation contract and are available to completion and hover.
 
 ## Assets and desktop services
 
@@ -167,7 +188,15 @@ and SHA-256 pin:
 ```
 
 `showMessageDialog`, `showOpenFileDialog`, `showSaveFileDialog`, `showFolderDialog`,
-`readClipboardText`, and `writeClipboardText` require a mounted, non-Headless window.
+`readClipboardText`, and `writeClipboardText` require a mounted window. In the Headless host,
+dialogs require an explicitly queued test-driver result and clipboard access uses the isolated
+in-memory test clipboard; an unscripted dialog fails instead of opening native UI.
+
+`getImageDimensions(source)` reads a packaged asset, local image, or bounded PNG data URI.
+`renderDrawingToPng(document, path)` flattens ordered visible layers with layer opacity into a
+transparency-preserving PNG. Display and export use the same validated renderer, and invalid input
+fails before the destination file is created or replaced. Image metadata and PNG rendering execute
+asynchronously so filesystem and raster work do not block the desktop dispatcher.
 
 `showNotification({ title, message?, silent? })` submits an informational local notification from
 an installed Windows MSIX application. The required title is limited to 256 UTF-16 code units and
@@ -191,5 +220,5 @@ control loading, a full editing `DataGrid`, and certified macOS execution are no
 Typed item templates, a windowed virtual grid, native list/tree hosts, rich text, canvas/drawing,
 resources, class/type selectors, styles, theme variants, and resource lookup are supported.
 Multi-window orchestration is available through `createDesktopApplication`. Incompatible GUI API
-and descriptor contracts fail before payload loading. The complete proof application is in
-`samples/Calculator`.
+and descriptor contracts fail before payload loading. Complete proof applications are in
+`samples/Calculator` and `samples/SharpPaint`.

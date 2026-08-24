@@ -2408,6 +2408,7 @@ public abstract partial class ExpressionEmitterBase
         {
             EmitExpression(promise);
             EnsureBoxed();
+            IL.Emit(OpCodes.Call, Ctx.Runtime!.NormalizeManagedAwaitable);
             IL.Emit(OpCodes.Castclass, Types.TaskOfObject);
             var promiseLocal = IL.DeclareLocal(Types.TaskOfObject);
             IL.Emit(OpCodes.Stloc, promiseLocal);
@@ -2439,6 +2440,9 @@ public abstract partial class ExpressionEmitterBase
         EmitExpression(promise);
         EnsureBoxed();
         var promiseReceiverLocal = IL.DeclareLocal(typeof(object));
+        IL.Emit(OpCodes.Stloc, promiseReceiverLocal);
+        IL.Emit(OpCodes.Ldloc, promiseReceiverLocal);
+        IL.Emit(OpCodes.Call, Ctx.Runtime!.NormalizeManagedAwaitable);
         IL.Emit(OpCodes.Stloc, promiseReceiverLocal);
 
         // Promise.prototype.catch/finally are specified in terms of an

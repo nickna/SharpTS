@@ -127,7 +127,18 @@ internal static class DesktopApplicationHost
             currentGuest.QueueMicrotask(callback);
         }, exitCode => shutdown.RequestShutdown(
             exitCode == 0 ? SharpTSHostedShutdownReason.HostRequested : SharpTSHostedShutdownReason.UncaughtError,
-            exitCode), options.GuestArguments);
+            exitCode), options.GuestArguments,
+        invokeGuestCallback: callback =>
+        {
+            if (shutdown.IsShutdownStarted)
+                return;
+            var currentGuest = guest
+                ?? throw new InvalidOperationException("Guest callback arrived before runtime creation.");
+            currentGuest.InvokeNative(callback);
+        },
+        interactionServices: options.Headless
+            ? new ScriptedDesktopInteractionServices()
+            : null);
         bridgeContext = bridgeRegistration.Context;
 
         void Fail(

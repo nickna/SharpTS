@@ -238,6 +238,37 @@
         "documentation": "Handles a normalized key-up event."
       },
       {
+        "name": "capturePointerOnPress",
+        "type": "boolean",
+        "default": false,
+        "setter": "pointer",
+        "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal."
+      },
+      {
+        "name": "onPointerDown",
+        "type": "(event: PointerEvent) => boolean",
+        "setter": "event",
+        "documentation": "Handles a normalized pointer press."
+      },
+      {
+        "name": "onPointerMove",
+        "type": "(event: PointerEvent) => boolean",
+        "setter": "event",
+        "documentation": "Handles normalized pointer movement."
+      },
+      {
+        "name": "onPointerUp",
+        "type": "(event: PointerEvent) => boolean",
+        "setter": "event",
+        "documentation": "Handles a normalized pointer release."
+      },
+      {
+        "name": "onPointerCancel",
+        "type": "(event: PointerEvent) => boolean",
+        "setter": "event",
+        "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state."
+      },
+      {
         "name": "allowDrop",
         "type": "boolean",
         "default": false,
@@ -252,7 +283,7 @@
       },
       {
         "name": "onDrop",
-        "type": "(event: DropEvent) => void",
+        "type": "(event: DropEvent) => void | Promise<unknown>",
         "setter": "event",
         "documentation": "Receives normalized text and local-file drop data."
       }
@@ -410,7 +441,14 @@
           "documentation": "Light, dark, or operating-system window theme."
         }
       ],
-      "events": [],
+      "events": [
+        {
+          "name": "onCloseRequested",
+          "type": "() => boolean",
+          "setter": "event",
+          "documentation": "Handles and cancels a native close request when the callback returns true."
+        }
+      ],
       "operations": [
         "focus"
       ],
@@ -853,7 +891,7 @@
       "events": [
         {
           "name": "onClick",
-          "type": "() => void",
+          "type": "() => void | Promise<unknown>",
           "adapter": "action",
           "documentation": "Called when the control is activated."
         }
@@ -922,7 +960,7 @@
       "events": [
         {
           "name": "onTextChanged",
-          "type": "(value: string) => void",
+          "type": "(value: string) => void | Promise<unknown>",
           "adapter": "string-action",
           "documentation": "Called after the editable text changes."
         }
@@ -984,7 +1022,7 @@
       "events": [
         {
           "name": "onValueChanged",
-          "type": "(value: string) => void",
+          "type": "(value: string) => void | Promise<unknown>",
           "adapter": "string-action",
           "documentation": "Called after the control value changes."
         }
@@ -1025,7 +1063,7 @@
       "events": [
         {
           "name": "onCheckedChanged",
-          "type": "(value: boolean) => void",
+          "type": "(value: boolean) => void | Promise<unknown>",
           "adapter": "bool-action",
           "documentation": "Called after the checked state changes."
         }
@@ -1073,7 +1111,7 @@
       "events": [
         {
           "name": "onCheckedChanged",
-          "type": "(value: boolean) => void",
+          "type": "(value: boolean) => void | Promise<unknown>",
           "adapter": "bool-action",
           "documentation": "Called after the checked state changes."
         }
@@ -1114,7 +1152,7 @@
       "events": [
         {
           "name": "onCheckedChanged",
-          "type": "(value: boolean) => void",
+          "type": "(value: boolean) => void | Promise<unknown>",
           "adapter": "bool-action",
           "documentation": "Called after the checked state changes."
         }
@@ -1164,7 +1202,7 @@
       "events": [
         {
           "name": "onSelectionChanged",
-          "type": "(index: number) => void",
+          "type": "(index: number) => void | Promise<unknown>",
           "adapter": "number-action",
           "documentation": "Called after the selected item or items change."
         }
@@ -1224,7 +1262,7 @@
       "events": [
         {
           "name": "onSelectionChanged",
-          "type": "(indices: number[]) => void",
+          "type": "(indices: number[]) => void | Promise<unknown>",
           "adapter": "indices-action",
           "documentation": "Called after the selected item or items change."
         }
@@ -1298,7 +1336,7 @@
       "events": [
         {
           "name": "onSelectionChanged",
-          "type": "(indices: number[]) => void",
+          "type": "(indices: number[]) => void | Promise<unknown>",
           "adapter": "indices-action",
           "documentation": "Called after the selected item or items change."
         }
@@ -1369,7 +1407,7 @@
       "events": [
         {
           "name": "onExpandedChanged",
-          "type": "(expanded: boolean) => void",
+          "type": "(expanded: boolean) => void | Promise<unknown>",
           "adapter": "bool-action",
           "documentation": "Called after the expanded state changes."
         }
@@ -1462,13 +1500,25 @@
           "converter": "drawing-json",
           "setter": "drawing",
           "documentation": "Retained drawing commands rendered by the canvas."
+        },
+        {
+          "name": "coordinateWidth",
+          "type": "number",
+          "setter": "drawing",
+          "documentation": "Optional whole-number logical coordinate width scaled into the arranged canvas width."
+        },
+        {
+          "name": "coordinateHeight",
+          "type": "number",
+          "setter": "drawing",
+          "documentation": "Optional whole-number logical coordinate height scaled into the arranged canvas height."
         }
       ],
       "events": [],
       "operations": [
         "focus"
       ],
-      "documentation": "Retained vector drawing surface for lines, rectangles, and ellipses.",
+      "documentation": "Retained drawing surface for lines, rectangles, ellipses, polylines, and images.",
       "trimming": [
         "SharpTS.Gui.DrawingSurface"
       ]
@@ -1522,7 +1572,7 @@
       "events": [
         {
           "name": "onValueChanged",
-          "type": "(value: number | null) => void",
+          "type": "(value: number | null) => void | Promise<unknown>",
           "adapter": "nullable-number-action",
           "documentation": "Called after the control value changes."
         }
@@ -1562,7 +1612,7 @@
       "events": [
         {
           "name": "onValueChanged",
-          "type": "(value: string | null) => void",
+          "type": "(value: string | null) => void | Promise<unknown>",
           "adapter": "nullable-string-action",
           "documentation": "Called after the control value changes."
         }
@@ -1602,7 +1652,7 @@
       "events": [
         {
           "name": "onValueChanged",
-          "type": "(value: string | null) => void",
+          "type": "(value: string | null) => void | Promise<unknown>",
           "adapter": "nullable-string-action",
           "documentation": "Called after the control value changes."
         }
@@ -1655,7 +1705,7 @@
       "events": [
         {
           "name": "onValueChanged",
-          "type": "(value: number) => void",
+          "type": "(value: number) => void | Promise<unknown>",
           "adapter": "number-action",
           "documentation": "Called after the control value changes."
         }
@@ -1778,13 +1828,13 @@
       "events": [
         {
           "name": "onLoad",
-          "type": "() => void",
+          "type": "() => void | Promise<unknown>",
           "adapter": "action",
           "documentation": "Called after the image loads successfully."
         },
         {
           "name": "onError",
-          "type": "(message: string) => void",
+          "type": "(message: string) => void | Promise<unknown>",
           "adapter": "string-action",
           "documentation": "Called when the image cannot be loaded, with an error message."
         }
@@ -1824,7 +1874,7 @@
       "events": [
         {
           "name": "onSelectionChanged",
-          "type": "(index: number) => void",
+          "type": "(index: number) => void | Promise<unknown>",
           "adapter": "number-action",
           "documentation": "Called after the selected item or items change."
         }
@@ -1926,7 +1976,7 @@
       "events": [
         {
           "name": "onClick",
-          "type": "() => void",
+          "type": "() => void | Promise<unknown>",
           "adapter": "action",
           "documentation": "Called when the control is activated."
         }

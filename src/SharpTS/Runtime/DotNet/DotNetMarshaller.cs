@@ -154,6 +154,9 @@ internal static class DotNetMarshaller
         if (value == null) return null;
         if (declaredReturnType == typeof(void)) return SharpTSUndefined.Instance;
 
+        if (TryWrapManagedAwaitable(value, declaredReturnType, out SharpTSPromise? promise))
+            return promise;
+
         // CLR arrays cross back as ordinary guest arrays, recursively preserving jagged
         // array shape and wrapping external element values through the same return seam.
         if (value is Array array)
@@ -197,5 +200,56 @@ internal static class DotNetMarshaller
 
         // Complex .NET objects get wrapped so future property/method access works.
         return new DotNetInstance(value, actualType);
+    }
+
+    private static bool TryWrapManagedAwaitable(
+        object value,
+        Type declaredReturnType,
+        out SharpTSPromise? promise)
+    {
+        Task? task = null;
+        Type? resultType = null;
+
+        if (declaredReturnType == typeof(Task) && value is Task nonGenericTask)
+        {
+            task = nonGenericTask;
+        }
+        else if (declaredReturnType.IsGenericType &&
+                 declaredReturnType.GetGenericTypeDefinition() == typeof(Task<>) &&
+                 value is Task genericTask)
+        {
+            task = genericTask;
+            resultType = declaredReturnType.GetGenericArguments()[0];
+        }
+        else if (declaredReturnType == typeof(ValueTask) && value is ValueTask valueTask)
+        {
+            task = valueTask.AsTask();
+        }
+        else if (declaredReturnType.IsGenericType &&
+                 declaredReturnType.GetGenericTypeDefinition() == typeof(ValueTask<>))
+        {
+            resultType = declaredReturnType.GetGenericArguments()[0];
+            task = (Task?)declaredReturnType.GetMethod(nameof(ValueTask<int>.AsTask), Type.EmptyTypes)!
+                .Invoke(value, null);
+        }
+
+        if (task is null)
+        {
+            promise = null;
+            return false;
+        }
+
+        promise = new SharpTSPromise(CompleteManagedAwaitable(task, resultType));
+        return true;
+    }
+
+    private static async Task<object?> CompleteManagedAwaitable(Task task, Type? resultType)
+    {
+        await task;
+        if (resultType is null)
+            return SharpTSUndefined.Instance;
+
+        object? result = task.GetType().GetProperty(nameof(Task<object>.Result))!.GetValue(task);
+        return WrapReturn(result, resultType);
     }
 }

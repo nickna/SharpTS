@@ -11,6 +11,7 @@
     <GuiConformanceConfig>$(GuiConformanceRoot)tsconfig.json</GuiConformanceConfig>
     <GuiConformanceGuest>$(GuiConformanceRoot)SharpTS.Gui.Guest.dll</GuiConformanceGuest>
     <CalculatorHeadlessGuest>$(GuiConformanceRoot)Calculator.Headless.Guest.dll</CalculatorHeadlessGuest>
+    <SharpPaintHeadlessGuest>$(GuiConformanceRoot)SharpPaint.Headless.Guest.dll</SharpPaintHeadlessGuest>
     <MultiWindowGuest>$(GuiConformanceRoot)MultiWindow.Guest.dll</MultiWindowGuest>
   </PropertyGroup>
 
@@ -51,6 +52,7 @@
     <Copy SourceFiles="..\..\..\src\SharpTS.Gui.Sdk\GuiPackage\tsconfig.overlay.json" DestinationFiles="$(GuiConformanceConfig)" />
     <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -r &quot;$(GuiConformanceSupport)&quot; -c &quot;$(MSBuildThisFileDirectory)Fixtures\RetainedRenderer\main.tsx&quot; --target dll --hosted --quiet -o &quot;$(GuiConformanceGuest)&quot;" />
     <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -c &quot;$(MSBuildThisFileDirectory)..\..\..\samples\Calculator\headless.tests.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(CalculatorHeadlessGuest)&quot;" />
+    <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -c &quot;$(MSBuildThisFileDirectory)..\..\..\samples\SharpPaint\headless.tests.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(SharpPaintHeadlessGuest)&quot;" />
     <Exec Command="dotnet &quot;$(GuiConformanceCompiler)&quot; -p &quot;$(GuiConformanceConfig)&quot; -r &quot;$(GuiConformanceBridge)&quot; -r &quot;$(GuiConformanceSupport)&quot; -c &quot;$(MSBuildThisFileDirectory)Fixtures\MultiWindow\main.tsx&quot; --target dll --hosted --verify --quiet -o &quot;$(MultiWindowGuest)&quot;" />
     <Copy SourceFiles="$(GuiConformanceGuest)" DestinationFolder="$(GuiConformanceHostDir)" />
     <Copy SourceFiles="$(GuiConformanceSupport)" DestinationFolder="$(GuiConformanceHostDir)" />

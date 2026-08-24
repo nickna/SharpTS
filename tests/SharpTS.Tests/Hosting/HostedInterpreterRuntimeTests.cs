@@ -674,7 +674,7 @@ public sealed class HostedInterpreterRuntimeTests
     }
 
     [Fact]
-    public void OwnerReentrancy_IsInlineAndOffThreadReturnValuesAreRejected()
+    public void OwnerNotifications_ArePostedAndOffThreadReturnValuesAreRejected()
     {
         var dispatcher = new DeterministicHostDispatcher();
         using var runtime = CreateRunningRuntime(dispatcher);
@@ -686,11 +686,35 @@ public sealed class HostedInterpreterRuntimeTests
             runtime.Notify(() => order.Add("inner"));
             order.Add("outer-end");
         });
+        Assert.Equal(["outer-start", "outer-end"], order);
+
+        Assert.True(dispatcher.RunNext());
         Exception? exception = Task.Run(() => Record.Exception(() => runtime.Invoke(() => 42)))
             .GetAwaiter().GetResult();
 
-        Assert.Equal(["outer-start", "inner", "outer-end"], order);
+        Assert.Equal(["outer-start", "outer-end", "inner"], order);
         Assert.Contains("return-valued", Assert.IsType<InvalidOperationException>(exception).Message);
+    }
+
+    [Fact]
+    public void NativePredicate_ReturnsSynchronouslyButDefersItsMicrotaskCheckpoint()
+    {
+        var dispatcher = new DeterministicHostDispatcher();
+        using var runtime = CreateRunningRuntime(dispatcher);
+        var order = new List<string>();
+
+        object? result = runtime.InvokeNativeCallback(() =>
+        {
+            order.Add("predicate");
+            runtime.EnqueueMicrotask(() => order.Add("microtask"));
+            return true;
+        });
+
+        Assert.Equal(true, result);
+        Assert.Equal(["predicate"], order);
+
+        Assert.True(dispatcher.RunNext());
+        Assert.Equal(["predicate", "microtask"], order);
     }
 
     [Fact]
@@ -720,6 +744,8 @@ public sealed class HostedInterpreterRuntimeTests
 
         runtime.Notify(() => runtime.EnqueueMicrotask(
             () => throw new InvalidOperationException("rerender failed")));
+        Assert.Empty(errors.Errors);
+        Assert.True(dispatcher.RunNext());
         Assert.Single(errors.Errors);
         Assert.Equal(SharpTSHostedErrorPhase.Running, errors.Errors[0].Phase);
         Assert.Equal(SharpTSHostedShutdownReason.UncaughtError, runtime.ShutdownReason);

@@ -17,9 +17,12 @@ public sealed class DesktopRoot : IDisposable
 {
     private readonly TraceRecorder _recorder;
     private readonly Action<DesktopRoot, Window> _showWindow;
-    private readonly Action<Action> _dispatchGuestCallback;
+    private readonly Action<Action> _postGuestCallback;
+    private readonly Action<Action> _invokeGuestCallback;
+    private readonly Action<Action> _scheduleGuestMicrotask;
     private readonly bool _headless;
     private readonly Action _reactiveCleanup;
+    private DesktopEventWorkTracker? _eventWorkTracker;
     private readonly Action<DesktopRoot> _releaseRoot;
     private MountedNode? _mounted;
     private bool _disposed;
@@ -32,6 +35,7 @@ public sealed class DesktopRoot : IDisposable
     private int _removeOperations;
     private int _moveOperations;
     private string? _failNextSetterKey;
+    private int _renderDepth;
     private Window? _observedWindow;
     private Window? _closedWindow;
     private readonly TaskCompletionSource _completion =
@@ -40,7 +44,9 @@ public sealed class DesktopRoot : IDisposable
     internal DesktopRoot(
         TraceRecorder recorder,
         Action<DesktopRoot, Window> showWindow,
-        Action<Action> dispatchGuestCallback,
+        Action<Action> postGuestCallback,
+        Action<Action> invokeGuestCallback,
+        Action<Action> scheduleGuestMicrotask,
         bool headless,
         Action reactiveCleanup,
         Action<DesktopRoot> releaseRoot,
@@ -51,7 +57,9 @@ public sealed class DesktopRoot : IDisposable
     {
         _recorder = recorder;
         _showWindow = showWindow;
-        _dispatchGuestCallback = dispatchGuestCallback;
+        _postGuestCallback = postGuestCallback;
+        _invokeGuestCallback = invokeGuestCallback;
+        _scheduleGuestMicrotask = scheduleGuestMicrotask;
         _headless = headless;
         _reactiveCleanup = reactiveCleanup;
         _releaseRoot = releaseRoot;
@@ -74,8 +82,23 @@ public sealed class DesktopRoot : IDisposable
     internal void ResetOperationCounts() =>
         (_createOperations, _descriptorUpdateCalls, _removeOperations, _moveOperations) = (0, 0, 0, 0);
     internal void FailNextSetter(string key) => _failNextSetterKey = key;
+    internal DesktopEventWorkTracker CreateEventWorkTracker()
+    {
+        if (_eventWorkTracker is not null)
+            throw new InvalidOperationException("The event-work tracker is already configured.");
+        _eventWorkTracker = new DesktopEventWorkTracker();
+        return _eventWorkTracker;
+    }
+    internal bool HasPendingEventWork => _eventWorkTracker?.HasPending == true;
 
     public void Render(GuiVNode root)
+    {
+        _renderDepth++;
+        try { RenderCore(root); }
+        finally { _renderDepth--; }
+    }
+
+    private void RenderCore(GuiVNode root)
     {
         EnsureAccess();
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -201,6 +224,7 @@ public sealed class DesktopRoot : IDisposable
         if (_disposed)
             return;
         _disposed = true;
+        _eventWorkTracker?.Reset();
 
         try
         {
@@ -395,6 +419,8 @@ public sealed class DesktopRoot : IDisposable
 
         UpdateCallbacks(mounted, prepared.VNode);
         SynchronizeKeyboard(mounted);
+        SynchronizePointer(mounted, prepared.VNode);
+        SynchronizeWindowClose(mounted);
         SynchronizeDragDrop(mounted);
         ReconcileChildren(mounted, prepared.Children, prepared.VNode);
         UpdateRef(mounted, prepared.VNode);
@@ -414,6 +440,11 @@ public sealed class DesktopRoot : IDisposable
         mounted.LatestNullableStringChanged = node.NullableStringChanged;
         mounted.LatestKeyDown = node.KeyDown;
         mounted.LatestKeyUp = node.KeyUp;
+        mounted.LatestPointerDown = node.PointerDown;
+        mounted.LatestPointerMove = node.PointerMove;
+        mounted.LatestPointerUp = node.PointerUp;
+        mounted.LatestPointerCancel = node.PointerCancel;
+        mounted.LatestCloseRequested = node.CloseRequested;
         mounted.LatestDragOver = node.DragOver;
         mounted.LatestDrop = node.Drop;
     }
@@ -642,7 +673,7 @@ public sealed class DesktopRoot : IDisposable
                         _recorder.Record("text-changed-event", detail: mounted.VNode.Key);
                         Action<string>? latest = mounted.LatestTextChanged;
                         if (latest is not null)
-                            _dispatchGuestCallback(() => latest(value));
+                            PostGuestNotification(mounted, () => latest(value));
                     };
                     mounted.TextHandler = handler;
                     textBox.TextChanged += handler;
@@ -664,7 +695,7 @@ public sealed class DesktopRoot : IDisposable
                         _recorder.Record("checked-changed-event", detail: mounted.VNode.Key);
                         Action<bool>? latest = mounted.LatestCheckedChanged;
                         if (latest is not null)
-                            _dispatchGuestCallback(() => latest(value));
+                            PostGuestNotification(mounted, () => latest(value));
                     };
                     mounted.RoutedHandler = handler;
                     checkBox.IsCheckedChanged += handler;
@@ -685,7 +716,7 @@ public sealed class DesktopRoot : IDisposable
                         mounted.LastCheckedValue = value;
                         Action<bool>? latest = mounted.LatestExpandedChanged;
                         if (latest is not null)
-                            _dispatchGuestCallback(() => latest(value));
+                            PostGuestNotification(mounted, () => latest(value));
                     };
                     treeItem.Expanded += handler;
                     treeItem.Collapsed += handler;
@@ -704,7 +735,7 @@ public sealed class DesktopRoot : IDisposable
                         _recorder.Record("button-click-event", detail: mounted.VNode.Key);
                         Action? latest = mounted.LatestClick;
                         if (latest is not null)
-                            _dispatchGuestCallback(latest);
+                            PostGuestNotification(mounted, latest);
                     };
                     mounted.RoutedHandler = handler;
                     button.Click += handler;
@@ -713,15 +744,15 @@ public sealed class DesktopRoot : IDisposable
                 }
                 case MenuItem menuItem:
                 {
-                    EventHandler<RoutedEventArgs> handler = (_, _) =>
+                    EventHandler<RoutedEventArgs> handler = (_, args) =>
                     {
-                        if (mounted.SuppressEvents)
+                        if (mounted.SuppressEvents || !ReferenceEquals(args.Source, menuItem))
                             return;
                         EnsureAccess();
                         _recorder.Record("menu-click-event", detail: mounted.VNode.Key);
                         Action? latest = mounted.LatestClick;
                         if (latest is not null)
-                            _dispatchGuestCallback(latest);
+                            PostGuestNotification(mounted, latest);
                     };
                     menuItem.Click += handler;
                     mounted.ExtraUnsubscribe.Add(() => menuItem.Click -= handler);
@@ -744,7 +775,7 @@ public sealed class DesktopRoot : IDisposable
                         _recorder.Record("selection-changed-event", detail: mounted.VNode.Key);
                         Action<double>? latest = mounted.LatestSelectionChanged;
                         if (latest is not null)
-                            _dispatchGuestCallback(() => latest(value));
+                            PostGuestNotification(mounted, () => latest(value));
                     };
                     mounted.SelectionHandler = handler;
                     comboBox.SelectionChanged += handler;
@@ -766,7 +797,7 @@ public sealed class DesktopRoot : IDisposable
                         _recorder.Record("value-changed-event", detail: mounted.VNode.Key);
                         Action<double>? latest = mounted.LatestValueChanged;
                         if (latest is not null)
-                            _dispatchGuestCallback(() => latest(value));
+                            PostGuestNotification(mounted, () => latest(value));
                     };
                     mounted.ValueHandler = handler;
                     slider.ValueChanged += handler;
@@ -783,7 +814,7 @@ public sealed class DesktopRoot : IDisposable
                         if (mounted.LastIndices.SequenceEqual(indices)) return;
                         mounted.LastIndices = indices;
                         Action<int[]>? latest = mounted.LatestIndicesChanged;
-                        if (latest is not null) _dispatchGuestCallback(() => latest(indices));
+                        if (latest is not null) PostGuestNotification(mounted, () => latest(indices));
                     };
                     listBox.SelectionChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => listBox.SelectionChanged -= handler);
@@ -800,7 +831,7 @@ public sealed class DesktopRoot : IDisposable
                         if (mounted.LastNullableNumberValue == value) return;
                         mounted.LastNullableNumberValue = value;
                         Action<double?>? latest = mounted.LatestNullableValueChanged;
-                        if (latest is not null) _dispatchGuestCallback(() => latest(value));
+                        if (latest is not null) PostGuestNotification(mounted, () => latest(value));
                     };
                     numeric.ValueChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => numeric.ValueChanged -= handler);
@@ -814,7 +845,7 @@ public sealed class DesktopRoot : IDisposable
                         if (mounted.SuppressEvents) return;
                         string? value = date.SelectedDate?.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
                         Action<string?>? latest = mounted.LatestNullableStringChanged;
-                        if (latest is not null) _dispatchGuestCallback(() => latest(value));
+                        if (latest is not null) PostGuestNotification(mounted, () => latest(value));
                     };
                     date.SelectedDateChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => date.SelectedDateChanged -= handler);
@@ -830,7 +861,7 @@ public sealed class DesktopRoot : IDisposable
                             ? selected.ToString(time.UseSeconds ? @"hh\:mm\:ss" : @"hh\:mm", System.Globalization.CultureInfo.InvariantCulture)
                             : null;
                         Action<string?>? latest = mounted.LatestNullableStringChanged;
-                        if (latest is not null) _dispatchGuestCallback(() => latest(value));
+                        if (latest is not null) PostGuestNotification(mounted, () => latest(value));
                     };
                     time.SelectedTimeChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => time.SelectedTimeChanged -= handler);
@@ -845,7 +876,7 @@ public sealed class DesktopRoot : IDisposable
                         if (mounted.SuppressEvents || mounted.LastSelectionValue == tabs.SelectedIndex) return;
                         mounted.LastSelectionValue = tabs.SelectedIndex;
                         Action<double>? latest = mounted.LatestSelectionChanged;
-                        if (latest is not null) _dispatchGuestCallback(() => latest(tabs.SelectedIndex));
+                        if (latest is not null) PostGuestNotification(mounted, () => latest(tabs.SelectedIndex));
                     };
                     tabs.SelectionChanged += handler;
                     mounted.ExtraUnsubscribe.Add(() => tabs.SelectionChanged -= handler);
@@ -855,6 +886,8 @@ public sealed class DesktopRoot : IDisposable
             }
 
             SynchronizeKeyboard(mounted);
+            SynchronizePointer(mounted, mounted.VNode);
+            SynchronizeWindowClose(mounted);
             SynchronizeDragDrop(mounted);
             AttachWindowKeyReset(mounted);
         }
@@ -874,6 +907,9 @@ public sealed class DesktopRoot : IDisposable
     {
         bool attached = mounted.PrimaryEventAttached ||
             mounted.KeyDownHandler is not null || mounted.KeyUpHandler is not null ||
+            mounted.PointerDownHandler is not null || mounted.PointerMoveHandler is not null ||
+            mounted.PointerUpHandler is not null || mounted.PointerCancelHandler is not null ||
+            mounted.WindowClosingHandler is not null ||
             mounted.DragOverHandler is not null || mounted.DropHandler is not null;
         if (attached == mounted.EventAttached)
             return;
@@ -888,6 +924,20 @@ public sealed class DesktopRoot : IDisposable
             return;
         foreach (MountedNode child in mounted.Children)
             ReleaseSubtree(child);
+
+        if (mounted.CapturedPointer is not null)
+        {
+            mounted.SuppressPointerCancel = true;
+            try
+            {
+                mounted.CapturedPointer.Capture(null);
+                mounted.CapturedPointer = null;
+            }
+            finally
+            {
+                mounted.SuppressPointerCancel = false;
+            }
+        }
 
         if (mounted.EventAttached)
         {
@@ -913,12 +963,27 @@ public sealed class DesktopRoot : IDisposable
                 mounted.Control.KeyDown -= mounted.KeyDownHandler;
             if (mounted.KeyUpHandler is not null)
                 mounted.Control.KeyUp -= mounted.KeyUpHandler;
+            if (mounted.PointerDownHandler is not null)
+                mounted.Control.PointerPressed -= mounted.PointerDownHandler;
+            if (mounted.PointerMoveHandler is not null)
+                mounted.Control.PointerMoved -= mounted.PointerMoveHandler;
+            if (mounted.PointerUpHandler is not null)
+                mounted.Control.PointerReleased -= mounted.PointerUpHandler;
+            if (mounted.PointerCancelHandler is not null)
+                mounted.Control.PointerCaptureLost -= mounted.PointerCancelHandler;
+            if (mounted.WindowClosingHandler is not null && mounted.Control is Window closingWindow)
+                closingWindow.Closing -= mounted.WindowClosingHandler;
             if (mounted.DragOverHandler is not null)
                 DragDrop.RemoveDragOverHandler(mounted.Control, mounted.DragOverHandler);
             if (mounted.DropHandler is not null)
                 DragDrop.RemoveDropHandler(mounted.Control, mounted.DropHandler);
             mounted.KeyDownHandler = null;
             mounted.KeyUpHandler = null;
+            mounted.PointerDownHandler = null;
+            mounted.PointerMoveHandler = null;
+            mounted.PointerUpHandler = null;
+            mounted.PointerCancelHandler = null;
+            mounted.WindowClosingHandler = null;
             mounted.DragOverHandler = null;
             mounted.DropHandler = null;
             mounted.PrimaryEventAttached = false;
@@ -966,6 +1031,230 @@ public sealed class DesktopRoot : IDisposable
         UpdateSubscriptionState(mounted);
     }
 
+    private void SynchronizePointer(MountedNode mounted, GuiVNode node)
+    {
+        if (mounted.Control is DrawingSurface)
+        {
+            mounted.Control.IsHitTestVisible = node.CapturePointerOnPress ||
+                mounted.LatestPointerDown is not null || mounted.LatestPointerMove is not null ||
+                mounted.LatestPointerUp is not null || mounted.LatestPointerCancel is not null;
+        }
+        bool needsPointerDown = mounted.LatestPointerDown is not null || node.CapturePointerOnPress;
+        if (needsPointerDown && mounted.PointerDownHandler is null)
+        {
+            EventHandler<PointerPressedEventArgs> handler = (_, args) =>
+            {
+                DispatchPointer(mounted, args, mounted.LatestPointerDown, "down");
+                if (mounted.VNode.CapturePointerOnPress)
+                {
+                    args.Pointer.Capture(mounted.Control);
+                    mounted.CapturedPointer = args.Pointer;
+                }
+            };
+            mounted.Control.PointerPressed += handler;
+            mounted.PointerDownHandler = handler;
+        }
+        else if (!needsPointerDown && mounted.PointerDownHandler is not null)
+        {
+            mounted.Control.PointerPressed -= mounted.PointerDownHandler;
+            mounted.PointerDownHandler = null;
+        }
+        if (mounted.LatestPointerMove is not null && mounted.PointerMoveHandler is null)
+        {
+            EventHandler<PointerEventArgs> handler = (_, args) =>
+                DispatchPointer(mounted, args, mounted.LatestPointerMove, "move");
+            mounted.Control.PointerMoved += handler;
+            mounted.PointerMoveHandler = handler;
+        }
+        else if (mounted.LatestPointerMove is null && mounted.PointerMoveHandler is not null)
+        {
+            mounted.Control.PointerMoved -= mounted.PointerMoveHandler;
+            mounted.PointerMoveHandler = null;
+        }
+        bool needsPointerUp = mounted.LatestPointerUp is not null || node.CapturePointerOnPress;
+        if (needsPointerUp && mounted.PointerUpHandler is null)
+        {
+            EventHandler<PointerReleasedEventArgs> handler = (_, args) =>
+            {
+                mounted.SuppressPointerCancel = true;
+                try
+                {
+                    DispatchPointer(mounted, args, mounted.LatestPointerUp, "up");
+                }
+                finally
+                {
+                    try
+                    {
+                        if (ReferenceEquals(args.Pointer.Captured, mounted.Control))
+                            args.Pointer.Capture(null);
+                        mounted.CapturedPointer = null;
+                    }
+                    finally
+                    {
+                        mounted.SuppressPointerCancel = false;
+                    }
+                }
+            };
+            mounted.Control.PointerReleased += handler;
+            mounted.PointerUpHandler = handler;
+        }
+        else if (!needsPointerUp && mounted.PointerUpHandler is not null)
+        {
+            mounted.Control.PointerReleased -= mounted.PointerUpHandler;
+            mounted.PointerUpHandler = null;
+        }
+        bool needsCancel = mounted.LatestPointerCancel is not null || node.CapturePointerOnPress;
+        if (needsCancel && mounted.PointerCancelHandler is null)
+        {
+            EventHandler<PointerCaptureLostEventArgs> handler = (_, args) =>
+            {
+                mounted.CapturedPointer = null;
+                if (!mounted.SuppressPointerCancel)
+                    DispatchPointerCancel(mounted, args);
+            };
+            mounted.Control.PointerCaptureLost += handler;
+            mounted.PointerCancelHandler = handler;
+        }
+        else if (!needsCancel && mounted.PointerCancelHandler is not null)
+        {
+            mounted.Control.PointerCaptureLost -= mounted.PointerCancelHandler;
+            mounted.PointerCancelHandler = null;
+        }
+        UpdateSubscriptionState(mounted);
+    }
+
+    private void SynchronizeWindowClose(MountedNode mounted)
+    {
+        if (mounted.Control is not Window window)
+            return;
+        if (mounted.LatestCloseRequested is not null && mounted.WindowClosingHandler is null)
+        {
+            EventHandler<WindowClosingEventArgs> handler = (_, args) =>
+            {
+                bool handled = false;
+                Func<bool>? latest = mounted.LatestCloseRequested;
+                if (latest is not null)
+                    _invokeGuestCallback(() => handled = latest());
+                args.Cancel = handled;
+            };
+            window.Closing += handler;
+            mounted.WindowClosingHandler = handler;
+        }
+        else if (mounted.LatestCloseRequested is null && mounted.WindowClosingHandler is not null)
+        {
+            window.Closing -= mounted.WindowClosingHandler;
+            mounted.WindowClosingHandler = null;
+        }
+        UpdateSubscriptionState(mounted);
+    }
+
+    private void DispatchPointer(
+        MountedNode mounted,
+        PointerEventArgs args,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? latest,
+        string phase)
+    {
+        if (latest is null)
+            return;
+        PointerPoint point = args.GetCurrentPoint(mounted.Control);
+        PointerPointProperties properties = point.Properties;
+        KeyModifiers modifiers = args.KeyModifiers;
+        string pointerType = NormalizePointerType(args.Pointer.Type);
+        double buttons = PointerButtons(properties);
+        double pressure = Math.Clamp(properties.Pressure, 0, 1);
+        bool ctrl = modifiers.HasFlag(KeyModifiers.Control);
+        bool alt = modifiers.HasFlag(KeyModifiers.Alt);
+        bool shift = modifiers.HasFlag(KeyModifiers.Shift);
+        bool meta = modifiers.HasFlag(KeyModifiers.Meta);
+        mounted.HasPointerState = true;
+        mounted.LastPointerId = args.Pointer.Id;
+        mounted.LastPointerType = pointerType;
+        mounted.LastPointerX = point.Position.X;
+        mounted.LastPointerY = point.Position.Y;
+        mounted.LastPointerButtons = buttons;
+        mounted.LastPointerPressure = pressure;
+        mounted.LastPointerCtrl = ctrl;
+        mounted.LastPointerAlt = alt;
+        mounted.LastPointerShift = shift;
+        mounted.LastPointerMeta = meta;
+        bool handled = false;
+        _invokeGuestCallback(() => handled = latest(
+            args.Pointer.Id,
+            pointerType,
+            point.Position.X,
+            point.Position.Y,
+            NormalizePointerButton(properties.PointerUpdateKind, phase),
+            buttons,
+            pressure,
+            ctrl,
+            alt,
+            shift,
+            meta));
+        args.Handled |= handled;
+    }
+
+    private static double PointerButtons(PointerPointProperties properties) =>
+        (properties.IsLeftButtonPressed ? 1 : 0) |
+        (properties.IsRightButtonPressed ? 2 : 0) |
+        (properties.IsMiddleButtonPressed ? 4 : 0) |
+        (properties.IsXButton1Pressed ? 8 : 0) |
+        (properties.IsXButton2Pressed ? 16 : 0);
+
+    private void DispatchPointerCancel(MountedNode mounted, PointerCaptureLostEventArgs args)
+    {
+        var latest = mounted.LatestPointerCancel;
+        if (latest is null) return;
+        bool hasState = mounted.HasPointerState && mounted.LastPointerId == args.Pointer.Id;
+        double pointerId = args.Pointer.Id;
+        string pointerType = hasState ? mounted.LastPointerType : NormalizePointerType(args.Pointer.Type);
+        double x = hasState ? mounted.LastPointerX : 0;
+        double y = hasState ? mounted.LastPointerY : 0;
+        double buttons = hasState ? mounted.LastPointerButtons : 0;
+        double pressure = hasState ? mounted.LastPointerPressure : 0;
+        bool ctrl = hasState && mounted.LastPointerCtrl;
+        bool alt = hasState && mounted.LastPointerAlt;
+        bool shift = hasState && mounted.LastPointerShift;
+        bool meta = hasState && mounted.LastPointerMeta;
+        if (_renderDepth > 0)
+        {
+            _scheduleGuestMicrotask(() =>
+            {
+                if (_disposed || mounted.Released) return;
+                var deferred = mounted.LatestPointerCancel;
+                if (deferred is null) return;
+                PostGuestNotification(mounted, () => deferred(
+                    pointerId, pointerType, x, y, "none", buttons, pressure,
+                    ctrl, alt, shift, meta));
+            });
+            return;
+        }
+        bool handled = false;
+        _invokeGuestCallback(() => handled = latest(
+            pointerId, pointerType, x, y, "none", buttons, pressure,
+            ctrl, alt, shift, meta));
+        args.Handled |= handled;
+    }
+
+    private static string NormalizePointerType(PointerType type) => type switch
+    {
+        PointerType.Mouse => "mouse",
+        PointerType.Pen => "pen",
+        PointerType.Touch => "touch",
+        _ => "unknown",
+    };
+
+    private static string NormalizePointerButton(PointerUpdateKind kind, string phase)
+    {
+        if (phase is "move" or "cancel") return "none";
+        string text = kind.ToString();
+        if (text.Contains("LeftButton", StringComparison.Ordinal)) return "left";
+        if (text.Contains("RightButton", StringComparison.Ordinal)) return "right";
+        if (text.Contains("MiddleButton", StringComparison.Ordinal)) return "middle";
+        if (text.Contains("XButton1", StringComparison.Ordinal)) return "x1";
+        if (text.Contains("XButton2", StringComparison.Ordinal)) return "x2";
+        return "none";
+    }
+
     private void SynchronizeDragDrop(MountedNode mounted)
     {
         if (mounted.LatestDragOver is not null && mounted.DragOverHandler is null)
@@ -1002,7 +1291,7 @@ public sealed class DesktopRoot : IDisposable
         (string[] files, string? text) = DragData(args);
         KeyModifiers modifiers = args.KeyModifiers;
         string effect = "none";
-        _dispatchGuestCallback(() => effect = latest(
+        _invokeGuestCallback(() => effect = latest(
             files,
             text,
             NormalizeDropEffect(args.DragEffects),
@@ -1021,7 +1310,7 @@ public sealed class DesktopRoot : IDisposable
             return;
         (string[] files, string? text) = DragData(args);
         KeyModifiers modifiers = args.KeyModifiers;
-        _dispatchGuestCallback(() => latest(
+        PostGuestNotification(mounted, () => latest(
             files,
             text,
             NormalizeDropEffect(args.DragEffects),
@@ -1040,6 +1329,16 @@ public sealed class DesktopRoot : IDisposable
             .Cast<string>()
             .ToArray();
         return (files, args.DataTransfer.TryGetText());
+    }
+
+    private void PostGuestNotification(MountedNode mounted, Action callback)
+    {
+        _postGuestCallback(() =>
+        {
+            if (_disposed || mounted.Released)
+                return;
+            callback();
+        });
     }
 
     private static string NormalizeDropEffect(DragDropEffects effect) =>
@@ -1094,7 +1393,7 @@ public sealed class DesktopRoot : IDisposable
         if (latest is null) return;
         KeyModifiers modifiers = args.KeyModifiers;
         bool handled = false;
-        _dispatchGuestCallback(() => handled = latest(
+        _invokeGuestCallback(() => handled = latest(
             NormalizeKey(args.Key, modifiers),
             modifiers.HasFlag(KeyModifiers.Control),
             modifiers.HasFlag(KeyModifiers.Alt),
@@ -1191,6 +1490,11 @@ public sealed class DesktopRoot : IDisposable
             NullableStringChanged = null,
             KeyDown = null,
             KeyUp = null,
+            PointerDown = null,
+            PointerMove = null,
+            PointerUp = null,
+            PointerCancel = null,
+            CloseRequested = null,
             DragOver = null,
             Drop = null,
             Loaded = null,
@@ -1371,4 +1675,25 @@ public sealed class DesktopRoot : IDisposable
         foreach (MountedNode child in node.Children)
             CollectIdentities(child, identities);
     }
+}
+
+public sealed class DesktopEventWorkTracker
+{
+    private int _pending;
+
+    internal bool HasPending => Volatile.Read(ref _pending) != 0;
+
+    public void Begin() => Interlocked.Increment(ref _pending);
+
+    public void Complete()
+    {
+        int value = Interlocked.Decrement(ref _pending);
+        if (value < 0)
+        {
+            Interlocked.Exchange(ref _pending, 0);
+            throw new InvalidOperationException("Desktop event-work accounting underflowed.");
+        }
+    }
+
+    internal void Reset() => Interlocked.Exchange(ref _pending, 0);
 }

@@ -58,6 +58,9 @@ public sealed class RetainedRendererIntegrationTests
 
         Assert.Single(events, item => item.Stage == "button-click-event");
         Assert.Single(events, item => item.Stage == "guest-click");
+        Assert.Single(events, item => item.Stage.Contains("event-error:Error: expected async event failure", StringComparison.Ordinal));
+        Assert.Single(events, item => item.Stage == "event-error-window-alive:true");
+        AssertStageOrder(events, "guest-click", "event-error-window-alive:true");
         Assert.Single(events, item => item.Stage == "form-text:User");
         Assert.Single(events, item => item.Stage == "form-check:false");
         Assert.Single(events, item => item.Stage == "form-choice:2");

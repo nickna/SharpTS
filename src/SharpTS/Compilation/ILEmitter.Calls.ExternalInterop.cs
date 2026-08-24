@@ -495,6 +495,12 @@ public partial class ILEmitter
         {
             if (method.ReturnType == typeof(void))
                 IL.Emit(OpCodes.Ldnull);
+            else if (TryEmitExternalAwaitableReturn(method.ReturnType))
+            {
+                // Managed awaitables are normalized to the object-valued task used by
+                // the emitted Promise runtime. This must happen at the interop seam so
+                // both `await` and direct `.then()` observe a real guest Promise value.
+            }
             else if (method.ReturnType.IsArray)
                 EmitExternalArrayReturn(method.ReturnType);
             else
@@ -540,6 +546,21 @@ public partial class ILEmitter
         }
 
         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateArray);
+    }
+
+    private bool TryEmitExternalAwaitableReturn(Type returnType)
+    {
+        bool isTask = returnType == typeof(Task) ||
+            returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(Task<>);
+        bool isValueTask = returnType == typeof(ValueTask) ||
+            returnType.IsGenericType && returnType.GetGenericTypeDefinition() == typeof(ValueTask<>);
+        if (!isTask && !isValueTask)
+            return false;
+
+        if (isValueTask)
+            IL.Emit(OpCodes.Box, returnType);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.NormalizeManagedAwaitable);
+        return true;
     }
 
     private void EmitExternalDefaultValue(ParameterInfo parameter)

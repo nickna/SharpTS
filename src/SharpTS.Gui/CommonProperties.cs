@@ -76,8 +76,9 @@ internal static class CommonProperties
         VerticalAlignment vertical = ParseVerticalAlignment(node.VerticalAlignment);
         changed |= ApplyStyled(control, Layoutable.VerticalAlignmentProperty, vertical,
             IsSpecified(node, "verticalAlignment") || vertical != VerticalAlignment.Stretch);
-        changed |= ApplyStyled(control, Visual.IsVisibleProperty, node.IsVisible,
-            IsSpecified(node, "isVisible") || !node.IsVisible);
+        bool visibilitySpecified = IsSpecified(node, "isVisible") || !node.IsVisible;
+        if (node.Kind != "Window" || visibilitySpecified)
+            changed |= ApplyStyled(control, Visual.IsVisibleProperty, node.IsVisible, visibilitySpecified);
         changed |= ApplyStyled(control, InputElement.IsEnabledProperty, node.IsEnabled,
             IsSpecified(node, "isEnabled") || !node.IsEnabled);
         changed |= ApplyStyled(control, Visual.OpacityProperty, node.Opacity,

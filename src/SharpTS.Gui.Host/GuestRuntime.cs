@@ -13,6 +13,7 @@ internal interface IGuestRuntime : IDisposable
     SharpTSHostedShutdownReason? ShutdownReason { get; }
     Task InitializeAsync();
     void Notify(Action callback);
+    void InvokeNative(Action callback);
     void QueueMicrotask(Action callback);
     Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode);
 }
@@ -73,6 +74,10 @@ internal sealed class InterpretedGuestRuntime : IGuestRuntime
 
     public void Notify(Action callback) =>
         (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).Notify(callback);
+
+    public void InvokeNative(Action callback) =>
+        (_runtime ?? throw new InvalidOperationException("Guest is not initialized."))
+            .InvokeNativeCallback(() => { callback(); return null; });
 
     public void QueueMicrotask(Action callback) =>
         (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).EnqueueMicrotask(callback);
@@ -136,6 +141,13 @@ internal sealed class CompiledGuestRuntime : IGuestRuntime
     public void Notify(Action callback) =>
         (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).Notify(callback);
 
+    public void InvokeNative(Action callback)
+    {
+        if (_runtime is not SharpTSHostedRuntimeBase runtime)
+            throw new InvalidOperationException("Compiled guest runtime does not expose the hosted scheduler.");
+        runtime.InvokeNativeCallback(() => { callback(); return null; });
+    }
+
     public void QueueMicrotask(Action callback)
     {
         if (_runtime is not SharpTSHostedRuntimeBase runtime)
@@ -180,6 +192,13 @@ internal sealed class StaticCompiledGuestRuntime(
 
     public void Notify(Action callback) =>
         (_runtime ?? throw new InvalidOperationException("Guest is not initialized.")).Notify(callback);
+
+    public void InvokeNative(Action callback)
+    {
+        if (_runtime is not SharpTSHostedRuntimeBase runtime)
+            throw new InvalidOperationException("Compiled guest runtime does not expose the hosted scheduler.");
+        runtime.InvokeNativeCallback(() => { callback(); return null; });
+    }
 
     public void QueueMicrotask(Action callback)
     {

@@ -410,6 +410,7 @@ public sealed class HostInfrastructureTests
 
         public Task InitializeAsync() => Task.CompletedTask;
         public void Notify(Action callback) => callback();
+        public void InvokeNative(Action callback) => callback();
         public void QueueMicrotask(Action callback) => callback();
 
         public Task ShutdownAsync(SharpTSHostedShutdownReason reason, int exitCode)

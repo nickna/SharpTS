@@ -40,6 +40,40 @@ public class DotNetImportTests
     #region Single-type form
 
     [Theory, ModeData]
+    public void ManagedAwaitables_AreRealPromisesWithTypedResults(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { AsyncInteropFixture } from "dotnet:SharpTS.Tests.Infrastructure.AsyncInteropFixture";
+                const fixture = new AsyncInteropFixture();
+                async function main(): Promise<void> {
+                    console.log(await fixture.completedStringAsync());
+                    console.log(await fixture.pendingStringAsync());
+                    const values = await fixture.stringsAsync();
+                    console.log(values.join(","));
+                    console.log(await fixture.nullStringAsync());
+                    await fixture.completedVoidAsync();
+                    console.log(await fixture.completedNumberValueTaskAsync());
+                    console.log(await fixture.pendingStringValueTaskAsync());
+                    await fixture.completedStringAsync().then(value => console.log("then:" + value));
+                    try {
+                        await fixture.faultedStringAsync();
+                    } catch (error) {
+                        console.log(String(error).includes("managed-async-failure"));
+                    }
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal(
+            "completed\npending\nalpha,beta\nnull\n42\nvalue-task\nthen:completed\ntrue\n",
+            output);
+    }
+
+    [Theory, ModeData]
     public void SingleTypeForm_ConstructChainAndProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

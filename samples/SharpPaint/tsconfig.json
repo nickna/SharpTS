@@ -1,0 +1,6 @@
+{
+  "compilerOptions": {
+    "strict": true
+  },
+  "files": ["main.tsx", "SharpPaintApp.tsx", "document.ts"]
+}

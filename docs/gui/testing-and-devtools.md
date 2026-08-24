@@ -46,9 +46,17 @@ driver.afterRender(() => {
 ```
 
 The driver is available only under `--headless`. It supports keyed clicks, window keyboard input,
-text and allow-listed property queries, form value changes, and text drag/drop. A driver is scoped
-to one window and cannot resolve keys from another. `afterRender` schedules its callback after the
-interaction's pending render commits.
+text and allow-listed property queries, form value changes, text drag/drop, complete primary-pointer
+drags, and separate `pressPointer`, `movePointer`, `releasePointer`, and `cancelPointer` phases. The
+separate phases make click-only and cancelled captured gestures deterministic. A driver is scoped to
+one window and cannot resolve keys from another. `afterRender` schedules its callback after the
+interaction's posted event callback, promise-backed event work, desktop-service completion, and
+resulting render commits.
+
+Headless applications can queue deterministic results for the next message, open-file, save-file,
+or folder dialog through the driver. Each result is consumed once, and an unscripted dialog fails
+with an explicit test error instead of opening native UI. Clipboard reads and writes use an isolated
+in-memory clipboard in the Headless host.
 
 Scheduler control, native-failure injection, renderer identity, subscription counters, and trace
 staging are repository conformance facilities rather than supported application test APIs.

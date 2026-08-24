@@ -62,7 +62,9 @@ public static class DesktopBridge
         Action<Action> dispatchGuestCallback,
         Action<Action> scheduleGuestMicrotask,
         Action<int>? requestShutdown = null,
-        string[]? launchArguments = null)
+        string[]? launchArguments = null,
+        Action<Action>? invokeGuestCallback = null,
+        IDesktopInteractionServices? interactionServices = null)
     {
         if (_context is not null)
             throw new InvalidOperationException("A desktop runtime context is already registered.");
@@ -72,9 +74,11 @@ public static class DesktopBridge
             showWindow,
             headless,
             dispatchGuestCallback,
+            invokeGuestCallback ?? dispatchGuestCallback,
             scheduleGuestMicrotask,
             requestShutdown ?? (_ => { }),
-            launchArguments ?? []);
+            launchArguments ?? [],
+            interactionServices ?? NativeDesktopInteractionServices.Instance);
         _context = context;
         return new DesktopRuntimeRegistration(context, ReleaseContext);
     }
@@ -116,6 +120,15 @@ public static class DesktopBridge
         Func<string, bool, bool, bool, bool, bool, bool>? keyUp,
         bool hasKeyDown,
         bool hasKeyUp,
+        bool capturePointerOnPress,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerDown,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerMove,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerUp,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerCancel,
+        bool hasPointerDown,
+        bool hasPointerMove,
+        bool hasPointerUp,
+        bool hasPointerCancel,
         bool allowDrop,
         Func<string[], string?, string, bool, bool, bool, bool, string>? dragOver,
         Action<string[], string?, string, bool, bool, bool, bool>? drop,
@@ -150,6 +163,11 @@ public static class DesktopBridge
             CanvasTop = canvasTop,
             KeyDown = hasKeyDown ? keyDown : null,
             KeyUp = hasKeyUp ? keyUp : null,
+            CapturePointerOnPress = capturePointerOnPress,
+            PointerDown = hasPointerDown ? pointerDown : null,
+            PointerMove = hasPointerMove ? pointerMove : null,
+            PointerUp = hasPointerUp ? pointerUp : null,
+            PointerCancel = hasPointerCancel ? pointerCancel : null,
             AllowDrop = allowDrop,
             DragOver = hasDragOver ? dragOver : null,
             Drop = hasDrop ? drop : null,
@@ -182,6 +200,8 @@ public static class DesktopBridge
         double height,
         bool canResize,
         string theme,
+        bool hasCloseRequested,
+        Func<bool>? closeRequested,
         GuiVNode[] content,
         object? key,
         DesktopRef? reference) =>
@@ -193,6 +213,7 @@ public static class DesktopBridge
             Height: height,
             CanResize: canResize,
             Theme: theme,
+            CloseRequested: hasCloseRequested ? closeRequested : null,
             Children: content,
             AttachRef: GetAttach(reference),
             RefIdentity: reference);
@@ -450,8 +471,9 @@ public static class DesktopBridge
         new("RichTextBlock", NormalizeKey(key), RichTextJson: runsJson,
             AttachRef: GetAttach(reference), RefIdentity: reference);
 
-    public static GuiVNode CreateDrawingCanvas(string commandsJson, object? key, DesktopRef? reference) =>
+    public static GuiVNode CreateDrawingCanvas(string commandsJson, double coordinateWidth, double coordinateHeight, object? key, DesktopRef? reference) =>
         new("DrawingCanvas", NormalizeKey(key), DrawingJson: commandsJson,
+            CoordinateWidth: coordinateWidth, CoordinateHeight: coordinateHeight,
             AttachRef: GetAttach(reference), RefIdentity: reference);
 
     public static GuiVNode CreateCustomControl(
@@ -531,23 +553,75 @@ public static class DesktopBridge
         RequireContext().ScheduleGuestMicrotask(callback);
     }
 
-    public static Task<string> ShowMessageDialogAsync(string title, string message, string buttons) =>
-        DesktopServices.ShowMessageAsync(RequireContext().RequireWindowForServices(), title, message, buttons);
+    public static DesktopEventWorkTracker CreateEventWorkTracker(DesktopRoot root)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(root);
+        return root.CreateEventWorkTracker();
+    }
 
-    public static Task<string[]> ShowOpenFileDialogAsync(string title, bool allowMultiple, string filtersJson) =>
-        DesktopServices.OpenFilesAsync(RequireContext().RequireWindowForServices(), title, allowMultiple, filtersJson);
+    public static Task<string> ShowMessageDialogAsync(string title, string message, string buttons)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() =>
+            context.InteractionServices.ShowMessageAsync(owner, title, message, buttons));
+    }
 
-    public static Task<string?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson) =>
-        DesktopServices.SaveFileAsync(RequireContext().RequireWindowForServices(), title, suggestedFileName, defaultExtension, filtersJson);
+    public static Task<string[]> ShowOpenFileDialogAsync(string title, bool allowMultiple, string filtersJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() =>
+            context.InteractionServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson));
+    }
 
-    public static Task<string?> ShowFolderDialogAsync(string title) =>
-        DesktopServices.OpenFolderAsync(RequireContext().RequireWindowForServices(), title);
+    public static Task<string?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() =>
+            context.InteractionServices.SaveFileAsync(
+                owner, title, suggestedFileName, defaultExtension, filtersJson));
+    }
 
-    public static Task<string> ReadClipboardTextAsync() =>
-        DesktopServices.ReadClipboardAsync(RequireContext().RequireWindowForServices());
+    public static Task<string?> ShowFolderDialogAsync(string title)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() =>
+            context.InteractionServices.OpenFolderAsync(owner, title));
+    }
 
-    public static Task WriteClipboardTextAsync(string value) =>
-        DesktopServices.WriteClipboardAsync(RequireContext().RequireWindowForServices(), value);
+    public static Task<string> ReadClipboardTextAsync()
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() =>
+            context.InteractionServices.ReadClipboardAsync(owner));
+    }
+
+    public static Task WriteClipboardTextAsync(string value)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() =>
+            context.InteractionServices.WriteClipboardAsync(owner, value));
+    }
+
+    public static Task<string> GetImageDimensionsJsonAsync(string source)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return Task.Run(() => DrawingGraphics.GetImageDimensionsJson(context, source));
+    }
+
+    public static Task RenderDrawingToPngAsync(string documentJson, string path)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return Task.Run(() => DrawingGraphics.RenderDocumentToPng(context, documentJson, path));
+    }
 
     public static string[] GetDesktopLaunchArguments() =>
         RequireContext().GetLaunchArguments();

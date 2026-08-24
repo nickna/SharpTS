@@ -55,9 +55,13 @@ public partial class RuntimeEmitter
         var tcsLocal = il.DeclareLocal(tcsType);
         var lockLocal = il.DeclareLocal(_types.Object);
 
-        // Normalization may already have exposed the underlying task of a
-        // native promise. Preserve it instead of wrapping it as a fulfilled
-        // value (which would turn Task<T> into Task<object>(Task<T>)).
+        // Normalize any CLR Task<T> returned from dynamic external interop.
+        // Task<T> is invariant, so an `is Task<object>` check alone would wrap
+        // Task<string> as a fulfilled ordinary value instead of awaiting it.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
+        il.Emit(OpCodes.Starg, 0);
+
         var notTaskLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.TaskOfObject);
