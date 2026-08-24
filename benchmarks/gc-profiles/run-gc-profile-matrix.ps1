@@ -146,6 +146,14 @@ function Assert-ProcessSucceeded($Result, [string]$Description) {
     throw "$Description failed with exit code $($Result.ExitCode).`n$tail"
 }
 
+$gitStatus = @(Invoke-Checked git @('status', '--porcelain=v1', '--untracked-files=all'))
+if ($gitStatus.Count -gt 0) {
+    $dirtyPaths = ($gitStatus | Select-Object -First 25) -join [Environment]::NewLine
+    throw "GC profile results require a clean source tree so the recorded commit identifies the measured code.`n$dirtyPaths"
+}
+$gitCommit = @(Invoke-Checked git @('rev-parse', 'HEAD'))[0].ToString().Trim()
+$gitBranch = @(Invoke-Checked git @('branch', '--show-current'))[0].ToString().Trim()
+
 New-Item -ItemType Directory -Path $compiledRoot -Force | Out-Null
 
 $availableScripts = @(Get-ChildItem -LiteralPath $scriptsRoot -Filter '*.ts' | Sort-Object Name)
@@ -227,8 +235,6 @@ if ($Platforms -contains 'ubuntu') {
     }
 }
 
-$gitCommit = @(Invoke-Checked git @('rev-parse', 'HEAD'))[0].ToString().Trim()
-$gitBranch = @(Invoke-Checked git @('branch', '--show-current'))[0].ToString().Trim()
 $dotnetVersion = @(Invoke-Checked dotnet @('--version'))[0].ToString().Trim()
 $nodeVersion = @(Invoke-Checked node @('--version'))[0].ToString().Trim()
 $metadata = [ordered]@{
@@ -236,6 +242,7 @@ $metadata = [ordered]@{
     createdAtUtc = [DateTime]::UtcNow.ToString('O')
     commit = $gitCommit
     branch = $gitBranch
+    worktreeClean = $true
     dotnet = $dotnetVersion
     node = $nodeVersion
     host = [ordered]@{
@@ -321,9 +328,9 @@ function Invoke-WindowsMatrix {
     }
 }
 
-function Get-LinuxTimeMetrics([string]$Path) {
+function Get-LinuxTimeMetrics([string[]]$Lines) {
     $values = @{}
-    foreach ($line in Get-Content -LiteralPath $Path) {
+    foreach ($line in $Lines) {
         $pair = $line -split '=', 2
         if ($pair.Count -eq 2) { $values[$pair[0]] = $pair[1] }
     }
@@ -338,7 +345,7 @@ function Get-LinuxTimeMetrics([string]$Path) {
 function Invoke-UbuntuMatrix {
     Write-Host '=== Ubuntu 24.04 x64 matrix (Docker) ==='
     $container = "sharpts-gc-$([Guid]::NewGuid().ToString('N').Substring(0, 10))"
-    $compiledMount = "type=bind,source=$compiledRoot,target=/bench"
+    $compiledMount = "type=bind,source=$compiledRoot,target=/bench,readonly"
     $scriptsMount = "type=bind,source=$scriptsRoot,target=/scripts,readonly"
     $startupMount = "type=bind,source=$startupSource,target=/startup.ts,readonly"
     Invoke-Checked docker @(
@@ -354,14 +361,15 @@ function Invoke-UbuntuMatrix {
             $dllPath = "/bench/$name/$name.dll"
             for ($launch = 1; $launch -le $Launches; $launch++) {
                 $nodeMetricName = "$name-ubuntu-node-$launch.time"
-                $nodeMetricContainer = "/bench/$name/$nodeMetricName"
+                $nodeMetricContainer = "/tmp/$nodeMetricName"
                 $nodeResult = Invoke-MeasuredProcess docker @(
                     'exec', $container, '/usr/bin/time',
                     '-f', "elapsedSeconds=%e`nmaxRssKb=%M",
                     '-o', $nodeMetricContainer,
                     'node', $sourcePath)
                 Assert-ProcessSucceeded $nodeResult "Ubuntu Node $name launch $launch"
-                $nodeMetrics = Get-LinuxTimeMetrics (Join-Path (Join-Path $compiledRoot $name) $nodeMetricName)
+                $nodeMetrics = Get-LinuxTimeMetrics @(Invoke-Checked docker @(
+                    'exec', $container, 'cat', $nodeMetricContainer))
                 Add-Measurement 'ubuntu' 'node' 'node' $name $launch $nodeResult `
                     $nodeMetrics.ElapsedMilliseconds $nodeMetrics.PeakWorkingSetBytes
 
@@ -372,14 +380,15 @@ function Invoke-UbuntuMatrix {
                 foreach ($profile in $orderedProfiles) {
                     Set-ActiveProfile $name $profile
                     $metricName = "$name-ubuntu-$profile-$launch.time"
-                    $metricContainer = "/bench/$name/$metricName"
+                    $metricContainer = "/tmp/$metricName"
                     $result = Invoke-MeasuredProcess docker @(
                         'exec', $container, '/usr/bin/time',
                         '-f', "elapsedSeconds=%e`nmaxRssKb=%M",
                         '-o', $metricContainer,
                         'dotnet', $dllPath)
                     Assert-ProcessSucceeded $result "Ubuntu compiled/$profile $name launch $launch"
-                    $metrics = Get-LinuxTimeMetrics (Join-Path (Join-Path $compiledRoot $name) $metricName)
+                    $metrics = Get-LinuxTimeMetrics @(Invoke-Checked docker @(
+                        'exec', $container, 'cat', $metricContainer))
                     Add-Measurement 'ubuntu' 'compiled' $profile $name $launch $result `
                         $metrics.ElapsedMilliseconds $metrics.PeakWorkingSetBytes
                 }
@@ -428,6 +437,7 @@ foreach ($measurement in $measurements) {
 }
 
 $lines = [Collections.Generic.List[string]]::new()
+$invariantCulture = [Globalization.CultureInfo]::InvariantCulture
 $lines.Add('# GC profile benchmark matrix')
 $lines.Add('')
 $lines.Add("Generated from commit ``$($metadata.commit)`` with $Launches launches per cell.")
@@ -448,7 +458,8 @@ foreach ($namedGroup in $namedGroups | Sort-Object Name) {
         $stdev = Get-Median @($runtimeGroup.Group.standardDeviationMilliseconds)
         $elapsed = Get-Median @($runtimeGroup.Group.elapsedMilliseconds)
         $peakMb = (Get-Median @($runtimeGroup.Group.peakWorkingSetBytes)) / 1MB
-        $lines.Add("| $($first.platform) | $($first.name) | $maximum | $($first.runtimeProfile) | $($mean.ToString('F4')) ms | $($minimum.ToString('F4')) ms | $($stdev.ToString('F4')) ms | $($elapsed.ToString('F1')) ms | $($peakMb.ToString('F1')) MB |")
+        $parameter = ([double]$maximum).ToString('G17', $invariantCulture)
+        $lines.Add("| $($first.platform) | $($first.name) | $parameter | $($first.runtimeProfile) | $($mean.ToString('F4', $invariantCulture)) ms | $($minimum.ToString('F4', $invariantCulture)) ms | $($stdev.ToString('F4', $invariantCulture)) ms | $($elapsed.ToString('F1', $invariantCulture)) ms | $($peakMb.ToString('F1', $invariantCulture)) MB |")
     }
 }
 
@@ -463,7 +474,7 @@ foreach ($group in $startupMeasurements | Group-Object platform, runtime, profil
     $label = if ($first.runtime -eq 'node') { 'node' } else { $first.profile }
     $elapsed = Get-Median @($group.Group.elapsedMilliseconds)
     $peakMb = (Get-Median @($group.Group.peakWorkingSetBytes)) / 1MB
-    $lines.Add("| $($first.platform) | $label | $($elapsed.ToString('F2')) ms | $($peakMb.ToString('F1')) MB |")
+    $lines.Add("| $($first.platform) | $label | $($elapsed.ToString('F2', $invariantCulture)) ms | $($peakMb.ToString('F1', $invariantCulture)) MB |")
 }
 
 [IO.File]::WriteAllLines($summaryPath, $lines, [Text.UTF8Encoding]::new($false))

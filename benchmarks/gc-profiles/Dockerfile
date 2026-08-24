@@ -10,4 +10,6 @@ COPY --from=node /usr/local/bin/node /usr/local/bin/node
 
 RUN dotnet --info >/dev/null && node --version
 
+USER app
+
 CMD ["tail", "-f", "/dev/null"]

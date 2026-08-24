@@ -10,8 +10,8 @@ Run the default three-launch Windows and Ubuntu matrix from the repository root:
 .\benchmarks\gc-profiles\run-gc-profile-matrix.ps1
 ```
 
-Ubuntu runs in Docker using `Dockerfile`. Restrict platforms, workloads, or repetitions when
-iterating:
+Ubuntu runs in Docker using `Dockerfile`; workloads execute as the image's non-root `app` user
+against read-only source mounts. Restrict platforms, workloads, or repetitions when iterating:
 
 ```powershell
 .\benchmarks\gc-profiles\run-gc-profile-matrix.ps1 `
@@ -19,5 +19,7 @@ iterating:
 ```
 
 Generated raw measurements and summaries are written under the ignored `.perf-gc-profiles`
-directory. The checked-in [decision record](decision.md) explains the product policy, and
-`results/` preserves the evidence used for issue #1462.
+directory. The harness rejects a dirty Git worktree before building so its recorded commit fully
+identifies the compiler and workloads that were measured. The checked-in
+[decision record](decision.md) explains the product policy, and `results/` preserves the evidence
+used for issue #1462.
