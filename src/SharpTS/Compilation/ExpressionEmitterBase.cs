@@ -1302,6 +1302,13 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitArrayLiteral(Expr.ArrayLiteral a)
     {
+        if (Ctx.TypeMap?.IsStablePrimitivePromiseAllInputInitializer(a) == true)
+        {
+            IL.Emit(OpCodes.Newobj, Types.GetDefaultConstructor(Types.ListOfDouble));
+            SetStackUnknown();
+            return;
+        }
+
         bool hasSpreads = a.Elements.Any(e => e is Expr.Spread);
 
         // Evaluate all elements into locals first so an await inside any element

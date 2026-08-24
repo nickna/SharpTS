@@ -16,9 +16,12 @@ internal static class StablePrimitivePromiseAllAnalyzer
     public static void Analyze(
         List<Stmt> program,
         TypeMap? typeMap,
-        ClosureAnalyzer? closures)
+        ClosureAnalyzer? closures,
+        RuntimeFeatureSet? features)
     {
-        if (typeMap is null)
+        if (typeMap is null
+            || features?.UsesArrayPrototypeMutation == true
+            || features?.UsesDynamicPropertyDescriptors == true)
             return;
 
         var mutations = new PromiseMutationVisitor(typeMap);
@@ -48,6 +51,12 @@ internal static class StablePrimitivePromiseAllAnalyzer
             }
 
             typeMap.MarkStablePrimitivePromiseAllIterable(candidate.Iterable);
+            typeMap.MarkStablePrimitivePromiseAllInputInitializer(
+                visitor.InputInitializers[inputKey]);
+            foreach (var receiver in visitor.InputPushReceivers.GetValueOrDefault(inputKey, []))
+                typeMap.MarkStablePrimitivePromiseAllPushReceiver(receiver);
+            foreach (var seed in visitor.InputSeeds.GetValueOrDefault(inputKey, []))
+                typeMap.MarkStablePrimitivePromiseAllSeedValue(seed);
             foreach (var use in visitor.ResultUses.GetValueOrDefault(resultKey, []))
                 typeMap.MarkStablePrimitivePromiseAllResultUse(use);
         }
@@ -148,6 +157,8 @@ internal static class StablePrimitivePromiseAllAnalyzer
         public Dictionary<(int Scope, string Name), int> DeclarationCounts { get; } = [];
         public Dictionary<(int Scope, string Name), int> TerminalCounts { get; } = [];
         public HashSet<(int Scope, string Name)> Inputs { get; } = [];
+        public Dictionary<(int Scope, string Name), Expr.ArrayLiteral> InputInitializers { get; } = [];
+        public Dictionary<(int Scope, string Name), List<Expr.Variable>> InputPushReceivers { get; } = [];
         public Dictionary<(int Scope, string Name), ResultCandidate> Results { get; } = [];
         public Dictionary<(int Scope, string Name), List<Expr.Variable>> ResultUses { get; } = [];
         public Dictionary<(int Scope, string Name), List<Expr>> InputSeeds { get; } = [];
@@ -202,9 +213,10 @@ internal static class StablePrimitivePromiseAllAnalyzer
 
             if (_scope != 0
                 && annotation?.Replace(" ", "", StringComparison.Ordinal) == "Promise<number>[]"
-                && initializer is Expr.ArrayLiteral { Elements.Count: 0 })
+                && initializer is Expr.ArrayLiteral { Elements.Count: 0 } emptyArray)
             {
                 Inputs.Add(key);
+                InputInitializers[key] = emptyArray;
             }
 
             if (_scope != 0
@@ -223,7 +235,8 @@ internal static class StablePrimitivePromiseAllAnalyzer
 
         protected override void VisitCall(Expr.Call expression)
         {
-            if (expression.Callee is Expr.Get
+            if (!expression.Optional
+                && expression.Callee is Expr.Get
                 {
                     Optional: false,
                     Object: Expr.Variable receiver,
@@ -238,6 +251,9 @@ internal static class StablePrimitivePromiseAllAnalyzer
                     if (!InputSeeds.TryGetValue(key, out var seeds))
                         InputSeeds[key] = seeds = [];
                     seeds.Add(value);
+                    if (!InputPushReceivers.TryGetValue(key, out var receivers))
+                        InputPushReceivers[key] = receivers = [];
+                    receivers.Add(receiver);
                     Visit(argument);
                     return;
                 }

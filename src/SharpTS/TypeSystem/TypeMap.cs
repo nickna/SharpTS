@@ -26,6 +26,9 @@ public class TypeMap
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _stablePrimitivePromiseAllIterables = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.ArrayLiteral> _stablePrimitivePromiseAllInputInitializers = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllPushReceivers = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr> _stablePrimitivePromiseAllSeedValues = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllResultUses = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
@@ -234,6 +237,37 @@ public class TypeMap
 
     public bool IsStablePrimitivePromiseAllIterable(Expr iterable) =>
         _stablePrimitivePromiseAllIterables.Contains(iterable);
+
+    /// <summary>
+    /// Marks the empty literal backing the proven non-escaping Promise.all input.
+    /// It may use the private typed numeric-list carrier instead of a $Array.
+    /// </summary>
+    public void MarkStablePrimitivePromiseAllInputInitializer(Expr.ArrayLiteral initializer) =>
+        _stablePrimitivePromiseAllInputInitializers.Add(initializer);
+
+    public bool IsStablePrimitivePromiseAllInputInitializer(Expr.ArrayLiteral initializer) =>
+        _stablePrimitivePromiseAllInputInitializers.Contains(initializer);
+
+    /// <summary>
+    /// Marks an exact permitted push receiver for that private typed input.
+    /// </summary>
+    public void MarkStablePrimitivePromiseAllPushReceiver(Expr.Variable receiver) =>
+        _stablePrimitivePromiseAllPushReceivers.Add(receiver);
+
+    public bool IsStablePrimitivePromiseAllPushReceiver(Expr.Variable receiver) =>
+        _stablePrimitivePromiseAllPushReceivers.Contains(receiver);
+
+    /// <summary>
+    /// Marks the numeric argument of an intrinsic <c>Promise.resolve</c> whose
+    /// result is stored only in a proven stable primitive Promise.all input.
+    /// The compiler may carry the unboxed value in that private list instead of
+    /// materializing an otherwise-unobservable completed Task.
+    /// </summary>
+    public void MarkStablePrimitivePromiseAllSeedValue(Expr value) =>
+        _stablePrimitivePromiseAllSeedValues.Add(value);
+
+    public bool IsStablePrimitivePromiseAllSeedValue(Expr value) =>
+        _stablePrimitivePromiseAllSeedValues.Contains(value);
 
     /// <summary>
     /// Marks a permitted length/index receiver use of the non-escaping numeric

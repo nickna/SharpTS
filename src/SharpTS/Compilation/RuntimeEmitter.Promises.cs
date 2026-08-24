@@ -591,7 +591,11 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object]
         );
         runtime.PromiseAllPrimitive = allPrimitive;
-        EmitPromiseAllWrapper(allPrimitive.GetILGenerator(), promiseAllSM, runtime, stablePrimitive: true);
+        var primitiveAllSettlement = DefineCompletedPrimitivePromiseAllSettlement(
+            moduleBuilder);
+        EmitCompletedPrimitivePromiseAll(
+            allPrimitive.GetILGenerator(), runtime, primitiveAllSettlement);
+        primitiveAllSettlement.Type.CreateType();
         EmitPromiseAllMoveNext(promiseAllSM, runtime);
         promiseAllSM.Type.CreateType();
 
