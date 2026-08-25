@@ -23,6 +23,8 @@ public class TypeMap
     private readonly Dictionary<Token, TokenType> _promotableArrayLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
+        new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, HashSet<string>> _stableNumericCaptureFields = new(ReferenceEqualityComparer.Instance);
@@ -194,6 +196,25 @@ public class TypeMap
     /// the generated types). Empty when no object local was promoted.
     /// </summary>
     public IEnumerable<ObjectShapeInfo> PromotableObjectLocalShapes => _promotableObjectLocals.Values;
+
+    /// <summary>
+    /// Marks a fresh exact-class local whose allocation and pure constructor may be
+    /// represented by the same generated typed shape used for promoted object
+    /// literals. Registering the shape here also makes it available to the common
+    /// shape-type definition phase.
+    /// </summary>
+    public void MarkScalarReplaceableClassLocal(
+        Token nameToken,
+        ClassScalarReplacementInfo info)
+    {
+        _scalarReplaceableClassLocals[nameToken] = info;
+        _promotableObjectLocals[nameToken] = info.Shape;
+    }
+
+    public bool IsScalarReplaceableClassLocal(
+        Token nameToken,
+        out ClassScalarReplacementInfo info) =>
+        _scalarReplaceableClassLocals.TryGetValue(nameToken, out info!);
 
     /// <summary>
     /// Marks a <c>for...of</c> over a fresh, non-escaping <c>Map&lt;number, number&gt;</c>
