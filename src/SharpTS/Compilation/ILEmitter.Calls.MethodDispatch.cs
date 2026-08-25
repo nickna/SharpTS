@@ -12,6 +12,35 @@ public partial class ILEmitter
 {
     protected override bool TryEmitDiscardedExpression(Expr expression)
     {
+        // Numeric Map.set returns its receiver in JavaScript, but promotion only
+        // admits statement-position calls. Emit Dictionary.set_Item directly and
+        // leave the evaluation stack empty instead of manufacturing a receiver
+        // value solely for the statement emitter to pop.
+        if (expression is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable receiver,
+                    Name.Lexeme: "set"
+                },
+                Arguments: [var key, var value]
+            }
+            && _ctx.TryGetPromotedNumericMapLocal(receiver.Name.Lexeme) is { } numericMap)
+        {
+            IL.Emit(OpCodes.Ldloc, numericMap);
+            EmitExpressionAsDouble(key);
+            EmitExpressionAsDouble(value);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+                _ctx.Types.DictionaryDoubleDouble,
+                "set_Item",
+                _ctx.Types.Double,
+                _ctx.Types.Double));
+            SetStackUnknown();
+            return true;
+        }
+
         // A statement-position numeric index assignment has no result consumer.
         // Own that narrow shape before the general expression emitter reloads
         // and boxes the assigned double solely for Stmt.Expression to pop it.

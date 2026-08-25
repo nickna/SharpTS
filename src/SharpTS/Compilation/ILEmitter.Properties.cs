@@ -315,6 +315,20 @@ public partial class ILEmitter
             return;
         }
 
+        // Promoted numeric Map `.size` (#1482): keep Dictionary.Count as an
+        // unboxed TypeScript number. The registry property contract otherwise
+        // resets stack tracking to object because ordinary Map properties box.
+        if (!g.Optional && g.Name.Lexeme == "size" && g.Object is Expr.Variable mapSizeVar
+            && _ctx.TryGetPromotedNumericMapLocal(mapSizeVar.Name.Lexeme) is { } numericMap)
+        {
+            IL.Emit(OpCodes.Ldloc, numericMap);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(
+                _ctx.Types.DictionaryDoubleDouble, "Count").GetMethod!);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         // Try direct getter dispatch for known class instance types
         TypeInfo? objType = _ctx.TypeMap?.Get(g.Object);
         if (TryEmitDirectGetterCall(g.Object, objType, g.Name.Lexeme))

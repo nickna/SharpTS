@@ -384,6 +384,20 @@ public partial class CompilationContext
     }
 
     /// <summary>
+    /// Resolves a promoted numeric Map local. The concrete slot type is the
+    /// scope-correct source of truth, so same-named boxed Maps cannot enter the
+    /// direct typed-call path.
+    /// </summary>
+    public LocalBuilder? TryGetPromotedNumericMapLocal(string variableName)
+    {
+        if (!Locals.TryGetLocal(variableName, out var local))
+            return null;
+        return Locals.GetLocalType(variableName) == Types.DictionaryDoubleDouble
+            ? local
+            : null;
+    }
+
+    /// <summary>
     /// If <paramref name="variableName"/> currently binds to a promoted string-accumulator local
     /// (a slot whose CLR type is <c>StringBuilder</c>, declared by the #857 promotion path), returns its
     /// <see cref="LocalBuilder"/>; otherwise null. The slot's CLR type is the single source of truth, so
