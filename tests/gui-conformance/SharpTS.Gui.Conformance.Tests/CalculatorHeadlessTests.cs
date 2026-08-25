@@ -39,9 +39,14 @@ public sealed class CalculatorHeadlessTests
             GuiInterpretedTestAssets.Stage(root, configuration, stage);
             string guestDirectory = Path.Combine(stage, "Guest");
             Directory.CreateDirectory(guestDirectory);
-            File.Copy(Path.Combine(root, "samples", "Calculator", "headless.tests.tsx"), Path.Combine(guestDirectory, "main.tsx"), true);
-            File.Copy(Path.Combine(root, "samples", "Calculator", "CalculatorApp.tsx"), Path.Combine(guestDirectory, "CalculatorApp.tsx"), true);
-            File.Copy(Path.Combine(root, "samples", "Calculator", "calculator.ts"), Path.Combine(guestDirectory, "calculator.ts"), true);
+            string calculatorSource = Path.Combine(root, "samples", "Calculator");
+            File.Copy(Path.Combine(calculatorSource, "headless.tests.tsx"), Path.Combine(guestDirectory, "main.tsx"), true);
+            foreach (string source in Directory.EnumerateFiles(calculatorSource, "*.ts*"))
+            {
+                string name = Path.GetFileName(source);
+                if (name is "main.tsx" or "headless.tests.tsx" || name.Contains(".tests.", StringComparison.Ordinal)) continue;
+                File.Copy(source, Path.Combine(guestDirectory, name), true);
+            }
             File.Copy(Path.Combine(conformanceRoot, "Calculator.Headless.Guest.dll"), Path.Combine(stage, "SharpTS.Gui.Guest.dll"), true);
 
             string tracePath = Path.Combine(stage, $"{mode}.json");

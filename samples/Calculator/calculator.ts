@@ -1,12 +1,14 @@
+import { ExactNumber, addExact, divideExact, exact, exactToNumber, formatExact, multiplyExact, negateExact, parseExact, subtractExact } from "./exact";
+
 export type Operator = "+" | "-" | "*" | "/";
 
 export interface CalculatorState {
     readonly display: string;
-    readonly accumulator: number | null;
+    readonly accumulator: ExactNumber | null;
     readonly pendingOperator: Operator | null;
     readonly waitingForOperand: boolean;
     readonly repeatOperator: Operator | null;
-    readonly repeatOperand: number | null;
+    readonly repeatOperand: ExactNumber | null;
     readonly error: boolean;
     readonly lastExpression: string;
 }
@@ -19,6 +21,10 @@ export type CalculatorAction =
     | { type: "percent" }
     | { type: "sign" }
     | { type: "backspace" }
+    | { type: "clearEntry" }
+    | { type: "reciprocal" }
+    | { type: "square" }
+    | { type: "squareRoot" }
     | { type: "clear" };
 
 export const initialCalculatorState: CalculatorState = {
@@ -54,7 +60,8 @@ export function deriveCalculatorPresentation(state: CalculatorState): Calculator
         status: "Cannot divide by zero · Press C to reset",
     };
     if (state.pendingOperator !== null && state.accumulator !== null) {
-        const prefix = formatted(state.accumulator) + " " + operatorGlyph(state.pendingOperator);
+        const accumulator = state.accumulator === null ? exact(0n) : state.accumulator;
+        const prefix = formatted(accumulator) + " " + operatorGlyph(state.pendingOperator);
         return {
             expression: state.waitingForOperand ? prefix : prefix + " " + state.display,
             status: state.waitingForOperand ? "Enter the next number" : "Ready to calculate",
@@ -77,41 +84,46 @@ export function calculatorActionForKey(key: string): CalculatorAction | null {
     if (key === "/") return { type: "operator", operator: "/" };
     if (key === "Enter" || key === "=") return { type: "equals" };
     if (key === "%") return { type: "percent" };
-    if (key === "Backspace" || key === "Delete") return { type: "backspace" };
+    if (key === "Backspace") return { type: "backspace" };
+    if (key === "Delete") return { type: "clearEntry" };
+    if (key.toLowerCase() === "r") return { type: "reciprocal" };
+    if (key === "@") return { type: "squareRoot" };
+    if (key.toLowerCase() === "q") return { type: "square" };
+    if (key === "F9") return { type: "sign" };
     if (key === "Escape" || key.toLowerCase() === "c") return { type: "clear" };
     return null;
 }
 
-function numberOf(state: CalculatorState): number {
-    return Number.parseFloat(state.display);
+function numberOf(state: CalculatorState): ExactNumber {
+    return parseExact(state.display);
 }
 
-function calculate(left: number, right: number, operator: Operator): number {
+function calculateStandard(left: ExactNumber, right: ExactNumber, operator: Operator): ExactNumber | null {
     switch (operator) {
-        case "+": return left + right;
-        case "-": return left - right;
-        case "*": return left * right;
-        case "/": return right === 0 ? Number.NaN : left / right;
+        case "+": return addExact(left, right);
+        case "-": return subtractExact(left, right);
+        case "*": return multiplyExact(left, right);
+        case "/": return right.numerator === 0n ? null : divideExact(left, right);
     }
-    return Number.NaN;
+    return null;
 }
 
-function formatted(value: number): string {
-    if (!Number.isFinite(value)) return "Error";
-    if (Object.is(value, -0)) return "0";
-    return Number.parseFloat(value.toPrecision(12)).toString();
+function formatted(value: ExactNumber): string {
+    return formatExact(value);
 }
 
-function resultState(state: CalculatorState, value: number, operator: Operator | null, operand: number | null, left: number): CalculatorState {
-    const display = formatted(value);
+function resultState(state: CalculatorState, value: ExactNumber | null, operator: Operator | null, operand: ExactNumber | null, left: ExactNumber): CalculatorState {
+    const display = value === null ? "Error" : formatted(value);
+    const actualOperand = operand === null ? exact(0n) : operand;
     const lastExpression = operator === null || operand === null
         ? state.lastExpression
-        : formatted(left) + " " + operatorGlyph(operator as Operator) + " " + formatted(operand as number) + " =";
-    if (display === "Error") return { ...initialCalculatorState, display, waitingForOperand: true, error: true, lastExpression };
+        : formatted(left) + " " + operatorGlyph(operator) + " " + formatted(actualOperand) + " =";
+    if (display === "Error" || value === null) return { ...initialCalculatorState, display, waitingForOperand: true, error: true, lastExpression };
+    const actualValue = value === null ? exact(0n) : value;
     return {
         ...state,
         display,
-        accumulator: value,
+        accumulator: actualValue,
         pendingOperator: null,
         waitingForOperand: true,
         repeatOperator: operator,
@@ -161,13 +173,36 @@ export function calculatorReducer(state: CalculatorState, action: CalculatorActi
                 ? "0" : state.display.slice(0, state.display.length - 1);
             return { ...state, display: next };
         }
+        case "clearEntry": {
+            if (state.error) return initialCalculatorState;
+            return { ...state, display: "0", waitingForOperand: false };
+        }
+        case "reciprocal": {
+            if (state.error) return state;
+            const current = numberOf(state);
+            const value = current.numerator === 0n ? null : divideExact(exact(1n), current);
+            return resultState(state, value, null, null, current);
+        }
+        case "square": {
+            if (state.error) return state;
+            const current = numberOf(state);
+            return resultState(state, multiplyExact(current, current), null, null, current);
+        }
+        case "squareRoot": {
+            if (state.error) return state;
+            const current = numberOf(state);
+            const numeric = exactToNumber(current);
+            if (numeric < 0) return resultState(state, null, null, null, current);
+            return resultState(state, parseExact(String(Math.sqrt(numeric))), null, null, current);
+        }
         case "operator": {
             if (state.error) return state;
             const operator: Operator = action.operator === undefined ? "+" : action.operator;
             const current = numberOf(state);
             if (state.pendingOperator !== null && state.accumulator !== null && !state.waitingForOperand) {
-                const value = calculate(state.accumulator, current, state.pendingOperator);
-                const next = resultState(state, value, state.pendingOperator, current, state.accumulator);
+                const accumulator = state.accumulator === null ? exact(0n) : state.accumulator;
+                const value = calculateStandard(accumulator, current, state.pendingOperator);
+                const next = resultState(state, value, state.pendingOperator, current, accumulator);
                 return next.error ? next : { ...next, pendingOperator: operator, waitingForOperand: true, repeatOperator: null, repeatOperand: null, lastExpression: "" };
             }
             return {
@@ -183,11 +218,12 @@ export function calculatorReducer(state: CalculatorState, action: CalculatorActi
         case "percent": {
             if (state.error) return state;
             const current = numberOf(state);
-            const accumulator = state.accumulator === null ? 0 : state.accumulator;
+            const accumulator = state.accumulator === null ? exact(0n) : state.accumulator;
+            const oneHundred = exact(100n);
             const value = state.pendingOperator !== null && state.accumulator !== null &&
                 (state.pendingOperator === "+" || state.pendingOperator === "-")
-                ? accumulator * current / 100
-                : current / 100;
+                ? divideExact(multiplyExact(accumulator, current), oneHundred)
+                : divideExact(current, oneHundred);
             return { ...state, display: formatted(value), waitingForOperand: false };
         }
         case "equals": {
@@ -196,10 +232,12 @@ export function calculatorReducer(state: CalculatorState, action: CalculatorActi
             if (state.pendingOperator !== null) {
                 const left = state.accumulator === null ? current : state.accumulator;
                 const operand = state.waitingForOperand ? left : current;
-                return resultState(state, calculate(left, operand, state.pendingOperator), state.pendingOperator, operand, left);
+                return resultState(state, calculateStandard(left, operand, state.pendingOperator), state.pendingOperator, operand, left);
             }
-            if (state.repeatOperator !== null && state.repeatOperand !== null)
-                return resultState(state, calculate(current, state.repeatOperand, state.repeatOperator), state.repeatOperator, state.repeatOperand, current);
+            if (state.repeatOperator !== null && state.repeatOperand !== null) {
+                const operand = state.repeatOperand === null ? exact(0n) : state.repeatOperand;
+                return resultState(state, calculateStandard(current, operand, state.repeatOperator), state.repeatOperator, operand, current);
+            }
             return state;
         }
     }

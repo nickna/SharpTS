@@ -4,7 +4,7 @@ namespace SharpTS.Gui;
 internal static class GeneratedControlContract
 {
     internal const int SchemaVersion = 1;
-    internal const string SchemaHash = "0c34aaf15e0ab40a353d13f9e4992d1a64ee1bc39f925ba635703e1cb856915f";
+    internal const string SchemaHash = "1e7a4cdd01065d70da9be0d4953d54954ba969aaca5daec7b961239dabd48bc5";
     internal static NodeDescriptor[] CreateDescriptors() =>
     [
         new WindowDescriptor(),

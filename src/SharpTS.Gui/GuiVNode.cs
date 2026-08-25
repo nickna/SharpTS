@@ -82,6 +82,7 @@ public sealed record GuiVNode(
     bool LastChildFill = true,
     string? Header = null,
     bool CanResize = true,
+    bool Topmost = false,
     string Theme = "system",
     object? Children = null,
     Action? Click = null,

@@ -398,6 +398,13 @@
           "documentation": "Whether the user can resize the window."
         },
         {
+          "name": "topmost",
+          "type": "boolean",
+          "default": false,
+          "setter": "window",
+          "documentation": "Whether the window remains above non-topmost windows."
+        },
+        {
           "name": "theme",
           "type": "Theme",
           "default": "system",

@@ -3,7 +3,7 @@ import type { CommonProps, GuiChild, GuiElement, TextualChild, ControlRef, Windo
 /** @internal */
 export const descriptorSchemaVersion = 1;
 /** @internal */
-export const descriptorSchemaHash = "0c34aaf15e0ab40a353d13f9e4992d1a64ee1bc39f925ba635703e1cb856915f";
+export const descriptorSchemaHash = "1e7a4cdd01065d70da9be0d4953d54954ba969aaca5daec7b961239dabd48bc5";
 /** @internal */
 export interface ChildrenProps { children?: GuiChild; }
 /** @internal */
@@ -18,6 +18,8 @@ export interface WindowProps extends CommonProps<WindowHandle>, SingleElementChi
     title?: string;
     /** Whether the user can resize the window. */
     canResize?: boolean;
+    /** Whether the window remains above non-topmost windows. */
+    topmost?: boolean;
     /** Light, dark, or operating-system window theme. */
     theme?: Theme;
 }
@@ -522,7 +524,7 @@ export const Menu = tag<MenuProps>("Menu");
 export const MenuItem = tag<MenuItemProps>("MenuItem");
 /** @internal */
 export const controlContract = [
-  { kind: "Window", props: ["ref", "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "margin", "horizontalAlignment", "verticalAlignment", "isVisible", "isEnabled", "opacity", "toolTip", "automationName", "classes", "canvasLeft", "canvasTop", "gridRow", "gridColumn", "gridRowSpan", "gridColumnSpan", "dock", "onKeyDown", "onKeyUp", "allowDrop", "onDragOver", "onDrop", "title", "canResize", "theme"] },
+  { kind: "Window", props: ["ref", "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "margin", "horizontalAlignment", "verticalAlignment", "isVisible", "isEnabled", "opacity", "toolTip", "automationName", "classes", "canvasLeft", "canvasTop", "gridRow", "gridColumn", "gridRowSpan", "gridColumnSpan", "dock", "onKeyDown", "onKeyUp", "allowDrop", "onDragOver", "onDrop", "title", "canResize", "topmost", "theme"] },
   { kind: "StackPanel", props: ["ref", "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "margin", "horizontalAlignment", "verticalAlignment", "isVisible", "isEnabled", "opacity", "toolTip", "automationName", "classes", "canvasLeft", "canvasTop", "gridRow", "gridColumn", "gridRowSpan", "gridColumnSpan", "dock", "onKeyDown", "onKeyUp", "allowDrop", "onDragOver", "onDrop", "spacing", "orientation"] },
   { kind: "ToolBar", props: ["ref", "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "margin", "horizontalAlignment", "verticalAlignment", "isVisible", "isEnabled", "opacity", "toolTip", "automationName", "classes", "canvasLeft", "canvasTop", "gridRow", "gridColumn", "gridRowSpan", "gridColumnSpan", "dock", "onKeyDown", "onKeyUp", "allowDrop", "onDragOver", "onDrop", "spacing", "orientation"] },
   { kind: "WrapPanel", props: ["ref", "width", "height", "minWidth", "minHeight", "maxWidth", "maxHeight", "margin", "horizontalAlignment", "verticalAlignment", "isVisible", "isEnabled", "opacity", "toolTip", "automationName", "classes", "canvasLeft", "canvasTop", "gridRow", "gridColumn", "gridRowSpan", "gridColumnSpan", "dock", "onKeyDown", "onKeyUp", "allowDrop", "onDragOver", "onDrop", "spacing", "orientation"] },

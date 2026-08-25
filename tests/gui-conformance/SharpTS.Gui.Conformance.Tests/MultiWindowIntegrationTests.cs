@@ -42,7 +42,7 @@ public sealed class MultiWindowIntegrationTests
                   "hostedAbiVersion": 1,
                   "guiApiVersion": 1,
                   "descriptorSchemaVersion": 1,
-                  "descriptorSchemaHash": "0c34aaf15e0ab40a353d13f9e4992d1a64ee1bc39f925ba635703e1cb856915f"
+                  "descriptorSchemaHash": "1e7a4cdd01065d70da9be0d4953d54954ba969aaca5daec7b961239dabd48bc5"
                 }
                 """);
 

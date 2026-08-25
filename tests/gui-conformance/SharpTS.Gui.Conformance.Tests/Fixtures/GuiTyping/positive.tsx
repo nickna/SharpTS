@@ -55,7 +55,7 @@ const application = createDesktopApplication({
     onUnhandledError: (_error, failedWindow) => failedWindow.dispose(),
 });
 const mainWindow = application.createWindow(
-    <Window title="Main"><Button classes={["primary"]}>Main</Button></Window>,
+    <Window title="Main" topmost><Button classes={["primary"]}>Main</Button></Window>,
     { main: true },
 );
 const modalWindow = application.createWindow(

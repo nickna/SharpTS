@@ -37,6 +37,11 @@ internal sealed class WindowDescriptor() : NodeDescriptor("Window", 0, 1)
             window.CanResize = next.CanResize;
             changed = true;
         }
+        if (window.Topmost != next.Topmost)
+        {
+            window.Topmost = next.Topmost;
+            changed = true;
+        }
         ThemeVariant theme = ParseTheme(next.Theme);
         if (!Equals(window.RequestedThemeVariant, theme))
         {

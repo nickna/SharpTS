@@ -3,7 +3,7 @@ import type { DesktopWindow } from "./runtime.ts";
 
 /** Native property that can be read through DesktopTestDriver. @category Testing */
 export type DesktopTestProperty =
-    "automationName" | "background" | "foreground" | "toolTip" | "isEnabled" | "isVisible";
+    "automationName" | "background" | "foreground" | "toolTip" | "isEnabled" | "isVisible" | "topmost";
 
 /** Headless driver for locating and interacting with controls by their key. @category Testing */
 export interface DesktopTestDriver {

@@ -470,6 +470,44 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
+    public void Button_PointerOverPreservesConfiguredVisuals()
+    {
+        using DesktopRoot root = CreateRoot();
+        root.Render(new GuiVNode(
+            "Window",
+            Theme: "light",
+            Width: 320,
+            Height: 180,
+            Children: new[]
+            {
+                new GuiVNode(
+                    "Button",
+                    Key: "hover-button",
+                    Text: "7",
+                    Background: "#ffffff",
+                    Foreground: "#172033",
+                    Opacity: 1),
+            }));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var button = Assert.IsType<Button>(root.FindControl("hover-button"));
+        Point? center = button.TranslatePoint(
+            new Point(button.Bounds.Width / 2, button.Bounds.Height / 2),
+            root.Window);
+        Assert.NotNull(center);
+        root.Window.MouseMove(center.Value, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(button.IsPointerOver);
+        Assert.True(button.IsVisible);
+        Assert.Equal(1, button.Opacity);
+        Assert.Equal("7", button.Content);
+        Assert.Equal(Color.Parse("#ffffff"), Assert.IsAssignableFrom<ISolidColorBrush>(button.Background).Color);
+        Assert.Equal(Color.Parse("#172033"), Assert.IsAssignableFrom<ISolidColorBrush>(button.Foreground).Color);
+    }
+
+    [Fact]
     public void ReplacementAndDisposal_ReleaseEventsAndRefsChildFirstExactlyOnce()
     {
         var order = new List<string>();
@@ -849,7 +887,7 @@ public sealed class DesktopRendererTests : IDisposable
         DesktopRef reference = DesktopBridge.CreateRef();
         using DesktopRoot root = CreateRoot();
         root.Render(new GuiVNode(
-            "Window", Key: "window", Theme: "dark", Width: 320, Height: 180,
+            "Window", Key: "window", Theme: "dark", Topmost: true, Width: 320, Height: 180,
             Children: new[] { new GuiVNode(
                 "TextBox", Key: "editor", Text: string.Empty, AutomationName: "Document editor",
                 TextChanged: value => committedText.Add(value), AttachRef: reference.Attach, RefIdentity: reference) }));
@@ -857,6 +895,7 @@ public sealed class DesktopRendererTests : IDisposable
         var editor = Assert.IsType<TextBox>(root.FindControl("editor"));
         Assert.Equal("Document editor", AutomationProperties.GetName(editor));
         Assert.Equal(ThemeVariant.Dark, root.Window!.RequestedThemeVariant);
+        Assert.True(root.Window.Topmost);
         Assert.True(reference.IsAttached);
         root.Window.Show();
         Dispatcher.UIThread.RunJobs();

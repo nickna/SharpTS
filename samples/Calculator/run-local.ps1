@@ -12,6 +12,8 @@ dotnet build (Join-Path $root 'src\SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj') 
 if ($LASTEXITCODE -ne 0) { throw 'Failed to build the GUI SDK tasks.' }
 dotnet publish (Join-Path $root 'src\SharpTS.Gui.Host\SharpTS.Gui.Host.csproj') -c Release --self-contained false
 if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the GUI host.' }
+dotnet publish (Join-Path $root 'src\SharpTS.Gui.Host\SharpTS.Gui.Host.csproj') -c Release --self-contained false --no-restore -p:SharpTSGuiHostLibrary=true -o (Join-Path $root 'src\SharpTS.Gui.Host\bin\Release\net10.0\aot-publish')
+if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the AOT GUI host library.' }
 dotnet pack (Join-Path $root 'src\SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj') -c Release -o $feed -p:MinVerVersionOverride=$sdkVersion
 if ($LASTEXITCODE -ne 0) { throw 'Failed to pack the GUI SDK.' }
 # This script intentionally republishes the same local version while developing.

@@ -71,6 +71,7 @@ public static class DesktopTestingBridge
         "toolTip" => ToolTip.GetTip(RequireControl<Control>(root, key))?.ToString() ?? string.Empty,
         "isEnabled" => RequireControl<Control>(root, key).IsEnabled.ToString(),
         "isVisible" => RequireControl<Control>(root, key).IsVisible.ToString(),
+        "topmost" => RequireControl<Window>(root, key).Topmost.ToString(),
         _ => throw new ArgumentException($"Unsupported Headless property '{property}'.", nameof(property)),
     };
 
