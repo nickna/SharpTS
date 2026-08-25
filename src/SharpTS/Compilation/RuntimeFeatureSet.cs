@@ -143,8 +143,10 @@ public sealed class RuntimeFeatureSet
     // Function route checked alongside this flag) can replace a method binding.
     // Exact-instance typed companion calls require this to remain false.
     public bool UsesClassPrototypeMutation { get; set; } = true;
-    // A Date.prototype write makes statically typed Date method calls observable
-    // through the prototype object, so the direct DateEmitter fast path is unsafe.
+    // Date method binding mutation (prototype aliases, own overrides/accessors,
+    // prototype-chain mutation, or opaque evaluation) makes statically typed Date
+    // calls observable, so the direct DateEmitter fast path is unsafe. The historical
+    // property name is retained because it is part of the emitted-runtime feature API.
     public bool UsesDatePrototypeMutation { get; set; } = true;
     // Promise method/constructor/species mutation makes direct then lowering
     // observable through ordinary property lookup. Such programs must retain

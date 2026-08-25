@@ -30,13 +30,11 @@ public sealed class DateEmitter : ITypeEmitterStrategy
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
 
-        // Every handled method leaves a reference on the stack: a boxed double for the
-        // numeric getters/setters/valueOf (and a string|null object for toJSON), or a
-        // string for the conversion methods. We record the resulting StackType so the
-        // caller's EnsureBoxed() does not box an already-boxed value a second time —
-        // emitting `box Double` twice is the StackUnexpected ILVerify failure in #537.
-        // (The numeric arg emitted via EmitExpressionAsDouble would otherwise leave the
-        // tracked type as Double, tricking EnsureBoxed into re-boxing the boxed result.)
+        // Direct numeric getters and the single-double-argument setters keep the helper's
+        // native double result on the stack. Consumers that need object/any will box it at
+        // their actual boundary; numeric consumers and discarded results avoid the former
+        // box/unbox pair entirely (#1487). Multi-argument setters still use the object[]
+        // path and deliberately retain their boxed result for now.
         StackType resultType = StackType.Unknown;
 
         switch (methodName)
@@ -44,136 +42,136 @@ public sealed class DateEmitter : ITypeEmitterStrategy
             // Getters (no arguments, return double)
             case "getTime":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetTime);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getFullYear":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetFullYear);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getMonth":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetMonth);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getDate":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetDate);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getDay":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetDay);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getHours":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetHours);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getMinutes":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetMinutes);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getSeconds":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetSeconds);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getMilliseconds":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetMilliseconds);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getTimezoneOffset":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetTimezoneOffset);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             // UTC getters + legacy getYear (no arguments, return double)
             case "getUTCFullYear":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCFullYear);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCMonth":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCMonth);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCDate":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCDate);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCDay":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCDay);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCHours":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCHours);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCMinutes":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCMinutes);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCSeconds":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCSeconds);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getUTCMilliseconds":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetUTCMilliseconds);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "getYear":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateGetYear);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             // Simple setters (single argument, return double)
             case "setTime":
                 EmitSingleDoubleArgOrNaN(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetTime);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "setDate":
                 EmitSingleDoubleArgOrNaN(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetDate);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "setMilliseconds":
                 EmitSingleDoubleArgOrNaN(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetMilliseconds);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             // UTC simple setters + legacy setYear (single argument, return double)
             case "setUTCDate":
                 EmitSingleDoubleArgOrNaN(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCDate);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "setUTCMilliseconds":
                 EmitSingleDoubleArgOrNaN(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetUTCMilliseconds);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             case "setYear":
                 EmitSingleDoubleArgOrNaN(emitter, arguments);
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateSetYear);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             // Multi-argument setters (variadic, packaged as object[]). The $Runtime
@@ -285,7 +283,7 @@ public sealed class DateEmitter : ITypeEmitterStrategy
             // valueOf (no arguments, returns double)
             case "valueOf":
                 il.Emit(OpCodes.Call, ctx.Runtime!.DateValueOf);
-                il.Emit(OpCodes.Box, ctx.Types.Double);
+                resultType = StackType.Double;
                 break;
 
             // toString (no arguments, returns string)
