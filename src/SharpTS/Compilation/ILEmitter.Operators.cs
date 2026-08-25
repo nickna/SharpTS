@@ -1283,14 +1283,15 @@ public partial class ILEmitter
         HoistedTypedArrayBacking backing,
         LocalBuilder indexLocal)
     {
-        IL.Emit(OpCodes.Ldloc, backing.ByteOffsetLocal);
+        // Stable-backing candidates are created only by the exact length constructor, whose
+        // backing always starts at byte zero. Keep the captured offset in the preheader as part
+        // of the guarded storage facts, but do not reload and add that known zero at every access.
         IL.Emit(OpCodes.Ldloc, indexLocal);
         if (backing.Layout.BytesPerElement != 1)
         {
             IL.Emit(OpCodes.Ldc_I4, backing.Layout.BytesPerElement);
             IL.Emit(OpCodes.Mul);
         }
-        IL.Emit(OpCodes.Add);
     }
 
     private bool TryEmitIntegerCounterIndexI4(Expr index)
