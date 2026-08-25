@@ -1611,6 +1611,14 @@ public class EmittedRuntime
     public MethodBuilder GeneratorThrowMethod { get; set; } = null!;
     public MethodBuilder GeneratorNextMethod { get; set; } = null!;
 
+    // Private typed bridge implemented only by sync generators whose complete
+    // yield set is proven numeric. Direct for...of lowering uses it to avoid
+    // iterator-result allocation and per-yield number boxing while the public
+    // $IGenerator ABI remains object-valued.
+    public TypeBuilder NativeNumberGeneratorInterfaceType { get; set; } = null!;
+    public MethodBuilder NativeNumberGeneratorMoveNextMethod { get; set; } = null!;
+    public MethodBuilder NativeNumberGeneratorCurrentMethod { get; set; } = null!;
+
     // Async Generator interface ($IAsyncGenerator extends IAsyncEnumerator<object> with async Return/Throw)
     public TypeBuilder AsyncGeneratorInterfaceType { get; set; } = null!;
     public MethodBuilder AsyncGeneratorNextMethod { get; set; } = null!;

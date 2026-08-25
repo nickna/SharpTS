@@ -35,6 +35,12 @@ public partial class CompilationContext
     public MethodBuilder? StableDirectSelfCallTarget { get; set; }
 
     /// <summary>
+    /// Stable directly callable generator declarations whose emitted state
+    /// machine implements the private native-number generator bridge.
+    /// </summary>
+    public IReadOnlySet<string>? StableNativeNumberGeneratorFunctions { get; set; }
+
+    /// <summary>
     /// The $Program type where top-level functions are defined.
     /// Used for GetMethodFromHandle to properly resolve MethodBuilder tokens in persisted assemblies.
     /// </summary>

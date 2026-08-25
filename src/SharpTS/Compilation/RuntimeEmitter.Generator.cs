@@ -67,6 +67,40 @@ public partial class RuntimeEmitter
         runtime.GeneratorThrowMethod = throwMethod;
 
         interfaceBuilder.CreateType();
+        EmitNativeNumberGeneratorInterface(moduleBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits an internal interface for exact numeric generator state machines.
+    /// The implementing methods are explicit/private, so this compiler ABI does
+    /// not add JavaScript-visible properties to generator instances.
+    /// </summary>
+    private void EmitNativeNumberGeneratorInterface(
+        ModuleBuilder moduleBuilder,
+        EmittedRuntime runtime)
+    {
+        var interfaceBuilder = moduleBuilder.DefineType(
+            "$INativeNumberGenerator",
+            TypeAttributes.NotPublic | TypeAttributes.Interface | TypeAttributes.Abstract,
+            null,
+            [runtime.GeneratorInterfaceType]);
+        runtime.NativeNumberGeneratorInterfaceType = interfaceBuilder;
+
+        runtime.NativeNumberGeneratorMoveNextMethod = interfaceBuilder.DefineMethod(
+            "$moveNextForOf",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract |
+                MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Boolean,
+            Type.EmptyTypes);
+
+        runtime.NativeNumberGeneratorCurrentMethod = interfaceBuilder.DefineMethod(
+            "$getCurrentNumber",
+            MethodAttributes.Public | MethodAttributes.Virtual | MethodAttributes.Abstract |
+                MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Double,
+            Type.EmptyTypes);
+
+        interfaceBuilder.CreateType();
     }
 }
 

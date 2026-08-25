@@ -331,6 +331,7 @@ public partial class ILCompiler
         public GeneratorStateAnalyzer Analyzer { get; } = new();
         public Dictionary<string, GeneratorStateMachineBuilder> StateMachines { get; } = [];
         public Dictionary<string, Stmt.Function> Functions { get; } = [];
+        public HashSet<string> StableNativeNumberFunctions { get; } = new(StringComparer.Ordinal);
         public int StateMachineCounter { get; set; }
     }
 

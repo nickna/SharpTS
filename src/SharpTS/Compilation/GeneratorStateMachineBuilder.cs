@@ -25,6 +25,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
     // Core state machine fields
     public FieldBuilder StateField { get; private set; } = null!;
     public FieldBuilder CurrentField { get; private set; } = null!;
+    public FieldBuilder? NativeNumberCurrentField { get; private set; }
 
     // The value passed to next(v); read by a resumed yield expression (ECMA-262
     // §27.5.3.3 — `yield expr` evaluates to the argument of the resuming next).
@@ -112,7 +113,9 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis,
         bool isInstanceMethod = false,
         EmittedRuntime? runtime = null,
-        bool hasDynamicThis = false)
+        bool hasDynamicThis = false,
+        IReadOnlyDictionary<string, Type>? hoistedFieldTypes = null,
+        bool useNativeNumberCurrent = false)
     {
         _runtime = runtime;
 
@@ -128,6 +131,10 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         {
             interfaces.Add(runtime.GeneratorInterfaceType);
         }
+        if (useNativeNumberCurrent && runtime?.NativeNumberGeneratorInterfaceType != null)
+        {
+            interfaces.Add(runtime.NativeNumberGeneratorInterfaceType);
+        }
 
         // Define the state machine class (using class for reference semantics with IEnumerable)
         // Name follows C# compiler convention: <MethodName>d__N
@@ -141,6 +148,8 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // Define core fields
         DefineStateField();
         DefineCurrentField();
+        if (useNativeNumberCurrent)
+            DefineNativeNumberCurrentField();
         DefineSentField();
 
         // Define hoisted variables using HoistingManager.
@@ -149,8 +158,8 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         // from JS closure semantics (#541). They are instead read live from their enclosing
         // storage in MoveNext, the same way the async-generator path already works.
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);
-        _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
-        _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
+        _hoisting.DefineHoistedParameters(analysis.HoistedParameters, hoistedFieldTypes);
+        _hoisting.DefineHoistedLocals(analysis.HoistedLocals, hoistedFieldTypes);
         _hoisting.DefineHoistedEnumerators(analysis.ForOfLoopsWithYield, _types.IEnumerator);
         _hoisting.DefineHoistedForInState(analysis.ForInLoopsWithYield, _types.ListOfObject, _types.Int32);
 
@@ -192,6 +201,8 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         if (_runtime?.GeneratorInterfaceType != null)
         {
             DefineGeneratorMethods();
+            if (NativeNumberCurrentField != null)
+                DefineNativeNumberGeneratorMethods();
         }
     }
 
@@ -214,6 +225,14 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
             _types.Object,
             FieldAttributes.Private
         );
+    }
+
+    private void DefineNativeNumberCurrentField()
+    {
+        NativeNumberCurrentField = _stateMachineType.DefineField(
+            "<>2__currentNumber",
+            _types.Double,
+            FieldAttributes.Private);
     }
 
     private void DefineSentField()
@@ -290,7 +309,15 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
         var il = CurrentGetMethod.GetILGenerator();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, CurrentField);
+        if (NativeNumberCurrentField != null)
+        {
+            il.Emit(OpCodes.Ldfld, NativeNumberCurrentField);
+            il.Emit(OpCodes.Box, _types.Double);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldfld, CurrentField);
+        }
         il.Emit(OpCodes.Ret);
 
         currentProp.SetGetMethod(CurrentGetMethod);
@@ -316,7 +343,15 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
 
         var il2 = NonGenericCurrentGetMethod.GetILGenerator();
         il2.Emit(OpCodes.Ldarg_0);
-        il2.Emit(OpCodes.Ldfld, CurrentField);
+        if (NativeNumberCurrentField != null)
+        {
+            il2.Emit(OpCodes.Ldfld, NativeNumberCurrentField);
+            il2.Emit(OpCodes.Box, _types.Double);
+        }
+        else
+        {
+            il2.Emit(OpCodes.Ldfld, CurrentField);
+        }
         il2.Emit(OpCodes.Ret);
 
         nonGenericCurrentProp.SetGetMethod(NonGenericCurrentGetMethod);
@@ -525,8 +560,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         nextIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         nextIL.Emit(OpCodes.Dup);
         nextIL.Emit(OpCodes.Ldstr, "value");
-        nextIL.Emit(OpCodes.Ldarg_0);
-        nextIL.Emit(OpCodes.Ldfld, CurrentField);
+        EmitLoadYieldValueBoxed(nextIL);
         nextIL.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
         nextIL.Emit(OpCodes.Dup);
         nextIL.Emit(OpCodes.Ldstr, "done");
@@ -655,6 +689,91 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         _stateMachineType.DefineMethodOverride(ThrowMethod, _runtime!.GeneratorThrowMethod);
     }
 
+    private void DefineNativeNumberGeneratorMethods()
+    {
+        var moveNextForOf = _stateMachineType.DefineMethod(
+            "$INativeNumberGenerator.$moveNextForOf",
+            MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final |
+                MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Boolean,
+            Type.EmptyTypes);
+        var il = moveNextForOf.GetILGenerator();
+
+        EmitThrowIfExecuting(il, ExecutingField!);
+
+        // for...of resumes a generator with undefined on every step. This is
+        // observable when the yield expression's result is read after resume.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldsfld, _runtime!.UndefinedInstance);
+        il.Emit(OpCodes.Stfld, SentField);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stfld, ExecutingField!);
+        var moved = il.DeclareLocal(_types.Boolean);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, MoveNextMethod);
+        il.Emit(OpCodes.Stloc, moved);
+        il.BeginFinallyBlock();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stfld, ExecutingField!);
+        il.EndExceptionBlock();
+        il.Emit(OpCodes.Ldloc, moved);
+        il.Emit(OpCodes.Ret);
+        _stateMachineType.DefineMethodOverride(
+            moveNextForOf, _runtime.NativeNumberGeneratorMoveNextMethod);
+
+        var getCurrentNumber = _stateMachineType.DefineMethod(
+            "$INativeNumberGenerator.$getCurrentNumber",
+            MethodAttributes.Private | MethodAttributes.Virtual | MethodAttributes.Final |
+                MethodAttributes.HideBySig | MethodAttributes.NewSlot,
+            _types.Double,
+            Type.EmptyTypes);
+        var currentIL = getCurrentNumber.GetILGenerator();
+        currentIL.Emit(OpCodes.Ldarg_0);
+        currentIL.Emit(OpCodes.Ldfld, NativeNumberCurrentField!);
+        currentIL.Emit(OpCodes.Ret);
+        _stateMachineType.DefineMethodOverride(
+            getCurrentNumber, _runtime.NativeNumberGeneratorCurrentMethod);
+    }
+
+    private void EmitLoadYieldValueBoxed(ILGenerator il)
+    {
+        il.Emit(OpCodes.Ldarg_0);
+        if (NativeNumberCurrentField != null)
+        {
+            il.Emit(OpCodes.Ldfld, NativeNumberCurrentField);
+            il.Emit(OpCodes.Box, _types.Double);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldfld, CurrentField);
+        }
+    }
+
+    private void EmitLoadMoveNextResultValueBoxed(ILGenerator il, LocalBuilder moved)
+    {
+        if (NativeNumberCurrentField == null)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, CurrentField);
+            return;
+        }
+
+        var completion = il.DefineLabel();
+        var ready = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, moved);
+        il.Emit(OpCodes.Brfalse, completion);
+        EmitLoadYieldValueBoxed(il);
+        il.Emit(OpCodes.Br, ready);
+        il.MarkLabel(completion);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, CurrentField);
+        il.MarkLabel(ready);
+    }
+
     /// <summary>
     /// Emits <c>if (this.&lt;&gt;5__executing) throw new TypeError("Generator is already running");</c>
     /// at the head of next()/return()/throw(). The error is wrapped via CreateException so the guest
@@ -710,8 +829,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "value");
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, CurrentField);
+        EmitLoadMoveNextResultValueBoxed(il, movedLocal);
         il.Emit(OpCodes.Callvirt, setItem);
         il.Emit(OpCodes.Dup);
         il.Emit(OpCodes.Ldstr, "done");

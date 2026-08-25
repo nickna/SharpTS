@@ -340,21 +340,43 @@ public abstract partial class ExpressionEmitterBase
         bool isPrefix)
     {
         string name = variable.Name.Lexeme;
-        if (Ctx.CellBindingLocals.ContainsKey(name)
-            || !Ctx.Locals.TryGetLocal(name, out var local)
-            || local.LocalType != Types.Double)
+        if (Ctx.CellBindingLocals.ContainsKey(name))
         {
             return false;
         }
 
-        IL.Emit(OpCodes.Ldloc, local);
-        if (!isPrefix)
-            IL.Emit(OpCodes.Dup);
+        if (Ctx.Locals.TryGetLocal(name, out var local)
+            && local.LocalType == Types.Double)
+        {
+            IL.Emit(OpCodes.Ldloc, local);
+            if (!isPrefix)
+                IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Ldc_R8, delta);
+            IL.Emit(OpCodes.Add);
+            if (isPrefix)
+                IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, local);
+            SetStackType(StackType.Double);
+            return true;
+        }
+
+        var field = GetHoistedVariableField(name);
+        if (field == null || field.FieldType != Types.Double)
+            return false;
+
+        var original = IL.DeclareLocal(Types.Double);
+        var updated = IL.DeclareLocal(Types.Double);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldfld, field);
+        IL.Emit(OpCodes.Stloc, original);
+        IL.Emit(OpCodes.Ldloc, original);
         IL.Emit(OpCodes.Ldc_R8, delta);
         IL.Emit(OpCodes.Add);
-        if (isPrefix)
-            IL.Emit(OpCodes.Dup);
-        IL.Emit(OpCodes.Stloc, local);
+        IL.Emit(OpCodes.Stloc, updated);
+        IL.Emit(OpCodes.Ldarg_0);
+        IL.Emit(OpCodes.Ldloc, updated);
+        IL.Emit(OpCodes.Stfld, field);
+        IL.Emit(OpCodes.Ldloc, isPrefix ? updated : original);
         SetStackType(StackType.Double);
         return true;
     }
