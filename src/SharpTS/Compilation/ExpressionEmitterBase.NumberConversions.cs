@@ -73,6 +73,59 @@ public abstract partial class ExpressionEmitterBase
     /// </summary>
     protected virtual bool TryEmitIntegerCounterDecimalString(Expr expression) => false;
 
+    /// <summary>
+    /// Folds <c>parseInt(counter.toString(), 10)</c> only when the receiver is a
+    /// native Int64 loop-counter expression. Every Int64 is below JavaScript's
+    /// 1e21 exponential-format threshold, so parsing its stable decimal spelling
+    /// is exactly the original numeric value and neither intermediate operation
+    /// is observable.
+    /// </summary>
+    internal bool TryEmitStableIntegerCounterParseInt(Expr expression)
+    {
+        if (!CanEmitStableIntegerCounterParseInt(expression))
+            return false;
+
+        var toStringCall = (Expr.Call)expression;
+        var methodGet = (Expr.Get)toStringCall.Callee;
+        return TryEmitIntegerCounterDecimalValue(methodGet.Object);
+    }
+
+    /// <summary>
+    /// Non-emitting companion used while a call handler selects its stack ABI.
+    /// </summary>
+    internal bool CanEmitStableIntegerCounterParseInt(Expr expression)
+    {
+        if (Ctx.RuntimeFeatures?.UsesNumberPrototypeMutation == true
+            || expression is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Name.Lexeme: "toString"
+                } methodGet
+            } toStringCall
+            || toStringCall.Arguments.Count > 1
+            || (toStringCall.Arguments.Count == 1
+                && (!TryGetInt32Literal(toStringCall.Arguments[0], out int radix)
+                    || radix != 10))
+            || !IsStaticallyNumber(Ctx.TypeMap?.Get(methodGet.Object)))
+        {
+            return false;
+        }
+
+        return IsIntegerCounterDecimalValue(methodGet.Object);
+    }
+
+    /// <summary>
+    /// Sync ILEmitter overrides this for its native Int64 for-loop counters.
+    /// Other emitters conservatively retain the string-and-scan path.
+    /// </summary>
+    protected virtual bool TryEmitIntegerCounterDecimalValue(Expr expression) => false;
+
+    /// <summary>Non-emitting probe paired with the value emitter.</summary>
+    protected virtual bool IsIntegerCounterDecimalValue(Expr expression) => false;
+
     private static bool IsStaticallyNumber(TypeInfo? type) => type switch
     {
         TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => true,

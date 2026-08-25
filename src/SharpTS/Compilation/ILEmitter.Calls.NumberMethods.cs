@@ -21,6 +21,20 @@ public partial class ILEmitter
         return true;
     }
 
+    protected override bool TryEmitIntegerCounterDecimalValue(Expr expression)
+    {
+        if (!IsIntegerCounterValueI8(expression))
+            return false;
+
+        _ = TryEmitIntegerCounterValueI8(expression);
+        IL.Emit(OpCodes.Conv_R8);
+        SetStackType(StackType.Double);
+        return true;
+    }
+
+    protected override bool IsIntegerCounterDecimalValue(Expr expression) =>
+        IsIntegerCounterValueI8(expression);
+
     /// <summary>
     /// Emits a BigInt instance-method call (receiver statically bigint). toString takes
     /// an optional radix (ECMA-262 21.2.3.3); toLocaleString is the decimal form;

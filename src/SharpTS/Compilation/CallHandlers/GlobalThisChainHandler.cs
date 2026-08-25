@@ -28,6 +28,12 @@ public class GlobalThisChainHandler : ICallHandler
         string namespaceName = innerGet.Name.Lexeme;
         string methodName = chainedGet.Name.Lexeme;
 
+        if (namespaceName == "Number"
+            && ctx.RuntimeFeatures?.UsesNumberConstructorMutation == true)
+        {
+            return false;
+        }
+
         // Handle globalThis.console.log() etc.
         if (namespaceName == "console")
         {
@@ -45,7 +51,17 @@ public class GlobalThisChainHandler : ICallHandler
         var staticStrategy = ctx.TypeEmitterRegistry.GetStaticStrategy(namespaceName);
         if (staticStrategy != null && staticStrategy.TryEmitStaticCall(emitter, methodName, call.Arguments))
         {
-            emitter.SetStackUnknown();
+            if (namespaceName == "Number"
+                && methodName == "parseInt"
+                && NumberStaticEmitter.EmitsUnboxedDecimalParseInt(
+                    emitter, call.Arguments))
+            {
+                emitter.SetStackType(StackType.Double);
+            }
+            else
+            {
+                emitter.SetStackUnknown();
+            }
             return true;
         }
 

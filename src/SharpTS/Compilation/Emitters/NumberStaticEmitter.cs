@@ -1,6 +1,7 @@
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using TypeInfo = SharpTS.TypeSystem.TypeInfo;
 
 namespace SharpTS.Compilation.Emitters;
 
@@ -22,7 +23,8 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
         switch (methodName)
         {
             case "parseInt":
-                EmitParseInt(emitter, arguments);
+                EmitParseInt(emitter, arguments,
+                    EmitsUnboxedDecimalParseInt(emitter, arguments));
                 return true;
             case "parseFloat":
                 EmitParseFloat(emitter, arguments);
@@ -164,10 +166,50 @@ public sealed class NumberStaticEmitter : IStaticTypeEmitterStrategy
         }
     }
 
-    private static void EmitParseInt(IEmitterContext emitter, List<Expr> arguments)
+    internal static bool EmitsUnboxedDecimalParseInt(
+        IEmitterContext emitter,
+        IReadOnlyList<Expr> arguments)
+        => emitter.Context.RuntimeFeatures?.UsesNumberConstructorMutation != true
+            && !emitter.HasVariable("Number")
+            && arguments.Count == 2
+            && (IsStaticallyString(emitter.Context.TypeMap?.Get(arguments[0]))
+                || emitter is ExpressionEmitterBase expressionEmitter
+                    && expressionEmitter.CanEmitStableIntegerCounterParseInt(
+                        arguments[0]))
+            && ExpressionEmitterBase.TryGetInt32Literal(arguments[1], out int radix)
+            && radix == 10;
+
+    private static bool IsStaticallyString(TypeInfo? type) => type switch
+    {
+        TypeInfo.String => true,
+        TypeInfo.StringLiteral => true,
+        TypeInfo.Union union => union.Types.Count > 0
+            && union.Types.All(IsStaticallyString),
+        _ => false
+    };
+
+    private static void EmitParseInt(
+        IEmitterContext emitter,
+        List<Expr> arguments,
+        bool emitDecimalFastPath)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
+
+        if (emitDecimalFastPath)
+        {
+            if (emitter is ExpressionEmitterBase expressionEmitter
+                && expressionEmitter.TryEmitStableIntegerCounterParseInt(
+                    arguments[0]))
+            {
+                return;
+            }
+
+            emitter.EmitExpression(arguments[0]);
+            il.Emit(OpCodes.Castclass, ctx.Types.String);
+            il.Emit(OpCodes.Call, ctx.Runtime!.NumberParseIntDecimalString);
+            return;
+        }
 
         // Emit string argument
         if (arguments.Count > 0)

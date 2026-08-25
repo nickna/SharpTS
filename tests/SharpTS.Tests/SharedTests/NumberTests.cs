@@ -119,6 +119,45 @@ public class NumberTests
     }
 
     [Theory, ModeData]
+    public void RadixTenParseInt_PreservesScannerBoundaries(ExecutionMode mode)
+    {
+        var source = """
+            const whitespace: string =
+                "\u0009\u000A\u000B\u000C\u000D\u0020\u00A0\u1680" +
+                "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007" +
+                "\u2008\u2009\u200A\u2028\u2029\u202F\u205F\u3000\uFEFF";
+
+            console.log(
+                parseInt(whitespace + "+42tail", 10),
+                Number.parseInt(whitespace + "+42tail", 10));
+            console.log(
+                Object.is(parseInt("-000suffix", 10), -0),
+                Object.is(Number.parseInt("-0.5", 10), -0));
+            console.log(
+                Number.isNaN(parseInt("", 10)),
+                Number.isNaN(parseInt("+", 10)),
+                Number.isNaN(Number.parseInt("-x", 10)));
+            console.log(
+                parseInt("123.75", 10),
+                Number.parseInt("0x10", 10));
+            console.log(
+                parseInt("9".repeat(400), 10) === Infinity,
+                Number.parseInt("9".repeat(400), 10) === Infinity);
+            console.log(Number.isNaN(parseInt("\u008512", 10)));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "42 42\n" +
+            "true true\n" +
+            "true true true\n" +
+            "123 0\n" +
+            "true true\n" +
+            "true\n",
+            output);
+    }
+
+    [Theory, ModeData]
     public void Number_parseFloat_ParsesFloats(ExecutionMode mode)
     {
         var source = """

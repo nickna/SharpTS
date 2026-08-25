@@ -159,7 +159,9 @@ internal static class GlobalFunctionHandlers
             throw new InterpreterException($"{BuiltInNames.ParseInt}() requires at least one argument.");
 
         var strRV = await evaluateArg(arguments[0]);
-        var str = strRV.ToObject()?.ToString() ?? "";
+        var str = strRV.IsString
+            ? strRV.AsString()
+            : interpreter.ToStringForBuiltInArgument(strRV.ToObject());
         int radix = 10;
         if (arguments.Count > 1)
         {

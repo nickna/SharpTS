@@ -154,9 +154,12 @@ public sealed class RuntimeFeatureSet
     // prototype-chain mutation API, or __proto__ access makes a backing-list-only
     // array append unsafe. The discarded-result push fast path requires this false.
     public bool UsesArrayPrototypeMutation { get; set; } = true;
-    // Number prototype/static mutation makes typed number method calls observable
+    // Number prototype mutation makes typed number instance methods observable
     // through ordinary property lookup. Direct formatting requires this false.
     public bool UsesNumberPrototypeMutation { get; set; } = true;
+    // Replacing Number or mutating its static properties requires live lookup of
+    // Number.parseInt and the other constructor-owned built-ins.
+    public bool UsesNumberConstructorMutation { get; set; } = true;
     // Any observable access to RegExp.prototype, replacement of the global
     // constructor, dynamic evaluation, or opaque descriptor/prototype mutation
     // can replace the intrinsic test/exec bindings. The allocation-free literal

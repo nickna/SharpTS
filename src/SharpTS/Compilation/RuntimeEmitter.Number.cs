@@ -150,6 +150,7 @@ public partial class RuntimeEmitter
     {
         // Emit helper methods first (they're used by other methods)
         EmitGetDigitValue(typeBuilder, runtime);
+        EmitParseIntDecimalStringHelper(typeBuilder, runtime);
         EmitParseIntStringHelper(typeBuilder, runtime);
         EmitParseIntHelper(typeBuilder, runtime);
         EmitConvertIntToRadix(typeBuilder, runtime);
@@ -168,6 +169,167 @@ public partial class RuntimeEmitter
         EmitNumberToPrecision(typeBuilder, runtime);
         EmitNumberToExponential(typeBuilder, runtime);
         EmitNumberToStringRadix(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits the literal-radix-10 parse core. The caller has already proved that
+    /// ToString/ToInt32 coercion and intrinsic lookup are unobservable, so this
+    /// helper can scan the existing string directly without trimming or boxing.
+    /// </summary>
+    private void EmitParseIntDecimalStringHelper(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "NumberParseIntDecimalString",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.String]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        runtime.NumberParseIntDecimalString = method;
+
+        var il = method.GetILGenerator();
+        var length = il.DeclareLocal(_types.Int32);
+        var index = il.DeclareLocal(_types.Int32);
+        var digitStart = il.DeclareLocal(_types.Int32);
+        var sign = il.DeclareLocal(_types.Int32);
+        var digit = il.DeclareLocal(_types.Int32);
+        var current = il.DeclareLocal(_types.Char);
+        var result = il.DeclareLocal(_types.Double);
+
+        var whitespaceLoop = il.DefineLabel();
+        var aboveAsciiWhitespace = il.DefineLabel();
+        var consumeWhitespace = il.DefineLabel();
+        var afterWhitespace = il.DefineLabel();
+        var notMinus = il.DefineLabel();
+        var afterSign = il.DefineLabel();
+        var digitLoop = il.DefineLabel();
+        var endDigits = il.DefineLabel();
+        var noDigits = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, length);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+
+        // Skip exactly the ECMAScript WhiteSpace and LineTerminator set. The
+        // ASCII check is first so the common digit-leading input reaches the
+        // parser after two comparisons. U+0085 is intentionally not accepted;
+        // char.IsWhiteSpace includes it even though ECMAScript does not.
+        il.MarkLabel(whitespaceLoop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Bge, noDigits);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, current);
+
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)' ');
+        il.Emit(OpCodes.Bgt_Un, aboveAsciiWhitespace);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)' ');
+        il.Emit(OpCodes.Beq, consumeWhitespace);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'\t');
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_4);
+        il.Emit(OpCodes.Ble_Un, consumeWhitespace);
+        il.Emit(OpCodes.Br, afterWhitespace);
+
+        il.MarkLabel(aboveAsciiWhitespace);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4, 0x00A0);
+        il.Emit(OpCodes.Blt_Un, afterWhitespace);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4, 0xFEFF);
+        il.Emit(OpCodes.Beq, consumeWhitespace);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Call,
+            _types.GetMethod(_types.Char, "IsWhiteSpace", _types.Char));
+        il.Emit(OpCodes.Brfalse, afterWhitespace);
+
+        il.MarkLabel(consumeWhitespace);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, whitespaceLoop);
+
+        il.MarkLabel(afterWhitespace);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, sign);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'-');
+        il.Emit(OpCodes.Bne_Un, notMinus);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stloc, sign);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, afterSign);
+
+        il.MarkLabel(notMinus);
+        il.Emit(OpCodes.Ldloc, current);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'+');
+        il.Emit(OpCodes.Bne_Un, afterSign);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+
+        il.MarkLabel(afterSign);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Stloc, digitStart);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, result);
+
+        il.MarkLabel(digitLoop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Bge, endDigits);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'0');
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, digit);
+        il.Emit(OpCodes.Ldloc, digit);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)9);
+        il.Emit(OpCodes.Bgt_Un, endDigits);
+
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Ldc_R8, 10.0);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ldloc, digit);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, digitLoop);
+
+        il.MarkLabel(endDigits);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, digitStart);
+        il.Emit(OpCodes.Beq, noDigits);
+        il.Emit(OpCodes.Ldloc, sign);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldloc, result);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noDigits);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

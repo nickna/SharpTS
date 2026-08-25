@@ -24,6 +24,13 @@ public class StaticTypeHandler : ICallHandler
         if (ctx.TypeEmitterRegistry == null)
             return false;
 
+        if (staticVar.Name.Lexeme == "Number"
+            && (emitter.HasVariable("Number")
+                || ctx.RuntimeFeatures?.UsesNumberConstructorMutation == true))
+        {
+            return false;
+        }
+
         var staticStrategy = ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
         if (staticStrategy == null)
             return false;
@@ -31,7 +38,14 @@ public class StaticTypeHandler : ICallHandler
         if (!staticStrategy.TryEmitStaticCall(emitter, staticGet.Name.Lexeme, call.Arguments))
             return false;
 
-        if (staticVar.Name.Lexeme == "Promise"
+        if (staticVar.Name.Lexeme == "Number"
+            && staticGet.Name.Lexeme == "parseInt"
+            && NumberStaticEmitter.EmitsUnboxedDecimalParseInt(
+                emitter, call.Arguments))
+        {
+            emitter.SetStackType(StackType.Double);
+        }
+        else if (staticVar.Name.Lexeme == "Promise"
             && staticGet.Name.Lexeme == "resolve"
             && call.Arguments is [var resolvedValue]
             && ctx.TypeMap?.IsStablePrimitivePromiseAllSeedValue(resolvedValue) == true)

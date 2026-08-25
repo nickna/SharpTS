@@ -1150,6 +1150,8 @@ public class EmittedRuntime
     public MethodBuilder NumberParseInt { get; set; } = null!;
     /// <summary>Typed intrinsic parse path: already-coerced string plus native radix.</summary>
     public MethodBuilder NumberParseIntString { get; set; } = null!;
+    /// <summary>Allocation-free decimal parser for a stable string and literal radix 10.</summary>
+    public MethodBuilder NumberParseIntDecimalString { get; set; } = null!;
     public MethodBuilder NumberParseFloat { get; set; } = null!;
     public MethodBuilder NumberIsNaN { get; set; } = null!;
     public MethodBuilder NumberIsFinite { get; set; } = null!;

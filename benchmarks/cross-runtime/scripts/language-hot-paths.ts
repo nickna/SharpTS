@@ -58,6 +58,9 @@ function generatorRange(n: number): number {
     return sum;
 }
 
+// Permanent cross-runtime guard for the stable decimal parser. Keep the
+// numeric toString producer here so this tracks the real #1480 workload while
+// the BenchmarkDotNet companion isolates parser-only attribution.
 function parseIntegers(n: number): number {
     let sum: number = 0;
     for (let i: number = 0; i < n; i++) {
