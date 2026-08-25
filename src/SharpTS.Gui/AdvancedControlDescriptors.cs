@@ -6,6 +6,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 
 namespace SharpTS.Gui;
 
@@ -152,7 +154,20 @@ internal sealed partial class RichTextBlockDescriptor() : NodeDescriptor("RichTe
 
 internal sealed class DrawingCanvasDescriptor() : NodeDescriptor("DrawingCanvas", 0, 0)
 {
-    public override void Validate(GuiVNode node) => DrawingSurface.Parse(node.DrawingJson);
+    public override void Validate(GuiVNode node)
+    {
+        DrawingSurface.DrawingModel[] commands = DrawingSurface.Parse(node.DrawingJson);
+        bool hasWidth = !double.IsNaN(node.CoordinateWidth);
+        bool hasHeight = !double.IsNaN(node.CoordinateHeight);
+        if (hasWidth != hasHeight)
+            throw new ArgumentException("coordinateWidth and coordinateHeight must be supplied together.");
+        if (hasWidth)
+        {
+            DrawingGraphics.ValidateSurfaceDimensions(node.CoordinateWidth, node.CoordinateHeight);
+        }
+        else if (commands.Any(command => command.Composite == "destinationOut" || command.Kind == "text"))
+            throw new ArgumentException("Text and destinationOut drawing commands require logical coordinate dimensions.");
+    }
 
     public override Control Create(GuiVNode node)
     {
@@ -170,60 +185,114 @@ internal sealed class DrawingCanvasDescriptor() : NodeDescriptor("DrawingCanvas"
             surface.Commands = DrawingSurface.Parse(next.DrawingJson);
             changed = true;
         }
+        if (!surface.CoordinateWidth.Equals(next.CoordinateWidth) || !surface.CoordinateHeight.Equals(next.CoordinateHeight))
+        {
+            surface.CoordinateWidth = next.CoordinateWidth;
+            surface.CoordinateHeight = next.CoordinateHeight;
+            changed = true;
+        }
         return changed;
     }
 }
 
-internal sealed partial class DrawingSurface : Control
+internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICustomHitTest
 {
     private DrawingModel[] _commands = [];
+    private Bitmap? _bitmap;
+    private double _coordinateWidth = double.NaN;
+    private double _coordinateHeight = double.NaN;
     public DrawingModel[] Commands
     {
         get => _commands;
-        set { _commands = value; InvalidateVisual(); }
+        set { _commands = value; ResetBitmap(); }
     }
+    public double CoordinateWidth { get => _coordinateWidth; set { _coordinateWidth = value; ResetBitmap(); } }
+    public double CoordinateHeight { get => _coordinateHeight; set { _coordinateHeight = value; ResetBitmap(); } }
+
+    public DrawingSurface() => DetachedFromVisualTree += OnDetachedFromVisualTree;
+
+    public bool HitTest(Point point) => new Rect(Bounds.Size).Contains(point);
 
     public override void Render(DrawingContext context)
     {
         base.Render(context);
-        foreach (DrawingModel command in _commands)
+        if (double.IsFinite(CoordinateWidth) && double.IsFinite(CoordinateHeight))
         {
-            IBrush? fill = command.Fill is null ? null : Brush.Parse(command.Fill);
-            Pen? pen = command.Stroke is null ? null : new Pen(Brush.Parse(command.Stroke), command.StrokeThickness ?? 1);
-            switch (command.Kind)
-            {
-                case "line":
-                    context.DrawLine(
-                        pen ?? throw new ArgumentException("A line command requires stroke."),
-                        new Point(command.X1, command.Y1), new Point(command.X2, command.Y2));
-                    break;
-                case "rectangle":
-                    context.DrawRectangle(fill, pen, new Rect(command.X, command.Y, command.Width, command.Height));
-                    break;
-                case "ellipse":
-                    context.DrawEllipse(fill, pen, new Point(command.CenterX, command.CenterY), command.RadiusX, command.RadiusY);
-                    break;
-            }
+            _bitmap ??= DrawingGraphics.RenderBitmap(CoordinateWidth, CoordinateHeight, _commands);
+            context.DrawImage(_bitmap, new Rect(_bitmap.Size), new Rect(Bounds.Size));
+            return;
         }
+        foreach (DrawingModel command in _commands)
+            DrawingGraphics.DrawVector(context, command);
     }
 
-    public static DrawingModel[] Parse(string? json)
+    private void ResetBitmap()
+    {
+        _bitmap?.Dispose();
+        _bitmap = null;
+        InvalidateVisual();
+    }
+
+    private void OnDetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs args)
+    {
+        _bitmap?.Dispose();
+        _bitmap = null;
+    }
+
+    public static DrawingModel[] Parse(string? json, DesktopRuntimeContext? context = null)
     {
         DrawingModel[] commands = JsonSerializer.Deserialize(
             json ?? "[]", DrawingJsonContext.Default.DrawingModelArray) ?? [];
         foreach (DrawingModel command in commands)
         {
-            if (command.Kind is not ("line" or "rectangle" or "ellipse"))
+            if (command.Kind is not ("line" or "rectangle" or "ellipse" or "polyline" or "text" or "image"))
                 throw new ArgumentException($"Unsupported drawing command '{command.Kind}'.");
-            if (command.Kind == "line" && command.Stroke is null)
-                throw new ArgumentException("A line command requires stroke.");
+            if (command.Kind is "line" or "polyline" && command.Stroke is null)
+                throw new ArgumentException($"A {command.Kind} command requires stroke.");
+            if (command.Kind == "polyline" && (command.Points is null || command.Points.Length == 0))
+                throw new ArgumentException("A polyline command requires at least one point.");
+            if (command.Kind == "image" && string.IsNullOrWhiteSpace(command.Source))
+                throw new ArgumentException("An image command requires a source.");
+            if (command.Kind == "text" && string.IsNullOrEmpty(command.Text))
+                throw new ArgumentException("A text command requires text.");
+            if (command.Kind == "text" && command.Text!.Length > 65_536)
+                throw new ArgumentException("A text command supports at most 65,536 characters.");
+            if (command.Kind == "text" && command.Fill is null)
+                throw new ArgumentException("A text command requires fill.");
+            if (command.Kind == "image") DrawingGraphics.ValidateImageSource(
+                context ?? DesktopBridge.RequireContext(), command.Source!);
             foreach (double value in command.Values())
                 if (!double.IsFinite(value)) throw new ArgumentException("Drawing coordinates must be finite.");
             if (command.Kind is "rectangle" && (command.Width < 0 || command.Height < 0) ||
+                (command.Kind is "image" or "text") && (command.Width <= 0 || command.Height <= 0) ||
                 command.Kind is "ellipse" && (command.RadiusX < 0 || command.RadiusY < 0))
-                throw new ArgumentException("Drawing dimensions must be non-negative.");
+                throw new ArgumentException("Drawing dimensions are invalid.");
+            if (command.Kind == "polyline" && command.Points!.Length > 10_000)
+                throw new ArgumentException("A polyline command supports at most 10,000 points.");
             if (command.StrokeThickness is <= 0)
                 throw new ArgumentException("Drawing stroke thickness must be positive.");
+            if (command.Opacity is double opacity && (!double.IsFinite(opacity) || opacity < 0 || opacity > 1))
+                throw new ArgumentException("Drawing opacity must be between zero and one.");
+            if (command.Composite is not (null or "sourceOver" or "destinationOut"))
+                throw new ArgumentException($"Unsupported drawing composite mode '{command.Composite}'.");
+            if (command.Kind == "image" && command.Composite == "destinationOut")
+                throw new ArgumentException("Image commands do not support destinationOut compositing.");
+            if (command.Kind == "text" && (!double.IsFinite(command.FontSize) || command.FontSize < 1 || command.FontSize > 512))
+                throw new ArgumentException("Text font size must be between 1 and 512 pixels.");
+            if (command.Kind == "text" && command.FontFamily is { Length: > 128 })
+                throw new ArgumentException("Text font family names support at most 128 characters.");
+            if (command.Kind == "text" && command.FontWeight is not (null or "normal" or "medium" or "semibold" or "bold"))
+                throw new ArgumentException($"Unsupported text font weight '{command.FontWeight}'.");
+            if (command.Kind == "text" && command.FontStyle is not (null or "normal" or "italic"))
+                throw new ArgumentException($"Unsupported text font style '{command.FontStyle}'.");
+            if (command.Kind == "text" && command.TextAlignment is not (null or "left" or "center" or "right"))
+                throw new ArgumentException($"Unsupported text alignment '{command.TextAlignment}'.");
+            if (command.Kind == "text" && command.TextWrapping is not (null or "noWrap" or "wrap"))
+                throw new ArgumentException($"Unsupported text wrapping '{command.TextWrapping}'.");
+            if (command.LineCap is not (null or "butt" or "round" or "square"))
+                throw new ArgumentException($"Unsupported line cap '{command.LineCap}'.");
+            if (command.LineJoin is not (null or "miter" or "round" or "bevel"))
+                throw new ArgumentException($"Unsupported line join '{command.LineJoin}'.");
             if (command.Fill is not null) _ = Brush.Parse(command.Fill);
             if (command.Stroke is not null) _ = Brush.Parse(command.Stroke);
         }
@@ -244,18 +313,35 @@ internal sealed partial class DrawingSurface : Control
         double CenterY,
         double RadiusX,
         double RadiusY,
+        DrawingPointModel[]? Points,
+        string? Source,
+        string? Text,
         string? Fill,
         string? Stroke,
-        double? StrokeThickness)
+        double? StrokeThickness,
+        double? Opacity,
+        string? Composite,
+        string? LineCap,
+        string? LineJoin,
+        string? FontFamily,
+        double FontSize,
+        string? FontWeight,
+        string? FontStyle,
+        string? TextAlignment,
+        string? TextWrapping)
     {
         public IEnumerable<double> Values() => Kind switch
         {
             "line" => [X1, Y1, X2, Y2],
             "rectangle" => [X, Y, Width, Height],
             "ellipse" => [CenterX, CenterY, RadiusX, RadiusY],
+            "polyline" => (Points ?? []).SelectMany(point => new[] { point.X, point.Y }),
+            "text" => [X, Y, Width, Height],
+            "image" => [X, Y, Width, Height],
             _ => [],
         };
     }
+    internal sealed record DrawingPointModel(double X, double Y);
 
     [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true)]
     [JsonSerializable(typeof(DrawingModel[]))]

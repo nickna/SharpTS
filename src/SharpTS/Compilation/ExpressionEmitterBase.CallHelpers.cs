@@ -2467,7 +2467,6 @@ public abstract partial class ExpressionEmitterBase
         EnsureBoxed();
         var promiseReceiverLocal = IL.DeclareLocal(typeof(object));
         IL.Emit(OpCodes.Stloc, promiseReceiverLocal);
-
         // Promise.prototype.catch/finally are specified in terms of an
         // observable Get(promise, "then") followed by Invoke. Keep compiled
         // instance calls on their prototype-helper paths so own accessors or

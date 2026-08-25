@@ -1,5 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using Avalonia.Threading;
 using System.Diagnostics;
 using System.Reflection;
 using System.Text.Json;
@@ -9,40 +11,52 @@ namespace SharpTS.Gui;
 
 internal sealed class DesktopRuntimeContext
 {
+    private const int MaximumImagePayloadBytes = 25 * 1024 * 1024;
     private readonly Action<DesktopRoot, Window> _showWindow;
-    private readonly Action<Action> _dispatchGuestCallback;
+    private readonly Action<Action> _postGuestCallback;
+    private readonly Action<Action> _invokeGuestCallback;
     private readonly Action<Action> _scheduleGuestMicrotask;
     private readonly Action<int> _requestShutdown;
+    private readonly IDesktopInteractionServices _interactionServices;
     private readonly string[] _launchArguments;
     private readonly bool _headless;
     private readonly List<DesktopRoot> _roots = [];
     private readonly List<DesktopTrayIcon> _trayIcons = [];
+    private readonly List<Action> _desktopServiceIdleCallbacks = [];
     private DesktopApplicationSession? _application;
+    private int _pendingDesktopServices;
     private bool _cancelNextWindowClose;
 
     public DesktopRuntimeContext(
         TraceRecorder recorder,
         Action<DesktopRoot, Window> showWindow,
         bool headless,
-        Action<Action> dispatchGuestCallback,
+        Action<Action> postGuestCallback,
+        Action<Action> invokeGuestCallback,
         Action<Action> scheduleGuestMicrotask,
         Action<int> requestShutdown,
-        string[] launchArguments)
+        string[] launchArguments,
+        IDesktopInteractionServices interactionServices)
     {
         Recorder = recorder ?? throw new ArgumentNullException(nameof(recorder));
         _showWindow = showWindow ?? throw new ArgumentNullException(nameof(showWindow));
-        _dispatchGuestCallback = dispatchGuestCallback
-            ?? throw new ArgumentNullException(nameof(dispatchGuestCallback));
+        _postGuestCallback = postGuestCallback
+            ?? throw new ArgumentNullException(nameof(postGuestCallback));
+        _invokeGuestCallback = invokeGuestCallback
+            ?? throw new ArgumentNullException(nameof(invokeGuestCallback));
         _scheduleGuestMicrotask = scheduleGuestMicrotask
             ?? throw new ArgumentNullException(nameof(scheduleGuestMicrotask));
         _requestShutdown = requestShutdown ?? throw new ArgumentNullException(nameof(requestShutdown));
         _launchArguments = launchArguments?.ToArray() ?? throw new ArgumentNullException(nameof(launchArguments));
+        _interactionServices = interactionServices
+            ?? throw new ArgumentNullException(nameof(interactionServices));
         _headless = headless;
         EnsureOwnerThread();
     }
 
     public TraceRecorder Recorder { get; }
     public bool IsHeadless => _headless;
+    public IDesktopInteractionServices InteractionServices => _interactionServices;
     public DesktopRoot? CurrentRoot =>
         _roots.FirstOrDefault(root => root.IsMainWindow) ?? _roots.LastOrDefault();
 
@@ -54,18 +68,56 @@ internal sealed class DesktopRuntimeContext
         EnsureOwnerThread();
         Window window = CurrentRoot?.Window
             ?? throw new InvalidOperationException("No desktop Window is mounted.");
-        DisplayInfo[] displays = window.Screens.All.Select(screen => new DisplayInfo(
-            screen.DisplayName ?? string.Empty,
-            screen.IsPrimary,
-            screen.Scaling,
-            screen.CurrentOrientation.ToString().ToLowerInvariant(),
-            new DisplayBounds(
-                screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height),
-            new DisplayBounds(
-                screen.WorkingArea.X, screen.WorkingArea.Y,
-                screen.WorkingArea.Width, screen.WorkingArea.Height))).ToArray();
+        DisplayInfo[] displays = window.Screens.All.Select(screen =>
+        {
+            double scaling = NormalizeScaling(screen.Scaling);
+            return new DisplayInfo(
+                screen.DisplayName ?? string.Empty,
+                screen.IsPrimary,
+                scaling,
+                screen.CurrentOrientation.ToString().ToLowerInvariant(),
+                new DisplayBounds(
+                    screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height),
+                new DisplayBounds(
+                    screen.WorkingArea.X, screen.WorkingArea.Y,
+                    screen.WorkingArea.Width, screen.WorkingArea.Height),
+                new DisplaySize(screen.Bounds.Width / scaling, screen.Bounds.Height / scaling),
+                new DisplaySize(screen.WorkingArea.Width / scaling, screen.WorkingArea.Height / scaling));
+        }).ToArray();
         return JsonSerializer.Serialize(displays, DisplayJsonContext.Default.DisplayInfoArray);
     }
+
+    internal static string GetWindowMetricsJson(Window window)
+    {
+        Avalonia.Platform.Screen? screen = window.Screens.ScreenFromWindow(window)
+            ?? window.Screens.Primary
+            ?? window.Screens.All.FirstOrDefault();
+        double scaling = NormalizeScaling(screen?.Scaling ?? window.RenderScaling);
+        PixelRect workingArea = screen?.WorkingArea ?? new PixelRect(
+            0, 0,
+            Math.Max(1, (int)Math.Round(window.ClientSize.Width * scaling)),
+            Math.Max(1, (int)Math.Round(window.ClientSize.Height * scaling)));
+        var metrics = new WindowMetricsInfo(
+            window.ClientSize.Width,
+            window.ClientSize.Height,
+            scaling,
+            window.WindowState switch
+            {
+                Avalonia.Controls.WindowState.Minimized => "minimized",
+                Avalonia.Controls.WindowState.Maximized => "maximized",
+                Avalonia.Controls.WindowState.FullScreen => "fullScreen",
+                _ => "normal",
+            },
+            screen?.DisplayName ?? string.Empty,
+            screen?.IsPrimary ?? true,
+            workingArea.Width / scaling,
+            workingArea.Height / scaling,
+            new DisplayBounds(workingArea.X, workingArea.Y, workingArea.Width, workingArea.Height));
+        return JsonSerializer.Serialize(metrics, DisplayJsonContext.Default.WindowMetricsInfo);
+    }
+
+    private static double NormalizeScaling(double scaling) =>
+        double.IsFinite(scaling) && scaling > 0 ? scaling : 1;
 
     public DesktopApplicationSession CreateApplication(string shutdownMode)
     {
@@ -99,7 +151,9 @@ internal sealed class DesktopRuntimeContext
         var root = new DesktopRoot(
             Recorder,
             _showWindow,
-            _dispatchGuestCallback,
+            _postGuestCallback,
+            _invokeGuestCallback,
+            _scheduleGuestMicrotask,
             _headless,
             reactiveCleanup,
             ReleaseRoot,
@@ -164,12 +218,97 @@ internal sealed class DesktopRuntimeContext
         return cancel;
     }
 
-    public void DispatchGuestCallback(Action callback) => _dispatchGuestCallback(callback);
+    public void DispatchGuestCallback(Action callback) => _postGuestCallback(callback);
+
+    public void InvokeGuestCallback(Action callback) => _invokeGuestCallback(callback);
+
+    public Task<T> ScheduleDesktopService<T>(Func<Task<T>> operation)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(operation);
+        // Completion occurs in a deferred dispatcher turn, so inline Task continuations are safe
+        // here and preserve ordering before Headless idle checkpoints are released.
+        var completion = new TaskCompletionSource<T>();
+        _pendingDesktopServices++;
+        try
+        {
+            Dispatcher.UIThread.Post(async () =>
+            {
+                try
+                {
+                    completion.TrySetResult(await operation());
+                }
+                catch (OperationCanceledException cancellation)
+                {
+                    completion.TrySetCanceled(cancellation.CancellationToken);
+                }
+                catch (Exception exception)
+                {
+                    completion.TrySetException(exception);
+                }
+                finally
+                {
+                    CompleteDesktopService();
+                }
+            }, DispatcherPriority.Normal);
+        }
+        catch
+        {
+            _pendingDesktopServices--;
+            throw;
+        }
+        return completion.Task;
+    }
+
+    public Task ScheduleDesktopService(Func<Task> operation) =>
+        ScheduleDesktopService(async () =>
+        {
+            await operation();
+            return true;
+        });
+
+    public void AfterDesktopServices(Action callback)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(callback);
+        if (_pendingDesktopServices == 0)
+            DispatchGuestCallback(callback);
+        else
+            _desktopServiceIdleCallbacks.Add(callback);
+    }
+
+    public void PostGuestIdleProbe(Action callback)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(callback);
+        Dispatcher.UIThread.Post(
+            () => DispatchGuestCallback(callback),
+            DispatcherPriority.Background);
+    }
+
+    private void CompleteDesktopService()
+    {
+        EnsureOwnerThread();
+        if (_pendingDesktopServices <= 0)
+            throw new InvalidOperationException("Desktop service accounting underflowed.");
+        _pendingDesktopServices--;
+        if (_pendingDesktopServices != 0 || _desktopServiceIdleCallbacks.Count == 0)
+            return;
+        Action[] callbacks = _desktopServiceIdleCallbacks.ToArray();
+        _desktopServiceIdleCallbacks.Clear();
+        // Let Task/Promise continuations produced by the completed service reach the guest
+        // scheduler before releasing Headless assertions that observe the resulting render.
+        Dispatcher.UIThread.Post(() =>
+        {
+            foreach (Action callback in callbacks)
+                DispatchGuestCallback(callback);
+        }, DispatcherPriority.Background);
+    }
 
     public Window RequireWindowForServices()
     {
         EnsureOwnerThread();
-        if (_headless)
+        if (_headless && !_interactionServices.SupportsHeadless)
             throw new InvalidOperationException("Desktop dialogs and clipboard are unavailable in Headless mode.");
         return CurrentRoot?.Window
             ?? throw new InvalidOperationException("A mounted desktop root is required for this service.");
@@ -195,13 +334,30 @@ internal sealed class DesktopRuntimeContext
     public Bitmap LoadImage(string source)
     {
         EnsureOwnerThread();
+        using Stream stream = OpenImageStream(source);
+        return new Bitmap(stream);
+    }
+
+    internal Stream OpenImageStream(string source)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(source);
         if (source.StartsWith("asset:///", StringComparison.OrdinalIgnoreCase))
         {
             string logicalName = source[9..].Replace('\\', '/');
             Stream stream = Assembly.GetEntryAssembly()?.GetManifestResourceStream($"SharpTS.Gui.Asset/{logicalName}")
                 ?? throw new FileNotFoundException($"Packaged GUI asset '{logicalName}' was not found.");
-            using (stream)
-                return new Bitmap(stream);
+            return RequireBoundedImageStream(stream);
+        }
+        const string dataPrefix = "data:image/png;base64,";
+        if (source.StartsWith(dataPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            string encoded = source[dataPrefix.Length..];
+            if (encoded.Length > 35_000_000)
+                throw new InvalidDataException("Embedded PNG data exceeds the 25 MiB limit.");
+            byte[] bytes = Convert.FromBase64String(encoded);
+            if (bytes.Length > MaximumImagePayloadBytes)
+                throw new InvalidDataException("Embedded PNG data exceeds the 25 MiB limit.");
+            return new MemoryStream(bytes, writable: false);
         }
 
         string path = Uri.TryCreate(source, UriKind.Absolute, out Uri? uri) && uri.IsFile
@@ -209,7 +365,22 @@ internal sealed class DesktopRuntimeContext
             : source;
         if (!Path.IsPathRooted(path))
             path = Path.GetFullPath(path, AppContext.BaseDirectory);
-        return new Bitmap(path);
+        return RequireBoundedImageStream(File.OpenRead(path));
+    }
+
+    private static Stream RequireBoundedImageStream(Stream stream)
+    {
+        try
+        {
+            if (!stream.CanSeek || stream.Length > MaximumImagePayloadBytes)
+                throw new InvalidDataException("Image payloads are limited to 25 MiB.");
+            return stream;
+        }
+        catch
+        {
+            stream.Dispose();
+            throw;
+        }
     }
 
     public WindowIcon LoadWindowIcon(string source)
@@ -264,11 +435,25 @@ internal sealed record DisplayInfo(
     double Scaling,
     string Orientation,
     DisplayBounds Bounds,
-    DisplayBounds WorkingArea);
+    DisplayBounds WorkingArea,
+    DisplaySize BoundsSize,
+    DisplaySize WorkingAreaSize);
 internal sealed record DisplayBounds(double X, double Y, double Width, double Height);
+internal sealed record DisplaySize(double Width, double Height);
+internal sealed record WindowMetricsInfo(
+    double ClientWidth,
+    double ClientHeight,
+    double Scaling,
+    string WindowState,
+    string DisplayName,
+    bool IsPrimary,
+    double WorkingAreaWidth,
+    double WorkingAreaHeight,
+    DisplayBounds PixelWorkingArea);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DisplayInfo[]))]
+[JsonSerializable(typeof(WindowMetricsInfo))]
 internal sealed partial class DisplayJsonContext : JsonSerializerContext;
 
 public sealed class DesktopApplicationSession : IDisposable

@@ -128,30 +128,31 @@ public sealed class HostedInterpreterRuntime : ISharpTSHostedRuntime
         ArgumentNullException.ThrowIfNull(guestNotification);
         if (State is not (SharpTSHostedRuntimeState.Initializing or SharpTSHostedRuntimeState.Running))
             return; // Late completion after shutdown is deliberately ignored.
-
-        if (_dispatcher.CheckAccess())
-        {
-            AssertOwnerThread();
-            try
-            {
-                ExecuteGuestBoundary(guestNotification);
-            }
-            catch (HostedProcessExitException)
-            {
-                // The process-exit request already selected forced shutdown.
-            }
-            catch (Exception exception)
-            {
-                HandleFatal(
-                    exception,
-                    State == SharpTSHostedRuntimeState.Initializing
-                        ? SharpTSHostedErrorPhase.Initialization
-                        : SharpTSHostedErrorPhase.Running);
-            }
-            return;
-        }
-
         _interpreter.EnqueueCallback(guestNotification);
+    }
+
+    /// <summary>Synchronously obtains a native handled/cancel result without draining guest jobs inline.</summary>
+    public object? InvokeNativeCallback(Func<object?> guestCallback)
+    {
+        ArgumentNullException.ThrowIfNull(guestCallback);
+        if (!_dispatcher.CheckAccess())
+            throw new InvalidOperationException(
+                "A synchronous native callback cannot run off the owner thread.");
+        if (State is not (SharpTSHostedRuntimeState.Initializing or SharpTSHostedRuntimeState.Running))
+            throw new InvalidOperationException($"Guest work is not accepted in state {State}.");
+
+        AssertOwnerThread();
+        _guestBoundaryDepth++;
+        try
+        {
+            return guestCallback();
+        }
+        finally
+        {
+            _guestBoundaryDepth--;
+            if (_guestBoundaryDepth == 0 && !_disposed)
+                RequestTurn();
+        }
     }
 
     /// <summary>Queues host-integrated guest work for the next hosted microtask checkpoint.</summary>

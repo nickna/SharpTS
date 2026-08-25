@@ -154,6 +154,12 @@ internal static class DotNetMarshaller
         if (value == null) return null;
         if (declaredReturnType == typeof(void)) return SharpTSUndefined.Instance;
 
+        // Task<object?> is the trim-safe asynchronous host ABI. Guest-facing host
+        // adapters normalize their typed results before crossing this boundary, so
+        // the interpreter never needs open-ended Task<T>/ValueTask<T> reflection.
+        if (declaredReturnType == typeof(Task<object>) && value is Task<object?> objectTask)
+            return new SharpTSPromise(objectTask);
+
         // CLR arrays cross back as ordinary guest arrays, recursively preserving jagged
         // array shape and wrapping external element values through the same return seam.
         if (value is Array array)
@@ -198,4 +204,5 @@ internal static class DotNetMarshaller
         // Complex .NET objects get wrapped so future property/method access works.
         return new DotNetInstance(value, actualType);
     }
+
 }

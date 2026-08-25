@@ -40,6 +40,56 @@ public class DotNetImportTests
     #region Single-type form
 
     [Theory, ModeData]
+    public void ObjectValuedHostAwaitables_AreRealPromisesInBothModes(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import { HostAsyncInteropFixture } from "dotnet:SharpTS.Tests.Infrastructure.HostAsyncInteropFixture";
+                const fixture = new HostAsyncInteropFixture();
+                const readValues = async (): Promise<string[]> =>
+                    JSON.parse(await fixture.jsonStringListAsync());
+                const printNested = async (value: string): Promise<void> => {
+                    console.log("nested:" + value);
+                };
+                const runWrapped = async (): Promise<void> => {
+                    try {
+                        const confirmed = (await fixture.pendingStringAsync()) === "pending";
+                        if (!confirmed) return;
+                        const wrappedValues = await readValues();
+                        console.log(wrappedValues.join("|"));
+                        await printNested(wrappedValues[0]);
+                        console.log("after-nested");
+                    } catch (error) {
+                        console.log("unexpected-wrapped-error");
+                    }
+                };
+                async function main(): Promise<void> {
+                    console.log(await fixture.completedStringAsync());
+                    console.log(await fixture.pendingStringAsync());
+                    console.log(await fixture.nullStringAsync());
+                    const values = JSON.parse(await fixture.jsonStringListAsync());
+                    console.log(values.join(","));
+                    await runWrapped();
+                    await fixture.completedVoidAsync();
+                    await fixture.completedStringAsync().then(value => console.log("then:" + value));
+                    try {
+                        await fixture.faultedStringAsync();
+                    } catch (error) {
+                        console.log(String(error).includes("managed-async-failure"));
+                    }
+                }
+                main();
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal(
+            "completed\npending\nnull\nalpha,beta\nalpha|beta\nnested:alpha\nafter-nested\nthen:completed\ntrue\n",
+            output);
+    }
+
+    [Theory, ModeData]
     public void SingleTypeForm_ConstructChainAndProperty(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

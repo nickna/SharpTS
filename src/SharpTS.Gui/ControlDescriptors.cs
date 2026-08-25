@@ -18,14 +18,22 @@ internal sealed class WindowDescriptor() : NodeDescriptor("Window", 0, 1)
     public override Control Create(GuiVNode node)
     {
         var window = new Window();
-        Update(window, new GuiVNode("Window"), node);
+        UpdateWindow(window, null, node);
         return window;
     }
 
     public override bool Update(Control control, GuiVNode previous, GuiVNode next)
+        => UpdateWindow((Window)control, previous, next);
+
+    private static bool UpdateWindow(Window window, GuiVNode? previous, GuiVNode next)
     {
-        var window = (Window)control;
-        bool changed = CommonProperties.Apply(window, next);
+        // A Window's width and height establish its initial/native requested size.
+        // Reapply them only when the guest changes the corresponding VNode prop;
+        // otherwise an OS/user resize followed by a reactive render would snap the
+        // window back and make onMetricsChanged unusable for responsive layouts.
+        bool applyWidth = previous is null || DimensionPropChanged(previous, next, "width", previous.Width, next.Width);
+        bool applyHeight = previous is null || DimensionPropChanged(previous, next, "height", previous.Height, next.Height);
+        bool changed = CommonProperties.Apply(window, next, applyWidth, applyHeight);
         string title = next.Title ?? "SharpTS GUI";
         if (window.Title != title)
         {
@@ -45,6 +53,15 @@ internal sealed class WindowDescriptor() : NodeDescriptor("Window", 0, 1)
         }
         return changed;
     }
+
+    private static bool DimensionPropChanged(
+        GuiVNode previous,
+        GuiVNode next,
+        string property,
+        double previousValue,
+        double nextValue) =>
+        CommonProperties.IsSpecified(previous, property) != CommonProperties.IsSpecified(next, property) ||
+        !previousValue.Equals(nextValue);
 
     private static ThemeVariant ParseTheme(string theme) => theme switch
     {
@@ -254,51 +271,49 @@ internal sealed class TextBlockDescriptor() : NodeDescriptor("TextBlock", 0, 0)
             text.Text = value;
             changed = true;
         }
-        double fontSize = double.IsNaN(next.FontSize) ? TextBlock.FontSizeProperty.GetDefaultValue(text) : next.FontSize;
-        if (text.FontSize != fontSize)
-        {
-            text.FontSize = fontSize;
-            changed = true;
-        }
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.FontSizeProperty,
+            next.FontSize,
+            CommonProperties.IsSpecified(next, "fontSize") || !double.IsNaN(next.FontSize));
         FontWeight weight = CommonProperties.ParseFontWeight(next.FontWeight);
-        if (text.FontWeight != weight)
-        {
-            text.FontWeight = weight;
-            changed = true;
-        }
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.FontWeightProperty,
+            weight,
+            CommonProperties.IsSpecified(next, "fontWeight") || weight != FontWeight.Normal);
         FontStyle style = CommonProperties.ParseFontStyle(next.FontStyle);
-        if (text.FontStyle != style)
-        {
-            text.FontStyle = style;
-            changed = true;
-        }
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.FontStyleProperty,
+            style,
+            CommonProperties.IsSpecified(next, "fontStyle") || style != FontStyle.Normal);
         TextAlignment alignment = CommonProperties.ParseTextAlignment(next.TextAlignment);
-        if (text.TextAlignment != alignment)
-        {
-            text.TextAlignment = alignment;
-            changed = true;
-        }
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.TextAlignmentProperty,
+            alignment,
+            CommonProperties.IsSpecified(next, "textAlignment") || alignment != TextAlignment.Left);
         TextWrapping wrapping = ParseTextWrapping(next.TextWrapping);
-        if (text.TextWrapping != wrapping)
-        {
-            text.TextWrapping = wrapping;
-            changed = true;
-        }
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.TextWrappingProperty,
+            wrapping,
+            CommonProperties.IsSpecified(next, "textWrapping") || wrapping != TextWrapping.NoWrap);
         IBrush? foreground = CommonProperties.ParseBrush(next.Foreground);
-        if (!Equals(text.Foreground, foreground))
-        {
-            text.Foreground = foreground;
-            changed = true;
-        }
-        if (!string.IsNullOrWhiteSpace(next.FontFamily))
-        {
-            var family = new FontFamily(next.FontFamily);
-            if (!Equals(text.FontFamily, family))
-            {
-                text.FontFamily = family;
-                changed = true;
-            }
-        }
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.ForegroundProperty,
+            foreground,
+            CommonProperties.IsSpecified(next, "foreground") || foreground is not null);
+        FontFamily family = string.IsNullOrWhiteSpace(next.FontFamily)
+            ? text.FontFamily
+            : new FontFamily(next.FontFamily);
+        changed |= CommonProperties.ApplyStyled(
+            text,
+            TextBlock.FontFamilyProperty,
+            family,
+            CommonProperties.IsSpecified(next, "fontFamily") || !string.IsNullOrWhiteSpace(next.FontFamily));
         return changed;
     }
 
@@ -310,7 +325,7 @@ internal sealed class TextBlockDescriptor() : NodeDescriptor("TextBlock", 0, 0)
     };
 }
 
-internal sealed class ButtonDescriptor() : NodeDescriptor("Button", 0, 0)
+internal sealed class ButtonDescriptor() : NodeDescriptor("Button", 0, 1)
 {
     public override void Validate(GuiVNode node)
     {
@@ -336,7 +351,7 @@ internal sealed class ButtonDescriptor() : NodeDescriptor("Button", 0, 0)
             changed = true;
         }
         string content = next.Text ?? string.Empty;
-        if (!Equals(button.Content, content))
+        if (next.Children is not GuiVNode[] { Length: > 0 } && !Equals(button.Content, content))
         {
             button.Content = content;
             changed = true;
@@ -401,7 +416,7 @@ internal sealed class TextBoxDescriptor(string kind = "TextBox") : NodeDescripto
     }
 }
 
-internal sealed class CheckBoxDescriptor(string kind = "CheckBox") : NodeDescriptor(kind, 0, 0)
+internal sealed class CheckBoxDescriptor(string kind = "CheckBox") : NodeDescriptor(kind, 0, 1)
 {
     public override Control Create(GuiVNode node)
     {
@@ -421,7 +436,7 @@ internal sealed class CheckBoxDescriptor(string kind = "CheckBox") : NodeDescrip
         bool changed = CommonProperties.Apply(checkBox, next);
         changed |= CommonProperties.ApplyContent(checkBox, next);
         string content = next.Text ?? string.Empty;
-        if (!Equals(checkBox.Content, content))
+        if (next.Children is not GuiVNode[] { Length: > 0 } && !Equals(checkBox.Content, content))
         {
             checkBox.Content = content;
             changed = true;

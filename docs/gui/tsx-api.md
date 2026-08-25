@@ -103,12 +103,13 @@ errors.
 
 ## Children, identity, and commit recovery
 
-Natural children are supported. Text-bearing controls (`TextBlock`, `Button`, `CheckBox`,
-`RadioButton`, and `ToggleSwitch`) accept string/number children; container controls accept
-elements, fragments, arrays, and conditional children. Stable `key` values preserve the complete
-logical component or fragment subtree, including native identity and hook state, when siblings
-move. Fragments are layout-transparent and never insert a native panel. Duplicate keys at any
-sibling level are rejected before native mutation.
+Natural children are supported. `TextBlock` accepts recursive text/number children. `Button`,
+`CheckBox`, `RadioButton`, and `ToggleSwitch` accept either textual content or one retained element,
+which supports accessible icon-and-label command layouts without exposing Avalonia templates.
+Container controls accept elements, fragments, arrays, and conditional children. Stable `key`
+values preserve the complete logical component or fragment subtree, including native identity and
+hook state, when siblings move. Fragments are layout-transparent and never insert a native panel.
+Duplicate keys at any sibling level are rejected before native mutation.
 
 Built-in descriptors validate parsed values before mutation. If a native setter fails during an
 update, the renderer reverses the commit to the last VNode tree. A second failure during recovery
@@ -128,11 +129,42 @@ disposes the damaged window root and reports a combined fatal host error.
 Props are direct and typed rather than style objects. Common props include size constraints,
 per-edge `margin`/`padding` tuples, alignment, visibility, enabled/opacity state, Grid and Dock
 placement, tooltip and automation names. Text/content controls add colors, font family/size/style/
-weight, alignment, and corner radius where supported. Colors accept Avalonia color strings.
+weight, alignment, and corner radius where supported. Omitted `TextBlock` typography and foreground
+props remain unset so native styles and containing content controls can supply inherited values.
+Colors accept Avalonia color strings.
 
 `useControlRef<T>()` returns a stable typed ref with `isAttached` and `focus()`. `onKeyDown` and
 `onKeyUp` receive normalized key names and Ctrl/Alt/Shift/Meta/repeat flags; returning `true` marks
 the native event handled.
+
+Common `onPointerDown`, `onPointerMove`, `onPointerUp`, and `onPointerCancel` callbacks receive
+local DIP coordinates, pointer ID/type, changed button, the standard button bitmask, normalized
+pressure, and modifier flags. Returning `true` handles the native event. Set
+`capturePointerOnPress` for drag gestures that must continue outside the control; capture is
+released on up, cancellation, unmount, or disposal. Retained controls read the latest callbacks
+without accumulating native subscriptions. Cancellation reports the pointer's last known local
+coordinates, buttons, pressure, and modifiers. `Window.onCloseRequested` may return `true` to cancel
+the native close request, which supports an asynchronous prompt followed by a one-shot call to the
+existing window object's `close()` method.
+
+`Window.onMetricsChanged` receives a coalesced notification after native layout settles. Its
+`clientWidth` and `clientHeight` are device-independent pixels (DIPs), so applications can select
+width and height breakpoints while continuing to honor operating-system scaling. The event also
+reports the native window state, pixels-per-DIP scaling, current display identity, logical
+work-area size, and the physical-pixel work-area rectangle. The initial notification is delivered
+after mount; retained windows use the latest callback and release native size/display
+subscriptions when the callback is removed or the window is disposed.
+
+For `Window`, `width` and `height` establish the initial native size. An OS or user resize is not
+overwritten by an unrelated reactive render. Changing either prop in a later VNode still requests
+that new dimension explicitly. This lets responsive applications keep fixed startup dimensions
+while deriving their content layout from `onMetricsChanged`.
+
+Native notification callbacks run as posted guest tasks, after the routed native event has
+unwound. Return-valued key, pointer, drag-over, and close predicates remain synchronous, but their
+microtask checkpoint is deferred until the next hosted turn. Synchronous throws and rejected
+promises from event callbacks are delivered to the window or application `onUnhandledError`
+handler; an event failure does not implicitly dispose an otherwise healthy window.
 
 ## Typed item templates and drawing
 
@@ -143,9 +175,15 @@ materialize only the requested visible range plus `overscan`, preserving keyed n
 while a caller advances `startIndex`. Tree nodes use native `TreeViewItem` expansion events.
 
 `RichTextBlock` accepts independently styled text runs. `Canvas` supports `canvasLeft` and
-`canvasTop` attached props. `DrawingCanvas` retains validated line, rectangle, and ellipse commands
-and redraws only when its command contract changes. All of these controls remain in the generated
-descriptor/hash/documentation contract and are available to completion and hover.
+`canvasTop` attached props. `DrawingCanvas` retains validated line, rectangle, ellipse,
+round-polyline, bounded text, and image commands and redraws only when its command contract changes.
+`coordinateWidth` and `coordinateHeight` are whole-number dimensions that separate logical drawing
+coordinates from displayed DIPs. Text commands require logical dimensions and provide bounded,
+clipped layout with font family, size, weight, style, alignment, and wrapping. Per-command opacity,
+`sourceOver`, and `destinationOut` are supported; every canvas renders through an isolated layer so
+eraser commands cannot damage sibling canvases beneath it. Image commands accept packaged assets,
+local files, or bounded PNG data URIs. All of these controls remain in the generated descriptor/
+hash/documentation contract and are available to completion and hover.
 
 ## Assets and desktop services
 
@@ -167,7 +205,20 @@ and SHA-256 pin:
 ```
 
 `showMessageDialog`, `showOpenFileDialog`, `showSaveFileDialog`, `showFolderDialog`,
-`readClipboardText`, and `writeClipboardText` require a mounted, non-Headless window.
+`readClipboardText`, and `writeClipboardText` require a mounted window. In the Headless host,
+dialogs require an explicitly queued test-driver result and clipboard access uses the isolated
+in-memory test clipboard; an unscripted dialog fails instead of opening native UI.
+
+`getImageDimensions(source)` reads a packaged asset, local image, or bounded PNG data URI.
+`renderDrawingToPng(document, path)` flattens ordered visible layers with layer opacity into a
+transparency-preserving PNG. `renderDrawingToImage(document, { effects? })` returns the same bounded
+render as a portable PNG data URI and supports ordered Gaussian blur, grayscale, invert,
+brightness/contrast, and hue/saturation effects. `sampleDrawingPixel(document, point)` samples the
+composited RGBA result. `floodFillDrawing(document, options)` performs a contiguous four-connected
+fill using a normalized per-channel tolerance and returns either an unchanged result or a bounded
+raster image. Display, export, sampling, fill, and effects use the same validated renderer. Invalid
+input fails before a destination file is created or replaced, and raster services execute
+asynchronously so filesystem and image processing do not block the desktop dispatcher.
 
 `showNotification({ title, message?, silent? })` submits an informational local notification from
 an installed Windows MSIX application. The required title is limited to 256 UTF-16 code units and
@@ -177,10 +228,12 @@ Actions, images, progress updates, and click-activation callbacks are intentiona
 platform contract, so applications must not use notification interaction as a required workflow.
 
 `getDesktopDisplays()` requires a mounted window and reports every display visible to that window:
-name, primary state, pixel bounds, working area, orientation, and scaling factor. This is the
-supported basis for high-DPI and multiple-monitor layout decisions. Common `automationName`,
-keyboard handlers, typed ref `focus()`, committed text-change events (including IME commits), and
-the Window `system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
+name, primary state, orientation, and scaling factor. `bounds` and `workingArea` are physical
+desktop-pixel rectangles; `boundsSize` and `workingAreaSize` are their device-independent sizes.
+Use `Window.onMetricsChanged` for reactive layout of a particular window and
+`getDesktopDisplays()` for an on-demand topology snapshot. Common `automationName`, keyboard
+handlers, typed ref `focus()`, committed text-change events (including IME commits), and the Window
+`system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
 
 ## GUI API 1 boundaries
 
@@ -191,5 +244,5 @@ control loading, a full editing `DataGrid`, and certified macOS execution are no
 Typed item templates, a windowed virtual grid, native list/tree hosts, rich text, canvas/drawing,
 resources, class/type selectors, styles, theme variants, and resource lookup are supported.
 Multi-window orchestration is available through `createDesktopApplication`. Incompatible GUI API
-and descriptor contracts fail before payload loading. The complete proof application is in
-`samples/Calculator`.
+and descriptor contracts fail before payload loading. Complete proof applications are in
+`samples/Calculator` and `samples/SharpPaint`.

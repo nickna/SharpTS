@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
@@ -62,7 +63,9 @@ public static class DesktopBridge
         Action<Action> dispatchGuestCallback,
         Action<Action> scheduleGuestMicrotask,
         Action<int>? requestShutdown = null,
-        string[]? launchArguments = null)
+        string[]? launchArguments = null,
+        Action<Action>? invokeGuestCallback = null,
+        IDesktopInteractionServices? interactionServices = null)
     {
         if (_context is not null)
             throw new InvalidOperationException("A desktop runtime context is already registered.");
@@ -72,9 +75,11 @@ public static class DesktopBridge
             showWindow,
             headless,
             dispatchGuestCallback,
+            invokeGuestCallback ?? dispatchGuestCallback,
             scheduleGuestMicrotask,
             requestShutdown ?? (_ => { }),
-            launchArguments ?? []);
+            launchArguments ?? [],
+            interactionServices ?? NativeDesktopInteractionServices.Instance);
         _context = context;
         return new DesktopRuntimeRegistration(context, ReleaseContext);
     }
@@ -116,6 +121,15 @@ public static class DesktopBridge
         Func<string, bool, bool, bool, bool, bool, bool>? keyUp,
         bool hasKeyDown,
         bool hasKeyUp,
+        bool capturePointerOnPress,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerDown,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerMove,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerUp,
+        Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? pointerCancel,
+        bool hasPointerDown,
+        bool hasPointerMove,
+        bool hasPointerUp,
+        bool hasPointerCancel,
         bool allowDrop,
         Func<string[], string?, string, bool, bool, bool, bool, string>? dragOver,
         Action<string[], string?, string, bool, bool, bool, bool>? drop,
@@ -150,6 +164,11 @@ public static class DesktopBridge
             CanvasTop = canvasTop,
             KeyDown = hasKeyDown ? keyDown : null,
             KeyUp = hasKeyUp ? keyUp : null,
+            CapturePointerOnPress = capturePointerOnPress,
+            PointerDown = hasPointerDown ? pointerDown : null,
+            PointerMove = hasPointerMove ? pointerMove : null,
+            PointerUp = hasPointerUp ? pointerUp : null,
+            PointerCancel = hasPointerCancel ? pointerCancel : null,
             AllowDrop = allowDrop,
             DragOver = hasDragOver ? dragOver : null,
             Drop = hasDrop ? drop : null,
@@ -182,6 +201,10 @@ public static class DesktopBridge
         double height,
         bool canResize,
         string theme,
+        bool hasMetricsChanged,
+        Action<string>? metricsChanged,
+        bool hasCloseRequested,
+        Func<bool>? closeRequested,
         GuiVNode[] content,
         object? key,
         DesktopRef? reference) =>
@@ -193,6 +216,8 @@ public static class DesktopBridge
             Height: height,
             CanResize: canResize,
             Theme: theme,
+            WindowMetricsChanged: hasMetricsChanged ? metricsChanged : null,
+            CloseRequested: hasCloseRequested ? closeRequested : null,
             Children: content,
             AttachRef: GetAttach(reference),
             RefIdentity: reference);
@@ -450,8 +475,9 @@ public static class DesktopBridge
         new("RichTextBlock", NormalizeKey(key), RichTextJson: runsJson,
             AttachRef: GetAttach(reference), RefIdentity: reference);
 
-    public static GuiVNode CreateDrawingCanvas(string commandsJson, object? key, DesktopRef? reference) =>
+    public static GuiVNode CreateDrawingCanvas(string commandsJson, double coordinateWidth, double coordinateHeight, object? key, DesktopRef? reference) =>
         new("DrawingCanvas", NormalizeKey(key), DrawingJson: commandsJson,
+            CoordinateWidth: coordinateWidth, CoordinateHeight: coordinateHeight,
             AttachRef: GetAttach(reference), RefIdentity: reference);
 
     public static GuiVNode CreateCustomControl(
@@ -531,23 +557,112 @@ public static class DesktopBridge
         RequireContext().ScheduleGuestMicrotask(callback);
     }
 
-    public static Task<string> ShowMessageDialogAsync(string title, string message, string buttons) =>
-        DesktopServices.ShowMessageAsync(RequireContext().RequireWindowForServices(), title, message, buttons);
+    public static DesktopEventWorkTracker CreateEventWorkTracker(DesktopRoot root)
+    {
+        EnsureOwnerThread();
+        ArgumentNullException.ThrowIfNull(root);
+        return root.CreateEventWorkTracker();
+    }
 
-    public static Task<string[]> ShowOpenFileDialogAsync(string title, bool allowMultiple, string filtersJson) =>
-        DesktopServices.OpenFilesAsync(RequireContext().RequireWindowForServices(), title, allowMultiple, filtersJson);
+    // Guest-facing asynchronous methods deliberately share Task<object?> as a
+    // trim-safe ABI. Typed desktop services stay internal to SharpTS.Gui; their
+    // results are normalized here before the interpreter or compiled guest sees
+    // them. Do not expose arbitrary Task<T>/ValueTask<T> across this boundary.
+    private static async Task<object?> AsGuestResultAsync<T>(Task<T> task) =>
+        await task.ConfigureAwait(false);
 
-    public static Task<string?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson) =>
-        DesktopServices.SaveFileAsync(RequireContext().RequireWindowForServices(), title, suggestedFileName, defaultExtension, filtersJson);
+    private static async Task<object?> AsGuestCompletionAsync(Task task)
+    {
+        await task.ConfigureAwait(false);
+        return null;
+    }
 
-    public static Task<string?> ShowFolderDialogAsync(string title) =>
-        DesktopServices.OpenFolderAsync(RequireContext().RequireWindowForServices(), title);
+    private static async Task<object?> AsGuestStringListJsonAsync(Task<string[]> task) =>
+        JsonSerializer.Serialize(await task.ConfigureAwait(false));
 
-    public static Task<string> ReadClipboardTextAsync() =>
-        DesktopServices.ReadClipboardAsync(RequireContext().RequireWindowForServices());
+    public static Task<object?> ShowMessageDialogAsync(string title, string message, string buttons)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.ShowMessageAsync(owner, title, message, buttons)));
+    }
 
-    public static Task WriteClipboardTextAsync(string value) =>
-        DesktopServices.WriteClipboardAsync(RequireContext().RequireWindowForServices(), value);
+    public static Task<object?> ShowOpenFileDialogJsonAsync(string title, bool allowMultiple, string filtersJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestStringListJsonAsync(
+            context.InteractionServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson)));
+    }
+
+    public static Task<object?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.SaveFileAsync(
+                owner, title, suggestedFileName, defaultExtension, filtersJson)));
+    }
+
+    public static Task<object?> ShowFolderDialogAsync(string title)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.OpenFolderAsync(owner, title)));
+    }
+
+    public static Task<object?> ReadClipboardTextAsync()
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.ReadClipboardAsync(owner)));
+    }
+
+    public static Task<object?> WriteClipboardTextAsync(string value)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestCompletionAsync(
+            context.InteractionServices.WriteClipboardAsync(owner, value)));
+    }
+
+    public static Task<object?> GetImageDimensionsJsonAsync(string source)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.GetImageDimensionsJson(context, source)));
+    }
+
+    public static Task<object?> RenderDrawingToPngAsync(string documentJson, string path)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return AsGuestCompletionAsync(Task.Run(() => DrawingGraphics.RenderDocumentToPng(context, documentJson, path)));
+    }
+
+    public static Task<object?> RenderDrawingToImageJsonAsync(string documentJson, string optionsJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.RenderDocumentToImageJson(context, documentJson, optionsJson)));
+    }
+
+    public static Task<object?> SampleDrawingPixelJsonAsync(string documentJson, double x, double y)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.SampleDrawingPixelJson(context, documentJson, x, y)));
+    }
+
+    public static Task<object?> FloodFillDrawingJsonAsync(string documentJson, string optionsJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.FloodFillDrawingJson(context, documentJson, optionsJson)));
+    }
 
     public static string[] GetDesktopLaunchArguments() =>
         RequireContext().GetLaunchArguments();
@@ -558,20 +673,20 @@ public static class DesktopBridge
     public static string GetDesktopDisplaysJson() =>
         RequireContext().GetDisplaysJson();
 
-    public static Task OpenDesktopExternalAsync(string target) =>
-        DesktopPlatformServices.OpenExternalAsync(target);
+    public static Task<object?> OpenDesktopExternalAsync(string target) =>
+        AsGuestCompletionAsync(DesktopPlatformServices.OpenExternalAsync(target));
 
-    public static Task ShowDesktopItemInFolderAsync(string path) =>
-        DesktopPlatformServices.ShowItemInFolderAsync(path);
+    public static Task<object?> ShowDesktopItemInFolderAsync(string path) =>
+        AsGuestCompletionAsync(DesktopPlatformServices.ShowItemInFolderAsync(path));
 
-    public static Task PrintDesktopFileAsync(string path) =>
-        DesktopPlatformServices.PrintFileAsync(path);
+    public static Task<object?> PrintDesktopFileAsync(string path) =>
+        AsGuestCompletionAsync(DesktopPlatformServices.PrintFileAsync(path));
 
-    public static Task ShowDesktopNotificationAsync(string title, string message, bool silent)
+    public static Task<object?> ShowDesktopNotificationAsync(string title, string message, bool silent)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return DesktopNotifications.ShowAsync(context.IsHeadless, title, message, silent);
+        return AsGuestCompletionAsync(DesktopNotifications.ShowAsync(context.IsHeadless, title, message, silent));
     }
 
     public static DesktopTrayIcon CreateDesktopTrayIcon(

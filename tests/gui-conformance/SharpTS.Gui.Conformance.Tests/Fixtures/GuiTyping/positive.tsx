@@ -6,7 +6,9 @@ import {
     Fragment,
     Grid,
     DrawingCanvas,
+    DrawingDocument,
     RichTextBlock,
+    StackPanel,
     TextBlock,
     Window,
     createDesktopApplication,
@@ -17,8 +19,11 @@ import {
     getDesktopPlatformInfo,
     getDesktopDisplays,
     getLaunchArguments,
+    floodFillDrawing,
     openExternal,
     printFile,
+    renderDrawingToImage,
+    sampleDrawingPixel,
     showNotification,
     showItemInFolder,
     useControlRef,
@@ -38,6 +43,7 @@ export const positive = (
         <CalculatorButton key="typed-component" definition={definition} active={false} onPress={() => {}} />
         <TextBlock>{["recursive", 1, false, null]}</TextBlock>
         <Button ref={buttonRef}>Text only</Button>
+        <Button><StackPanel orientation="horizontal"><TextBlock>✎</TextBlock><TextBlock>Brush</TextBlock></StackPanel></Button>
         <Border allowDrop onDragOver={event => event.files.length > 0 ? "copy" : "none"}
             onDrop={event => { void event.text; }}><TextBlock>One logical child</TextBlock></Border>
         <Badge label="custom" automationName="Custom badge" />
@@ -75,6 +81,7 @@ const accent: string | number | boolean | readonly number[] | null = mainWindow.
 void modalWindow.closed;
 void getDesktopPlatformInfo().applicationDirectory;
 void getDesktopDisplays()[0].scaling;
+void getDesktopDisplays()[0].workingAreaSize.width;
 void getLaunchArguments();
 void openExternal("https://example.com");
 void showItemInFolder("document.txt");
@@ -90,6 +97,17 @@ const tree = createTree({ items: records, itemKey: item => item.id, itemLabel: i
 const dataGrid = createVirtualDataGrid({ items: records, rowKey: item => item.id,
     startIndex: 0, visibleCount: 10,
     columns: [{ key: "name", header: "Name", renderCell: item => <TextBlock>{item.name}</TextBlock> }] });
+const drawingDocument: DrawingDocument = {
+    width: 100,
+    height: 60,
+    layers: [{ isVisible: true, opacity: 1, commands: [{
+        kind: "text", text: "SharpTS", x: 2, y: 2, width: 96, height: 40,
+        fill: "#336699", fontFamily: "sans-serif", fontSize: 18, textWrapping: "wrap",
+    }] }],
+};
+void renderDrawingToImage(drawingDocument, { effects: [{ kind: "gaussianBlur", radius: 2 }] });
+void sampleDrawingPixel(drawingDocument, { x: 2, y: 2 });
+void floodFillDrawing(drawingDocument, { x: 2, y: 2, color: "#ff0000", tolerance: 0.1 });
 export const genericSurfaces = (
     <Grid>
         {virtualList}{tree}{dataGrid}

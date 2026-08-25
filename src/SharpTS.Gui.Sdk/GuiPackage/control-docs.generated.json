@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "0c34aaf15e0ab40a353d13f9e4992d1a64ee1bc39f925ba635703e1cb856915f",
+  "schemaHash": "9d07a1a4b39807ac966b79f227cf81f012bd735c41c1cc340ea446bc69d48d27",
   "controls": [
     {
       "kind": "Window",
@@ -230,6 +230,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -247,7 +287,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -280,6 +320,22 @@
             "light",
             "dark"
           ]
+        },
+        {
+          "name": "onMetricsChanged",
+          "type": "(event: WindowMetricsEvent) =\u003E void",
+          "documentation": "Receives coalesced post-layout client size, scaling, state, and current-display work-area metrics.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onCloseRequested",
+          "type": "() =\u003E boolean",
+          "documentation": "Handles and cancels a native close request when the callback returns true.",
+          "required": false,
+          "default": null,
+          "enumValues": null
         }
       ]
     },
@@ -511,6 +567,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -528,7 +624,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -783,6 +879,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -800,7 +936,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -1055,6 +1191,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -1072,7 +1248,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -1327,6 +1503,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -1344,7 +1560,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -1588,6 +1804,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -1605,7 +1861,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -1857,6 +2113,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -1874,7 +2170,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -2150,6 +2446,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -2167,7 +2503,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -2443,6 +2779,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -2460,7 +2836,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -2722,6 +3098,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -2739,7 +3155,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -2825,11 +3241,11 @@
       "propsType": "ButtonProps",
       "handle": "ButtonHandle",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
-      "documentation": "Clickable textual button.",
+      "documentation": "Clickable button with text or one retained content element.",
       "props": [
         {
           "name": "ref",
@@ -3047,6 +3463,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -3064,7 +3520,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -3183,7 +3639,7 @@
         },
         {
           "name": "onClick",
-          "type": "() =\u003E void",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called when the control is activated.",
           "required": false,
           "default": null,
@@ -3419,6 +3875,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -3436,7 +3932,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -3595,7 +4091,7 @@
         },
         {
           "name": "onTextChanged",
-          "type": "(value: string) =\u003E void",
+          "type": "(value: string) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the editable text changes.",
           "required": false,
           "default": null,
@@ -3831,6 +4327,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -3848,7 +4384,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -3999,7 +4535,7 @@
         },
         {
           "name": "onValueChanged",
-          "type": "(value: string) =\u003E void",
+          "type": "(value: string) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the control value changes.",
           "required": false,
           "default": null,
@@ -4013,11 +4549,11 @@
       "propsType": "CheckBoxProps",
       "handle": "unknown",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
-      "documentation": "Boolean toggle with a textual label.",
+      "documentation": "Boolean toggle with text or one retained content element.",
       "props": [
         {
           "name": "ref",
@@ -4235,6 +4771,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -4252,7 +4828,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -4379,7 +4955,7 @@
         },
         {
           "name": "onCheckedChanged",
-          "type": "(value: boolean) =\u003E void",
+          "type": "(value: boolean) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the checked state changes.",
           "required": false,
           "default": null,
@@ -4393,9 +4969,9 @@
       "propsType": "RadioButtonProps",
       "handle": "unknown",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "documentation": "Mutually exclusive grouped toggle.",
       "props": [
@@ -4615,6 +5191,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -4632,7 +5248,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -4767,7 +5383,7 @@
         },
         {
           "name": "onCheckedChanged",
-          "type": "(value: boolean) =\u003E void",
+          "type": "(value: boolean) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the checked state changes.",
           "required": false,
           "default": null,
@@ -4781,9 +5397,9 @@
       "propsType": "ToggleSwitchProps",
       "handle": "unknown",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "documentation": "Switch-style boolean toggle.",
       "props": [
@@ -5003,6 +5619,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -5020,7 +5676,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -5147,7 +5803,7 @@
         },
         {
           "name": "onCheckedChanged",
-          "type": "(value: boolean) =\u003E void",
+          "type": "(value: boolean) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the checked state changes.",
           "required": false,
           "default": null,
@@ -5383,6 +6039,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -5400,7 +6096,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -5535,7 +6231,7 @@
         },
         {
           "name": "onSelectionChanged",
-          "type": "(index: number) =\u003E void",
+          "type": "(index: number) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the selected item or items change.",
           "required": false,
           "default": null,
@@ -5771,6 +6467,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -5788,7 +6524,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -5934,7 +6670,7 @@
         },
         {
           "name": "onSelectionChanged",
-          "type": "(indices: number[]) =\u003E void",
+          "type": "(indices: number[]) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the selected item or items change.",
           "required": false,
           "default": null,
@@ -6170,6 +6906,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -6187,7 +6963,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -6423,6 +7199,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -6440,7 +7256,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -6467,7 +7283,7 @@
         },
         {
           "name": "onSelectionChanged",
-          "type": "(indices: number[]) =\u003E void",
+          "type": "(indices: number[]) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the selected item or items change.",
           "required": false,
           "default": null,
@@ -6703,6 +7519,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -6720,7 +7576,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -6956,6 +7812,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -6973,7 +7869,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -6997,7 +7893,7 @@
         },
         {
           "name": "onExpandedChanged",
-          "type": "(expanded: boolean) =\u003E void",
+          "type": "(expanded: boolean) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the expanded state changes.",
           "required": false,
           "default": null,
@@ -7233,6 +8129,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -7250,7 +8186,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -7486,6 +8422,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -7503,7 +8479,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -7529,7 +8505,7 @@
         "minimum": 0,
         "maximum": 0
       },
-      "documentation": "Retained vector drawing surface for lines, rectangles, and ellipses.",
+      "documentation": "Retained drawing surface for lines, rectangles, ellipses, polylines, bounded text, and images.",
       "props": [
         {
           "name": "ref",
@@ -7747,6 +8723,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -7764,7 +8780,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -7775,6 +8791,22 @@
           "type": "readonly DrawingCommand[]",
           "documentation": "Retained drawing commands rendered by the canvas.",
           "required": true,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "coordinateWidth",
+          "type": "number",
+          "documentation": "Optional whole-number logical coordinate width scaled into the arranged canvas width.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "coordinateHeight",
+          "type": "number",
+          "documentation": "Optional whole-number logical coordinate height scaled into the arranged canvas height.",
+          "required": false,
           "default": null,
           "enumValues": null
         }
@@ -8008,6 +9040,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -8025,7 +9097,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -8176,7 +9248,7 @@
         },
         {
           "name": "onValueChanged",
-          "type": "(value: number | null) =\u003E void",
+          "type": "(value: number | null) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the control value changes.",
           "required": false,
           "default": null,
@@ -8412,6 +9484,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -8429,7 +9541,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -8445,7 +9557,7 @@
         },
         {
           "name": "onValueChanged",
-          "type": "(value: string | null) =\u003E void",
+          "type": "(value: string | null) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the control value changes.",
           "required": false,
           "default": null,
@@ -8681,6 +9793,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -8698,7 +9850,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -8714,7 +9866,7 @@
         },
         {
           "name": "onValueChanged",
-          "type": "(value: string | null) =\u003E void",
+          "type": "(value: string | null) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the control value changes.",
           "required": false,
           "default": null,
@@ -8950,6 +10102,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -8967,7 +10159,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -8999,7 +10191,7 @@
         },
         {
           "name": "onValueChanged",
-          "type": "(value: number) =\u003E void",
+          "type": "(value: number) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the control value changes.",
           "required": false,
           "default": null,
@@ -9235,6 +10427,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -9252,7 +10484,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -9512,6 +10744,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -9529,7 +10801,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -9765,6 +11037,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -9782,7 +11094,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -9811,7 +11123,7 @@
         },
         {
           "name": "onLoad",
-          "type": "() =\u003E void",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the image loads successfully.",
           "required": false,
           "default": null,
@@ -9819,7 +11131,7 @@
         },
         {
           "name": "onError",
-          "type": "(message: string) =\u003E void",
+          "type": "(message: string) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called when the image cannot be loaded, with an error message.",
           "required": false,
           "default": null,
@@ -10055,6 +11367,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -10072,7 +11424,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -10088,7 +11440,7 @@
         },
         {
           "name": "onSelectionChanged",
-          "type": "(index: number) =\u003E void",
+          "type": "(index: number) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called after the selected item or items change.",
           "required": false,
           "default": null,
@@ -10324,6 +11676,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -10341,7 +11733,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -10585,6 +11977,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -10602,7 +12034,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -10838,6 +12270,46 @@
           "enumValues": null
         },
         {
+          "name": "capturePointerOnPress",
+          "type": "boolean",
+          "documentation": "Captures a pressed pointer until release, cancellation, unmount, or disposal.",
+          "required": false,
+          "default": false,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerDown",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer press.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerMove",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles normalized pointer movement.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerUp",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles a normalized pointer release.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
+          "name": "onPointerCancel",
+          "type": "(event: PointerEvent) =\u003E boolean",
+          "documentation": "Handles cancellation or loss of an active pointer capture using its last known local state.",
+          "required": false,
+          "default": null,
+          "enumValues": null
+        },
+        {
           "name": "allowDrop",
           "type": "boolean",
           "documentation": "Allows native drag data to be dropped on this control.",
@@ -10855,7 +12327,7 @@
         },
         {
           "name": "onDrop",
-          "type": "(event: DropEvent) =\u003E void",
+          "type": "(event: DropEvent) =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Receives normalized text and local-file drop data.",
           "required": false,
           "default": null,
@@ -10879,7 +12351,7 @@
         },
         {
           "name": "onClick",
-          "type": "() =\u003E void",
+          "type": "() =\u003E void | Promise\u003Cunknown\u003E",
           "documentation": "Called when the control is activated.",
           "required": false,
           "default": null,

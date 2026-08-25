@@ -138,30 +138,36 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         ArgumentNullException.ThrowIfNull(guestNotification);
         if (!AcceptsGuestWork)
             return;
-
-        if (_dispatcher.CheckAccess())
-        {
-            AssertOwnerThread();
-            try
-            {
-                ExecuteGuestBoundary(guestNotification);
-            }
-            catch (SharpTSHostedProcessExitException)
-            {
-                // The process-exit request already selected forced shutdown.
-            }
-            catch (Exception exception)
-            {
-                HandleFatal(
-                    exception,
-                    State == SharpTSHostedRuntimeState.Initializing
-                        ? SharpTSHostedErrorPhase.Initialization
-                        : SharpTSHostedErrorPhase.Running);
-            }
-            return;
-        }
-
         EnqueueMacrotask(guestNotification);
+    }
+
+    /// <summary>
+    /// Invokes a return-valued native callback synchronously while deferring the
+    /// guest microtask checkpoint until a posted host turn. Native frameworks can
+    /// therefore obtain handled/cancel results without allowing rendering to
+    /// re-enter the routed-event stack.
+    /// </summary>
+    public object? InvokeNativeCallback(Func<object?> guestCallback)
+    {
+        ArgumentNullException.ThrowIfNull(guestCallback);
+        if (!_dispatcher.CheckAccess())
+            throw new InvalidOperationException(
+                "A synchronous native callback cannot run off the owner thread.");
+        if (!AcceptsGuestWork)
+            throw new InvalidOperationException($"Guest work is not accepted in state {State}.");
+
+        AssertOwnerThread();
+        _guestBoundaryDepth++;
+        try
+        {
+            return guestCallback();
+        }
+        finally
+        {
+            _guestBoundaryDepth--;
+            if (_guestBoundaryDepth == 0 && !_disposed)
+                RequestTurn();
+        }
     }
 
     public object? Invoke(Func<object?> guestCallback)

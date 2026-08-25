@@ -1,0 +1,7 @@
+<Project Sdk="SharpTS.Gui.Sdk/0.0.0-local">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <SharpTSEntryPoint>main.tsx</SharpTSEntryPoint>
+    <SharpTSVerifyIL>true</SharpTSVerifyIL>
+  </PropertyGroup>
+</Project>

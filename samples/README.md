@@ -67,6 +67,18 @@ consumption. See the [calculator guide](Calculator/README.md) for local build an
 
 ---
 
+### SharpPaint Desktop Editor (`SharpPaint/`)
+
+**What it does:** Builds a layered Paint.NET-inspired desktop editor with functional drawing,
+eraser compositing, shapes, undo/redo, zoom, portable project files, and PNG import/export.
+
+**Demonstrates:** Native pointer capture, retained logical-coordinate drawing, isolated layer
+compositing, filesystem and dialog services, drag/drop, complex reducer state, interpreted/compiled
+guest parity, and a documented capability-gap matrix. See the
+[SharpPaint guide](SharpPaint/README.md) for commands and known gaps.
+
+---
+
 ### 1. File Hasher (`file-hasher.ts`)
 
 **What it does:** Generates multiple checksums (MD5, SHA1, SHA256, SHA512) for any file.

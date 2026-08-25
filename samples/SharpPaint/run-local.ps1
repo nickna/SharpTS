@@ -1,7 +1,7 @@
 param([ValidateSet('interpreted', 'compiled')][string]$Mode = 'compiled', [switch]$Headless)
 $ErrorActionPreference = 'Stop'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$artifactRoot = Join-Path $root 'artifacts\calculator-local'
+$artifactRoot = Join-Path $root 'artifacts\sharpaint-local'
 $feed = Join-Path $root 'artifacts\tsx-api-feed'
 $packages = Join-Path $artifactRoot 'packages'
 $sdkVersion = '0.0.0-local'
@@ -17,9 +17,6 @@ dotnet publish (Join-Path $root 'src\SharpTS.Gui.Host\SharpTS.Gui.Host.csproj') 
 if ($LASTEXITCODE -ne 0) { throw 'Failed to publish the GUI static host payload.' }
 dotnet pack (Join-Path $root 'src\SharpTS.Gui.Sdk\SharpTS.Gui.Sdk.csproj') -c Release -o $feed -p:MinVerVersionOverride=$sdkVersion
 if ($LASTEXITCODE -ne 0) { throw 'Failed to pack the GUI SDK.' }
-# This script intentionally republishes the same local version while developing.
-# NuGet otherwise reuses the previously extracted package and can run stale compiler/runtime
-# binaries even though the package in the local feed was just rebuilt.
 $sdkPackageCache = Join-Path $packages (Join-Path 'sharpts.gui.sdk' $sdkVersion)
 if (Test-Path -LiteralPath $sdkPackageCache) {
     $resolvedCache = (Resolve-Path -LiteralPath $sdkPackageCache).Path
@@ -29,18 +26,18 @@ if (Test-Path -LiteralPath $sdkPackageCache) {
     }
     Remove-Item -LiteralPath $resolvedCache -Recurse -Force
 }
-$project = Join-Path $PSScriptRoot 'Calculator.csproj'
+$project = Join-Path $PSScriptRoot 'SharpPaint.csproj'
 dotnet restore $project --force
-if ($LASTEXITCODE -ne 0) { throw 'Failed to restore the Calculator.' }
+if ($LASTEXITCODE -ne 0) { throw 'Failed to restore SharpPaint.' }
 # The local package intentionally keeps a fixed version. Force the app assembly target to
 # recopy the freshly extracted host/runtime instead of trusting timestamps from a previous
 # 0.0.0-local build, then launch exactly that output.
 dotnet build $project --no-restore --no-incremental
-if ($LASTEXITCODE -ne 0) { throw 'Failed to rebuild the Calculator against the local GUI SDK.' }
+if ($LASTEXITCODE -ne 0) { throw 'Failed to rebuild SharpPaint against the local GUI SDK.' }
 $arguments = @('run', '--project', $project, '--no-restore', '--no-build', '--', '--mode', $Mode)
 if ($Headless) {
     $env:SHARPTS_GUI_SMOKE_CLOSE = '1'
     $arguments += '--headless'
 }
 dotnet @arguments
-if ($LASTEXITCODE -ne 0) { throw "Calculator exited with code $LASTEXITCODE." }
+if ($LASTEXITCODE -ne 0) { throw "SharpPaint exited with code $LASTEXITCODE." }

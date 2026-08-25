@@ -7,10 +7,14 @@ import type {
     Dispatch,
     DropEffect,
     DropEvent,
+    DrawingCommand,
+    DrawingPoint,
     ErrorBoundaryProps,
     GuiChild,
     GuiElement,
     MutableRef,
+    PointerEvent,
+    WindowMetricsEvent,
     SelectionMode,
     SignalSetter,
     SourceInfo,
@@ -306,18 +310,79 @@ function thickness(value: Thickness | undefined): number[] {
     if (items.length === 2) return [items[1], items[0], items[1], items[0]];
     return [items[3], items[0], items[1], items[2]];
 }
-function action(handler: any): any { let result: any = null; if (typeof handler === "function") result = (): void => handler(); return result; }
-function stringAction(handler: any): any { let result: any = null; if (typeof handler === "function") result = (value: string): void => handler(value); return result; }
-function boolAction(handler: any): any { let result: any = null; if (typeof handler === "function") result = (value: boolean): void => handler(value); return result; }
-function numberAction(handler: any): any { let result: any = null; if (typeof handler === "function") result = (value: number): void => handler(value); return result; }
-function indicesAction(handler: any): any { let result: any = null; if (typeof handler === "function") result = (value: number[]): void => handler(value); return result; }
-function nullableNumberAction(handler: any): any { let result: any = null; if (typeof handler === "function") result = (value: any): void => handler(value); return result; }
-function nullableStringAction(handler: any): any { let result: any = null; if (typeof handler === "function") result = (value: any): void => handler(value); return result; }
-function keyAction(handler: any): any {
+type EventErrorReporter = ((error: unknown) => void) | null;
+type EventWorkTracker = ((value: any) => void) | null;
+function reportEventError(error: unknown, reporter: EventErrorReporter): void {
+    if (reporter === null) throw error;
+    reporter(error);
+}
+function observeEventResult(value: any, reporter: EventErrorReporter, tracker: EventWorkTracker): void {
+    if (value === null || value === undefined || typeof value.then !== "function") return;
+    if (tracker !== null) {
+        tracker(value);
+        return;
+    }
+    value.then(undefined, (error: unknown): void => reportEventError(error, reporter));
+}
+function invokeEvent(invoke: () => any, reporter: EventErrorReporter, tracker: EventWorkTracker): void {
+    try { observeEventResult(invoke(), reporter, tracker); }
+    catch (error) { reportEventError(error, reporter); }
+}
+function invokePredicate(invoke: () => any, fallback: any,
+    reporter: EventErrorReporter, tracker: EventWorkTracker): any {
+    try {
+        const value = invoke();
+        if (value !== null && value !== undefined && typeof value.then === "function") {
+            observeEventResult(value, reporter, tracker);
+            return fallback;
+        }
+        return value;
+    } catch (error) {
+        reportEventError(error, reporter);
+        return fallback;
+    }
+}
+function action(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (): void => invokeEvent(() => handler(), reporter, tracker); return result; }
+function stringAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (value: string): void => invokeEvent(() => handler(value), reporter, tracker); return result; }
+function boolAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (value: boolean): void => invokeEvent(() => handler(value), reporter, tracker); return result; }
+function numberAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (value: number): void => invokeEvent(() => handler(value), reporter, tracker); return result; }
+function indicesAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (value: number[]): void => invokeEvent(() => handler(value), reporter, tracker); return result; }
+function nullableNumberAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (value: any): void => invokeEvent(() => handler(value), reporter, tracker); return result; }
+function nullableStringAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any { let result: any = null; if (typeof handler === "function") result = (value: any): void => invokeEvent(() => handler(value), reporter, tracker); return result; }
+function keyAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
     let result: any = null;
     if (typeof handler === "function") {
         result = (key: string, ctrl: boolean, alt: boolean, shift: boolean, meta: boolean, repeat: boolean): boolean =>
-            handler({ key, ctrl, alt, shift, meta, repeat }) === true;
+            invokePredicate(() => handler({ key, ctrl, alt, shift, meta, repeat }), false, reporter, tracker) === true;
+    }
+    return result;
+}
+function boolPredicate(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
+    let result: any = null;
+    if (typeof handler === "function") result = (): boolean =>
+        invokePredicate(() => handler(), true, reporter, tracker) === true;
+    return result;
+}
+function windowMetricsAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
+    let result: any = null;
+    if (typeof handler === "function") result = (json: string): void =>
+        invokeEvent(() => handler(JSON.parse(json) as WindowMetricsEvent), reporter, tracker);
+    return result;
+}
+function pointerEvent(pointerId: number, pointerType: string, x: number, y: number,
+    button: string, buttons: number, pressure: number,
+    ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): PointerEvent {
+    return { pointerId, pointerType: pointerType as any, x, y, button: button as any,
+        buttons, pressure, ctrl, alt, shift, meta };
+}
+function pointerAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
+    let result: any = null;
+    if (typeof handler === "function") {
+        result = (pointerId: number, pointerType: string, x: number, y: number,
+            button: string, buttons: number, pressure: number,
+            ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): boolean =>
+            invokePredicate(() => handler(pointerEvent(pointerId, pointerType, x, y, button, buttons, pressure,
+                ctrl, alt, shift, meta)), false, reporter, tracker) === true;
     }
     return result;
 }
@@ -325,21 +390,21 @@ function dropEvent(files: string[], text: string | null, effect: DropEffect,
     ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): DropEvent {
     return { files: files.slice(), text, effect, ctrl, alt, shift, meta };
 }
-function dragOverAction(handler: any): any {
+function dragOverAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
     let result: any = null;
     if (typeof handler === "function") {
         result = (files: string[], text: string | null, effect: DropEffect,
             ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): DropEffect =>
-            handler(dropEvent(files, text, effect, ctrl, alt, shift, meta));
+            invokePredicate(() => handler(dropEvent(files, text, effect, ctrl, alt, shift, meta)), "none", reporter, tracker);
     }
     return result;
 }
-function dropAction(handler: any): any {
+function dropAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
     let result: any = null;
     if (typeof handler === "function") {
         result = (files: string[], text: string | null, effect: DropEffect,
             ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): void =>
-            handler(dropEvent(files, text, effect, ctrl, alt, shift, meta));
+            invokeEvent(() => handler(dropEvent(files, text, effect, ctrl, alt, shift, meta)), reporter, tracker);
     }
     return result;
 }
@@ -350,7 +415,8 @@ function hasProperty(value: any, name: string): boolean {
     return false;
 }
 
-function withCommon(node: GuiVNode, safe: any): GuiVNode {
+function withCommon(node: GuiVNode, safe: any,
+    reporter: EventErrorReporter, tracker: EventWorkTracker): GuiVNode {
     const margin = thickness(safe.margin);
     return DesktopBridge.WithCommon(node,
         safe.width === undefined ? NaN : safe.width, safe.height === undefined ? NaN : safe.height,
@@ -368,9 +434,14 @@ function withCommon(node: GuiVNode, safe: any): GuiVNode {
         safe.dock === undefined ? "left" : safe.dock,
         safe.canvasLeft === undefined ? NaN : safe.canvasLeft,
         safe.canvasTop === undefined ? NaN : safe.canvasTop,
-        keyAction(safe.onKeyDown), keyAction(safe.onKeyUp),
+        keyAction(safe.onKeyDown, reporter, tracker), keyAction(safe.onKeyUp, reporter, tracker),
         hasProperty(safe, "onKeyDown"), hasProperty(safe, "onKeyUp"),
-        safe.allowDrop === true, dragOverAction(safe.onDragOver), dropAction(safe.onDrop),
+        safe.capturePointerOnPress === true,
+        pointerAction(safe.onPointerDown, reporter, tracker), pointerAction(safe.onPointerMove, reporter, tracker),
+        pointerAction(safe.onPointerUp, reporter, tracker), pointerAction(safe.onPointerCancel, reporter, tracker),
+        hasProperty(safe, "onPointerDown"), hasProperty(safe, "onPointerMove"),
+        hasProperty(safe, "onPointerUp"), hasProperty(safe, "onPointerCancel"),
+        safe.allowDrop === true, dragOverAction(safe.onDragOver, reporter, tracker), dropAction(safe.onDrop, reporter, tracker),
         hasProperty(safe, "onDragOver"), hasProperty(safe, "onDrop")) as any;
 }
 
@@ -410,20 +481,35 @@ class ReactiveRoot {
     private components: ComponentState[] = [];
     private boundaries: ErrorBoundaryState[] = [];
     private fibers: LogicalFiber[] = [];
+    private pendingEventWork = 0;
+    private managedEventWork: any = null;
     public constructor(
         private readonly element: GuiChild,
         private readonly onUnhandledError: ((error: unknown) => void) | null = null) {}
     public setManaged(root: any): void { this.managed = root; }
+    public setEventWorkTracker(tracker: any): void { this.managedEventWork = tracker; }
     public invalidate(): void {
-        if (this.disposed || this.scheduled) return;
+        if (this.disposed || this.managed === null || this.scheduled) return;
         if (this.rendering) throw new Error("State cannot be updated while rendering.");
         this.scheduled = true;
-        DesktopBridge.QueueMicrotask((): void => {
+        const tracker = this.managedEventWork;
+        if (tracker !== null) tracker.Begin();
+        try {
+            DesktopBridge.QueueMicrotask((): void => {
+                this.scheduled = false;
+                try {
+                    if (this.disposed || this.managed === null) return;
+                    try { this.renderNow(); }
+                    catch (error) { this.failWindow(error); }
+                } finally {
+                    if (this.managedEventWork === tracker && tracker !== null) tracker.Complete();
+                }
+            });
+        } catch (error) {
             this.scheduled = false;
-            if (this.disposed) return;
-            try { this.renderNow(); }
-            catch (error) { this.failWindow(error); }
-        });
+            if (this.managedEventWork === tracker && tracker !== null) tracker.Complete();
+            throw error;
+        }
     }
     private component(path: string, type: any, boundary: ErrorBoundaryState | null): ComponentState {
         for (const existing of this.components) if (existing.path === path && existing.type === type) {
@@ -530,16 +616,22 @@ class ReactiveRoot {
     private intrinsic(element: GuiElement, path: string, nativeKey: string | null,
         nearestBoundary: ErrorBoundaryState | null): { node: GuiVNode; fibers: LogicalFiber[] } {
         const safe: any = element.props || {};
+        const eventReporter = (error: unknown): void => this.reportEventError(error);
+        const eventTracker = (value: any): void => this.trackEventWork(value);
         const ref: any = safe.ref === undefined ? null : safe.ref;
-        const textual = element.type === "TextBlock" || element.type === "Button" ||
-            element.type === "CheckBox" || element.type === "RadioButton" ||
-            element.type === "ToggleSwitch";
+        const contentControl = element.type === "Button" || element.type === "CheckBox" ||
+            element.type === "RadioButton" || element.type === "ToggleSwitch";
+        const contentValues: GuiChild[] = [];
+        if (contentControl) flatten(safe.children, contentValues);
+        const retainedContent = contentControl && contentValues.length === 1 &&
+            typeof contentValues[0] !== "string" && typeof contentValues[0] !== "number";
+        const textual = element.type === "TextBlock" || (contentControl && !retainedContent);
         const children = textual ? { fibers: [], nodes: [] } : this.materialize(safe.children, path, null, nearestBoundary);
         const key: any = nativeKey;
         let node: GuiVNode;
         const pad = thickness(safe.padding); const border = thickness(safe.borderThickness);
         switch (element.type) {
-            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, children.nodes, key, ref); break;
+            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, safe.onMetricsChanged !== undefined, windowMetricsAction(safe.onMetricsChanged, eventReporter, eventTracker), safe.onCloseRequested !== undefined, boolPredicate(safe.onCloseRequested, eventReporter, eventTracker), children.nodes, key, ref); break;
             case "StackPanel": case "ToolBar": node = DesktopBridge.CreateStackPanel(element.type, safe.spacing === undefined ? 0 : safe.spacing, element.type === "ToolBar" ? "horizontal" : (safe.orientation === undefined ? "vertical" : safe.orientation), children.nodes, key, ref); break;
             case "WrapPanel": node = DesktopBridge.CreateWrapPanel(safe.spacing === undefined ? 0 : safe.spacing, safe.orientation === undefined ? "horizontal" : safe.orientation, children.nodes, key, ref); break;
             case "DockPanel": node = DesktopBridge.CreateDockPanel(safe.lastChildFill === undefined ? true : safe.lastChildFill, children.nodes, key, ref); break;
@@ -548,21 +640,21 @@ class ReactiveRoot {
             case "ScrollViewer": node = DesktopBridge.CreateScrollViewer(safe.horizontalScrollBarVisibility || "auto", safe.verticalScrollBarVisibility || "auto", children.nodes, key, ref); break;
             case "Separator": node = DesktopBridge.CreateSeparator(key, ref); break;
             case "TextBlock": node = DesktopBridge.CreateTextBlock(textContent(safe.children), safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.fontStyle || "normal", safe.textWrapping || "noWrap", safe.textAlignment || "left", safe.foreground || null, key, ref); break;
-            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : textContent(safe.children), safe.isChecked === true, safe.groupName || null, action(safe.onClick), boolAction(safe.onCheckedChanged), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
-            case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged), key, ref); break;
-            case "ComboBox": node = DesktopBridge.CreateComboBox((safe.items || []).slice(), safe.selectedIndex === undefined ? -1 : safe.selectedIndex, numberAction(safe.onSelectionChanged), key, ref); break;
-            case "ListBox": node = DesktopBridge.CreateListBox((safe.items || []).slice(), (safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged), key, ref); break;
+            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : (retainedContent ? "" : textContent(safe.children)), safe.isChecked === true, safe.groupName || null, action(safe.onClick, eventReporter, eventTracker), boolAction(safe.onCheckedChanged, eventReporter, eventTracker), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
+            case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged, eventReporter, eventTracker), key, ref); break;
+            case "ComboBox": node = DesktopBridge.CreateComboBox((safe.items || []).slice(), safe.selectedIndex === undefined ? -1 : safe.selectedIndex, numberAction(safe.onSelectionChanged, eventReporter, eventTracker), key, ref); break;
+            case "ListBox": node = DesktopBridge.CreateListBox((safe.items || []).slice(), (safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged, eventReporter, eventTracker), key, ref); break;
             case "ItemsControl": case "TreeView": case "Canvas": node = DesktopBridge.CreateItemsControl(element.type, children.nodes, key, ref); break;
-            case "VirtualizingList": node = DesktopBridge.CreateVirtualizingList((safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged), children.nodes, key, ref); break;
-            case "TreeViewItem": node = DesktopBridge.CreateTreeViewItem(safe.header, safe.isExpanded === true, boolAction(safe.onExpandedChanged), children.nodes, key, ref); break;
+            case "VirtualizingList": node = DesktopBridge.CreateVirtualizingList((safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged, eventReporter, eventTracker), children.nodes, key, ref); break;
+            case "TreeViewItem": node = DesktopBridge.CreateTreeViewItem(safe.header, safe.isExpanded === true, boolAction(safe.onExpandedChanged, eventReporter, eventTracker), children.nodes, key, ref); break;
             case "RichTextBlock": node = DesktopBridge.CreateRichTextBlock(JSON.stringify(safe.runs || []), key, ref); break;
-            case "DrawingCanvas": node = DesktopBridge.CreateDrawingCanvas(JSON.stringify(safe.commands || []), key, ref); break;
-            case "NumericUpDown": node = DesktopBridge.CreateNumericUpDown(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.increment === undefined ? 1 : safe.increment, safe.value === undefined ? null : safe.value, nullableNumberAction(safe.onValueChanged), key, ref); break;
-            case "DatePicker": case "TimePicker": node = DesktopBridge.CreateDateTimePicker(element.type, safe.value === undefined ? null : safe.value, nullableStringAction(safe.onValueChanged), key, ref); break;
-            case "Slider": node = DesktopBridge.CreateSlider(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.value === undefined ? 0 : safe.value, numberAction(safe.onValueChanged), key, ref); break;
+            case "DrawingCanvas": node = DesktopBridge.CreateDrawingCanvas(JSON.stringify(safe.commands || []), safe.coordinateWidth === undefined ? NaN : safe.coordinateWidth, safe.coordinateHeight === undefined ? NaN : safe.coordinateHeight, key, ref); break;
+            case "NumericUpDown": node = DesktopBridge.CreateNumericUpDown(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.increment === undefined ? 1 : safe.increment, safe.value === undefined ? null : safe.value, nullableNumberAction(safe.onValueChanged, eventReporter, eventTracker), key, ref); break;
+            case "DatePicker": case "TimePicker": node = DesktopBridge.CreateDateTimePicker(element.type, safe.value === undefined ? null : safe.value, nullableStringAction(safe.onValueChanged, eventReporter, eventTracker), key, ref); break;
+            case "Slider": node = DesktopBridge.CreateSlider(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.value === undefined ? 0 : safe.value, numberAction(safe.onValueChanged, eventReporter, eventTracker), key, ref); break;
             case "ProgressBar": node = DesktopBridge.CreateProgressBar(safe.minimum === undefined ? 0 : safe.minimum, safe.maximum === undefined ? 100 : safe.maximum, safe.value === undefined ? 0 : safe.value, key, ref); break;
-            case "Image": node = DesktopBridge.CreateImage(safe.source, safe.stretch || "uniform", action(safe.onLoad), stringAction(safe.onError), key, ref); break;
-            case "TabControl": node = DesktopBridge.CreateTabControl(safe.selectedIndex === undefined ? 0 : safe.selectedIndex, numberAction(safe.onSelectionChanged), children.nodes, key, ref); break;
+            case "Image": node = DesktopBridge.CreateImage(safe.source, safe.stretch || "uniform", action(safe.onLoad, eventReporter, eventTracker), stringAction(safe.onError, eventReporter, eventTracker), key, ref); break;
+            case "TabControl": node = DesktopBridge.CreateTabControl(safe.selectedIndex === undefined ? 0 : safe.selectedIndex, numberAction(safe.onSelectionChanged, eventReporter, eventTracker), children.nodes, key, ref); break;
             case "TabItem": node = DesktopBridge.CreateTabItem(safe.header, children.nodes, key, ref); break;
             case "Menu": node = DesktopBridge.CreateMenu(children.nodes, key, ref); break;
             default:
@@ -573,13 +665,35 @@ class ReactiveRoot {
                 break;
         }
         node = DesktopBridge.WithSpecifiedProperties(
-            source(withCommon(withStyle(node, safe), safe), element.source),
+            source(withCommon(withStyle(node, safe), safe, eventReporter, eventTracker), element.source),
             Object.keys(safe)) as any;
         if (nearestBoundary !== null) node = DesktopBridge.WithBoundary(node, nearestBoundary.path) as any;
         return { node, fibers: children.fibers };
     }
-    public renderNow(): void {
+
+    private reportEventError(error: unknown): void {
         if (this.disposed) return;
+        const report = this.onUnhandledError;
+        if (report === null) throw error;
+        report(error);
+    }
+
+    private trackEventWork(value: any): void {
+        this.pendingEventWork++;
+        if (this.managedEventWork !== null) this.managedEventWork.Begin();
+        value.then(
+            (): void => this.completeEventWork(false, null),
+            (error: unknown): void => this.completeEventWork(true, error));
+    }
+
+    private completeEventWork(failed: boolean, error: unknown): void {
+        if (this.pendingEventWork > 0) this.pendingEventWork--;
+        if (this.managedEventWork !== null) this.managedEventWork.Complete();
+        if (failed) this.reportEventError(error);
+    }
+
+    public renderNow(): void {
+        if (this.disposed || this.managed === null) return;
         this.rendering = true;
         for (const component of this.components) component.seen = false;
         for (const boundary of this.boundaries) boundary.seen = false;
@@ -589,7 +703,9 @@ class ReactiveRoot {
         try {
             const materialized = this.materialize(this.element, "root");
             if (materialized.nodes.length !== 1) throw new Error("A desktop window requires exactly one Window root.");
-            this.managed.Render(materialized.nodes[0]);
+            const managed = this.managed;
+            if (this.disposed || managed === null) return;
+            managed.Render(materialized.nodes[0]);
             this.fibers = materialized.fibers;
         } catch (error) {
             const value: any = error as any;
@@ -677,7 +793,8 @@ class ReactiveRoot {
             this.cleanup(component);
         }
         for (const dependency of this.dependencies) remove(dependency.subscribers, this);
-        this.dependencies = []; this.components = []; this.boundaries = []; this.fibers = []; this.managed = null;
+        this.dependencies = []; this.components = []; this.boundaries = []; this.fibers = [];
+        this.pendingEventWork = 0; this.managedEventWork = null; this.managed = null;
     }
 }
 
@@ -912,7 +1029,7 @@ export interface DesktopStyle {
 export interface DesktopApplicationOptions {
     /** Condition that ends the application message loop. */
     shutdownMode?: DesktopShutdownMode;
-    /** Handles render, effect, and native commit failures not caught by an ErrorBoundary. */
+    /** Handles render, effect, native commit, and event-callback failures not caught elsewhere. */
     onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
     /** Named values available to window and control resource lookup. */
     resources?: Readonly<{ [key: string]: DesktopResourceValue }>;
@@ -927,7 +1044,7 @@ export interface DesktopWindowOptions {
     modal?: boolean;
     /** Whether this window is the application's main window. */
     main?: boolean;
-    /** Window-specific unhandled error callback. */
+    /** Window-specific handler for render, effect, native commit, and event-callback failures. */
     onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
 }
 /** Live desktop window created by DesktopApplication. @category Application Lifecycle */
@@ -1031,7 +1148,8 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
                 windowOptions.modal === true,
                 windowOptions.main === true);
             runner.setManaged(root);
-            const closed = (async (): Promise<void> => { await root.Completion; })();
+            runner.setEventWorkTracker(DesktopBridge.CreateEventWorkTracker(root));
+            const closed = root.Completion as Promise<void>;
             window = {
                 get isDisposed(): boolean { return root.IsDisposed; },
                 closed,
@@ -1044,7 +1162,14 @@ export function createDesktopApplication(options: DesktopApplicationOptions = {}
             };
             (window as any).__managedRoot = root;
             try { runner.renderNow(); }
-            catch (error) { root.Dispose(); throw error; }
+            catch (error) {
+                try { root.Dispose(); }
+                catch (disposeError) {
+                    throw new Error("Initial desktop render failed (" + String(error) +
+                        ") and root rollback also failed: " + String(disposeError));
+                }
+                throw new Error("Initial desktop render failed: " + String(error));
+            }
             return window;
         },
         createTrayIcon(trayOptions: TrayIconOptions): DesktopTrayIcon {
@@ -1096,6 +1221,73 @@ export interface FileFilter {
     /** File patterns such as `*.png` accepted by the filter. */
     patterns: readonly string[];
 }
+/** One composited layer rendered by renderDrawingToPng. @category Desktop Services */
+export interface DrawingLayer {
+    /** Whether the layer participates in export. */
+    readonly isVisible: boolean;
+    /** Layer opacity from zero to one. */
+    readonly opacity: number;
+    /** Ordered drawing commands contained by the layer. */
+    readonly commands: readonly DrawingCommand[];
+}
+/** Logical drawing document rendered by renderDrawingToPng. @category Desktop Services */
+export interface DrawingDocument {
+    /** Output width in pixels. */
+    readonly width: number;
+    /** Output height in pixels. */
+    readonly height: number;
+    /** Optional canvas background; omitted output remains transparent. */
+    readonly background?: string;
+    /** Back-to-front ordered drawing layers. */
+    readonly layers: readonly DrawingLayer[];
+}
+/** A bounded PNG image produced by the desktop drawing renderer. @category Desktop Services */
+export interface DrawingImage {
+    /** Validated PNG data URI suitable for an image drawing command. */
+    readonly source: string;
+    /** Image width in pixels. */
+    readonly width: number;
+    /** Image height in pixels. */
+    readonly height: number;
+}
+/** One pixel sampled from a rendered drawing document. @category Desktop Services */
+export interface DrawingPixel {
+    readonly red: number;
+    readonly green: number;
+    readonly blue: number;
+    readonly alpha: number;
+    /** Normalized #RRGGBB color when opaque, otherwise #AARRGGBB. */
+    readonly color: string;
+}
+/** A validated effect applied in order while rasterizing a drawing document. @category Desktop Services */
+export type DrawingEffect =
+    { readonly kind: "gaussianBlur"; readonly radius: number } |
+    { readonly kind: "grayscale" } |
+    { readonly kind: "invert" } |
+    { readonly kind: "brightnessContrast"; readonly brightness: number; readonly contrast: number } |
+    { readonly kind: "hueSaturation"; readonly hue: number; readonly saturation: number };
+/** Options for renderDrawingToImage. @category Desktop Services */
+export interface RenderDrawingToImageOptions {
+    /** Ordered effects applied after the document is composited. */
+    readonly effects?: readonly DrawingEffect[];
+}
+/** Options for a contiguous flood-fill operation. @category Desktop Services */
+export interface DrawingFloodFillOptions {
+    /** Seed x coordinate in document pixels. */
+    readonly x: number;
+    /** Seed y coordinate in document pixels. */
+    readonly y: number;
+    /** Replacement color. */
+    readonly color: string;
+    /** Maximum normalized per-channel difference from zero to one. */
+    readonly tolerance?: number;
+}
+/** Result of a flood-fill operation. @category Desktop Services */
+export type DrawingFloodFillResult =
+    { readonly changed: false } |
+    { readonly changed: true; readonly image: DrawingImage };
+/** Dimensions reported for a supported image source. @category Desktop Services */
+export interface ImageDimensions { readonly width: number; readonly height: number; }
 /** Options for showOpenFileDialog. @category Desktop Services */
 export interface OpenFileDialogOptions {
     /** Native dialog title. */
@@ -1142,15 +1334,22 @@ export interface DesktopPlatformInfo {
     /** Operating-system temporary directory. */
     temporaryDirectory: string;
 }
-/** Rectangle in desktop coordinate space. @category Desktop Services */
+/** Rectangle in physical desktop pixel coordinates. @category Desktop Services */
 export interface DesktopDisplayBounds {
-    /** Horizontal origin in device-independent pixels. */
+    /** Horizontal origin in physical desktop pixels. */
     x: number;
-    /** Vertical origin in device-independent pixels. */
+    /** Vertical origin in physical desktop pixels. */
     y: number;
-    /** Rectangle width in device-independent pixels. */
+    /** Rectangle width in physical desktop pixels. */
     width: number;
-    /** Rectangle height in device-independent pixels. */
+    /** Rectangle height in physical desktop pixels. */
+    height: number;
+}
+/** Display size expressed in device-independent pixels. @category Desktop Services */
+export interface DesktopDisplaySize {
+    /** Logical width after applying native display scaling. */
+    width: number;
+    /** Logical height after applying native display scaling. */
     height: number;
 }
 /** Native desktop display information. @category Desktop Services */
@@ -1163,10 +1362,14 @@ export interface DesktopDisplayInfo {
     scaling: number;
     /** Current native display orientation. */
     orientation: "landscape" | "portrait" | "landscapeflipped" | "portraitflipped" | "none";
-    /** Full display bounds. */
+    /** Full display bounds in physical desktop pixels. */
     bounds: DesktopDisplayBounds;
-    /** Bounds remaining after desktop shell work areas are excluded. */
+    /** Physical bounds remaining after desktop shell work areas are excluded. */
     workingArea: DesktopDisplayBounds;
+    /** Full display size in device-independent pixels. */
+    boundsSize: DesktopDisplaySize;
+    /** Usable display size in device-independent pixels. */
+    workingAreaSize: DesktopDisplaySize;
 }
 /** Options for showNotification. @category Desktop Services */
 export interface DesktopNotificationOptions {
@@ -1183,37 +1386,68 @@ export interface DesktopNotificationOptions {
  * @returns The button selected by the user.
  * @category Desktop Services
  */
-export async function showMessageDialog(options: MessageDialogOptions): Promise<MessageDialogResult> { return await DesktopBridge.ShowMessageDialogAsync(options.title || "", options.message, options.buttons || "ok") as any; }
+export function showMessageDialog(options: MessageDialogOptions): Promise<MessageDialogResult> { return DesktopBridge.ShowMessageDialogAsync(options.title || "", options.message, options.buttons || "ok") as any; }
 /**
  * Displays a native open-file dialog.
  * @param options - Title, multi-select, and filter options.
  * @returns The selected file paths, or an empty array when canceled.
  * @category Desktop Services
  */
-export async function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> { return await DesktopBridge.ShowOpenFileDialogAsync(options.title || "", options.allowMultiple === true, JSON.stringify(options.filters || [])) as any; }
+export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> {
+    const result = DesktopBridge.ShowOpenFileDialogJsonAsync(
+        options.title || "", options.allowMultiple === true,
+        JSON.stringify(options.filters || [])) as Promise<string>;
+    return result.then(json => JSON.parse(json) as string[]);
+}
+
+/** Reads pixel dimensions from a packaged asset, local file, or PNG data URI. @category Desktop Services */
+export function getImageDimensions(source: string): Promise<ImageDimensions> {
+    const result = DesktopBridge.GetImageDimensionsJsonAsync(source) as Promise<string>;
+    return result.then(json => JSON.parse(json) as ImageDimensions);
+}
+
+/** Renders a validated drawing document to a transparency-preserving PNG file. @category Desktop Services */
+export function renderDrawingToPng(document: DrawingDocument, path: string): Promise<void> {
+    return DesktopBridge.RenderDrawingToPngAsync(JSON.stringify(document), path) as any;
+}
+/** Renders a validated drawing document to a bounded PNG data URI, optionally applying effects. @category Desktop Services */
+export function renderDrawingToImage(document: DrawingDocument, options: RenderDrawingToImageOptions = {}): Promise<DrawingImage> {
+    const result = DesktopBridge.RenderDrawingToImageJsonAsync(JSON.stringify(document), JSON.stringify(options)) as Promise<string>;
+    return result.then(json => JSON.parse(json) as DrawingImage);
+}
+/** Samples one pixel from the fully composited drawing document. @category Desktop Services */
+export function sampleDrawingPixel(document: DrawingDocument, point: DrawingPoint): Promise<DrawingPixel> {
+    const result = DesktopBridge.SampleDrawingPixelJsonAsync(JSON.stringify(document), point.x, point.y) as Promise<string>;
+    return result.then(json => JSON.parse(json) as DrawingPixel);
+}
+/** Applies a contiguous, four-connected flood fill and returns a rasterized document image. @category Desktop Services */
+export function floodFillDrawing(document: DrawingDocument, options: DrawingFloodFillOptions): Promise<DrawingFloodFillResult> {
+    const result = DesktopBridge.FloodFillDrawingJsonAsync(JSON.stringify(document), JSON.stringify(options)) as Promise<string>;
+    return result.then(json => JSON.parse(json) as DrawingFloodFillResult);
+}
 /**
  * Displays a native save-file dialog.
  * @param options - Title, suggested name, extension, and filter options.
  * @returns The selected file path, or null when canceled.
  * @category Desktop Services
  */
-export async function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise<string | null> { return await DesktopBridge.ShowSaveFileDialogAsync(options.title || "", options.suggestedFileName || "", options.defaultExtension || "", JSON.stringify(options.filters || [])) as any; }
+export function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise<string | null> { return DesktopBridge.ShowSaveFileDialogAsync(options.title || "", options.suggestedFileName || "", options.defaultExtension || "", JSON.stringify(options.filters || [])) as any; }
 /**
  * Displays a native folder-selection dialog.
  * @param options - Dialog title options.
  * @returns The selected folder path, or null when canceled.
  * @category Desktop Services
  */
-export async function showFolderDialog(options: FolderDialogOptions = {}): Promise<string | null> { return await DesktopBridge.ShowFolderDialogAsync(options.title || "") as any; }
+export function showFolderDialog(options: FolderDialogOptions = {}): Promise<string | null> { return DesktopBridge.ShowFolderDialogAsync(options.title || "") as any; }
 /** Reads plain text from the desktop clipboard. @returns Clipboard text, or an empty string when no text is available. @category Desktop Services */
-export async function readClipboardText(): Promise<string> { return await DesktopBridge.ReadClipboardTextAsync(); }
+export function readClipboardText(): Promise<string> { return DesktopBridge.ReadClipboardTextAsync() as any; }
 /**
  * Writes plain text to the desktop clipboard.
  * @param value - Text to place on the clipboard.
  * @returns A promise completed after the clipboard is updated.
  * @category Desktop Services
  */
-export async function writeClipboardText(value: string): Promise<void> { await DesktopBridge.WriteClipboardTextAsync(value); }
+export function writeClipboardText(value: string): Promise<void> { return DesktopBridge.WriteClipboardTextAsync(value) as any; }
 /** Returns command-line arguments supplied when the desktop application launched. @returns Launch argument strings. @category Desktop Services */
 export function getLaunchArguments(): string[] { return DesktopBridge.GetDesktopLaunchArguments() as any; }
 /** Returns operating-system, runtime, and well-known directory information. @returns Current desktop platform information. @category Desktop Services */
@@ -1226,21 +1460,21 @@ export function getDesktopDisplays(): DesktopDisplayInfo[] { return JSON.parse(D
  * @returns A promise completed after the native open request is submitted.
  * @category Desktop Services
  */
-export async function openExternal(target: string): Promise<void> { await DesktopBridge.OpenDesktopExternalAsync(target); }
+export function openExternal(target: string): Promise<void> { return DesktopBridge.OpenDesktopExternalAsync(target) as any; }
 /**
  * Reveals a file or folder in the native file manager.
  * @param path - Local path to reveal.
  * @returns A promise completed after the native reveal request is submitted.
  * @category Desktop Services
  */
-export async function showItemInFolder(path: string): Promise<void> { await DesktopBridge.ShowDesktopItemInFolderAsync(path); }
+export function showItemInFolder(path: string): Promise<void> { return DesktopBridge.ShowDesktopItemInFolderAsync(path) as any; }
 /**
  * Sends a local file to the operating system's print workflow.
  * @param path - Local file path to print.
  * @returns A promise completed after the native print request is submitted.
  * @category Desktop Services
  */
-export async function printFile(path: string): Promise<void> { await DesktopBridge.PrintDesktopFileAsync(path); }
+export function printFile(path: string): Promise<void> { return DesktopBridge.PrintDesktopFileAsync(path) as any; }
 /**
  * Displays a native desktop notification.
  * @param options - Notification title, body, and sound options.

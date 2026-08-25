@@ -58,6 +58,32 @@ public class NullableFixture
     public int OrDefault(int? value, int fallback) => value ?? fallback;
 }
 
+/// <summary>Controlled object-valued host-awaitable surface for dual-mode CLR interop tests.</summary>
+public sealed class HostAsyncInteropFixture
+{
+    public Task<object?> CompletedStringAsync() => Task.FromResult<object?>("completed");
+
+    public async Task<object?> PendingStringAsync()
+    {
+        await Task.Yield();
+        return "pending";
+    }
+
+    public Task<object?> NullStringAsync() => Task.FromResult<object?>(null);
+
+    public Task<object?> JsonStringListAsync() =>
+        Task.FromResult<object?>("[\"alpha\",\"beta\"]");
+
+    public async Task<object?> CompletedVoidAsync()
+    {
+        await Task.CompletedTask;
+        return null;
+    }
+
+    public Task<object?> FaultedStringAsync() =>
+        Task.FromException<object?>(new InvalidOperationException("managed-async-failure"));
+}
+
 /// <summary>Controlled ref/out/in surface for tuple-lowered CLR interop tests.</summary>
 public class ByRefFixture
 {

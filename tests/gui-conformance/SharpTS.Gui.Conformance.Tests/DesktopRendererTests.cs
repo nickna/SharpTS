@@ -11,6 +11,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using SkiaSharp;
 using SharpTS.Gui;
 using Xunit;
 
@@ -43,6 +44,8 @@ public sealed class DesktopRendererTests : IDisposable
     private readonly TraceRecorder _trace = new(Environment.CurrentManagedThreadId);
     private readonly DesktopRuntimeRegistration _runtimeRegistration;
     private readonly List<int> _shutdownRequests = [];
+    private readonly Queue<Action> _guestMicrotasks = [];
+    private bool _deferGuestMicrotasks;
 
     public DesktopRendererTests()
     {
@@ -51,7 +54,13 @@ public sealed class DesktopRendererTests : IDisposable
             (_, _) => { },
             headless: true,
             dispatchGuestCallback: callback => callback(),
-            scheduleGuestMicrotask: callback => callback(),
+            scheduleGuestMicrotask: callback =>
+            {
+                if (_deferGuestMicrotasks)
+                    _guestMicrotasks.Enqueue(callback);
+                else
+                    callback();
+            },
             requestShutdown: exitCode => _shutdownRequests.Add(exitCode));
     }
 
@@ -300,7 +309,8 @@ public sealed class DesktopRendererTests : IDisposable
             }),
             new GuiVNode("RichTextBlock", Key: "rich", RichTextJson:
                 "[{\"text\":\"Bold\",\"fontWeight\":\"bold\"},{\"text\":\" text\",\"foreground\":\"#336699\"}]"),
-            new GuiVNode("DrawingCanvas", Key: "drawing", Width: 120, Height: 80, DrawingJson:
+            new GuiVNode("DrawingCanvas", Key: "drawing", Width: 120, Height: 80,
+                CoordinateWidth: 240, CoordinateHeight: 160, DrawingJson:
                 "[{\"kind\":\"line\",\"x1\":0,\"y1\":0,\"x2\":20,\"y2\":20,\"stroke\":\"#336699\"}]"))));
 
         var list = Assert.IsType<ListBox>(root.FindControl("list"));
@@ -312,7 +322,10 @@ public sealed class DesktopRendererTests : IDisposable
         Assert.Equal(12, Canvas.GetLeft(positioned));
         Assert.Equal(18, Canvas.GetTop(positioned));
         Assert.Equal(2, Assert.IsType<TextBlock>(root.FindControl("rich")).Inlines!.Count);
-        Assert.Single(Assert.IsType<DrawingSurface>(root.FindControl("drawing")).Commands);
+        DrawingSurface drawing = Assert.IsType<DrawingSurface>(root.FindControl("drawing"));
+        Assert.Single(drawing.Commands);
+        Assert.Equal(240, drawing.CoordinateWidth);
+        Assert.Equal(160, drawing.CoordinateHeight);
         list.SelectedIndex = 0;
         treeItem.IsExpanded = false;
         Assert.Equal([0], selectedEvent);
@@ -336,12 +349,387 @@ public sealed class DesktopRendererTests : IDisposable
     [InlineData("[{\"kind\":\"unknown\"}]")]
     [InlineData("[{\"kind\":\"line\",\"x1\":0,\"y1\":0,\"x2\":1,\"y2\":1}]")]
     [InlineData("[{\"kind\":\"rectangle\",\"width\":-1,\"height\":2}]")]
+    [InlineData("[{\"kind\":\"image\",\"source\":\"data:image/png;base64,not-base64\",\"width\":1,\"height\":1}]")]
+    [InlineData("[{\"kind\":\"text\",\"text\":\"Text\",\"x\":0,\"y\":0,\"width\":20,\"height\":20,\"fill\":\"#000000\",\"fontSize\":12}]")]
     public void DrawingCanvas_RejectsInvalidCommandsBeforeNativeMutation(string commands)
     {
         DesktopRoot root = CreateRoot();
         Assert.ThrowsAny<Exception>(() => root.Render(Window(
             new GuiVNode("DrawingCanvas", Width: 100, Height: 100, DrawingJson: commands))));
         Assert.Null(root.Window);
+    }
+
+    [Theory]
+    [InlineData(7.5, 8)]
+    [InlineData(8, 7.5)]
+    [InlineData(8193, 8)]
+    public void DrawingCanvas_RejectsInvalidLogicalPixelDimensionsBeforeNativeMutation(
+        double coordinateWidth,
+        double coordinateHeight)
+    {
+        DesktopRoot root = CreateRoot();
+        Assert.ThrowsAny<Exception>(() => root.Render(Window(
+            new GuiVNode(
+                "DrawingCanvas",
+                Width: 100,
+                Height: 100,
+                CoordinateWidth: coordinateWidth,
+                CoordinateHeight: coordinateHeight,
+                DrawingJson: "[]"))));
+        Assert.Null(root.Window);
+    }
+
+    [Fact]
+    public void DrawingCanvas_UsesDirectBitmapCacheAndDisposesItWhenUnmounted()
+    {
+        using DesktopRoot root = CreateRoot();
+        root.Render(Window(new GuiVNode(
+            "DrawingCanvas",
+            Key: "drawing",
+            Width: 16,
+            Height: 16,
+            CoordinateWidth: 16,
+            CoordinateHeight: 16,
+            DrawingJson: "[{\"kind\":\"rectangle\",\"x\":0,\"y\":0,\"width\":16,\"height\":16,\"fill\":\"#ff0000\"}]")));
+        DrawingSurface surface = Assert.IsType<DrawingSurface>(root.FindControl("drawing"));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+        using var frame = root.Window.CaptureRenderedFrame();
+        var bitmapField = typeof(DrawingSurface).GetField(
+            "_bitmap",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+
+        Assert.IsType<Avalonia.Media.Imaging.WriteableBitmap>(bitmapField.GetValue(surface));
+
+        root.Render(Window(Text("replacement", "replacement")));
+        Assert.Null(bitmapField.GetValue(surface));
+    }
+
+    [Fact]
+    public void PointerInput_NormalizesCapturesUsesLatestCallbacksAndCleansUp()
+    {
+        var events = new List<string>();
+        bool modifiersObserved = false;
+        bool handledObserved = false;
+        double observedPressure = -1;
+        IPointer? nativePointer = null;
+        using DesktopRoot root = CreateRoot();
+        GuiVNode Surface(string version) => new(
+            "Border", Key: "pointer", Width: 100, Height: 80, Background: "#ffffff", CapturePointerOnPress: true,
+            PointerDown: (id, type, x, y, button, buttons, pressure, ctrl, alt, shift, meta) =>
+            {
+                modifiersObserved = ctrl && shift && !alt && !meta;
+                observedPressure = pressure;
+                events.Add($"{version}-down:{type}:{button}:{buttons}:{Math.Round(x)},{Math.Round(y)}");
+                return true;
+            },
+            PointerMove: (id, type, x, y, button, buttons, pressure, ctrl, alt, shift, meta) =>
+            {
+                events.Add($"{version}-move:{button}:{buttons}:{Math.Round(x)},{Math.Round(y)}");
+                return true;
+            },
+            PointerUp: (id, type, x, y, button, buttons, pressure, ctrl, alt, shift, meta) =>
+            {
+                events.Add($"{version}-up:{button}:{buttons}:{Math.Round(x)},{Math.Round(y)}");
+                return true;
+            },
+            PointerCancel: (id, type, x, y, button, buttons, pressure, ctrl, alt, shift, meta) =>
+            {
+                events.Add($"{version}-cancel:{button}:{buttons}:{Math.Round(x)},{Math.Round(y)}");
+                return true;
+            });
+
+        root.Render(Window(Surface("old"), width: 240, height: 180));
+        Control original = root.FindControl("pointer")!;
+        int subscriptions = root.ActiveSubscriptions;
+        root.Render(Window(Surface("new"), width: 240, height: 180));
+        Assert.Same(original, root.FindControl("pointer"));
+        Assert.Equal(subscriptions, root.ActiveSubscriptions);
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        root.Window.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, args) => handledObserved = args.Handled,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        original.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, args) => nativePointer = args.Pointer,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+
+        Point press = original.TranslatePoint(new Point(10, 12), root.Window)!.Value;
+        Point move = original.TranslatePoint(new Point(50, 42), root.Window)!.Value;
+        Point outside = original.TranslatePoint(new Point(145, 110), root.Window)!.Value;
+        root.Window.MouseDown(press, MouseButton.Left,
+            RawInputModifiers.LeftMouseButton | RawInputModifiers.Control | RawInputModifiers.Shift);
+        root.Window.MouseMove(move,
+            RawInputModifiers.LeftMouseButton | RawInputModifiers.Control | RawInputModifiers.Shift);
+        root.Window.MouseUp(outside, MouseButton.Left,
+            RawInputModifiers.Control | RawInputModifiers.Shift);
+
+        Assert.StartsWith("new-down:mouse:left:1:10,12", events[0], StringComparison.Ordinal);
+        Assert.Contains(events, item => item.StartsWith("new-move:none:1:", StringComparison.Ordinal));
+        Assert.Contains(events, item => item.StartsWith("new-up:left:0:", StringComparison.Ordinal));
+        Assert.DoesNotContain(events, item => item.StartsWith("new-cancel", StringComparison.Ordinal));
+        Assert.DoesNotContain(events, item => item.StartsWith("old-", StringComparison.Ordinal));
+        Assert.True(modifiersObserved);
+        Assert.True(handledObserved);
+        Assert.InRange(observedPressure, 0, 1);
+
+        events.Clear();
+        root.Window.MouseDown(press, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        nativePointer!.Capture(null);
+        Assert.Contains("new-cancel:none:1:10,12", events);
+
+        events.Clear();
+        root.Window.MouseDown(press, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        root.Render(Window(Text("replacement", "replacement"), width: 240, height: 180));
+        Assert.DoesNotContain(events, item => item.StartsWith("new-cancel", StringComparison.Ordinal));
+        root.Dispose();
+        Assert.Equal(0, root.ActiveSubscriptions);
+    }
+
+    [Fact]
+    public void PointerCaptureLossDuringNativeCommitIsDeferredPastGuestRender()
+    {
+        IPointer? nativePointer = null;
+        bool cancelObserved = false;
+        using IDisposable registration = DescriptorRegistry.RegisterForTesting(
+            new CommitActionDescriptor(() => nativePointer!.Capture(null)));
+        using DesktopRoot root = CreateRoot();
+
+        GuiVNode Content(string probeText) => new(
+            "Grid", Key: "content", Children:
+            new GuiVNode[]
+            {
+                new GuiVNode("$CommitAction", Key: "probe", Text: probeText),
+                new GuiVNode(
+                    "Border", Key: "pointer", Width: 100, Height: 80,
+                    Background: "#ffffff", CapturePointerOnPress: true,
+                    PointerDown: (_, _, _, _, _, _, _, _, _, _, _) => true,
+                    PointerCancel: (_, _, _, _, _, _, _, _, _, _, _) =>
+                    {
+                        cancelObserved = true;
+                        return true;
+                    })
+            });
+
+        root.Render(Window(Content("before"), width: 240, height: 180));
+        Control surface = root.FindControl("pointer")!;
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+        surface.AddHandler(
+            InputElement.PointerPressedEvent,
+            (_, args) => nativePointer = args.Pointer,
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+        Point press = surface.TranslatePoint(new Point(50, 40), root.Window)!.Value;
+        root.Window.MouseDown(press, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        Assert.NotNull(nativePointer);
+
+        _deferGuestMicrotasks = true;
+        try
+        {
+            root.Render(Window(Content("release-capture"), width: 240, height: 180));
+            Assert.False(cancelObserved);
+            Assert.Single(_guestMicrotasks);
+        }
+        finally
+        {
+            _deferGuestMicrotasks = false;
+        }
+
+        DrainGuestMicrotasks();
+        Assert.True(cancelObserved);
+    }
+
+    [Fact]
+    public void CloseRequest_CanCancelThenAllowOneShotProgrammaticClose()
+    {
+        int requests = 0;
+        DesktopRoot root = CreateRoot();
+        root.Render(Window() with { CloseRequested = () => { requests++; return true; } });
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        root.Window.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, requests);
+        Assert.False(root.IsDisposed);
+
+        root.Render(Window() with { CloseRequested = () => { requests++; return false; } });
+        root.Window!.Close();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(2, requests);
+        Assert.True(root.IsDisposed);
+        Assert.Equal(0, root.ActiveSubscriptions);
+    }
+
+    [Fact]
+    public void ShownWindowRemainsVisibleAcrossStateDrivenReconciliation()
+    {
+        using DesktopRoot root = CreateRoot();
+        root.Render(Window(Text("before", "content"), title: "Before"));
+        Window window = root.Window!;
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(window.IsVisible);
+
+        root.Render(Window(Text("after", "content"), title: "After"));
+
+        Assert.Same(window, root.Window);
+        Assert.Equal("After", window.Title);
+        Assert.True(window.IsVisible);
+    }
+
+    [Fact]
+    public void DrawingGraphics_ExportsIsolatedLayersImagesAndTransparencyWithSharedValidation()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"sharpts-drawing-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        try
+        {
+            string output = Path.Combine(directory, "layers.png");
+            const string document = """
+                {
+                  "width":8,"height":8,
+                  "layers":[
+                    {"isVisible":true,"opacity":1,"commands":[{"kind":"rectangle","x":0,"y":0,"width":8,"height":8,"fill":"#ff0000","strokeThickness":1}]},
+                    {"isVisible":true,"opacity":1,"commands":[
+                      {"kind":"rectangle","x":0,"y":0,"width":8,"height":8,"fill":"#0000ff","strokeThickness":1},
+                      {"kind":"polyline","points":[{"x":0,"y":4},{"x":8,"y":4}],"stroke":"#000000","strokeThickness":4,"lineCap":"round","lineJoin":"round","composite":"destinationOut"}
+                    ]}
+                  ]
+                }
+                """;
+            CompleteBackgroundTask(DesktopBridge.RenderDrawingToPngAsync(document, output));
+            Assert.True(File.Exists(output));
+            using SKBitmap bitmap = SKBitmap.Decode(output)!;
+            Assert.Equal(8, bitmap.Width);
+            Assert.Equal(8, bitmap.Height);
+            Assert.Equal(SKColors.Blue, bitmap.GetPixel(1, 1));
+            Assert.Equal(SKColors.Red, bitmap.GetPixel(4, 4));
+
+            using JsonDocument localDimensions = JsonDocument.Parse(
+                CompleteBackgroundString(DesktopBridge.GetImageDimensionsJsonAsync(output)));
+            Assert.Equal(8, localDimensions.RootElement.GetProperty("width").GetInt32());
+            string dataUri = "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(output));
+            using JsonDocument embeddedDimensions = JsonDocument.Parse(
+                CompleteBackgroundString(DesktopBridge.GetImageDimensionsJsonAsync(dataUri)));
+            Assert.Equal(8, embeddedDimensions.RootElement.GetProperty("height").GetInt32());
+
+            using var jpegBitmap = new SKBitmap(1, 1);
+            jpegBitmap.Erase(SKColors.Green);
+            using SKImage jpegImage = SKImage.FromBitmap(jpegBitmap);
+            using SKData jpeg = jpegImage.Encode(SKEncodedImageFormat.Jpeg, 90);
+            string mislabeled = "data:image/png;base64," + Convert.ToBase64String(jpeg.ToArray());
+            Assert.Throws<InvalidDataException>(() => CompleteBackgroundTask(
+                DesktopBridge.GetImageDimensionsJsonAsync(mislabeled)));
+
+            string oversizedImage = Path.Combine(directory, "oversized.png");
+            using (FileStream stream = File.Create(oversizedImage))
+                stream.SetLength(25L * 1024 * 1024 + 1);
+            Assert.Throws<InvalidDataException>(() => CompleteBackgroundTask(
+                DesktopBridge.GetImageDimensionsJsonAsync(oversizedImage)));
+
+            string imageOutput = Path.Combine(directory, "image.png");
+            string imageDocument = $$"""
+                {"width":8,"height":8,"layers":[{"isVisible":true,"opacity":0.5,"commands":[{"kind":"image","source":"{{dataUri}}","x":0,"y":0,"width":8,"height":8,"opacity":1}]}]}
+                """;
+            CompleteBackgroundTask(DesktopBridge.RenderDrawingToPngAsync(imageDocument, imageOutput));
+            using SKBitmap imageBitmap = SKBitmap.Decode(imageOutput)!;
+            Assert.InRange(imageBitmap.GetPixel(1, 1).Alpha, (byte)126, (byte)129);
+
+            string rejected = Path.Combine(directory, "rejected.png");
+            Assert.ThrowsAny<Exception>(() => CompleteBackgroundTask(DesktopBridge.RenderDrawingToPngAsync(
+                "{\"width\":8,\"height\":8,\"layers\":[{\"isVisible\":true,\"opacity\":2,\"commands\":[]}]}", rejected)));
+            Assert.False(File.Exists(rejected));
+
+            Assert.ThrowsAny<Exception>(() => CompleteBackgroundTask(DesktopBridge.RenderDrawingToPngAsync(
+                "{\"width\":7.5,\"height\":8,\"layers\":[]}", rejected)));
+            Assert.False(File.Exists(rejected));
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void DrawingGraphics_TextSamplingFloodFillAndEffectsShareTheValidatedRenderer()
+    {
+        const string splitDocument = """
+            {
+              "width":6,"height":4,
+              "layers":[{"isVisible":true,"opacity":1,"commands":[
+                {"kind":"rectangle","x":0,"y":0,"width":3,"height":4,"fill":"#ff0000"},
+                {"kind":"rectangle","x":3,"y":0,"width":3,"height":4,"fill":"#0000ff"}
+              ]}]
+            }
+            """;
+
+        using (JsonDocument sample = JsonDocument.Parse(CompleteBackgroundString(
+            DesktopBridge.SampleDrawingPixelJsonAsync(splitDocument, 1, 1))))
+        {
+            Assert.Equal(255, sample.RootElement.GetProperty("red").GetInt32());
+            Assert.Equal("#ff0000", sample.RootElement.GetProperty("color").GetString());
+        }
+
+        string filledJson = CompleteBackgroundString(DesktopBridge.FloodFillDrawingJsonAsync(
+            splitDocument,
+            "{\"x\":1,\"y\":1,\"color\":\"#00ff00\",\"tolerance\":0}"));
+        using (JsonDocument filled = JsonDocument.Parse(filledJson))
+        {
+            Assert.True(filled.RootElement.GetProperty("changed").GetBoolean());
+            string source = filled.RootElement.GetProperty("image").GetProperty("source").GetString()!;
+            using SKBitmap bitmap = DecodeDataUri(source);
+            Assert.Equal(SKColors.Lime, bitmap.GetPixel(1, 1));
+            Assert.Equal(SKColors.Blue, bitmap.GetPixel(4, 1));
+        }
+
+        using (JsonDocument unchanged = JsonDocument.Parse(CompleteBackgroundString(
+            DesktopBridge.FloodFillDrawingJsonAsync(
+                splitDocument,
+                "{\"x\":1,\"y\":1,\"color\":\"#ff0000\",\"tolerance\":0}"))))
+        {
+            Assert.False(unchanged.RootElement.GetProperty("changed").GetBoolean());
+            Assert.False(unchanged.RootElement.TryGetProperty("image", out JsonElement image) && image.ValueKind != JsonValueKind.Null);
+        }
+
+        string invertedJson = CompleteBackgroundString(DesktopBridge.RenderDrawingToImageJsonAsync(
+            splitDocument,
+            "{\"effects\":[{\"kind\":\"invert\"}]}"));
+        using (JsonDocument inverted = JsonDocument.Parse(invertedJson))
+        using (SKBitmap bitmap = DecodeDataUri(inverted.RootElement.GetProperty("source").GetString()!))
+        {
+            Assert.Equal(SKColors.Cyan, bitmap.GetPixel(1, 1));
+            Assert.Equal(SKColors.Yellow, bitmap.GetPixel(4, 1));
+        }
+
+        const string textDocument = """
+            {
+              "width":120,"height":48,
+              "layers":[{"isVisible":true,"opacity":1,"commands":[
+                {"kind":"text","text":"SharpTS","x":2,"y":2,"width":116,"height":44,
+                 "fill":"#ff0000","fontFamily":"sans-serif","fontSize":24,
+                 "fontWeight":"bold","textAlignment":"left","textWrapping":"wrap"}
+              ]}]
+            }
+            """;
+        string textJson = CompleteBackgroundString(DesktopBridge.RenderDrawingToImageJsonAsync(textDocument, "{}"));
+        using (JsonDocument renderedText = JsonDocument.Parse(textJson))
+        using (SKBitmap bitmap = DecodeDataUri(renderedText.RootElement.GetProperty("source").GetString()!))
+        {
+            Assert.Contains(Enumerable.Range(0, bitmap.Width), x =>
+                Enumerable.Range(0, bitmap.Height).Any(y => bitmap.GetPixel(x, y).Red > 0 && bitmap.GetPixel(x, y).Alpha > 0));
+        }
+
+        Assert.ThrowsAny<Exception>(() => CompleteBackgroundTask(
+            DesktopBridge.RenderDrawingToImageJsonAsync(
+                splitDocument,
+                "{\"effects\":[{\"kind\":\"gaussianBlur\",\"radius\":65}]}")));
     }
 
     [Fact]
@@ -908,6 +1296,126 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
+    public void ContentControlsRetainOneRichChildAndCanReturnToTextContent()
+    {
+        using DesktopRoot root = CreateRoot();
+        var richChild = new GuiVNode("StackPanel", Key: "button-content", Children:
+        new GuiVNode[]
+        {
+            Text("✎", "icon"),
+            Text("Brush", "label"),
+        });
+        root.Render(Window(new GuiVNode(
+            "Button",
+            Key: "tool",
+            Foreground: "#334155",
+            Children: new GuiVNode[] { richChild })));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var button = Assert.IsType<Button>(root.FindControl("tool"));
+        var content = Assert.IsType<StackPanel>(button.Content);
+        Assert.Same(content, root.FindControl("button-content"));
+        var label = Assert.IsType<TextBlock>(root.FindControl("label"));
+        Assert.Equal("Brush", label.Text);
+        Assert.True(label.Bounds.Width > 0);
+        Assert.True(label.Bounds.Height > 0);
+        Assert.Equal(button.Foreground, label.Foreground);
+
+        root.Render(Window(new GuiVNode("Button", Key: "tool", Foreground: "#334155", Children:
+        new GuiVNode[]
+        {
+            richChild with { Children = new GuiVNode[] { Text("✎", "icon"), Text("Pencil", "label") } },
+        })));
+
+        Assert.Same(button, root.FindControl("tool"));
+        Assert.Same(content, button.Content);
+        Assert.Equal("Pencil", Assert.IsType<TextBlock>(root.FindControl("label")).Text);
+
+        root.Render(Window(new GuiVNode("Button", Key: "tool", Text: "Plain")));
+
+        Assert.Equal("Plain", button.Content);
+        Assert.Null(root.FindControl("button-content"));
+    }
+
+    [Fact]
+    public void WindowMetricsArePostLayoutDeduplicatedAndUseLatestCallback()
+    {
+        using DesktopRoot root = CreateRoot();
+        var first = new List<string>();
+        var latest = new List<string>();
+        GuiVNode MetricsWindow(Action<string>? callback) => new(
+            "Window",
+            Key: "window",
+            Width: 640,
+            Height: 480,
+            WindowMetricsChanged: callback,
+            Children: new GuiVNode[] { Text("content") });
+
+        root.Render(MetricsWindow(first.Add));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        string initial = Assert.Single(first);
+        using (JsonDocument payload = JsonDocument.Parse(initial))
+        {
+            Assert.True(payload.RootElement.GetProperty("clientWidth").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("clientHeight").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("scaling").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("workingAreaWidth").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("pixelWorkingArea").GetProperty("width").GetInt32() > 0);
+        }
+        using (JsonDocument displays = JsonDocument.Parse(DesktopBridge.GetDesktopDisplaysJson()))
+        {
+            JsonElement display = displays.RootElement.EnumerateArray().First();
+            double scaling = display.GetProperty("scaling").GetDouble();
+            Assert.Equal(
+                display.GetProperty("bounds").GetProperty("width").GetDouble() / scaling,
+                display.GetProperty("boundsSize").GetProperty("width").GetDouble(),
+                precision: 6);
+            Assert.Equal(
+                display.GetProperty("workingArea").GetProperty("height").GetDouble() / scaling,
+                display.GetProperty("workingAreaSize").GetProperty("height").GetDouble(),
+                precision: 6);
+        }
+        Assert.Equal(1, root.ActiveSubscriptions);
+
+        root.Render(MetricsWindow(latest.Add));
+        DesktopTestingBridge.SetWindowClientSize(root, 520, 360);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Single(first);
+        string resized = Assert.Single(latest);
+        using (JsonDocument payload = JsonDocument.Parse(resized))
+        {
+            Assert.InRange(payload.RootElement.GetProperty("clientWidth").GetDouble(), 519, 521);
+            Assert.InRange(payload.RootElement.GetProperty("clientHeight").GetDouble(), 359, 361);
+        }
+
+        root.Render(MetricsWindow(latest.Add));
+        Dispatcher.UIThread.RunJobs();
+        Assert.InRange(root.Window.ClientSize.Width, 519, 521);
+        Assert.InRange(root.Window.ClientSize.Height, 359, 361);
+
+        root.Render(MetricsWindow(latest.Add) with { Width = 700, Height = 410 });
+        Dispatcher.UIThread.RunJobs();
+        Assert.InRange(root.Window.ClientSize.Width, 699, 701);
+        Assert.InRange(root.Window.ClientSize.Height, 409, 411);
+
+        root.Window.WindowState = WindowState.Maximized;
+        Dispatcher.UIThread.RunJobs();
+        using (JsonDocument payload = JsonDocument.Parse(latest.Last()))
+            Assert.Equal("maximized", payload.RootElement.GetProperty("windowState").GetString());
+
+        root.Render(MetricsWindow(null));
+        Assert.Equal(0, root.ActiveSubscriptions);
+        int notificationsAfterRemoval = latest.Count;
+        DesktopTestingBridge.SetWindowClientSize(root, 500, 340);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(notificationsAfterRemoval, latest.Count);
+    }
+
+    [Fact]
     public void ThousandMountUpdateUnmountCyclesReleaseRootsControlsCallbacksRefsAndSubscriptions()
     {
         var retained = new List<WeakReference>();
@@ -1016,6 +1524,41 @@ public sealed class DesktopRendererTests : IDisposable
             mainWindow: true);
     }
 
+    private void DrainGuestMicrotasks()
+    {
+        while (_guestMicrotasks.TryDequeue(out Action? callback))
+            callback();
+    }
+
+    private static SKBitmap DecodeDataUri(string source)
+    {
+        const string prefix = "data:image/png;base64,";
+        Assert.StartsWith(prefix, source, StringComparison.Ordinal);
+        return SKBitmap.Decode(Convert.FromBase64String(source[prefix.Length..]))
+            ?? throw new InvalidDataException("The drawing service returned an invalid PNG data URI.");
+    }
+
+    private static T CompleteBackgroundTask<T>(Task<T> task)
+    {
+        PumpDesktopDispatcherUntilCompleted(task);
+        return task.GetAwaiter().GetResult();
+    }
+
+    private static string CompleteBackgroundString(Task<object?> task) =>
+        Assert.IsType<string>(CompleteBackgroundTask(task));
+
+    private static void PumpDesktopDispatcherUntilCompleted(Task task)
+    {
+        long deadline = Environment.TickCount64 + 10_000;
+        while (!task.IsCompleted)
+        {
+            Dispatcher.UIThread.RunJobs();
+            Thread.Yield();
+            if (Environment.TickCount64 >= deadline)
+                throw new TimeoutException("Background desktop graphics work did not complete within ten seconds.");
+        }
+    }
+
     private sealed class TestApplication : Application;
 
     private sealed class RollbackProbeDescriptor(bool failEveryUpdateAfterCreate = false)
@@ -1038,6 +1581,28 @@ public sealed class DesktopRendererTests : IDisposable
             if (next.Text == "throw" || (failEveryUpdateAfterCreate && _updates > 1))
                 throw new InvalidOperationException("injected setter failure");
             text.Text = next.Text;
+            return true;
+        }
+    }
+
+    private sealed class CommitActionDescriptor(Action action)
+        : NodeDescriptor("$CommitAction", 0, 0)
+    {
+        private int _updates;
+
+        public override Control Create(GuiVNode node)
+        {
+            var control = new TextBlock();
+            Update(control, new GuiVNode(Kind), node);
+            return control;
+        }
+
+        public override bool Update(Control control, GuiVNode previous, GuiVNode next)
+        {
+            _updates++;
+            if (_updates > 1)
+                action();
+            ((TextBlock)control).Text = next.Text;
             return true;
         }
     }

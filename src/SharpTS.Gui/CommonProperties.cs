@@ -51,13 +51,19 @@ internal static class CommonProperties
         }
     }
 
-    public static bool Apply(Control control, GuiVNode node)
+    public static bool Apply(
+        Control control,
+        GuiVNode node,
+        bool applyWidth = true,
+        bool applyHeight = true)
     {
         bool changed = false;
-        changed |= ApplyStyled(control, Layoutable.WidthProperty, EffectiveWidth(node),
-            IsSpecified(node, "width") || !double.IsNaN(node.Width) || node.Kind == "Window");
-        changed |= ApplyStyled(control, Layoutable.HeightProperty, EffectiveHeight(node),
-            IsSpecified(node, "height") || !double.IsNaN(node.Height) || node.Kind == "Window");
+        if (applyWidth)
+            changed |= ApplyStyled(control, Layoutable.WidthProperty, EffectiveWidth(node),
+                IsSpecified(node, "width") || !double.IsNaN(node.Width) || node.Kind == "Window");
+        if (applyHeight)
+            changed |= ApplyStyled(control, Layoutable.HeightProperty, EffectiveHeight(node),
+                IsSpecified(node, "height") || !double.IsNaN(node.Height) || node.Kind == "Window");
         changed |= ApplyStyled(control, Layoutable.MinWidthProperty, node.MinWidth,
             IsSpecified(node, "minWidth") || node.MinWidth != 0);
         changed |= ApplyStyled(control, Layoutable.MinHeightProperty, node.MinHeight,
@@ -76,8 +82,9 @@ internal static class CommonProperties
         VerticalAlignment vertical = ParseVerticalAlignment(node.VerticalAlignment);
         changed |= ApplyStyled(control, Layoutable.VerticalAlignmentProperty, vertical,
             IsSpecified(node, "verticalAlignment") || vertical != VerticalAlignment.Stretch);
-        changed |= ApplyStyled(control, Visual.IsVisibleProperty, node.IsVisible,
-            IsSpecified(node, "isVisible") || !node.IsVisible);
+        bool visibilitySpecified = IsSpecified(node, "isVisible") || !node.IsVisible;
+        if (node.Kind != "Window" || visibilitySpecified)
+            changed |= ApplyStyled(control, Visual.IsVisibleProperty, node.IsVisible, visibilitySpecified);
         changed |= ApplyStyled(control, InputElement.IsEnabledProperty, node.IsEnabled,
             IsSpecified(node, "isEnabled") || !node.IsEnabled);
         changed |= ApplyStyled(control, Visual.OpacityProperty, node.Opacity,
@@ -275,10 +282,10 @@ internal static class CommonProperties
         _ => throw new ArgumentException($"Unsupported dock '{value}'."),
     };
 
-    private static bool IsSpecified(GuiVNode node, string property) =>
+    public static bool IsSpecified(GuiVNode node, string property) =>
         node.SpecifiedProperties.Contains(property, StringComparer.Ordinal);
 
-    private static bool ApplyStyled<T>(
+    public static bool ApplyStyled<T>(
         AvaloniaObject target,
         StyledProperty<T> property,
         T value,
