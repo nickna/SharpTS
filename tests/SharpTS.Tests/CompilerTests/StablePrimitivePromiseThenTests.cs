@@ -189,6 +189,70 @@ public sealed class StablePrimitivePromiseThenTests
     }
 
     [Fact]
+    public void StableAsyncLoop_KeepsCounterAndHandlerSnapshotUnboxed()
+    {
+        Assembly assembly = Compile(StableSource);
+        Type stateMachine = Assert.Single(assembly.GetTypes(), type =>
+            type.Name.StartsWith("<sumChain>d__", StringComparison.Ordinal));
+        MethodInfo moveNext = stateMachine.GetMethod(
+            "MoveNext",
+            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)!;
+
+        Assert.Contains(moveNext.GetMethodBody()!.LocalVariables,
+            local => local.LocalType == typeof(double));
+        Assert.Contains(ReadInstructions(moveNext),
+            instruction => instruction.OpCode == OpCodes.Clt);
+        Assert.DoesNotContain(ReadInstructions(moveNext), instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "JsLessThan" or "ConvertToNumber"
+            });
+        Assert.Equal(typeof(double), stateMachine.GetField("n")!.FieldType);
+
+        FieldInfo capture = FindSingleDisplayClassField(assembly, "i");
+        Assert.Equal(typeof(double), capture.FieldType);
+    }
+
+    [Fact]
+    public void SuspendingPromiseLoop_RetainsObjectCounterSnapshot()
+    {
+        Assembly assembly = Compile("""
+            async function sumChain(n: number): Promise<number> {
+                let chain: Promise<number> = Promise.resolve(0);
+                for (let i: number = 0; i < n; i++) {
+                    await Promise.resolve(0);
+                    chain = chain.then((sum: number): number => sum + i);
+                }
+                return await chain;
+            }
+            sumChain(3);
+            """);
+
+        FieldInfo capture = FindSingleDisplayClassField(assembly, "i");
+        Assert.Equal(typeof(object), capture.FieldType);
+    }
+
+    [Fact]
+    public void ReassignedLoopBound_RetainsObjectStateField()
+    {
+        Assembly assembly = Compile("""
+            async function sumChain(n: number): Promise<number> {
+                n = n + 0;
+                let chain: Promise<number> = Promise.resolve(0);
+                for (let i: number = 0; i < n; i++) {
+                    chain = chain.then((sum: number): number => sum + i);
+                }
+                return await chain;
+            }
+            sumChain(3);
+            """);
+
+        Type stateMachine = Assert.Single(assembly.GetTypes(), type =>
+            type.Name.StartsWith("<sumChain>d__", StringComparison.Ordinal));
+        Assert.Equal(typeof(object), stateMachine.GetField("n")!.FieldType);
+    }
+
+    [Fact]
     public void StableNumericChain_VerifiesIlAndStandaloneOutput()
     {
         Assert.Empty(TestHarness.CompileAndVerifyOnly(StableSource));
@@ -636,6 +700,18 @@ public sealed class StablePrimitivePromiseThenTests
         compiler.Compile(statements, typeMap, deadCodeInfo);
         return Assembly.Load(compiler.SaveToBytes());
     }
+
+    private static FieldInfo FindSingleDisplayClassField(
+        Assembly assembly,
+        string name) =>
+        Assert.Single(
+            assembly.GetTypes().SelectMany(type =>
+                type.Name.Contains("DisplayClass", StringComparison.Ordinal)
+                    ? type.GetFields(
+                        BindingFlags.Public | BindingFlags.NonPublic |
+                        BindingFlags.Instance | BindingFlags.Static)
+                    : []),
+            field => field.Name == name);
 
     private static MethodInfo FindSingleCaller(Assembly assembly, string methodName) =>
         Assert.Single(FindCallers(assembly, methodName));

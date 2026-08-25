@@ -28,6 +28,8 @@ public class TypeMap
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, HashSet<string>> _stableNumericCaptureFields = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Var> _stableNumericStateMachineLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Parameter> _stableNumericStateMachineParameters = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stableExactPrimitiveMethodCalls = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _stablePrimitivePromiseAllIterables = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrayLiteral> _stablePrimitivePromiseAllInputInitializers = new(ReferenceEqualityComparer.Instance);
@@ -264,6 +266,23 @@ public class TypeMap
     public bool IsStableNumericCaptureField(Expr.ArrowFunction arrow, string name) =>
         _stableNumericCaptureFields.TryGetValue(arrow, out var names)
         && names.Contains(name);
+
+    /// <summary>
+    /// Marks an explicitly numeric local whose complete state-machine lifetime has
+    /// been proven to remain numeric and suspension-local. The state-machine emitter
+    /// may keep the binding in an unboxed <c>double</c> local.
+    /// </summary>
+    public void MarkStableNumericStateMachineLocal(Stmt.Var declaration) =>
+        _stableNumericStateMachineLocals.Add(declaration);
+
+    public bool IsStableNumericStateMachineLocal(Stmt.Var declaration) =>
+        _stableNumericStateMachineLocals.Contains(declaration);
+
+    public void MarkStableNumericStateMachineParameter(Stmt.Parameter parameter) =>
+        _stableNumericStateMachineParameters.Add(parameter);
+
+    public bool IsStableNumericStateMachineParameter(Stmt.Parameter parameter) =>
+        _stableNumericStateMachineParameters.Contains(parameter);
 
     /// <summary>
     /// Marks a class method access whose receiver is provably the exact instance

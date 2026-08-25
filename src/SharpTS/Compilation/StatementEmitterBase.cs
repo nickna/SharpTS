@@ -87,13 +87,19 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
         else
         {
             // Not hoisted - use local variable
-            var local = IL.DeclareLocal(typeof(object));
+            bool stableNumeric = Ctx.TypeMap?.IsStableNumericStateMachineLocal(v) == true;
+            var local = IL.DeclareLocal(stableNumeric ? Types.Double : typeof(object));
             Ctx.Locals.RegisterLocal(name, local);
 
             if (v.Initializer != null)
             {
-                EmitExpression(v.Initializer);
-                EnsureBoxed();
+                if (stableNumeric)
+                    EmitExpressionAsDouble(v.Initializer);
+                else
+                {
+                    EmitExpression(v.Initializer);
+                    EnsureBoxed();
+                }
                 IL.Emit(OpCodes.Stloc, local);
             }
             else

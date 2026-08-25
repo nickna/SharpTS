@@ -594,7 +594,8 @@ public partial class ILCompiler
             _types.Object,
             isInstanceMethod: false,  // Static method!
             hasAsyncArrows: hasAsyncArrows,
-            hasLock: hasLock
+            hasLock: hasLock,
+            hoistedParameterTypes: GetStableAsyncParameterFieldTypes(method)
         );
 
         // #682/#follow-up: attach the static method's function display class (registered in Phase 4) to

@@ -66,14 +66,14 @@ public class StateMachineVariableResolver : IVariableResolver
         {
             _il.Emit(OpCodes.Ldarg_0);
             _il.Emit(OpCodes.Ldfld, field);
-            return StackType.Unknown;
+            return MapTypeToStackType(field.FieldType);
         }
 
         // 2. Check non-hoisted local
         if (_locals.TryGetLocal(name, out var local))
         {
             _il.Emit(OpCodes.Ldloc, local);
-            return StackType.Unknown;
+            return MapTypeToStackType(local.LocalType);
         }
 
         return null; // Not found - caller handles fallback
@@ -124,6 +124,14 @@ public class StateMachineVariableResolver : IVariableResolver
         }
 
         return false; // Not found
+    }
+
+    private static StackType MapTypeToStackType(Type type)
+    {
+        if (type == typeof(double)) return StackType.Double;
+        if (type == typeof(bool)) return StackType.Boolean;
+        if (type == typeof(string)) return StackType.String;
+        return StackType.Unknown;
     }
 
     /// <inheritdoc />
