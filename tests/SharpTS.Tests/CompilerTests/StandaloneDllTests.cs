@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using SharpTS.Compilation;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Runtime;
 using SharpTS.Tests.Infrastructure;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -1560,14 +1561,7 @@ public class StandaloneDllTests
 
     private static void TryTerminateProcessTree(Process process)
     {
-        try
-        {
-            process.Kill(entireProcessTree: true);
-        }
-        catch (InvalidOperationException)
-        {
-            // The process exited between the timeout and Kill().
-        }
+        ProcessTreeTermination.Terminate(process);
     }
 
     private static List<string> GetAssemblyReferences(string dllPath)

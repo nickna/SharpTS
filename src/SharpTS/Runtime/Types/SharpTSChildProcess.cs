@@ -30,7 +30,12 @@ public class SharpTSChildProcess : SharpTSEventEmitter
     /// <summary>
     /// Sets the underlying OS process for kill() support.
     /// </summary>
-    public void SetProcess(Process process) => _process = process;
+    public void SetProcess(Process process) => Volatile.Write(ref _process, process);
+
+    /// <summary>
+    /// Drops the Process handle after its owner has observed exit and disposed it.
+    /// </summary>
+    public void ClearProcess(Process process) => Interlocked.CompareExchange(ref _process, null, process);
 
     /// <summary>
     /// Sets the PID of the spawned process.
@@ -123,9 +128,10 @@ public class SharpTSChildProcess : SharpTSEventEmitter
 
         try
         {
-            if (_process != null && !_process.HasExited)
+            var process = Volatile.Read(ref _process);
+            if (process != null && !process.HasExited)
             {
-                _process.Kill(entireProcessTree: true);
+                ProcessTreeTermination.TryKill(process);
                 return RuntimeValue.True;
             }
         }

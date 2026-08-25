@@ -826,6 +826,8 @@ public partial class ILCompiler
         // hold the first top-level awaits, so the context must be current before the
         // first $Initialize call captures an awaiter.
         EmitInstallEventLoopSyncContext(il);
+        var returnLabel = il.DefineLabel();
+        il.BeginExceptionBlock();
 
         if (hostedInitialize == null)
         {
@@ -838,7 +840,12 @@ public partial class ILCompiler
         // Node process lifecycle at natural drain: 'beforeExit' (re-entering
         // the loop when a listener schedules work), then 'exit' (#1080).
         il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
-
+        il.Emit(OpCodes.Leave, returnLabel);
+        il.BeginFinallyBlock();
+        EmitTerminateOwnedChildProcesses(il);
+        il.Emit(OpCodes.Endfinally);
+        il.EndExceptionBlock();
+        il.MarkLabel(returnLabel);
         il.Emit(OpCodes.Ret);
     }
 

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SharpTS.Runtime;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -109,7 +110,7 @@ public class NpmFixture : IDisposable
 
         if (!process.WaitForExit(timeoutMs))
         {
-            process.Kill();
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException($"{fileName} {arguments} exceeded {timeoutMs}ms");
         }
 

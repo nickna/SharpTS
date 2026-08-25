@@ -1215,6 +1215,12 @@ public partial class ILCompiler
             System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)!);
     }
 
+    private void EmitTerminateOwnedChildProcesses(ILGenerator il)
+    {
+        if (_runtime.ChildProcessTerminateOwned is not null)
+            il.Emit(OpCodes.Call, _runtime.ChildProcessTerminateOwned);
+    }
+
     /// <summary>
     /// Emits the default entry point where top-level statements run as the program.
     /// Used for DLL target or EXE without user-defined main().
@@ -1232,6 +1238,8 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
+        var returnLabel = il.DefineLabel();
+        il.BeginExceptionBlock();
 
         if (_hosted)
         {
@@ -1252,7 +1260,12 @@ public partial class ILCompiler
         // Node process lifecycle at natural drain: 'beforeExit' (re-entering
         // the loop when a listener schedules work), then 'exit' (#1080).
         il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
-
+        il.Emit(OpCodes.Leave, returnLabel);
+        il.BeginFinallyBlock();
+        EmitTerminateOwnedChildProcesses(il);
+        il.Emit(OpCodes.Endfinally);
+        il.EndExceptionBlock();
+        il.MarkLabel(returnLabel);
         il.Emit(OpCodes.Ret);
     }
 
@@ -1412,6 +1425,8 @@ public partial class ILCompiler
 
         var il = mainMethod.GetILGenerator();
         EmitInstallEventLoopSyncContext(il);
+        var returnLabel = il.DefineLabel();
+        il.BeginExceptionBlock();
         var ctx = CreateEntryPointTopLevelContext(il, mainMethod);
 
         // Create entry-point display class instance if there are captured top-level variables
@@ -1550,6 +1565,7 @@ public partial class ILCompiler
                 // Unbox double, convert to int, call Environment.Exit
                 il.Emit(OpCodes.Unbox_Any, _types.Double);
                 il.Emit(OpCodes.Conv_I4);
+                EmitTerminateOwnedChildProcesses(il);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Environment, "Exit", _types.Int32));
             }
             else
@@ -1563,7 +1579,7 @@ public partial class ILCompiler
             // Node process lifecycle at natural drain: 'beforeExit' (re-entering
             // the loop when a listener schedules work), then 'exit' (#1080).
             il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
-            il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Leave, returnLabel);
         }
         else
         {
@@ -1572,6 +1588,7 @@ public partial class ILCompiler
                 // Unbox double, convert to int, call Environment.Exit
                 il.Emit(OpCodes.Unbox_Any, _types.Double);
                 il.Emit(OpCodes.Conv_I4);
+                EmitTerminateOwnedChildProcesses(il);
                 il.Emit(OpCodes.Call, _types.GetMethod(_types.Environment, "Exit", _types.Int32));
             }
             else
@@ -1585,8 +1602,15 @@ public partial class ILCompiler
             // Node process lifecycle at natural drain: 'beforeExit' (re-entering
             // the loop when a listener schedules work), then 'exit' (#1080).
             il.Emit(OpCodes.Call, _runtime.ProcessRunLifecycle);
-            il.Emit(OpCodes.Ret);
+            il.Emit(OpCodes.Leave, returnLabel);
         }
+
+        il.BeginFinallyBlock();
+        EmitTerminateOwnedChildProcesses(il);
+        il.Emit(OpCodes.Endfinally);
+        il.EndExceptionBlock();
+        il.MarkLabel(returnLabel);
+        il.Emit(OpCodes.Ret);
 
     }
 

@@ -206,6 +206,7 @@ public partial class Interpreter : IDisposable
     // SynchronizationContext routes async/await continuations back to the main thread
     private readonly System.Collections.Concurrent.BlockingCollection<Action> _callbackQueue = new();
     private readonly CancellationTokenSource _shutdownCts = new();
+    private readonly OwnedProcessRegistry _ownedProcesses = new();
     private InterpreterSynchronizationContext? _eventLoopSyncContext;
 
     // VM timeout support — checked during statement execution to enforce script timeout
@@ -635,7 +636,19 @@ public partial class Interpreter : IDisposable
     {
         try { _shutdownCts.Cancel(); }
         catch (ObjectDisposedException) { }
+        _ownedProcesses.TerminateAll();
     }
+
+    /// <summary>
+    /// Registers a successfully started OS process as owned by this interpreter.
+    /// No other interpreter, test host, worktree, or build-server process is visible here.
+    /// </summary>
+    internal void RegisterOwnedProcess(System.Diagnostics.Process process) => _ownedProcesses.Register(process);
+
+    /// <summary>Releases ownership after the child has exited and its streams have drained.</summary>
+    internal void UnregisterOwnedProcess(System.Diagnostics.Process process) => _ownedProcesses.Unregister(process);
+
+    internal int OwnedProcessCount => _ownedProcesses.Count;
 
     /// <summary>
     /// Allows runtime resources to stop pending asynchronous I/O when their owning interpreter
@@ -1090,6 +1103,10 @@ public partial class Interpreter : IDisposable
         // Signal the event loop to exit via cooperative cancellation
         try { _shutdownCts.Cancel(); }
         catch (ObjectDisposedException) { }
+
+        // Child processes are external resources: cancellation alone cannot stop them.
+        // Terminate only the processes explicitly registered by this interpreter.
+        _ownedProcesses.TerminateAll();
 
         // Complete the callback queue to unblock any waiting TryTake
         try { _callbackQueue.CompleteAdding(); }

@@ -682,6 +682,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, _childCtxProc);
         il.Emit(OpCodes.Callvirt, _miProcStart);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
 
         EmitDictSetFromCtx(il, "pid", () =>
         {
@@ -805,6 +808,9 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
 
         il.MarkLabel(afterTry);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
         // EventLoop.GetInstance().Schedule(new Action(this.EmitCaptured));
         EmitScheduleOnLoop(il, runtime, _childCtxEmitCaptured);
         il.Emit(OpCodes.Ldnull);
@@ -1051,6 +1057,9 @@ public partial class RuntimeEmitter
         il.EndExceptionBlock();
 
         il.MarkLabel(afterTry);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _childCtxProc);
+        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
         EmitScheduleOnLoop(il, runtime, _childCtxEmitStreamClose);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
@@ -1538,6 +1547,8 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldloc, processLocal);
             il.Emit(OpCodes.Callvirt, _miProcStart);
             il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Ldloc, processLocal);
+            il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
             EmitDictSet(il, dictLocal, "pid", () =>
             {
                 il.Emit(OpCodes.Ldloc, processLocal);
@@ -1550,6 +1561,8 @@ public partial class RuntimeEmitter
             il.BeginCatchBlock(_types.Exception);
             var exLocal = il.DeclareLocal(_types.Exception);
             il.Emit(OpCodes.Stloc, exLocal);
+            il.Emit(OpCodes.Ldloc, processLocal);
+            il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
             StoreCtxField(il, ctxLocal, _childCtxResKind, () => il.Emit(OpCodes.Ldc_I4_2));
             StoreCtxField(il, ctxLocal, _childCtxResError, () =>
             {

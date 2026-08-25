@@ -2357,6 +2357,12 @@ public class EmittedRuntime
     public MethodBuilder ChildProcessExecFileSync { get; set; } = null!;
     public MethodBuilder ChildProcessExecFile { get; set; } = null!;
     public MethodBuilder ChildProcessFork { get; set; } = null!;
+    public FieldBuilder ChildProcessOwnedProcessesField { get; set; } = null!;
+    public FieldBuilder ChildProcessOwnershipStoppingField { get; set; } = null!;
+    public MethodBuilder ChildProcessRegisterOwned { get; set; } = null!;
+    public MethodBuilder ChildProcessUnregisterOwned { get; set; } = null!;
+    public MethodBuilder ChildProcessReleaseOwned { get; set; } = null!;
+    public MethodBuilder ChildProcessTerminateOwned { get; set; } = null!;
 
     // Querystring module methods
 

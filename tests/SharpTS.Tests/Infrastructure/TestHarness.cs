@@ -6,6 +6,7 @@ using SharpTS.Diagnostics;
 using SharpTS.Execution;
 using SharpTS.Modules;
 using SharpTS.Parsing;
+using SharpTS.Runtime;
 using SharpTS.Runtime.BuiltIns;
 using SharpTS.TypeSystem;
 
@@ -549,7 +550,7 @@ public static class TestHarness
             // Use timeout to catch infinite loop bugs
             if (!process.WaitForExit((int)timeout.TotalMilliseconds))
             {
-                process.Kill();
+                ProcessTreeTermination.Terminate(process);
                 throw new TimeoutException(
                     $"Compiled program execution exceeded {timeout.TotalSeconds}s timeout. " +
                     "This likely indicates an infinite loop bug (e.g., Promise double-wrapping in async iterators).");
@@ -732,7 +733,7 @@ public static class TestHarness
 
         if (!process.WaitForExit((int)DefaultTimeout.TotalMilliseconds))
         {
-            process.Kill();
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException(
                 $"Compiled DLL execution exceeded {DefaultTimeout.TotalSeconds}s timeout.");
         }
@@ -1187,7 +1188,7 @@ public static class TestHarness
             {
                 var partialOut = outputTask.IsCompleted ? outputTask.Result : "(reading)";
                 var partialErr = errorTask.IsCompleted ? errorTask.Result : "(reading)";
-                process.Kill();
+                ProcessTreeTermination.Terminate(process);
                 throw new TimeoutException(
                     $"Compiled module execution exceeded {DefaultTimeout.TotalSeconds}s timeout. " +
                     $"Stdout: [{partialOut}] Stderr: [{partialErr}]");

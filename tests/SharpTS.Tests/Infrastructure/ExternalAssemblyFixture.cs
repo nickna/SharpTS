@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SharpTS.Runtime;
 using Xunit;
 
 namespace SharpTS.Tests.Infrastructure;
@@ -149,7 +150,7 @@ public sealed class ExternalAssemblyFixture : IDisposable
         string stderr = process.StandardError.ReadToEnd();
         if (!process.WaitForExit(TimeSpan.FromMinutes(5)))
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException($"'dotnet {arguments}' timed out in {workingDirectory}");
         }
         if (process.ExitCode != 0)

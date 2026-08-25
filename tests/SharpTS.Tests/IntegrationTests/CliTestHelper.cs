@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using SharpTS.Runtime;
 
 namespace SharpTS.Tests.IntegrationTests;
 
@@ -46,7 +47,7 @@ public static class CliTestHelper
 
         if (!process.WaitForExit((int)effectiveTimeout.TotalMilliseconds))
         {
-            process.Kill();
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException(
                 $"CLI execution exceeded {effectiveTimeout.TotalSeconds}s timeout. " +
                 $"Arguments: {arguments}");

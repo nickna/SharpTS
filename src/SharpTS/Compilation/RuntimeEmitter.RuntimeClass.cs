@@ -481,6 +481,21 @@ public partial class RuntimeEmitter
         );
         runtime.ConsoleGroupLevelField = consoleGroupLevelField;
 
+        // A generated program owns only the child processes it starts. This registry is
+        // private to the generated $Runtime type, so parallel worktrees/processes cannot
+        // observe or terminate one another's children.
+        if (_features.UsesChildProcess)
+        {
+            runtime.ChildProcessOwnedProcessesField = typeBuilder.DefineField(
+                "_ownedChildProcesses",
+                typeof(System.Collections.Concurrent.ConcurrentDictionary<int, System.Diagnostics.Process>),
+                FieldAttributes.Private | FieldAttributes.Static);
+            runtime.ChildProcessOwnershipStoppingField = typeBuilder.DefineField(
+                "_childProcessOwnershipStopping",
+                _types.Int32,
+                FieldAttributes.Private | FieldAttributes.Static);
+        }
+
         // Pre-define populate-method shells before the cctor IL is generated
         // so the cctor can `Call` each populate to eagerly fill the
         // singletons. Without eager-population, `delete Number.prototype.toString;
@@ -530,6 +545,13 @@ public partial class RuntimeEmitter
         // Initialize _random = new Random()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Random));
         cctorIL.Emit(OpCodes.Stsfld, randomField);
+
+        if (_features.UsesChildProcess)
+        {
+            cctorIL.Emit(OpCodes.Newobj, typeof(System.Collections.Concurrent.ConcurrentDictionary<int, System.Diagnostics.Process>)
+                .GetConstructor(Type.EmptyTypes)!);
+            cctorIL.Emit(OpCodes.Stsfld, runtime.ChildProcessOwnedProcessesField);
+        }
 
         // Initialize _mathSingleton = new Dictionary<string, object>()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
