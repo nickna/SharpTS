@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Globalization;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -10,6 +11,141 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class RuntimeEmitter
 {
+    private void DefineNumberFixedFormattingInfrastructure(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime)
+    {
+        Type stateType = typeof(ValueTuple<ulong, int, bool>);
+        Type spanType = typeof(Span<char>);
+        Type formatterType = EmitGenerics.MakeGenericType(typeof(SpanAction<,>),
+            typeof(char), stateType);
+
+        runtime.NumberFixedUInt64FormatterField = typeBuilder.DefineField(
+            "_numberFixedUInt64Formatter",
+            formatterType,
+            FieldAttributes.Private | FieldAttributes.Static | FieldAttributes.InitOnly);
+
+        var method = typeBuilder.DefineMethod(
+            "FormatNumberFixedUInt64",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [spanType, stateType]);
+        runtime.NumberFixedUInt64FormatterCallback = method;
+
+        FieldInfo item1 = stateType.GetField("Item1")!;
+        FieldInfo item2 = stateType.GetField("Item2")!;
+        FieldInfo item3 = stateType.GetField("Item3")!;
+        MethodInfo spanLength = spanType.GetProperty("Length")!.GetGetMethod()!;
+        MethodInfo spanItem = spanType.GetProperty("Item")!.GetGetMethod()!;
+
+        var il = method.GetILGenerator();
+        var remaining = il.DeclareLocal(_types.UInt64);
+        var digits = il.DeclareLocal(_types.Int32);
+        var negative = il.DeclareLocal(_types.Boolean);
+        var start = il.DeclareLocal(_types.Int32);
+        var decimalIndex = il.DeclareLocal(_types.Int32);
+        var index = il.DeclareLocal(_types.Int32);
+
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Ldfld, item1);
+        il.Emit(OpCodes.Stloc, remaining);
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Ldfld, item2);
+        il.Emit(OpCodes.Stloc, digits);
+        il.Emit(OpCodes.Ldarga_S, (byte)1);
+        il.Emit(OpCodes.Ldfld, item3);
+        il.Emit(OpCodes.Stloc, negative);
+
+        var positiveStart = il.DefineLabel();
+        var startReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, negative);
+        il.Emit(OpCodes.Brfalse, positiveStart);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Br, startReady);
+        il.MarkLabel(positiveStart);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.MarkLabel(startReady);
+        il.Emit(OpCodes.Stloc, start);
+
+        var noDecimal = il.DefineLabel();
+        var decimalReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, digits);
+        il.Emit(OpCodes.Brfalse, noDecimal);
+        il.Emit(OpCodes.Ldarga_S, (byte)0);
+        il.Emit(OpCodes.Call, spanLength);
+        il.Emit(OpCodes.Ldloc, digits);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Br, decimalReady);
+        il.MarkLabel(noDecimal);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.MarkLabel(decimalReady);
+        il.Emit(OpCodes.Stloc, decimalIndex);
+
+        il.Emit(OpCodes.Ldarga_S, (byte)0);
+        il.Emit(OpCodes.Call, spanLength);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, index);
+
+        var loopCheck = il.DefineLabel();
+        var writeDigit = il.DefineLabel();
+        var loopNext = il.DefineLabel();
+        il.Emit(OpCodes.Br, loopCheck);
+
+        il.MarkLabel(writeDigit);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, decimalIndex);
+        var notDecimal = il.DefineLabel();
+        il.Emit(OpCodes.Bne_Un, notDecimal);
+        il.Emit(OpCodes.Ldarga_S, (byte)0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Call, spanItem);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'.');
+        il.Emit(OpCodes.Stind_I2);
+        il.Emit(OpCodes.Br, loopNext);
+
+        il.MarkLabel(notDecimal);
+        il.Emit(OpCodes.Ldarga_S, (byte)0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Call, spanItem);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'0');
+        il.Emit(OpCodes.Ldloc, remaining);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Rem_Un);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stind_I2);
+        il.Emit(OpCodes.Ldloc, remaining);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Div_Un);
+        il.Emit(OpCodes.Stloc, remaining);
+
+        il.MarkLabel(loopNext);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(loopCheck);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, start);
+        il.Emit(OpCodes.Bge, writeDigit);
+
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, negative);
+        il.Emit(OpCodes.Brfalse, done);
+        il.Emit(OpCodes.Ldarga_S, (byte)0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, spanItem);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'-');
+        il.Emit(OpCodes.Stind_I2);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitNumberMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         // Emit helper methods first (they're used by other methods)
@@ -1112,16 +1248,33 @@ public partial class RuntimeEmitter
 
     private void EmitNumberToFixedDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        MethodBuilder bigIntegerFallback = EmitNumberToFixedBigInteger(typeBuilder);
         var method = typeBuilder.DefineMethod(
             "NumberToFixedDouble",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.String,
-            [_types.Double, _types.Int32, _types.String]);
+            [_types.Double, _types.Int32]);
         method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
         runtime.NumberToFixedDouble = method;
 
         var il = method.GetILGenerator();
         var valueLocal = il.DeclareLocal(_types.Double);
+        var negativeLocal = il.DeclareLocal(_types.Boolean);
+        var bitsLocal = il.DeclareLocal(_types.UInt64);
+        var fractionLocal = il.DeclareLocal(_types.UInt64);
+        var rawExponentLocal = il.DeclareLocal(_types.Int32);
+        var significandLocal = il.DeclareLocal(_types.UInt64);
+        var binaryExponentLocal = il.DeclareLocal(_types.Int32);
+        var numeratorLocal = il.DeclareLocal(_types.UInt64);
+        var scaleIndexLocal = il.DeclareLocal(_types.Int32);
+        var shiftLocal = il.DeclareLocal(_types.Int32);
+        var rightShiftLocal = il.DeclareLocal(_types.Int32);
+        var scaledLocal = il.DeclareLocal(_types.UInt64);
+        var quotientLocal = il.DeclareLocal(_types.UInt64);
+        var remainingLocal = il.DeclareLocal(_types.UInt64);
+        var digitCountLocal = il.DeclareLocal(_types.Int32);
+        var wholeDigitsLocal = il.DeclareLocal(_types.Int32);
+        var lengthLocal = il.DeclareLocal(_types.Int32);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, valueLocal);
 
@@ -1142,32 +1295,404 @@ public partial class RuntimeEmitter
             il, runtime, "toFixed() digits argument must be between 0 and 100");
         il.MarkLabel(inRange);
 
-        // Values at or above 1e21 use ordinary Number::toString. Blt_Un also
-        // sends NaN to the BCL fixed formatter, which returns the JS spelling.
+        // Non-finite values and magnitudes at or above 1e21 use ordinary
+        // Number::toString. The remaining path works from the exact binary64
+        // significand, avoiding the BCL's ties-to-even fixed-point rounding.
+        var finite = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsFinite", [_types.Double])!);
+        il.Emit(OpCodes.Brtrue, finite);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(finite);
+
         var fixedNotation = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double])!);
         il.Emit(OpCodes.Ldc_R8, 1e21);
-        il.Emit(OpCodes.Blt_Un, fixedNotation);
+        il.Emit(OpCodes.Blt, fixedNotation);
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, runtime.FormatNumber);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(fixedNotation);
+
+        // Preserve the sign for negative non-zero inputs even when rounding
+        // produces zero. Negative zero itself compares non-negative in JS.
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ldc_R8, 0.0);
-        var nonZero = il.DefineLabel();
-        il.Emit(OpCodes.Bne_Un, nonZero);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Stloc, valueLocal);
-        il.MarkLabel(nonZero);
+        il.Emit(OpCodes.Clt);
+        il.Emit(OpCodes.Stloc, negativeLocal);
 
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Ldarg_2);
-        il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
+            typeof(BitConverter), "DoubleToInt64Bits", [_types.Double])!);
+        il.Emit(OpCodes.Ldc_I8, long.MaxValue);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Stloc, bitsLocal);
+
+        il.Emit(OpCodes.Ldloc, bitsLocal);
+        il.Emit(OpCodes.Ldc_I8, 0x000f_ffff_ffff_ffffL);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Stloc, fractionLocal);
+        il.Emit(OpCodes.Ldloc, bitsLocal);
+        il.Emit(OpCodes.Ldc_I4, 52);
+        il.Emit(OpCodes.Shr_Un);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, rawExponentLocal);
+
+        var normal = il.DefineLabel();
+        var decompositionReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rawExponentLocal);
+        il.Emit(OpCodes.Brtrue, normal);
+        il.Emit(OpCodes.Ldloc, fractionLocal);
+        il.Emit(OpCodes.Stloc, significandLocal);
+        il.Emit(OpCodes.Ldc_I4, -1074);
+        il.Emit(OpCodes.Stloc, binaryExponentLocal);
+        il.Emit(OpCodes.Br, decompositionReady);
+        il.MarkLabel(normal);
+        il.Emit(OpCodes.Ldloc, fractionLocal);
+        il.Emit(OpCodes.Ldc_I8, 0x0010_0000_0000_0000L);
+        il.Emit(OpCodes.Or);
+        il.Emit(OpCodes.Stloc, significandLocal);
+        il.Emit(OpCodes.Ldloc, rawExponentLocal);
+        il.Emit(OpCodes.Ldc_I4, 1023 + 52);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, binaryExponentLocal);
+        il.MarkLabel(decompositionReady);
+
+        // Try the allocation-free UInt64 scaling path. Inputs that cannot fit
+        // exactly fall through to the BigInteger implementation below.
+        il.Emit(OpCodes.Ldloc, significandLocal);
+        il.Emit(OpCodes.Stloc, numeratorLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, scaleIndexLocal);
+        var scaleCheck = il.DefineLabel();
+        var scaleBody = il.DefineLabel();
+        var scaleReady = il.DefineLabel();
+        var fallback = il.DefineLabel();
+        il.Emit(OpCodes.Br, scaleCheck);
+        il.MarkLabel(scaleBody);
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldc_I8, 3_689_348_814_741_910_323L); // UInt64.MaxValue / 5
+        il.Emit(OpCodes.Bgt_Un, fallback);
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldc_I4_5);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Stloc, numeratorLocal);
+        il.Emit(OpCodes.Ldloc, scaleIndexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, scaleIndexLocal);
+        il.MarkLabel(scaleCheck);
+        il.Emit(OpCodes.Ldloc, scaleIndexLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Blt, scaleBody);
+        il.MarkLabel(scaleReady);
+
+        il.Emit(OpCodes.Ldloc, binaryExponentLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, shiftLocal);
+
+        var negativeShift = il.DefineLabel();
+        var formatScaled = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, shiftLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, negativeShift);
+        il.Emit(OpCodes.Ldloc, shiftLocal);
+        il.Emit(OpCodes.Ldc_I4, 64);
+        il.Emit(OpCodes.Bge, fallback);
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldc_I8, -1L);
+        il.Emit(OpCodes.Ldloc, shiftLocal);
+        il.Emit(OpCodes.Shr_Un);
+        il.Emit(OpCodes.Bgt_Un, fallback);
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldloc, shiftLocal);
+        il.Emit(OpCodes.Shl);
+        il.Emit(OpCodes.Stloc, scaledLocal);
+        il.Emit(OpCodes.Br, formatScaled);
+
+        il.MarkLabel(negativeShift);
+        il.Emit(OpCodes.Ldloc, shiftLocal);
+        il.Emit(OpCodes.Neg);
+        il.Emit(OpCodes.Stloc, rightShiftLocal);
+        var shiftAtMost64 = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rightShiftLocal);
+        il.Emit(OpCodes.Ldc_I4, 64);
+        il.Emit(OpCodes.Ble, shiftAtMost64);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Stloc, scaledLocal);
+        il.Emit(OpCodes.Br, formatScaled);
+
+        il.MarkLabel(shiftAtMost64);
+        var shiftBelow64 = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rightShiftLocal);
+        il.Emit(OpCodes.Ldc_I4, 64);
+        il.Emit(OpCodes.Blt, shiftBelow64);
+        var roundOneAt64 = il.DefineLabel();
+        var roundedAt64 = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldc_I8, long.MinValue);
+        il.Emit(OpCodes.Bge_Un, roundOneAt64);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Br, roundedAt64);
+        il.MarkLabel(roundOneAt64);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_U8);
+        il.MarkLabel(roundedAt64);
+        il.Emit(OpCodes.Stloc, scaledLocal);
+        il.Emit(OpCodes.Br, formatScaled);
+
+        il.MarkLabel(shiftBelow64);
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldloc, rightShiftLocal);
+        il.Emit(OpCodes.Shr_Un);
+        il.Emit(OpCodes.Stloc, quotientLocal);
+        il.Emit(OpCodes.Ldloc, quotientLocal);
+        il.Emit(OpCodes.Stloc, scaledLocal);
+
+        // remainder >= 2^(rightShift - 1) rounds upward, including exact ties.
+        il.Emit(OpCodes.Ldloc, numeratorLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldloc, rightShiftLocal);
+        il.Emit(OpCodes.Shl);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.And);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Ldloc, rightShiftLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Shl);
+        var noRound = il.DefineLabel();
+        il.Emit(OpCodes.Blt_Un, noRound);
+        il.Emit(OpCodes.Ldloc, scaledLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, scaledLocal);
+        il.MarkLabel(noRound);
+
+        il.MarkLabel(formatScaled);
+        il.Emit(OpCodes.Ldloc, scaledLocal);
+        il.Emit(OpCodes.Stloc, remainingLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, digitCountLocal);
+        var digitLoop = il.DefineLabel();
+        var digitsReady = il.DefineLabel();
+        il.MarkLabel(digitLoop);
+        il.Emit(OpCodes.Ldloc, remainingLocal);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Blt_Un, digitsReady);
+        il.Emit(OpCodes.Ldloc, remainingLocal);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Conv_U8);
+        il.Emit(OpCodes.Div_Un);
+        il.Emit(OpCodes.Stloc, remainingLocal);
+        il.Emit(OpCodes.Ldloc, digitCountLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, digitCountLocal);
+        il.Emit(OpCodes.Br, digitLoop);
+        il.MarkLabel(digitsReady);
+
+        il.Emit(OpCodes.Ldloc, digitCountLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Stloc, wholeDigitsLocal);
+        var wholeReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, wholeDigitsLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Bge, wholeReady);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, wholeDigitsLocal);
+        il.MarkLabel(wholeReady);
+
+        il.Emit(OpCodes.Ldloc, wholeDigitsLocal);
+        il.Emit(OpCodes.Ldloc, negativeLocal);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        var lengthReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Brfalse, lengthReady);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, lengthLocal);
+        il.MarkLabel(lengthReady);
+
+        Type stateType = typeof(ValueTuple<ulong, int, bool>);
+        ConstructorInfo stateConstructor = stateType.GetConstructor(
+            [typeof(ulong), typeof(int), typeof(bool)])!;
+        MethodInfo stringCreateDefinition = typeof(string).GetMethods(
+                BindingFlags.Public | BindingFlags.Static)
+            .Single(candidate => candidate.Name == "Create"
+                && candidate.IsGenericMethodDefinition
+                && candidate.GetParameters().Length == 3
+                && candidate.GetParameters()[2].ParameterType.IsGenericType
+                && candidate.GetParameters()[2].ParameterType.GetGenericTypeDefinition()
+                    == typeof(SpanAction<,>));
+        MethodInfo stringCreate = EmitGenerics.MakeGenericMethod(
+            stringCreateDefinition, stateType);
+        il.Emit(OpCodes.Ldloc, lengthLocal);
+        il.Emit(OpCodes.Ldloc, scaledLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, negativeLocal);
+        il.Emit(OpCodes.Newobj, stateConstructor);
+        il.Emit(OpCodes.Ldsfld, runtime.NumberFixedUInt64FormatterField);
+        il.Emit(OpCodes.Call, stringCreate);
         il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallback);
+        il.Emit(OpCodes.Ldloc, significandLocal);
+        il.Emit(OpCodes.Ldloc, binaryExponentLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, negativeLocal);
+        il.Emit(OpCodes.Call, bigIntegerFallback);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private MethodBuilder EmitNumberToFixedBigInteger(TypeBuilder typeBuilder)
+    {
+        Type bi = _types.BigInteger;
+        var method = typeBuilder.DefineMethod(
+            "NumberToFixedBigInteger",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.String,
+            [_types.UInt64, _types.Int32, _types.Int32, _types.Boolean]);
+
+        MethodInfo multiply = _types.GetMethod(bi, "op_Multiply", bi, bi);
+        MethodInfo leftShift = _types.GetMethod(bi, "op_LeftShift", bi, _types.Int32);
+        MethodInfo add = _types.GetMethod(bi, "op_Addition", bi, bi);
+        MethodInfo greaterOrEqual = _types.GetMethod(
+            bi, "op_GreaterThanOrEqual", bi, bi);
+        MethodInfo divRem = _types.TryGetMethod(
+            bi, "DivRem", bi, bi, bi.MakeByRefType())
+            ?? throw new InvalidOperationException("BigInteger.DivRem overload not found.");
+
+        var il = method.GetILGenerator();
+        var numerator = il.DeclareLocal(bi);
+        var scaled = il.DeclareLocal(bi);
+        var divisor = il.DeclareLocal(bi);
+        var remainder = il.DeclareLocal(bi);
+        var shift = il.DeclareLocal(_types.Int32);
+        var integer = il.DeclareLocal(_types.String);
+        var fixedPoint = il.DeclareLocal(_types.String);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(bi, _types.UInt64));
+        il.Emit(OpCodes.Ldc_I4_5);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(bi, _types.Int32));
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _types.GetMethod(bi, "Pow", bi, _types.Int32));
+        il.Emit(OpCodes.Call, multiply);
+        il.Emit(OpCodes.Stloc, numerator);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, shift);
+        var rightShift = il.DefineLabel();
+        var scaledReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, rightShift);
+        il.Emit(OpCodes.Ldloc, numerator);
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Call, leftShift);
+        il.Emit(OpCodes.Stloc, scaled);
+        il.Emit(OpCodes.Br, scaledReady);
+
+        il.MarkLabel(rightShift);
+        il.Emit(OpCodes.Call, _types.GetMethod(bi, "get_One"));
+        il.Emit(OpCodes.Ldloc, shift);
+        il.Emit(OpCodes.Neg);
+        il.Emit(OpCodes.Call, leftShift);
+        il.Emit(OpCodes.Stloc, divisor);
+        il.Emit(OpCodes.Ldloc, numerator);
+        il.Emit(OpCodes.Ldloc, divisor);
+        il.Emit(OpCodes.Ldloca, remainder);
+        il.Emit(OpCodes.Call, divRem);
+        il.Emit(OpCodes.Stloc, scaled);
+        il.Emit(OpCodes.Ldloc, remainder);
+        il.Emit(OpCodes.Ldloc, remainder);
+        il.Emit(OpCodes.Call, add);
+        il.Emit(OpCodes.Ldloc, divisor);
+        var noRound = il.DefineLabel();
+        il.Emit(OpCodes.Call, greaterOrEqual);
+        il.Emit(OpCodes.Brfalse, noRound);
+        il.Emit(OpCodes.Ldloc, scaled);
+        il.Emit(OpCodes.Call, _types.GetMethod(bi, "get_One"));
+        il.Emit(OpCodes.Call, add);
+        il.Emit(OpCodes.Stloc, scaled);
+        il.MarkLabel(noRound);
+        il.MarkLabel(scaledReady);
+
+        il.Emit(OpCodes.Ldloca, scaled);
+        il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty(
+            "InvariantCulture")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            bi, "ToString", typeof(IFormatProvider)));
+        il.Emit(OpCodes.Stloc, integer);
+
+        var hasFraction = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brtrue, hasFraction);
+        var unsignedInteger = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, unsignedInteger);
+        il.Emit(OpCodes.Ldstr, "-");
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(unsignedInteger);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(hasFraction);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)'0');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "PadLeft", _types.Int32, _types.Char));
+        il.Emit(OpCodes.Stloc, integer);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Ldloc, integer);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Length"));
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldstr, ".");
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "Insert", _types.Int32, _types.String));
+        il.Emit(OpCodes.Stloc, fixedPoint);
+
+        var unsignedFixed = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Brfalse, unsignedFixed);
+        il.Emit(OpCodes.Ldstr, "-");
+        il.Emit(OpCodes.Ldloc, fixedPoint);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "Concat", _types.String, _types.String));
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(unsignedFixed);
+        il.Emit(OpCodes.Ldloc, fixedPoint);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 
     private void EmitNumberToFixed(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -1259,39 +1784,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ble, notTooLargeLabel);
         GuestErrorEmitter.ThrowRangeError(il, runtime, "toFixed() digits argument must be between 0 and 100");
 
-        // return value.ToString($"F{digits}", CultureInfo.InvariantCulture).
-        // ECMA-262: -0 formatted as "0" (no sign) — strip via abs on zero.
+        // The typed formatter shares the exact rounding implementation with
+        // stable literal-digit calls after the observable coercion above.
         il.MarkLabel(notTooLargeLabel);
-
-        // ECMA-262 21.1.3.3 step 10: values at or above 10^21 use the
-        // ordinary Number::toString representation, irrespective of the
-        // requested fraction digit count. The fixed-point formatter below
-        // would otherwise produce "1000000000000000000000" instead of
-        // "1e+21".
-        var fixedNotationLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double])!);
-        il.Emit(OpCodes.Ldc_R8, 1e21);
-        il.Emit(OpCodes.Blt_Un, fixedNotationLabel);
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Call, runtime.FormatNumber);
-        il.Emit(OpCodes.Ret);
-
-        il.Emit(OpCodes.Ldloc, valueLocal);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        var nonZeroFLabel = il.DefineLabel();
-        il.Emit(OpCodes.Bne_Un, nonZeroFLabel);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Stloc, valueLocal);
-        il.MarkLabel(nonZeroFLabel);
-        il.MarkLabel(fixedNotationLabel);
-        il.Emit(OpCodes.Ldloca, valueLocal);
-        il.Emit(OpCodes.Ldstr, "F");
         il.Emit(OpCodes.Ldloc, digitsLocal);
-        il.Emit(OpCodes.Box, _types.Int32);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.Object])!);
-        il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
+        il.Emit(OpCodes.Call, runtime.NumberToFixedDouble);
         il.Emit(OpCodes.Ret);
     }
 

@@ -67,6 +67,11 @@ function parseIntegers(n: number): number {
 }
 
 function formatFixed(n: number): number {
+    // Content-sensitive guard: length-only checks cannot distinguish the BCL's
+    // ties-to-even "0.12" from JavaScript's exact "0.13" for this midpoint.
+    if ((0.125).toFixed(2) !== "0.13") {
+        throw new Error("incorrect Number.prototype.toFixed rounding");
+    }
     let totalLength: number = 0;
     for (let i: number = 0; i < n; i++) {
         totalLength = totalLength + (i * 0.125).toFixed(2).length;

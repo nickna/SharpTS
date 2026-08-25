@@ -43,6 +43,42 @@ public sealed class StableNumericStringConversionTests
         Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Compiled));
     }
 
+    [Theory, ModeData]
+    public void ToFixed_UsesJavaScriptExactRounding(ExecutionMode mode)
+    {
+        const string source = """
+            function dynamicFixed(value: number, digits: number): string {
+                return value.toFixed(digits);
+            }
+
+            console.log(
+                (0.125).toFixed(2),
+                (1.125).toFixed(2),
+                (2.5).toFixed(0),
+                (3.5).toFixed(0),
+                (-2.5).toFixed(0));
+            console.log(
+                (2.55).toFixed(1),
+                (1.005).toFixed(2),
+                (-0.001).toFixed(2),
+                (-0).toFixed(2));
+            console.log(dynamicFixed(0.1, 100));
+            console.log(dynamicFixed(5e-324, 100));
+            console.log(dynamicFixed(999999999999999900000, 2));
+            """;
+
+        const string expected =
+            "0.13 1.13 3 4 -3\n" +
+            "2.5 1.00 -0.00 0.00\n" +
+            "0.1000000000000000055511151231257827021181583404541015625" +
+                "000000000000000000000000000000000000000000000\n" +
+            "0.0000000000000000000000000000000000000000000000000000000" +
+                "000000000000000000000000000000000000000000000\n" +
+            "999999999999999868928.00\n";
+
+        Assert.Equal(expected, TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void StableTypedConversions_PassIlVerification()
     {
@@ -114,6 +150,29 @@ public sealed class StableNumericStringConversionTests
         Assert.Equal(1_234_500_000, result);
         Assert.True(allocated <= 256,
             $"Typed parseInt allocated {allocated:N0} bytes in the hot loop.");
+    }
+
+    [Fact]
+    public void TypedToFixedLoop_AllocatesOnlyResultStrings()
+    {
+        Assembly assembly = Compile("""
+            function render(value: number): string {
+                return value.toFixed(2);
+            }
+            """);
+        var render = FindFunction(assembly, "render")
+            .CreateDelegate<Func<double, object>>();
+
+        Assert.Equal("1.25", (string)render(1.25));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        string result = "";
+        for (int i = 0; i < 100_000; i++)
+            result = (string)render(i * 0.125);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal("12499.88", result);
+        Assert.True(allocated <= 4_100_000,
+            $"Typed toFixed allocated {allocated:N0} bytes for 100,000 result strings.");
     }
 
     [Theory, ModeData]

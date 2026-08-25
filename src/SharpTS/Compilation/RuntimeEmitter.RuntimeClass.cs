@@ -1,5 +1,6 @@
 ﻿using System.Reflection;
 using System.Reflection.Emit;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace SharpTS.Compilation;
@@ -504,6 +505,11 @@ public partial class RuntimeEmitter
         DefineRegExpPrototypePopulateShell(typeBuilder, runtime);
         DefinePromisePrototypePopulateShell(typeBuilder, runtime);
 
+        // The exact toFixed fast path writes straight into the result string.
+        // Predeclare its cached callback before emitting the type initializer so
+        // hot calls do not allocate a delegate alongside every result string.
+        DefineNumberFixedFormattingInfrastructure(typeBuilder, runtime);
+
         // Static constructor to initialize Random and symbol storage
         var cctorBuilder = typeBuilder.DefineConstructor(
             MethodAttributes.Static | MethodAttributes.Private | MethodAttributes.SpecialName | MethodAttributes.RTSpecialName,
@@ -511,6 +517,15 @@ public partial class RuntimeEmitter
             Type.EmptyTypes
         );
         var cctorIL = cctorBuilder.GetILGenerator();
+
+        Type fixedStateType = typeof(ValueTuple<ulong, int, bool>);
+        Type fixedFormatterType = EmitGenerics.MakeGenericType(typeof(SpanAction<,>),
+            typeof(char), fixedStateType);
+        cctorIL.Emit(OpCodes.Ldnull);
+        cctorIL.Emit(OpCodes.Ldftn, runtime.NumberFixedUInt64FormatterCallback);
+        cctorIL.Emit(OpCodes.Newobj, _types.GetConstructor(
+            fixedFormatterType, _types.Object, typeof(IntPtr)));
+        cctorIL.Emit(OpCodes.Stsfld, runtime.NumberFixedUInt64FormatterField);
 
         // Initialize _random = new Random()
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.Random));
