@@ -35,7 +35,17 @@ public record struct HoistedArrayEntry(LocalBuilder TypedLocal, ArrayElementsDes
 /// index fast paths load <see cref="TypedLocal"/> directly instead of re-emitting
 /// <c>ldloc; castclass $XArray</c> on every access.
 /// </summary>
-public record struct HoistedTypedArrayEntry(LocalBuilder TypedLocal, Type XArrayType, string ElementType);
+public readonly record struct HoistedTypedArrayBacking(
+    LocalBuilder BufferLocal,
+    LocalBuilder ByteOffsetLocal,
+    LocalBuilder LengthLocal,
+    TypedArrayElementLayout Layout);
+
+public record struct HoistedTypedArrayEntry(
+    LocalBuilder TypedLocal,
+    Type XArrayType,
+    string ElementType,
+    HoistedTypedArrayBacking? Backing);
 
 public record struct HoistedCompactRecordEntry(
     LocalBuilder TypedLocal,

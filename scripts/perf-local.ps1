@@ -156,6 +156,7 @@ function Invoke-WslChecked {
     )
 
     $scriptText = if ($WithoutToolchain) { "set -euo pipefail`n$Command" } else { "$(Get-WslEnvironmentPrefix)`n$Command" }
+    $scriptText = $scriptText.Replace("`r`n", "`n").Replace("`r", "`n")
     if ($Capture) {
         $output = @(& wsl.exe -d $WslDistro --exec bash -c $scriptText 2>&1)
     } else {

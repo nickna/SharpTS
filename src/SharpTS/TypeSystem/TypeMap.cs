@@ -37,6 +37,7 @@ public class TypeMap
     private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllPushReceivers = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _stablePrimitivePromiseAllSeedValues = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Variable> _stablePrimitivePromiseAllResultUses = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Expr.Variable> _stableTypedArrayBackingReceivers = new(ReferenceEqualityComparer.Instance);
 
     /// <summary>
     /// Associates an expression with its resolved type.
@@ -154,6 +155,17 @@ public class TypeMap
     /// </summary>
     public bool IsPromotableArrayLocal(Token nameToken, out TokenType elementToken) =>
         _promotableArrayLocals.TryGetValue(nameToken, out elementToken);
+
+    /// <summary>
+    /// Marks an indexed receiver use whose binding belongs to a fresh, exact, non-escaping numeric
+    /// TypedArray local. The IL compiler may cache that receiver's backing storage around a loop.
+    /// Keying the actual receiver node keeps the whole-program proof scope-correct under shadowing.
+    /// </summary>
+    public void MarkStableTypedArrayBackingReceiver(Expr.Variable receiver) =>
+        _stableTypedArrayBackingReceivers.Add(receiver);
+
+    public bool IsStableTypedArrayBackingReceiver(Expr.Variable receiver) =>
+        _stableTypedArrayBackingReceivers.Contains(receiver);
 
     /// <summary>
     /// Marks a fresh, exact, non-escaping <c>Map&lt;number, number&gt;</c> function local

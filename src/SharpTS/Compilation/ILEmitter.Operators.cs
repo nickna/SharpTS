@@ -1201,6 +1201,99 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Castclass, xArrayType);
     }
 
+    private bool TryGetDirectTypedArrayBacking(
+        Expr receiver,
+        string elementType,
+        out HoistedTypedArrayBacking backing)
+    {
+        if (receiver is Expr.Variable variable
+            && _ctx.TryGetHoistedTypedArray(variable.Name.Lexeme) is
+                { ElementType: var hoistedElement, Backing: { } direct }
+            && hoistedElement == elementType)
+        {
+            backing = direct;
+            return true;
+        }
+
+        backing = default;
+        return false;
+    }
+
+    private void EmitDirectTypedArrayRead(
+        HoistedTypedArrayBacking backing,
+        LocalBuilder indexLocal)
+    {
+        if (backing.Layout.BytesPerElement == 1)
+        {
+            EmitDirectTypedArrayArrayAndIndex(backing, indexLocal);
+            IL.Emit(backing.Layout.Signed ? OpCodes.Ldelem_I1 : OpCodes.Ldelem_U1);
+            IL.Emit(OpCodes.Conv_R8);
+            return;
+        }
+
+        EmitDirectTypedArrayElementReference(backing, indexLocal);
+        RuntimeEmitter.EmitReadElementAsDouble(
+            IL,
+            backing.Layout.BytesPerElement,
+            backing.Layout.Signed,
+            backing.Layout.IsFloat);
+    }
+
+    private void EmitDirectTypedArrayWrite(
+        HoistedTypedArrayBacking backing,
+        LocalBuilder indexLocal,
+        LocalBuilder valueLocal)
+    {
+        if (backing.Layout.BytesPerElement == 1)
+        {
+            EmitDirectTypedArrayArrayAndIndex(backing, indexLocal);
+            IL.Emit(OpCodes.Ldloc, valueLocal);
+            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(backing.Layout.Signed ? OpCodes.Conv_I1 : OpCodes.Conv_U1);
+            IL.Emit(OpCodes.Stelem_I1);
+            return;
+        }
+
+        EmitDirectTypedArrayElementReference(backing, indexLocal);
+        IL.Emit(OpCodes.Ldloc, valueLocal);
+        RuntimeEmitter.EmitNarrowDoubleAndWrite(
+            IL,
+            backing.Layout.BytesPerElement,
+            backing.Layout.Signed,
+            backing.Layout.IsFloat);
+    }
+
+    private void EmitDirectTypedArrayArrayAndIndex(
+        HoistedTypedArrayBacking backing,
+        LocalBuilder indexLocal)
+    {
+        IL.Emit(OpCodes.Ldloc, backing.BufferLocal);
+        EmitDirectTypedArrayByteIndex(backing, indexLocal);
+    }
+
+    private void EmitDirectTypedArrayElementReference(
+        HoistedTypedArrayBacking backing,
+        LocalBuilder indexLocal)
+    {
+        EmitDirectTypedArrayArrayAndIndex(backing, indexLocal);
+        IL.Emit(OpCodes.Ldelema, typeof(byte));
+    }
+
+    private void EmitDirectTypedArrayByteIndex(
+        HoistedTypedArrayBacking backing,
+        LocalBuilder indexLocal)
+    {
+        // Stable-backing candidates are created only by the exact length constructor, whose
+        // backing always starts at byte zero. Keep the captured offset in the preheader as part
+        // of the guarded storage facts, but do not reload and add that known zero at every access.
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        if (backing.Layout.BytesPerElement != 1)
+        {
+            IL.Emit(OpCodes.Ldc_I4, backing.Layout.BytesPerElement);
+            IL.Emit(OpCodes.Mul);
+        }
+    }
+
     private bool TryEmitIntegerCounterIndexI4(Expr index)
     {
         switch (index)
@@ -2448,20 +2541,29 @@ public partial class ILEmitter
             && _ctx.TypeMap?.Get(csi.Value) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral
             && IsArithmeticOrBitwiseCompound(csi.Operator.Type))
         {
-            // recv = (TAType)a  — side-effect-free variable, loaded once. Reuse the loop-hoisted
-            // typed local directly when available (#928), else cast once into a fresh recvLocal.
-            LocalBuilder recvLocal;
-            if (csi.Object is Expr.Variable cv && _ctx.TryGetHoistedTypedArray(cv.Name.Lexeme) is { } choist)
+            HoistedTypedArrayBacking? directBacking =
+                TryGetDirectTypedArrayBacking(csi.Object, cta.ElementType, out var backing)
+                    ? backing
+                    : null;
+
+            // The concrete receiver remains the fallback when the whole-program backing proof
+            // does not hold. Keep its existing cast-only hoist intact.
+            LocalBuilder? recvLocal = null;
+            if (directBacking == null)
             {
-                recvLocal = choist.TypedLocal;
-            }
-            else
-            {
-                EmitExpression(csi.Object);
-                EnsureBoxed();
-                IL.Emit(OpCodes.Castclass, ctaType);
-                recvLocal = IL.DeclareLocal(ctaType);
-                IL.Emit(OpCodes.Stloc, recvLocal);
+                if (csi.Object is Expr.Variable cv
+                    && _ctx.TryGetHoistedTypedArray(cv.Name.Lexeme) is { } choist)
+                {
+                    recvLocal = choist.TypedLocal;
+                }
+                else
+                {
+                    EmitExpression(csi.Object);
+                    EnsureBoxed();
+                    IL.Emit(OpCodes.Castclass, ctaType);
+                    recvLocal = IL.DeclareLocal(ctaType);
+                    IL.Emit(OpCodes.Stloc, recvLocal);
+                }
             }
 
             // idx = (int)i  (native-int fast path when the index is an integer loop counter, #928)
@@ -2469,21 +2571,34 @@ public partial class ILEmitter
             var idxLocal = IL.DeclareLocal(_ctx.Types.Int32);
             IL.Emit(OpCodes.Stloc, idxLocal);
 
-            // cur = recv.GetUnboxed(idx)  → double
-            IL.Emit(OpCodes.Ldloc, recvLocal);
-            IL.Emit(OpCodes.Ldloc, idxLocal);
-            IL.Emit(OpCodes.Call, ctaGet);
+            // cur = direct backing read, or recv.GetUnboxed(idx) on the fallback path.
+            if (directBacking is { } directRead)
+            {
+                EmitDirectTypedArrayRead(directRead, idxLocal);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, recvLocal!);
+                IL.Emit(OpCodes.Ldloc, idxLocal);
+                IL.Emit(OpCodes.Call, ctaGet);
+            }
 
             // result = cur OP v  (double)
             EmitCompoundArithmeticDoubleOnStack(csi.Operator.Type, csi.Value);
             var resLocal = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Stloc, resLocal);
 
-            // recv.SetUnboxed(idx, result)
-            IL.Emit(OpCodes.Ldloc, recvLocal);
-            IL.Emit(OpCodes.Ldloc, idxLocal);
-            IL.Emit(OpCodes.Ldloc, resLocal);
-            IL.Emit(OpCodes.Call, ctaSet);
+            if (directBacking is { } directWrite)
+            {
+                EmitDirectTypedArrayWrite(directWrite, idxLocal, resLocal);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, recvLocal!);
+                IL.Emit(OpCodes.Ldloc, idxLocal);
+                IL.Emit(OpCodes.Ldloc, resLocal);
+                IL.Emit(OpCodes.Call, ctaSet);
+            }
 
             // The compound-assignment expression evaluates to the stored numeric result.
             IL.Emit(OpCodes.Ldloc, resLocal);
