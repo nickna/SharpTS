@@ -27,6 +27,7 @@ before starting the unchanged sample. Pass `-Mode interpreted` for source execut
 - Fifty document-level undo/redo steps and zoom from 25% to 400%.
 - Portable `.sharpaint` v1 projects with embedded imported PNGs.
 - PNG import/export, file drop, unsaved-change prompts, and keyboard shortcuts.
+- Adaptive width and height breakpoints that remain usable at small OS-scaled logical sizes.
 
 The project format is intentionally operation-backed instead of promising Paint.NET file
 compatibility. Each layer stores validated drawing commands; imported PNG bytes are embedded as a
@@ -57,3 +58,12 @@ discoverable without pretending the behavior exists.
 Pressure is normalized by SharpTS.Gui for mouse, pen, and touch input, but v1 intentionally uses a
 fixed width per gesture. Multi-document tabs, plug-ins, and Paint.NET format compatibility are out
 of scope.
+
+## Responsive layout
+
+SharpPaint treats `Window.onMetricsChanged` dimensions as DIPs. A compact width uses an icon tool
+rail and smaller command controls; a narrow width collapses Layers behind a toolbar button; a short
+height bounds and scrolls layer properties. The palette scrolls horizontally and both side panes
+scroll vertically, so no pane can draw over the palette or status bar. These are content
+breakpoints, not inverse-DPI scaling—the application continues to honor the Windows accessibility
+scale selected by the user.

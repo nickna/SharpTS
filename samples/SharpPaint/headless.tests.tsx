@@ -20,12 +20,37 @@ const eraserDriver = createDesktopTestDriver(eraserWindow);
 let cancelWindow: any = null;
 cancelWindow = application.createWindow(<SharpPaintShowcase requestClose={() => cancelWindow.close()} />);
 const cancelDriver = createDesktopTestDriver(cancelWindow);
+let responsiveWindow: any = null;
+responsiveWindow = application.createWindow(<SharpPaintShowcase requestClose={() => responsiveWindow.close()} />);
+const responsiveDriver = createDesktopTestDriver(responsiveWindow);
 const openProjectPath = join(process.cwd(), "SharpPaint.Headless.Open.sharpaint");
 const saveProjectPath = join(process.cwd(), "SharpPaint.Headless.Save.sharpaint");
 writeFileSync(openProjectPath, serializeProject(createDocument(320, 240)), "utf8");
 
 expect("initial canvas", driver.getText("command-count") === "1 commands · 1 layers");
 expect("paint surface automation", driver.getProperty("paint-surface", "automationName") === "Paint surface");
+expect("brush glyph content", driver.getText("brush-glyph") === "✎");
+expect("brush label content", driver.getText("brush-label") === "Brush");
+expect("filled-shapes label content", driver.getText("filled-label") === "Filled shapes");
+
+responsiveDriver.setWindowClientSize(840, 560);
+responsiveDriver.afterRender(() => {
+    expect("narrow mode is reported", responsiveDriver.getText("layout-mode") === "narrow");
+    expect("narrow layout hides layers", responsiveDriver.getProperty("layers-panel", "isVisible") === "False");
+    expect("narrow layout exposes layers toggle", responsiveDriver.getProperty("layers-toggle", "isVisible") === "True");
+    expect("short layout hides deferred layer action", responsiveDriver.getProperty("merge-layer", "isVisible") === "False");
+    responsiveDriver.click("layers-toggle");
+    responsiveDriver.afterRender(() => {
+        expect("narrow layers can be opened", responsiveDriver.getProperty("layers-panel", "isVisible") === "True");
+        responsiveDriver.setWindowClientSize(1180, 720);
+        responsiveDriver.afterRender(() => {
+            expect("wide mode is reported", responsiveDriver.getText("layout-mode") === "wide");
+            expect("wide layout retains layers", responsiveDriver.getProperty("layers-panel", "isVisible") === "True");
+            expect("wide layout hides layers toggle", responsiveDriver.getProperty("layers-toggle", "isVisible") === "False");
+            expect("wide layout restores deferred layer action", responsiveDriver.getProperty("merge-layer", "isVisible") === "True");
+        });
+    });
+});
 
 cancelDriver.pressPointer("paint-surface", { x: 16, y: 18 });
 cancelDriver.movePointer("paint-surface", { x: 48, y: 52 });

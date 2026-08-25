@@ -57,9 +57,11 @@ Replace `<version>` with the package version selected by the application.
 Applications create a session with `createDesktopApplication` and mount windows with
 `application.createWindow`. Public component APIs include state and lifecycle hooks, fragments,
 error boundaries, resources/styles, assets, dialogs, clipboard/display services, typed item
-templates, drawing, and the generated built-in control catalog.
+templates, drawing, retained content controls, reactive window metrics for adaptive DIP-based
+layouts, and the generated built-in control catalog.
 
-The `@sharpts/gui/testing` subpath provides a window-scoped Headless interaction driver.
+The `@sharpts/gui/testing` subpath provides a window-scoped Headless interaction driver, including
+deterministic logical window resizing for responsive-layout tests.
 `@sharpts/gui/devtools` provides read-only tree inspection and deterministic Headless PNG snapshots.
 Repository fault injection, scheduler manipulation, trace staging, renderer identity, and
 subscription counters are not application APIs.

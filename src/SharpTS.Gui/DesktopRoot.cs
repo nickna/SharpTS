@@ -10,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Platform.Storage;
 using Avalonia.Input;
 using Avalonia.Controls.Primitives;
+using Avalonia.Threading;
 
 namespace SharpTS.Gui;
 
@@ -421,6 +422,7 @@ public sealed class DesktopRoot : IDisposable
         SynchronizeKeyboard(mounted);
         SynchronizePointer(mounted, prepared.VNode);
         SynchronizeWindowClose(mounted);
+        SynchronizeWindowMetrics(mounted);
         SynchronizeDragDrop(mounted);
         ReconcileChildren(mounted, prepared.Children, prepared.VNode);
         UpdateRef(mounted, prepared.VNode);
@@ -444,6 +446,7 @@ public sealed class DesktopRoot : IDisposable
         mounted.LatestPointerMove = node.PointerMove;
         mounted.LatestPointerUp = node.PointerUp;
         mounted.LatestPointerCancel = node.PointerCancel;
+        mounted.LatestWindowMetricsChanged = node.WindowMetricsChanged;
         mounted.LatestCloseRequested = node.CloseRequested;
         mounted.LatestDragOver = node.DragOver;
         mounted.LatestDrop = node.Drop;
@@ -888,6 +891,7 @@ public sealed class DesktopRoot : IDisposable
             SynchronizeKeyboard(mounted);
             SynchronizePointer(mounted, mounted.VNode);
             SynchronizeWindowClose(mounted);
+            SynchronizeWindowMetrics(mounted);
             SynchronizeDragDrop(mounted);
             AttachWindowKeyReset(mounted);
         }
@@ -909,7 +913,7 @@ public sealed class DesktopRoot : IDisposable
             mounted.KeyDownHandler is not null || mounted.KeyUpHandler is not null ||
             mounted.PointerDownHandler is not null || mounted.PointerMoveHandler is not null ||
             mounted.PointerUpHandler is not null || mounted.PointerCancelHandler is not null ||
-            mounted.WindowClosingHandler is not null ||
+            mounted.WindowClosingHandler is not null || mounted.WindowSizeChangedHandler is not null ||
             mounted.DragOverHandler is not null || mounted.DropHandler is not null;
         if (attached == mounted.EventAttached)
             return;
@@ -973,6 +977,14 @@ public sealed class DesktopRoot : IDisposable
                 mounted.Control.PointerCaptureLost -= mounted.PointerCancelHandler;
             if (mounted.WindowClosingHandler is not null && mounted.Control is Window closingWindow)
                 closingWindow.Closing -= mounted.WindowClosingHandler;
+            if (mounted.WindowSizeChangedHandler is not null && mounted.Control is Window metricsWindow)
+            {
+                metricsWindow.SizeChanged -= mounted.WindowSizeChangedHandler;
+                metricsWindow.PositionChanged -= mounted.WindowPositionChangedHandler;
+                metricsWindow.ScalingChanged -= mounted.WindowScalingChangedHandler;
+                metricsWindow.PropertyChanged -= mounted.WindowPropertyChangedHandler;
+                metricsWindow.Screens.Changed -= mounted.ScreensChangedHandler;
+            }
             if (mounted.DragOverHandler is not null)
                 DragDrop.RemoveDragOverHandler(mounted.Control, mounted.DragOverHandler);
             if (mounted.DropHandler is not null)
@@ -984,6 +996,13 @@ public sealed class DesktopRoot : IDisposable
             mounted.PointerUpHandler = null;
             mounted.PointerCancelHandler = null;
             mounted.WindowClosingHandler = null;
+            mounted.WindowSizeChangedHandler = null;
+            mounted.WindowPositionChangedHandler = null;
+            mounted.WindowScalingChangedHandler = null;
+            mounted.WindowPropertyChangedHandler = null;
+            mounted.ScreensChangedHandler = null;
+            mounted.WindowMetricsPending = false;
+            mounted.LastWindowMetricsJson = null;
             mounted.DragOverHandler = null;
             mounted.DropHandler = null;
             mounted.PrimaryEventAttached = false;
@@ -1146,6 +1165,72 @@ public sealed class DesktopRoot : IDisposable
             mounted.WindowClosingHandler = null;
         }
         UpdateSubscriptionState(mounted);
+    }
+
+    private void SynchronizeWindowMetrics(MountedNode mounted)
+    {
+        if (mounted.Control is not Window window)
+            return;
+        if (mounted.LatestWindowMetricsChanged is not null && mounted.WindowSizeChangedHandler is null)
+        {
+            EventHandler<SizeChangedEventArgs> sizeHandler = (_, _) => QueueWindowMetrics(mounted, window);
+            EventHandler<PixelPointEventArgs> positionHandler = (_, _) => QueueWindowMetrics(mounted, window);
+            EventHandler scalingHandler = (_, _) => QueueWindowMetrics(mounted, window);
+            EventHandler<AvaloniaPropertyChangedEventArgs> propertyHandler = (_, args) =>
+            {
+                if (args.Property == Window.WindowStateProperty)
+                    QueueWindowMetrics(mounted, window);
+            };
+            EventHandler screensHandler = (_, _) => QueueWindowMetrics(mounted, window);
+            window.SizeChanged += sizeHandler;
+            window.PositionChanged += positionHandler;
+            window.ScalingChanged += scalingHandler;
+            window.PropertyChanged += propertyHandler;
+            window.Screens.Changed += screensHandler;
+            mounted.WindowSizeChangedHandler = sizeHandler;
+            mounted.WindowPositionChangedHandler = positionHandler;
+            mounted.WindowScalingChangedHandler = scalingHandler;
+            mounted.WindowPropertyChangedHandler = propertyHandler;
+            mounted.ScreensChangedHandler = screensHandler;
+            mounted.LastWindowMetricsJson = null;
+            QueueWindowMetrics(mounted, window);
+            UpdateSubscriptionState(mounted);
+        }
+        else if (mounted.LatestWindowMetricsChanged is null && mounted.WindowSizeChangedHandler is not null)
+        {
+            window.SizeChanged -= mounted.WindowSizeChangedHandler;
+            window.PositionChanged -= mounted.WindowPositionChangedHandler;
+            window.ScalingChanged -= mounted.WindowScalingChangedHandler;
+            window.PropertyChanged -= mounted.WindowPropertyChangedHandler;
+            window.Screens.Changed -= mounted.ScreensChangedHandler;
+            mounted.WindowSizeChangedHandler = null;
+            mounted.WindowPositionChangedHandler = null;
+            mounted.WindowScalingChangedHandler = null;
+            mounted.WindowPropertyChangedHandler = null;
+            mounted.ScreensChangedHandler = null;
+            mounted.LastWindowMetricsJson = null;
+            UpdateSubscriptionState(mounted);
+        }
+    }
+
+    private void QueueWindowMetrics(MountedNode mounted, Window window)
+    {
+        if (_disposed || mounted.Released || mounted.SuppressEvents || mounted.WindowMetricsPending)
+            return;
+        mounted.WindowMetricsPending = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            mounted.WindowMetricsPending = false;
+            if (_disposed || mounted.Released || mounted.LatestWindowMetricsChanged is null)
+                return;
+            string json = DesktopRuntimeContext.GetWindowMetricsJson(window);
+            if (string.Equals(json, mounted.LastWindowMetricsJson, StringComparison.Ordinal))
+                return;
+            mounted.LastWindowMetricsJson = json;
+            Action<string>? latest = mounted.LatestWindowMetricsChanged;
+            if (latest is not null)
+                PostGuestNotification(mounted, () => latest(json));
+        }, DispatcherPriority.Background);
     }
 
     private void DispatchPointer(

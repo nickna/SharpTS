@@ -102,6 +102,7 @@ public sealed record GuiVNode(
     Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? PointerMove = null,
     Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? PointerUp = null,
     Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? PointerCancel = null,
+    Action<string>? WindowMetricsChanged = null,
     Func<bool>? CloseRequested = null,
     bool AllowDrop = false,
     Func<string[], string?, string, bool, bool, bool, bool, string>? DragOver = null,

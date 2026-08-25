@@ -16,7 +16,7 @@ import {
     StatusBar,
     TextBlock,
     TextBox,
-    ToolBar,
+    WrapPanel,
     Window,
     getImageDimensions,
     renderDrawingToPng,
@@ -26,7 +26,7 @@ import {
     useReducer,
     useRef,
 } from "@sharpts/gui";
-import type { DrawingCommand, DrawingDocument } from "@sharpts/gui";
+import type { DrawingCommand, DrawingDocument, WindowMetricsEvent } from "@sharpts/gui";
 import { readFileSync, statSync, writeFileSync } from "fs";
 import { basename, extname } from "path";
 import {
@@ -83,6 +83,9 @@ interface AppState {
     readonly newDialog: boolean;
     readonly newWidth: string;
     readonly newHeight: string;
+    readonly windowWidth: number;
+    readonly windowHeight: number;
+    readonly layersPaneOpen: boolean;
 }
 
 type AppAction =
@@ -107,7 +110,9 @@ type AppAction =
     | { type: "status"; status: string }
     | { type: "showNew"; value: boolean }
     | { type: "newWidth"; value: string }
-    | { type: "newHeight"; value: string };
+    | { type: "newHeight"; value: string }
+    | { type: "metrics"; width: number; height: number }
+    | { type: "toggleLayers"; value: boolean };
 
 function initialState(): AppState {
     const document = createDocument();
@@ -129,6 +134,9 @@ function initialState(): AppState {
         newDialog: false,
         newWidth: "1024",
         newHeight: "768",
+        windowWidth: 1120,
+        windowHeight: 700,
+        layersPaneOpen: false,
     };
 }
 
@@ -206,6 +214,13 @@ function appReducer(state: AppState, action: any): AppState {
         case "showNew": return { ...state, newDialog: action.value as boolean };
         case "newWidth": return { ...state, newWidth: action.value as string };
         case "newHeight": return { ...state, newHeight: action.value as string };
+        case "metrics": {
+            const windowWidth = Math.max(1, Math.round(action.width as number));
+            const windowHeight = Math.max(1, Math.round(action.height as number));
+            if (windowWidth === state.windowWidth && windowHeight === state.windowHeight) return state;
+            return { ...state, windowWidth, windowHeight };
+        }
+        case "toggleLayers": return { ...state, layersPaneOpen: action.value as boolean };
     }
     return state;
 }
@@ -221,6 +236,13 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
     const selectedLayer = (document.layers.find(layer => layer.id === state.selectedLayerId) || document.layers[0]) as PaintLayer;
     const scaledWidth = Math.max(1, document.width * state.zoom);
     const scaledHeight = Math.max(1, document.height * state.zoom);
+    const compact = state.windowWidth < 1120;
+    const narrow = state.windowWidth < 900;
+    const short = state.windowHeight < 650;
+    const showLayers = !narrow || state.layersPaneOpen;
+    const toolRailWidth = compact ? 70 : 132;
+    const layersWidth = compact ? 220 : 250;
+    const swatchSize = compact ? 26 : 30;
 
     const pointOf = (event: PointerEvent): { x: number; y: number } => ({ x: event.x / state.zoom, y: event.y / state.zoom });
     const onPointerDown = (event: PointerEvent): boolean => {
@@ -393,7 +415,8 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
 
     return (
         <Window title={(state.history.dirty ? "● " : "") + "SharpPaint" + (state.filePath === null ? " · Untitled" : " · " + basename(state.filePath))}
-            width={1320} height={820} minWidth={920} minHeight={620} canResize={true} theme="light"
+            width={1120} height={700} minWidth={720} minHeight={480} canResize={true} theme="light"
+            onMetricsChanged={(event: WindowMetricsEvent) => dispatch({ type: "metrics", width: event.clientWidth, height: event.clientHeight })}
             onKeyDown={onKeyDown} onCloseRequested={onCloseRequested} allowDrop={true}
             onDragOver={event => event.files.length > 0 ? "copy" : "none"} onDrop={onDrop}>
             <Grid rows="*" columns="*">
@@ -416,67 +439,84 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                             <MenuItem header="Color adjustments · planned" isEnabled={false} toolTip="Needs pixel readback and filter primitives" />
                         </MenuItem>
                     </Menu>
-                    <ToolBar dock="top" spacing={8} margin={8}>
-                        <Button key="new" automationName="New document" toolTip="New document · Ctrl+N" onClick={requestNew}>New</Button>
-                        <Button key="open" automationName="Open document" toolTip="Open · Ctrl+O" onClick={requestOpen}>Open</Button>
-                        <Button key="save" automationName="Save document" toolTip="Save · Ctrl+S" onClick={() => saveProject(false)}>Save</Button>
-                        <Button key="undo" automationName="Undo" isEnabled={state.history.past.length > 0} onClick={() => dispatch({ type: "undo" })}>↶</Button>
-                        <Button key="redo" automationName="Redo" isEnabled={state.history.future.length > 0} onClick={() => dispatch({ type: "redo" })}>↷</Button>
-                        <TextBlock margin={8} foreground="#475569">Size</TextBlock>
-                        <Slider key="brush-size" automationName="Brush size" width={150} minimum={1} maximum={64} value={state.size} onValueChanged={value => dispatch({ type: "size", size: value })} />
-                        <TextBlock margin={5} minWidth={42}>{state.size + " px"}</TextBlock>
-                        <CheckBox isChecked={state.filled} onCheckedChanged={value => dispatch({ type: "filled", filled: value })} toolTip="Fill rectangles and ellipses">Filled shapes</CheckBox>
-                    </ToolBar>
+                    <Border dock="top" padding={8} background="#ffffff" borderBrush="#e2e8f0" borderThickness={1}>
+                        <WrapPanel spacing={8} orientation="horizontal">
+                            <Button key="new" automationName="New document" toolTip="New document · Ctrl+N" onClick={requestNew}>New</Button>
+                            <Button key="open" automationName="Open document" toolTip="Open · Ctrl+O" onClick={requestOpen}>Open</Button>
+                            <Button key="save" automationName="Save document" toolTip="Save · Ctrl+S" onClick={() => saveProject(false)}>Save</Button>
+                            <Button key="undo" automationName="Undo" isEnabled={state.history.past.length > 0} onClick={() => dispatch({ type: "undo" })}>↶</Button>
+                            <Button key="redo" automationName="Redo" isEnabled={state.history.future.length > 0} onClick={() => dispatch({ type: "redo" })}>↷</Button>
+                            <Button key="layers-toggle" automationName="Show layers" isVisible={narrow} onClick={() => dispatch({ type: "toggleLayers", value: true })}>Layers</Button>
+                            <TextBlock margin={8} foreground="#475569">Size</TextBlock>
+                            <Slider key="brush-size" automationName="Brush size" width={compact ? 110 : 150} minimum={1} maximum={64} value={state.size} onValueChanged={value => dispatch({ type: "size", size: value })} />
+                            <TextBlock margin={5} minWidth={42}>{state.size + " px"}</TextBlock>
+                            <CheckBox isChecked={state.filled} onCheckedChanged={value => dispatch({ type: "filled", filled: value })} toolTip="Fill rectangles and ellipses">
+                                <TextBlock key="filled-label" foreground="#1f2937">{compact ? "Filled" : "Filled shapes"}</TextBlock>
+                            </CheckBox>
+                        </WrapPanel>
+                    </Border>
                     <StatusBar dock="bottom" padding={8} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1}>
-                        <Grid columns="*,auto,180,70" rows="auto">
+                        <Grid columns={narrow ? "*,0,0,54" : compact ? "*,auto,120,60" : "*,auto,150,64"} rows="auto">
                             <TextBlock key="status" automationName="Status" foreground="#334155">{state.status}</TextBlock>
-                            <TextBlock gridColumn={1} margin={8} foreground="#64748b">{state.cursor === null ? "—" : Math.round(state.cursor.x) + ", " + Math.round(state.cursor.y)}</TextBlock>
-                            <Slider key="zoom" automationName="Zoom" gridColumn={2} minimum={0.25} maximum={4} value={state.zoom} onValueChanged={value => dispatch({ type: "zoom", zoom: value })} />
+                            <TextBlock gridColumn={1} margin={8} isVisible={!narrow} foreground="#64748b">{state.cursor === null ? "—" : Math.round(state.cursor.x) + ", " + Math.round(state.cursor.y)}</TextBlock>
+                            <Slider key="zoom" automationName="Zoom" gridColumn={2} isVisible={!narrow} minimum={0.25} maximum={4} value={state.zoom} onValueChanged={value => dispatch({ type: "zoom", zoom: value })} />
                             <TextBlock gridColumn={3} horizontalAlignment="right">{Math.round(state.zoom * 100) + "%"}</TextBlock>
+                            <TextBlock key="layout-mode" isVisible={false}>{narrow ? "narrow" : compact ? "compact" : short ? "short" : "wide"}</TextBlock>
                         </Grid>
                     </StatusBar>
                     <Border dock="bottom" background="#ffffff" borderBrush="#cbd5e1" borderThickness={1} padding={9}>
-                        <StackPanel orientation="horizontal" spacing={7}>
-                            <Border width={34} height={34} background={state.color} borderBrush="#0f172a" borderThickness={2} cornerRadius={5}><TextBlock> </TextBlock></Border>
-                            {COLORS.map(color => <Button key={color} automationName={"Color " + color} toolTip={color} width={30} height={30} background={color} onClick={() => dispatch({ type: "color", color })}> </Button>)}
-                            <TextBox key="custom-color" automationName="Custom color" width={104} text={state.color} maxLength={9} onTextChanged={value => { if (validColor(value)) dispatch({ type: "color", color: value }); }} />
-                        </StackPanel>
+                        <ScrollViewer horizontalScrollBarVisibility="auto" verticalScrollBarVisibility="disabled">
+                            <StackPanel orientation="horizontal" spacing={7}>
+                                <Border width={swatchSize + 4} height={swatchSize + 4} background={state.color} borderBrush="#0f172a" borderThickness={2} cornerRadius={5}><TextBlock> </TextBlock></Border>
+                                {COLORS.map(color => <Button key={color} automationName={"Color " + color} toolTip={color} width={swatchSize} height={swatchSize} background={color} onClick={() => dispatch({ type: "color", color })}> </Button>)}
+                                <TextBox key="custom-color" automationName="Custom color" width={104} text={state.color} maxLength={9} onTextChanged={value => { if (validColor(value)) dispatch({ type: "color", color: value }); }} />
+                            </StackPanel>
+                        </ScrollViewer>
                     </Border>
-                    <Border dock="left" width={108} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1} padding={10}>
-                        <StackPanel spacing={8}>
-                            <TextBlock fontSize={12} fontWeight="bold" foreground="#64748b">TOOLS</TextBlock>
-                            {toolButton("brush", "✎", "Brush · B", state, dispatch)}
-                            {toolButton("eraser", "⌫", "Eraser · E · removes pixels", state, dispatch)}
-                            {toolButton("line", "╱", "Line · L", state, dispatch)}
-                            {toolButton("rectangle", "□", "Rectangle · R", state, dispatch)}
-                            {toolButton("ellipse", "○", "Ellipse · O", state, dispatch)}
-                            <Button isEnabled={false} toolTip="Planned: needs pixel readback">Fill</Button>
-                            <Button isEnabled={false} toolTip="Planned: needs pixel sampling">Picker</Button>
-                            <Button isEnabled={false} toolTip="Planned: needs editable text overlays">Text</Button>
-                        </StackPanel>
+                    <Border dock="left" width={toolRailWidth} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1} padding={compact ? 7 : 10}>
+                        <ScrollViewer verticalScrollBarVisibility="auto" horizontalScrollBarVisibility="disabled">
+                            <StackPanel spacing={8}>
+                                <TextBlock fontSize={12} fontWeight="bold" horizontalAlignment={compact ? "center" : "left"} foreground="#64748b">{compact ? "" : "TOOLS"}</TextBlock>
+                                {toolButton("brush", "✎", "Brush · B", compact, state, dispatch)}
+                                {toolButton("eraser", "⌫", "Eraser · E · removes pixels", compact, state, dispatch)}
+                                {toolButton("line", "╱", "Line · L", compact, state, dispatch)}
+                                {toolButton("rectangle", "□", "Rectangle · R", compact, state, dispatch)}
+                                {toolButton("ellipse", "○", "Ellipse · O", compact, state, dispatch)}
+                                <Button isEnabled={false} toolTip="Planned: needs pixel readback">{compact ? "▣" : "Fill"}</Button>
+                                <Button isEnabled={false} toolTip="Planned: needs pixel sampling">{compact ? "◎" : "Picker"}</Button>
+                                <Button isEnabled={false} toolTip="Planned: needs editable text overlays">{compact ? "T" : "Text"}</Button>
+                            </StackPanel>
+                        </ScrollViewer>
                     </Border>
-                    <Border dock="right" width={260} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1} padding={12}>
-                        <StackPanel spacing={9}>
-                            <TextBlock fontSize={13} fontWeight="bold" foreground="#475569">LAYERS</TextBlock>
-                            <StackPanel orientation="horizontal" spacing={5}>
+                    <Border key="layers-panel" dock="right" width={layersWidth} isVisible={showLayers} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1} padding={12}>
+                        <Grid rows="auto,auto,*,auto" columns="*">
+                            <Grid columns="*,auto" rows="auto">
+                                <TextBlock fontSize={13} fontWeight="bold" foreground="#475569">LAYERS</TextBlock>
+                                <Button gridColumn={1} isVisible={narrow} automationName="Close layers" onClick={() => dispatch({ type: "toggleLayers", value: false })}>×</Button>
+                            </Grid>
+                            <WrapPanel gridRow={1} spacing={5} orientation="horizontal" margin={8}>
                                 <Button key="add-layer" automationName="Add layer" onClick={() => dispatch({ type: "addLayer" })}>＋</Button>
                                 <Button key="duplicate-layer" automationName="Duplicate layer" onClick={() => dispatch({ type: "duplicateLayer" })}>⧉</Button>
                                 <Button key="delete-layer" automationName="Delete layer" onClick={() => dispatch({ type: "deleteLayer" })}>−</Button>
                                 <Button key="raise-layer" automationName="Raise layer" onClick={() => dispatch({ type: "moveLayer", direction: 1 })}>↑</Button>
                                 <Button key="lower-layer" automationName="Lower layer" onClick={() => dispatch({ type: "moveLayer", direction: -1 })}>↓</Button>
-                            </StackPanel>
-                            <ScrollViewer height={330} verticalScrollBarVisibility="auto">
+                            </WrapPanel>
+                            <ScrollViewer gridRow={2} verticalScrollBarVisibility="auto" horizontalScrollBarVisibility="disabled">
                                 <StackPanel spacing={5}>
                                     {document.layers.slice().reverse().map(layer => layerRow(layer, state.selectedLayerId, dispatch))}
                                 </StackPanel>
                             </ScrollViewer>
-                            <TextBlock fontSize={12} foreground="#64748b">Layer name</TextBlock>
-                            <TextBox key="layer-name" automationName="Layer name" text={selectedLayer.name} maxLength={80} onTextChanged={name => dispatch({ type: "renameLayer", name })} />
-                            <TextBlock fontSize={12} foreground="#64748b">Opacity · {Math.round(selectedLayer.opacity * 100) + "%"}</TextBlock>
-                            <Slider key="layer-opacity" automationName="Layer opacity" minimum={0} maximum={1} value={selectedLayer.opacity} onValueChanged={value => dispatch({ type: "opacity", value })} />
-                            <Button isEnabled={false} toolTip="Planned: requires layer flattening without losing eraser semantics">Merge down · planned</Button>
-                            <TextBlock key="command-count" automationName="Command count" fontSize={11} foreground="#94a3b8">{commandCount + " commands · " + document.layers.length + " layers"}</TextBlock>
-                        </StackPanel>
+                            <ScrollViewer gridRow={3} maxHeight={short ? 132 : 210} verticalScrollBarVisibility="auto" horizontalScrollBarVisibility="disabled">
+                                <StackPanel spacing={8} margin={8}>
+                                    <TextBlock fontSize={12} foreground="#64748b">Layer name</TextBlock>
+                                    <TextBox key="layer-name" automationName="Layer name" text={selectedLayer.name} maxLength={80} onTextChanged={name => dispatch({ type: "renameLayer", name })} />
+                                    <TextBlock fontSize={12} foreground="#64748b">Opacity · {Math.round(selectedLayer.opacity * 100) + "%"}</TextBlock>
+                                    <Slider key="layer-opacity" automationName="Layer opacity" minimum={0} maximum={1} value={selectedLayer.opacity} onValueChanged={value => dispatch({ type: "opacity", value })} />
+                                    <Button key="merge-layer" isVisible={!short} isEnabled={false} toolTip="Planned: requires layer flattening without losing eraser semantics">Merge down · planned</Button>
+                                    <TextBlock key="command-count" automationName="Command count" fontSize={11} foreground="#94a3b8">{commandCount + " commands · " + document.layers.length + " layers"}</TextBlock>
+                                </StackPanel>
+                            </ScrollViewer>
+                        </Grid>
                     </Border>
                     <ScrollViewer horizontalScrollBarVisibility="auto" verticalScrollBarVisibility="auto">
                         <Border margin={28} padding={0} background="#ffffff" borderBrush="#64748b" borderThickness={1} width={scaledWidth} height={scaledHeight}>
@@ -521,11 +561,18 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
     );
 }
 
-function toolButton(tool: PaintTool, glyph: string, tip: string, state: AppState, dispatch: (action: AppAction) => void): JSX.Element {
+function toolButton(tool: PaintTool, glyph: string, tip: string, compact: boolean, state: AppState, dispatch: (action: AppAction) => void): JSX.Element {
     const active = state.tool === tool;
+    const content = compact
+        ? <TextBlock key={tool + "-glyph"} fontSize={18} foreground={active ? "#1d4ed8" : "#334155"}>{glyph}</TextBlock>
+        : <StackPanel orientation="horizontal" spacing={8}>
+            <TextBlock key={tool + "-glyph"} width={20} textAlignment="center" fontSize={17} foreground={active ? "#1d4ed8" : "#334155"}>{glyph}</TextBlock>
+            <TextBlock key={tool + "-label"} verticalAlignment="center" foreground={active ? "#1d4ed8" : "#334155"}>{toolLabel(tool)}</TextBlock>
+        </StackPanel>;
     return <Button key={tool} automationName={toolLabel(tool) + " tool"} toolTip={tip} height={46} fontSize={12}
+        horizontalContentAlignment={compact ? "center" : "left"}
         background={active ? "#dbeafe" : "#ffffff"} foreground={active ? "#1d4ed8" : "#334155"}
-        onClick={() => dispatch({ type: "tool", tool })}>{glyph + " " + toolLabel(tool)}</Button>;
+        onClick={() => dispatch({ type: "tool", tool })}>{content}</Button>;
 }
 function toolLabel(tool: PaintTool): string {
     switch (tool) { case "brush": return "Brush"; case "eraser": return "Eraser"; case "line": return "Line"; case "rectangle": return "Rectangle"; case "ellipse": return "Ellipse"; }

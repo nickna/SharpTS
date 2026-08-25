@@ -53,7 +53,23 @@ public sealed class SharpPaintHeadlessTests
         Assert.True(compiled.Count(item => item.Stage == "render-commit") >= 8);
     }
 
-    private static async Task<TraceEvent[]> RunAsync(string mode)
+    [Fact]
+    public async Task InterpretedSmokeCloseIgnoresQueuedMetricsRenderAfterDisposal()
+    {
+        TraceEvent[] events = await RunAsync(
+            "interpreted",
+            entryPoint: "main.tsx",
+            smokeClose: true);
+
+        Assert.Single(events, item => item.Stage == "guest-init-end");
+        Assert.Contains(events, item => item.Stage == "headless-window-shown");
+        Assert.Contains(events, item => item.Stage == "unmount");
+    }
+
+    private static async Task<TraceEvent[]> RunAsync(
+        string mode,
+        string entryPoint = "headless.tests.tsx",
+        bool smokeClose = false)
     {
         string root = FindRepositoryRoot();
 #if DEBUG
@@ -71,8 +87,8 @@ public sealed class SharpPaintHeadlessTests
             GuiInterpretedTestAssets.Stage(root, configuration, stage);
             string guestDirectory = Path.Combine(stage, "Guest");
             Directory.CreateDirectory(guestDirectory);
-            foreach (string file in new[] { "headless.tests.tsx", "SharpPaintApp.tsx", "document.ts" })
-                File.Copy(Path.Combine(root, "samples", "SharpPaint", file), Path.Combine(guestDirectory, file == "headless.tests.tsx" ? "main.tsx" : file), true);
+            foreach (string file in new[] { entryPoint, "SharpPaintApp.tsx", "document.ts" })
+                File.Copy(Path.Combine(root, "samples", "SharpPaint", file), Path.Combine(guestDirectory, file == entryPoint ? "main.tsx" : file), true);
             File.Copy(Path.Combine(conformanceRoot, "SharpPaint.Headless.Guest.dll"), Path.Combine(stage, "SharpTS.Gui.Guest.dll"), true);
 
             string tracePath = Path.Combine(stage, $"{mode}.json");
@@ -89,6 +105,8 @@ public sealed class SharpPaintHeadlessTests
             start.ArgumentList.Add("--headless");
             start.ArgumentList.Add("--trace");
             start.ArgumentList.Add(tracePath);
+            if (smokeClose)
+                start.Environment["SHARPTS_GUI_SMOKE_CLOSE"] = "1";
 
             using var process = Process.Start(start)
                 ?? throw new InvalidOperationException("Could not start the SharpPaint Headless host.");

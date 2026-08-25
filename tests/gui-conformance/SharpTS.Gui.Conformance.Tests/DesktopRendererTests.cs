@@ -1220,6 +1220,116 @@ public sealed class DesktopRendererTests : IDisposable
     }
 
     [Fact]
+    public void ContentControlsRetainOneRichChildAndCanReturnToTextContent()
+    {
+        using DesktopRoot root = CreateRoot();
+        var richChild = new GuiVNode("StackPanel", Key: "button-content", Children:
+        new GuiVNode[]
+        {
+            Text("✎", "icon"),
+            Text("Brush", "label"),
+        });
+        root.Render(Window(new GuiVNode(
+            "Button",
+            Key: "tool",
+            Foreground: "#334155",
+            Children: new GuiVNode[] { richChild })));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var button = Assert.IsType<Button>(root.FindControl("tool"));
+        var content = Assert.IsType<StackPanel>(button.Content);
+        Assert.Same(content, root.FindControl("button-content"));
+        var label = Assert.IsType<TextBlock>(root.FindControl("label"));
+        Assert.Equal("Brush", label.Text);
+        Assert.True(label.Bounds.Width > 0);
+        Assert.True(label.Bounds.Height > 0);
+        Assert.Equal(button.Foreground, label.Foreground);
+
+        root.Render(Window(new GuiVNode("Button", Key: "tool", Foreground: "#334155", Children:
+        new GuiVNode[]
+        {
+            richChild with { Children = new GuiVNode[] { Text("✎", "icon"), Text("Pencil", "label") } },
+        })));
+
+        Assert.Same(button, root.FindControl("tool"));
+        Assert.Same(content, button.Content);
+        Assert.Equal("Pencil", Assert.IsType<TextBlock>(root.FindControl("label")).Text);
+
+        root.Render(Window(new GuiVNode("Button", Key: "tool", Text: "Plain")));
+
+        Assert.Equal("Plain", button.Content);
+        Assert.Null(root.FindControl("button-content"));
+    }
+
+    [Fact]
+    public void WindowMetricsArePostLayoutDeduplicatedAndUseLatestCallback()
+    {
+        using DesktopRoot root = CreateRoot();
+        var first = new List<string>();
+        var latest = new List<string>();
+        GuiVNode MetricsWindow(Action<string>? callback) => new(
+            "Window",
+            Key: "window",
+            Width: 640,
+            Height: 480,
+            WindowMetricsChanged: callback,
+            Children: new GuiVNode[] { Text("content") });
+
+        root.Render(MetricsWindow(first.Add));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        string initial = Assert.Single(first);
+        using (JsonDocument payload = JsonDocument.Parse(initial))
+        {
+            Assert.True(payload.RootElement.GetProperty("clientWidth").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("clientHeight").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("scaling").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("workingAreaWidth").GetDouble() > 0);
+            Assert.True(payload.RootElement.GetProperty("pixelWorkingArea").GetProperty("width").GetInt32() > 0);
+        }
+        using (JsonDocument displays = JsonDocument.Parse(DesktopBridge.GetDesktopDisplaysJson()))
+        {
+            JsonElement display = displays.RootElement.EnumerateArray().First();
+            double scaling = display.GetProperty("scaling").GetDouble();
+            Assert.Equal(
+                display.GetProperty("bounds").GetProperty("width").GetDouble() / scaling,
+                display.GetProperty("boundsSize").GetProperty("width").GetDouble(),
+                precision: 6);
+            Assert.Equal(
+                display.GetProperty("workingArea").GetProperty("height").GetDouble() / scaling,
+                display.GetProperty("workingAreaSize").GetProperty("height").GetDouble(),
+                precision: 6);
+        }
+        Assert.Equal(1, root.ActiveSubscriptions);
+
+        root.Render(MetricsWindow(latest.Add));
+        DesktopTestingBridge.SetWindowClientSize(root, 520, 360);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Single(first);
+        string resized = Assert.Single(latest);
+        using (JsonDocument payload = JsonDocument.Parse(resized))
+        {
+            Assert.InRange(payload.RootElement.GetProperty("clientWidth").GetDouble(), 519, 521);
+            Assert.InRange(payload.RootElement.GetProperty("clientHeight").GetDouble(), 359, 361);
+        }
+
+        root.Window.WindowState = WindowState.Maximized;
+        Dispatcher.UIThread.RunJobs();
+        using (JsonDocument payload = JsonDocument.Parse(latest.Last()))
+            Assert.Equal("maximized", payload.RootElement.GetProperty("windowState").GetString());
+
+        root.Render(MetricsWindow(null));
+        Assert.Equal(0, root.ActiveSubscriptions);
+        int notificationsAfterRemoval = latest.Count;
+        DesktopTestingBridge.SetWindowClientSize(root, 500, 340);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(notificationsAfterRemoval, latest.Count);
+    }
+
+    [Fact]
     public void ThousandMountUpdateUnmountCyclesReleaseRootsControlsCallbacksRefsAndSubscriptions()
     {
         var retained = new List<WeakReference>();

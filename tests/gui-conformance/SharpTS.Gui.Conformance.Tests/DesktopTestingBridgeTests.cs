@@ -55,6 +55,26 @@ public sealed class DesktopTestingBridgeTests
     }
 
     [Fact]
+    public void TestingDriverResizesTheWindowInLogicalCoordinates()
+    {
+        using DesktopRuntimeRegistration runtime = Configure(headless: true);
+        using DesktopApplicationSession application = DesktopBridge.CreateDesktopApplication("explicit");
+        using DesktopRoot root = application.CreateWindowRoot(() => { }, null, false, true);
+        root.Render(Window("value"));
+        root.Window!.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        DesktopTestingBridge.SetWindowClientSize(root, 720, 480);
+
+        Assert.InRange(root.Window.ClientSize.Width, 719, 721);
+        Assert.InRange(root.Window.ClientSize.Height, 479, 481);
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DesktopTestingBridge.SetWindowClientSize(root, double.NaN, 480));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            DesktopTestingBridge.SetWindowClientSize(root, 720, 0));
+    }
+
+    [Fact]
     public void TestingDriverSupportsDeterministicPointerPhasesAndCancellation()
     {
         var events = new List<string>();

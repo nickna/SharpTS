@@ -276,10 +276,10 @@ internal static class CommonProperties
         _ => throw new ArgumentException($"Unsupported dock '{value}'."),
     };
 
-    private static bool IsSpecified(GuiVNode node, string property) =>
+    public static bool IsSpecified(GuiVNode node, string property) =>
         node.SpecifiedProperties.Contains(property, StringComparer.Ordinal);
 
-    private static bool ApplyStyled<T>(
+    public static bool ApplyStyled<T>(
         AvaloniaObject target,
         StyledProperty<T> property,
         T value,

@@ -35,6 +35,8 @@ export interface DesktopTestDriver {
     setComboBoxIndex(key: string, value: number): void;
     /** Replaces the numeric value of a keyed Slider. */
     setSliderValue(key: string, value: number): void;
+    /** Replaces the headless window client size in device-independent pixels. */
+    setWindowClientSize(width: number, height: number): void;
     /** Presses the primary mouse pointer at local coordinates on a keyed control. */
     pressPointer(key: string, point: { readonly x: number; readonly y: number }): void;
     /** Moves an active primary mouse pointer to local coordinates on its keyed control. */
@@ -91,6 +93,9 @@ export function createDesktopTestDriver(window: DesktopWindow): DesktopTestDrive
         },
         setSliderValue(key: string, value: number): void {
             DesktopTestingBridge.SetSliderValue(managed, key, value);
+        },
+        setWindowClientSize(width: number, height: number): void {
+            DesktopTestingBridge.SetWindowClientSize(managed, width, height);
         },
         pressPointer(key: string, point: { readonly x: number; readonly y: number }): void {
             DesktopTestingBridge.PressPointer(managed, key, point.x, point.y);

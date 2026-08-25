@@ -92,6 +92,8 @@ export type {
     PointerEvent,
     PointerType,
     PointerButton,
+    WindowState,
+    WindowMetricsEvent,
     DropEffect,
     DropEvent,
     Thickness,
@@ -182,6 +184,7 @@ export type {
     DesktopTrayIcon,
     DesktopPlatformInfo,
     DesktopDisplayBounds,
+    DesktopDisplaySize,
     DesktopDisplayInfo,
     DesktopNotificationOptions,
 } from "./runtime";

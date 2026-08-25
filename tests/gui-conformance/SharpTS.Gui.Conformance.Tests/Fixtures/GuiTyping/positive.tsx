@@ -7,6 +7,7 @@ import {
     Grid,
     DrawingCanvas,
     RichTextBlock,
+    StackPanel,
     TextBlock,
     Window,
     createDesktopApplication,
@@ -38,6 +39,7 @@ export const positive = (
         <CalculatorButton key="typed-component" definition={definition} active={false} onPress={() => {}} />
         <TextBlock>{["recursive", 1, false, null]}</TextBlock>
         <Button ref={buttonRef}>Text only</Button>
+        <Button><StackPanel orientation="horizontal"><TextBlock>✎</TextBlock><TextBlock>Brush</TextBlock></StackPanel></Button>
         <Border allowDrop onDragOver={event => event.files.length > 0 ? "copy" : "none"}
             onDrop={event => { void event.text; }}><TextBlock>One logical child</TextBlock></Border>
         <Badge label="custom" automationName="Custom badge" />
@@ -75,6 +77,7 @@ const accent: string | number | boolean | readonly number[] | null = mainWindow.
 void modalWindow.closed;
 void getDesktopPlatformInfo().applicationDirectory;
 void getDesktopDisplays()[0].scaling;
+void getDesktopDisplays()[0].workingAreaSize.width;
 void getLaunchArguments();
 void openExternal("https://example.com");
 void showItemInFolder("document.txt");

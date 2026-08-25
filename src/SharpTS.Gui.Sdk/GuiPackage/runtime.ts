@@ -13,6 +13,7 @@ import type {
     GuiElement,
     MutableRef,
     PointerEvent,
+    WindowMetricsEvent,
     SelectionMode,
     SignalSetter,
     SourceInfo,
@@ -361,6 +362,12 @@ function boolPredicate(handler: any, reporter: EventErrorReporter = null, tracke
         invokePredicate(() => handler(), true, reporter, tracker) === true;
     return result;
 }
+function windowMetricsAction(handler: any, reporter: EventErrorReporter = null, tracker: EventWorkTracker = null): any {
+    let result: any = null;
+    if (typeof handler === "function") result = (json: string): void =>
+        invokeEvent(() => handler(JSON.parse(json) as WindowMetricsEvent), reporter, tracker);
+    return result;
+}
 function pointerEvent(pointerId: number, pointerType: string, x: number, y: number,
     button: string, buttons: number, pressure: number,
     ctrl: boolean, alt: boolean, shift: boolean, meta: boolean): PointerEvent {
@@ -481,12 +488,12 @@ class ReactiveRoot {
     public setManaged(root: any): void { this.managed = root; }
     public setEventWorkTracker(tracker: any): void { this.managedEventWork = tracker; }
     public invalidate(): void {
-        if (this.disposed || this.scheduled) return;
+        if (this.disposed || this.managed === null || this.scheduled) return;
         if (this.rendering) throw new Error("State cannot be updated while rendering.");
         this.scheduled = true;
         DesktopBridge.QueueMicrotask((): void => {
             this.scheduled = false;
-            if (this.disposed) return;
+            if (this.disposed || this.managed === null) return;
             try { this.renderNow(); }
             catch (error) { this.failWindow(error); }
         });
@@ -599,15 +606,19 @@ class ReactiveRoot {
         const eventReporter = (error: unknown): void => this.reportEventError(error);
         const eventTracker = (value: any): void => this.trackEventWork(value);
         const ref: any = safe.ref === undefined ? null : safe.ref;
-        const textual = element.type === "TextBlock" || element.type === "Button" ||
-            element.type === "CheckBox" || element.type === "RadioButton" ||
-            element.type === "ToggleSwitch";
+        const contentControl = element.type === "Button" || element.type === "CheckBox" ||
+            element.type === "RadioButton" || element.type === "ToggleSwitch";
+        const contentValues: GuiChild[] = [];
+        if (contentControl) flatten(safe.children, contentValues);
+        const retainedContent = contentControl && contentValues.length === 1 &&
+            typeof contentValues[0] !== "string" && typeof contentValues[0] !== "number";
+        const textual = element.type === "TextBlock" || (contentControl && !retainedContent);
         const children = textual ? { fibers: [], nodes: [] } : this.materialize(safe.children, path, null, nearestBoundary);
         const key: any = nativeKey;
         let node: GuiVNode;
         const pad = thickness(safe.padding); const border = thickness(safe.borderThickness);
         switch (element.type) {
-            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, safe.onCloseRequested !== undefined, boolPredicate(safe.onCloseRequested, eventReporter, eventTracker), children.nodes, key, ref); break;
+            case "Window": node = DesktopBridge.CreateWindow(safe.title === undefined ? "SharpTS GUI" : safe.title, safe.width === undefined ? 720 : safe.width, safe.height === undefined ? 480 : safe.height, safe.canResize === undefined ? true : safe.canResize, safe.theme === undefined ? "system" : safe.theme, safe.onMetricsChanged !== undefined, windowMetricsAction(safe.onMetricsChanged, eventReporter, eventTracker), safe.onCloseRequested !== undefined, boolPredicate(safe.onCloseRequested, eventReporter, eventTracker), children.nodes, key, ref); break;
             case "StackPanel": case "ToolBar": node = DesktopBridge.CreateStackPanel(element.type, safe.spacing === undefined ? 0 : safe.spacing, element.type === "ToolBar" ? "horizontal" : (safe.orientation === undefined ? "vertical" : safe.orientation), children.nodes, key, ref); break;
             case "WrapPanel": node = DesktopBridge.CreateWrapPanel(safe.spacing === undefined ? 0 : safe.spacing, safe.orientation === undefined ? "horizontal" : safe.orientation, children.nodes, key, ref); break;
             case "DockPanel": node = DesktopBridge.CreateDockPanel(safe.lastChildFill === undefined ? true : safe.lastChildFill, children.nodes, key, ref); break;
@@ -616,7 +627,7 @@ class ReactiveRoot {
             case "ScrollViewer": node = DesktopBridge.CreateScrollViewer(safe.horizontalScrollBarVisibility || "auto", safe.verticalScrollBarVisibility || "auto", children.nodes, key, ref); break;
             case "Separator": node = DesktopBridge.CreateSeparator(key, ref); break;
             case "TextBlock": node = DesktopBridge.CreateTextBlock(textContent(safe.children), safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.fontStyle || "normal", safe.textWrapping || "noWrap", safe.textAlignment || "left", safe.foreground || null, key, ref); break;
-            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : textContent(safe.children), safe.isChecked === true, safe.groupName || null, action(safe.onClick, eventReporter, eventTracker), boolAction(safe.onCheckedChanged, eventReporter, eventTracker), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
+            case "Button": case "CheckBox": case "RadioButton": case "ToggleSwitch": case "MenuItem": node = DesktopBridge.CreateContentControl(element.type, element.type === "MenuItem" ? (safe.header || "") : (retainedContent ? "" : textContent(safe.children)), safe.isChecked === true, safe.groupName || null, action(safe.onClick, eventReporter, eventTracker), boolAction(safe.onCheckedChanged, eventReporter, eventTracker), safe.background || null, safe.foreground || null, pad[0], pad[1], pad[2], pad[3], safe.fontSize === undefined ? NaN : safe.fontSize, safe.fontWeight || "normal", safe.horizontalContentAlignment || "center", safe.verticalContentAlignment || "center", children.nodes, key, ref); break;
             case "TextBox": case "PasswordBox": node = DesktopBridge.CreateTextBox(element.type, element.type === "PasswordBox" ? (safe.value || "") : (safe.text || ""), safe.placeholder || null, safe.isReadOnly === true, safe.acceptsReturn === true, safe.maxLength === undefined ? 0 : safe.maxLength, element.type === "PasswordBox" && safe.revealPassword !== true, stringAction(element.type === "PasswordBox" ? safe.onValueChanged : safe.onTextChanged, eventReporter, eventTracker), key, ref); break;
             case "ComboBox": node = DesktopBridge.CreateComboBox((safe.items || []).slice(), safe.selectedIndex === undefined ? -1 : safe.selectedIndex, numberAction(safe.onSelectionChanged, eventReporter, eventTracker), key, ref); break;
             case "ListBox": node = DesktopBridge.CreateListBox((safe.items || []).slice(), (safe.selectedIndices || []).slice(), safe.selectionMode || "single", indicesAction(safe.onSelectionChanged, eventReporter, eventTracker), key, ref); break;
@@ -669,7 +680,7 @@ class ReactiveRoot {
     }
 
     public renderNow(): void {
-        if (this.disposed) return;
+        if (this.disposed || this.managed === null) return;
         this.rendering = true;
         for (const component of this.components) component.seen = false;
         for (const boundary of this.boundaries) boundary.seen = false;
@@ -679,7 +690,9 @@ class ReactiveRoot {
         try {
             const materialized = this.materialize(this.element, "root");
             if (materialized.nodes.length !== 1) throw new Error("A desktop window requires exactly one Window root.");
-            this.managed.Render(materialized.nodes[0]);
+            const managed = this.managed;
+            if (this.disposed || managed === null) return;
+            managed.Render(materialized.nodes[0]);
             this.fibers = materialized.fibers;
         } catch (error) {
             const value: any = error as any;
@@ -1263,15 +1276,22 @@ export interface DesktopPlatformInfo {
     /** Operating-system temporary directory. */
     temporaryDirectory: string;
 }
-/** Rectangle in desktop coordinate space. @category Desktop Services */
+/** Rectangle in physical desktop pixel coordinates. @category Desktop Services */
 export interface DesktopDisplayBounds {
-    /** Horizontal origin in device-independent pixels. */
+    /** Horizontal origin in physical desktop pixels. */
     x: number;
-    /** Vertical origin in device-independent pixels. */
+    /** Vertical origin in physical desktop pixels. */
     y: number;
-    /** Rectangle width in device-independent pixels. */
+    /** Rectangle width in physical desktop pixels. */
     width: number;
-    /** Rectangle height in device-independent pixels. */
+    /** Rectangle height in physical desktop pixels. */
+    height: number;
+}
+/** Display size expressed in device-independent pixels. @category Desktop Services */
+export interface DesktopDisplaySize {
+    /** Logical width after applying native display scaling. */
+    width: number;
+    /** Logical height after applying native display scaling. */
     height: number;
 }
 /** Native desktop display information. @category Desktop Services */
@@ -1284,10 +1304,14 @@ export interface DesktopDisplayInfo {
     scaling: number;
     /** Current native display orientation. */
     orientation: "landscape" | "portrait" | "landscapeflipped" | "portraitflipped" | "none";
-    /** Full display bounds. */
+    /** Full display bounds in physical desktop pixels. */
     bounds: DesktopDisplayBounds;
-    /** Bounds remaining after desktop shell work areas are excluded. */
+    /** Physical bounds remaining after desktop shell work areas are excluded. */
     workingArea: DesktopDisplayBounds;
+    /** Full display size in device-independent pixels. */
+    boundsSize: DesktopDisplaySize;
+    /** Usable display size in device-independent pixels. */
+    workingAreaSize: DesktopDisplaySize;
 }
 /** Options for showNotification. @category Desktop Services */
 export interface DesktopNotificationOptions {

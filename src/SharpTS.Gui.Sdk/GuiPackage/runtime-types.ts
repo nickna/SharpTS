@@ -24,6 +24,35 @@ export type TextAlignment = "left" | "center" | "right" | "justify";
 export type PointerType = "mouse" | "pen" | "touch" | "unknown";
 /** Button whose state changed for a pointer event. @category Core and Composition */
 export type PointerButton = "none" | "left" | "middle" | "right" | "x1" | "x2";
+/** Native desktop window presentation state. @category Core and Composition */
+export type WindowState = "normal" | "minimized" | "maximized" | "fullScreen";
+
+/** Coalesced post-layout metrics for the containing desktop window. @category Core and Composition */
+export interface WindowMetricsEvent {
+    /** Arranged client width in device-independent pixels. */
+    readonly clientWidth: number;
+    /** Arranged client height in device-independent pixels. */
+    readonly clientHeight: number;
+    /** Native pixels per device-independent pixel on the current display. */
+    readonly scaling: number;
+    /** Current native presentation state. */
+    readonly windowState: WindowState;
+    /** Operating-system name of the current display, when available. */
+    readonly displayName: string;
+    /** Whether the current display is the primary display. */
+    readonly isPrimary: boolean;
+    /** Current display work-area width in device-independent pixels. */
+    readonly workingAreaWidth: number;
+    /** Current display work-area height in device-independent pixels. */
+    readonly workingAreaHeight: number;
+    /** Current display work area in physical desktop pixels. */
+    readonly pixelWorkingArea: {
+        readonly x: number;
+        readonly y: number;
+        readonly width: number;
+        readonly height: number;
+    };
+}
 
 /** Normalized native pointer event in local device-independent coordinates. @category Core and Composition */
 export interface PointerEvent {

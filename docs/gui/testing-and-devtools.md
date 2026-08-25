@@ -53,6 +53,10 @@ one window and cannot resolve keys from another. `afterRender` schedules its cal
 interaction's posted event callback, promise-backed event work, desktop-service completion, and
 resulting render commits.
 
+`setWindowClientSize(width, height)` resizes the Headless window in DIPs. Combine it with
+`afterRender` and visibility or structural assertions to exercise responsive width and height
+breakpoints deterministically in both interpreted and compiled modes.
+
 Headless applications can queue deterministic results for the next message, open-file, save-file,
 or folder dialog through the driver. Each result is consumed once, and an unscripted dialog fails
 with an explicit test error instead of opening native UI. Clipboard reads and writes use an isolated

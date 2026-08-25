@@ -103,12 +103,13 @@ errors.
 
 ## Children, identity, and commit recovery
 
-Natural children are supported. Text-bearing controls (`TextBlock`, `Button`, `CheckBox`,
-`RadioButton`, and `ToggleSwitch`) accept string/number children; container controls accept
-elements, fragments, arrays, and conditional children. Stable `key` values preserve the complete
-logical component or fragment subtree, including native identity and hook state, when siblings
-move. Fragments are layout-transparent and never insert a native panel. Duplicate keys at any
-sibling level are rejected before native mutation.
+Natural children are supported. `TextBlock` accepts recursive text/number children. `Button`,
+`CheckBox`, `RadioButton`, and `ToggleSwitch` accept either textual content or one retained element,
+which supports accessible icon-and-label command layouts without exposing Avalonia templates.
+Container controls accept elements, fragments, arrays, and conditional children. Stable `key`
+values preserve the complete logical component or fragment subtree, including native identity and
+hook state, when siblings move. Fragments are layout-transparent and never insert a native panel.
+Duplicate keys at any sibling level are rejected before native mutation.
 
 Built-in descriptors validate parsed values before mutation. If a native setter fails during an
 update, the renderer reverses the commit to the last VNode tree. A second failure during recovery
@@ -128,7 +129,9 @@ disposes the damaged window root and reports a combined fatal host error.
 Props are direct and typed rather than style objects. Common props include size constraints,
 per-edge `margin`/`padding` tuples, alignment, visibility, enabled/opacity state, Grid and Dock
 placement, tooltip and automation names. Text/content controls add colors, font family/size/style/
-weight, alignment, and corner radius where supported. Colors accept Avalonia color strings.
+weight, alignment, and corner radius where supported. Omitted `TextBlock` typography and foreground
+props remain unset so native styles and containing content controls can supply inherited values.
+Colors accept Avalonia color strings.
 
 `useControlRef<T>()` returns a stable typed ref with `isAttached` and `focus()`. `onKeyDown` and
 `onKeyUp` receive normalized key names and Ctrl/Alt/Shift/Meta/repeat flags; returning `true` marks
@@ -143,6 +146,14 @@ without accumulating native subscriptions. Cancellation reports the pointer's la
 coordinates, buttons, pressure, and modifiers. `Window.onCloseRequested` may return `true` to cancel
 the native close request, which supports an asynchronous prompt followed by a one-shot call to the
 existing window object's `close()` method.
+
+`Window.onMetricsChanged` receives a coalesced notification after native layout settles. Its
+`clientWidth` and `clientHeight` are device-independent pixels (DIPs), so applications can select
+width and height breakpoints while continuing to honor operating-system scaling. The event also
+reports the native window state, pixels-per-DIP scaling, current display identity, logical
+work-area size, and the physical-pixel work-area rectangle. The initial notification is delivered
+after mount; retained windows use the latest callback and release native size/display
+subscriptions when the callback is removed or the window is disposed.
 
 Native notification callbacks run as posted guest tasks, after the routed native event has
 unwound. Return-valued key, pointer, drag-over, and close predicates remain synchronous, but their
@@ -206,10 +217,12 @@ Actions, images, progress updates, and click-activation callbacks are intentiona
 platform contract, so applications must not use notification interaction as a required workflow.
 
 `getDesktopDisplays()` requires a mounted window and reports every display visible to that window:
-name, primary state, pixel bounds, working area, orientation, and scaling factor. This is the
-supported basis for high-DPI and multiple-monitor layout decisions. Common `automationName`,
-keyboard handlers, typed ref `focus()`, committed text-change events (including IME commits), and
-the Window `system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
+name, primary state, orientation, and scaling factor. `bounds` and `workingArea` are physical
+desktop-pixel rectangles; `boundsSize` and `workingAreaSize` are their device-independent sizes.
+Use `Window.onMetricsChanged` for reactive layout of a particular window and
+`getDesktopDisplays()` for an on-demand topology snapshot. Common `automationName`, keyboard
+handlers, typed ref `focus()`, committed text-change events (including IME commits), and the Window
+`system`/`light`/`dark` theme selector map directly to Avalonia native behavior.
 
 ## GUI API 1 boundaries
 

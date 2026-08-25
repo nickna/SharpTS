@@ -34,6 +34,7 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? LatestPointerUp { get; set; }
     public Func<double, string, double, double, string, double, double, bool, bool, bool, bool, bool>? LatestPointerCancel { get; set; }
     public Func<bool>? LatestCloseRequested { get; set; }
+    public Action<string>? LatestWindowMetricsChanged { get; set; }
     public Func<string[], string?, string, bool, bool, bool, bool, string>? LatestDragOver { get; set; }
     public Action<string[], string?, string, bool, bool, bool, bool>? LatestDrop { get; set; }
     public EventHandler<Avalonia.Input.KeyEventArgs>? KeyDownHandler { get; set; }
@@ -43,6 +44,13 @@ internal sealed class MountedNode(GuiVNode vnode, NodeDescriptor descriptor, Con
     public EventHandler<Avalonia.Input.PointerReleasedEventArgs>? PointerUpHandler { get; set; }
     public EventHandler<Avalonia.Input.PointerCaptureLostEventArgs>? PointerCancelHandler { get; set; }
     public EventHandler<Avalonia.Controls.WindowClosingEventArgs>? WindowClosingHandler { get; set; }
+    public EventHandler<Avalonia.Controls.SizeChangedEventArgs>? WindowSizeChangedHandler { get; set; }
+    public EventHandler<Avalonia.Controls.PixelPointEventArgs>? WindowPositionChangedHandler { get; set; }
+    public EventHandler? WindowScalingChangedHandler { get; set; }
+    public EventHandler<Avalonia.AvaloniaPropertyChangedEventArgs>? WindowPropertyChangedHandler { get; set; }
+    public EventHandler? ScreensChangedHandler { get; set; }
+    public bool WindowMetricsPending { get; set; }
+    public string? LastWindowMetricsJson { get; set; }
     public Avalonia.Input.IPointer? CapturedPointer { get; set; }
     public bool SuppressPointerCancel { get; set; }
     public bool HasPointerState { get; set; }

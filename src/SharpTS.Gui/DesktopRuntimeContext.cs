@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -67,18 +68,56 @@ internal sealed class DesktopRuntimeContext
         EnsureOwnerThread();
         Window window = CurrentRoot?.Window
             ?? throw new InvalidOperationException("No desktop Window is mounted.");
-        DisplayInfo[] displays = window.Screens.All.Select(screen => new DisplayInfo(
-            screen.DisplayName ?? string.Empty,
-            screen.IsPrimary,
-            screen.Scaling,
-            screen.CurrentOrientation.ToString().ToLowerInvariant(),
-            new DisplayBounds(
-                screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height),
-            new DisplayBounds(
-                screen.WorkingArea.X, screen.WorkingArea.Y,
-                screen.WorkingArea.Width, screen.WorkingArea.Height))).ToArray();
+        DisplayInfo[] displays = window.Screens.All.Select(screen =>
+        {
+            double scaling = NormalizeScaling(screen.Scaling);
+            return new DisplayInfo(
+                screen.DisplayName ?? string.Empty,
+                screen.IsPrimary,
+                scaling,
+                screen.CurrentOrientation.ToString().ToLowerInvariant(),
+                new DisplayBounds(
+                    screen.Bounds.X, screen.Bounds.Y, screen.Bounds.Width, screen.Bounds.Height),
+                new DisplayBounds(
+                    screen.WorkingArea.X, screen.WorkingArea.Y,
+                    screen.WorkingArea.Width, screen.WorkingArea.Height),
+                new DisplaySize(screen.Bounds.Width / scaling, screen.Bounds.Height / scaling),
+                new DisplaySize(screen.WorkingArea.Width / scaling, screen.WorkingArea.Height / scaling));
+        }).ToArray();
         return JsonSerializer.Serialize(displays, DisplayJsonContext.Default.DisplayInfoArray);
     }
+
+    internal static string GetWindowMetricsJson(Window window)
+    {
+        Avalonia.Platform.Screen? screen = window.Screens.ScreenFromWindow(window)
+            ?? window.Screens.Primary
+            ?? window.Screens.All.FirstOrDefault();
+        double scaling = NormalizeScaling(screen?.Scaling ?? window.RenderScaling);
+        PixelRect workingArea = screen?.WorkingArea ?? new PixelRect(
+            0, 0,
+            Math.Max(1, (int)Math.Round(window.ClientSize.Width * scaling)),
+            Math.Max(1, (int)Math.Round(window.ClientSize.Height * scaling)));
+        var metrics = new WindowMetricsInfo(
+            window.ClientSize.Width,
+            window.ClientSize.Height,
+            scaling,
+            window.WindowState switch
+            {
+                Avalonia.Controls.WindowState.Minimized => "minimized",
+                Avalonia.Controls.WindowState.Maximized => "maximized",
+                Avalonia.Controls.WindowState.FullScreen => "fullScreen",
+                _ => "normal",
+            },
+            screen?.DisplayName ?? string.Empty,
+            screen?.IsPrimary ?? true,
+            workingArea.Width / scaling,
+            workingArea.Height / scaling,
+            new DisplayBounds(workingArea.X, workingArea.Y, workingArea.Width, workingArea.Height));
+        return JsonSerializer.Serialize(metrics, DisplayJsonContext.Default.WindowMetricsInfo);
+    }
+
+    private static double NormalizeScaling(double scaling) =>
+        double.IsFinite(scaling) && scaling > 0 ? scaling : 1;
 
     public DesktopApplicationSession CreateApplication(string shutdownMode)
     {
@@ -396,11 +435,25 @@ internal sealed record DisplayInfo(
     double Scaling,
     string Orientation,
     DisplayBounds Bounds,
-    DisplayBounds WorkingArea);
+    DisplayBounds WorkingArea,
+    DisplaySize BoundsSize,
+    DisplaySize WorkingAreaSize);
 internal sealed record DisplayBounds(double X, double Y, double Width, double Height);
+internal sealed record DisplaySize(double Width, double Height);
+internal sealed record WindowMetricsInfo(
+    double ClientWidth,
+    double ClientHeight,
+    double Scaling,
+    string WindowState,
+    string DisplayName,
+    bool IsPrimary,
+    double WorkingAreaWidth,
+    double WorkingAreaHeight,
+    DisplayBounds PixelWorkingArea);
 
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DisplayInfo[]))]
+[JsonSerializable(typeof(WindowMetricsInfo))]
 internal sealed partial class DisplayJsonContext : JsonSerializerContext;
 
 public sealed class DesktopApplicationSession : IDisposable

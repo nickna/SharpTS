@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Headless;
+using Avalonia.Threading;
 using System.Runtime.CompilerServices;
 
 namespace SharpTS.Gui;
@@ -120,6 +121,18 @@ public static class DesktopTestingBridge
 
     public static void SetSliderValue(DesktopRoot root, string key, double value) =>
         RequireControl<Slider>(root, key).Value = value;
+
+    public static void SetWindowClientSize(DesktopRoot root, double width, double height)
+    {
+        DesktopRoot validated = RequireRoot(root);
+        if (!double.IsFinite(width) || !double.IsFinite(height) || width < 1 || height < 1)
+            throw new ArgumentOutOfRangeException("width/height", "Window client dimensions must be positive finite values.");
+        Window window = RequireWindow(validated);
+        window.Width = width;
+        window.Height = height;
+        window.InvalidateMeasure();
+        Dispatcher.UIThread.RunJobs();
+    }
 
     public static void PressPointer(DesktopRoot root, string key, double x, double y)
     {

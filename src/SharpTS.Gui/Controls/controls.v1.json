@@ -443,6 +443,12 @@
       ],
       "events": [
         {
+          "name": "onMetricsChanged",
+          "type": "(event: WindowMetricsEvent) => void",
+          "setter": "event",
+          "documentation": "Receives coalesced post-layout client size, scaling, state, and current-display work-area metrics."
+        },
+        {
           "name": "onCloseRequested",
           "type": "() => boolean",
           "setter": "event",
@@ -876,9 +882,9 @@
       "nativeType": "Avalonia.Controls.Button",
       "adapter": "button",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "propsType": "ButtonProps",
       "handle": "ButtonHandle",
@@ -899,7 +905,7 @@
       "operations": [
         "focus"
       ],
-      "documentation": "Clickable textual button.",
+      "documentation": "Clickable button with text or one retained content element.",
       "trimming": [
         "Avalonia.Controls.Button"
       ]
@@ -1040,9 +1046,9 @@
       "nativeType": "Avalonia.Controls.CheckBox",
       "adapter": "check-box",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "propsType": "CheckBoxProps",
       "handle": "unknown",
@@ -1071,7 +1077,7 @@
       "operations": [
         "focus"
       ],
-      "documentation": "Boolean toggle with a textual label.",
+      "documentation": "Boolean toggle with text or one retained content element.",
       "trimming": [
         "Avalonia.Controls.CheckBox"
       ]
@@ -1081,9 +1087,9 @@
       "nativeType": "Avalonia.Controls.RadioButton",
       "adapter": "radio-button",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "propsType": "RadioButtonProps",
       "handle": "unknown",
@@ -1129,9 +1135,9 @@
       "nativeType": "Avalonia.Controls.ToggleSwitch",
       "adapter": "toggle-switch",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "propsType": "ToggleSwitchProps",
       "handle": "unknown",

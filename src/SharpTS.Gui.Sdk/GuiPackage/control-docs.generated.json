@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "schemaHash": "6889fba2a0a8adefcca41c27cce622d91e07847d31875d42d6070bdf2e9ea66e",
+  "schemaHash": "9d07a1a4b39807ac966b79f227cf81f012bd735c41c1cc340ea446bc69d48d27",
   "controls": [
     {
       "kind": "Window",
@@ -320,6 +320,14 @@
             "light",
             "dark"
           ]
+        },
+        {
+          "name": "onMetricsChanged",
+          "type": "(event: WindowMetricsEvent) =\u003E void",
+          "documentation": "Receives coalesced post-layout client size, scaling, state, and current-display work-area metrics.",
+          "required": false,
+          "default": null,
+          "enumValues": null
         },
         {
           "name": "onCloseRequested",
@@ -3233,11 +3241,11 @@
       "propsType": "ButtonProps",
       "handle": "ButtonHandle",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
-      "documentation": "Clickable textual button.",
+      "documentation": "Clickable button with text or one retained content element.",
       "props": [
         {
           "name": "ref",
@@ -4541,11 +4549,11 @@
       "propsType": "CheckBoxProps",
       "handle": "unknown",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
-      "documentation": "Boolean toggle with a textual label.",
+      "documentation": "Boolean toggle with text or one retained content element.",
       "props": [
         {
           "name": "ref",
@@ -4961,9 +4969,9 @@
       "propsType": "RadioButtonProps",
       "handle": "unknown",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "documentation": "Mutually exclusive grouped toggle.",
       "props": [
@@ -5389,9 +5397,9 @@
       "propsType": "ToggleSwitchProps",
       "handle": "unknown",
       "children": {
-        "model": "text",
+        "model": "content",
         "minimum": 0,
-        "maximum": 0
+        "maximum": 1
       },
       "documentation": "Switch-style boolean toggle.",
       "props": [
