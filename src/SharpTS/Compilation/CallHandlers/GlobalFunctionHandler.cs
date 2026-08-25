@@ -1,5 +1,6 @@
 using SharpTS.Compilation.Emitters;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation.CallHandlers;
 
@@ -19,6 +20,15 @@ public class GlobalFunctionHandler : ICallHandler
         var il = emitter.IL;
         var ctx = emitter.Context;
 
+        if (emitter.HasVariable(v.Name.Lexeme))
+            return false;
+
+        if (v.Name.Lexeme == "parseInt"
+            && ctx.RuntimeFeatures?.UsesGlobalParseIntMutation == true)
+        {
+            return EmitLiveGlobalFunctionCall(emitter, il, ctx, call, "parseInt");
+        }
+
         return v.Name.Lexeme switch
         {
             "eval" => EmitEval(emitter, il, ctx, call),
@@ -35,6 +45,25 @@ public class GlobalFunctionHandler : ICallHandler
             "btoa" => EmitBase64Global(emitter, il, ctx, call, ctx.Runtime!.BufferBtoa),
             _ => false
         };
+    }
+
+    private static bool EmitLiveGlobalFunctionCall(
+        IEmitterContext emitter,
+        System.Reflection.Emit.ILGenerator il,
+        CompilationContext ctx,
+        Expr.Call call,
+        string name)
+    {
+        // A bare call to a mutable global binding must observe the current
+        // globalThis property. Undefined preserves ordinary call-this binding:
+        // sloppy functions receive globalThis and strict functions keep undefined.
+        il.Emit(System.Reflection.Emit.OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+        il.Emit(System.Reflection.Emit.OpCodes.Ldstr, name);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.GlobalThisGetProperty);
+        emitter.EmitArgsArrayWithSpread(call.Arguments);
+        il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        emitter.SetStackUnknown();
+        return true;
     }
 
     /// <summary>
@@ -157,12 +186,37 @@ public class GlobalFunctionHandler : ICallHandler
 
     private static bool EmitParseInt(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
+        if (call.Arguments.Count is 1 or 2
+            && IsStaticallyString(ctx.TypeMap?.Get(call.Arguments[0]))
+            && (call.Arguments.Count == 1
+                || ExpressionEmitterBase.TryGetInt32Literal(call.Arguments[1], out _)))
+        {
+            int radix = 0;
+            if (call.Arguments.Count == 2)
+                _ = ExpressionEmitterBase.TryGetInt32Literal(call.Arguments[1], out radix);
+
+            emitter.EmitExpression(call.Arguments[0]);
+            il.Emit(System.Reflection.Emit.OpCodes.Castclass, ctx.Types.String);
+            il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, radix);
+            il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.NumberParseIntString);
+            emitter.SetStackType(StackType.Double);
+            return true;
+        }
+
         if (call.Arguments.Count > 0) { emitter.EmitExpression(call.Arguments[0]); emitter.EmitBoxIfNeeded(call.Arguments[0]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldnull); }
         if (call.Arguments.Count > 1) { emitter.EmitExpression(call.Arguments[1]); emitter.EmitBoxIfNeeded(call.Arguments[1]); } else { il.Emit(System.Reflection.Emit.OpCodes.Ldc_I4, 10); il.Emit(System.Reflection.Emit.OpCodes.Box, ctx.Types.Int32); }
         il.Emit(System.Reflection.Emit.OpCodes.Call, ctx.Runtime!.NumberParseInt);
         emitter.SetStackType(StackType.Double);
         return true;
     }
+
+    private static bool IsStaticallyString(TypeInfo? type) => type switch
+    {
+        TypeInfo.String => true,
+        TypeInfo.StringLiteral => true,
+        TypeInfo.Union union => union.Types.Count > 0 && union.Types.All(IsStaticallyString),
+        _ => false
+    };
 
     private static bool EmitParseFloat(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {

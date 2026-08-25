@@ -154,6 +154,12 @@ public sealed class RuntimeFeatureSet
     // prototype-chain mutation API, or __proto__ access makes a backing-list-only
     // array append unsafe. The discarded-result push fast path requires this false.
     public bool UsesArrayPrototypeMutation { get; set; } = true;
+    // Number prototype/static mutation makes typed number method calls observable
+    // through ordinary property lookup. Direct formatting requires this false.
+    public bool UsesNumberPrototypeMutation { get; set; } = true;
+    // A write to the global parseInt binding (or opaque eval) requires live
+    // globalThis lookup instead of the direct typed parsing intrinsic.
+    public bool UsesGlobalParseIntMutation { get; set; } = true;
 
     // ── Typed arrays ──────────────────────────────────────────────────────
     /// <summary>

@@ -597,7 +597,7 @@ public abstract partial class ExpressionEmitterBase
     /// lookups to the built-in string prototype, and <c>InvokeMethodValue</c> binds the
     /// receiver so the built-in can read it back.
     /// </summary>
-    private void EmitDynamicMethodCallPreservingThis(Expr obj, string methodName, List<Expr> arguments)
+    protected void EmitDynamicMethodCallPreservingThis(Expr obj, string methodName, List<Expr> arguments)
     {
         EmitExpression(obj);
         EnsureBoxed();
@@ -1558,6 +1558,9 @@ public abstract partial class ExpressionEmitterBase
 
         // Promise instance methods: promise.then/catch/finally
         string methodName = methodGet.Name.Lexeme;
+        if (TryEmitStableNumberConversionCall(methodGet, c.Arguments))
+            return true;
+
         if (methodName is "then" or "catch" or "finally"
             && Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true)
         {

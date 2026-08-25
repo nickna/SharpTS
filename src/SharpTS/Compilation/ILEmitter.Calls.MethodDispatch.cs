@@ -70,6 +70,9 @@ public partial class ILEmitter
     {
         string methodName = methodGet.Name.Lexeme;
 
+        if (TryEmitStableNumberConversionCall(methodGet, arguments))
+            return;
+
         // Promoted typed-array local push (#857/#860): append unboxed elements directly to the
         // bare List<T> via the typed helper — bypassing ArrayEmitter's $Array unwrap/copy and the
         // per-element boxing. Handled here (not in ArrayEmitter) because EnsureDouble/EnsureBoolean
@@ -285,6 +288,12 @@ public partial class ILEmitter
             && !(_ctx.RuntimeFeatures?.UsesDatePrototypeMutation == true
                 && methodName is "valueOf" or "toString"))
         {
+            if (_ctx.RuntimeFeatures?.UsesNumberPrototypeMutation == true)
+            {
+                EmitDynamicMethodCallPreservingThis(methodGet.Object, methodName, arguments);
+                return;
+            }
+
             // Check if we know it's a number at compile time
             if (objType is TypeSystem.TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or TypeSystem.TypeInfo.NumberLiteral)
             {

@@ -17,6 +17,13 @@ public interface IEmitterContext
     CompilationContext Context { get; }
 
     /// <summary>
+    /// Returns whether the current lexical scope contains a binding with this
+    /// name. Call handlers use this before selecting a global intrinsic so a
+    /// parameter or local with a built-in name retains ordinary value dispatch.
+    /// </summary>
+    bool HasVariable(string name);
+
+    /// <summary>
     /// Gets the current ILGenerator for emitting IL instructions.
     /// </summary>
     ILGenerator IL { get; }
