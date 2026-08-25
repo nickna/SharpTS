@@ -1,0 +1,269 @@
+using System.Reflection;
+using System.Reflection.Emit;
+using SharpTS.Compilation;
+using SharpTS.Parsing;
+using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
+using Xunit;
+
+namespace SharpTS.Tests.CompilerTests;
+
+public sealed class StableNumericStringConversionTests
+{
+    [Fact]
+    public void StableTypedConversions_PreserveNumericSemantics()
+    {
+        const string source = """
+            function format(value: number): string {
+                return value.toString() + "|" + value.toString(10)
+                    + "|" + value.toFixed() + "|" + value.toFixed(2);
+            }
+
+            console.log(format(12.34));
+            console.log((-0).toString(), (-0).toFixed(2));
+            console.log((1e21).toFixed(2), (1e-6).toString(), (1e-7).toString());
+            console.log((NaN).toFixed(1), (Infinity).toFixed(1));
+            console.log(
+                parseInt("42"),
+                parseInt("0x10"),
+                parseInt("0x10", 16),
+                Object.is(parseInt("-0", 10), -0),
+                parseInt("101tail", 2),
+                parseInt("z", 36),
+                Number.isNaN(parseInt("x", 10)));
+            """;
+
+        const string expected =
+            "12.34|12.34|12|12.34\n" +
+            "0 0.00\n" +
+            "1e+21 0.000001 1e-7\n" +
+            "NaN Infinity\n" +
+            "42 16 16 true 5 35 true\n";
+
+        Assert.Equal(expected, TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void StableTypedConversions_PassIlVerification()
+    {
+        Assert.Empty(TestHarness.CompileAndVerifyOnly("""
+            function render(value: number): string {
+                return value.toString(10) + value.toFixed(2);
+            }
+            function read(value: string): number {
+                return parseInt(value, 10);
+            }
+            console.log(render(read("12")));
+            """));
+    }
+
+    [Fact]
+    public void StableTypedConversions_CallTypedRuntimeHelpers()
+    {
+        Assembly assembly = Compile("""
+            function counterLengths(n: number): number {
+                let total: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    total += i.toString().length;
+                }
+                return total;
+            }
+            function render(value: number): string { return value.toString(10); }
+            function fixed(value: number): string { return value.toFixed(2); }
+            function read(value: string): number { return parseInt(value, 10); }
+            """);
+
+        AssertCalls(assembly, "counterLengths", "ConcatStringInt64");
+        AssertCalls(assembly, "render", "FormatNumber");
+        AssertCalls(assembly, "fixed", "NumberToFixedDouble");
+        AssertCalls(assembly, "read", "NumberParseIntString");
+
+        foreach (string function in new[] { "counterLengths", "render", "fixed", "read" })
+        {
+            MethodInfo method = FindFunction(assembly, function);
+            Assert.DoesNotContain(CalledMethods(method), called =>
+                called.Name is "NumberToStringRadix" or "NumberToFixed" or
+                    "NumberParseInt" or "InvokeMethodValue");
+        }
+
+        Assert.DoesNotContain(Instructions(FindFunction(assembly, "read")), instruction =>
+            instruction.OpCode == OpCodes.Box);
+        Assert.DoesNotContain(Instructions(FindFunction(assembly, "fixed")), instruction =>
+            instruction.OpCode == OpCodes.Box);
+    }
+
+    [Fact]
+    public void TypedParseIntLoop_DoesNotAllocatePerIteration()
+    {
+        Assembly assembly = Compile("""
+            function run(n: number): number {
+                let total: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    total += parseInt("12345", 10);
+                }
+                return total;
+            }
+            """);
+        var run = FindFunction(assembly, "run").CreateDelegate<Func<double, double>>();
+
+        Assert.Equal(123450, run(10));
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        double result = run(100_000);
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+
+        Assert.Equal(1_234_500_000, result);
+        Assert.True(allocated <= 256,
+            $"Typed parseInt allocated {allocated:N0} bytes in the hot loop.");
+    }
+
+    [Theory, ModeData]
+    public void NumberPrototypeMutation_RetainsLiveDispatch(ExecutionMode mode)
+    {
+        const string source = """
+            const originalToString: any = Number.prototype.toString;
+            const originalToFixed: any = Number.prototype.toFixed;
+
+            (Number.prototype as any).toString = function(): string { return "patched-string"; };
+            (Number.prototype as any).toFixed = function(): string { return "patched-fixed"; };
+            console.log((5).toString(), (5).toFixed(2));
+
+            (Number.prototype as any).toString = originalToString;
+            (Number.prototype as any).toFixed = originalToFixed;
+            """;
+
+        Assert.Equal("patched-string patched-fixed\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void ReassignedGlobalParseInt_RetainsLiveDispatch()
+    {
+        const string source = """
+            const originalParseInt: any = globalThis.parseInt;
+            (globalThis as any).parseInt = function(): number { return 77; };
+            console.log(parseInt("10", 10));
+            (globalThis as any).parseInt = originalParseInt;
+            """;
+
+        Assert.Equal("77\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Theory, ModeData]
+    public void ShadowedParseInt_RetainsValueDispatch(ExecutionMode mode)
+    {
+        const string source = """
+            function invoke(
+                parseInt: (value: string, radix: number) => number
+            ): number {
+                return parseInt("10", 10);
+            }
+            console.log(invoke((_value, _radix) => 99));
+            """;
+
+        Assert.Equal("99\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void AsyncTypedConversions_AreCorrect(ExecutionMode mode)
+    {
+        const string source = """
+            async function convert(value: number): Promise<string> {
+                await Promise.resolve(0);
+                return value.toString() + "|" + value.toFixed(2)
+                    + "|" + parseInt("12", 10);
+            }
+            convert(3.5).then(value => console.log(value));
+            """;
+
+        Assert.Equal("3.5|3.50|12\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void DynamicArguments_KeepGeneralNumberConversionHelpers()
+    {
+        Assembly assembly = Compile("""
+            function render(value: number, radix: number): string {
+                return value.toString(radix);
+            }
+            function fixed(value: number, digits: number): string {
+                return value.toFixed(digits);
+            }
+            """);
+
+        AssertCalls(assembly, "render", "NumberToStringRadix");
+        AssertCalls(assembly, "fixed", "NumberToFixed");
+    }
+
+    private static Assembly Compile(string source)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        TypeMap typeMap = new TypeChecker().Check(statements);
+        var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(statements);
+        var compiler = new ILCompiler($"numeric_string_conversions_{Guid.NewGuid():N}");
+        compiler.Compile(statements, typeMap, deadCodeInfo);
+        return Assembly.Load(compiler.SaveToBytes());
+    }
+
+    private static MethodInfo FindFunction(Assembly assembly, string name) =>
+        assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
+
+    private static void AssertCalls(Assembly assembly, string function, string helper) =>
+        Assert.Contains(CalledMethods(FindFunction(assembly, function)),
+            called => called.Name == helper);
+
+    private static IEnumerable<MethodBase> CalledMethods(MethodInfo method) =>
+        Instructions(method)
+            .Where(instruction => instruction.Operand is MethodBase)
+            .Select(instruction => (MethodBase)instruction.Operand!);
+
+    private static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> Instructions(MethodInfo method)
+    {
+        byte[] il = method.GetMethodBody()?.GetILAsByteArray()
+            ?? throw new InvalidOperationException($"Method '{method.Name}' has no IL body.");
+        Module module = method.Module;
+
+        for (int offset = 0; offset < il.Length;)
+        {
+            byte first = il[offset++];
+            short value = first == 0xfe
+                ? unchecked((short)(0xfe00 | il[offset++]))
+                : first;
+            OpCode opCode = OpCodeByValue[value];
+            MemberInfo? operand = null;
+            if (opCode.OperandType is OperandType.InlineMethod or OperandType.InlineType)
+            {
+                int token = BitConverter.ToInt32(il, offset);
+                operand = opCode.OperandType == OperandType.InlineMethod
+                    ? module.ResolveMethod(token)
+                    : module.ResolveType(token);
+            }
+
+            int operandSize = opCode.OperandType switch
+            {
+                OperandType.InlineNone => 0,
+                OperandType.ShortInlineBrTarget or OperandType.ShortInlineI or
+                    OperandType.ShortInlineVar => 1,
+                OperandType.InlineVar => 2,
+                OperandType.InlineI or OperandType.InlineBrTarget or
+                    OperandType.InlineField or OperandType.InlineMethod or
+                    OperandType.InlineSig or OperandType.InlineString or
+                    OperandType.InlineTok or OperandType.InlineType or
+                    OperandType.ShortInlineR => 4,
+                OperandType.InlineI8 or OperandType.InlineR => 8,
+                OperandType.InlineSwitch => 4 + 4 * BitConverter.ToInt32(il, offset),
+                _ => throw new InvalidOperationException(
+                    $"Unsupported IL operand type {opCode.OperandType}.")
+            };
+            offset += operandSize;
+            yield return (opCode, operand);
+        }
+    }
+
+    private static readonly IReadOnlyDictionary<short, OpCode> OpCodeByValue =
+        typeof(OpCodes)
+            .GetFields(BindingFlags.Public | BindingFlags.Static)
+            .Where(field => field.FieldType == typeof(OpCode))
+            .Select(field => (OpCode)field.GetValue(null)!)
+            .ToDictionary(opCode => opCode.Value);
+}

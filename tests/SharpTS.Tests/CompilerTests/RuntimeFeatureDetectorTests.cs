@@ -175,6 +175,38 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("const value: number = 1; value.toString();", false)]
+    [InlineData("const prototype = Number.prototype;", true)]
+    [InlineData("Number.prototype.toString = function() { return 'x'; };", true)]
+    [InlineData("Number.prototype['toFixed'] = function() { return 'x'; };", true)]
+    [InlineData("const N = Number; N.prototype.toString = function() { return 'x'; };", true)]
+    [InlineData("const p = Number.prototype; p.toFixed = function() { return 'x'; };", true)]
+    [InlineData("Object.defineProperty(Number.prototype, 'x', { value: 1 });", true)]
+    [InlineData("eval('void 0');", true)]
+    public void DetectsNumberPrototypeMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(expected, features.UsesNumberPrototypeMutation);
+    }
+
+    [Theory]
+    [InlineData("parseInt('10', 10);", false)]
+    [InlineData("globalThis.parseInt = function() { return 1; };", true)]
+    [InlineData("globalThis['parseInt'] = function() { return 1; };", true)]
+    [InlineData("parseInt = function() { return 1; };", true)]
+    [InlineData("eval('void 0');", true)]
+    public void DetectsGlobalParseIntMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.Equal(expected, features.UsesGlobalParseIntMutation);
+    }
+
+    [Theory]
     [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; const isLeaf = node.left === null; console.log(isLeaf);", true)]
     [InlineData("const node: { left: object | null; right: object | null } = { left: null, right: null }; node.left = null;", false)]
     [InlineData("export const node: { left: object | null; right: object | null } = { left: null, right: null };", false)]

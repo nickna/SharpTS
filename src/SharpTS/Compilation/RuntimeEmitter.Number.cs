@@ -14,6 +14,7 @@ public partial class RuntimeEmitter
     {
         // Emit helper methods first (they're used by other methods)
         EmitGetDigitValue(typeBuilder, runtime);
+        EmitParseIntStringHelper(typeBuilder, runtime);
         EmitParseIntHelper(typeBuilder, runtime);
         EmitConvertIntToRadix(typeBuilder, runtime);
         EmitGetValidFloatPart(typeBuilder, runtime);
@@ -26,10 +27,205 @@ public partial class RuntimeEmitter
         EmitNumberIsSafeInteger(typeBuilder, runtime);
         EmitGlobalIsNaN(typeBuilder, runtime);
         EmitGlobalIsFinite(typeBuilder, runtime);
+        EmitNumberToFixedDouble(typeBuilder, runtime);
         EmitNumberToFixed(typeBuilder, runtime);
         EmitNumberToPrecision(typeBuilder, runtime);
         EmitNumberToExponential(typeBuilder, runtime);
         EmitNumberToStringRadix(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits the allocation-free typed parse core used when the caller has already
+    /// proved the input is a string and the radix is a native Int32. The general
+    /// object/object helper remains responsible for observable JS coercion.
+    /// </summary>
+    private void EmitParseIntStringHelper(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "NumberParseIntString",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.String, _types.Int32]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        runtime.NumberParseIntString = method;
+
+        var il = method.GetILGenerator();
+        var strLocal = il.DeclareLocal(_types.String);
+        var radixLocal = il.DeclareLocal(_types.Int32);
+        var signLocal = il.DeclareLocal(_types.Int32);
+        var startLocal = il.DeclareLocal(_types.Int32);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var digitLocal = il.DeclareLocal(_types.Int32);
+        var prefixCharLocal = il.DeclareLocal(_types.Char);
+        var resultLocal = il.DeclareLocal(_types.Double);
+        var hasDigitsLocal = il.DeclareLocal(_types.Boolean);
+
+        var notEmpty = il.DefineLabel();
+        var notMinus = il.DefineLabel();
+        var afterSign = il.DefineLabel();
+        var checkPrefix = il.DefineLabel();
+        var noPrefix = il.DefineLabel();
+        var prefixFound = il.DefineLabel();
+        var validateRadix = il.DefineLabel();
+        var radixAtLeastTwo = il.DefineLabel();
+        var radixValid = il.DefineLabel();
+        var loop = il.DefineLabel();
+        var endLoop = il.DefineLabel();
+        var returnResult = il.DefineLabel();
+
+        // Trim is allocation-free when no surrounding whitespace is present.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stloc, strLocal);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, notEmpty);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notEmpty);
+
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, signLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, startLocal);
+
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Ldc_I4, (int)'-');
+        il.Emit(OpCodes.Bne_Un, notMinus);
+        il.Emit(OpCodes.Ldc_I4_M1);
+        il.Emit(OpCodes.Stloc, signLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, startLocal);
+        il.Emit(OpCodes.Br, afterSign);
+
+        il.MarkLabel(notMinus);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Ldc_I4, (int)'+');
+        il.Emit(OpCodes.Bne_Un, afterSign);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, startLocal);
+        il.MarkLabel(afterSign);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stloc, radixLocal);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Brfalse, checkPrefix);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Ldc_I4, 16);
+        il.Emit(OpCodes.Beq, checkPrefix);
+        il.Emit(OpCodes.Br, validateRadix);
+
+        // Radix 0 and 16 both recognize and strip an optional 0x prefix.
+        il.MarkLabel(checkPrefix);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, startLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Blt, noPrefix);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldloc, startLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Ldc_I4, (int)'0');
+        il.Emit(OpCodes.Bne_Un, noPrefix);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldloc, startLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Stloc, prefixCharLocal);
+        il.Emit(OpCodes.Ldloc, prefixCharLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'x');
+        il.Emit(OpCodes.Beq, prefixFound);
+        il.Emit(OpCodes.Ldloc, prefixCharLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'X');
+        il.Emit(OpCodes.Bne_Un, noPrefix);
+
+        il.MarkLabel(prefixFound);
+        il.Emit(OpCodes.Ldc_I4, 16);
+        il.Emit(OpCodes.Stloc, radixLocal);
+        il.Emit(OpCodes.Ldloc, startLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, startLocal);
+        il.Emit(OpCodes.Br, validateRadix);
+
+        il.MarkLabel(noPrefix);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Brtrue, validateRadix);
+        il.Emit(OpCodes.Ldc_I4, 10);
+        il.Emit(OpCodes.Stloc, radixLocal);
+
+        il.MarkLabel(validateRadix);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Bge, radixAtLeastTwo);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(radixAtLeastTwo);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Ldc_I4, 36);
+        il.Emit(OpCodes.Ble, radixValid);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(radixValid);
+
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hasDigitsLocal);
+        il.Emit(OpCodes.Ldloc, startLocal);
+        il.Emit(OpCodes.Stloc, indexLocal);
+
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.String, "Length")!.GetGetMethod()!);
+        il.Emit(OpCodes.Bge, endLoop);
+        il.Emit(OpCodes.Ldloc, strLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "get_Chars", [_types.Int32])!);
+        il.Emit(OpCodes.Call, runtime.GetDigitValue);
+        il.Emit(OpCodes.Stloc, digitLocal);
+        il.Emit(OpCodes.Ldloc, digitLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, endLoop);
+        il.Emit(OpCodes.Ldloc, digitLocal);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Bge, endLoop);
+
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ldloc, digitLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, resultLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, hasDigitsLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(endLoop);
+        il.Emit(OpCodes.Ldloc, hasDigitsLocal);
+        il.Emit(OpCodes.Brtrue, returnResult);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(returnResult);
+        il.Emit(OpCodes.Ldloc, signLocal);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ldloc, resultLocal);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitNumberParseInt(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -911,6 +1107,66 @@ public partial class RuntimeEmitter
         // default: return false
         il.MarkLabel(returnFalseLabel);
         il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitNumberToFixedDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "NumberToFixedDouble",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.Double, _types.Int32, _types.String]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        runtime.NumberToFixedDouble = method;
+
+        var il = method.GetILGenerator();
+        var valueLocal = il.DeclareLocal(_types.Double);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, valueLocal);
+
+        // Keep validation inside the standalone helper even though the current
+        // direct emitter only selects compile-time literals in range.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        var notNegative = il.DefineLabel();
+        il.Emit(OpCodes.Bge, notNegative);
+        GuestErrorEmitter.ThrowRangeError(
+            il, runtime, "toFixed() digits argument must be between 0 and 100");
+        il.MarkLabel(notNegative);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4, 100);
+        var inRange = il.DefineLabel();
+        il.Emit(OpCodes.Ble, inRange);
+        GuestErrorEmitter.ThrowRangeError(
+            il, runtime, "toFixed() digits argument must be between 0 and 100");
+        il.MarkLabel(inRange);
+
+        // Values at or above 1e21 use ordinary Number::toString. Blt_Un also
+        // sends NaN to the BCL fixed formatter, which returns the JS spelling.
+        var fixedNotation = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Abs", [_types.Double])!);
+        il.Emit(OpCodes.Ldc_R8, 1e21);
+        il.Emit(OpCodes.Blt_Un, fixedNotation);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Call, runtime.FormatNumber);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fixedNotation);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        var nonZero = il.DefineLabel();
+        il.Emit(OpCodes.Bne_Un, nonZero);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, valueLocal);
+        il.MarkLabel(nonZero);
+
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Double, "ToString", [_types.String, typeof(IFormatProvider)])!);
         il.Emit(OpCodes.Ret);
     }
 

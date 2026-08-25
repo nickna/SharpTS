@@ -8,6 +8,19 @@ namespace SharpTS.Compilation;
 /// </summary>
 public partial class ILEmitter
 {
+    protected override bool TryEmitIntegerCounterDecimalString(Expr expression)
+    {
+        if (!IsIntegerCounterValueI8(expression))
+            return false;
+
+        IL.Emit(OpCodes.Ldstr, "");
+        _ = TryEmitIntegerCounterValueI8(expression);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Call, _ctx.Runtime!.ConcatStringInt64);
+        SetStackType(StackType.String);
+        return true;
+    }
+
     /// <summary>
     /// Emits a BigInt instance-method call (receiver statically bigint). toString takes
     /// an optional radix (ECMA-262 21.2.3.3); toLocaleString is the decimal form;

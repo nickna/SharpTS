@@ -1148,6 +1148,8 @@ public class EmittedRuntime
 
     // Number methods
     public MethodBuilder NumberParseInt { get; set; } = null!;
+    /// <summary>Typed intrinsic parse path: already-coerced string plus native radix.</summary>
+    public MethodBuilder NumberParseIntString { get; set; } = null!;
     public MethodBuilder NumberParseFloat { get; set; } = null!;
     public MethodBuilder NumberIsNaN { get; set; } = null!;
     public MethodBuilder NumberIsFinite { get; set; } = null!;
@@ -1158,6 +1160,8 @@ public class EmittedRuntime
     public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
     public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
     public MethodBuilder NumberToFixed { get; set; } = null!;
+    /// <summary>Typed intrinsic fixed formatter: native receiver/digits plus precomputed format.</summary>
+    public MethodBuilder NumberToFixedDouble { get; set; } = null!;
     public MethodBuilder NumberToPrecision { get; set; } = null!;
     public MethodBuilder NumberToExponential { get; set; } = null!;
     public MethodBuilder NumberToStringRadix { get; set; } = null!;

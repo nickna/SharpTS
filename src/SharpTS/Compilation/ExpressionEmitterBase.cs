@@ -102,6 +102,8 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     protected abstract TypeProvider Types { get; }
     protected abstract IVariableResolver Resolver { get; }
 
+    bool IEmitterContext.HasVariable(string name) => Resolver.HasVariable(name);
+
     /// <summary>
     /// Gets the hoisted field for a variable name, or null if not hoisted.
     /// Override in state machine emitters to check the builder's variable fields.
