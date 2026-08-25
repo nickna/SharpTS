@@ -173,7 +173,8 @@ public partial class ILCompiler
         _classExprs.Getters[classExpr] = [];
         _classExprs.Setters[classExpr] = [];
 
-        // Add _fields dictionary for dynamic property storage (extras)
+        // Class expressions retain direct per-instance expando storage. Unlike the narrow
+        // declaration optimization, their runtime-valued identity commonly escapes.
         var fieldsField = typeBuilder.DefineField(
             "_fields",
             typeof(Dictionary<string, object>),

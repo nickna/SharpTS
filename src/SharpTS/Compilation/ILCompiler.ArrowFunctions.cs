@@ -399,7 +399,10 @@ public partial class ILCompiler
                         extraSrcFields.ContainsKey(capturedVar))
                         continue;
 
-                    var field = displayClass.DefineField(capturedVar, _types.Object, FieldAttributes.Public);
+                    var captureType = _typeMap?.IsStableNumericCaptureField(arrow, capturedVar) == true
+                        ? _types.Double
+                        : _types.Object;
+                    var field = displayClass.DefineField(capturedVar, captureType, FieldAttributes.Public);
                     fieldMap[capturedVar] = field;
                 }
                 _closures.DisplayClassFields[arrow] = fieldMap;

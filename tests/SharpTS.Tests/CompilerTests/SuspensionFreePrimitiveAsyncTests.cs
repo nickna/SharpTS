@@ -10,8 +10,9 @@ namespace SharpTS.Tests.CompilerTests;
 
 /// <summary>
 /// Regression coverage for #1451. A deliberately narrow async function with no
-/// suspension points and a primitive result completes through a typed core and fresh Task wrapper;
-/// observable or uncertain shapes retain the ordinary async state machine.
+/// suspension points and a primitive result completes through a typed core and fresh Task wrapper.
+/// Immediately consumed intrinsic primitive resolves can join that core; observable or uncertain
+/// shapes retain the ordinary async state machine.
 /// </summary>
 public sealed class SuspensionFreePrimitiveAsyncTests
 {
@@ -285,7 +286,7 @@ public sealed class SuspensionFreePrimitiveAsyncTests
     {
         {
             """
-            async function suspended(value: number): Promise<number> {
+            async function suspended(value: any): Promise<any> {
                 return await Promise.resolve(value);
             }
             suspended(1);
@@ -334,6 +335,118 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             type.Name.Contains("<sum>d__", StringComparison.Ordinal));
         Assert.Equal("10\n", TestHarness.RunCompiled(source));
         Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
+    public void ImmediatelyAwaitedPrimitiveResolve_ElidesStateMachineAndCompletedTasks()
+    {
+        const string source = """
+            async function sum(count: number): Promise<number> {
+                let total: number = 0;
+                for (let index: number = 0; index < count; index++) {
+                    total = total + await Promise.resolve(index);
+                }
+                return total;
+            }
+            sum(5).then((value: number): void => console.log(value));
+            """;
+
+        var parsed = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var parsedSum = parsed.OfType<Stmt.Function>()
+            .Single(function => function.Name.Lexeme == "sum");
+        var totalDeclaration = parsedSum.Body!.OfType<Stmt.Var>()
+            .Single(statement => statement.Name.Lexeme == "total");
+        var inspectedTypeMap = new TypeChecker().Check(parsed);
+        var loop = parsedSum.Body!.OfType<Stmt.For>().Single();
+        var assignment = ((Stmt.Block)loop.Body).Statements
+            .OfType<Stmt.Expression>()
+            .Select(statement => statement.Expr)
+            .OfType<Expr.Assign>()
+            .Single();
+        var addition = Assert.IsType<Expr.Binary>(assignment.Value);
+        Assert.IsType<SharpTS.TypeSystem.TypeInfo.Primitive>(
+            inspectedTypeMap.Get(addition.Left));
+        Assert.IsType<SharpTS.TypeSystem.TypeInfo.Primitive>(
+            inspectedTypeMap.Get(addition.Right));
+        Assert.IsType<SharpTS.TypeSystem.TypeInfo.Primitive>(
+            inspectedTypeMap.Get(addition));
+        Assert.False(inspectedTypeMap.IsUndefinedReachableNumericLocal(totalDeclaration));
+        Assert.False(inspectedTypeMap.IsUndefinedReachableNumericLocal(
+            totalDeclaration.Initializer!));
+
+        Assembly assembly = Compile(source);
+        Assert.DoesNotContain(assembly.GetTypes(), type =>
+            type.Name.Contains("<sum>d__", StringComparison.Ordinal));
+        MethodInfo core = assembly.GetType("$Program")!
+            .GetMethods(BindingFlags.NonPublic | BindingFlags.Static)
+            .Single(method => method.Name.Contains(
+                "$asyncCore$sum", StringComparison.Ordinal));
+        var instructions = ReadInstructions(core).ToArray();
+        var calls = instructions
+            .Select(instruction => instruction.Operand)
+            .OfType<MethodBase>()
+            .ToArray();
+
+        Assert.DoesNotContain(calls, method =>
+            method.Name == "FromResult" && method.DeclaringType == typeof(Task));
+        Assert.DoesNotContain(calls, method => method.Name == "PrepareHostedAwait");
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.OpCode == OpCodes.Box);
+        Assert.Equal("10\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
+    public void ShadowedPromiseResolve_DoesNotElideAwait()
+    {
+        const string source = """
+            async function work(Promise: any): Promise<number> {
+                return await Promise.resolve(1);
+            }
+            const replacement = {
+                resolve(value: number): Promise<number> {
+                    return globalThis.Promise.resolve(value + 20);
+                }
+            };
+            work(replacement).then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo moveNext = assembly.GetTypes()
+            .Single(type => type.Name.Contains("<work>d__", StringComparison.Ordinal))
+            .GetMethod("MoveNext")!;
+        var calls = ReadInstructions(moveNext)
+            .Select(instruction => instruction.Operand)
+            .OfType<MethodBase>()
+            .ToArray();
+
+        Assert.Contains(calls, method =>
+            method.Name == "FromResult" && method.DeclaringType == typeof(Task));
+    }
+
+    [Fact]
+    public void PromiseMutation_RetainsCompletedTaskAwait()
+    {
+        const string source = """
+            (Promise as any).resolve = (value: number): Promise<number> =>
+                new Promise<number>((resolve): void => resolve(value + 30));
+            async function work(): Promise<number> {
+                return await Promise.resolve(1);
+            }
+            work().then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo moveNext = assembly.GetTypes()
+            .Single(type => type.Name.Contains("<work>d__", StringComparison.Ordinal))
+            .GetMethod("MoveNext")!;
+        var calls = ReadInstructions(moveNext)
+            .Select(instruction => instruction.Operand)
+            .OfType<MethodBase>()
+            .ToArray();
+
+        Assert.Contains(calls, method =>
+            method.Name == "FromResult" && method.DeclaringType == typeof(Task));
     }
 
     [Fact]

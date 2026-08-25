@@ -49,8 +49,11 @@ public abstract partial class AsyncFunctionMoveNextEmitter
 
     protected override void EmitAwait(Expr.Await a)
     {
+        if (TryEmitStablePrimitivePromiseResolveAwait(a))
+            return;
+
         if (AllowSuspensionFreePrimitiveAsyncCoreAwait
-            && Ctx.SuspensionFreePrimitiveAsyncCoreAwaits?.Contains(a) == true)
+            && Ctx.SuspensionFreePrimitiveAsyncAwaits?.Contains(a) == true)
         {
             if (TryEmitSuspensionFreePrimitiveAsyncCoreCall(a.Expression))
                 return;
@@ -65,6 +68,58 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         // 2+. Coerce to Task<object>, suspend/resume, and leave the awaited result on the stack.
         EmitAwaitFromValueOnStack(NextAwaitState());
     }
+
+    /// <summary>
+    /// Elides the fresh completed <c>Task&lt;object&gt;</c> created for an immediately
+    /// awaited intrinsic <c>Promise.resolve(primitive)</c>. The generated await path
+    /// already continues synchronously for that completed task, so its identity and
+    /// the boxed primitive cannot be observed. Programs that can replace Promise
+    /// behavior, shadow the global binding, or pass a thenable retain ordinary
+    /// Promise resolution and await lowering.
+    /// </summary>
+    private bool TryEmitStablePrimitivePromiseResolveAwait(Expr.Await awaitExpression)
+    {
+        Expr expression = awaitExpression.Expression;
+        if (Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation == true
+            || Resolver.HasVariable("Promise")
+            || expression is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Promise" },
+                    Name.Lexeme: "resolve"
+                },
+                Arguments: [var value]
+            }
+            || value is Expr.Spread
+            || !IsStaticallyNonNullPrimitive(Ctx.TypeMap?.Get(value)))
+        {
+            return false;
+        }
+
+        if (Ctx.SuspensionFreePrimitiveAsyncAwaits?.Contains(awaitExpression) != true)
+        {
+            // AsyncStateAnalyzer reserved a dispatch label for every syntactic
+            // await that was not proven non-suspending before state-machine
+            // definition. This path never stores that state, but the persisted
+            // switch target must still be marked.
+            MarkAwaitResumeLabel(NextAwaitState());
+        }
+        EmitExpression(value);
+        return true;
+    }
+
+    private static bool IsStaticallyNonNullPrimitive(TypeSystem.TypeInfo? type) => type is
+        TypeSystem.TypeInfo.Primitive
+        {
+            Type: TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN
+        }
+        or TypeSystem.TypeInfo.NumberLiteral
+        or TypeSystem.TypeInfo.BooleanLiteral
+        or TypeSystem.TypeInfo.String
+        or TypeSystem.TypeInfo.StringLiteral;
 
     private bool TryEmitSuspensionFreePrimitiveAsyncCoreCall(Expr expression)
     {

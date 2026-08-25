@@ -18,9 +18,10 @@ public partial class ILCompiler
         // The expando dictionary is deliberately absent from a newly constructed instance.
         // JavaScript cannot observe the backing store itself, so allocate it only when a
         // dynamic own property is actually created or the compatibility Fields surface is
-        // requested. Keeping this helper on the emitted type also makes base-constructor
-        // virtual dispatch safe: an override can materialize its own store before the
-        // derived constructor has resumed after super().
+        // requested. The weak side table keeps the common typed-only object layout compact.
+        // Keeping this helper on the emitted type also makes base-constructor virtual dispatch
+        // safe: an override can materialize its own store before the derived constructor has
+        // resumed after super().
         var ensureFields = typeBuilder.DefineMethod(
             "$EnsureFields",
             MethodAttributes.Private | MethodAttributes.HideBySig,
@@ -90,23 +91,61 @@ public partial class ILCompiler
     private void EmitEnsureFieldsBody(MethodBuilder method, FieldInfo fieldsField)
     {
         var il = method.GetILGenerator();
-        var readyLabel = il.DefineLabel();
-        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
 
-        // return _fields ??= new Dictionary<string, object?>();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
-        il.Emit(OpCodes.Stloc, fieldsLocal);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Brtrue_S, readyLabel);
-        il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
-        il.Emit(OpCodes.Stloc, fieldsLocal);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Stfld, fieldsField);
-        il.MarkLabel(readyLabel);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
+        if (fieldsField.IsStatic)
+        {
+            // Compact layout: return _fields.GetOrCreateValue(this);
+            il.Emit(OpCodes.Ldsfld, fieldsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                fieldsField.FieldType, "GetOrCreateValue", [_types.Object])!);
+        }
+        else
+        {
+            // General layout: return _fields ??= new Dictionary<string, object?>();
+            var readyLabel = il.DefineLabel();
+            var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, fieldsField);
+            il.Emit(OpCodes.Stloc, fieldsLocal);
+            il.Emit(OpCodes.Ldloc, fieldsLocal);
+            il.Emit(OpCodes.Brtrue_S, readyLabel);
+            il.Emit(OpCodes.Newobj, _types.DictionaryStringObjectCtor);
+            il.Emit(OpCodes.Stloc, fieldsLocal);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, fieldsLocal);
+            il.Emit(OpCodes.Stfld, fieldsField);
+            il.MarkLabel(readyLabel);
+            il.Emit(OpCodes.Ldloc, fieldsLocal);
+        }
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitLoadDynamicFieldsOrBranch(
+        ILGenerator il,
+        FieldInfo fieldsField,
+        LocalBuilder fieldsLocal,
+        Label missingLabel)
+    {
+        if (fieldsField.IsStatic)
+        {
+            il.Emit(OpCodes.Ldsfld, fieldsField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloca, fieldsLocal);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                fieldsField.FieldType,
+                "TryGetValue",
+                [_types.Object, _types.DictionaryStringObject.MakeByRefType()])!);
+            il.Emit(OpCodes.Brfalse, missingLabel);
+        }
+        else
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, fieldsField);
+            il.Emit(OpCodes.Stloc, fieldsLocal);
+            il.Emit(OpCodes.Ldloc, fieldsLocal);
+            il.Emit(OpCodes.Brfalse, missingLabel);
+        }
     }
 
     /// <summary>
@@ -205,7 +244,7 @@ public partial class ILCompiler
     {
         var il = method.GetILGenerator();
         var returnTrueLabel = il.DefineLabel();
-        var haveFieldsLabel = il.DefineLabel();
+        var noFieldsLabel = il.DefineLabel();
 
         // Check typed backing field names
         if (backingFields != null)
@@ -224,17 +263,15 @@ public partial class ILCompiler
 
         // A missing expando store is observably equivalent to an empty one. Do not
         // allocate merely to answer a property probe.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Brtrue_S, haveFieldsLabel);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(haveFieldsLabel);
+        var fieldsLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        EmitLoadDynamicFieldsOrBranch(il, fieldsField, fieldsLocal, noFieldsLabel);
+        il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "ContainsKey", [_types.String])!);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(noFieldsLabel);
+        il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ret);
 
         il.MarkLabel(returnTrueLabel);
@@ -348,11 +385,7 @@ public partial class ILCompiler
 
         // 2. Check _fields dictionary
         il.MarkLabel(tryFieldsLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
-        il.Emit(OpCodes.Stloc, fieldsLocal);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Brfalse, tryMethodsLabel);
+        EmitLoadDynamicFieldsOrBranch(il, fieldsField, fieldsLocal, tryMethodsLabel);
         il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);
@@ -717,11 +750,7 @@ public partial class ILCompiler
 
         // 2. Check _fields dictionary
         il.MarkLabel(tryFieldsLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldfld, fieldsField);
-        il.Emit(OpCodes.Stloc, fieldsLocal);
-        il.Emit(OpCodes.Ldloc, fieldsLocal);
-        il.Emit(OpCodes.Brfalse, tryMethodsLabel);
+        EmitLoadDynamicFieldsOrBranch(il, fieldsField, fieldsLocal, tryMethodsLabel);
         il.Emit(OpCodes.Ldloc, fieldsLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloca, valueLocal);

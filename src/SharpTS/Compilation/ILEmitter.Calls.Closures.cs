@@ -522,12 +522,22 @@ public partial class ILEmitter
                 if (local != null)
                 {
                     IL.Emit(OpCodes.Ldloc, local);
-                    // The capture field is object-typed, so a value-type local (e.g. a
-                    // number stored in an unboxed `double` slot via CanUseUnboxedLocal)
-                    // must be boxed before Stfld. The captured-parameter path above
-                    // already does this; omitting it here left a float64 where the
-                    // verifier expects a reference, corrupting the stack (#431).
-                    if (local.LocalType.IsValueType)
+                    if (field.FieldType == _ctx.Types.Double)
+                    {
+                        // Stable numeric loop snapshots keep the already-unboxed
+                        // counter in an unboxed display field. The captured loop
+                        // binding cannot take the integer-counter path, but retain a
+                        // defensive widening for future numeric local shapes.
+                        if (local.LocalType != _ctx.Types.Double)
+                        {
+                            if (local.LocalType.IsValueType)
+                                IL.Emit(OpCodes.Box, local.LocalType);
+                            IL.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
+                        }
+                    }
+                    // General capture fields are object-typed, so a value-type local
+                    // must still be boxed before Stfld (#431).
+                    else if (local.LocalType.IsValueType)
                     {
                         IL.Emit(OpCodes.Box, local.LocalType);
                     }

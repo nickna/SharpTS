@@ -77,6 +77,8 @@ public partial class ILCompiler
         public Dictionary<string, List<(Parsing.Stmt.Function Method, Parsing.Expr Key, MethodBuilder Builder)>> SymbolMethods { get; } = [];
         public Dictionary<Stmt.Class, (MethodBuilder Method, IReadOnlyList<Expr> Keys)> DeferredComputedClassKeys { get; } = new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, FieldBuilder> InstanceFieldsField { get; } = [];
+        public HashSet<Stmt.Class> CompactStorageClasses { get; } =
+            new(ReferenceEqualityComparer.Instance);
         public Dictionary<string, GenericTypeParameterBuilder[]> GenericParams { get; } = [];
 
         // ES2022 Private Class Elements Support
@@ -300,7 +302,7 @@ public partial class ILCompiler
         public Dictionary<string, AsyncStateMachineBuilder> StateMachines { get; } = [];
         public Dictionary<string, Stmt.Function> Functions { get; } = [];
         public Dictionary<string, AsyncStateAnalyzer.AsyncFunctionAnalysis> Analyses { get; } = [];
-        public Dictionary<string, HashSet<Expr.Await>> DirectCoreAwaits { get; } = [];
+        public Dictionary<string, HashSet<Expr.Await>> SuspensionFreeAwaits { get; } = [];
         public Dictionary<string, Stmt.Function> SuspensionFreePrimitiveFunctions { get; } = [];
         public Dictionary<string, MethodBuilder> SuspensionFreePrimitiveCores { get; } = [];
         public Dictionary<string, MethodBuilder> StableSuspensionFreePrimitiveCores { get; } = [];

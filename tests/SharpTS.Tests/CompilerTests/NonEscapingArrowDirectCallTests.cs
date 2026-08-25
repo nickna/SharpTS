@@ -1,4 +1,8 @@
+using System.Reflection;
+using SharpTS.Compilation;
+using SharpTS.Parsing;
 using SharpTS.Tests.Infrastructure;
+using SharpTS.TypeSystem;
 using Xunit;
 
 namespace SharpTS.Tests.CompilerTests;
@@ -14,6 +18,110 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public class NonEscapingArrowDirectCallTests
 {
+    [Fact]
+    public void StableNumericLoopCapture_UsesUnboxedDisplayField()
+    {
+        const string source = """
+            function work(n: number): number {
+                let sum: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    const add = (a: number): number => a + i;
+                    sum = sum + add(i);
+                }
+                return sum;
+            }
+            console.log(work(1000));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(double), FindCaptureField(assembly, "i").FieldType);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("999000\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void BodyMutatedLoopCapture_RetainsSharedObjectCell()
+    {
+        const string source = """
+            function work(n: number): number {
+                let sum: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    const read = (): number => i;
+                    i = i + 1;
+                    sum = sum + read();
+                }
+                return sum;
+            }
+            console.log(work(3));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object), FindCaptureField(assembly, "i").FieldType);
+        Assert.Equal("4\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void NonLiteralLoopInitializer_RetainsObjectCaptureField()
+    {
+        const string source = """
+            function work(n: number): number {
+                const start: number = 0;
+                let sum: number = 0;
+                for (let i: number = start; i < n; i++) {
+                    const add = (a: number): number => a + i;
+                    sum = sum + add(i);
+                }
+                return sum;
+            }
+            console.log(work(10));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object), FindCaptureField(assembly, "i").FieldType);
+        Assert.Equal("90\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void AsyncEnclosingFunction_RetainsObjectCaptureField()
+    {
+        const string source = """
+            async function work(n: number): Promise<number> {
+                let sum: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    const add = (a: number): number => a + i;
+                    sum = sum + add(i);
+                }
+                return sum;
+            }
+            work(10).then((value: number): void => console.log(value));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object), FindCaptureField(assembly, "i").FieldType);
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+        Assert.Equal("90\n", TestHarness.RunCompiledStandalone(source));
+    }
+
+    [Fact]
+    public void DirectEval_RetainsObjectCaptureField()
+    {
+        const string source = """
+            function work(n: number): number {
+                eval("");
+                let sum: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    const add = (a: number): number => a + i;
+                    sum = sum + add(i);
+                }
+                return sum;
+            }
+            console.log(work(10));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.Equal(typeof(object), FindCaptureField(assembly, "i").FieldType);
+    }
+
     [Theory, ModeData]
     public void CapturingArrow_InvokedByName_IsCorrect(ExecutionMode mode)
     {
@@ -276,4 +384,21 @@ public class NonEscapingArrowDirectCallTests
             """;
         Assert.Equal("1005,6\n", TestHarness.Run(source, mode));
     }
+
+    private static Assembly Compile(string source)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(statements);
+        var compiler = new ILCompiler($"stable_numeric_capture_{Guid.NewGuid():N}");
+        compiler.Compile(statements, typeMap, deadCodeInfo);
+        return Assembly.Load(compiler.SaveToBytes());
+    }
+
+    private static FieldInfo FindCaptureField(Assembly assembly, string name) =>
+        Assert.Single(assembly.GetTypes()
+            .SelectMany(type => type.GetFields(
+                BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance)),
+            field => field.Name == name
+                && field.DeclaringType?.Name.Contains("DisplayClass", StringComparison.Ordinal) == true);
 }

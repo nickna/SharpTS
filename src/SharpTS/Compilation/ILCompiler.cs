@@ -656,10 +656,14 @@ public partial class ILCompiler
         StablePrimitivePromiseAllAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer, _features);
         StableExactClassMethodCallAnalyzer.Analyze(statements, _typeMap, _features);
-        ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
-        StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         NonEscapingArrowLocalAnalyzer.Analyze(
             statements, _closures.DirectCallArrowBindings, _closures.Analyzer);
+        StableNumericLoopCaptureAnalyzer.Analyze(
+            statements, _typeMap, _closures.Analyzer, _closures.DirectCallArrowBindings);
+        _classes.CompactStorageClasses.UnionWith(
+            CompactClassStorageAnalyzer.Analyze(statements, _typeMap, _features));
+        ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ObjectLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
     }
 

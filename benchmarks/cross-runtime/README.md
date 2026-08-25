@@ -36,6 +36,13 @@ pipeline), so it reflects what a user actually experiences invoking each runtime
 # Run everything; results land in $TEMP/bench-results/results.txt
 ./benchmarks/cross-runtime/run-benchmarks.ps1
 
+# Repeat only numeric-loop workloads, excluding the advisory Bun result
+./benchmarks/cross-runtime/run-benchmarks.ps1 `
+  -Workloads int-arrays,brainfuck,accumulate `
+  -Runtimes compiled,node `
+  -Launches 3 `
+  -OutputDirectory .perf-cross-runtime
+
 # Render the table from a results file
 ./benchmarks/cross-runtime/format-results.ps1 -ResultsFile $env:TEMP/bench-results/results.txt
 ```
@@ -47,8 +54,19 @@ same inexpensive guard used by CI):
 ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke
 ```
 
-Override the output directory with `$env:OUTPUT_DIR`. Node and Bun are detected
-automatically; Bun is skipped if not on `PATH`.
+`-Workloads` accepts script basenames and `-Runtimes` accepts `interpreter`,
+`compiled`, `node`, and `bun`. Override the output directory with
+`-OutputDirectory` or `$env:OUTPUT_DIR`. Node and Bun are detected only when
+selected; Bun is skipped if not on `PATH`.
+
+`-RepositoryRoot` is intended for the paired local performance harness. It lets
+the current runner compile and execute a frozen source worktree, so the baseline
+does not need to be modified when harness features are added later.
+`-NodeExecutable` selects a specific Node binary when more than one version is
+installed.
+
+For repeatable candidate-vs-baseline runs on native Windows and WSL, see
+[`../local-perf/README.md`](../local-perf/README.md).
 
 ## How timing works
 

@@ -20,10 +20,11 @@ public partial class CompilationContext
     public Dictionary<string, MethodBuilder>? SuspensionFreePrimitiveAsyncCores { get; set; }
 
     /// <summary>
-    /// Await nodes whose direct-core proof was established before state-machine layout. These
-    /// nodes do not consume a state number or force locals into hoisted object fields.
+    /// Await nodes proven non-suspending before state-machine layout, including stable direct
+    /// async-core calls and immediately awaited intrinsic primitive resolves. These nodes do not
+    /// consume a state number or force locals into hoisted object fields.
     /// </summary>
-    public IReadOnlySet<Expr.Await>? SuspensionFreePrimitiveAsyncCoreAwaits { get; set; }
+    public IReadOnlySet<Expr.Await>? SuspensionFreePrimitiveAsyncAwaits { get; set; }
 
     /// <summary>
     /// The exact emitted method that may bypass a value-backed module binding for recursive

@@ -232,6 +232,28 @@ public partial class TypeChecker
         }
 
         TypeInfo exprType = CheckExpr(awaitExpr.Expression);
+        // Promise is represented as an Any-valued special global, so the
+        // ordinary member-call path cannot preserve Promise.resolve<T>'s T.
+        // Recover it only for a directly awaited intrinsic resolve. Keeping
+        // the call itself Any retains the checker's intentionally permissive
+        // Promise method surface, while preventing a known primitive await
+        // from needlessly tainting numeric locals as possibly undefined.
+        if (_environment.Get("Promise") is null
+            && awaitExpr.Expression is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Promise" },
+                    Name.Lexeme: "resolve"
+                },
+                Arguments: [var resolvedValue]
+            }
+            && _typeMap.Get(resolvedValue) is { } resolvedType)
+        {
+            return ResolveAwaitedType(resolvedType);
+        }
         return ResolveAwaitedType(exprType);
     }
 

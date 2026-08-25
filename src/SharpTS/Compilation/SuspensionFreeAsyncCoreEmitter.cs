@@ -7,14 +7,33 @@ namespace SharpTS.Compilation;
 
 /// <summary>
 /// Emits a synchronous primitive core for an async function after analysis proved every retained
-/// await is a stable call to another suspension-free primitive core.
+/// await is either a stable call to another suspension-free primitive core or an immediately
+/// consumed intrinsic primitive resolve.
 /// </summary>
 internal sealed class SuspensionFreeAsyncCoreEmitter(CompilationContext context) : ILEmitter(context)
 {
     protected override void EmitAwait(Expr.Await expression)
     {
-        if (Ctx.SuspensionFreePrimitiveAsyncCoreAwaits?.Contains(expression) != true
-            || expression.Expression is not Expr.Call
+        if (Ctx.SuspensionFreePrimitiveAsyncAwaits?.Contains(expression) != true)
+            throw new CompileException("Await is not suspension-free in this async core.");
+
+        if (expression.Expression is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Promise" },
+                    Name.Lexeme: "resolve"
+                },
+                Arguments: [var resolvedValue]
+            })
+        {
+            EmitExpression(resolvedValue);
+            return;
+        }
+
+        if (expression.Expression is not Expr.Call
             {
                 Callee: Expr.Variable variable,
                 Arguments: var arguments
