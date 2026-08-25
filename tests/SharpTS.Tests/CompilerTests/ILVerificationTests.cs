@@ -1475,10 +1475,10 @@ public class ILVerificationTests
         Assert.Equal(output, TestHarness.RunInterpreted(source));
     }
 
-    // #537: single-double-argument Date setters (setTime/setDate/setMilliseconds/setUTCDate/
-    // setUTCMilliseconds/setYear) used as a bare statement or assigned to a number previously left
-    // the tracked stack type as Double, so the caller boxed the already-boxed result a second time
-    // (StackUnexpected). The DateEmitter now records the boxed result as a reference type.
+    // #537 / #1487: single-double-argument Date setters (setTime/setDate/setMilliseconds/
+    // setUTCDate/setUTCMilliseconds/setYear) must leave a correctly tracked result. They now keep
+    // the helper's native double on the stack, so both bare statements and numeric assignment avoid
+    // boxing while continuing to pass strict IL verification.
     [Fact]
     public void DateSingleArgSetters_PassILVerification()
     {

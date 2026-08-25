@@ -129,13 +129,32 @@ public class RuntimeFeatureDetectorTests
     [InlineData("Date.prototype.toString = Object.prototype.toString;", true)]
     [InlineData("Date.prototype['valueOf'] = function() { return 0; };", true)]
     [InlineData("Object.defineProperty(Date.prototype, 'x', { value: 1 });", true)]
+    [InlineData("const prototype = Date.prototype;", true)]
+    [InlineData("const d = new Date(0); (d as any).getTime = function() { return 1; };", true)]
+    [InlineData("const d = new Date(0); const alias: any = d; alias.setTime = function() { return 1; };", true)]
+    [InlineData("const d = new Date(0); Object.defineProperty(d, 'getTime', { value: function() { return 1; } });", true)]
+    [InlineData("const d = new Date(0); Object.getPrototypeOf(d);", true)]
     [InlineData("new Date().toString();", false)]
-    public void DetectsDatePrototypeMutation(string source, bool expected)
+    public void DetectsDateMethodMutationRisk(string source, bool expected)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
-        var features = new RuntimeFeatureDetector().Detect(statements);
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
 
         Assert.Equal(expected, features.UsesDatePrototypeMutation);
+    }
+
+    [Fact]
+    public void DateTypedParameterMethodRequiresDateRuntimeWithoutDisablingFastPath()
+    {
+        const string source = "function read(d: Date): number { return d.getTime(); }";
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.True(features.UsesDate);
+        Assert.False(features.UsesDatePrototypeMutation);
     }
 
     [Theory]
