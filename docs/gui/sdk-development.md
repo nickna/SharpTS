@@ -134,6 +134,12 @@ Native creation, setters, child collections, event attachment, refs, dialogs, cl
 recovery run on the Avalonia dispatcher. Off-thread notifications enter through the hosted
 dispatcher; synchronous return-valued off-thread callbacks are rejected.
 
+Guest-facing asynchronous bridge methods use `Task<object?>` as a narrow, trim-safe ABI. Typed
+desktop services remain inside the native host and normalize their results at `DesktopBridge`;
+compound payloads cross as validated JSON and are decoded by the TypeScript facade. Do not expose
+open-ended `Task<T>` or `ValueTask<T>` methods to guest code: supporting arbitrary result types
+would require reflection and generic instantiation that cannot be rooted reliably for Native AOT.
+
 The generated built-in descriptor contract uses reviewed named adapters without runtime
 reflection. There is no public third-party descriptor-registration or custom-control loading API.
 The descriptor manifest and its C#/TypeScript adapters are maintainer-only implementation details,

@@ -492,12 +492,24 @@ class ReactiveRoot {
         if (this.disposed || this.managed === null || this.scheduled) return;
         if (this.rendering) throw new Error("State cannot be updated while rendering.");
         this.scheduled = true;
-        DesktopBridge.QueueMicrotask((): void => {
+        const tracker = this.managedEventWork;
+        if (tracker !== null) tracker.Begin();
+        try {
+            DesktopBridge.QueueMicrotask((): void => {
+                this.scheduled = false;
+                try {
+                    if (this.disposed || this.managed === null) return;
+                    try { this.renderNow(); }
+                    catch (error) { this.failWindow(error); }
+                } finally {
+                    if (this.managedEventWork === tracker && tracker !== null) tracker.Complete();
+                }
+            });
+        } catch (error) {
             this.scheduled = false;
-            if (this.disposed || this.managed === null) return;
-            try { this.renderNow(); }
-            catch (error) { this.failWindow(error); }
-        });
+            if (this.managedEventWork === tracker && tracker !== null) tracker.Complete();
+            throw error;
+        }
     }
     private component(path: string, type: any, boundary: ErrorBoundaryState | null): ComponentState {
         for (const existing of this.components) if (existing.path === path && existing.type === type) {
@@ -1381,7 +1393,12 @@ export function showMessageDialog(options: MessageDialogOptions): Promise<Messag
  * @returns The selected file paths, or an empty array when canceled.
  * @category Desktop Services
  */
-export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> { return DesktopBridge.ShowOpenFileDialogAsync(options.title || "", options.allowMultiple === true, JSON.stringify(options.filters || [])) as any; }
+export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> {
+    const result = DesktopBridge.ShowOpenFileDialogJsonAsync(
+        options.title || "", options.allowMultiple === true,
+        JSON.stringify(options.filters || [])) as Promise<string>;
+    return result.then(json => JSON.parse(json) as string[]);
+}
 
 /** Reads pixel dimensions from a packaged asset, local file, or PNG data URI. @category Desktop Services */
 export function getImageDimensions(source: string): Promise<ImageDimensions> {

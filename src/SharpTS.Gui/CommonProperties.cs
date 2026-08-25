@@ -51,13 +51,19 @@ internal static class CommonProperties
         }
     }
 
-    public static bool Apply(Control control, GuiVNode node)
+    public static bool Apply(
+        Control control,
+        GuiVNode node,
+        bool applyWidth = true,
+        bool applyHeight = true)
     {
         bool changed = false;
-        changed |= ApplyStyled(control, Layoutable.WidthProperty, EffectiveWidth(node),
-            IsSpecified(node, "width") || !double.IsNaN(node.Width) || node.Kind == "Window");
-        changed |= ApplyStyled(control, Layoutable.HeightProperty, EffectiveHeight(node),
-            IsSpecified(node, "height") || !double.IsNaN(node.Height) || node.Kind == "Window");
+        if (applyWidth)
+            changed |= ApplyStyled(control, Layoutable.WidthProperty, EffectiveWidth(node),
+                IsSpecified(node, "width") || !double.IsNaN(node.Width) || node.Kind == "Window");
+        if (applyHeight)
+            changed |= ApplyStyled(control, Layoutable.HeightProperty, EffectiveHeight(node),
+                IsSpecified(node, "height") || !double.IsNaN(node.Height) || node.Kind == "Window");
         changed |= ApplyStyled(control, Layoutable.MinWidthProperty, node.MinWidth,
             IsSpecified(node, "minWidth") || node.MinWidth != 0);
         changed |= ApplyStyled(control, Layoutable.MinHeightProperty, node.MinHeight,

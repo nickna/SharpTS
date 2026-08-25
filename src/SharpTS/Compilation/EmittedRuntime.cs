@@ -1075,7 +1075,6 @@ public class EmittedRuntime
     public MethodBuilder ShouldAutoAwaitPromiseMethod { get; set; } = null!;
     /// <summary>$Runtime.CoerceAwaitableToTask(object value) -> Task&lt;object?&gt; — the await coercion for a value that is neither a $Promise nor a Task&lt;object?&gt;: an ordinary thenable (a value whose <c>then</c> member is callable) is adopted by invoking <c>then(resolve, reject)</c> into a fresh capability (#349); anything else becomes Task.FromResult(value). Called at every state-machine await's wrap-value site.</summary>
     public MethodBuilder CoerceAwaitableToTaskMethod { get; set; } = null!;
-    public MethodBuilder NormalizeManagedAwaitable { get; set; } = null!;
     /// <summary>$PromiseCapability — the host executor handed to a general (non-Promise) species constructor by NewPromiseCapabilityResult (#349): captures the resolve/reject functions (Capture, exposed as a Func&lt;object[],object&gt;) and drives them when the source task settles (Settle, an Action&lt;Task&lt;object&gt;&gt; continuation).</summary>
     public TypeBuilder PromiseCapabilityType { get; set; } = null!;
     public ConstructorBuilder PromiseCapabilityCtor { get; set; } = null!;

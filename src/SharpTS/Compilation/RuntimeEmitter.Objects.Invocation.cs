@@ -584,7 +584,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.MethodCallableType);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Callvirt, runtime.MethodCallableInvoke);
-        il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
         il.Emit(OpCodes.Ret);
 
         // Null callee: `f(x)` where f is null. Throws TypeError per ECMA-262
@@ -626,7 +625,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);  // receiver (this)
         il.Emit(OpCodes.Ldarg_2);  // args
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodBase, "Invoke", _types.Object, _types.ObjectArray));
-        il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notMethodBaseLabel);
 
@@ -866,7 +864,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.MethodCallableType);
         il.Emit(OpCodes.Ldarg_2);  // args
         il.Emit(OpCodes.Callvirt, runtime.MethodCallableInvoke);
-        il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
         il.Emit(OpCodes.Ret);
 
         // Handle Func<object?[], object?> (from CreateBoundMethod in RuntimeTypes.Methods)

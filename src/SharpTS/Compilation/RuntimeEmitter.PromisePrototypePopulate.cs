@@ -44,9 +44,6 @@ public partial class RuntimeEmitter
             // TypeError. then is more restrictive than catch/finally — must be
             // a real Promise (not just any thenable).
             EmitThrowIfNullOrUndefined(il, runtime, "Promise.prototype.then called on null or undefined");
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
-            il.Emit(OpCodes.Starg, 0);
             var isPromiseOkLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
@@ -87,9 +84,6 @@ public partial class RuntimeEmitter
             // on null/undefined. Per the spec invariant, surface that synchronously
             // before any Task-conversion or PromiseThen dispatch.
             EmitThrowIfNullOrUndefined(il, runtime, "Promise.prototype.catch called on null or undefined");
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
-            il.Emit(OpCodes.Starg, 0);
             // Fast path: real $TSPromise / Task<object> receiver → direct PromiseCatch.
             EmitFastPathOrUserThenInvoke(il, runtime, isCatch: true, methodNameForError: "Promise.prototype.catch");
             il.Emit(OpCodes.Ret);
@@ -108,9 +102,6 @@ public partial class RuntimeEmitter
 
             var il = m.GetILGenerator();
             EmitThrowIfNullOrUndefined(il, runtime, "Promise.prototype.finally called on null or undefined");
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
-            il.Emit(OpCodes.Starg, 0);
             EmitDynamicPromiseFinallyInvoke(il, runtime, finallyFunctions);
             il.Emit(OpCodes.Ret);
         }

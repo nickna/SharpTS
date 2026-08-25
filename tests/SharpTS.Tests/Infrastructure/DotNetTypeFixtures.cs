@@ -58,33 +58,30 @@ public class NullableFixture
     public int OrDefault(int? value, int fallback) => value ?? fallback;
 }
 
-/// <summary>Controlled asynchronous return surface for dual-mode CLR interop tests.</summary>
-public sealed class AsyncInteropFixture
+/// <summary>Controlled object-valued host-awaitable surface for dual-mode CLR interop tests.</summary>
+public sealed class HostAsyncInteropFixture
 {
-    public Task<string> CompletedStringAsync() => Task.FromResult("completed");
+    public Task<object?> CompletedStringAsync() => Task.FromResult<object?>("completed");
 
-    public async Task<string> PendingStringAsync()
+    public async Task<object?> PendingStringAsync()
     {
         await Task.Yield();
         return "pending";
     }
 
-    public Task<string[]> StringsAsync() => Task.FromResult(new[] { "alpha", "beta" });
+    public Task<object?> NullStringAsync() => Task.FromResult<object?>(null);
 
-    public Task<string?> NullStringAsync() => Task.FromResult<string?>(null);
+    public Task<object?> JsonStringListAsync() =>
+        Task.FromResult<object?>("[\"alpha\",\"beta\"]");
 
-    public Task CompletedVoidAsync() => Task.CompletedTask;
-
-    public ValueTask<int> CompletedNumberValueTaskAsync() => ValueTask.FromResult(42);
-
-    public async ValueTask<string> PendingStringValueTaskAsync()
+    public async Task<object?> CompletedVoidAsync()
     {
-        await Task.Yield();
-        return "value-task";
+        await Task.CompletedTask;
+        return null;
     }
 
-    public Task<string> FaultedStringAsync() =>
-        Task.FromException<string>(new InvalidOperationException("managed-async-failure"));
+    public Task<object?> FaultedStringAsync() =>
+        Task.FromException<object?>(new InvalidOperationException("managed-async-failure"));
 }
 
 /// <summary>Controlled ref/out/in surface for tuple-lowered CLR interop tests.</summary>

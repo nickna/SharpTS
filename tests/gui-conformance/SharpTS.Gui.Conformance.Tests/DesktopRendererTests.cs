@@ -613,11 +613,11 @@ public sealed class DesktopRendererTests : IDisposable
             Assert.Equal(SKColors.Red, bitmap.GetPixel(4, 4));
 
             using JsonDocument localDimensions = JsonDocument.Parse(
-                CompleteBackgroundTask(DesktopBridge.GetImageDimensionsJsonAsync(output)));
+                CompleteBackgroundString(DesktopBridge.GetImageDimensionsJsonAsync(output)));
             Assert.Equal(8, localDimensions.RootElement.GetProperty("width").GetInt32());
             string dataUri = "data:image/png;base64," + Convert.ToBase64String(File.ReadAllBytes(output));
             using JsonDocument embeddedDimensions = JsonDocument.Parse(
-                CompleteBackgroundTask(DesktopBridge.GetImageDimensionsJsonAsync(dataUri)));
+                CompleteBackgroundString(DesktopBridge.GetImageDimensionsJsonAsync(dataUri)));
             Assert.Equal(8, embeddedDimensions.RootElement.GetProperty("height").GetInt32());
 
             using var jpegBitmap = new SKBitmap(1, 1);
@@ -670,14 +670,14 @@ public sealed class DesktopRendererTests : IDisposable
             }
             """;
 
-        using (JsonDocument sample = JsonDocument.Parse(CompleteBackgroundTask(
+        using (JsonDocument sample = JsonDocument.Parse(CompleteBackgroundString(
             DesktopBridge.SampleDrawingPixelJsonAsync(splitDocument, 1, 1))))
         {
             Assert.Equal(255, sample.RootElement.GetProperty("red").GetInt32());
             Assert.Equal("#ff0000", sample.RootElement.GetProperty("color").GetString());
         }
 
-        string filledJson = CompleteBackgroundTask(DesktopBridge.FloodFillDrawingJsonAsync(
+        string filledJson = CompleteBackgroundString(DesktopBridge.FloodFillDrawingJsonAsync(
             splitDocument,
             "{\"x\":1,\"y\":1,\"color\":\"#00ff00\",\"tolerance\":0}"));
         using (JsonDocument filled = JsonDocument.Parse(filledJson))
@@ -689,7 +689,7 @@ public sealed class DesktopRendererTests : IDisposable
             Assert.Equal(SKColors.Blue, bitmap.GetPixel(4, 1));
         }
 
-        using (JsonDocument unchanged = JsonDocument.Parse(CompleteBackgroundTask(
+        using (JsonDocument unchanged = JsonDocument.Parse(CompleteBackgroundString(
             DesktopBridge.FloodFillDrawingJsonAsync(
                 splitDocument,
                 "{\"x\":1,\"y\":1,\"color\":\"#ff0000\",\"tolerance\":0}"))))
@@ -698,7 +698,7 @@ public sealed class DesktopRendererTests : IDisposable
             Assert.False(unchanged.RootElement.TryGetProperty("image", out JsonElement image) && image.ValueKind != JsonValueKind.Null);
         }
 
-        string invertedJson = CompleteBackgroundTask(DesktopBridge.RenderDrawingToImageJsonAsync(
+        string invertedJson = CompleteBackgroundString(DesktopBridge.RenderDrawingToImageJsonAsync(
             splitDocument,
             "{\"effects\":[{\"kind\":\"invert\"}]}"));
         using (JsonDocument inverted = JsonDocument.Parse(invertedJson))
@@ -718,7 +718,7 @@ public sealed class DesktopRendererTests : IDisposable
               ]}]
             }
             """;
-        string textJson = CompleteBackgroundTask(DesktopBridge.RenderDrawingToImageJsonAsync(textDocument, "{}"));
+        string textJson = CompleteBackgroundString(DesktopBridge.RenderDrawingToImageJsonAsync(textDocument, "{}"));
         using (JsonDocument renderedText = JsonDocument.Parse(textJson))
         using (SKBitmap bitmap = DecodeDataUri(renderedText.RootElement.GetProperty("source").GetString()!))
         {
@@ -1392,6 +1392,16 @@ public sealed class DesktopRendererTests : IDisposable
             Assert.InRange(payload.RootElement.GetProperty("clientHeight").GetDouble(), 359, 361);
         }
 
+        root.Render(MetricsWindow(latest.Add));
+        Dispatcher.UIThread.RunJobs();
+        Assert.InRange(root.Window.ClientSize.Width, 519, 521);
+        Assert.InRange(root.Window.ClientSize.Height, 359, 361);
+
+        root.Render(MetricsWindow(latest.Add) with { Width = 700, Height = 410 });
+        Dispatcher.UIThread.RunJobs();
+        Assert.InRange(root.Window.ClientSize.Width, 699, 701);
+        Assert.InRange(root.Window.ClientSize.Height, 409, 411);
+
         root.Window.WindowState = WindowState.Maximized;
         Dispatcher.UIThread.RunJobs();
         using (JsonDocument payload = JsonDocument.Parse(latest.Last()))
@@ -1528,17 +1538,14 @@ public sealed class DesktopRendererTests : IDisposable
             ?? throw new InvalidDataException("The drawing service returned an invalid PNG data URI.");
     }
 
-    private static void CompleteBackgroundTask(Task task)
-    {
-        PumpDesktopDispatcherUntilCompleted(task);
-        task.GetAwaiter().GetResult();
-    }
-
     private static T CompleteBackgroundTask<T>(Task<T> task)
     {
         PumpDesktopDispatcherUntilCompleted(task);
         return task.GetAwaiter().GetResult();
     }
+
+    private static string CompleteBackgroundString(Task<object?> task) =>
+        Assert.IsType<string>(CompleteBackgroundTask(task));
 
     private static void PumpDesktopDispatcherUntilCompleted(Task task)
     {

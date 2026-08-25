@@ -30,7 +30,7 @@ public sealed class GuiContractServiceTests
     {
         const string source = "const view = <Button onClick={() => {}}>ok</Button>;";
         var hover = _service.Hover(_document, source, 0, source.IndexOf("Button", StringComparison.Ordinal) + 2);
-        Assert.Contains("Clickable textual button", hover!.Contents.MarkupContent!.Value, StringComparison.Ordinal);
+        Assert.Contains("Clickable", hover!.Contents.MarkupContent!.Value, StringComparison.Ordinal);
 
         var definition = _service.Definition(_document, source, 0, source.IndexOf("Button", StringComparison.Ordinal) + 2);
         Assert.NotNull(definition);

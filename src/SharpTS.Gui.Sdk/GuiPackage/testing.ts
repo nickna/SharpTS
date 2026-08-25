@@ -7,7 +7,7 @@ export type DesktopTestProperty =
 
 /** Headless driver for locating and interacting with controls by their key. @category Testing */
 export interface DesktopTestDriver {
-    /** Runs a callback after all pending render and native commit work completes. */
+    /** Runs a callback after pending async event, reactive render, and native commit work completes. */
     afterRender(callback: () => void): void;
     /** Activates the keyed control. */
     click(key: string): void;

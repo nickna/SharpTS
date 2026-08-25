@@ -1425,16 +1425,6 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpLabel);
         }
 
-        // Normalize dynamically returned Task<T> before exposing the Promise surface.
-        var notManagedTaskLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.Task);
-        il.Emit(OpCodes.Brfalse, notManagedTaskLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.NormalizeManagedAwaitable);
-        il.Emit(OpCodes.Starg, 0);
-        il.MarkLabel(notManagedTaskLabel);
-
         // Task<object?> (Promise) - check for then/catch/finally
         var promiseLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

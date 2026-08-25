@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using Avalonia.Controls;
 using Avalonia.Interactivity;
 
@@ -563,88 +564,104 @@ public static class DesktopBridge
         return root.CreateEventWorkTracker();
     }
 
-    public static Task<string> ShowMessageDialogAsync(string title, string message, string buttons)
+    // Guest-facing asynchronous methods deliberately share Task<object?> as a
+    // trim-safe ABI. Typed desktop services stay internal to SharpTS.Gui; their
+    // results are normalized here before the interpreter or compiled guest sees
+    // them. Do not expose arbitrary Task<T>/ValueTask<T> across this boundary.
+    private static async Task<object?> AsGuestResultAsync<T>(Task<T> task) =>
+        await task.ConfigureAwait(false);
+
+    private static async Task<object?> AsGuestCompletionAsync(Task task)
     {
-        DesktopRuntimeContext context = RequireContext();
-        Window owner = context.RequireWindowForServices();
-        return context.ScheduleDesktopService(() =>
-            context.InteractionServices.ShowMessageAsync(owner, title, message, buttons));
+        await task.ConfigureAwait(false);
+        return null;
     }
 
-    public static Task<string[]> ShowOpenFileDialogAsync(string title, bool allowMultiple, string filtersJson)
+    private static async Task<object?> AsGuestStringListJsonAsync(Task<string[]> task) =>
+        JsonSerializer.Serialize(await task.ConfigureAwait(false));
+
+    public static Task<object?> ShowMessageDialogAsync(string title, string message, string buttons)
     {
         DesktopRuntimeContext context = RequireContext();
         Window owner = context.RequireWindowForServices();
-        return context.ScheduleDesktopService(() =>
-            context.InteractionServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson));
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.ShowMessageAsync(owner, title, message, buttons)));
     }
 
-    public static Task<string?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson)
+    public static Task<object?> ShowOpenFileDialogJsonAsync(string title, bool allowMultiple, string filtersJson)
     {
         DesktopRuntimeContext context = RequireContext();
         Window owner = context.RequireWindowForServices();
-        return context.ScheduleDesktopService(() =>
+        return context.ScheduleDesktopService(() => AsGuestStringListJsonAsync(
+            context.InteractionServices.OpenFilesAsync(owner, title, allowMultiple, filtersJson)));
+    }
+
+    public static Task<object?> ShowSaveFileDialogAsync(string title, string suggestedFileName, string defaultExtension, string filtersJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        Window owner = context.RequireWindowForServices();
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
             context.InteractionServices.SaveFileAsync(
-                owner, title, suggestedFileName, defaultExtension, filtersJson));
+                owner, title, suggestedFileName, defaultExtension, filtersJson)));
     }
 
-    public static Task<string?> ShowFolderDialogAsync(string title)
+    public static Task<object?> ShowFolderDialogAsync(string title)
     {
         DesktopRuntimeContext context = RequireContext();
         Window owner = context.RequireWindowForServices();
-        return context.ScheduleDesktopService(() =>
-            context.InteractionServices.OpenFolderAsync(owner, title));
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.OpenFolderAsync(owner, title)));
     }
 
-    public static Task<string> ReadClipboardTextAsync()
+    public static Task<object?> ReadClipboardTextAsync()
     {
         DesktopRuntimeContext context = RequireContext();
         Window owner = context.RequireWindowForServices();
-        return context.ScheduleDesktopService(() =>
-            context.InteractionServices.ReadClipboardAsync(owner));
+        return context.ScheduleDesktopService(() => AsGuestResultAsync(
+            context.InteractionServices.ReadClipboardAsync(owner)));
     }
 
-    public static Task WriteClipboardTextAsync(string value)
+    public static Task<object?> WriteClipboardTextAsync(string value)
     {
         DesktopRuntimeContext context = RequireContext();
         Window owner = context.RequireWindowForServices();
-        return context.ScheduleDesktopService(() =>
-            context.InteractionServices.WriteClipboardAsync(owner, value));
+        return context.ScheduleDesktopService(() => AsGuestCompletionAsync(
+            context.InteractionServices.WriteClipboardAsync(owner, value)));
     }
 
-    public static Task<string> GetImageDimensionsJsonAsync(string source)
+    public static Task<object?> GetImageDimensionsJsonAsync(string source)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return Task.Run(() => DrawingGraphics.GetImageDimensionsJson(context, source));
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.GetImageDimensionsJson(context, source)));
     }
 
-    public static Task RenderDrawingToPngAsync(string documentJson, string path)
+    public static Task<object?> RenderDrawingToPngAsync(string documentJson, string path)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return Task.Run(() => DrawingGraphics.RenderDocumentToPng(context, documentJson, path));
+        return AsGuestCompletionAsync(Task.Run(() => DrawingGraphics.RenderDocumentToPng(context, documentJson, path)));
     }
 
-    public static Task<string> RenderDrawingToImageJsonAsync(string documentJson, string optionsJson)
+    public static Task<object?> RenderDrawingToImageJsonAsync(string documentJson, string optionsJson)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return Task.Run(() => DrawingGraphics.RenderDocumentToImageJson(context, documentJson, optionsJson));
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.RenderDocumentToImageJson(context, documentJson, optionsJson)));
     }
 
-    public static Task<string> SampleDrawingPixelJsonAsync(string documentJson, double x, double y)
+    public static Task<object?> SampleDrawingPixelJsonAsync(string documentJson, double x, double y)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return Task.Run(() => DrawingGraphics.SampleDrawingPixelJson(context, documentJson, x, y));
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.SampleDrawingPixelJson(context, documentJson, x, y)));
     }
 
-    public static Task<string> FloodFillDrawingJsonAsync(string documentJson, string optionsJson)
+    public static Task<object?> FloodFillDrawingJsonAsync(string documentJson, string optionsJson)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return Task.Run(() => DrawingGraphics.FloodFillDrawingJson(context, documentJson, optionsJson));
+        return AsGuestResultAsync(Task.Run(() => DrawingGraphics.FloodFillDrawingJson(context, documentJson, optionsJson)));
     }
 
     public static string[] GetDesktopLaunchArguments() =>
@@ -656,20 +673,20 @@ public static class DesktopBridge
     public static string GetDesktopDisplaysJson() =>
         RequireContext().GetDisplaysJson();
 
-    public static Task OpenDesktopExternalAsync(string target) =>
-        DesktopPlatformServices.OpenExternalAsync(target);
+    public static Task<object?> OpenDesktopExternalAsync(string target) =>
+        AsGuestCompletionAsync(DesktopPlatformServices.OpenExternalAsync(target));
 
-    public static Task ShowDesktopItemInFolderAsync(string path) =>
-        DesktopPlatformServices.ShowItemInFolderAsync(path);
+    public static Task<object?> ShowDesktopItemInFolderAsync(string path) =>
+        AsGuestCompletionAsync(DesktopPlatformServices.ShowItemInFolderAsync(path));
 
-    public static Task PrintDesktopFileAsync(string path) =>
-        DesktopPlatformServices.PrintFileAsync(path);
+    public static Task<object?> PrintDesktopFileAsync(string path) =>
+        AsGuestCompletionAsync(DesktopPlatformServices.PrintFileAsync(path));
 
-    public static Task ShowDesktopNotificationAsync(string title, string message, bool silent)
+    public static Task<object?> ShowDesktopNotificationAsync(string title, string message, bool silent)
     {
         DesktopRuntimeContext context = RequireContext();
         context.EnsureOwnerThread();
-        return DesktopNotifications.ShowAsync(context.IsHeadless, title, message, silent);
+        return AsGuestCompletionAsync(DesktopNotifications.ShowAsync(context.IsHeadless, title, message, silent));
     }
 
     public static DesktopTrayIcon CreateDesktopTrayIcon(

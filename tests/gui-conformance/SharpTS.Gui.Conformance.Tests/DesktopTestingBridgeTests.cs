@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Headless;
 using Avalonia.Threading;
 using SharpTS.Gui;
+using System.Text.Json;
 using Xunit;
 
 namespace SharpTS.Gui.Conformance.Tests;
@@ -33,12 +34,32 @@ public sealed class DesktopTestingBridgeTests
         Assert.Equal("second", DesktopTestingBridge.GetText(second, "value"));
         bool afterRenderCalled = false;
         DesktopTestingBridge.AfterRender(first, () => afterRenderCalled = true);
+        Dispatcher.UIThread.RunJobs();
         Assert.True(afterRenderCalled);
         Assert.Throws<InvalidOperationException>(() => DesktopTestingBridge.Click(first, "value"));
         Assert.Throws<InvalidOperationException>(() => DesktopTestingBridge.GetText(first, "missing"));
 
         first.Dispose();
         Assert.Throws<ObjectDisposedException>(() => DesktopTestingBridge.GetText(first, "value"));
+    }
+
+    [Fact]
+    public void AfterRenderWaitsForTrackedGuestWork()
+    {
+        using DesktopRuntimeRegistration runtime = Configure(headless: true);
+        using DesktopApplicationSession application = DesktopBridge.CreateDesktopApplication("explicit");
+        using DesktopRoot root = application.CreateWindowRoot(() => { }, null, false, true);
+        root.Render(Window("value"));
+        DesktopEventWorkTracker tracker = root.CreateEventWorkTracker();
+        tracker.Begin();
+
+        bool afterRenderCalled = false;
+        DesktopTestingBridge.AfterRender(root, () => afterRenderCalled = true);
+
+        Assert.False(afterRenderCalled);
+        tracker.Complete();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(afterRenderCalled);
     }
 
     [Fact]
@@ -211,9 +232,9 @@ public sealed class DesktopTestingBridgeTests
         using DesktopRoot root = application.CreateWindowRoot(() => { }, null, false, true);
         root.Render(Window("services"));
 
-        Task<string> message = DesktopBridge.ShowMessageDialogAsync("Title", "Message", "yesNo");
-        Task<string[]> open = DesktopBridge.ShowOpenFileDialogAsync("Open", false, "[]");
-        Task<string?> save = DesktopBridge.ShowSaveFileDialogAsync("Save", "file.txt", "txt", "[]");
+        Task<object?> message = DesktopBridge.ShowMessageDialogAsync("Title", "Message", "yesNo");
+        Task<object?> open = DesktopBridge.ShowOpenFileDialogJsonAsync("Open", false, "[]");
+        Task<object?> save = DesktopBridge.ShowSaveFileDialogAsync("Save", "file.txt", "txt", "[]");
 
         Assert.Empty(services.Calls);
         Assert.False(message.IsCompleted);
@@ -223,7 +244,9 @@ public sealed class DesktopTestingBridgeTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal("yes", await message);
-        Assert.Equal(["C:\\paint\\one.sharpaint", "C:\\paint\\two.png"], await open);
+        string[]? opened = JsonSerializer.Deserialize<string[]>((string)(await open)!);
+        Assert.NotNull(opened);
+        Assert.Equal(["C:\\paint\\one.sharpaint", "C:\\paint\\two.png"], opened);
         Assert.Null(await save);
         Assert.Equal(["message", "open", "save"], services.Calls);
     }

@@ -18,14 +18,22 @@ internal sealed class WindowDescriptor() : NodeDescriptor("Window", 0, 1)
     public override Control Create(GuiVNode node)
     {
         var window = new Window();
-        Update(window, new GuiVNode("Window"), node);
+        UpdateWindow(window, null, node);
         return window;
     }
 
     public override bool Update(Control control, GuiVNode previous, GuiVNode next)
+        => UpdateWindow((Window)control, previous, next);
+
+    private static bool UpdateWindow(Window window, GuiVNode? previous, GuiVNode next)
     {
-        var window = (Window)control;
-        bool changed = CommonProperties.Apply(window, next);
+        // A Window's width and height establish its initial/native requested size.
+        // Reapply them only when the guest changes the corresponding VNode prop;
+        // otherwise an OS/user resize followed by a reactive render would snap the
+        // window back and make onMetricsChanged unusable for responsive layouts.
+        bool applyWidth = previous is null || DimensionPropChanged(previous, next, "width", previous.Width, next.Width);
+        bool applyHeight = previous is null || DimensionPropChanged(previous, next, "height", previous.Height, next.Height);
+        bool changed = CommonProperties.Apply(window, next, applyWidth, applyHeight);
         string title = next.Title ?? "SharpTS GUI";
         if (window.Title != title)
         {
@@ -45,6 +53,15 @@ internal sealed class WindowDescriptor() : NodeDescriptor("Window", 0, 1)
         }
         return changed;
     }
+
+    private static bool DimensionPropChanged(
+        GuiVNode previous,
+        GuiVNode next,
+        string property,
+        double previousValue,
+        double nextValue) =>
+        CommonProperties.IsSpecified(previous, property) != CommonProperties.IsSpecified(next, property) ||
+        !previousValue.Equals(nextValue);
 
     private static ThemeVariant ParseTheme(string theme) => theme switch
     {

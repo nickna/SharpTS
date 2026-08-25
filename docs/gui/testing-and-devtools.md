@@ -51,7 +51,8 @@ drags, and separate `pressPointer`, `movePointer`, `releasePointer`, and `cancel
 separate phases make click-only and cancelled captured gestures deterministic. A driver is scoped to
 one window and cannot resolve keys from another. `afterRender` schedules its callback after the
 interaction's posted event callback, promise-backed event work, desktop-service completion, and
-resulting render commits.
+resulting render commits. It requires a stable guest idle checkpoint, so the callback is always
+deferred rather than invoked inline.
 
 `setWindowClientSize(width, height)` resizes the Headless window in DIPs. Combine it with
 `afterRender` and visibility or structural assertions to exercise responsive width and height

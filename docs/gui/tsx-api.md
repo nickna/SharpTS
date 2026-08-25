@@ -155,6 +155,11 @@ work-area size, and the physical-pixel work-area rectangle. The initial notifica
 after mount; retained windows use the latest callback and release native size/display
 subscriptions when the callback is removed or the window is disposed.
 
+For `Window`, `width` and `height` establish the initial native size. An OS or user resize is not
+overwritten by an unrelated reactive render. Changing either prop in a later VNode still requests
+that new dimension explicitly. This lets responsive applications keep fixed startup dimensions
+while deriving their content layout from `onMetricsChanged`.
+
 Native notification callbacks run as posted guest tasks, after the routed native event has
 unwound. Return-valued key, pointer, drag-over, and close predicates remain synchronous, but their
 microtask checkpoint is deferred until the next hosted turn. Synchronous throws and rejected

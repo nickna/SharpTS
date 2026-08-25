@@ -22,21 +22,35 @@ public static class DesktopTestingBridge
         DesktopRoot validated = RequireRoot(root);
         ArgumentNullException.ThrowIfNull(callback);
         DesktopRuntimeContext context = DesktopBridge.RequireContext();
-        void CheckEventWork()
+        void ConfirmGuestIdle()
         {
             if (validated.IsDisposed)
                 return;
             if (validated.HasPendingEventWork)
             {
-                context.PostGuestIdleProbe(CheckEventWork);
+                CheckGuestWork();
                 return;
             }
-            callback();
+            // A hosted Promise continuation can be admitted to the guest queue as
+            // the tracked operation settles. Require one complete idle checkpoint
+            // with no newly tracked render before exposing the native tree.
+            context.PostGuestIdleProbe(callback);
+        }
+        void CheckGuestWork()
+        {
+            if (validated.IsDisposed)
+                return;
+            if (validated.HasPendingEventWork)
+            {
+                context.PostGuestIdleProbe(CheckGuestWork);
+                return;
+            }
+            context.PostGuestIdleProbe(ConfirmGuestIdle);
         }
         context.DispatchGuestCallback(() =>
         {
             if (!validated.IsDisposed)
-                context.AfterDesktopServices(CheckEventWork);
+                context.AfterDesktopServices(CheckGuestWork);
         });
     }
 
