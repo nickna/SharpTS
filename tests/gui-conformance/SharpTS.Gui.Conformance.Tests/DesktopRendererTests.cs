@@ -350,6 +350,7 @@ public sealed class DesktopRendererTests : IDisposable
     [InlineData("[{\"kind\":\"line\",\"x1\":0,\"y1\":0,\"x2\":1,\"y2\":1}]")]
     [InlineData("[{\"kind\":\"rectangle\",\"width\":-1,\"height\":2}]")]
     [InlineData("[{\"kind\":\"image\",\"source\":\"data:image/png;base64,not-base64\",\"width\":1,\"height\":1}]")]
+    [InlineData("[{\"kind\":\"text\",\"text\":\"Text\",\"x\":0,\"y\":0,\"width\":20,\"height\":20,\"fill\":\"#000000\",\"fontSize\":12}]")]
     public void DrawingCanvas_RejectsInvalidCommandsBeforeNativeMutation(string commands)
     {
         DesktopRoot root = CreateRoot();
@@ -654,6 +655,81 @@ public sealed class DesktopRendererTests : IDisposable
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public void DrawingGraphics_TextSamplingFloodFillAndEffectsShareTheValidatedRenderer()
+    {
+        const string splitDocument = """
+            {
+              "width":6,"height":4,
+              "layers":[{"isVisible":true,"opacity":1,"commands":[
+                {"kind":"rectangle","x":0,"y":0,"width":3,"height":4,"fill":"#ff0000"},
+                {"kind":"rectangle","x":3,"y":0,"width":3,"height":4,"fill":"#0000ff"}
+              ]}]
+            }
+            """;
+
+        using (JsonDocument sample = JsonDocument.Parse(CompleteBackgroundTask(
+            DesktopBridge.SampleDrawingPixelJsonAsync(splitDocument, 1, 1))))
+        {
+            Assert.Equal(255, sample.RootElement.GetProperty("red").GetInt32());
+            Assert.Equal("#ff0000", sample.RootElement.GetProperty("color").GetString());
+        }
+
+        string filledJson = CompleteBackgroundTask(DesktopBridge.FloodFillDrawingJsonAsync(
+            splitDocument,
+            "{\"x\":1,\"y\":1,\"color\":\"#00ff00\",\"tolerance\":0}"));
+        using (JsonDocument filled = JsonDocument.Parse(filledJson))
+        {
+            Assert.True(filled.RootElement.GetProperty("changed").GetBoolean());
+            string source = filled.RootElement.GetProperty("image").GetProperty("source").GetString()!;
+            using SKBitmap bitmap = DecodeDataUri(source);
+            Assert.Equal(SKColors.Lime, bitmap.GetPixel(1, 1));
+            Assert.Equal(SKColors.Blue, bitmap.GetPixel(4, 1));
+        }
+
+        using (JsonDocument unchanged = JsonDocument.Parse(CompleteBackgroundTask(
+            DesktopBridge.FloodFillDrawingJsonAsync(
+                splitDocument,
+                "{\"x\":1,\"y\":1,\"color\":\"#ff0000\",\"tolerance\":0}"))))
+        {
+            Assert.False(unchanged.RootElement.GetProperty("changed").GetBoolean());
+            Assert.False(unchanged.RootElement.TryGetProperty("image", out JsonElement image) && image.ValueKind != JsonValueKind.Null);
+        }
+
+        string invertedJson = CompleteBackgroundTask(DesktopBridge.RenderDrawingToImageJsonAsync(
+            splitDocument,
+            "{\"effects\":[{\"kind\":\"invert\"}]}"));
+        using (JsonDocument inverted = JsonDocument.Parse(invertedJson))
+        using (SKBitmap bitmap = DecodeDataUri(inverted.RootElement.GetProperty("source").GetString()!))
+        {
+            Assert.Equal(SKColors.Cyan, bitmap.GetPixel(1, 1));
+            Assert.Equal(SKColors.Yellow, bitmap.GetPixel(4, 1));
+        }
+
+        const string textDocument = """
+            {
+              "width":120,"height":48,
+              "layers":[{"isVisible":true,"opacity":1,"commands":[
+                {"kind":"text","text":"SharpTS","x":2,"y":2,"width":116,"height":44,
+                 "fill":"#ff0000","fontFamily":"sans-serif","fontSize":24,
+                 "fontWeight":"bold","textAlignment":"left","textWrapping":"wrap"}
+              ]}]
+            }
+            """;
+        string textJson = CompleteBackgroundTask(DesktopBridge.RenderDrawingToImageJsonAsync(textDocument, "{}"));
+        using (JsonDocument renderedText = JsonDocument.Parse(textJson))
+        using (SKBitmap bitmap = DecodeDataUri(renderedText.RootElement.GetProperty("source").GetString()!))
+        {
+            Assert.Contains(Enumerable.Range(0, bitmap.Width), x =>
+                Enumerable.Range(0, bitmap.Height).Any(y => bitmap.GetPixel(x, y).Red > 0 && bitmap.GetPixel(x, y).Alpha > 0));
+        }
+
+        Assert.ThrowsAny<Exception>(() => CompleteBackgroundTask(
+            DesktopBridge.RenderDrawingToImageJsonAsync(
+                splitDocument,
+                "{\"effects\":[{\"kind\":\"gaussianBlur\",\"radius\":65}]}")));
     }
 
     [Fact]
@@ -1442,6 +1518,14 @@ public sealed class DesktopRendererTests : IDisposable
     {
         while (_guestMicrotasks.TryDequeue(out Action? callback))
             callback();
+    }
+
+    private static SKBitmap DecodeDataUri(string source)
+    {
+        const string prefix = "data:image/png;base64,";
+        Assert.StartsWith(prefix, source, StringComparison.Ordinal);
+        return SKBitmap.Decode(Convert.FromBase64String(source[prefix.Length..]))
+            ?? throw new InvalidDataException("The drawing service returned an invalid PNG data URI.");
     }
 
     private static void CompleteBackgroundTask(Task task)

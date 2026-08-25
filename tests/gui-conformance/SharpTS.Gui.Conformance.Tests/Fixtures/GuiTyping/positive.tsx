@@ -6,6 +6,7 @@ import {
     Fragment,
     Grid,
     DrawingCanvas,
+    DrawingDocument,
     RichTextBlock,
     StackPanel,
     TextBlock,
@@ -18,8 +19,11 @@ import {
     getDesktopPlatformInfo,
     getDesktopDisplays,
     getLaunchArguments,
+    floodFillDrawing,
     openExternal,
     printFile,
+    renderDrawingToImage,
+    sampleDrawingPixel,
     showNotification,
     showItemInFolder,
     useControlRef,
@@ -93,6 +97,17 @@ const tree = createTree({ items: records, itemKey: item => item.id, itemLabel: i
 const dataGrid = createVirtualDataGrid({ items: records, rowKey: item => item.id,
     startIndex: 0, visibleCount: 10,
     columns: [{ key: "name", header: "Name", renderCell: item => <TextBlock>{item.name}</TextBlock> }] });
+const drawingDocument: DrawingDocument = {
+    width: 100,
+    height: 60,
+    layers: [{ isVisible: true, opacity: 1, commands: [{
+        kind: "text", text: "SharpTS", x: 2, y: 2, width: 96, height: 40,
+        fill: "#336699", fontFamily: "sans-serif", fontSize: 18, textWrapping: "wrap",
+    }] }],
+};
+void renderDrawingToImage(drawingDocument, { effects: [{ kind: "gaussianBlur", radius: 2 }] });
+void sampleDrawingPixel(drawingDocument, { x: 2, y: 2 });
+void floodFillDrawing(drawingDocument, { x: 2, y: 2, color: "#ff0000", tolerance: 0.1 });
 export const genericSurfaces = (
     <Grid>
         {virtualList}{tree}{dataGrid}

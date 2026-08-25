@@ -9,6 +9,7 @@ import {
     createDocument,
     createHistory,
     createImportedDocument,
+    createTextCommand,
     deleteLayer,
     duplicateLayer,
     extendDraft,
@@ -16,6 +17,7 @@ import {
     moveLayer,
     parseProject,
     redo,
+    replaceLayerCommands,
     renameLayer,
     serializeProject,
     setLayerOpacity,
@@ -66,6 +68,14 @@ expect("eraser preview is composed into its target layer",
 const bounded = clampPoint(initial, { x: -12, y: 900 });
 expect("bounds clamping", bounded.x === 0 && bounded.y === 200);
 
+const text = createTextCommand("SharpTS\nPaint", { x: 10, y: 12, width: 140, height: 60 }, "#123456", "sans-serif", 24, true, true);
+expect("retained text command", text.kind === "text" && text.text === "SharpTS\nPaint" && text.fill === "#123456" && text.fontWeight === "bold" && text.fontStyle === "italic");
+const textDocument = appendCommand(initial, initial.layers[0].id, text);
+const textRoundTrip = parseProject(serializeProject(textDocument));
+expect("text remains in project version one", textRoundTrip.version === 1 && textRoundTrip.layers[0].commands[1].kind === "text");
+const rasterized = replaceLayerCommands(textDocument, initial.layers[0].id, [{ kind: "image", source: "data:image/png;base64,iVBORw0KGgo=", x: 0, y: 0, width: 320, height: 200 }]);
+expect("raster edits replace only selected layer commands", rasterized.layers[0].commands.length === 1 && rasterized.layers[0].commands[0].kind === "image");
+
 const added = addLayer(initial, initial.layers[0].id);
 const duplicated = duplicateLayer(added.document, added.layerId);
 expect("add and duplicate", duplicated.document.layers.length === 3 && duplicated.document.layers[2].id !== duplicated.document.layers[1].id);
@@ -106,5 +116,6 @@ rejects("duplicate layer IDs", '{"format":"sharpaint","version":1,"width":1,"hei
 rejects("non-finite geometry", '{"format":"sharpaint","version":1,"width":1e999,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[]}]}');
 rejects("unsupported command", '{"format":"sharpaint","version":1,"width":1,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"filter"}]}]}');
 rejects("unembedded image", '{"format":"sharpaint","version":1,"width":1,"height":1,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"image","source":"file.png","x":0,"y":0,"width":1,"height":1}]}]}');
+rejects("invalid text", '{"format":"sharpaint","version":1,"width":10,"height":10,"layers":[{"id":"x","name":"a","isVisible":true,"opacity":1,"commands":[{"kind":"text","text":"","x":0,"y":0,"width":5,"height":5,"fill":"#000000","fontFamily":"sans-serif","fontSize":12,"textAlignment":"left","textWrapping":"wrap"}]}]}');
 
 console.log("SharpPaint model tests passed.");

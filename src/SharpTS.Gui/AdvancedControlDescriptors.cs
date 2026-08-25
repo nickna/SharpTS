@@ -165,8 +165,8 @@ internal sealed class DrawingCanvasDescriptor() : NodeDescriptor("DrawingCanvas"
         {
             DrawingGraphics.ValidateSurfaceDimensions(node.CoordinateWidth, node.CoordinateHeight);
         }
-        else if (commands.Any(command => command.Composite == "destinationOut"))
-            throw new ArgumentException("destinationOut drawing commands require logical coordinate dimensions.");
+        else if (commands.Any(command => command.Composite == "destinationOut" || command.Kind == "text"))
+            throw new ArgumentException("Text and destinationOut drawing commands require logical coordinate dimensions.");
     }
 
     public override Control Create(GuiVNode node)
@@ -245,7 +245,7 @@ internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICust
             json ?? "[]", DrawingJsonContext.Default.DrawingModelArray) ?? [];
         foreach (DrawingModel command in commands)
         {
-            if (command.Kind is not ("line" or "rectangle" or "ellipse" or "polyline" or "image"))
+            if (command.Kind is not ("line" or "rectangle" or "ellipse" or "polyline" or "text" or "image"))
                 throw new ArgumentException($"Unsupported drawing command '{command.Kind}'.");
             if (command.Kind is "line" or "polyline" && command.Stroke is null)
                 throw new ArgumentException($"A {command.Kind} command requires stroke.");
@@ -253,12 +253,18 @@ internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICust
                 throw new ArgumentException("A polyline command requires at least one point.");
             if (command.Kind == "image" && string.IsNullOrWhiteSpace(command.Source))
                 throw new ArgumentException("An image command requires a source.");
+            if (command.Kind == "text" && string.IsNullOrEmpty(command.Text))
+                throw new ArgumentException("A text command requires text.");
+            if (command.Kind == "text" && command.Text!.Length > 65_536)
+                throw new ArgumentException("A text command supports at most 65,536 characters.");
+            if (command.Kind == "text" && command.Fill is null)
+                throw new ArgumentException("A text command requires fill.");
             if (command.Kind == "image") DrawingGraphics.ValidateImageSource(
                 context ?? DesktopBridge.RequireContext(), command.Source!);
             foreach (double value in command.Values())
                 if (!double.IsFinite(value)) throw new ArgumentException("Drawing coordinates must be finite.");
             if (command.Kind is "rectangle" && (command.Width < 0 || command.Height < 0) ||
-                command.Kind is "image" && (command.Width <= 0 || command.Height <= 0) ||
+                (command.Kind is "image" or "text") && (command.Width <= 0 || command.Height <= 0) ||
                 command.Kind is "ellipse" && (command.RadiusX < 0 || command.RadiusY < 0))
                 throw new ArgumentException("Drawing dimensions are invalid.");
             if (command.Kind == "polyline" && command.Points!.Length > 10_000)
@@ -271,6 +277,18 @@ internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICust
                 throw new ArgumentException($"Unsupported drawing composite mode '{command.Composite}'.");
             if (command.Kind == "image" && command.Composite == "destinationOut")
                 throw new ArgumentException("Image commands do not support destinationOut compositing.");
+            if (command.Kind == "text" && (!double.IsFinite(command.FontSize) || command.FontSize < 1 || command.FontSize > 512))
+                throw new ArgumentException("Text font size must be between 1 and 512 pixels.");
+            if (command.Kind == "text" && command.FontFamily is { Length: > 128 })
+                throw new ArgumentException("Text font family names support at most 128 characters.");
+            if (command.Kind == "text" && command.FontWeight is not (null or "normal" or "medium" or "semibold" or "bold"))
+                throw new ArgumentException($"Unsupported text font weight '{command.FontWeight}'.");
+            if (command.Kind == "text" && command.FontStyle is not (null or "normal" or "italic"))
+                throw new ArgumentException($"Unsupported text font style '{command.FontStyle}'.");
+            if (command.Kind == "text" && command.TextAlignment is not (null or "left" or "center" or "right"))
+                throw new ArgumentException($"Unsupported text alignment '{command.TextAlignment}'.");
+            if (command.Kind == "text" && command.TextWrapping is not (null or "noWrap" or "wrap"))
+                throw new ArgumentException($"Unsupported text wrapping '{command.TextWrapping}'.");
             if (command.LineCap is not (null or "butt" or "round" or "square"))
                 throw new ArgumentException($"Unsupported line cap '{command.LineCap}'.");
             if (command.LineJoin is not (null or "miter" or "round" or "bevel"))
@@ -297,13 +315,20 @@ internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICust
         double RadiusY,
         DrawingPointModel[]? Points,
         string? Source,
+        string? Text,
         string? Fill,
         string? Stroke,
         double? StrokeThickness,
         double? Opacity,
         string? Composite,
         string? LineCap,
-        string? LineJoin)
+        string? LineJoin,
+        string? FontFamily,
+        double FontSize,
+        string? FontWeight,
+        string? FontStyle,
+        string? TextAlignment,
+        string? TextWrapping)
     {
         public IEnumerable<double> Values() => Kind switch
         {
@@ -311,6 +336,7 @@ internal sealed partial class DrawingSurface : Control, Avalonia.Rendering.ICust
             "rectangle" => [X, Y, Width, Height],
             "ellipse" => [CenterX, CenterY, RadiusX, RadiusY],
             "polyline" => (Points ?? []).SelectMany(point => new[] { point.X, point.Y }),
+            "text" => [X, Y, Width, Height],
             "image" => [X, Y, Width, Height],
             _ => [],
         };

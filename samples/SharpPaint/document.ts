@@ -1,10 +1,12 @@
-export type PaintTool = "brush" | "eraser" | "line" | "rectangle" | "ellipse";
+export type DrawingTool = "brush" | "eraser" | "line" | "rectangle" | "ellipse";
+export type PaintTool = DrawingTool | "fill" | "picker" | "text";
 export interface PaintPoint { readonly x: number; readonly y: number; }
 export type PaintCommand =
     | { readonly kind: "polyline"; readonly points: readonly PaintPoint[]; readonly stroke: string; readonly strokeThickness: number; readonly lineCap: "round"; readonly lineJoin: "round"; readonly composite?: "destinationOut" }
     | { readonly kind: "line"; readonly x1: number; readonly y1: number; readonly x2: number; readonly y2: number; readonly stroke: string; readonly strokeThickness: number }
     | { readonly kind: "rectangle"; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly fill?: string; readonly stroke?: string; readonly strokeThickness: number }
     | { readonly kind: "ellipse"; readonly centerX: number; readonly centerY: number; readonly radiusX: number; readonly radiusY: number; readonly fill?: string; readonly stroke?: string; readonly strokeThickness: number }
+    | { readonly kind: "text"; readonly text: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly fill: string; readonly fontFamily: string; readonly fontSize: number; readonly fontWeight?: "bold"; readonly fontStyle?: "italic"; readonly textAlignment: "left"; readonly textWrapping: "wrap" }
     | { readonly kind: "image"; readonly source: string; readonly x: number; readonly y: number; readonly width: number; readonly height: number };
 
 export interface PaintLayer {
@@ -32,7 +34,7 @@ export interface DocumentHistory {
 }
 
 export interface PaintDraft {
-    readonly tool: PaintTool;
+    readonly tool: DrawingTool;
     readonly start: PaintPoint;
     readonly points: readonly PaintPoint[];
 }
@@ -118,7 +120,7 @@ export function clampPoint(document: PaintDocument, point: PaintPoint): PaintPoi
     };
 }
 
-export function beginDraft(tool: PaintTool, point: PaintPoint): PaintDraft {
+export function beginDraft(tool: DrawingTool, point: PaintPoint): PaintDraft {
     return { tool, start: point, points: [point] };
 }
 
@@ -167,6 +169,37 @@ export function commandForDraft(draft: PaintDraft, color: string, size: number, 
 
 export function appendCommand(document: PaintDocument, layerId: string, command: PaintCommand): PaintDocument {
     return mapLayer(document, layerId, layer => ({ ...layer, commands: [...layer.commands, command] }));
+}
+
+export function replaceLayerCommands(document: PaintDocument, layerId: string, commands: readonly PaintCommand[]): PaintDocument {
+    return mapLayer(document, layerId, layer => ({ ...layer, commands: commands.slice() }));
+}
+
+export function createTextCommand(
+    text: string,
+    bounds: { readonly x: number; readonly y: number; readonly width: number; readonly height: number },
+    color: string,
+    fontFamily: string,
+    fontSize: number,
+    bold: boolean,
+    italic: boolean): PaintCommand {
+    const command: PaintCommand = {
+        kind: "text",
+        text,
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height,
+        fill: color,
+        fontFamily,
+        fontSize,
+        fontWeight: bold ? "bold" : undefined,
+        fontStyle: italic ? "italic" : undefined,
+        textAlignment: "left",
+        textWrapping: "wrap",
+    };
+    validateCommand(command);
+    return command;
 }
 
 export function addLayer(document: PaintDocument, afterLayerId?: string): { document: PaintDocument; layerId: string } {
@@ -261,7 +294,7 @@ function validateDimension(value: number, name: string): void {
 }
 function finite(value: any): boolean { return typeof value === "number" && Number.isFinite(value); }
 function validateCommand(command: any): void {
-    if (command === null || typeof command !== "object" || ["polyline", "line", "rectangle", "ellipse", "image"].indexOf(command.kind) < 0)
+    if (command === null || typeof command !== "object" || ["polyline", "line", "rectangle", "ellipse", "text", "image"].indexOf(command.kind) < 0)
         throw new Error("A layer contains an unsupported drawing command.");
     const numbers: number[] = [];
     if (command.kind === "polyline") {
@@ -280,6 +313,16 @@ function validateCommand(command: any): void {
         if (typeof command.source !== "string" || !command.source.startsWith("data:image/png;base64,") || command.source.length > 35_000_000)
             throw new Error("Saved image layers must contain embedded PNG data.");
         if (command.width <= 0 || command.height <= 0) throw new Error("Image dimensions must be positive.");
+    } else if (command.kind === "text") {
+        if (typeof command.text !== "string" || command.text.length < 1 || command.text.length > 65_536)
+            throw new Error("Text commands require between 1 and 65,536 characters.");
+        if (command.width <= 0 || command.height <= 0 || !finite(command.fontSize) || command.fontSize < 1 || command.fontSize > 512)
+            throw new Error("Text bounds or font size are invalid.");
+        if (!validColor(command.fill) || typeof command.fontFamily !== "string" || command.fontFamily.length < 1 || command.fontFamily.length > 128)
+            throw new Error("Text color or font family is invalid.");
+        if (command.fontWeight !== undefined && command.fontWeight !== "bold") throw new Error("Text font weight is invalid.");
+        if (command.fontStyle !== undefined && command.fontStyle !== "italic") throw new Error("Text font style is invalid.");
+        if (command.textAlignment !== "left" || command.textWrapping !== "wrap") throw new Error("Text layout is invalid.");
     } else {
         if (!finite(command.strokeThickness) || command.strokeThickness <= 0 || command.strokeThickness > 256)
             throw new Error("Stroke thickness is invalid.");

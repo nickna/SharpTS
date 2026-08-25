@@ -1,7 +1,9 @@
 import {
     Border,
     Button,
+    Canvas,
     CheckBox,
+    ComboBox,
     DockPanel,
     DrawingCanvas,
     ErrorBoundary,
@@ -19,14 +21,19 @@ import {
     WrapPanel,
     Window,
     getImageDimensions,
+    floodFillDrawing,
     renderDrawingToPng,
+    renderDrawingToImage,
+    sampleDrawingPixel,
     showMessageDialog,
     showOpenFileDialog,
     showSaveFileDialog,
     useReducer,
+    useControlRef,
+    useEffect,
     useRef,
 } from "@sharpts/gui";
-import type { DrawingCommand, DrawingDocument, WindowMetricsEvent } from "@sharpts/gui";
+import type { DrawingCommand, DrawingDocument, DrawingEffect, TextBoxHandle, WindowMetricsEvent } from "@sharpts/gui";
 import { readFileSync, statSync, writeFileSync } from "fs";
 import { basename, extname } from "path";
 import {
@@ -35,6 +42,7 @@ import {
     PaintDraft,
     PaintLayer,
     PaintTool,
+    DrawingTool,
     addLayer,
     appendCommand,
     beginDraft,
@@ -44,11 +52,13 @@ import {
     createDocument,
     createHistory,
     createImportedDocument,
+    createTextCommand,
     deleteLayer,
     duplicateLayer,
     extendDraft,
     moveLayer,
     parseProject,
+    replaceLayerCommands,
     redo,
     renameLayer,
     serializeProject,
@@ -64,6 +74,30 @@ const COLORS = [
     DEFAULT_COLOR, "#ffffff", "#ef4444", "#f97316", "#f59e0b", "#eab308", "#22c55e", "#14b8a6",
     "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#d946ef", "#ec4899", "#78716c", "#94a3b8",
 ];
+const FONT_FAMILIES = ["sans-serif", "serif", "monospace"];
+
+interface TextDraft {
+    readonly start: { readonly x: number; readonly y: number };
+    readonly x: number;
+    readonly y: number;
+    readonly width: number;
+    readonly height: number;
+    readonly text: string;
+    readonly editing: boolean;
+}
+
+type EffectDialogKind = "gaussianBlur" | "brightnessContrast" | "hueSaturation";
+interface EffectDialogState {
+    readonly kind: EffectDialogKind;
+    readonly first: number;
+    readonly second: number;
+}
+interface RasterPreview {
+    readonly layerId: string;
+    readonly revision: number;
+    readonly signature: string;
+    readonly command: DrawingCommand;
+}
 
 interface AppState {
     readonly history: DocumentHistory;
@@ -86,6 +120,16 @@ interface AppState {
     readonly windowWidth: number;
     readonly windowHeight: number;
     readonly layersPaneOpen: boolean;
+    readonly revision: number;
+    readonly fillTolerance: number;
+    readonly fontFamily: string;
+    readonly textSize: number;
+    readonly textBold: boolean;
+    readonly textItalic: boolean;
+    readonly textDraft: TextDraft | null;
+    readonly effectDialog: EffectDialogState | null;
+    readonly effectPreview: RasterPreview | null;
+    readonly busy: string | null;
 }
 
 type AppAction =
@@ -112,7 +156,24 @@ type AppAction =
     | { type: "newWidth"; value: string }
     | { type: "newHeight"; value: string }
     | { type: "metrics"; width: number; height: number }
-    | { type: "toggleLayers"; value: boolean };
+    | { type: "toggleLayers"; value: boolean }
+    | { type: "fillTolerance"; value: number }
+    | { type: "fontFamily"; value: string }
+    | { type: "textSize"; value: number }
+    | { type: "textBold"; value: boolean }
+    | { type: "textItalic"; value: boolean }
+    | { type: "textStart"; point: { x: number; y: number } }
+    | { type: "textMove"; point: { x: number; y: number } }
+    | { type: "textEdit"; point: { x: number; y: number } }
+    | { type: "textValue"; value: string }
+    | { type: "cancelText" }
+    | { type: "showEffect"; kind: EffectDialogKind }
+    | { type: "effectParameter"; first?: number; second?: number }
+    | { type: "effectPreview"; preview: RasterPreview }
+    | { type: "cancelEffect" }
+    | { type: "busy"; value: string | null }
+    | { type: "replaceLayer"; layerId: string; source: string; status: string; expectedRevision: number }
+    | { type: "commitText"; command: DrawingCommand };
 
 function initialState(): AppState {
     const document = createDocument();
@@ -137,18 +198,76 @@ function initialState(): AppState {
         windowWidth: 1120,
         windowHeight: 700,
         layersPaneOpen: false,
+        revision: 0,
+        fillTolerance: 0.08,
+        fontFamily: FONT_FAMILIES[0],
+        textSize: 32,
+        textBold: false,
+        textItalic: false,
+        textDraft: null,
+        effectDialog: null,
+        effectPreview: null,
+        busy: null,
     };
 }
 
 function updateDocument(state: AppState, document: PaintDocument, selectedLayerId: string = state.selectedLayerId): AppState {
-    return { ...state, history: commitDocument(state.history, document), selectedLayerId };
+    return {
+        ...state,
+        history: commitDocument(state.history, document),
+        selectedLayerId,
+        revision: state.revision + 1,
+        draft: null,
+        textDraft: null,
+        effectDialog: null,
+        effectPreview: null,
+    };
+}
+
+function resizeTextDraft(draft: TextDraft, point: { readonly x: number; readonly y: number }): TextDraft {
+    return {
+        ...draft,
+        x: Math.min(draft.start.x, point.x),
+        y: Math.min(draft.start.y, point.y),
+        width: Math.abs(point.x - draft.start.x),
+        height: Math.abs(point.y - draft.start.y),
+    };
+}
+
+function effectTitle(kind: EffectDialogKind): string {
+    if (kind === "gaussianBlur") return "Gaussian blur";
+    if (kind === "brightnessContrast") return "Brightness / contrast";
+    return "Hue / saturation";
+}
+
+function effectForDialog(dialog: EffectDialogState): DrawingEffect {
+    if (dialog.kind === "gaussianBlur") return { kind: "gaussianBlur", radius: dialog.first };
+    if (dialog.kind === "brightnessContrast") return { kind: "brightnessContrast", brightness: dialog.first, contrast: dialog.second };
+    return { kind: "hueSaturation", hue: dialog.first, saturation: dialog.second };
+}
+
+function effectName(effect: DrawingEffect): string {
+    if (effect.kind === "gaussianBlur") return "Gaussian blur";
+    if (effect.kind === "brightnessContrast") return "Brightness / contrast";
+    if (effect.kind === "hueSaturation") return "Hue / saturation";
+    if (effect.kind === "grayscale") return "Grayscale";
+    return "Invert";
+}
+
+function requireDrawingTool(tool: PaintTool): DrawingTool {
+    if (tool === "brush") return "brush";
+    if (tool === "eraser") return "eraser";
+    if (tool === "line") return "line";
+    if (tool === "rectangle") return "rectangle";
+    if (tool === "ellipse") return "ellipse";
+    throw new Error("The selected tool does not create a drawing gesture.");
 }
 
 function appReducer(state: AppState, action: any): AppState {
     switch (action.type) {
         case "tool": {
             const tool = action.tool as PaintTool;
-            return { ...state, tool, draft: null, status: toolLabel(tool) + " selected" };
+            return { ...state, tool, draft: null, textDraft: null, effectDialog: null, effectPreview: null, status: toolLabel(tool) + " selected" };
         }
         case "color": {
             const color = action.color as string;
@@ -161,7 +280,7 @@ function appReducer(state: AppState, action: any): AppState {
             const point = clampPoint(state.history.document, action.point as { x: number; y: number });
             return {
                 ...state,
-                draft: beginDraft(state.tool, point),
+                draft: beginDraft(requireDrawingTool(state.tool), point),
                 draftColor: state.color,
                 draftSize: state.size,
                 draftFilled: state.filled,
@@ -183,8 +302,8 @@ function appReducer(state: AppState, action: any): AppState {
             return { ...updateDocument(state, document), draft: null, cursor: clampedPoint, status: toolLabel(state.tool) + " committed" };
         }
         case "pointerCancel": return { ...state, draft: null, status: "Gesture canceled" };
-        case "undo": return { ...state, history: undo(state.history), draft: null, status: state.history.past.length === 0 ? "Nothing to undo" : "Undid document change" };
-        case "redo": return { ...state, history: redo(state.history), draft: null, status: state.history.future.length === 0 ? "Nothing to redo" : "Redid document change" };
+        case "undo": return { ...state, history: undo(state.history), revision: state.revision + 1, draft: null, textDraft: null, effectDialog: null, effectPreview: null, status: state.history.past.length === 0 ? "Nothing to undo" : "Undid document change" };
+        case "redo": return { ...state, history: redo(state.history), revision: state.revision + 1, draft: null, textDraft: null, effectDialog: null, effectPreview: null, status: state.history.future.length === 0 ? "Nothing to redo" : "Redid document change" };
         case "selectLayer": return { ...state, selectedLayerId: action.layerId as string, draft: null };
         case "addLayer": {
             const result = addLayer(state.history.document, state.selectedLayerId);
@@ -207,7 +326,7 @@ function appReducer(state: AppState, action: any): AppState {
         case "opacity": return updateDocument(state, setLayerOpacity(state.history.document, state.selectedLayerId, action.value as number));
         case "load": {
             const loaded = action.document as PaintDocument;
-            return { ...state, history: createHistory(loaded), selectedLayerId: loaded.layers[loaded.layers.length - 1].id, filePath: action.filePath as string | null, draft: null, status: action.status as string, newDialog: false };
+            return { ...state, history: createHistory(loaded), selectedLayerId: loaded.layers[loaded.layers.length - 1].id, filePath: action.filePath as string | null, revision: state.revision + 1, draft: null, textDraft: null, effectDialog: null, effectPreview: null, busy: null, status: action.status as string, newDialog: false };
         }
         case "saved": return { ...state, history: createHistory(state.history.document), filePath: action.filePath as string, status: action.status as string };
         case "status": return { ...state, status: action.status as string };
@@ -221,6 +340,76 @@ function appReducer(state: AppState, action: any): AppState {
             return { ...state, windowWidth, windowHeight };
         }
         case "toggleLayers": return { ...state, layersPaneOpen: action.value as boolean };
+        case "fillTolerance": return { ...state, fillTolerance: Math.max(0, Math.min(1, action.value as number)) };
+        case "fontFamily": return FONT_FAMILIES.indexOf(action.value as string) < 0 ? state : { ...state, fontFamily: action.value as string };
+        case "textSize": return { ...state, textSize: Math.round(Math.max(6, Math.min(144, action.value as number))) };
+        case "textBold": return { ...state, textBold: action.value as boolean };
+        case "textItalic": return { ...state, textItalic: action.value as boolean };
+        case "textStart": {
+            const point = clampPoint(state.history.document, action.point as { x: number; y: number });
+            return { ...state, draft: null, textDraft: { start: point, x: point.x, y: point.y, width: 1, height: 1, text: "", editing: false }, cursor: point, status: "Drag to create a text box" };
+        }
+        case "textMove": {
+            const textDraft = state.textDraft;
+            if (textDraft === null || textDraft.editing) return state;
+            const point = clampPoint(state.history.document, action.point as { x: number; y: number });
+            return { ...state, cursor: point, textDraft: resizeTextDraft(textDraft, point) };
+        }
+        case "textEdit": {
+            const textDraft = state.textDraft;
+            if (textDraft === null) return state;
+            const point = clampPoint(state.history.document, action.point as { x: number; y: number });
+            const resized = resizeTextDraft(textDraft, point);
+            const width = resized.width < 8 ? Math.min(280, state.history.document.width - resized.x) : resized.width;
+            const height = resized.height < 8 ? Math.min(120, state.history.document.height - resized.y) : resized.height;
+            return { ...state, cursor: point, textDraft: { ...resized, width: Math.max(1, width), height: Math.max(1, height), editing: true }, status: "Enter text, then apply or press Ctrl+Enter" };
+        }
+        case "textValue": return state.textDraft === null ? state : { ...state, textDraft: { ...state.textDraft, text: (action.value as string).slice(0, 65_536) } };
+        case "cancelText": return { ...state, textDraft: null, status: "Text canceled" };
+        case "showEffect": {
+            const kind = action.kind as EffectDialogKind;
+            const dialog: EffectDialogState = kind === "gaussianBlur"
+                ? { kind, first: 4, second: 0 }
+                : { kind, first: 0, second: 0 };
+            return { ...state, effectDialog: dialog, effectPreview: null, textDraft: null, draft: null, status: effectTitle(kind) + " settings" };
+        }
+        case "effectParameter": {
+            if (state.effectDialog === null) return state;
+            return {
+                ...state,
+                effectDialog: {
+                    ...state.effectDialog,
+                    first: action.first === undefined ? state.effectDialog.first : action.first as number,
+                    second: action.second === undefined ? state.effectDialog.second : action.second as number,
+                },
+                effectPreview: null,
+            };
+        }
+        case "effectPreview": {
+            const preview = action.preview as RasterPreview;
+            return preview.revision === state.revision
+                ? { ...state, effectPreview: preview, busy: null, status: "Effect preview ready" }
+                : { ...state, busy: null, status: "Discarded a stale effect preview" };
+        }
+        case "cancelEffect": return { ...state, effectDialog: null, effectPreview: null, busy: null, status: "Effect canceled" };
+        case "busy": return { ...state, busy: action.value as string | null, status: action.value === null ? state.status : action.value as string };
+        case "replaceLayer": {
+            if ((action.expectedRevision as number) !== state.revision || state.history.document.layers.findIndex(layer => layer.id === action.layerId) < 0)
+                return { ...state, busy: null, status: "Discarded a stale graphics result" };
+            const document = replaceLayerCommands(state.history.document, action.layerId as string, [{
+                kind: "image",
+                source: action.source as string,
+                x: 0,
+                y: 0,
+                width: state.history.document.width,
+                height: state.history.document.height,
+            }]);
+            return { ...updateDocument(state, document), busy: null, status: action.status as string };
+        }
+        case "commitText": {
+            const document = appendCommand(state.history.document, state.selectedLayerId, action.command as any);
+            return { ...updateDocument(state, document), status: "Text committed" };
+        }
     }
     return state;
 }
@@ -243,19 +432,104 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
     const toolRailWidth = compact ? 70 : 132;
     const layersWidth = compact ? 220 : 250;
     const swatchSize = compact ? 26 : 30;
+    const usesStrokeSize = state.tool === "brush" || state.tool === "eraser" || state.tool === "line" || state.tool === "rectangle" || state.tool === "ellipse";
+    const shapeTool = state.tool === "rectangle" || state.tool === "ellipse";
+    const textEditorRef = useControlRef<TextBoxHandle>();
+    const lifecycle = useRef({ alive: true, operation: 0 });
+    useEffect(() => {
+        lifecycle.current.alive = true;
+        return () => {
+            lifecycle.current.alive = false;
+            lifecycle.current.operation++;
+        };
+    }, []);
+    useEffect(() => {
+        if (state.textDraft !== null && state.textDraft.editing) textEditorRef.focus();
+    }, [state.textDraft === null ? false : state.textDraft.editing]);
 
     const pointOf = (event: PointerEvent): { x: number; y: number } => ({ x: event.x / state.zoom, y: event.y / state.zoom });
+    const pointInPixels = (point: { readonly x: number; readonly y: number }): { x: number; y: number } => ({
+        x: Math.max(0, Math.min(document.width - 1, Math.floor(point.x))),
+        y: Math.max(0, Math.min(document.height - 1, Math.floor(point.y))),
+    });
+    const layerDrawing = (layer: PaintLayer): DrawingDocument => ({
+        width: document.width,
+        height: document.height,
+        layers: [{ isVisible: true, opacity: 1, commands: layer.commands as readonly DrawingCommand[] }],
+    });
+    const documentDrawing = (): DrawingDocument => ({
+        width: document.width,
+        height: document.height,
+        layers: document.layers.map(layer => ({
+            isVisible: layer.isVisible,
+            opacity: layer.opacity,
+            commands: layer.commands as readonly DrawingCommand[],
+        })),
+    });
+    const performFill = async (point: { readonly x: number; readonly y: number }): Promise<void> => {
+        if (state.busy !== null) return;
+        const operation = ++lifecycle.current.operation;
+        const revision = state.revision;
+        const layerId = selectedLayer.id;
+        dispatch({ type: "busy", value: "Filling selected layer…" });
+        try {
+            const result = await floodFillDrawing(layerDrawing(selectedLayer), {
+                ...pointInPixels(point),
+                color: state.color,
+                tolerance: state.fillTolerance,
+            });
+            if (!lifecycle.current.alive || lifecycle.current.operation !== operation) return;
+            if (!result.changed) {
+                dispatch({ type: "busy", value: null });
+                dispatch({ type: "status", status: "Fill made no change" });
+                return;
+            }
+            const filledImage = result.image;
+            if (filledImage === undefined) throw new Error("The fill service did not return its changed image.");
+            dispatch({ type: "replaceLayer", layerId, source: filledImage.source, expectedRevision: revision, status: "Filled selected region" });
+        } catch (error) {
+            if (!lifecycle.current.alive || lifecycle.current.operation !== operation) return;
+            dispatch({ type: "busy", value: null });
+            dispatch({ type: "status", status: "Could not fill: " + String(error) });
+        }
+    };
+    const performPicker = async (point: { readonly x: number; readonly y: number }): Promise<void> => {
+        if (state.busy !== null) return;
+        const operation = ++lifecycle.current.operation;
+        dispatch({ type: "busy", value: "Sampling color…" });
+        try {
+            const pixel = await sampleDrawingPixel(documentDrawing(), pointInPixels(point));
+            if (!lifecycle.current.alive || lifecycle.current.operation !== operation) return;
+            const color = pixel.color;
+            dispatch({ type: "busy", value: null });
+            dispatch({ type: "color", color });
+            dispatch({ type: "status", status: "Picked " + color.toUpperCase() });
+        } catch (error) {
+            if (!lifecycle.current.alive || lifecycle.current.operation !== operation) return;
+            dispatch({ type: "busy", value: null });
+            dispatch({ type: "status", status: "Could not pick color: " + String(error) });
+        }
+    };
     const onPointerDown = (event: PointerEvent): boolean => {
         if (event.button !== "left" && (event.buttons & 1) === 0) return false;
-        dispatch({ type: "pointerDown", point: pointOf(event) });
+        const point = pointOf(event);
+        if (state.tool === "fill") void performFill(point);
+        else if (state.tool === "picker") void performPicker(point);
+        else if (state.tool === "text") dispatch({ type: "textStart", point });
+        else dispatch({ type: "pointerDown", point });
         return true;
     };
     const onPointerMove = (event: PointerEvent): boolean => {
-        dispatch({ type: "pointerMove", point: pointOf(event) });
-        return state.draft !== null || (event.buttons & 1) !== 0;
+        const point = pointOf(event);
+        if (state.tool === "text" && state.textDraft !== null && !state.textDraft.editing)
+            dispatch({ type: "textMove", point });
+        else dispatch({ type: "pointerMove", point });
+        return state.draft !== null || state.textDraft !== null || (event.buttons & 1) !== 0;
     };
     const onPointerUp = (event: PointerEvent): boolean => {
-        dispatch({ type: "pointerUp", point: pointOf(event) });
+        const point = pointOf(event);
+        if (state.tool === "text") dispatch({ type: "textEdit", point });
+        else if (state.tool !== "fill" && state.tool !== "picker") dispatch({ type: "pointerUp", point });
         return true;
     };
 
@@ -351,6 +625,77 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
             dispatch({ type: "status", status: "Could not export PNG: " + String(error) });
         }
     };
+    const commitText = (): void => {
+        const textDraft = state.textDraft;
+        if (textDraft === null || !textDraft.editing) return;
+        if (textDraft.text.length === 0) {
+            dispatch({ type: "cancelText" });
+            dispatch({ type: "status", status: "Empty text was not added" });
+            return;
+        }
+        try {
+            const command = createTextCommand(
+                textDraft.text,
+                textDraft,
+                state.color,
+                state.fontFamily,
+                state.textSize,
+                state.textBold,
+                state.textItalic);
+            dispatch({ type: "commitText", command: command as DrawingCommand });
+        } catch (error) {
+            dispatch({ type: "status", status: "Could not add text: " + String(error) });
+        }
+    };
+    const requestEffectImage = async (effect: DrawingEffect, preview: boolean): Promise<void> => {
+        if (state.busy !== null) return;
+        const operation = ++lifecycle.current.operation;
+        const revision = state.revision;
+        const layerId = selectedLayer.id;
+        const signature = JSON.stringify(effect);
+        dispatch({ type: "busy", value: preview ? "Rendering effect preview…" : "Applying effect…" });
+        try {
+            const image = await renderDrawingToImage(layerDrawing(selectedLayer), { effects: [effect] });
+            if (!lifecycle.current.alive || lifecycle.current.operation !== operation) return;
+            if (preview) {
+                dispatch({
+                    type: "effectPreview",
+                    preview: {
+                        layerId,
+                        revision,
+                        signature,
+                        command: { kind: "image", source: image.source, x: 0, y: 0, width: image.width, height: image.height },
+                    },
+                });
+            } else {
+                dispatch({ type: "replaceLayer", layerId, source: image.source, expectedRevision: revision, status: effectName(effect) + " applied" });
+            }
+        } catch (error) {
+            if (!lifecycle.current.alive || lifecycle.current.operation !== operation) return;
+            dispatch({ type: "busy", value: null });
+            dispatch({ type: "status", status: "Could not apply effect: " + String(error) });
+        }
+    };
+    const previewCurrentEffect = (): void => {
+        if (state.effectDialog !== null) void requestEffectImage(effectForDialog(state.effectDialog), true);
+    };
+    const applyCurrentEffect = (): void => {
+        if (state.effectDialog === null) return;
+        const effect = effectForDialog(state.effectDialog);
+        const signature = JSON.stringify(effect);
+        const preview: any = state.effectPreview === null ? null : state.effectPreview.command;
+        if (state.effectPreview !== null && state.effectPreview.signature === signature &&
+            state.effectPreview.revision === state.revision && state.effectPreview.layerId === selectedLayer.id &&
+            preview !== null && preview.kind === "image") {
+            dispatch({ type: "replaceLayer", layerId: selectedLayer.id, source: preview.source, expectedRevision: state.revision, status: effectName(effect) + " applied" });
+            return;
+        }
+        void requestEffectImage(effect, false);
+    };
+    const cancelEffect = (): void => {
+        lifecycle.current.operation++;
+        dispatch({ type: "cancelEffect" });
+    };
     const onCloseRequested = (): boolean => {
         if (closeState.current.bypass || !state.history.dirty) return false;
         if (closeState.current.promptActive) return true;
@@ -369,6 +714,16 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
     };
     const onKeyDown = (event: KeyEvent): boolean => {
         const key = event.key.toLowerCase();
+        if (state.busy !== null) return true;
+        if (state.effectDialog !== null) {
+            if (key === "escape") { cancelEffect(); return true; }
+            return false;
+        }
+        if (state.textDraft !== null && state.textDraft.editing) {
+            if (event.ctrl && key === "enter") { commitText(); return true; }
+            if (key === "escape") { dispatch({ type: "cancelText" }); return true; }
+            return false;
+        }
         if (event.ctrl && key === "z") { dispatch({ type: event.shift ? "redo" : "undo" }); return true; }
         if (event.ctrl && key === "y") { dispatch({ type: "redo" }); return true; }
         if (event.ctrl && key === "n") { void requestNew(); return true; }
@@ -381,6 +736,9 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
         else if (key === "l") dispatch({ type: "tool", tool: "line" });
         else if (key === "r") dispatch({ type: "tool", tool: "rectangle" });
         else if (key === "o") dispatch({ type: "tool", tool: "ellipse" });
+        else if (key === "f") dispatch({ type: "tool", tool: "fill" });
+        else if (key === "i") dispatch({ type: "tool", tool: "picker" });
+        else if (key === "t") dispatch({ type: "tool", tool: "text" });
         else if (event.key === "+") dispatch({ type: "zoom", zoom: state.zoom + 0.25 });
         else if (event.key === "-") dispatch({ type: "zoom", zoom: state.zoom - 0.25 });
         else return false;
@@ -404,6 +762,8 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
     // DrawingCommand and PaintCommand are structurally compatible. Keep this
     // adapter dynamic to avoid materializing SharpTS's object-union wrapper.
     const layerCommands = (layer: PaintLayer): any => {
+        if (state.effectPreview !== null && state.effectPreview.layerId === layer.id && state.effectPreview.revision === state.revision)
+            return [state.effectPreview.command] as any;
         if (layer.id !== state.selectedLayerId || previewCommand === null) return layer.commands as any;
         const committed: any = layer.commands;
         const combined: any[] = [];
@@ -435,8 +795,11 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                             <MenuItem header="Selection & transforms · planned" isEnabled={false} toolTip="Needs selection geometry, transforms, and handles in SharpTS.Gui" />
                         </MenuItem>
                         <MenuItem header="Effects">
-                            <MenuItem header="Blur · planned" isEnabled={false} toolTip="Needs a pixel filter pipeline" />
-                            <MenuItem header="Color adjustments · planned" isEnabled={false} toolTip="Needs pixel readback and filter primitives" />
+                            <MenuItem key="effect-blur" header="Gaussian Blur…" onClick={() => dispatch({ type: "showEffect", kind: "gaussianBlur" })} />
+                            <MenuItem key="effect-grayscale" header="Grayscale" onClick={() => requestEffectImage({ kind: "grayscale" }, false)} />
+                            <MenuItem key="effect-invert" header="Invert" onClick={() => requestEffectImage({ kind: "invert" }, false)} />
+                            <MenuItem key="effect-brightness" header="Brightness / Contrast…" onClick={() => dispatch({ type: "showEffect", kind: "brightnessContrast" })} />
+                            <MenuItem key="effect-hue" header="Hue / Saturation…" onClick={() => dispatch({ type: "showEffect", kind: "hueSaturation" })} />
                         </MenuItem>
                     </Menu>
                     <Border dock="top" padding={8} background="#ffffff" borderBrush="#e2e8f0" borderThickness={1}>
@@ -447,12 +810,25 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                             <Button key="undo" automationName="Undo" isEnabled={state.history.past.length > 0} onClick={() => dispatch({ type: "undo" })}>↶</Button>
                             <Button key="redo" automationName="Redo" isEnabled={state.history.future.length > 0} onClick={() => dispatch({ type: "redo" })}>↷</Button>
                             <Button key="layers-toggle" automationName="Show layers" isVisible={narrow} onClick={() => dispatch({ type: "toggleLayers", value: true })}>Layers</Button>
-                            <TextBlock margin={8} foreground="#475569">Size</TextBlock>
-                            <Slider key="brush-size" automationName="Brush size" width={compact ? 110 : 150} minimum={1} maximum={64} value={state.size} onValueChanged={value => dispatch({ type: "size", size: value })} />
-                            <TextBlock margin={5} minWidth={42}>{state.size + " px"}</TextBlock>
-                            <CheckBox isChecked={state.filled} onCheckedChanged={value => dispatch({ type: "filled", filled: value })} toolTip="Fill rectangles and ellipses">
+                            <TextBlock isVisible={usesStrokeSize} margin={8} foreground="#475569">Size</TextBlock>
+                            <Slider key="brush-size" automationName="Brush size" isVisible={usesStrokeSize} width={compact ? 110 : 150} minimum={1} maximum={64} value={state.size} onValueChanged={value => dispatch({ type: "size", size: value })} />
+                            <TextBlock isVisible={usesStrokeSize} margin={5} minWidth={42}>{state.size + " px"}</TextBlock>
+                            <CheckBox isVisible={shapeTool} isChecked={state.filled} onCheckedChanged={value => dispatch({ type: "filled", filled: value })} toolTip="Fill rectangles and ellipses">
                                 <TextBlock key="filled-label" foreground="#1f2937">{compact ? "Filled" : "Filled shapes"}</TextBlock>
                             </CheckBox>
+                            <TextBlock isVisible={state.tool === "fill"} margin={8} foreground="#475569">Tolerance</TextBlock>
+                            <Slider key="fill-tolerance" automationName="Fill tolerance" isVisible={state.tool === "fill"} width={compact ? 110 : 150} minimum={0} maximum={1} value={state.fillTolerance} onValueChanged={value => dispatch({ type: "fillTolerance", value })} />
+                            <TextBlock isVisible={state.tool === "fill"} margin={5}>{Math.round(state.fillTolerance * 100) + "%"}</TextBlock>
+                            <ComboBox key="font-family" automationName="Text font family" isVisible={state.tool === "text"} width={compact ? 110 : 140}
+                                items={FONT_FAMILIES} selectedIndex={FONT_FAMILIES.indexOf(state.fontFamily)}
+                                onSelectionChanged={index => { if (index >= 0) dispatch({ type: "fontFamily", value: FONT_FAMILIES[index] }); }} />
+                            <TextBlock isVisible={state.tool === "text"} margin={8} foreground="#475569">Text size</TextBlock>
+                            <Slider key="text-size" automationName="Text size" isVisible={state.tool === "text"} width={compact ? 100 : 130} minimum={6} maximum={144} value={state.textSize} onValueChanged={value => dispatch({ type: "textSize", value })} />
+                            <TextBlock isVisible={state.tool === "text"} margin={5}>{state.textSize + " px"}</TextBlock>
+                            <CheckBox key="text-bold" automationName="Bold text" isVisible={state.tool === "text"} isChecked={state.textBold} onCheckedChanged={value => dispatch({ type: "textBold", value })}>Bold</CheckBox>
+                            <CheckBox key="text-italic" automationName="Italic text" isVisible={state.tool === "text"} isChecked={state.textItalic} onCheckedChanged={value => dispatch({ type: "textItalic", value })}>Italic</CheckBox>
+                            <Button key="apply-text" automationName="Apply text" isVisible={state.textDraft !== null && state.textDraft.editing} onClick={commitText}>Apply text</Button>
+                            <Button key="cancel-text" automationName="Cancel text" isVisible={state.textDraft !== null && state.textDraft.editing} onClick={() => dispatch({ type: "cancelText" })}>Cancel</Button>
                         </WrapPanel>
                     </Border>
                     <StatusBar dock="bottom" padding={8} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1}>
@@ -482,9 +858,9 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                                 {toolButton("line", "╱", "Line · L", compact, state, dispatch)}
                                 {toolButton("rectangle", "□", "Rectangle · R", compact, state, dispatch)}
                                 {toolButton("ellipse", "○", "Ellipse · O", compact, state, dispatch)}
-                                <Button isEnabled={false} toolTip="Planned: needs pixel readback">{compact ? "▣" : "Fill"}</Button>
-                                <Button isEnabled={false} toolTip="Planned: needs pixel sampling">{compact ? "◎" : "Picker"}</Button>
-                                <Button isEnabled={false} toolTip="Planned: needs editable text overlays">{compact ? "T" : "Text"}</Button>
+                                {toolButton("fill", "▣", "Fill · F · contiguous selected-layer fill", compact, state, dispatch)}
+                                {toolButton("picker", "◎", "Picker · I · sample the visible document", compact, state, dispatch)}
+                                {toolButton("text", "T", "Text · T · drag a text box", compact, state, dispatch)}
                             </StackPanel>
                         </ScrollViewer>
                     </Border>
@@ -531,7 +907,24 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                                     coordinateWidth={document.width} coordinateHeight={document.height}
                                     commands={EMPTY_DRAWING_COMMANDS} capturePointerOnPress={true}
                                     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
-                                    onPointerCancel={() => { dispatch({ type: "pointerCancel" }); return true; }} />
+                                    onPointerCancel={() => { dispatch({ type: state.tool === "text" ? "cancelText" : "pointerCancel" }); return true; }} />
+                                <Canvas key="text-overlay" width={scaledWidth} height={scaledHeight} isVisible={state.textDraft !== null}>
+                                    {state.textDraft === null ? null : state.textDraft.editing ? (
+                                        <TextBox key="text-editor" automationName="Text editor" ref={textEditorRef}
+                                            canvasLeft={state.textDraft.x * state.zoom} canvasTop={state.textDraft.y * state.zoom}
+                                            width={Math.max(1, state.textDraft.width * state.zoom)} height={Math.max(1, state.textDraft.height * state.zoom)}
+                                            text={state.textDraft.text} acceptsReturn={true} maxLength={65_536}
+                                            foreground={state.color} background="#ffffff" padding={4}
+                                            fontFamily={state.fontFamily}
+                                            fontSize={Math.max(6, state.textSize * state.zoom)}
+                                            fontWeight={state.textBold ? "bold" : "normal"} fontStyle={state.textItalic ? "italic" : "normal"}
+                                            onTextChanged={value => dispatch({ type: "textValue", value })} />
+                                    ) : (
+                                        <Border canvasLeft={state.textDraft.x * state.zoom} canvasTop={state.textDraft.y * state.zoom}
+                                            width={Math.max(1, state.textDraft.width * state.zoom)} height={Math.max(1, state.textDraft.height * state.zoom)}
+                                            borderBrush="#2563eb" borderThickness={1} />
+                                    )}
+                                </Canvas>
                             </Grid>
                         </Border>
                     </ScrollViewer>
@@ -556,6 +949,38 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                         </Border>
                     </Border>
                 ) : null}
+                {state.effectDialog === null ? null : (
+                    <Border background="#cc0f172a" padding={40}>
+                        <Border width={460} horizontalAlignment="center" verticalAlignment="center" padding={24} background="#ffffff" cornerRadius={12} borderBrush="#cbd5e1" borderThickness={1}>
+                            <StackPanel spacing={13}>
+                                <TextBlock key="effect-title" automationName="Effect title" fontSize={22} fontWeight="bold" foreground="#0f172a">{effectTitle(state.effectDialog.kind)}</TextBlock>
+                                <TextBlock foreground="#64748b">Effects are applied to the entire selected layer. Preview and Cancel do not change history.</TextBlock>
+                                <TextBlock>{state.effectDialog.kind === "gaussianBlur" ? "Radius · " + Math.round(state.effectDialog.first) + " px" :
+                                    state.effectDialog.kind === "brightnessContrast" ? "Brightness · " + Math.round(state.effectDialog.first) : "Hue · " + Math.round(state.effectDialog.first) + "°"}</TextBlock>
+                                <Slider key="effect-first" automationName="Primary effect value"
+                                    minimum={state.effectDialog.kind === "hueSaturation" ? -180 : state.effectDialog.kind === "brightnessContrast" ? -100 : 0}
+                                    maximum={state.effectDialog.kind === "gaussianBlur" ? 32 : state.effectDialog.kind === "hueSaturation" ? 180 : 100}
+                                    value={state.effectDialog.first} onValueChanged={value => dispatch({ type: "effectParameter", first: value })} />
+                                <TextBlock isVisible={state.effectDialog.kind !== "gaussianBlur"}>{state.effectDialog.kind === "brightnessContrast" ? "Contrast · " + Math.round(state.effectDialog.second) : "Saturation · " + Math.round(state.effectDialog.second)}</TextBlock>
+                                <Slider key="effect-second" automationName="Secondary effect value" isVisible={state.effectDialog.kind !== "gaussianBlur"}
+                                    minimum={-100} maximum={100} value={state.effectDialog.second} onValueChanged={value => dispatch({ type: "effectParameter", second: value })} />
+                                <TextBlock key="effect-preview-status" automationName="Effect preview status" foreground="#64748b">{state.effectPreview === null ? "No preview" : "Preview ready"}</TextBlock>
+                                <StackPanel orientation="horizontal" spacing={8} horizontalAlignment="right">
+                                    <Button key="cancel-effect" automationName="Cancel effect" onClick={cancelEffect}>Cancel</Button>
+                                    <Button key="preview-effect" automationName="Preview effect" onClick={previewCurrentEffect}>Preview</Button>
+                                    <Button key="apply-effect" automationName="Apply effect" background="#2563eb" foreground="#ffffff" onClick={applyCurrentEffect}>Apply</Button>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </Border>
+                )}
+                {state.busy === null ? null : (
+                    <Border background="#990f172a" padding={40}>
+                        <Border horizontalAlignment="center" verticalAlignment="center" padding={20} background="#ffffff" cornerRadius={10}>
+                            <TextBlock key="busy-status" automationName="Busy status" fontSize={16} fontWeight="bold" foreground="#1e293b">{state.busy}</TextBlock>
+                        </Border>
+                    </Border>
+                )}
             </Grid>
         </Window>
     );
@@ -575,7 +1000,16 @@ function toolButton(tool: PaintTool, glyph: string, tip: string, compact: boolea
         onClick={() => dispatch({ type: "tool", tool })}>{content}</Button>;
 }
 function toolLabel(tool: PaintTool): string {
-    switch (tool) { case "brush": return "Brush"; case "eraser": return "Eraser"; case "line": return "Line"; case "rectangle": return "Rectangle"; case "ellipse": return "Ellipse"; }
+    switch (tool) {
+        case "brush": return "Brush";
+        case "eraser": return "Eraser";
+        case "line": return "Line";
+        case "rectangle": return "Rectangle";
+        case "ellipse": return "Ellipse";
+        case "fill": return "Fill";
+        case "picker": return "Picker";
+        case "text": return "Text";
+    }
     return "Tool";
 }
 function layerRow(layer: PaintLayer, selectedLayerId: string, dispatch: (action: AppAction) => void): JSX.Element {

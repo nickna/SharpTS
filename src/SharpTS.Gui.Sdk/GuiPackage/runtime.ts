@@ -8,6 +8,7 @@ import type {
     DropEffect,
     DropEvent,
     DrawingCommand,
+    DrawingPoint,
     ErrorBoundaryProps,
     GuiChild,
     GuiElement,
@@ -1228,6 +1229,51 @@ export interface DrawingDocument {
     /** Back-to-front ordered drawing layers. */
     readonly layers: readonly DrawingLayer[];
 }
+/** A bounded PNG image produced by the desktop drawing renderer. @category Desktop Services */
+export interface DrawingImage {
+    /** Validated PNG data URI suitable for an image drawing command. */
+    readonly source: string;
+    /** Image width in pixels. */
+    readonly width: number;
+    /** Image height in pixels. */
+    readonly height: number;
+}
+/** One pixel sampled from a rendered drawing document. @category Desktop Services */
+export interface DrawingPixel {
+    readonly red: number;
+    readonly green: number;
+    readonly blue: number;
+    readonly alpha: number;
+    /** Normalized #RRGGBB color when opaque, otherwise #AARRGGBB. */
+    readonly color: string;
+}
+/** A validated effect applied in order while rasterizing a drawing document. @category Desktop Services */
+export type DrawingEffect =
+    { readonly kind: "gaussianBlur"; readonly radius: number } |
+    { readonly kind: "grayscale" } |
+    { readonly kind: "invert" } |
+    { readonly kind: "brightnessContrast"; readonly brightness: number; readonly contrast: number } |
+    { readonly kind: "hueSaturation"; readonly hue: number; readonly saturation: number };
+/** Options for renderDrawingToImage. @category Desktop Services */
+export interface RenderDrawingToImageOptions {
+    /** Ordered effects applied after the document is composited. */
+    readonly effects?: readonly DrawingEffect[];
+}
+/** Options for a contiguous flood-fill operation. @category Desktop Services */
+export interface DrawingFloodFillOptions {
+    /** Seed x coordinate in document pixels. */
+    readonly x: number;
+    /** Seed y coordinate in document pixels. */
+    readonly y: number;
+    /** Replacement color. */
+    readonly color: string;
+    /** Maximum normalized per-channel difference from zero to one. */
+    readonly tolerance?: number;
+}
+/** Result of a flood-fill operation. @category Desktop Services */
+export type DrawingFloodFillResult =
+    { readonly changed: false } |
+    { readonly changed: true; readonly image: DrawingImage };
 /** Dimensions reported for a supported image source. @category Desktop Services */
 export interface ImageDimensions { readonly width: number; readonly height: number; }
 /** Options for showOpenFileDialog. @category Desktop Services */
@@ -1346,6 +1392,21 @@ export function getImageDimensions(source: string): Promise<ImageDimensions> {
 /** Renders a validated drawing document to a transparency-preserving PNG file. @category Desktop Services */
 export function renderDrawingToPng(document: DrawingDocument, path: string): Promise<void> {
     return DesktopBridge.RenderDrawingToPngAsync(JSON.stringify(document), path) as any;
+}
+/** Renders a validated drawing document to a bounded PNG data URI, optionally applying effects. @category Desktop Services */
+export function renderDrawingToImage(document: DrawingDocument, options: RenderDrawingToImageOptions = {}): Promise<DrawingImage> {
+    const result = DesktopBridge.RenderDrawingToImageJsonAsync(JSON.stringify(document), JSON.stringify(options)) as Promise<string>;
+    return result.then(json => JSON.parse(json) as DrawingImage);
+}
+/** Samples one pixel from the fully composited drawing document. @category Desktop Services */
+export function sampleDrawingPixel(document: DrawingDocument, point: DrawingPoint): Promise<DrawingPixel> {
+    const result = DesktopBridge.SampleDrawingPixelJsonAsync(JSON.stringify(document), point.x, point.y) as Promise<string>;
+    return result.then(json => JSON.parse(json) as DrawingPixel);
+}
+/** Applies a contiguous, four-connected flood fill and returns a rasterized document image. @category Desktop Services */
+export function floodFillDrawing(document: DrawingDocument, options: DrawingFloodFillOptions): Promise<DrawingFloodFillResult> {
+    const result = DesktopBridge.FloodFillDrawingJsonAsync(JSON.stringify(document), JSON.stringify(options)) as Promise<string>;
+    return result.then(json => JSON.parse(json) as DrawingFloodFillResult);
 }
 /**
  * Displays a native save-file dialog.

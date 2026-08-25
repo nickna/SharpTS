@@ -60,6 +60,11 @@ error boundaries, resources/styles, assets, dialogs, clipboard/display services,
 templates, drawing, retained content controls, reactive window metrics for adaptive DIP-based
 layouts, and the generated built-in control catalog.
 
+The drawing surface supports retained geometry, bounded text, images, opacity, and isolated
+erasing. Typed asynchronous services render a drawing document to a file or portable PNG source,
+sample composited pixels, perform contiguous flood fills, and apply the supported blur and color
+effect pipeline through the same validated renderer.
+
 The `@sharpts/gui/testing` subpath provides a window-scoped Headless interaction driver, including
 deterministic logical window resizing for responsive-layout tests.
 `@sharpts/gui/devtools` provides read-only tree inspection and deterministic Headless PNG snapshots.

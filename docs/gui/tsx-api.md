@@ -171,9 +171,10 @@ while a caller advances `startIndex`. Tree nodes use native `TreeViewItem` expan
 
 `RichTextBlock` accepts independently styled text runs. `Canvas` supports `canvasLeft` and
 `canvasTop` attached props. `DrawingCanvas` retains validated line, rectangle, ellipse,
-round-polyline, and image commands and redraws only when its command contract changes.
+round-polyline, bounded text, and image commands and redraws only when its command contract changes.
 `coordinateWidth` and `coordinateHeight` are whole-number dimensions that separate logical drawing
-coordinates from displayed DIPs. Per-command opacity,
+coordinates from displayed DIPs. Text commands require logical dimensions and provide bounded,
+clipped layout with font family, size, weight, style, alignment, and wrapping. Per-command opacity,
 `sourceOver`, and `destinationOut` are supported; every canvas renders through an isolated layer so
 eraser commands cannot damage sibling canvases beneath it. Image commands accept packaged assets,
 local files, or bounded PNG data URIs. All of these controls remain in the generated descriptor/
@@ -205,9 +206,14 @@ in-memory test clipboard; an unscripted dialog fails instead of opening native U
 
 `getImageDimensions(source)` reads a packaged asset, local image, or bounded PNG data URI.
 `renderDrawingToPng(document, path)` flattens ordered visible layers with layer opacity into a
-transparency-preserving PNG. Display and export use the same validated renderer, and invalid input
-fails before the destination file is created or replaced. Image metadata and PNG rendering execute
-asynchronously so filesystem and raster work do not block the desktop dispatcher.
+transparency-preserving PNG. `renderDrawingToImage(document, { effects? })` returns the same bounded
+render as a portable PNG data URI and supports ordered Gaussian blur, grayscale, invert,
+brightness/contrast, and hue/saturation effects. `sampleDrawingPixel(document, point)` samples the
+composited RGBA result. `floodFillDrawing(document, options)` performs a contiguous four-connected
+fill using a normalized per-channel tolerance and returns either an unchanged result or a bounded
+raster image. Display, export, sampling, fill, and effects use the same validated renderer. Invalid
+input fails before a destination file is created or replaced, and raster services execute
+asynchronously so filesystem and image processing do not block the desktop dispatcher.
 
 `showNotification({ title, message?, silent? })` submits an informational local notification from
 an installed Windows MSIX application. The required title is limited to 256 UTF-16 code units and

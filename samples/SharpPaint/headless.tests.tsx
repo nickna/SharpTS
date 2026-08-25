@@ -23,6 +23,32 @@ const cancelDriver = createDesktopTestDriver(cancelWindow);
 let responsiveWindow: any = null;
 responsiveWindow = application.createWindow(<SharpPaintShowcase requestClose={() => responsiveWindow.close()} />);
 const responsiveDriver = createDesktopTestDriver(responsiveWindow);
+let fillWindow: any = null;
+fillWindow = application.createWindow(<SharpPaintShowcase requestClose={() => fillWindow.close()} />);
+const fillDriver = createDesktopTestDriver(fillWindow);
+let textWindow: any = null;
+textWindow = application.createWindow(<SharpPaintShowcase requestClose={() => textWindow.close()} />);
+const textDriver = createDesktopTestDriver(textWindow);
+let effectWindow: any = null;
+effectWindow = application.createWindow(<SharpPaintShowcase requestClose={() => effectWindow.close()} />);
+const effectDriver = createDesktopTestDriver(effectWindow);
+let completedChains = 0;
+function finishChain(): void {
+    completedChains++;
+    if (completedChains === 6) setTimeout((() => application.dispose()) as any, 25);
+}
+function waitForStatus(testDriver: DesktopTestDriver, expected: string, then: () => void, remaining: number = 200): void {
+    const actual = testDriver.getText("status");
+    if (actual === expected) { then(); return; }
+    if (remaining <= 0) throw new Error("Timed out waiting for status '" + expected + "'; actual status was '" + actual + "'.");
+    setTimeout((() => waitForStatus(testDriver, expected, then, remaining - 1)) as any, 10);
+}
+function waitForText(testDriver: DesktopTestDriver, key: string, expected: string, then: () => void, remaining: number = 200): void {
+    const actual = testDriver.getText(key);
+    if (actual === expected) { then(); return; }
+    if (remaining <= 0) throw new Error("Timed out waiting for '" + key + "' to be '" + expected + "'; actual text was '" + actual + "'.");
+    setTimeout((() => waitForText(testDriver, key, expected, then, remaining - 1)) as any, 10);
+}
 const openProjectPath = join(process.cwd(), "SharpPaint.Headless.Open.sharpaint");
 const saveProjectPath = join(process.cwd(), "SharpPaint.Headless.Save.sharpaint");
 writeFileSync(openProjectPath, serializeProject(createDocument(320, 240)), "utf8");
@@ -33,8 +59,10 @@ expect("brush glyph content", driver.getText("brush-glyph") === "✎");
 expect("brush label content", driver.getText("brush-label") === "Brush");
 expect("filled-shapes label content", driver.getText("filled-label") === "Filled shapes");
 
-responsiveDriver.setWindowClientSize(840, 560);
 responsiveDriver.afterRender(() => {
+    setTimeout((() => {
+        responsiveDriver.setWindowClientSize(840, 560);
+        responsiveDriver.afterRender(() => {
     expect("narrow mode is reported", responsiveDriver.getText("layout-mode") === "narrow");
     expect("narrow layout hides layers", responsiveDriver.getProperty("layers-panel", "isVisible") === "False");
     expect("narrow layout exposes layers toggle", responsiveDriver.getProperty("layers-toggle", "isVisible") === "True");
@@ -48,8 +76,11 @@ responsiveDriver.afterRender(() => {
             expect("wide layout retains layers", responsiveDriver.getProperty("layers-panel", "isVisible") === "True");
             expect("wide layout hides layers toggle", responsiveDriver.getProperty("layers-toggle", "isVisible") === "False");
             expect("wide layout restores deferred layer action", responsiveDriver.getProperty("merge-layer", "isVisible") === "True");
+            finishChain();
         });
     });
+        });
+    }) as any, 25);
 });
 
 cancelDriver.pressPointer("paint-surface", { x: 16, y: 18 });
@@ -57,6 +88,58 @@ cancelDriver.movePointer("paint-surface", { x: 48, y: 52 });
 cancelDriver.cancelPointer("paint-surface");
 cancelDriver.afterRender(() => {
     expect("cancelled gesture is discarded", cancelDriver.getText("command-count") === "1 commands · 1 layers");
+    finishChain();
+});
+
+fillDriver.click("#ef4444");
+fillDriver.afterRender(() => {
+    fillDriver.click("fill");
+    fillDriver.afterRender(() => {
+        fillDriver.pressPointer("paint-surface", { x: 20, y: 20 });
+        fillDriver.releasePointer("paint-surface", { x: 20, y: 20 });
+        waitForStatus(fillDriver, "Filled selected region", () => {
+            fillDriver.click("picker");
+            fillDriver.afterRender(() => {
+                fillDriver.pressPointer("paint-surface", { x: 20, y: 20 });
+                fillDriver.releasePointer("paint-surface", { x: 20, y: 20 });
+                waitForStatus(fillDriver, "Picked #EF4444", () => {
+                    expect("picker updates shared color", fillDriver.getText("custom-color") === "#ef4444");
+                    finishChain();
+                });
+            });
+        });
+    });
+});
+
+textDriver.click("text");
+textDriver.afterRender(() => {
+    textDriver.dragPointer("paint-surface", [{ x: 30, y: 30 }, { x: 260, y: 120 }]);
+    textDriver.afterRender(() => {
+        textDriver.setTextBoxValue("text-editor", "SharpTS text");
+        textDriver.afterRender(() => {
+            textDriver.click("apply-text");
+            textDriver.afterRender(() => {
+                expect("text commits one retained command", textDriver.getText("command-count") === "2 commands · 1 layers");
+                expect("text commit status", textDriver.getText("status") === "Text committed");
+                finishChain();
+            });
+        });
+    });
+});
+
+effectDriver.clickMenuItem("effect-invert");
+waitForStatus(effectDriver, "Invert applied", () => {
+    expect("instant effect rasterizes selected layer", effectDriver.getText("command-count") === "1 commands · 1 layers");
+    effectDriver.clickMenuItem("effect-blur");
+    effectDriver.afterRender(() => {
+        expect("effect dialog opens", effectDriver.getText("effect-title") === "Gaussian blur");
+        effectDriver.click("preview-effect");
+        waitForStatus(effectDriver, "Effect preview ready", () => {
+            expect("effect preview is non-destructive", effectDriver.getText("command-count") === "1 commands · 1 layers");
+            effectDriver.click("apply-effect");
+            waitForStatus(effectDriver, "Gaussian blur applied", () => finishChain());
+        });
+    });
 });
 
 driver.dragPointer("paint-surface", [{ x: 12, y: 14 }, { x: 40, y: 42 }, { x: 72, y: 58 }]);
@@ -106,7 +189,7 @@ driver.afterRender(() => {
                                                     driver.clickMenuItem("menu-new");
                                                     driver.afterRender(() => {
                                                         expect("new menu item opens dialog", driver.getText("new-width") === "1024");
-                                                        setTimeout((() => application.dispose()) as any, 25);
+                                                        finishChain();
                                                     });
                                                 });
                                             });

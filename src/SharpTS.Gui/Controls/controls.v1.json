@@ -1524,7 +1524,7 @@
       "operations": [
         "focus"
       ],
-      "documentation": "Retained drawing surface for lines, rectangles, ellipses, polylines, and images.",
+      "documentation": "Retained drawing surface for lines, rectangles, ellipses, polylines, bounded text, and images.",
       "trimming": [
         "SharpTS.Gui.DrawingSurface"
       ]

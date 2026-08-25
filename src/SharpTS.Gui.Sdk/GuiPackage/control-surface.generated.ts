@@ -470,7 +470,7 @@ export const Canvas = tag<CanvasProps>("Canvas");
  * @function
  */
 export const RichTextBlock = tag<RichTextBlockProps>("RichTextBlock");
-/** Retained drawing surface for lines, rectangles, ellipses, polylines, and images.
+/** Retained drawing surface for lines, rectangles, ellipses, polylines, bounded text, and images.
  * @category Components
  * @function
  */

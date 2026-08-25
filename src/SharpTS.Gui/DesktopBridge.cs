@@ -626,6 +626,27 @@ public static class DesktopBridge
         return Task.Run(() => DrawingGraphics.RenderDocumentToPng(context, documentJson, path));
     }
 
+    public static Task<string> RenderDrawingToImageJsonAsync(string documentJson, string optionsJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return Task.Run(() => DrawingGraphics.RenderDocumentToImageJson(context, documentJson, optionsJson));
+    }
+
+    public static Task<string> SampleDrawingPixelJsonAsync(string documentJson, double x, double y)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return Task.Run(() => DrawingGraphics.SampleDrawingPixelJson(context, documentJson, x, y));
+    }
+
+    public static Task<string> FloodFillDrawingJsonAsync(string documentJson, string optionsJson)
+    {
+        DesktopRuntimeContext context = RequireContext();
+        context.EnsureOwnerThread();
+        return Task.Run(() => DrawingGraphics.FloodFillDrawingJson(context, documentJson, optionsJson));
+    }
+
     public static string[] GetDesktopLaunchArguments() =>
         RequireContext().GetLaunchArguments();
 

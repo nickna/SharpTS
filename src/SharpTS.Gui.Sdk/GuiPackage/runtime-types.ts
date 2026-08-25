@@ -100,6 +100,7 @@ export type DrawingCommand =
     { kind: "rectangle"; x: number; y: number; width: number; height: number; fill?: string; stroke?: string; strokeThickness?: number; opacity?: number; composite?: DrawingCompositeMode } |
     { kind: "ellipse"; centerX: number; centerY: number; radiusX: number; radiusY: number; fill?: string; stroke?: string; strokeThickness?: number; opacity?: number; composite?: DrawingCompositeMode } |
     { kind: "polyline"; points: readonly DrawingPoint[]; stroke: string; strokeThickness?: number; lineCap?: DrawingLineCap; lineJoin?: DrawingLineJoin; opacity?: number; composite?: DrawingCompositeMode } |
+    { kind: "text"; text: string; x: number; y: number; width: number; height: number; fill: string; fontFamily?: string; fontSize: number; fontWeight?: FontWeight; fontStyle?: "normal" | "italic"; textAlignment?: "left" | "center" | "right"; textWrapping?: "noWrap" | "wrap"; opacity?: number; composite?: DrawingCompositeMode } |
     { kind: "image"; source: string; x: number; y: number; width: number; height: number; opacity?: number; composite?: "sourceOver" };
 /** A logical point used by polyline drawing commands. @category Core and Composition */
 export interface DrawingPoint { readonly x: number; readonly y: number; }

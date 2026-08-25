@@ -8505,7 +8505,7 @@
         "minimum": 0,
         "maximum": 0
       },
-      "documentation": "Retained drawing surface for lines, rectangles, ellipses, polylines, and images.",
+      "documentation": "Retained drawing surface for lines, rectangles, ellipses, polylines, bounded text, and images.",
       "props": [
         {
           "name": "ref",
