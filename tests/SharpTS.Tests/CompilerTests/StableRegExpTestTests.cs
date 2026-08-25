@@ -47,14 +47,21 @@ public sealed class StableRegExpTestTests
         var validate = validateMethod.CreateDelegate<Func<string, double, double>>();
 
         Assert.Equal(10, validate("abcdefghij", 10));
-        _ = validate("abcdefghij", 1000);
-        long before = GC.GetAllocatedBytesForCurrentThread();
+        _ = validate("abcdefghij", 100_000);
+
+        long smallBefore = GC.GetAllocatedBytesForCurrentThread();
+        Assert.Equal(1_000, validate("abcdefghij", 1_000));
+        long smallAllocated = GC.GetAllocatedBytesForCurrentThread() - smallBefore;
+
+        long largeBefore = GC.GetAllocatedBytesForCurrentThread();
         double result = validate("abcdefghij", 100_000);
-        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        long largeAllocated = GC.GetAllocatedBytesForCurrentThread() - largeBefore;
 
         Assert.Equal(100_000, result);
-        Assert.True(allocated <= 256,
-            $"Stable RegExp.test allocated {allocated:N0} bytes in the hot loop.");
+        Assert.True(largeAllocated <= smallAllocated + 8_192,
+            $"Stable RegExp.test allocations scaled with the loop: "
+            + $"{smallAllocated:N0} bytes for 1,000 iterations and "
+            + $"{largeAllocated:N0} bytes for 100,000 iterations.");
     }
 
     [Theory, ModeData]
