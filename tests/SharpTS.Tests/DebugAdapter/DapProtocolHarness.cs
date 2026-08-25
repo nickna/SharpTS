@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using SharpTS.DebugAdapter.Adapter;
+using SharpTS.Runtime;
 
 namespace SharpTS.Tests.DebugAdapter;
 
@@ -163,8 +164,7 @@ internal sealed class DapProtocolHarness : IAsyncDisposable
         }
         catch
         {
-            if (!_process.HasExited)
-                _process.Kill(entireProcessTree: true);
+            ProcessTreeTermination.Terminate(_process);
         }
         finally
         {

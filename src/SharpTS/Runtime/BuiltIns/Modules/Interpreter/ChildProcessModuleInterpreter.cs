@@ -68,34 +68,42 @@ public static class ChildProcessModuleInterpreter
 
         using var process = new Process { StartInfo = startInfo };
         process.Start();
-        if (input != null)
+        interpreter.RegisterOwnedProcess(process);
+        try
         {
-            process.StandardInput.Write(input);
-            process.StandardInput.Close();
-        }
-
-        var stdout = process.StandardOutput.ReadToEnd();
-
-        if (timeout > 0)
-        {
-            if (!process.WaitForExit((int)timeout))
+            if (input != null)
             {
-                process.Kill();
-                throw new Exception("Command timed out");
+                process.StandardInput.Write(input);
+                process.StandardInput.Close();
             }
-        }
-        else
-        {
-            process.WaitForExit();
-        }
 
-        if (process.ExitCode != 0)
-        {
-            var stderr = process.StandardError.ReadToEnd();
-            throw new Exception($"Command failed with exit code {process.ExitCode}: {stderr}");
-        }
+            var stdout = process.StandardOutput.ReadToEnd();
 
-        return RuntimeValue.FromString(stdout);
+            if (timeout > 0)
+            {
+                if (!process.WaitForExit((int)timeout))
+                {
+                    ProcessTreeTermination.Terminate(process);
+                    throw new Exception("Command timed out");
+                }
+            }
+            else
+            {
+                process.WaitForExit();
+            }
+
+            if (process.ExitCode != 0)
+            {
+                var stderr = process.StandardError.ReadToEnd();
+                throw new Exception($"Command failed with exit code {process.ExitCode}: {stderr}");
+            }
+
+            return RuntimeValue.FromString(stdout);
+        }
+        finally
+        {
+            interpreter.UnregisterOwnedProcess(process);
+        }
     }
 
     private static RuntimeValue SpawnSync(Interp interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
@@ -145,16 +153,24 @@ public static class ChildProcessModuleInterpreter
         {
             using var process = new Process { StartInfo = startInfo };
             process.Start();
-            if (input != null)
+            interpreter.RegisterOwnedProcess(process);
+            try
             {
-                // Feed the synchronous stdin, then close so the child sees EOF.
-                process.StandardInput.Write(input);
-                process.StandardInput.Close();
+                if (input != null)
+                {
+                    // Feed the synchronous stdin, then close so the child sees EOF.
+                    process.StandardInput.Write(input);
+                    process.StandardInput.Close();
+                }
+                stdout = process.StandardOutput.ReadToEnd();
+                stderr = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+                exitCode = process.ExitCode;
             }
-            stdout = process.StandardOutput.ReadToEnd();
-            stderr = process.StandardError.ReadToEnd();
-            process.WaitForExit();
-            exitCode = process.ExitCode;
+            finally
+            {
+                interpreter.UnregisterOwnedProcess(process);
+            }
         }
         catch (Exception ex)
         {
@@ -250,42 +266,50 @@ public static class ChildProcessModuleInterpreter
 
                 using var process = new Process { StartInfo = startInfo };
                 process.Start();
+                interpreter.RegisterOwnedProcess(process);
                 childProcess.SetPid(process.Id);
                 childProcess.SetProcess(process);
-
-                var maxBuffer = (int)GetDoubleOption(options, "maxBuffer", 1024 * 1024);
-                var (asBuffer, encoding) = GetOutputEncoding(options);
-                var outBytes = ReadCappedBytes(process.StandardOutput.BaseStream, maxBuffer, out var oOver);
-                var errBytes = ReadCappedBytes(process.StandardError.BaseStream, maxBuffer, out var eOver);
-                stdout = asBuffer ? new SharpTSBuffer(outBytes) : BufferEncoding.Decode(outBytes, encoding);
-                stderr = asBuffer ? new SharpTSBuffer(errBytes) : BufferEncoding.Decode(errBytes, encoding);
-                if (oOver || eOver)
+                try
                 {
-                    try { process.Kill(); } catch { }
-                    error = MaxBufferError();
-                }
-
-                if (timeout > 0)
-                {
-                    if (!process.WaitForExit((int)timeout))
+                    var maxBuffer = (int)GetDoubleOption(options, "maxBuffer", 1024 * 1024);
+                    var (asBuffer, encoding) = GetOutputEncoding(options);
+                    var outBytes = ReadCappedBytes(process.StandardOutput.BaseStream, maxBuffer, out var oOver);
+                    var errBytes = ReadCappedBytes(process.StandardError.BaseStream, maxBuffer, out var eOver);
+                    stdout = asBuffer ? new SharpTSBuffer(outBytes) : BufferEncoding.Decode(outBytes, encoding);
+                    stderr = asBuffer ? new SharpTSBuffer(errBytes) : BufferEncoding.Decode(errBytes, encoding);
+                    if (oOver || eOver)
                     {
-                        process.Kill();
-                        kind = 1;
+                        ProcessTreeTermination.Terminate(process);
+                        error = MaxBufferError();
                     }
-                    else { code = process.ExitCode; }
-                }
-                else
-                {
-                    process.WaitForExit();
-                    code = process.ExitCode;
-                }
 
-                if (kind == 0 && error == null && code != 0)
-                    error = new SharpTSObject(new Dictionary<string, object?>
+                    if (timeout > 0)
                     {
-                        ["message"] = $"Command failed with exit code {code}",
-                        ["code"] = (double)code
-                    });
+                        if (!process.WaitForExit((int)timeout))
+                        {
+                            ProcessTreeTermination.Terminate(process);
+                            kind = 1;
+                        }
+                        else { code = process.ExitCode; }
+                    }
+                    else
+                    {
+                        process.WaitForExit();
+                        code = process.ExitCode;
+                    }
+
+                    if (kind == 0 && error == null && code != 0)
+                        error = new SharpTSObject(new Dictionary<string, object?>
+                        {
+                            ["message"] = $"Command failed with exit code {code}",
+                            ["code"] = (double)code
+                        });
+                }
+                finally
+                {
+                    interpreter.UnregisterOwnedProcess(process);
+                    childProcess.ClearProcess(process);
+                }
             }
             catch (Exception ex)
             {
@@ -366,7 +390,7 @@ public static class ChildProcessModuleInterpreter
 
         // Start synchronously so child.stdin.write()/.end() on the same tick reach a live
         // StandardInput; a spawn failure is surfaced as an async 'error' event.
-        Process process;
+        Process? process = null;
         try
         {
             var startInfo = new ProcessStartInfo
@@ -402,6 +426,7 @@ public static class ChildProcessModuleInterpreter
 
             process = new Process { StartInfo = startInfo };
             process.Start();
+            interpreter.RegisterOwnedProcess(process);
             childProcess.SetPid(process.Id);
             childProcess.SetProcess(process);
 
@@ -447,6 +472,13 @@ public static class ChildProcessModuleInterpreter
         }
         catch (Exception ex)
         {
+            if (process != null)
+            {
+                ProcessTreeTermination.Terminate(process);
+                interpreter.UnregisterOwnedProcess(process);
+                childProcess.ClearProcess(process);
+                process.Dispose();
+            }
             var spawnErr = SpawnError(ex, command, "spawn");
             interpreter.Ref();
             interpreter.EnqueueCallback(() =>
@@ -460,7 +492,7 @@ public static class ChildProcessModuleInterpreter
         // Keep the loop alive while the child runs; stream chunks and lifecycle events are
         // marshalled onto the loop thread (PushFromHost / EmitWith) so they run with a real
         // interpreter and after the synchronous script has attached its listeners.
-        var startedProcess = process;
+        var startedProcess = process!;
         interpreter.Ref();
         Task.Run(() =>
         {
@@ -530,6 +562,12 @@ public static class ChildProcessModuleInterpreter
                     finally { interpreter.Unref(); }
                 });
             }
+            finally
+            {
+                interpreter.UnregisterOwnedProcess(startedProcess);
+                childProcess.ClearProcess(startedProcess);
+                startedProcess.Dispose();
+            }
         });
 
         return RuntimeValue.FromObject(childProcess);
@@ -583,34 +621,42 @@ public static class ChildProcessModuleInterpreter
 
         using var process = new Process { StartInfo = startInfo };
         process.Start();
-        if (input != null)
+        interpreter.RegisterOwnedProcess(process);
+        try
         {
-            process.StandardInput.Write(input);
-            process.StandardInput.Close();
-        }
-
-        var stdout = process.StandardOutput.ReadToEnd();
-
-        if (timeout > 0)
-        {
-            if (!process.WaitForExit((int)timeout))
+            if (input != null)
             {
-                process.Kill();
-                throw new Exception("Command timed out");
+                process.StandardInput.Write(input);
+                process.StandardInput.Close();
             }
-        }
-        else
-        {
-            process.WaitForExit();
-        }
 
-        if (process.ExitCode != 0)
-        {
-            var stderr = process.StandardError.ReadToEnd();
-            throw new Exception($"Command failed with exit code {process.ExitCode}: {stderr}");
-        }
+            var stdout = process.StandardOutput.ReadToEnd();
 
-        return RuntimeValue.FromString(stdout);
+            if (timeout > 0)
+            {
+                if (!process.WaitForExit((int)timeout))
+                {
+                    ProcessTreeTermination.Terminate(process);
+                    throw new Exception("Command timed out");
+                }
+            }
+            else
+            {
+                process.WaitForExit();
+            }
+
+            if (process.ExitCode != 0)
+            {
+                var stderr = process.StandardError.ReadToEnd();
+                throw new Exception($"Command failed with exit code {process.ExitCode}: {stderr}");
+            }
+
+            return RuntimeValue.FromString(stdout);
+        }
+        finally
+        {
+            interpreter.UnregisterOwnedProcess(process);
+        }
     }
 
     /// <summary>
@@ -682,42 +728,50 @@ public static class ChildProcessModuleInterpreter
 
                 using var process = new Process { StartInfo = startInfo };
                 process.Start();
+                interpreter.RegisterOwnedProcess(process);
                 childProcess.SetPid(process.Id);
                 childProcess.SetProcess(process);
-
-                var maxBuffer = (int)GetDoubleOption(options, "maxBuffer", 1024 * 1024);
-                var (asBuffer, encoding) = GetOutputEncoding(options);
-                var outBytes = ReadCappedBytes(process.StandardOutput.BaseStream, maxBuffer, out var oOver);
-                var errBytes = ReadCappedBytes(process.StandardError.BaseStream, maxBuffer, out var eOver);
-                stdout = asBuffer ? new SharpTSBuffer(outBytes) : BufferEncoding.Decode(outBytes, encoding);
-                stderr = asBuffer ? new SharpTSBuffer(errBytes) : BufferEncoding.Decode(errBytes, encoding);
-                if (oOver || eOver)
+                try
                 {
-                    try { process.Kill(); } catch { }
-                    error = MaxBufferError();
-                }
-
-                if (timeout > 0)
-                {
-                    if (!process.WaitForExit((int)timeout))
+                    var maxBuffer = (int)GetDoubleOption(options, "maxBuffer", 1024 * 1024);
+                    var (asBuffer, encoding) = GetOutputEncoding(options);
+                    var outBytes = ReadCappedBytes(process.StandardOutput.BaseStream, maxBuffer, out var oOver);
+                    var errBytes = ReadCappedBytes(process.StandardError.BaseStream, maxBuffer, out var eOver);
+                    stdout = asBuffer ? new SharpTSBuffer(outBytes) : BufferEncoding.Decode(outBytes, encoding);
+                    stderr = asBuffer ? new SharpTSBuffer(errBytes) : BufferEncoding.Decode(errBytes, encoding);
+                    if (oOver || eOver)
                     {
-                        process.Kill();
-                        kind = 1;
+                        ProcessTreeTermination.Terminate(process);
+                        error = MaxBufferError();
                     }
-                    else { code = process.ExitCode; }
-                }
-                else
-                {
-                    process.WaitForExit();
-                    code = process.ExitCode;
-                }
 
-                if (kind == 0 && error == null && code != 0)
-                    error = new SharpTSObject(new Dictionary<string, object?>
+                    if (timeout > 0)
                     {
-                        ["message"] = $"Command failed with exit code {code}",
-                        ["code"] = (double)code
-                    });
+                        if (!process.WaitForExit((int)timeout))
+                        {
+                            ProcessTreeTermination.Terminate(process);
+                            kind = 1;
+                        }
+                        else { code = process.ExitCode; }
+                    }
+                    else
+                    {
+                        process.WaitForExit();
+                        code = process.ExitCode;
+                    }
+
+                    if (kind == 0 && error == null && code != 0)
+                        error = new SharpTSObject(new Dictionary<string, object?>
+                        {
+                            ["message"] = $"Command failed with exit code {code}",
+                            ["code"] = (double)code
+                        });
+                }
+                finally
+                {
+                    interpreter.UnregisterOwnedProcess(process);
+                    childProcess.ClearProcess(process);
+                }
             }
             catch (Exception ex)
             {
@@ -783,7 +837,8 @@ public static class ChildProcessModuleInterpreter
         var cwd = GetStringOption(options, "cwd");
         var childProcess = RunFork(modulePath, forkArgs, options, cwd, interpreter,
             interpreter.Ref, interpreter.Unref, interpreter.EnqueueCallback,
-            (cp, ev, arg) => cp.EmitWith(interpreter, ev, arg));
+            (cp, ev, arg) => cp.EmitWith(interpreter, ev, arg),
+            interpreter.RegisterOwnedProcess, interpreter.UnregisterOwnedProcess);
         return RuntimeValue.FromObject(childProcess);
     }
 
@@ -795,7 +850,8 @@ public static class ChildProcessModuleInterpreter
     /// </summary>
     public static SharpTSChildProcess ForkForCompiledLoop(
         string modulePath, object? argsObj, object? optionsObj,
-        Action eventLoopRef, Action eventLoopUnref, Action<Action> eventLoopSchedule)
+        Action eventLoopRef, Action eventLoopUnref, Action<Action> eventLoopSchedule,
+        Action<Process> registerProcess, Action<Process> unregisterProcess)
     {
         var forkArgs = new List<string>();
         if (argsObj is SharpTSArray a)
@@ -806,7 +862,7 @@ public static class ChildProcessModuleInterpreter
 
         return RunFork(modulePath, forkArgs, options, cwd, interp: null,
             eventLoopRef, eventLoopUnref, eventLoopSchedule,
-            (cp, ev, arg) => cp.EmitDirect(ev, arg));
+            (cp, ev, arg) => cp.EmitDirect(ev, arg), registerProcess, unregisterProcess);
     }
 
     /// <summary>
@@ -823,7 +879,8 @@ public static class ChildProcessModuleInterpreter
     private static SharpTSChildProcess RunFork(
         string modulePath, List<string> forkArgs, SharpTSObject? options, string? cwd,
         Interp? interp, Action refLoop, Action unrefLoop, Action<Action> post,
-        Action<SharpTSChildProcess, string, object?> emit)
+        Action<SharpTSChildProcess, string, object?> emit,
+        Action<Process> registerProcess, Action<Process> unregisterProcess)
     {
         var resolvedModule = modulePath;
         if (!Path.IsPathRooted(resolvedModule))
@@ -903,10 +960,12 @@ public static class ChildProcessModuleInterpreter
         refLoop();
         Task.Run(() =>
         {
+            Process? process = null;
             try
             {
-                var process = new Process { StartInfo = startInfo };
+                process = new Process { StartInfo = startInfo };
                 process.Start();
+                registerProcess(process);
                 childProcess.SetPid(process.Id);
                 childProcess.SetProcess(process);
 
@@ -992,6 +1051,7 @@ public static class ChildProcessModuleInterpreter
             }
             catch (Exception ex)
             {
+                ProcessTreeTermination.Terminate(process);
                 post(() =>
                 {
                     try
@@ -1003,6 +1063,16 @@ public static class ChildProcessModuleInterpreter
                     }
                     finally { unrefLoop(); }
                 });
+            }
+            finally
+            {
+                cts.Cancel();
+                if (process != null)
+                {
+                    unregisterProcess(process);
+                    childProcess.ClearProcess(process);
+                    process.Dispose();
+                }
             }
         });
 

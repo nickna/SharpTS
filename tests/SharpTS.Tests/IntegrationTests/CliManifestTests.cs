@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SharpTS.Runtime;
 using System.Reflection.Metadata;
 using System.Reflection.PortableExecutable;
 using SharpTS.Modules;
@@ -216,7 +217,7 @@ public class CliManifestTests(ExternalAssemblyFixture fixture)
         var stderr = process.StandardError.ReadToEnd();
         if (!process.WaitForExit(TimeSpan.FromSeconds(60)))
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException($"Compiled program timed out: {dllPath}");
         }
         return new CliTestHelper.CliResult(

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Security;
 using System.Security.Cryptography;
 using System.Text;
+using SharpTS.Runtime;
 
 namespace SharpTS.References;
 
@@ -107,14 +108,18 @@ internal static class NuGetRestorer
                 $"sharpts.json packages ('{manifest.ManifestPath}').");
         }
 
-        string stdout = process.StandardOutput.ReadToEnd();
-        string stderr = process.StandardError.ReadToEnd();
+        using var processLifetime = process;
+        Task<string> stdoutTask = process.StandardOutput.ReadToEndAsync();
+        Task<string> stderrTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(TimeSpan.FromMinutes(10)))
         {
-            try { process.Kill(entireProcessTree: true); } catch { }
+            ProcessTreeTermination.Terminate(process);
             throw new Exception(
                 $"Error: NuGet restore for sharpts.json ('{manifest.ManifestPath}') timed out after 10 minutes.");
         }
+
+        string stdout = stdoutTask.GetAwaiter().GetResult();
+        string stderr = stderrTask.GetAwaiter().GetResult();
 
         if (process.ExitCode != 0)
         {

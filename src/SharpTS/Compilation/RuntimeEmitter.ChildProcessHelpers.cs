@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Collections.Concurrent;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
@@ -12,6 +13,7 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitChildProcessMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
+        EmitOwnedChildProcessLifecycle(typeBuilder, runtime);
         EmitChildProcessNoOp(typeBuilder);
         EmitChildProcessAsyncInfra(typeBuilder, runtime);
         EmitChildProcessExecSync(typeBuilder, runtime);
@@ -21,6 +23,215 @@ public partial class RuntimeEmitter
         EmitChildProcessExecFileSync(typeBuilder, runtime);
         EmitChildProcessExecFile(typeBuilder, runtime);
         EmitChildProcessFork(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits the generated runtime's private child-process ownership registry. The emitted
+    /// assembly remains standalone: every operation is expressed using BCL types and IL.
+    /// </summary>
+    private void EmitOwnedChildProcessLifecycle(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        Type registryType = typeof(ConcurrentDictionary<int, Process>);
+        MethodInfo volatileRead = typeof(Volatile).GetMethod(nameof(Volatile.Read), [typeof(int).MakeByRefType()])!;
+        MethodInfo exchange = typeof(Interlocked).GetMethod(nameof(Interlocked.Exchange), [typeof(int).MakeByRefType(), typeof(int)])!;
+        MethodInfo processId = _types.GetProperty(_types.Process, "Id")!.GetGetMethod()!;
+        MethodInfo setItem = registryType.GetProperty("Item")!.GetSetMethod()!;
+        MethodInfo tryRemove = registryType.GetMethod("TryRemove", [typeof(int), typeof(Process).MakeByRefType()])!;
+
+        runtime.ChildProcessUnregisterOwned = DefineChildProcessUnregisterOwned(
+            typeBuilder, runtime, processId, tryRemove);
+
+        var terminateOne = typeBuilder.DefineMethod(
+            "ChildProcessTerminateOne",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Void,
+            [_types.Process]);
+        {
+            var il = terminateOne.GetILGenerator();
+            var afterKill = il.DefineLabel();
+            il.BeginExceptionBlock();
+            var skipKill = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Brfalse, skipKill);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "HasExited")!.GetGetMethod()!);
+            il.Emit(OpCodes.Brtrue, skipKill);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Kill", [_types.Boolean])!);
+            il.MarkLabel(skipKill);
+            il.Emit(OpCodes.Leave, afterKill);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Leave, afterKill);
+            il.EndExceptionBlock();
+            il.MarkLabel(afterKill);
+
+            var afterWait = il.DefineLabel();
+            il.BeginExceptionBlock();
+            var skipWait = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Brfalse, skipWait);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldc_I4, 5000);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "WaitForExit", [_types.Int32])!);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(skipWait);
+            il.Emit(OpCodes.Leave, afterWait);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Leave, afterWait);
+            il.EndExceptionBlock();
+            il.MarkLabel(afterWait);
+            il.Emit(OpCodes.Ret);
+        }
+
+        runtime.ChildProcessRegisterOwned = typeBuilder.DefineMethod(
+            "ChildProcessRegisterOwned",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Process]);
+        {
+            var il = runtime.ChildProcessRegisterOwned.GetILGenerator();
+            var register = il.DefineLabel();
+            var done = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldsflda, runtime.ChildProcessOwnershipStoppingField);
+            il.Emit(OpCodes.Call, volatileRead);
+            il.Emit(OpCodes.Brfalse, register);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, terminateOne);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(register);
+            il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, processId);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, setItem);
+
+            il.Emit(OpCodes.Ldsflda, runtime.ChildProcessOwnershipStoppingField);
+            il.Emit(OpCodes.Call, volatileRead);
+            il.Emit(OpCodes.Brfalse, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.ChildProcessUnregisterOwned);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, terminateOne);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
+
+        runtime.ChildProcessReleaseOwned = typeBuilder.DefineMethod(
+            "ChildProcessReleaseOwned",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Process]);
+        {
+            var il = runtime.ChildProcessReleaseOwned.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.ChildProcessUnregisterOwned);
+            var done = il.DefineLabel();
+            var dispose = il.DefineLabel();
+            il.BeginExceptionBlock();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Brtrue, dispose);
+            il.Emit(OpCodes.Leave, done);
+            il.MarkLabel(dispose);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
+            il.Emit(OpCodes.Leave, done);
+            il.BeginCatchBlock(_types.Exception);
+            il.Emit(OpCodes.Pop);
+            il.Emit(OpCodes.Leave, done);
+            il.EndExceptionBlock();
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
+
+        runtime.ChildProcessTerminateOwned = typeBuilder.DefineMethod(
+            "ChildProcessTerminateOwned",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            Type.EmptyTypes);
+        {
+            var il = runtime.ChildProcessTerminateOwned.GetILGenerator();
+            Type collectionType = typeof(ICollection<Process>);
+            var processes = il.DeclareLocal(typeof(Process[]));
+            var values = il.DeclareLocal(collectionType);
+            var index = il.DeclareLocal(_types.Int32);
+
+            il.Emit(OpCodes.Ldsflda, runtime.ChildProcessOwnershipStoppingField);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Call, exchange);
+            il.Emit(OpCodes.Pop);
+
+            il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+            il.Emit(OpCodes.Callvirt, registryType.GetProperty("Values")!.GetGetMethod()!);
+            il.Emit(OpCodes.Stloc, values);
+            il.Emit(OpCodes.Ldloc, values);
+            il.Emit(OpCodes.Callvirt, collectionType.GetProperty("Count")!.GetGetMethod()!);
+            il.Emit(OpCodes.Newarr, _types.Process);
+            il.Emit(OpCodes.Stloc, processes);
+            il.Emit(OpCodes.Ldloc, values);
+            il.Emit(OpCodes.Ldloc, processes);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Callvirt, collectionType.GetMethod("CopyTo")!);
+
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            var loop = il.DefineLabel();
+            var loopTest = il.DefineLabel();
+            il.Emit(OpCodes.Br, loopTest);
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, processes);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldelem_Ref);
+            il.Emit(OpCodes.Call, terminateOne);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(loopTest);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldloc, processes);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Blt, loop);
+            il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+            il.Emit(OpCodes.Callvirt, registryType.GetMethod("Clear", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Ret);
+        }
+    }
+
+    private MethodBuilder DefineChildProcessUnregisterOwned(
+        TypeBuilder typeBuilder,
+        EmittedRuntime runtime,
+        MethodInfo processId,
+        MethodInfo tryRemove)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ChildProcessUnregisterOwned",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Void,
+            [_types.Process]);
+        var il = method.GetILGenerator();
+        var removed = il.DeclareLocal(_types.Process);
+        var done = il.DefineLabel();
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldsfld, runtime.ChildProcessOwnedProcessesField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, processId);
+        il.Emit(OpCodes.Ldloca, removed);
+        il.Emit(OpCodes.Callvirt, tryRemove);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, done);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, done);
+        il.EndExceptionBlock();
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 
     /// <summary>
@@ -284,6 +495,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, processLocal);
+        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
         EmitSyncInputWrite(il, processLocal, __inputES);
 
         // stdout = process.StandardOutput.ReadToEnd()
@@ -309,14 +522,10 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Leave, afterTryLabel);
 
-        // finally { process?.Dispose() }
+        // finally { unregister + dispose the process owned by this generated runtime }
         il.BeginFinallyBlock();
-        var skipDisposeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Brfalse, skipDisposeLabel);
-        il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
-        il.MarkLabel(skipDisposeLabel);
+        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
         il.Emit(OpCodes.Endfinally);
 
         il.EndExceptionBlock();
@@ -535,6 +744,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, processLocal);
+        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
 
         // if (input != null) { process.StandardInput.Write(input); process.StandardInput.Close(); }  (#1021)
         var noInputWrite = il.DefineLabel();
@@ -567,14 +778,19 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Process, "ExitCode")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, exitCodeLocal);
 
-        // Dispose process
+        // Release ownership and dispose process
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
+        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
 
         il.Emit(OpCodes.Leave, afterProcessLabel);
 
         // catch (Exception ex) { errorMsg = ex.Message; exitCode = -1; }
         il.BeginCatchBlock(_types.Exception);
+        var spawnSyncException = il.DeclareLocal(_types.Exception);
+        il.Emit(OpCodes.Stloc, spawnSyncException);
+        il.Emit(OpCodes.Ldloc, processLocal);
+        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
+        il.Emit(OpCodes.Ldloc, spawnSyncException);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Message")!.GetGetMethod()!);
         il.Emit(OpCodes.Stloc, errorMsgLocal);
         il.Emit(OpCodes.Ldc_I4_M1);
@@ -998,6 +1214,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, processLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Process, "Start", Type.EmptyTypes)!);
         il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, processLocal);
+        il.Emit(OpCodes.Call, runtime.ChildProcessRegisterOwned);
         EmitSyncInputWrite(il, processLocal, __inputEFS);
 
         il.Emit(OpCodes.Ldloc, processLocal);
@@ -1019,14 +1237,10 @@ public partial class RuntimeEmitter
 
         il.Emit(OpCodes.Leave, afterTryLabel);
 
-        // finally { process?.Dispose() }
+        // finally { unregister + dispose the process owned by this generated runtime }
         il.BeginFinallyBlock();
-        var skipDisposeLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Brfalse, skipDisposeLabel);
-        il.Emit(OpCodes.Ldloc, processLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDisposable, "Dispose")!);
-        il.MarkLabel(skipDisposeLabel);
+        il.Emit(OpCodes.Call, runtime.ChildProcessReleaseOwned);
         il.Emit(OpCodes.Endfinally);
 
         il.EndExceptionBlock();
@@ -1187,9 +1401,12 @@ public partial class RuntimeEmitter
         var refLocal = il.DeclareLocal(typeof(Action));
         var unrefLocal = il.DeclareLocal(typeof(Action));
         var scheduleLocal = il.DeclareLocal(typeof(Action<Action>));
+        var registerLocal = il.DeclareLocal(typeof(Action<Process>));
+        var unregisterLocal = il.DeclareLocal(typeof(Action<Process>));
         var argsLocal = il.DeclareLocal(_types.ObjectArray);
         var actionCtor = typeof(Action).GetConstructor([_types.Object, typeof(IntPtr)])!;
         var actionOfActionCtor = typeof(Action<Action>).GetConstructor([_types.Object, typeof(IntPtr)])!;
+        var actionOfProcessCtor = typeof(Action<Process>).GetConstructor([_types.Object, typeof(IntPtr)])!;
 
         // Type t = Type.GetType("SharpTS.Runtime.BuiltIns.Modules.Interpreter.ChildProcessModuleInterpreter, SharpTS");
         il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.Modules.Interpreter.ChildProcessModuleInterpreter, SharpTS");
@@ -1221,9 +1438,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldftn, runtime.EventLoopSchedule);
         il.Emit(OpCodes.Newobj, actionOfActionCtor);
         il.Emit(OpCodes.Stloc, scheduleLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, runtime.ChildProcessRegisterOwned);
+        il.Emit(OpCodes.Newobj, actionOfProcessCtor);
+        il.Emit(OpCodes.Stloc, registerLocal);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldftn, runtime.ChildProcessUnregisterOwned);
+        il.Emit(OpCodes.Newobj, actionOfProcessCtor);
+        il.Emit(OpCodes.Stloc, unregisterLocal);
 
-        // object[] args = { modulePath, argsObj, optionsObj, ref, unref, schedule };
-        il.Emit(OpCodes.Ldc_I4_6);
+        // object[] args = { modulePath, argsObj, optionsObj, ref, unref, schedule, register, unregister };
+        il.Emit(OpCodes.Ldc_I4_8);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, argsLocal);
         void SetArg(int i, OpCode ld) { il.Emit(OpCodes.Ldloc, argsLocal); il.Emit(OpCodes.Ldc_I4, i); il.Emit(ld); il.Emit(OpCodes.Stelem_Ref); }
@@ -1233,6 +1458,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, argsLocal); il.Emit(OpCodes.Ldc_I4_3); il.Emit(OpCodes.Ldloc, refLocal); il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldloc, argsLocal); il.Emit(OpCodes.Ldc_I4_4); il.Emit(OpCodes.Ldloc, unrefLocal); il.Emit(OpCodes.Stelem_Ref);
         il.Emit(OpCodes.Ldloc, argsLocal); il.Emit(OpCodes.Ldc_I4_5); il.Emit(OpCodes.Ldloc, scheduleLocal); il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, argsLocal); il.Emit(OpCodes.Ldc_I4_6); il.Emit(OpCodes.Ldloc, registerLocal); il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, argsLocal); il.Emit(OpCodes.Ldc_I4_7); il.Emit(OpCodes.Ldloc, unregisterLocal); il.Emit(OpCodes.Stelem_Ref);
 
         // return t.GetMethod("ForkForCompiledLoop").Invoke(null, args);
         il.Emit(OpCodes.Ldloc, typeLocal);

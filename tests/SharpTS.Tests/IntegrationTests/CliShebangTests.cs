@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SharpTS.Runtime;
 using Xunit;
 
 namespace SharpTS.Tests.IntegrationTests;
@@ -141,7 +142,7 @@ public class CliShebangTests
         var stderrTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit((int)CliTestHelper.DefaultTimeout.TotalMilliseconds))
         {
-            process.Kill(entireProcessTree: true);
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException("Executable shebang example did not exit within 30 seconds.");
         }
 
@@ -166,7 +167,7 @@ public class CliShebangTests
         var stderrTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit((int)CliTestHelper.DefaultTimeout.TotalMilliseconds))
         {
-            process.Kill(entireProcessTree: true);
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException("Compiled shebang script did not exit within 30 seconds.");
         }
 

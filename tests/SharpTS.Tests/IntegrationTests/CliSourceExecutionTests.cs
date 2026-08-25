@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using SharpTS.Runtime;
 using Xunit;
 
 namespace SharpTS.Tests.IntegrationTests;
@@ -58,7 +59,7 @@ public class CliSourceExecutionTests
         var stderrTask = process.StandardError.ReadToEndAsync();
         if (!process.WaitForExit(60_000))
         {
-            process.Kill(entireProcessTree: true);
+            ProcessTreeTermination.Terminate(process);
             throw new TimeoutException("Compiled source-execution host did not exit within 60 seconds.");
         }
 
