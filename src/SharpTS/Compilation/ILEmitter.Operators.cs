@@ -779,6 +779,25 @@ public partial class ILEmitter
         var localType = local != null ? _ctx.Locals.GetLocalType(ca.Name.Lexeme) : null;
         bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
 
+        // A proven number local with a proven number RHS can remain in native
+        // double space for arithmetic compound assignment. The old path boxed
+        // both operands, dispatched through the generic compound helper, then
+        // converted the boxed result back to double on every iteration. Keep
+        // dynamic += (which may concatenate strings), captured/object slots,
+        // and undefined-capable values on that coercion-preserving path.
+        if (isTypedDouble
+            && local != null
+            && IsArithmeticCompound(ca.Operator.Type)
+            && IsNumericTypeInfo(_ctx.TypeMap?.Get(ca.Value)))
+        {
+            IL.Emit(OpCodes.Ldloc, local);
+            EmitCompoundArithmeticDoubleOnStack(ca.Operator.Type, ca.Value);
+            IL.Emit(OpCodes.Dup);
+            IL.Emit(OpCodes.Stloc, local);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         // For += with unknown right-hand side types, use runtime Add (handles both string concat and numeric add)
         // When the target is a typed double local, we know it's numeric — skip runtime Add.
         if (!isTypedDouble && ca.Operator.Type == TokenType.PLUS_EQUAL)
@@ -2533,6 +2552,10 @@ public partial class ILEmitter
         TokenType.SLASH_EQUAL or TokenType.PERCENT_EQUAL or TokenType.AMPERSAND_EQUAL or
         TokenType.PIPE_EQUAL or TokenType.CARET_EQUAL or TokenType.LESS_LESS_EQUAL or
         TokenType.GREATER_GREATER_EQUAL;
+
+    private static bool IsArithmeticCompound(TokenType op) => op is
+        TokenType.PLUS_EQUAL or TokenType.MINUS_EQUAL or TokenType.STAR_EQUAL or
+        TokenType.SLASH_EQUAL or TokenType.PERCENT_EQUAL;
 
     // Stack in: [cur (double)]. Applies `cur OP value` in native double space (JS bitwise ops route
     // through int32) and leaves the numeric result as a double. Shared by the boxed compound path

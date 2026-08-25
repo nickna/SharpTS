@@ -247,6 +247,27 @@ public partial class ILCompiler
             int restIndex = funcStmt.Parameters.IndexOf(restParam);
             int regularCount = funcStmt.Parameters.Count(p => !p.IsRest);
             _functions.RestParams[qualifiedFunctionName] = (restIndex, regularCount);
+
+            if (_stableNumericRestFunctions.TryGetValue(funcStmt, out var flattenedInfo))
+            {
+                var companions = new Dictionary<int, MethodBuilder>();
+                foreach (int restArity in flattenedInfo.RestArities.Order())
+                {
+                    Type[] companionParameters = paramTypes
+                        .Take(flattenedInfo.RegularParameterCount)
+                        .Concat(Enumerable.Repeat(_types.Double, restArity))
+                        .ToArray();
+                    var companion = _programType.DefineMethod(
+                        $"{qualifiedFunctionName}$rest$arity{restArity}",
+                        MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.HideBySig,
+                        returnType,
+                        companionParameters);
+                    MarkCompilerGenerated(companion);
+                    companions[restArity] = companion;
+                }
+
+                _functions.FlattenedNumericRestMethods[qualifiedFunctionName] = companions;
+            }
         }
 
         // Track function AST node for closure analysis lookups
@@ -601,6 +622,79 @@ public partial class ILCompiler
             il.Emit(OpCodes.Ret);
         }
 
+        EmitFlattenedNumericRestCompanionBodies(funcStmt, qualifiedFunctionName, methodBuilder);
+    }
+
+    private void EmitFlattenedNumericRestCompanionBodies(
+        Stmt.Function function,
+        string qualifiedFunctionName,
+        MethodBuilder ordinaryMethod)
+    {
+        if (!_stableNumericRestFunctions.TryGetValue(function, out var info)
+            || !_functions.FlattenedNumericRestMethods.TryGetValue(
+                qualifiedFunctionName, out var companions)
+            || function.Body == null)
+        {
+            return;
+        }
+
+        Dictionary<string, FieldBuilder>? topLevelVars =
+            BuildModuleMemberTopLevelStaticVarsForModule(_modules.CurrentPath);
+
+        foreach (var (restArity, companion) in companions.OrderBy(pair => pair.Key))
+        {
+            var il = companion.GetILGenerator();
+            var ctx = CreateModuleMemberContext(il, companion);
+            ctx.StableDirectSelfCallTarget = ordinaryMethod;
+            ctx.FunctionOverloads = _functions.Overloads;
+            ctx.AsyncArrowBuilders = _async.ArrowBuilders.Count > 0 ? _async.ArrowBuilders : null;
+            ApplyCommonJsModuleAccess(ctx);
+            ctx.UnionGenerator = _unionGenerator;
+            ctx.IsStrictMode = _isStrictMode || BodyDeclaresUseStrict(function.Body);
+            ApplyCapturedTopLevelVariableAccess(ctx);
+            ctx.TopLevelStaticVars = topLevelVars;
+            ctx.ArrowEntryPointDCFields = _closures.ArrowEntryPointDCFields.Count > 0
+                ? _closures.ArrowEntryPointDCFields
+                : null;
+            ctx.ArrowFunctionDCFields = _closures.ArrowFunctionDCFields.Count > 0
+                ? _closures.ArrowFunctionDCFields
+                : null;
+            ctx.ArrowScopeDCFields = _closures.ArrowScopeDCFields.Count > 0
+                ? _closures.ArrowScopeDCFields
+                : null;
+            ctx.ArrowScopeDCExtraFieldsByArrow = _arrowScopeDCExtraFields.Count > 0
+                ? _arrowScopeDCExtraFields
+                : null;
+            ApplyInnerFunctionSupport(ctx);
+            ctx.CurrentMethodReturnType = companion.ReturnType;
+            ctx.FlattenedNumericRestParameter = new FlattenedNumericRestParameter(
+                info.RestName,
+                info.RegularParameterCount,
+                restArity);
+
+            var parameters = companion.GetParameters();
+            for (int i = 0; i < info.RegularParameterCount; i++)
+            {
+                ctx.DefineParameter(
+                    function.Parameters[i].Name.Lexeme,
+                    i,
+                    parameters[i].ParameterType);
+            }
+
+            var emitter = new ILEmitter(ctx);
+            emitter.InitializeCapturedLexicalTdzBindings(function.Body);
+            emitter.EmitStatements(function.Body);
+
+            if (emitter.HasDeferredReturns)
+            {
+                emitter.FinalizeReturns();
+            }
+            else
+            {
+                EmitDefaultReturnValue(il, companion.ReturnType);
+                il.Emit(OpCodes.Ret);
+            }
+        }
     }
 
     internal static bool TryGetCompactRecordShape(

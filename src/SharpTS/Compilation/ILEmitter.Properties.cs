@@ -17,6 +17,17 @@ public partial class ILEmitter
 {
     protected override void EmitGet(Expr.Get g)
     {
+        if (!g.Optional
+            && g.Name.Lexeme == "length"
+            && g.Object is Expr.Variable restLength
+            && _ctx.FlattenedNumericRestParameter is { } flattenedLength
+            && restLength.Name.Lexeme == flattenedLength.Name)
+        {
+            EmitDoubleConstant(flattenedLength.Length);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         // CommonJS: `module.exports` reads → ldsfld $exports
         if (TryEmitCjsGet(g)) return;
 
@@ -951,6 +962,9 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (TryEmitFlattenedNumericRestIndex(gi))
+            return;
+
         if (TryEmitStableMapEntryIndex(gi))
             return;
 
@@ -1294,6 +1308,25 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Ldloc, idxRecvLocal);
         IL.Emit(OpCodes.Ldloc, idxKeyLocal);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.GetIndex);
+    }
+
+    private bool TryEmitFlattenedNumericRestIndex(Expr.GetIndex expression)
+    {
+        if (expression.Optional
+            || expression.Object is not Expr.Variable restVariable
+            || _ctx.FlattenedNumericRestParameter is not { } flattened
+            || restVariable.Name.Lexeme != flattened.Name
+            || expression.Index is not Expr.Literal { Value: double index }
+            || index < 0
+            || index != Math.Truncate(index)
+            || index >= flattened.Length)
+        {
+            return false;
+        }
+
+        IL.Emit(OpCodes.Ldarg, flattened.FirstArgumentIndex + (int)index);
+        SetStackType(StackType.Double);
+        return true;
     }
 
     /// <summary>

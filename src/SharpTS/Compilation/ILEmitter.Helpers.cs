@@ -322,6 +322,10 @@ public partial class ILEmitter
 
     public override void EmitExpressionAsDouble(Expr expr)
     {
+        if (expr is Expr.GetIndex flattenedRestIndex
+            && TryEmitFlattenedNumericRestIndex(flattenedRestIndex))
+            return;
+
         // A number[] read consumed as a number can keep the numeric-mode $Array
         // result native while its guarded cold arm performs the same ordinary
         // property lookup + ToNumber coercion this method used previously.

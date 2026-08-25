@@ -44,6 +44,18 @@ public partial class CompilationContext
     // If a function has a rest param, restParamIndex is its index, regularParamCount is non-rest param count
     public Dictionary<string, (int RestParamIndex, int RegularParamCount)>? FunctionRestParams { get; set; }
 
+    /// <summary>
+    /// Private typed companions for stable <c>number[]</c> rest functions, keyed by
+    /// qualified function name and the number of trailing rest arguments.
+    /// </summary>
+    public Dictionary<string, Dictionary<int, MethodBuilder>>? FlattenedNumericRestMethods { get; set; }
+
+    /// <summary>
+    /// Set only while emitting one flattened companion body. Constant rest-element
+    /// reads are redirected to native double arguments and <c>length</c> to a literal.
+    /// </summary>
+    public FlattenedNumericRestParameter? FlattenedNumericRestParameter { get; set; }
+
     // Function overloads for default parameters: function name -> list of overload methods
     public Dictionary<string, List<MethodBuilder>>? FunctionOverloads { get; set; }
 
@@ -192,3 +204,8 @@ public partial class CompilationContext
             : ApplyNamespacePrefix(CurrentNamespacePath, baseName);
     }
 }
+
+public sealed record FlattenedNumericRestParameter(
+    string Name,
+    int FirstArgumentIndex,
+    int Length);

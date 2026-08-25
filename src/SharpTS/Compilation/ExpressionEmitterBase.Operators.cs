@@ -117,6 +117,9 @@ public abstract partial class ExpressionEmitterBase
     {
         string name = ca.Name.Lexeme;
 
+        if (TryEmitNativeNumericLocalCompound(ca))
+            return;
+
         // GetValue(left) precedes evaluation of the RHS. Spill it so a suspension
         // in the RHS still occurs with an empty evaluation stack.
         EmitVariable(new Expr.Variable(ca.Name));
@@ -139,6 +142,42 @@ public abstract partial class ExpressionEmitterBase
 
         SetStackUnknown();
     }
+
+    private bool TryEmitNativeNumericLocalCompound(Expr.CompoundAssign compound)
+    {
+        string name = compound.Name.Lexeme;
+        if (Ctx.CellBindingLocals.ContainsKey(name)
+            || !Ctx.Locals.TryGetLocal(name, out var local)
+            || local.LocalType != Types.Double
+            || !IsArithmeticCompound(compound.Operator.Type)
+            || !IsNumericType(Ctx.TypeMap?.Get(compound.Value)))
+        {
+            return false;
+        }
+
+        // Spill both values before applying the operator. In state-machine
+        // emitters the RHS may suspend, so no value may remain on the evaluation
+        // stack while it is evaluated.
+        IL.Emit(OpCodes.Ldloc, local);
+        var current = IL.DeclareLocal(Types.Double);
+        IL.Emit(OpCodes.Stloc, current);
+
+        EmitExpressionAsDouble(compound.Value);
+        var value = IL.DeclareLocal(Types.Double);
+        IL.Emit(OpCodes.Stloc, value);
+
+        IL.Emit(OpCodes.Ldloc, current);
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(CompoundOperatorHelper.GetOpcode(compound.Operator.Type)!.Value);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Stloc, local);
+        SetStackType(StackType.Double);
+        return true;
+    }
+
+    private static bool IsArithmeticCompound(TokenType op) => op is
+        TokenType.PLUS_EQUAL or TokenType.MINUS_EQUAL or TokenType.STAR_EQUAL or
+        TokenType.SLASH_EQUAL or TokenType.PERCENT_EQUAL;
 
     /// <summary>
     /// variable &&= value / variable ||= value / variable ??= value
