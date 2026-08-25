@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.ExceptionServices;
 using System.Runtime.InteropServices;
 using SharpTS.Execution;
 using SharpTS.Runtime;
@@ -44,14 +45,28 @@ public sealed class OwnedProcessRegistryTests
     }
 
     [Fact]
-    public async Task ProcessTreeTermination_TerminatesDescendants()
+    public void ProcessTreeTermination_TerminatesDescendants()
     {
         using Process parent = StartParentThatReportsChildPid();
         Process? child = null;
 
         try
         {
-            string? line = await parent.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(10));
+            // Keep the PID handshake off the ThreadPool: under the suite's aggressive
+            // parallelism, an awaited continuation can be delayed past the child's lifetime.
+            string? line = null;
+            Exception? readException = null;
+            var reader = new Thread(() =>
+            {
+                try { line = parent.StandardOutput.ReadLine(); }
+                catch (Exception exception) { readException = exception; }
+            }) { IsBackground = true };
+            reader.Start();
+
+            Assert.True(reader.Join(TimeSpan.FromSeconds(10)), "Timed out waiting for the parent to report a child PID.");
+            if (readException is not null)
+                ExceptionDispatchInfo.Capture(readException).Throw();
+
             Assert.True(int.TryParse(line, out int childPid), $"Parent did not report a child PID. Output: {line ?? "<null>"}");
 
             child = Process.GetProcessById(childPid);
