@@ -107,35 +107,73 @@ public sealed class StableNumericStringConversionTests
             function render(value: number): string { return value.toString(10); }
             function fixed(value: number): string { return value.toFixed(2); }
             function read(value: string): number { return parseInt(value, 10); }
+            function readStatic(value: string): number {
+                return Number.parseInt(value, 10);
+            }
+            function parseCounter(n: number): number {
+                let total: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    total += parseInt(i.toString(), 10);
+                }
+                return total;
+            }
+            function parseCounterStatic(n: number): number {
+                let total: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    total += Number.parseInt(i.toString(), 10);
+                }
+                return total;
+            }
             """);
 
         AssertCalls(assembly, "counterLengths", "ConcatStringInt64");
         AssertCalls(assembly, "render", "FormatNumber");
         AssertCalls(assembly, "fixed", "NumberToFixedDouble");
-        AssertCalls(assembly, "read", "NumberParseIntString");
+        AssertCalls(assembly, "read", "NumberParseIntDecimalString");
+        AssertCalls(assembly, "readStatic", "NumberParseIntDecimalString");
 
-        foreach (string function in new[] { "counterLengths", "render", "fixed", "read" })
+        foreach (string function in new[]
+                 {
+                     "counterLengths", "render", "fixed", "read", "readStatic",
+                     "parseCounter", "parseCounterStatic"
+                 })
+        {
+            MethodInfo method = FindFunction(assembly, function);
+            MethodBase? unexpected = CalledMethods(method).FirstOrDefault(called =>
+                called.Name is "NumberToStringRadix" or "NumberToFixed" or
+                    "NumberParseIntString" or "NumberParseInt" or
+                    "ParseIntHelper" or "InvokeMethodValue");
+            Assert.True(unexpected == null,
+                $"{function} unexpectedly calls {unexpected?.Name}.");
+        }
+
+        foreach (string function in new[] { "parseCounter", "parseCounterStatic" })
         {
             MethodInfo method = FindFunction(assembly, function);
             Assert.DoesNotContain(CalledMethods(method), called =>
-                called.Name is "NumberToStringRadix" or "NumberToFixed" or
-                    "NumberParseInt" or "InvokeMethodValue");
+                called.Name is "NumberParseIntDecimalString" or "FormatNumber" or
+                    "ConcatStringInt64");
+            Assert.Contains(Instructions(method), instruction =>
+                instruction.OpCode == OpCodes.Conv_R8);
         }
 
         Assert.DoesNotContain(Instructions(FindFunction(assembly, "read")), instruction =>
             instruction.OpCode == OpCodes.Box);
+        Assert.DoesNotContain(
+            Instructions(FindFunction(assembly, "readStatic")),
+            instruction => instruction.OpCode == OpCodes.Box);
         Assert.DoesNotContain(Instructions(FindFunction(assembly, "fixed")), instruction =>
             instruction.OpCode == OpCodes.Box);
     }
 
     [Fact]
-    public void TypedParseIntLoop_DoesNotAllocatePerIteration()
+    public void TypedDecimalParseIntLoop_DoesNotAllocatePerIteration()
     {
         Assembly assembly = Compile("""
             function run(n: number): number {
                 let total: number = 0;
                 for (let i: number = 0; i < n; i++) {
-                    total += parseInt("12345", 10);
+                    total += parseInt(" \uFEFF12345suffix", 10);
                 }
                 return total;
             }
@@ -149,7 +187,7 @@ public sealed class StableNumericStringConversionTests
 
         Assert.Equal(1_234_500_000, result);
         Assert.True(allocated <= 256,
-            $"Typed parseInt allocated {allocated:N0} bytes in the hot loop.");
+            $"Typed decimal parseInt allocated {allocated:N0} bytes in the hot loop.");
     }
 
     [Fact]
@@ -181,16 +219,27 @@ public sealed class StableNumericStringConversionTests
         const string source = """
             const originalToString: any = Number.prototype.toString;
             const originalToFixed: any = Number.prototype.toFixed;
+            function parseCounters(n: number): number {
+                let total: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    total += parseInt(i.toString(), 10);
+                    total += Number.parseInt(i.toString(), 10);
+                }
+                return total;
+            }
 
             (Number.prototype as any).toString = function(): string { return "patched-string"; };
             (Number.prototype as any).toFixed = function(): string { return "patched-fixed"; };
             console.log((5).toString(), (5).toFixed(2));
+            console.log(parseCounters(3));
 
             (Number.prototype as any).toString = originalToString;
             (Number.prototype as any).toFixed = originalToFixed;
             """;
 
-        Assert.Equal("patched-string patched-fixed\n", TestHarness.Run(source, mode));
+        Assert.Equal(
+            "patched-string patched-fixed\nNaN\n",
+            TestHarness.Run(source, mode));
     }
 
     [Fact]
@@ -204,6 +253,19 @@ public sealed class StableNumericStringConversionTests
             """;
 
         Assert.Equal("77\n", TestHarness.Run(source, ExecutionMode.Compiled));
+    }
+
+    [Fact]
+    public void ReassignedNumberParseInt_RetainsLiveDispatch()
+    {
+        const string source = """
+            const originalParseInt: any = Number.parseInt;
+            (Number as any).parseInt = function(): number { return 88; };
+            console.log(Number.parseInt("10", 10));
+            (Number as any).parseInt = originalParseInt;
+            """;
+
+        Assert.Equal("88\n", TestHarness.Run(source, ExecutionMode.Compiled));
     }
 
     [Theory, ModeData]
@@ -246,10 +308,30 @@ public sealed class StableNumericStringConversionTests
             function fixed(value: number, digits: number): string {
                 return value.toFixed(digits);
             }
+            function dynamicRadix(value: string, radix: number): number {
+                return parseInt(value, radix);
+            }
+            function dynamicInput(value: any): number {
+                return parseInt(value, 10);
+            }
+            function hexadecimal(value: string): number {
+                return parseInt(value, 16);
+            }
             """);
 
         AssertCalls(assembly, "render", "NumberToStringRadix");
         AssertCalls(assembly, "fixed", "NumberToFixed");
+        AssertCalls(assembly, "dynamicRadix", "NumberParseInt");
+        AssertCalls(assembly, "dynamicInput", "NumberParseInt");
+        AssertCalls(assembly, "hexadecimal", "NumberParseIntString");
+        foreach (string function in new[]
+                 {
+                     "dynamicRadix", "dynamicInput", "hexadecimal"
+                 })
+        {
+            Assert.DoesNotContain(CalledMethods(FindFunction(assembly, function)),
+                called => called.Name == "NumberParseIntDecimalString");
+        }
     }
 
     private static Assembly Compile(string source)

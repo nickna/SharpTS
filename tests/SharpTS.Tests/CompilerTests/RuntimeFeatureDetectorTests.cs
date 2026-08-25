@@ -181,6 +181,9 @@ public class RuntimeFeatureDetectorTests
     [InlineData("Number.prototype['toFixed'] = function() { return 'x'; };", true)]
     [InlineData("const N = Number; N.prototype.toString = function() { return 'x'; };", true)]
     [InlineData("const p = Number.prototype; p.toFixed = function() { return 'x'; };", true)]
+    [InlineData("Number.parseInt = function() { return 0; };", true)]
+    [InlineData("globalThis.Number = Number;", true)]
+    [InlineData("globalThis['Number'] = Number;", true)]
     [InlineData("Object.defineProperty(Number.prototype, 'x', { value: 1 });", true)]
     [InlineData("eval('void 0');", true)]
     public void DetectsNumberPrototypeMutationRisk(string source, bool expected)
@@ -190,6 +193,20 @@ public class RuntimeFeatureDetectorTests
         var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
 
         Assert.Equal(expected, features.UsesNumberPrototypeMutation);
+    }
+
+    [Theory]
+    [InlineData("Number.prototype.toString = function() { return 'x'; };", false)]
+    [InlineData("Number.parseInt = function() { return 0; };", true)]
+    [InlineData("globalThis.Number = Number;", true)]
+    [InlineData("globalThis['Number'] = Number;", true)]
+    [InlineData("eval('void 0');", true)]
+    public void DetectsNumberConstructorMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.Equal(expected, features.UsesNumberConstructorMutation);
     }
 
     [Theory]

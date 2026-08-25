@@ -186,6 +186,28 @@ public class GlobalFunctionHandler : ICallHandler
 
     private static bool EmitParseInt(IEmitterContext emitter, System.Reflection.Emit.ILGenerator il, CompilationContext ctx, Expr.Call call)
     {
+        if (call.Arguments.Count == 2
+            && ExpressionEmitterBase.TryGetInt32Literal(call.Arguments[1], out int decimalRadix)
+            && decimalRadix == 10)
+        {
+            if (emitter is ExpressionEmitterBase expressionEmitter
+                && expressionEmitter.TryEmitStableIntegerCounterParseInt(
+                    call.Arguments[0]))
+            {
+                return true;
+            }
+
+            if (IsStaticallyString(ctx.TypeMap?.Get(call.Arguments[0])))
+            {
+                emitter.EmitExpression(call.Arguments[0]);
+                il.Emit(System.Reflection.Emit.OpCodes.Castclass, ctx.Types.String);
+                il.Emit(System.Reflection.Emit.OpCodes.Call,
+                    ctx.Runtime!.NumberParseIntDecimalString);
+                emitter.SetStackType(StackType.Double);
+                return true;
+            }
+        }
+
         if (call.Arguments.Count is 1 or 2
             && IsStaticallyString(ctx.TypeMap?.Get(call.Arguments[0]))
             && (call.Arguments.Count == 1

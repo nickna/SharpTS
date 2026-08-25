@@ -133,11 +133,14 @@ public static class NumberBuiltIns
         => _instanceLookup.GetMethod(name);
 
     // Static method implementations (V2)
-    private static RuntimeValue ParseIntV2(Interpreter _, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
+    private static RuntimeValue ParseIntV2(
+        Interpreter interpreter,
+        RuntimeValue receiver,
+        ReadOnlySpan<RuntimeValue> args)
     {
         var str = args[0].Kind == ValueKind.String
             ? args[0].AsString()
-            : args[0].ToObject()?.ToString() ?? "";
+            : interpreter.ToStringForBuiltInArgument(args[0].ToObject());
         var radix = args.Length > 1 && args[1].Kind == ValueKind.Number
             ? (int)Interpreter.ToNumber(args[1])
             : 10;
@@ -303,6 +306,9 @@ public static class NumberBuiltIns
     /// </summary>
     public static double ParseInt(string str, int radix)
     {
+        if (radix == 10)
+            return ParseIntDecimal(str);
+
         str = str.Trim();
         if (string.IsNullOrEmpty(str)) return double.NaN;
 
@@ -340,6 +346,53 @@ public static class NumberBuiltIns
         {
             return double.NaN;
         }
+    }
+
+    /// <summary>
+    /// Parses an already-coerced string with radix 10 without allocating a
+    /// trimmed string or digit buffer.
+    /// </summary>
+    public static double ParseIntDecimal(string str)
+    {
+        int index = 0;
+        while (index < str.Length && IsEcmaParseWhitespace(str[index]))
+            index++;
+
+        int sign = 1;
+        if (index < str.Length)
+        {
+            if (str[index] == '-')
+            {
+                sign = -1;
+                index++;
+            }
+            else if (str[index] == '+')
+            {
+                index++;
+            }
+        }
+
+        int digitStart = index;
+        double result = 0;
+        while (index < str.Length)
+        {
+            int digit = str[index] - '0';
+            if ((uint)digit > 9)
+                break;
+            result = result * 10 + digit;
+            index++;
+        }
+
+        return index == digitStart ? double.NaN : sign * result;
+    }
+
+    private static bool IsEcmaParseWhitespace(char value)
+    {
+        if (value <= ' ')
+            return value == ' ' || (uint)(value - '\t') <= 4;
+        if (value < '\u00A0')
+            return false;
+        return value == '\uFEFF' || char.IsWhiteSpace(value);
     }
 
     /// <summary>
