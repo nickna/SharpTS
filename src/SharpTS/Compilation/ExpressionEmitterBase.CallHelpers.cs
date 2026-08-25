@@ -219,11 +219,34 @@ public abstract partial class ExpressionEmitterBase
                     }
                 }
 
-                var paramCount = targetMethod.GetParameters().Length;
-
-                // Rest parameter handling
                 (int RestParamIndex, int RegularParamCount) restInfo = default;
                 bool hasRestParam = Ctx.FunctionRestParams?.TryGetValue(resolvedFuncName, out restInfo) == true;
+
+                // A stable number[] rest function may have a private fixed-arity
+                // companion whose trailing values are native doubles. Select it
+                // only for a fixed call whose rest arguments are themselves
+                // statically numeric. The public List<object> ABI remains the
+                // target for spreads, any-typed values, aliases, imports, and all
+                // indirect calls.
+                bool usesFlattenedNumericRest = false;
+                if (hasRestParam
+                    && !hasSpreadArguments
+                    && c.Arguments.Count >= restInfo.RegularParamCount
+                    && c.Arguments.Skip(restInfo.RegularParamCount)
+                        .All(argument => IsNumericType(Ctx.TypeMap?.Get(argument))))
+                {
+                    int restArity = c.Arguments.Count - restInfo.RegularParamCount;
+                    if (Ctx.FlattenedNumericRestMethods?.TryGetValue(
+                            resolvedFuncName, out var companions) == true
+                        && companions.TryGetValue(restArity, out var companion))
+                    {
+                        targetMethod = companion;
+                        hasRestParam = false;
+                        usesFlattenedNumericRest = true;
+                    }
+                }
+
+                var paramCount = targetMethod.GetParameters().Length;
 
                 if (hasRestParam)
                 {
@@ -320,7 +343,8 @@ public abstract partial class ExpressionEmitterBase
                     // arguments object including extras past the declared arity (#64).
                     // Done *before* loading args onto the stack so we don't disturb
                     // the evaluation order for the call itself.
-                    if (Ctx.FunctionsCapturingArguments?.Contains(resolvedFuncName) == true &&
+                    if (!usesFlattenedNumericRest &&
+                        Ctx.FunctionsCapturingArguments?.Contains(resolvedFuncName) == true &&
                         Ctx.Runtime?.CurrentArgumentsField != null)
                     {
                         int publishCount = c.Arguments.Count;

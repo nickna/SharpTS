@@ -51,6 +51,7 @@ public partial class ILCompiler
             DisplayClassConstructors = _closures.DisplayClassConstructors,
             // Function metadata
             FunctionRestParams = _functions.RestParams,
+            FlattenedNumericRestMethods = _functions.FlattenedNumericRestMethods,
             FunctionLengths = _functions.Lengths,
             FunctionNames = _functions.Names,
             FunctionsCapturingArguments = _functions.CapturingArguments,
@@ -241,6 +242,7 @@ public partial class ILCompiler
             EnumKinds = parentCtx.EnumKinds,
             TopLevelStaticVars = parentCtx.TopLevelStaticVars,
             FunctionRestParams = parentCtx.FunctionRestParams,
+            FlattenedNumericRestMethods = parentCtx.FlattenedNumericRestMethods,
             FunctionLengths = parentCtx.FunctionLengths,
             FunctionNames = parentCtx.FunctionNames,
             FunctionGenericParams = parentCtx.FunctionGenericParams,

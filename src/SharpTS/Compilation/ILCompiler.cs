@@ -70,6 +70,8 @@ public partial class ILCompiler
         new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Stmt.Function, string> _exactCompactRecordReturns =
         new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.Function, StableNumericRestFunctionAnalyzer.Info>
+        _stableNumericRestFunctions = new(ReferenceEqualityComparer.Instance);
     private TypeBuilder _programType = null!;
 
     // Organized state containers (see ILCompiler.State.cs for definitions)
@@ -680,6 +682,9 @@ public partial class ILCompiler
     {
         PreScanBuiltInModuleImports(statements);
         StableFunctionBindingAnalyzer.Analyze(statements, _stableSelfCallFunctions);
+        StableNumericRestFunctionAnalyzer.Analyze(
+            statements, _typeMap, _stableSelfCallFunctions, _closures.Analyzer,
+            _stableNumericRestFunctions);
         ExactCompactRecordFunctionAnalyzer.Analyze(
             statements, _typeMap, _features, _stableSelfCallFunctions,
             _exactCompactRecordParameters, _exactCompactRecordReturns);
@@ -1336,6 +1341,9 @@ public partial class ILCompiler
         {
             PreScanBuiltInModuleImports(m.Statements, m.Path);
             StableFunctionBindingAnalyzer.Analyze(m.Statements, _stableSelfCallFunctions);
+            StableNumericRestFunctionAnalyzer.Analyze(
+                m.Statements, _typeMap, _stableSelfCallFunctions, _closures.Analyzer,
+                _stableNumericRestFunctions);
             ExactCompactRecordFunctionAnalyzer.Analyze(
                 m.Statements, _typeMap, _features, _stableSelfCallFunctions,
                 _exactCompactRecordParameters, _exactCompactRecordReturns);
