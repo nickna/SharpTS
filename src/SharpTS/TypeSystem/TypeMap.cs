@@ -21,6 +21,7 @@ public class TypeMap
     private readonly HashSet<object> _undefinedReachableNumericLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Parameter> _undefinedReachableNumericParams = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, TokenType> _promotableArrayLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Token> _promotableNumericMapLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
@@ -153,6 +154,19 @@ public class TypeMap
     /// </summary>
     public bool IsPromotableArrayLocal(Token nameToken, out TokenType elementToken) =>
         _promotableArrayLocals.TryGetValue(nameToken, out elementToken);
+
+    /// <summary>
+    /// Marks a fresh, exact, non-escaping <c>Map&lt;number, number&gt;</c> function local
+    /// whose complete lifetime is limited to direct numeric operations. The IL
+    /// compiler may represent it as <c>Dictionary&lt;double, double&gt;</c>. Keyed by
+    /// the declaration name token so a synthetic <see cref="Stmt.Var"/> emitted
+    /// for <see cref="Stmt.Const"/> retains the proof.
+    /// </summary>
+    public void MarkPromotableNumericMapLocal(Token nameToken) =>
+        _promotableNumericMapLocals.Add(nameToken);
+
+    public bool IsPromotableNumericMapLocal(Token nameToken) =>
+        _promotableNumericMapLocals.Contains(nameToken);
 
     /// <summary>
     /// Flags a <c>const</c>/<c>let</c> string local with a string-literal initializer that is provably

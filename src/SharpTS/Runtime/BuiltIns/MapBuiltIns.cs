@@ -39,7 +39,12 @@ public static class MapBuiltIns
         => _lookup.GetMember(receiver, name);
 
     private static RuntimeValue GetV2(Interpreter _, SharpTSMap map, ReadOnlySpan<RuntimeValue> args)
-        => RuntimeValue.FromBoxed(map.Get(args[0].ToObject()));
+    {
+        object? key = args[0].ToObject();
+        return map.Has(key)
+            ? RuntimeValue.FromBoxed(map.Get(key))
+            : RuntimeValue.Undefined;
+    }
 
     private static RuntimeValue SetV2(Interpreter _, SharpTSMap map, ReadOnlySpan<RuntimeValue> args)
         => RuntimeValue.FromObject(map.Set(args[0].ToObject(), args[1].ToObject()));

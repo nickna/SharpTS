@@ -259,12 +259,12 @@ public partial class RuntimeEmitter
         var dictType = _types.DictionaryObjectObject;
         var valueLocal = il.DeclareLocal(_types.Object);
 
-        var returnNullLabel = il.DefineLabel();
+        var returnUndefinedLabel = il.DefineLabel();
 
-        // if (map is not Dictionary<object, object?> dict) return null;
+        // if (map is not Dictionary<object, object?> dict) return undefined;
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, dictType);
-        il.Emit(OpCodes.Brfalse, returnNullLabel);
+        il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
         // if (dict.TryGetValue(NormalizeMapKey(key), out var value)) return value;
         il.Emit(OpCodes.Ldarg_0);
@@ -273,14 +273,14 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.NormalizeMapKey);
         il.Emit(OpCodes.Ldloca, valueLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(dictType, "TryGetValue")!);
-        il.Emit(OpCodes.Brfalse, returnNullLabel);
+        il.Emit(OpCodes.Brfalse, returnUndefinedLabel);
 
         il.Emit(OpCodes.Ldloc, valueLocal);
         il.Emit(OpCodes.Ret);
 
-        // return null;
-        il.MarkLabel(returnNullLabel);
-        il.Emit(OpCodes.Ldnull);
+        // Missing Map keys produce JavaScript undefined, not null.
+        il.MarkLabel(returnUndefinedLabel);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ret);
     }
 

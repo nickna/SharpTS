@@ -17,6 +17,13 @@ public sealed class MapEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (receiver is Expr.Variable variable
+            && ctx.TryGetPromotedNumericMapLocal(variable.Name.Lexeme) is { } numericMap)
+        {
+            return EmitNumericMapMethod(
+                emitter, numericMap, methodName, arguments);
+        }
+
         // Emit the Map object
         emitter.EmitExpression(receiver);
         emitter.EmitBoxIfNeeded(receiver);
@@ -76,6 +83,70 @@ public sealed class MapEmitter : ITypeEmitterStrategy
                 }
                 il.Emit(OpCodes.Call, ctx.Runtime!.MapForEach);
                 il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                return true;
+
+            default:
+                return false;
+        }
+    }
+
+    private static bool EmitNumericMapMethod(
+        IEmitterContext emitter,
+        LocalBuilder map,
+        string methodName,
+        List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        Type mapType = ctx.Types.DictionaryDoubleDouble;
+
+        switch (methodName)
+        {
+            case "get" when arguments is [var key]:
+            {
+                var value = il.DeclareLocal(ctx.Types.Double);
+                var missing = il.DefineLabel();
+                var done = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, map);
+                emitter.EmitExpressionAsDouble(key);
+                il.Emit(OpCodes.Ldloca, value);
+                il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(
+                    mapType,
+                    "TryGetValue",
+                    ctx.Types.Double,
+                    ctx.Types.Double.MakeByRefType()));
+                il.Emit(OpCodes.Brfalse, missing);
+                il.Emit(OpCodes.Ldloc, value);
+                il.Emit(OpCodes.Box, ctx.Types.Double);
+                il.Emit(OpCodes.Br, done);
+                il.MarkLabel(missing);
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                il.MarkLabel(done);
+                emitter.SetStackType(StackType.Unknown);
+                return true;
+            }
+
+            case "has" when arguments is [var key]:
+                il.Emit(OpCodes.Ldloc, map);
+                emitter.EmitExpressionAsDouble(key);
+                il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(
+                    mapType, "ContainsKey", ctx.Types.Double));
+                emitter.SetStackType(StackType.Boolean);
+                return true;
+
+            case "delete" when arguments is [var key]:
+                il.Emit(OpCodes.Ldloc, map);
+                emitter.EmitExpressionAsDouble(key);
+                il.Emit(OpCodes.Callvirt, ctx.Types.GetMethod(
+                    mapType, "Remove", ctx.Types.Double));
+                emitter.SetStackType(StackType.Boolean);
+                return true;
+
+            case "clear" when arguments.Count == 0:
+                il.Emit(OpCodes.Ldloc, map);
+                il.Emit(OpCodes.Callvirt, ctx.Types.GetMethodNoParams(mapType, "Clear"));
+                il.Emit(OpCodes.Ldsfld, ctx.Runtime!.UndefinedInstance);
+                emitter.SetStackType(StackType.Unknown);
                 return true;
 
             default:

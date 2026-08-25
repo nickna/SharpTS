@@ -284,14 +284,18 @@ public class TypeProvider
     public Type ConcurrentQueueOpen => Resolve("System.Collections.Concurrent.ConcurrentQueue`1");
     public Type ConcurrentQueueOfObject => MakeGenericType(ConcurrentQueueOpen, Object);
     public Type IEqualityComparerOpen => Resolve("System.Collections.Generic.IEqualityComparer`1");
+    public Type EqualityComparerOpen => Resolve("System.Collections.Generic.EqualityComparer`1");
     public Type RuntimeHelpers => Resolve("System.Runtime.CompilerServices.RuntimeHelpers");
 
     public Type ListOfObject => MakeGenericType(ListOpen, Object);
     public Type ListOfObjectNullable => typeof(List<object?>);
     public Type IEqualityComparerOfObject => MakeGenericType(IEqualityComparerOpen, Object);
     public Type IEqualityComparerOfString => MakeGenericType(IEqualityComparerOpen, String);
+    public Type IEqualityComparerOfDouble => MakeGenericType(IEqualityComparerOpen, Double);
+    public Type EqualityComparerOfDouble => MakeGenericType(EqualityComparerOpen, Double);
     public Type StringComparer => Resolve("System.StringComparer");
     public Type DictionaryObjectObject => MakeGenericType(DictionaryOpen, Object, Object);
+    public Type DictionaryDoubleDouble => MakeGenericType(DictionaryOpen, Double, Double);
     public Type DictionaryStringObject => MakeGenericType(DictionaryOpen, String, Object);
     public Type IEnumerableOfObject => MakeGenericType(IEnumerableOpen, Object);
     public Type IEnumeratorOfObject => MakeGenericType(IEnumeratorOpen, Object);

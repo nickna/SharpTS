@@ -406,6 +406,24 @@ public partial class ILEmitter
             return;
         }
 
+        // Closed-lifetime numeric Map promotion (#1482). The analyzer admits
+        // only a fresh, empty Map<number, number> local with direct numeric
+        // set/get/has/delete/clear/size uses, so the slot can hold native doubles.
+        // EqualityComparer<double>.Default is explicit here: Double.Equals and
+        // Double.GetHashCode define NaN equality and signed-zero equivalence,
+        // matching SameValueZero for the admitted numeric key domain.
+        if (_ctx.TypeMap?.IsPromotableNumericMapLocal(v.Name) == true)
+        {
+            Type mapType = _ctx.Types.DictionaryDoubleDouble;
+            var mapLocal = _ctx.Locals.DeclareLocal(v.Name.Lexeme, mapType);
+            IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(
+                _ctx.Types.EqualityComparerOfDouble, "Default").GetMethod!);
+            IL.Emit(OpCodes.Newobj, _ctx.Types.GetConstructor(
+                mapType, _ctx.Types.IEqualityComparerOfDouble));
+            IL.Emit(OpCodes.Stloc, mapLocal);
+            return;
+        }
+
         // Integer loop-counter prototype (#928): the analyzer-identified counter gets a native
         // Int64 slot initialized from its integer literal. Reads materialize a double (resolver),
         // the increment stays native int, and recognized index sites (a[i], a[i±k]) consume the
@@ -702,6 +720,7 @@ public partial class ILEmitter
             // evaluating any user expression early; unsupported runtime shapes
             // and unbounded/NaN counts simply retain normal List<T> growth.
             EmitCountedPushReservation(f);
+            EmitCountedNumericMapReservation(f);
 
             // Per-iteration reference cells (#650): for a loop binding that the body
             // both mutates and a closure captures, wrap its initial value in a fresh
@@ -823,6 +842,46 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Conv_I4);
         IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
             listType,
+            "EnsureCapacity",
+            [_ctx.Types.Int32])!);
+        IL.Emit(OpCodes.Pop);
+
+        _ctx.ILBuilder.MarkLabel(skipLabel);
+        SetStackUnknown();
+    }
+
+    private void EmitCountedNumericMapReservation(Stmt.For loop)
+    {
+        if (!CountedNumericMapSetLoopAnalyzer.TryAnalyze(loop, out var reservation)
+            || _ctx.TryGetPromotedNumericMapLocal(reservation.Map.Name.Lexeme) is not { } mapLocal)
+        {
+            return;
+        }
+
+        var countLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var skipLabel = _ctx.ILBuilder.DefineLabel("counted_numeric_map_reserve_skip");
+
+        SetStackUnknown();
+        EmitExpression(reservation.Bound);
+        EnsureDouble();
+        IL.Emit(OpCodes.Stloc, countLocal);
+
+        // Match the existing counted-array reservation boundary: reject NaN,
+        // infinities, negatives, and bounds above one million rather than
+        // changing allocation failure timing for unbounded guest input.
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, skipLabel);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
+        IL.Emit(OpCodes.Bgt_Un, skipLabel);
+
+        IL.Emit(OpCodes.Ldloc, mapLocal);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+            _ctx.Types.DictionaryDoubleDouble,
             "EnsureCapacity",
             [_ctx.Types.Int32])!);
         IL.Emit(OpCodes.Pop);
