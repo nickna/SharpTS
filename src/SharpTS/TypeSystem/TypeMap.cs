@@ -156,6 +156,21 @@ public class TypeMap
     public bool IsPromotableArrayLocal(Token nameToken, out TokenType elementToken) =>
         _promotableArrayLocals.TryGetValue(nameToken, out elementToken);
 
+    private readonly HashSet<Token> _stableNumericSliceSortReceivers =
+        new(ReferenceEqualityComparer.Instance);
+
+    /// <summary>
+    /// Records the exact receiver occurrence of a discarded
+    /// <c>freshNumericSlice.sort((a, b) =&gt; a - b)</c> call after whole-function
+    /// analysis proves that the slice local neither escapes nor aliases.
+    /// </summary>
+    public void MarkStableNumericSliceSortReceiver(Token receiverToken) =>
+        _stableNumericSliceSortReceivers.Add(receiverToken);
+
+    /// <summary>True only for the receiver occurrence approved by the analyzer.</summary>
+    public bool IsStableNumericSliceSortReceiver(Token receiverToken) =>
+        _stableNumericSliceSortReceivers.Contains(receiverToken);
+
     /// <summary>
     /// Marks an indexed receiver use whose binding belongs to a fresh, exact, non-escaping numeric
     /// TypedArray local. The IL compiler may cache that receiver's backing storage around a loop.

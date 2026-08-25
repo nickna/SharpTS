@@ -26,6 +26,11 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (methodName == "slice" && TryEmitNumericSliceCall(emitter, receiver, arguments))
+            return true;
+        if (methodName == "sort" && TryEmitNumericSortCall(emitter, receiver, arguments))
+            return true;
+
         if (methodName == "push"
             && receiver is Expr.Variable stableReceiver
             && ctx.TypeMap?.IsStablePrimitivePromiseAllPushReceiver(stableReceiver) == true
@@ -909,6 +914,117 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
             return bound;
         }
         return null;
+    }
+
+    /// <summary>
+    /// Keeps a zero-argument slice of a statically numeric array in the
+    /// packed-double $Array representation. The runtime helper repeats the
+    /// dense ordinary-array proof and falls back to observable generic slice.
+    /// </summary>
+    private static bool TryEmitNumericSliceCall(
+        IEmitterContext emitter,
+        Expr receiver,
+        List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (arguments.Count != 0
+            || ArrayElements.Resolve(ctx.TypeMap?.Get(receiver)) is not
+                { Kind: ArrayElementsKind.Double }
+            || ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+            || ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            return false;
+        }
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitBoxIfNeeded(receiver);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArraySliceNumber);
+        emitter.SetStackUnknown();
+        return true;
+    }
+
+    /// <summary>
+    /// Routes the closed, non-throwing numeric comparator <c>(a,b) =&gt; a-b</c>
+    /// to the packed stable merge kernel. Captures, calls, property reads,
+    /// statements, and every other comparator shape retain the observable sort
+    /// path, including comparator-driven mutation and abrupt completion.
+    /// </summary>
+    private static bool TryEmitNumericSortCall(
+        IEmitterContext emitter,
+        Expr receiver,
+        List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (receiver is not Expr.Variable stableSlice
+            || ctx.TypeMap?.IsStableNumericSliceSortReceiver(stableSlice.Name) != true
+            || arguments.Count != 1
+            || ArrayElements.Resolve(ctx.TypeMap?.Get(receiver)) is not
+                { Kind: ArrayElementsKind.Double }
+            || ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+            || ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            return false;
+        }
+
+        var af = ResolveCallbackArrow(emitter, arguments[0]);
+        if (af is null
+            || af.HasOwnThis
+            || af.IsAsync
+            || af.IsGenerator
+            || af.Parameters.Count != 2
+            || af.Parameters.Any(parameter =>
+                parameter.IsRest || parameter.IsOptional || parameter.DefaultValue != null)
+            || !IsPureNumericDifference(af)
+            || ctx.DisplayClasses.ContainsKey(af)
+            || !ctx.ArrowMethods.TryGetValue(af, out var arrowMethod)
+            || arrowMethod.ReturnType != ctx.Types.Double
+            || arrowMethod.GetParameters() is not { Length: 2 } parameters
+            || parameters[0].ParameterType != ctx.Types.Double
+            || parameters[1].ParameterType != ctx.Types.Double
+            || arrowMethod.DeclaringType is not TypeBuilder programType)
+        {
+            return false;
+        }
+
+        var typedComparator = typeof(Func<double, double, double>);
+        var boxedComparator = typeof(Func<object, object, double>);
+        var boxedAdapter = ctx.ArrowBoxedAdapters.GetOrEmit(
+            programType,
+            arrowMethod,
+            funcArity: 2,
+            instance: false,
+            boolReturn: false,
+            numberReturn: true);
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitBoxIfNeeded(receiver);
+        ctx.IL.Emit(OpCodes.Ldnull);
+        ctx.IL.Emit(OpCodes.Ldftn, arrowMethod);
+        ctx.IL.Emit(OpCodes.Newobj,
+            typedComparator.GetConstructor([typeof(object), typeof(IntPtr)])!);
+        ctx.IL.Emit(OpCodes.Ldnull);
+        ctx.IL.Emit(OpCodes.Ldftn, boxedAdapter);
+        ctx.IL.Emit(OpCodes.Newobj,
+            boxedComparator.GetConstructor([typeof(object), typeof(IntPtr)])!);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.ArraySortNumeric);
+        emitter.SetStackUnknown();
+        return true;
+    }
+
+    private static bool IsPureNumericDifference(Expr.ArrowFunction af)
+    {
+        if (af.ExpressionBody is not Expr.Binary
+            {
+                Operator.Type: TokenType.MINUS,
+                Left: Expr.Variable left,
+                Right: Expr.Variable right
+            })
+        {
+            return false;
+        }
+
+        return left.Name.Lexeme == af.Parameters[0].Name.Lexeme
+            && right.Name.Lexeme == af.Parameters[1].Name.Lexeme;
     }
 
     private static bool TryEmitDirectDelegateCall(IEmitterContext emitter, List<Expr> arguments, System.Reflection.Emit.MethodBuilder helperMethod, System.Reflection.Emit.MethodBuilder? boolHelper = null)

@@ -309,6 +309,334 @@ public partial class RuntimeEmitter
         var markNonExtensible = typeBuilder.DefineMethod("MarkNonExtensible",
             MethodAttributes.Public | MethodAttributes.HideBySig, _types.Void, System.Type.EmptyTypes);
         runtime.TSArrayMarkNonExtensible = markNonExtensible;
+        var isNumericGetter = typeBuilder.DefineMethod("get_IsNumeric",
+            MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            _types.Boolean, Type.EmptyTypes);
+        runtime.TSArrayIsNumericGetter = isNumericGetter;
+        var numericCountGetter = typeBuilder.DefineMethod("get_NumericCount",
+            MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            _types.Int32, Type.EmptyTypes);
+        runtime.TSArrayNumericCountGetter = numericCountGetter;
+        var cloneNumeric = typeBuilder.DefineMethod("CloneNumeric",
+            MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            typeBuilder, Type.EmptyTypes);
+        runtime.TSArrayCloneNumeric = cloneNumeric;
+        var numericComparatorType = typeof(Func<double, double, double>);
+        var sortNumeric = typeBuilder.DefineMethod("SortNumeric",
+            MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            _types.Void, [numericComparatorType]);
+        sortNumeric.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        runtime.TSArraySortNumeric = sortNumeric;
+
+        // These representation probes are consumed only by guarded emitted-runtime
+        // helpers. They expose no backing storage and do not force materialization.
+        {
+            var il = isNumericGetter.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+            il.Emit(OpCodes.Ret);
+        }
+        {
+            var il = numericCountGetter.GetILGenerator();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // CloneNumeric() preserves the packed-double representation for a fresh
+        // zero-argument slice. The caller proves numeric mode plus ordinary dense
+        // array observability before entering, so one exact-sized double[] is the
+        // complete slice storage and no element is boxed.
+        {
+            var il = cloneNumeric.GetILGenerator();
+            var result = il.DeclareLocal(typeBuilder);
+            var index = il.DeclareLocal(_types.Int32);
+            var loop = il.DefineLabel();
+            var done = il.DefineLabel();
+
+            il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+            il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+            il.Emit(OpCodes.Stloc, result);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stfld, _tsArrayIsNumericField);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Newarr, _types.Double);
+            il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, index);
+            il.MarkLabel(loop);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Bge, done);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Stelem_R8);
+            il.Emit(OpCodes.Ldloc, index);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, index);
+            il.Emit(OpCodes.Br, loop);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ldloc, result);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Stable bottom-up merge sort over the packed store. The persistent
+        // slice buffer is one side of the merge and a single double[] is the
+        // scratch side; after the last pass the sorted buffer becomes the store.
+        // The proven comparator has signature double(double,double), so neither
+        // elements nor comparison results cross an object boundary. A bgt on the
+        // result treats NaN like zero and takes the left run, preserving stability.
+        {
+            var il = sortNumeric.GetILGenerator();
+            var n = il.DeclareLocal(_types.Int32);
+            var src = il.DeclareLocal(_types.DoubleArray);
+            var dst = il.DeclareLocal(_types.DoubleArray);
+            var swap = il.DeclareLocal(_types.DoubleArray);
+            var width = il.DeclareLocal(_types.Int32);
+            var lo = il.DeclareLocal(_types.Int32);
+            var mid = il.DeclareLocal(_types.Int32);
+            var hi = il.DeclareLocal(_types.Int32);
+            var i = il.DeclareLocal(_types.Int32);
+            var j = il.DeclareLocal(_types.Int32);
+            var k = il.DeclareLocal(_types.Int32);
+
+            var done = il.DefineLabel();
+            var widthCond = il.DefineLabel();
+            var widthBody = il.DefineLabel();
+            var loCond = il.DefineLabel();
+            var loBody = il.DefineLabel();
+            var loNext = il.DefineLabel();
+            var midAdd = il.DefineLabel();
+            var midDone = il.DefineLabel();
+            var hiAdd = il.DefineLabel();
+            var hiDone = il.DefineLabel();
+            var widthDouble = il.DefineLabel();
+            var mergeCond = il.DefineLabel();
+            var mergeBody = il.DefineLabel();
+            var takeLeft = il.DefineLabel();
+            var takeRight = il.DefineLabel();
+            var afterTake = il.DefineLabel();
+            var drainLeftCond = il.DefineLabel();
+            var drainLeftBody = il.DefineLabel();
+            var drainRightCond = il.DefineLabel();
+            var drainRightBody = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Stloc, n);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Blt, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Stloc, src);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Newarr, _types.Double);
+            il.Emit(OpCodes.Stloc, dst);
+
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, width);
+            il.Emit(OpCodes.Br, widthCond);
+            il.MarkLabel(widthBody);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Stloc, lo);
+            il.Emit(OpCodes.Br, loCond);
+            il.MarkLabel(loBody);
+
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Ldloc, lo);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Blt, midAdd);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Stloc, mid);
+            il.Emit(OpCodes.Br, midDone);
+            il.MarkLabel(midAdd);
+            il.Emit(OpCodes.Ldloc, lo);
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, mid);
+            il.MarkLabel(midDone);
+
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Ldloc, mid);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Blt, hiAdd);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Stloc, hi);
+            il.Emit(OpCodes.Br, hiDone);
+            il.MarkLabel(hiAdd);
+            il.Emit(OpCodes.Ldloc, mid);
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, hi);
+            il.MarkLabel(hiDone);
+
+            il.Emit(OpCodes.Ldloc, lo);
+            il.Emit(OpCodes.Stloc, i);
+            il.Emit(OpCodes.Ldloc, mid);
+            il.Emit(OpCodes.Stloc, j);
+            il.Emit(OpCodes.Ldloc, lo);
+            il.Emit(OpCodes.Stloc, k);
+            il.Emit(OpCodes.Br, mergeCond);
+
+            il.MarkLabel(mergeBody);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Callvirt, numericComparatorType.GetMethod("Invoke")!);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Bgt, takeRight);
+
+            il.MarkLabel(takeLeft);
+            il.Emit(OpCodes.Ldloc, dst);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Stelem_R8);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, i);
+            il.Emit(OpCodes.Br, afterTake);
+
+            il.MarkLabel(takeRight);
+            il.Emit(OpCodes.Ldloc, dst);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Stelem_R8);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, j);
+
+            il.MarkLabel(afterTake);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, k);
+            il.MarkLabel(mergeCond);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldloc, mid);
+            il.Emit(OpCodes.Bge, drainLeftCond);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldloc, hi);
+            il.Emit(OpCodes.Blt, mergeBody);
+
+            il.MarkLabel(drainLeftCond);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldloc, mid);
+            il.Emit(OpCodes.Bge, drainRightCond);
+            il.MarkLabel(drainLeftBody);
+            il.Emit(OpCodes.Ldloc, dst);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Stelem_R8);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, i);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, k);
+            il.Emit(OpCodes.Ldloc, i);
+            il.Emit(OpCodes.Ldloc, mid);
+            il.Emit(OpCodes.Blt, drainLeftBody);
+
+            il.MarkLabel(drainRightCond);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldloc, hi);
+            il.Emit(OpCodes.Bge, loNext);
+            il.MarkLabel(drainRightBody);
+            il.Emit(OpCodes.Ldloc, dst);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Stelem_R8);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, j);
+            il.Emit(OpCodes.Ldloc, k);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, k);
+            il.Emit(OpCodes.Ldloc, j);
+            il.Emit(OpCodes.Ldloc, hi);
+            il.Emit(OpCodes.Blt, drainRightBody);
+
+            il.MarkLabel(loNext);
+            il.Emit(OpCodes.Ldloc, hi);
+            il.Emit(OpCodes.Stloc, lo);
+            il.MarkLabel(loCond);
+            il.Emit(OpCodes.Ldloc, lo);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Blt, loBody);
+
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Stloc, swap);
+            il.Emit(OpCodes.Ldloc, dst);
+            il.Emit(OpCodes.Stloc, src);
+            il.Emit(OpCodes.Ldloc, swap);
+            il.Emit(OpCodes.Stloc, dst);
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Ldc_I4, int.MaxValue / 2);
+            il.Emit(OpCodes.Ble, widthDouble);
+            il.Emit(OpCodes.Ldc_I4, int.MaxValue);
+            il.Emit(OpCodes.Stloc, width);
+            il.Emit(OpCodes.Br, widthCond);
+            il.MarkLabel(widthDouble);
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Mul);
+            il.Emit(OpCodes.Stloc, width);
+            il.MarkLabel(widthCond);
+            il.Emit(OpCodes.Ldloc, width);
+            il.Emit(OpCodes.Ldloc, n);
+            il.Emit(OpCodes.Blt, widthBody);
+
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Beq, done);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, src);
+            il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+            il.MarkLabel(done);
+            il.Emit(OpCodes.Ret);
+        }
 
         // ── void EnsureBoxed() ── numeric -> boxed: box each _numStore[i] into
         // the (empty) base list, then clear the numeric mode.

@@ -206,6 +206,134 @@ public sealed class ArraySortDirectComparatorTests
             $"Stable numeric sort allocated {allocated:N0} bytes; comparator results may be boxed.");
     }
 
+    [Fact]
+    public void FreshNumericSliceSort_UsesTypedStableKernel()
+    {
+        Assembly assembly = Compile("""
+            function makeNumbers(n: number): number[] {
+                const values: number[] = [];
+                let state: number = 123456789;
+                for (let i: number = 0; i < n; i++) {
+                    state = (state * 48271) % 2147483647;
+                    values.push(state);
+                }
+                return values;
+            }
+
+            function sortNumbers(source: number[]): number {
+                const copy: number[] = source.slice();
+                copy.sort((left: number, right: number): number => left - right);
+                return copy[0] + copy[copy.length - 1];
+            }
+
+            function stableSignedZeros(): boolean {
+                const source: number[] = [2, 0, -0, 1];
+                const copy: number[] = source.slice();
+                copy.sort((left: number, right: number): number => left - right);
+                return 1 / copy[0] === Infinity
+                    && 1 / copy[1] === -Infinity
+                    && copy[2] === 1
+                    && copy[3] === 2
+                    && source[0] === 2;
+            }
+            """);
+
+        MethodInfo sortNumbers = FindFunction(assembly, "sortNumbers");
+        MethodBase[] calls = CalledMethods(sortNumbers).ToArray();
+        Assert.Contains(calls, method => method.Name == "ArraySliceNumber");
+        Assert.Contains(calls, method => method.Name == "ArraySortNumeric");
+        Assert.DoesNotContain(calls, method => method.Name == "ArraySortDirectNumber");
+        Assert.DoesNotContain(calls, method => method.Name == "EnsureBoxed");
+
+        MethodInfo kernel = assembly.GetType("$Array")!.GetMethod(
+            "SortNumeric",
+            BindingFlags.Instance | BindingFlags.NonPublic)
+            ?? throw new InvalidOperationException("Missing packed numeric sort kernel.");
+        var kernelInstructions = Instructions(kernel).ToArray();
+        Assert.Contains(kernelInstructions, instruction =>
+            instruction.OpCode == OpCodes.Newarr
+            && instruction.Operand is Type type
+            && type == typeof(double));
+        Assert.DoesNotContain(kernelInstructions, instruction =>
+            instruction.OpCode == OpCodes.Newarr
+            && instruction.Operand is Type type
+            && type == typeof(object));
+        Assert.DoesNotContain(kernelInstructions, instruction =>
+            instruction.OpCode == OpCodes.Box
+            && instruction.Operand is Type type
+            && type == typeof(double));
+        Assert.Contains(CalledMethods(kernel), method =>
+            method.DeclaringType == typeof(Func<double, double, double>)
+            && method.Name == "Invoke");
+        Assert.DoesNotContain(
+            kernel.GetMethodBody()!.LocalVariables,
+            local => local.LocalType == typeof(object[]));
+
+        var numbers = Assert.IsAssignableFrom<List<object>>(
+            FindFunction(assembly, "makeNumbers").Invoke(null, [1_000.0]));
+        double checksum = Assert.IsType<double>(sortNumbers.Invoke(null, [numbers]));
+        Assert.True(checksum > 0);
+        MethodInfo stableSignedZeros = FindFunction(assembly, "stableSignedZeros");
+        Assert.Contains(CalledMethods(stableSignedZeros), method =>
+            method.Name == "ArraySortNumeric");
+        Assert.True(Assert.IsType<bool>(stableSignedZeros.Invoke(null, [])));
+    }
+
+    [Fact]
+    public void FreshNumericSliceSort_HolesAndUndefinedUseRuntimeFallback()
+    {
+        Assembly assembly = Compile("""
+            function makeHoley(): number[] {
+                const values: number[] = [];
+                values[0] = 3;
+                values[2] = 1;
+                return values;
+            }
+
+            function makeUndefined(): number[] {
+                return [3, undefined as any, 1];
+            }
+
+            function sortFirst(source: number[]): number {
+                const copy: number[] = source.slice();
+                copy.sort((left: number, right: number): number => left - right);
+                return copy[0];
+            }
+            """);
+
+        MethodInfo sortFirst = FindFunction(assembly, "sortFirst");
+        Assert.Contains(CalledMethods(sortFirst), method => method.Name == "ArraySortNumeric");
+
+        var holey = Assert.IsAssignableFrom<List<object>>(
+            FindFunction(assembly, "makeHoley").Invoke(null, []));
+        var undefined = Assert.IsAssignableFrom<List<object>>(
+            FindFunction(assembly, "makeUndefined").Invoke(null, []));
+        Assert.Equal(1.0, Assert.IsType<double>(sortFirst.Invoke(null, [holey])));
+        Assert.Equal(1.0, Assert.IsType<double>(sortFirst.Invoke(null, [undefined])));
+    }
+
+    [Theory]
+    [InlineData("const alias: number[] = copy; copy.sort((a: number, b: number): number => a - b); return alias[0];")]
+    [InlineData("copy.sort((a: number, b: number): number => a - b); return copy.sort((a: number, b: number): number => a - b)[0];")]
+    [InlineData("Object.freeze(copy); copy.sort((a: number, b: number): number => a - b); return copy[0];")]
+    [InlineData("Object.defineProperty(copy, '0', { value: 4 }); copy.sort((a: number, b: number): number => a - b); return copy[0];")]
+    [InlineData("Object.setPrototypeOf(copy, Array.prototype); copy.sort((a: number, b: number): number => a - b); return copy[0];")]
+    [InlineData("copy.sort((a: number, b: number): number => { copy.push(0); return a - b; }); return copy[0];")]
+    [InlineData("copy.sort((a: number, b: number): number => { throw new Error('stop'); }); return copy[0];")]
+    public void ObservableNumericSliceSortShapes_RetainGeneralPath(string body)
+    {
+        Assembly assembly = Compile($$"""
+            function sortObserved(source: number[]): number {
+                const copy: number[] = source.slice();
+                {{body}}
+            }
+            """);
+
+        MethodInfo method = FindFunction(assembly, "sortObserved");
+        Assert.DoesNotContain(CalledMethods(method), called =>
+            called.Name == "ArraySortNumeric");
+    }
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
