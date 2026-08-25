@@ -58,8 +58,10 @@ import {
     validColor,
 } from "./document";
 
+const DEFAULT_COLOR = "#111827";
+const EMPTY_DRAWING_COMMANDS: readonly DrawingCommand[] = [];
 const COLORS = [
-    "#111827", "#ffffff", "#ef4444", "#f97316", "#f59e0b", "#eab308", "#22c55e", "#14b8a6",
+    DEFAULT_COLOR, "#ffffff", "#ef4444", "#f97316", "#f59e0b", "#eab308", "#22c55e", "#14b8a6",
     "#06b6d4", "#3b82f6", "#6366f1", "#8b5cf6", "#d946ef", "#ec4899", "#78716c", "#94a3b8",
 ];
 
@@ -113,12 +115,12 @@ function initialState(): AppState {
         history: createHistory(document),
         selectedLayerId: document.layers[0].id,
         tool: "brush",
-        color: "#111827",
+        color: DEFAULT_COLOR,
         size: 8,
         filled: false,
         zoom: 0.75,
         draft: null,
-        draftColor: "#111827",
+        draftColor: DEFAULT_COLOR,
         draftSize: 8,
         draftFilled: false,
         cursor: null,
@@ -374,7 +376,19 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
         if (event.files.length === 0) return;
         await openDroppedFile(event.files[0]);
     };
-    const preview = state.draft === null ? [] : [commandForDraft(state.draft, state.draftColor, state.draftSize, state.draftFilled) as DrawingCommand];
+    const previewCommand = state.draft === null
+        ? null
+        : commandForDraft(state.draft, state.draftColor, state.draftSize, state.draftFilled) as DrawingCommand;
+    // DrawingCommand and PaintCommand are structurally compatible. Keep this
+    // adapter dynamic to avoid materializing SharpTS's object-union wrapper.
+    const layerCommands = (layer: PaintLayer): any => {
+        if (layer.id !== state.selectedLayerId || previewCommand === null) return layer.commands as any;
+        const committed: any = layer.commands;
+        const combined: any[] = [];
+        for (let index = 0; index < committed.length; index++) combined.push(committed[index]);
+        combined.push(previewCommand as any);
+        return combined;
+    };
     const commandCount = document.layers.reduce((sum, layer) => sum + layer.commands.length, 0);
 
     return (
@@ -428,11 +442,11 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                             <TextBox key="custom-color" automationName="Custom color" width={104} text={state.color} maxLength={9} onTextChanged={value => { if (validColor(value)) dispatch({ type: "color", color: value }); }} />
                         </StackPanel>
                     </Border>
-                    <Border dock="left" width={92} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1} padding={10}>
+                    <Border dock="left" width={108} background="#f8fafc" borderBrush="#cbd5e1" borderThickness={1} padding={10}>
                         <StackPanel spacing={8}>
                             <TextBlock fontSize={12} fontWeight="bold" foreground="#64748b">TOOLS</TextBlock>
                             {toolButton("brush", "✎", "Brush · B", state, dispatch)}
-                            {toolButton("eraser", "◇", "Eraser · E", state, dispatch)}
+                            {toolButton("eraser", "⌫", "Eraser · E · removes pixels", state, dispatch)}
                             {toolButton("line", "╱", "Line · L", state, dispatch)}
                             {toolButton("rectangle", "□", "Rectangle · R", state, dispatch)}
                             {toolButton("ellipse", "○", "Ellipse · O", state, dispatch)}
@@ -471,11 +485,11 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
                                     <DrawingCanvas key={layer.id} width={scaledWidth} height={scaledHeight}
                                         coordinateWidth={document.width} coordinateHeight={document.height}
                                         isVisible={layer.isVisible} opacity={layer.opacity}
-                                        commands={layer.commands as readonly DrawingCommand[]} />
+                                        commands={layerCommands(layer)} />
                                 ))}
                                 <DrawingCanvas key="paint-surface" automationName="Paint surface" width={scaledWidth} height={scaledHeight}
                                     coordinateWidth={document.width} coordinateHeight={document.height}
-                                    commands={preview} capturePointerOnPress={true}
+                                    commands={EMPTY_DRAWING_COMMANDS} capturePointerOnPress={true}
                                     onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp}
                                     onPointerCancel={() => { dispatch({ type: "pointerCancel" }); return true; }} />
                             </Grid>
@@ -509,9 +523,9 @@ export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
 
 function toolButton(tool: PaintTool, glyph: string, tip: string, state: AppState, dispatch: (action: AppAction) => void): JSX.Element {
     const active = state.tool === tool;
-    return <Button key={tool} automationName={toolLabel(tool) + " tool"} toolTip={tip} height={54} fontSize={22}
+    return <Button key={tool} automationName={toolLabel(tool) + " tool"} toolTip={tip} height={46} fontSize={12}
         background={active ? "#dbeafe" : "#ffffff"} foreground={active ? "#1d4ed8" : "#334155"}
-        onClick={() => dispatch({ type: "tool", tool })}>{glyph}</Button>;
+        onClick={() => dispatch({ type: "tool", tool })}>{glyph + " " + toolLabel(tool)}</Button>;
 }
 function toolLabel(tool: PaintTool): string {
     switch (tool) { case "brush": return "Brush"; case "eraser": return "Eraser"; case "line": return "Line"; case "rectangle": return "Rectangle"; case "ellipse": return "Ellipse"; }

@@ -39,11 +39,30 @@ expect("white background", initial.layers[0].commands[0].kind === "rectangle");
 const click = commandForDraft(beginDraft("brush", { x: 4, y: 7 }), "#112233", 5, false);
 expect("click-only brush polyline", click.kind === "polyline" && click.points.length === 1);
 const erased = commandForDraft(extendDraft(beginDraft("eraser", { x: 1, y: 2 }), { x: 9, y: 10 }), "#ffffff", 12, false);
-expect("eraser compositing", erased.kind === "polyline" && erased.composite === "destinationOut");
+expect("eraser compositing", erased.kind === "polyline" && erased.composite === "destinationOut" && erased.stroke === "#000000");
 const rectangle = commandForDraft(extendDraft(beginDraft("rectangle", { x: 20, y: 30 }), { x: 4, y: 8 }), "#abcdef", 3, true);
 expect("normalized filled rectangle", rectangle.kind === "rectangle" && rectangle.x === 4 && rectangle.y === 8 && rectangle.width === 16 && rectangle.height === 22 && rectangle.fill === "#abcdef");
 const ellipse = commandForDraft(extendDraft(beginDraft("ellipse", { x: 0, y: 0 }), { x: 20, y: 10 }), "#010203", 2, false);
 expect("ellipse geometry", ellipse.kind === "ellipse" && ellipse.centerX === 10 && ellipse.centerY === 5 && ellipse.radiusX === 10 && ellipse.radiusY === 5);
+const sharedColor = "#2468ac";
+const coloredBrush = commandForDraft(extendDraft(beginDraft("brush", { x: 1, y: 1 }), { x: 2, y: 2 }), sharedColor, 2, false);
+const coloredEraser = commandForDraft(extendDraft(beginDraft("eraser", { x: 1, y: 1 }), { x: 2, y: 2 }), sharedColor, 2, false);
+const coloredLine = commandForDraft(extendDraft(beginDraft("line", { x: 1, y: 1 }), { x: 2, y: 2 }), sharedColor, 2, false);
+const coloredRectangle = commandForDraft(extendDraft(beginDraft("rectangle", { x: 1, y: 1 }), { x: 2, y: 2 }), sharedColor, 2, false);
+const coloredEllipse = commandForDraft(extendDraft(beginDraft("ellipse", { x: 1, y: 1 }), { x: 2, y: 2 }), sharedColor, 2, false);
+expect("one selected color reaches every paint-producing tool",
+    coloredBrush.kind === "polyline" && coloredBrush.stroke === sharedColor &&
+    coloredLine.kind === "line" && coloredLine.stroke === sharedColor &&
+    coloredRectangle.kind === "rectangle" && coloredRectangle.stroke === sharedColor &&
+    coloredEllipse.kind === "ellipse" && coloredEllipse.stroke === sharedColor);
+expect("eraser ignores selected paint color",
+    coloredEraser.kind === "polyline" && coloredEraser.stroke === "#000000" && coloredEraser.composite === "destinationOut");
+const eraserDraft = extendDraft(beginDraft("eraser", { x: 10, y: 10 }), { x: 20, y: 20 });
+const eraserPreview = [...initial.layers[0].commands, commandForDraft(eraserDraft, "#ff000080", 6, false)];
+const previewCommand = eraserPreview[eraserPreview.length - 1];
+expect("eraser preview is composed into its target layer",
+    initial.layers[0].commands.length === 1 && eraserPreview.length === 2 &&
+    previewCommand.kind === "polyline" && previewCommand.composite === "destinationOut" && previewCommand.stroke === "#000000");
 const bounded = clampPoint(initial, { x: -12, y: 900 });
 expect("bounds clamping", bounded.x === 0 && bounded.y === 200);
 

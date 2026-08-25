@@ -136,7 +136,9 @@ export function commandForDraft(draft: PaintDraft, color: string, size: number, 
         return {
             kind: "polyline",
             points: draft.points,
-            stroke: color,
+            // destinationOut uses only source alpha. Keep the eraser fully opaque and
+            // independent of the selected paint color, including its optional alpha.
+            stroke: draft.tool === "eraser" ? "#000000" : color,
             strokeThickness: size,
             lineCap: "round",
             lineJoin: "round",
