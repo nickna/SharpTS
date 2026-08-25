@@ -98,6 +98,7 @@ public sealed class RuntimeFeatureDetector
             UsesPromisePrototypeMutation = false,
             UsesArrayPrototypeMutation = false,
             UsesNumberPrototypeMutation = false,
+            UsesRegExpPrototypeMutation = false,
             UsesGlobalParseIntMutation = false,
             PotentiallyMaterializesUnknownCompactObjectRecordShape = false,
             TypedArrays = RuntimeFeatureSet.TypedArrayKinds.None,
@@ -296,7 +297,10 @@ public sealed class RuntimeFeatureDetector
             case "Object":
             case "eval":
             case "Function":
-                _set.UsesObjectIntegrityMutation = true; break;
+                _set.UsesObjectIntegrityMutation = true;
+                if (name is "eval" or "Function")
+                    _set.UsesRegExpPrototypeMutation = true;
+                break;
 
             // Fetch family
             case "fetch":
@@ -510,6 +514,7 @@ public sealed class RuntimeFeatureDetector
             case "globalThis":
             case "global":
                 _set.UsesObjectIntegrityMutation = true;
+                _set.UsesRegExpPrototypeMutation = true;
                 _set.UsesFetch = true;
                 _set.UsesTextEncoding = true;
                 _set.UsesWebStreams = true;
@@ -794,6 +799,10 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberPrototype(g))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpPrototype(g))
+                    _set.UsesRegExpPrototypeMutation = true;
+                if (g.Name.Lexeme == "__proto__")
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (g.Object is Expr.Variable ov)
                 {
                     HandleMemberAccess(ov.Name.Lexeme, g.Name.Lexeme);
@@ -804,6 +813,9 @@ public sealed class RuntimeFeatureDetector
                         || (ov.Name.Lexeme == "Reflect"
                             && g.Name.Lexeme is "set" or "deleteProperty"))
                         _set.UsesArrayPrototypeMutation = true;
+                    if (ov.Name.Lexeme is "Object" or "Reflect"
+                        && g.Name.Lexeme == "getPrototypeOf")
+                        _set.UsesRegExpPrototypeMutation = true;
                     if ((ov.Name.Lexeme == "Object"
                             && g.Name.Lexeme is "defineProperty" or "defineProperties" or "create")
                         || (ov.Name.Lexeme == "Reflect" && g.Name.Lexeme == "defineProperty"))
@@ -871,6 +883,9 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberMutationTarget(s.Object))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpMutationTarget(s.Object)
+                    || (IsGlobalObject(s.Object) && s.Name.Lexeme == "RegExp"))
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (IsGlobalObject(s.Object) && s.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 if (IsArrayPrototype(s.Object)
@@ -896,6 +911,9 @@ public sealed class RuntimeFeatureDetector
                 {
                     // Computed access may resolve to defineProperty at runtime.
                     _set.UsesDynamicPropertyDescriptors = true;
+                    // It may also resolve to getPrototypeOf, yielding an alias
+                    // to the RegExp prototype that a later write can mutate.
+                    _set.UsesRegExpPrototypeMutation = true;
                 }
                 if (gi.Object is Expr.Variable indexedPrototypeOwner
                     && indexedPrototypeOwner.Name.Lexeme is "Object" or "Reflect"
@@ -922,6 +940,10 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberMutationTarget(si.Object))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpMutationTarget(si.Object)
+                    || (IsGlobalObject(si.Object)
+                        && si.Index is Expr.Literal { Value: "RegExp" }))
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (IsGlobalObject(si.Object)
                     && si.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
@@ -940,6 +962,7 @@ public sealed class RuntimeFeatureDetector
                 {
                     _set.UsesPromisePrototypeMutation = true;
                     _set.UsesNumberPrototypeMutation = true;
+                    _set.UsesRegExpPrototypeMutation = true;
                     _set.UsesGlobalParseIntMutation = true;
                 }
                 if (c.Callee is Expr.Get
@@ -965,6 +988,7 @@ public sealed class RuntimeFeatureDetector
                     // value dispatch is conservative and preserves observability.
                     _set.UsesPromisePrototypeMutation = true;
                     _set.UsesNumberPrototypeMutation = true;
+                    _set.UsesRegExpPrototypeMutation = true;
                 }
                 if (c.Callee is not Expr.Variable directSourceCall ||
                     !_sourceFunctions.Contains(directSourceCall.Name.Lexeme))
@@ -1052,6 +1076,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (asg.Name.Lexeme == "Number")
                     _set.UsesNumberPrototypeMutation = true;
+                if (asg.Name.Lexeme == "RegExp")
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (asg.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 if (_opaqueValueBindings.Contains(asg.Name.Lexeme))
@@ -1061,6 +1087,8 @@ public sealed class RuntimeFeatureDetector
             case Expr.CompoundAssign ca:
                 if (ca.Name.Lexeme == "Number")
                     _set.UsesNumberPrototypeMutation = true;
+                if (ca.Name.Lexeme == "RegExp")
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (ca.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 VisitExpr(ca.Value);
@@ -1072,6 +1100,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberMutationTarget(cs.Object))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpMutationTarget(cs.Object))
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (IsGlobalObject(cs.Object) && cs.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 if (cs.Name.Lexeme == "push" && CouldTargetArray(cs.Object))
@@ -1089,6 +1119,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberMutationTarget(csi.Object))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpMutationTarget(csi.Object))
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (IsGlobalObject(csi.Object)
                     && csi.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
@@ -1102,6 +1134,8 @@ public sealed class RuntimeFeatureDetector
             case Expr.LogicalAssign la:
                 if (la.Name.Lexeme == "Number")
                     _set.UsesNumberPrototypeMutation = true;
+                if (la.Name.Lexeme == "RegExp")
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (la.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 VisitExpr(la.Value);
@@ -1113,6 +1147,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberMutationTarget(ls.Object))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpMutationTarget(ls.Object))
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (IsGlobalObject(ls.Object) && ls.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 if (ls.Name.Lexeme == "push" && CouldTargetArray(ls.Object))
@@ -1130,6 +1166,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesPromisePrototypeMutation = true;
                 if (IsNumberMutationTarget(lsi.Object))
                     _set.UsesNumberPrototypeMutation = true;
+                if (IsRegExpMutationTarget(lsi.Object))
+                    _set.UsesRegExpPrototypeMutation = true;
                 if (IsGlobalObject(lsi.Object)
                     && lsi.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
@@ -1184,6 +1222,8 @@ public sealed class RuntimeFeatureDetector
                         _set.UsesPromisePrototypeMutation = true;
                     if (IsNumberMutationTarget(deletedProperty.Object))
                         _set.UsesNumberPrototypeMutation = true;
+                    if (IsRegExpMutationTarget(deletedProperty.Object))
+                        _set.UsesRegExpPrototypeMutation = true;
                     if (IsGlobalObject(deletedProperty.Object)
                         && deletedProperty.Name.Lexeme == "parseInt")
                         _set.UsesGlobalParseIntMutation = true;
@@ -1202,6 +1242,8 @@ public sealed class RuntimeFeatureDetector
                         _set.UsesPromisePrototypeMutation = true;
                     if (IsNumberMutationTarget(deletedIndex.Object))
                         _set.UsesNumberPrototypeMutation = true;
+                    if (IsRegExpMutationTarget(deletedIndex.Object))
+                        _set.UsesRegExpPrototypeMutation = true;
                     if (IsGlobalObject(deletedIndex.Object)
                         && deletedIndex.Index is Expr.Literal { Value: "parseInt" })
                         _set.UsesGlobalParseIntMutation = true;
@@ -1449,6 +1491,41 @@ public sealed class RuntimeFeatureDetector
         if (IsNumberPrototype(initializer))
             _numberPrototypeAliases.Add(name);
     }
+
+    private static bool IsRegExpConstructor(Expr expr) => expr switch
+    {
+        Expr.Variable { Name.Lexeme: "RegExp" } => true,
+        Expr.Get
+        {
+            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
+            Name.Lexeme: "RegExp"
+        } => true,
+        Expr.GetIndex
+        {
+            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
+            Index: Expr.Literal { Value: "RegExp" }
+        } => true,
+        Expr.Grouping grouping => IsRegExpConstructor(grouping.Expression),
+        Expr.TypeAssertion assertion => IsRegExpConstructor(assertion.Expression),
+        Expr.Satisfies satisfies => IsRegExpConstructor(satisfies.Expression),
+        Expr.NonNullAssertion nonNull => IsRegExpConstructor(nonNull.Expression),
+        _ => false
+    };
+
+    private static bool IsRegExpPrototype(Expr expr) => expr switch
+    {
+        Expr.Get { Name.Lexeme: "prototype" } get => IsRegExpConstructor(get.Object),
+        Expr.GetIndex { Index: Expr.Literal { Value: "prototype" } } get =>
+            IsRegExpConstructor(get.Object),
+        Expr.Grouping grouping => IsRegExpPrototype(grouping.Expression),
+        Expr.TypeAssertion assertion => IsRegExpPrototype(assertion.Expression),
+        Expr.Satisfies satisfies => IsRegExpPrototype(satisfies.Expression),
+        Expr.NonNullAssertion nonNull => IsRegExpPrototype(nonNull.Expression),
+        _ => false
+    };
+
+    private static bool IsRegExpMutationTarget(Expr expr) =>
+        IsRegExpConstructor(expr) || IsRegExpPrototype(expr);
 
     private bool CouldTargetClassMethod(Expr receiver, string methodName) =>
         _typeMap?.Get(receiver) is TypeInfo.Instance instance

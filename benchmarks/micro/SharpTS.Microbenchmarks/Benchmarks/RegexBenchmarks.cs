@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Order;
 using SharpTS.Microbenchmarks.Infrastructure;
@@ -22,6 +23,11 @@ public class RegexBenchmarks
     private MethodInfo _tsLiteral = null!;
     private MethodInfo _tsValidator = null!;
     private MethodInfo _tsExtract = null!;
+    // Match the options used by SharpTS's emitted $RegExp for a plain literal,
+    // so this is an engine-equivalent ceiling rather than an interpreted-regex
+    // comparison.
+    private readonly Regex _nativeValidator = new(
+        "^[a-z]+$", RegexOptions.ECMAScript | RegexOptions.Compiled);
 
     [Params(100, 10_000, 100_000)]
     public int N { get; set; }
@@ -57,6 +63,17 @@ public class RegexBenchmarks
     [BenchmarkCategory("RegexValidator")]
     public object? SharpTS_RegexValidatorLoop()
         => BenchmarkHarness.InvokeCompiled(_tsValidator, ValidatorInput, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("RegexValidator")]
+    public int NativeCSharp_RegexValidatorLoop()
+    {
+        int valid = 0;
+        for (int i = 0; i < N; i++)
+            if (_nativeValidator.IsMatch(ValidatorInput))
+                valid++;
+        return valid;
+    }
 
     [Benchmark]
     [BenchmarkCategory("RegexExtract")]

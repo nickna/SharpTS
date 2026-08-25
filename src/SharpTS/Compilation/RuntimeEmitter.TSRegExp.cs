@@ -4926,8 +4926,8 @@ public partial class RuntimeEmitter
     /// Emits the three RegExp.prototype data-method helpers (exec/test/
     /// toString) as static methods on $RegExp. Each names its first param
     /// "__this" so $TSFunction._expectsThis=true and `.call(receiver, ...)`
-    /// routes the receiver. Each throws TypeError when receiver is not a
-    /// $RegExp.
+    /// routes the receiver. Exec/toString require a $RegExp; test is generic
+    /// and delegates through the observable RegExpExec operation.
     /// </summary>
     private void EmitTSRegExpProtoMethods(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -4984,26 +4984,20 @@ public partial class RuntimeEmitter
         catch { /* already named — ignore */ }
 
         var il = method.GetILGenerator();
-        var rxLocal = il.DeclareLocal(runtime.TSRegExpType);
+        var rxLocal = il.DeclareLocal(_types.Object);
         var sLocal = il.DeclareLocal(_types.String);
+        var resultLocal = il.DeclareLocal(_types.Object);
 
-        var okLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
         il.Emit(OpCodes.Stloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        il.Emit(OpCodes.Brtrue, okLabel);
-        GuestErrorEmitter.ThrowTypeError(il, runtime, "RegExp.prototype.test called on non-RegExp");
-        il.MarkLabel(okLabel);
 
         EmitArgToJsString(il, runtime, argIndex: 1, sLocal);
 
-        // RegExp.prototype.test is specified in terms of RegExpExec. Reuse the
-        // strict exec implementation so writes to a non-writable lastIndex
-        // surface TypeError instead of being bypassed by the boolean fast path.
-        il.Emit(OpCodes.Ldloc, rxLocal);
-        il.Emit(OpCodes.Ldloc, sLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSRegExpExecMethod);
+        // RegExp.prototype.test is specified in terms of RegExpExec. Resolve
+        // `exec` live so own/prototype overrides and accessors remain visible;
+        // the intrinsic exec method still performs strict lastIndex writes.
+        EmitRegExpExecSlow(il, runtime, rxLocal, sLocal, resultLocal);
+        il.Emit(OpCodes.Ldloc, resultLocal);
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Cgt_Un);
         il.Emit(OpCodes.Box, _types.Boolean);
