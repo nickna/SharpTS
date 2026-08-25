@@ -851,7 +851,7 @@ public partial class RuntimeEmitter
     }
 
     // Stack in: [ref byte]. Stack out: [double]. Reads the element and widens to double.
-    private static void EmitReadElementAsDouble(ILGenerator il, int bytesPerElement, bool signed, bool isFloat)
+    internal static void EmitReadElementAsDouble(ILGenerator il, int bytesPerElement, bool signed, bool isFloat)
     {
         if (bytesPerElement == 1)
         {
@@ -887,7 +887,7 @@ public partial class RuntimeEmitter
 
     // Stack in: [ref byte, double value]. Narrows the double to the element type and stores it.
     // Conv opcodes mirror the boxed Set so the fast path and boxed fallback agree exactly.
-    private static void EmitNarrowDoubleAndWrite(ILGenerator il, int bytesPerElement, bool signed, bool isFloat)
+    internal static void EmitNarrowDoubleAndWrite(ILGenerator il, int bytesPerElement, bool signed, bool isFloat)
     {
         if (bytesPerElement == 1)
         {

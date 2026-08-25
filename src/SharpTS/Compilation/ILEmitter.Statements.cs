@@ -1032,8 +1032,9 @@ public partial class ILEmitter
         if (candidates.Count == 0) return false;
 
         Dictionary<string, HoistedTypedArrayEntry>? cache = null;
-        foreach (var (varName, elementType) in candidates)
+        foreach (var (varName, candidate) in candidates)
         {
+            string elementType = candidate.ElementType;
             // Skip variables already hoisted by an outer loop.
             if (_ctx.TryGetHoistedTypedArray(varName) != null) continue;
             // Only numeric typed arrays with unboxed accessors take the fast path (BigInt /
@@ -1051,8 +1052,35 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Castclass, xArrayType);
             IL.Emit(OpCodes.Stloc, typedLocal);
 
+            HoistedTypedArrayBacking? backing = null;
+            if (candidate.CanHoistBacking
+                && TypedArrayElementLayout.TryGet(elementType, out var layout))
+            {
+                // The whole-program proof guarantees a fresh length-constructed array whose
+                // binding and backing identity never escape. Capture all storage facts before the
+                // loop so the hot body need not reload fields through GetUnboxed/SetUnboxed.
+                var bufferLocal = IL.DeclareLocal(typeof(byte[]));
+                IL.Emit(OpCodes.Ldloc, typedLocal);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrayGetBuffer);
+                IL.Emit(OpCodes.Stloc, bufferLocal);
+
+                var byteOffsetLocal = IL.DeclareLocal(_ctx.Types.Int32);
+                IL.Emit(OpCodes.Ldloc, typedLocal);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrayByteOffsetGetter);
+                IL.Emit(OpCodes.Stloc, byteOffsetLocal);
+
+                var lengthLocal = IL.DeclareLocal(_ctx.Types.Int32);
+                IL.Emit(OpCodes.Ldloc, typedLocal);
+                IL.Emit(OpCodes.Call, _ctx.Runtime.TypedArrayLengthGetter);
+                IL.Emit(OpCodes.Stloc, lengthLocal);
+
+                backing = new HoistedTypedArrayBacking(
+                    bufferLocal, byteOffsetLocal, lengthLocal, layout);
+            }
+
             cache ??= new Dictionary<string, HoistedTypedArrayEntry>();
-            cache[varName] = new HoistedTypedArrayEntry(typedLocal, xArrayType, elementType);
+            cache[varName] = new HoistedTypedArrayEntry(
+                typedLocal, xArrayType, elementType, backing);
         }
 
         if (cache == null) return false;

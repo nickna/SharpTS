@@ -28,6 +28,18 @@ public partial class ILEmitter
             return;
         }
 
+        if (!g.Optional
+            && g.Name.Lexeme == "length"
+            && g.Object is Expr.Variable typedArrayLength
+            && _ctx.TryGetHoistedTypedArray(typedArrayLength.Name.Lexeme) is
+                { Backing: { } backing })
+        {
+            IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
+
         // CommonJS: `module.exports` reads → ldsfld $exports
         if (TryEmitCjsGet(g)) return;
 
@@ -1146,6 +1158,16 @@ public partial class ILEmitter
             && _ctx.Runtime!.GetTypedArrayType(gta.ElementType) is { } gtaType
             && _ctx.Runtime!.TypedArrayGetUnboxedByElement.TryGetValue(gta.ElementType, out var taGetU))
         {
+            if (TryGetDirectTypedArrayBacking(gi.Object, gta.ElementType, out var backing))
+            {
+                EmitIndexAsInt32(gi.Index);
+                var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
+                IL.Emit(OpCodes.Stloc, indexLocal);
+                EmitDirectTypedArrayRead(backing, indexLocal);
+                SetStackType(StackType.Double);
+                return;
+            }
+
             // Receiver: hoisted loop-invariant cast when available, else per-access cast (#928).
             EmitTypedArrayReceiver(gi.Object, gtaType);
             // Native-int fast path when the index is an integer loop counter (#928).
@@ -1651,6 +1673,14 @@ public partial class ILEmitter
             EnsureDouble();
             var valLocal = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Stloc, valLocal);
+
+            if (TryGetDirectTypedArrayBacking(si.Object, sta.ElementType, out var backing))
+            {
+                EmitDirectTypedArrayWrite(backing, idxLocal, valLocal);
+                IL.Emit(OpCodes.Ldloc, valLocal);
+                SetStackType(StackType.Double);
+                return;
+            }
 
             // Receiver: hoisted loop-invariant cast when available, else per-access cast (#928).
             EmitTypedArrayReceiver(si.Object, staType);
