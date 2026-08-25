@@ -50,11 +50,14 @@ public class HoistingManager
     /// <summary>
     /// Defines fields for all hoisted parameters.
     /// </summary>
-    public void DefineHoistedParameters(IEnumerable<string> names)
+    public void DefineHoistedParameters(
+        IEnumerable<string> names,
+        IReadOnlyDictionary<string, Type>? fieldTypes = null)
     {
         foreach (var name in names)
         {
-            var field = _typeBuilder.DefineField(name, _objectType, FieldAttributes.Public);
+            Type fieldType = fieldTypes?.GetValueOrDefault(name) ?? _objectType;
+            var field = _typeBuilder.DefineField(name, fieldType, FieldAttributes.Public);
             HoistedParameters[name] = field;
         }
     }

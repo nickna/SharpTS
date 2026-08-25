@@ -178,6 +178,9 @@ public abstract partial class ExpressionEmitterBase
             string name = v.Name.Lexeme;
             double delta = pi.Operator.Type == TokenType.PLUS_PLUS ? 1.0 : -1.0;
 
+            if (TryEmitNativeNumericLocalIncrement(v, delta, isPrefix: true))
+                return;
+
             // Load current value, convert to double, add delta, box.
             // ConvertToNumber implements ECMA-262 ToNumber (undefined→NaN);
             // Convert.ToDouble throws InvalidCastException on $Undefined (#190).
@@ -241,6 +244,9 @@ public abstract partial class ExpressionEmitterBase
             string name = v.Name.Lexeme;
             double delta = poi.Operator.Type == TokenType.PLUS_PLUS ? 1.0 : -1.0;
 
+            if (TryEmitNativeNumericLocalIncrement(v, delta, isPrefix: false))
+                return;
+
             // Load current value (this is the expression result — original value)
             EmitVariable(v);
             EnsureBoxed();
@@ -287,6 +293,31 @@ public abstract partial class ExpressionEmitterBase
 
         // Unknown operand — keep the stack state defined for the verifier.
         SetStackUnknown();
+    }
+
+    private bool TryEmitNativeNumericLocalIncrement(
+        Expr.Variable variable,
+        double delta,
+        bool isPrefix)
+    {
+        string name = variable.Name.Lexeme;
+        if (Ctx.CellBindingLocals.ContainsKey(name)
+            || !Ctx.Locals.TryGetLocal(name, out var local)
+            || local.LocalType != Types.Double)
+        {
+            return false;
+        }
+
+        IL.Emit(OpCodes.Ldloc, local);
+        if (!isPrefix)
+            IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Ldc_R8, delta);
+        IL.Emit(OpCodes.Add);
+        if (isPrefix)
+            IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Stloc, local);
+        SetStackType(StackType.Double);
+        return true;
     }
 
     /// <summary>

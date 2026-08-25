@@ -9,7 +9,8 @@ namespace SharpTS.Compilation;
 /// may be stored as an unboxed <c>double</c>. The binding must be an explicitly
 /// numeric, definitely initialized <c>for (let ...)</c> counter and the capturing
 /// arrow must already belong to the proven non-escaping direct-call path in a fully
-/// synchronous enclosing function.
+/// synchronous enclosing function, or be the inline callback of a proven stable
+/// primitive Promise chain whose async loop counter never crosses a suspension.
 /// </summary>
 /// <remarks>
 /// Captures that need live binding semantics are excluded through the per-iteration
@@ -37,7 +38,12 @@ internal static class StableNumericLoopCaptureAnalyzer
         var directCallArrows = new HashSet<Expr.ArrowFunction>(
             directCallBindings.Values,
             ReferenceEqualityComparer.Instance);
-        var visitor = new LoopVisitor(typeMap, closures, directCallArrows);
+        var promiseHandlers = new StablePromiseHandlerVisitor(typeMap);
+        foreach (var statement in program)
+            promiseHandlers.Visit(statement);
+
+        var visitor = new LoopVisitor(
+            typeMap, closures, directCallArrows, promiseHandlers.Arrows);
         foreach (var statement in program)
             visitor.Visit(statement);
     }
@@ -56,7 +62,7 @@ internal static class StableNumericLoopCaptureAnalyzer
             } candidate
             || !IsNumericLiteral(initializer)
             || typeMap.Get(initializer) is not (TypeInfo.Primitive
-                { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
+            { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral)
             || typeMap.IsUndefinedReachableNumericLocal(candidate)
             || typeMap.IsUndefinedReachableNumericLocal(initializer))
         {
@@ -72,10 +78,10 @@ internal static class StableNumericLoopCaptureAnalyzer
         expression = Unwrap(expression);
         return expression is Expr.Literal { Value: double }
             or Expr.Unary
-            {
-                Operator.Type: TokenType.MINUS,
-                Right: Expr.Literal { Value: double }
-            };
+        {
+            Operator.Type: TokenType.MINUS,
+            Right: Expr.Literal { Value: double }
+        };
     }
 
     private static Expr Unwrap(Expr expression)
@@ -105,16 +111,20 @@ internal static class StableNumericLoopCaptureAnalyzer
     private sealed class LoopVisitor(
         TypeMap typeMap,
         ClosureAnalyzer closures,
-        HashSet<Expr.ArrowFunction> directCallArrows) : AstVisitorBase
+        HashSet<Expr.ArrowFunction> directCallArrows,
+        HashSet<Expr.ArrowFunction> stablePromiseHandlers) : AstVisitorBase
     {
         private readonly TypeMap _typeMap = typeMap;
         private readonly ClosureAnalyzer _closures = closures;
         private readonly HashSet<Expr.ArrowFunction> _directCallArrows = directCallArrows;
+        private readonly HashSet<Expr.ArrowFunction> _stablePromiseHandlers = stablePromiseHandlers;
+        private readonly Stack<object> _functionStack = new();
         private int _functionDepth;
         private int _suspendingFunctionDepth;
 
         protected override void VisitFunction(Stmt.Function statement)
         {
+            _functionStack.Push(statement);
             _functionDepth++;
             if (statement.IsAsync || statement.IsGenerator)
                 _suspendingFunctionDepth++;
@@ -127,11 +137,13 @@ internal static class StableNumericLoopCaptureAnalyzer
                 if (statement.IsAsync || statement.IsGenerator)
                     _suspendingFunctionDepth--;
                 _functionDepth--;
+                _functionStack.Pop();
             }
         }
 
         protected override void VisitArrowFunction(Expr.ArrowFunction expression)
         {
+            _functionStack.Push(expression);
             _functionDepth++;
             if (expression.IsAsync || expression.IsGenerator)
                 _suspendingFunctionDepth++;
@@ -144,24 +156,109 @@ internal static class StableNumericLoopCaptureAnalyzer
                 if (expression.IsAsync || expression.IsGenerator)
                     _suspendingFunctionDepth--;
                 _functionDepth--;
+                _functionStack.Pop();
             }
         }
 
         protected override void VisitFor(Stmt.For statement)
         {
             if (_functionDepth > 0
-                && _suspendingFunctionDepth == 0
                 && TryGetStableNumericBinding(statement, _typeMap, out var declaration))
             {
                 var collector = new CandidateCollector(
                     declaration.Name.Lexeme,
                     _typeMap,
                     _closures,
-                    _directCallArrows);
+                    _directCallArrows,
+                    _stablePromiseHandlers);
                 collector.Visit(statement.Body);
+
+                if (_suspendingFunctionDepth == 0)
+                {
+                    collector.MarkSynchronousCaptures();
+                }
+                else if (_functionStack.TryPeek(out var enclosing)
+                    && enclosing is Stmt.Function
+                    {
+                        IsAsync: true,
+                        IsGenerator: false
+                    } function
+                    && IsStableAsyncPromiseLoop(statement, declaration.Name.Lexeme)
+                    && collector.StablePromiseCaptures.Count > 0)
+                {
+                    _typeMap.MarkStableNumericStateMachineLocal(declaration);
+                    collector.MarkStablePromiseCaptures();
+                    MarkStableBoundParameter(statement, function, declaration.Name.Lexeme);
+                }
             }
 
             base.VisitFor(statement);
+        }
+
+        private void MarkStableBoundParameter(
+            Stmt.For loop,
+            Stmt.Function function,
+            string counterName)
+        {
+            if (loop.Condition is not Expr.Binary
+                {
+                    Operator.Type: TokenType.LESS,
+                    Left: Expr.Variable left,
+                    Right: Expr.Variable right
+                }
+                || left.Name.Lexeme != counterName)
+            {
+                return;
+            }
+
+            string boundName = right.Name.Lexeme;
+
+            var parameter = function.Parameters.SingleOrDefault(candidate =>
+                candidate.Name.Lexeme == boundName);
+            if (parameter is not
+                {
+                    Type: "number",
+                    IsOptional: false,
+                    IsRest: false,
+                    DefaultValue: null
+                }
+                || _typeMap.IsUndefinedReachableNumericParam(parameter)
+                || _closures.GetCapturedLocals(function).Contains(boundName))
+            {
+                return;
+            }
+
+            var writes = new BindingWriteVisitor(boundName);
+            if (function.Body is not null)
+                foreach (var statement in function.Body)
+                    writes.Visit(statement);
+            if (!writes.Written)
+                _typeMap.MarkStableNumericStateMachineParameter(parameter);
+        }
+
+        private static bool IsStableAsyncPromiseLoop(Stmt.For loop, string name)
+        {
+            if (loop.Condition is not Expr.Binary
+                {
+                    Operator.Type: TokenType.LESS,
+                    Left: Expr.Variable conditionCounter
+                }
+                || conditionCounter.Name.Lexeme != name
+                || loop.Increment is not Expr.PostfixIncrement
+                {
+                    Operand: Expr.Variable incrementCounter,
+                    Operator.Type: TokenType.PLUS_PLUS
+                }
+                || incrementCounter.Name.Lexeme != name)
+            {
+                return false;
+            }
+
+            var safety = new AsyncLoopSafetyVisitor(name);
+            if (loop.Condition is not null)
+                safety.Visit(loop.Condition);
+            safety.Visit(loop.Body);
+            return safety.Safe;
         }
     }
 
@@ -169,20 +266,28 @@ internal static class StableNumericLoopCaptureAnalyzer
         string bindingName,
         TypeMap typeMap,
         ClosureAnalyzer closures,
-        HashSet<Expr.ArrowFunction> directCallArrows) : AstVisitorBase
+        HashSet<Expr.ArrowFunction> directCallArrows,
+        HashSet<Expr.ArrowFunction> stablePromiseHandlers) : AstVisitorBase
     {
         private readonly string _bindingName = bindingName;
         private readonly TypeMap _typeMap = typeMap;
         private readonly ClosureAnalyzer _closures = closures;
         private readonly HashSet<Expr.ArrowFunction> _directCallArrows = directCallArrows;
+        private readonly HashSet<Expr.ArrowFunction> _stablePromiseHandlers = stablePromiseHandlers;
+        private readonly HashSet<Expr.ArrowFunction> _directCaptures =
+            new(ReferenceEqualityComparer.Instance);
+        public HashSet<Expr.ArrowFunction> StablePromiseCaptures { get; } =
+            new(ReferenceEqualityComparer.Instance);
 
         protected override void VisitArrowFunction(Expr.ArrowFunction arrow)
         {
-            if (_directCallArrows.Contains(arrow)
-                && _closures.GetCaptures(arrow).Contains(_bindingName)
+            if (_closures.GetCaptures(arrow).Contains(_bindingName)
                 && !_closures.GetClosureCellFields(arrow).Contains(_bindingName))
             {
-                _typeMap.MarkStableNumericCaptureField(arrow, _bindingName);
+                if (_directCallArrows.Contains(arrow))
+                    _directCaptures.Add(arrow);
+                if (_stablePromiseHandlers.Contains(arrow))
+                    StablePromiseCaptures.Add(arrow);
             }
 
             // A nested arrow has a separate creation scope and capture source.
@@ -261,6 +366,124 @@ internal static class StableNumericLoopCaptureAnalyzer
             Stmt.Sequence sequence => DeclaresBinding(sequence.Statements),
             _ => false
         };
+
+        public void MarkSynchronousCaptures()
+        {
+            foreach (var arrow in _directCaptures)
+                _typeMap.MarkStableNumericCaptureField(arrow, _bindingName);
+            foreach (var arrow in StablePromiseCaptures)
+                _typeMap.MarkStableNumericCaptureField(arrow, _bindingName);
+        }
+
+        public void MarkStablePromiseCaptures()
+        {
+            foreach (var arrow in StablePromiseCaptures)
+                _typeMap.MarkStableNumericCaptureField(arrow, _bindingName);
+        }
+    }
+
+    private sealed class StablePromiseHandlerVisitor(TypeMap typeMap) : AstVisitorBase
+    {
+        public HashSet<Expr.ArrowFunction> Arrows { get; } =
+            new(ReferenceEqualityComparer.Instance);
+
+        protected override void VisitCall(Expr.Call expression)
+        {
+            if (expression.Callee is Expr.Get method
+                && typeMap.IsStablePrimitivePromiseThen(method)
+                && expression.Arguments is [Expr.ArrowFunction handler])
+            {
+                Arrows.Add(handler);
+            }
+            base.VisitCall(expression);
+        }
+    }
+
+    private sealed class AsyncLoopSafetyVisitor(string bindingName) : AstVisitorBase
+    {
+        public bool Safe { get; private set; } = true;
+
+        protected override void VisitAwait(Expr.Await expression) => Safe = false;
+        protected override void VisitYield(Expr.Yield expression) => Safe = false;
+
+        protected override void VisitAssign(Expr.Assign expression)
+        {
+            if (expression.Name.Lexeme == bindingName)
+                Safe = false;
+            base.VisitAssign(expression);
+        }
+
+        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
+        {
+            if (expression.Name.Lexeme == bindingName)
+                Safe = false;
+            base.VisitCompoundAssign(expression);
+        }
+
+        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
+        {
+            if (expression.Name.Lexeme == bindingName)
+                Safe = false;
+            base.VisitLogicalAssign(expression);
+        }
+
+        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)
+        {
+            if (expression.Operand is Expr.Variable variable
+                && variable.Name.Lexeme == bindingName)
+                Safe = false;
+            base.VisitPrefixIncrement(expression);
+        }
+
+        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expression)
+        {
+            if (expression.Operand is Expr.Variable variable
+                && variable.Name.Lexeme == bindingName)
+                Safe = false;
+            base.VisitPostfixIncrement(expression);
+        }
+    }
+
+    private sealed class BindingWriteVisitor(string bindingName) : AstVisitorBase
+    {
+        public bool Written { get; private set; }
+
+        protected override void VisitAssign(Expr.Assign expression)
+        {
+            if (expression.Name.Lexeme == bindingName)
+                Written = true;
+            base.VisitAssign(expression);
+        }
+
+        protected override void VisitCompoundAssign(Expr.CompoundAssign expression)
+        {
+            if (expression.Name.Lexeme == bindingName)
+                Written = true;
+            base.VisitCompoundAssign(expression);
+        }
+
+        protected override void VisitLogicalAssign(Expr.LogicalAssign expression)
+        {
+            if (expression.Name.Lexeme == bindingName)
+                Written = true;
+            base.VisitLogicalAssign(expression);
+        }
+
+        protected override void VisitPrefixIncrement(Expr.PrefixIncrement expression)
+        {
+            if (expression.Operand is Expr.Variable variable
+                && variable.Name.Lexeme == bindingName)
+                Written = true;
+            base.VisitPrefixIncrement(expression);
+        }
+
+        protected override void VisitPostfixIncrement(Expr.PostfixIncrement expression)
+        {
+            if (expression.Operand is Expr.Variable variable
+                && variable.Name.Lexeme == bindingName)
+                Written = true;
+            base.VisitPostfixIncrement(expression);
+        }
     }
 
     private sealed class DirectEvalVisitor : AstVisitorBase

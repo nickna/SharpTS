@@ -23,9 +23,13 @@ public class TypeMap
     private readonly Dictionary<Token, TokenType> _promotableArrayLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Token> _promotableStringAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Token, ObjectShapeInfo> _promotableObjectLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
+        new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, HashSet<string>> _stableNumericCaptureFields = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Var> _stableNumericStateMachineLocals = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Stmt.Parameter> _stableNumericStateMachineParameters = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stableExactPrimitiveMethodCalls = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr> _stablePrimitivePromiseAllIterables = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.ArrayLiteral> _stablePrimitivePromiseAllInputInitializers = new(ReferenceEqualityComparer.Instance);
@@ -196,6 +200,25 @@ public class TypeMap
     public IEnumerable<ObjectShapeInfo> PromotableObjectLocalShapes => _promotableObjectLocals.Values;
 
     /// <summary>
+    /// Marks a fresh exact-class local whose allocation and pure constructor may be
+    /// represented by the same generated typed shape used for promoted object
+    /// literals. Registering the shape here also makes it available to the common
+    /// shape-type definition phase.
+    /// </summary>
+    public void MarkScalarReplaceableClassLocal(
+        Token nameToken,
+        ClassScalarReplacementInfo info)
+    {
+        _scalarReplaceableClassLocals[nameToken] = info;
+        _promotableObjectLocals[nameToken] = info.Shape;
+    }
+
+    public bool IsScalarReplaceableClassLocal(
+        Token nameToken,
+        out ClassScalarReplacementInfo info) =>
+        _scalarReplaceableClassLocals.TryGetValue(nameToken, out info!);
+
+    /// <summary>
     /// Marks a <c>for...of</c> over a fresh, non-escaping <c>Map&lt;number, number&gt;</c>
     /// whose entry binding is observed only through literal <c>[0]</c>/<c>[1]</c> reads.
     /// The compiler may lower this shape directly over the backing dictionary without
@@ -243,6 +266,23 @@ public class TypeMap
     public bool IsStableNumericCaptureField(Expr.ArrowFunction arrow, string name) =>
         _stableNumericCaptureFields.TryGetValue(arrow, out var names)
         && names.Contains(name);
+
+    /// <summary>
+    /// Marks an explicitly numeric local whose complete state-machine lifetime has
+    /// been proven to remain numeric and suspension-local. The state-machine emitter
+    /// may keep the binding in an unboxed <c>double</c> local.
+    /// </summary>
+    public void MarkStableNumericStateMachineLocal(Stmt.Var declaration) =>
+        _stableNumericStateMachineLocals.Add(declaration);
+
+    public bool IsStableNumericStateMachineLocal(Stmt.Var declaration) =>
+        _stableNumericStateMachineLocals.Contains(declaration);
+
+    public void MarkStableNumericStateMachineParameter(Stmt.Parameter parameter) =>
+        _stableNumericStateMachineParameters.Add(parameter);
+
+    public bool IsStableNumericStateMachineParameter(Stmt.Parameter parameter) =>
+        _stableNumericStateMachineParameters.Contains(parameter);
 
     /// <summary>
     /// Marks a class method access whose receiver is provably the exact instance

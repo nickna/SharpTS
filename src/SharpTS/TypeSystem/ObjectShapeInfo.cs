@@ -26,3 +26,21 @@ public sealed record ObjectShapeInfo(string CanonicalKey, IReadOnlyList<ObjectSh
 /// or <see cref="TokenType.TYPE_STRING"/> → <c>string</c>).
 /// </summary>
 public readonly record struct ObjectShapeField(string Name, TokenType Kind);
+
+/// <summary>
+/// Describes a class-local allocation that can reuse an <see cref="ObjectShapeInfo"/>
+/// value-type carrier. The constructor proof guarantees that every observable
+/// instance field is initialized by copying one primitive constructor parameter,
+/// and that the instance itself never escapes constant-key field access.
+/// </summary>
+public sealed record ClassScalarReplacementInfo(
+    ObjectShapeInfo Shape,
+    IReadOnlyList<TokenType> ConstructorParameterKinds,
+    IReadOnlyList<ClassScalarFieldInitialization> FieldInitializations);
+
+/// <summary>
+/// One side-effect-free constructor assignment, preserving constructor-body order.
+/// </summary>
+public readonly record struct ClassScalarFieldInitialization(
+    string FieldName,
+    int ParameterIndex);

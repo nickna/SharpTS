@@ -86,7 +86,8 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
         bool isInstanceMethod = false,
         bool hasDynamicThis = false,
         bool hasAsyncArrows = false,
-        bool hasLock = false)
+        bool hasLock = false,
+        IReadOnlyDictionary<string, Type>? hoistedParameterTypes = null)
     {
         // Determine builder and task types based on return type
         if (returnType == _types.Void)
@@ -113,7 +114,8 @@ public class AsyncStateMachineBuilder : AsyncBuilderBase
 
         // Define hoisted variables using HoistingManager
         _hoisting = new HoistingManager(_stateMachineType, _types.Object);
-        _hoisting.DefineHoistedParameters(analysis.HoistedParameters);
+        _hoisting.DefineHoistedParameters(
+            analysis.HoistedParameters, hoistedParameterTypes);
         _hoisting.DefineHoistedLocals(analysis.HoistedLocals);
 
         // Define awaiter fields (one per await point)

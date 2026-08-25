@@ -49,7 +49,8 @@ public partial class ILCompiler
             _types.Object,
             isInstanceMethod: false,
             hasDynamicThis: analysis.UsesThis,
-            hasAsyncArrows: hasAsyncArrows);
+            hasAsyncArrows: hasAsyncArrows,
+            hoistedParameterTypes: GetStableAsyncParameterFieldTypes(funcStmt));
 
         // Define stub method (returns Task<object>).
         // A trailing rest parameter is typed List<object> so the indirect
@@ -94,6 +95,18 @@ public partial class ILCompiler
 
         // Build state machines for any async arrows found in this function
         DefineAsyncArrowStateMachines(analysis.AsyncArrows, smBuilder);
+    }
+
+    private IReadOnlyDictionary<string, Type>? GetStableAsyncParameterFieldTypes(
+        Stmt.Function function)
+    {
+        Dictionary<string, Type>? result = null;
+        foreach (var parameter in function.Parameters)
+        {
+            if (_typeMap?.IsStableNumericStateMachineParameter(parameter) == true)
+                (result ??= [])[parameter.Name.Lexeme] = _types.Double;
+        }
+        return result;
     }
 
     private HashSet<Expr.Await> FindSuspensionFreeAwaits(
@@ -1335,9 +1348,10 @@ public partial class ILCompiler
             }
         }
 
-        // Copy parameters to state machine fields
-        // For instance methods, parameters start at arg 1 (arg 0 is 'this')
-        // Hoisted parameter fields are typed as 'object', so we need to box value types
+        // Copy parameters to state machine fields. General fields are object-typed;
+        // proven numeric fields convert the object ABI value once here and remain
+        // native throughout MoveNext.
+        // For instance methods, parameters start at arg 1 (arg 0 is 'this').
         int paramOffset = isInstanceMethod ? 1 : 0;
         var stubParams = stubMethod.GetParameters();
         for (int i = 0; i < parameters.Count; i++)
@@ -1347,10 +1361,18 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Ldloca, smLocal);
                 il.Emit(OpCodes.Ldarg, i + paramOffset);
-                // Box value types since hoisted fields are typed as object
-                if (i < stubParams.Length && stubParams[i].ParameterType.IsValueType)
+                Type sourceType = i < stubParams.Length
+                    ? stubParams[i].ParameterType
+                    : _types.Object;
+                if (field.FieldType == _types.Double && sourceType != _types.Double)
                 {
-                    il.Emit(OpCodes.Box, stubParams[i].ParameterType);
+                    if (sourceType.IsValueType)
+                        il.Emit(OpCodes.Box, sourceType);
+                    il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                }
+                else if (field.FieldType == _types.Object && sourceType.IsValueType)
+                {
+                    il.Emit(OpCodes.Box, sourceType);
                 }
                 il.Emit(OpCodes.Stfld, field);
             }
@@ -1451,7 +1473,8 @@ public partial class ILCompiler
             _types.Object,
             isInstanceMethod: isInstanceMethod,
             hasAsyncArrows: hasAsyncArrows,
-            hasLock: hasLock
+            hasLock: hasLock,
+            hoistedParameterTypes: GetStableAsyncParameterFieldTypes(method)
         );
         RegisterStateMachine(
             methodBuilder,

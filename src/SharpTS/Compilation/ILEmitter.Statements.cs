@@ -107,7 +107,7 @@ public partial class ILEmitter
                 return;
             }
 
-            checkStaticField:
+        checkStaticField:
 
             // Check if this is a top-level variable - use static fields so all functions can access them
             if (_ctx.TopLevelStaticVars?.TryGetValue(v.Name.Lexeme, out var staticField) == true)
@@ -262,6 +262,46 @@ public partial class ILEmitter
             _ctx.ArrowMethods.ContainsKey(staticCallArrow))
         {
             _ctx.Locals.DeclareLocal(v.Name.Lexeme, _ctx.Types.Object, tag: staticCallArrow);
+            return;
+        }
+
+        // Exact non-escaping class allocation: when analysis proves that the
+        // constructor only copies primitive parameters into declared fields and
+        // the local is observed solely through constant-key field reads, reuse the
+        // generated value-type shape carrier. Evaluate every argument first in
+        // source order, then replay the constructor's pure field assignments; no
+        // class instance or dynamic property store is allocated.
+        if (_ctx.TypeMap != null && v.Initializer is Expr.New scalarNew
+            && _ctx.TypeMap.IsScalarReplaceableClassLocal(v.Name, out var scalarInfo)
+            && _ctx.TryGetObjectShapeType(scalarInfo.Shape.CanonicalKey) is { } scalarShape)
+        {
+            var argumentLocals = new LocalBuilder[scalarNew.Arguments.Count];
+            for (int index = 0; index < scalarNew.Arguments.Count; index++)
+            {
+                var kind = scalarInfo.ConstructorParameterKinds[index];
+                Type argumentType = kind switch
+                {
+                    TokenType.TYPE_NUMBER => _ctx.Types.Double,
+                    TokenType.TYPE_BOOLEAN => _ctx.Types.Boolean,
+                    _ => _ctx.Types.String
+                };
+                EmitExpression(scalarNew.Arguments[index]);
+                EnsureForFieldType(argumentType);
+                argumentLocals[index] = IL.DeclareLocal(argumentType);
+                IL.Emit(OpCodes.Stloc, argumentLocals[index]);
+            }
+
+            var scalarLocal = _ctx.Locals.DeclareLocal(
+                v.Name.Lexeme,
+                scalarShape.ClrType);
+            IL.Emit(OpCodes.Ldloca, scalarLocal);
+            IL.Emit(OpCodes.Initobj, scalarShape.ClrType);
+            foreach (var initialization in scalarInfo.FieldInitializations)
+            {
+                IL.Emit(OpCodes.Ldloca, scalarLocal);
+                IL.Emit(OpCodes.Ldloc, argumentLocals[initialization.ParameterIndex]);
+                IL.Emit(OpCodes.Stfld, scalarShape.FieldBuilders[initialization.FieldName]);
+            }
             return;
         }
 
@@ -1842,7 +1882,7 @@ public partial class ILEmitter
                 _ctx.Types.Type, "GetTypeFromHandle", _ctx.Types.RuntimeTypeHandle));
             IL.Emit(OpCodes.Stfld, displayField);
         }
-        skipCapturedClassStore:
+    skipCapturedClassStore:
 
         if (!isBlockScoped)
             return;

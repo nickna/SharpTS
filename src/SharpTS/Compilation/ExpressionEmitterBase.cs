@@ -420,6 +420,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     /// </summary>
     protected virtual void EmitBinary(Expr.Binary b)
     {
+        if (TryEmitStableNumericLocalComparison(b))
+            return;
+
         // Bitwise and shift operators need int32 coercion of both operands per ECMA-262 ToInt32.
         if (IsBitwiseOrShiftOp(b.Operator.Type))
         {
@@ -459,6 +462,79 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             SetStackUnknown();
         }
     }
+
+    private bool TryEmitStableNumericLocalComparison(Expr.Binary expression)
+    {
+        if (expression.Operator.Type != TokenType.LESS
+            || !HasNativeNumericLocal(expression.Left)
+            || !IsSimpleNumericOperand(expression.Left)
+            || !IsSimpleNumericOperand(expression.Right)
+            || !IsNumericType(Ctx.TypeMap?.Get(expression.Left))
+            || !IsNumericType(Ctx.TypeMap?.Get(expression.Right)))
+        {
+            return false;
+        }
+
+        EmitExpressionAsDouble(expression.Left);
+        var left = IL.DeclareLocal(Types.Double);
+        IL.Emit(OpCodes.Stloc, left);
+        EmitExpressionAsDouble(expression.Right);
+        var right = IL.DeclareLocal(Types.Double);
+        IL.Emit(OpCodes.Stloc, right);
+        IL.Emit(OpCodes.Ldloc, left);
+        IL.Emit(OpCodes.Ldloc, right);
+        IL.Emit(OpCodes.Clt);
+        SetStackType(StackType.Boolean);
+        return true;
+    }
+
+    private bool HasNativeNumericLocal(Expr expression)
+    {
+        expression = UnwrapNumericOperand(expression);
+        return expression is Expr.Variable variable
+            && Ctx.Locals.TryGetLocal(variable.Name.Lexeme, out var local)
+            && local.LocalType == Types.Double;
+    }
+
+    private static bool IsSimpleNumericOperand(Expr expression)
+    {
+        expression = UnwrapNumericOperand(expression);
+        return expression is Expr.Variable
+            or Expr.Literal { Value: double }
+            or Expr.Unary
+        {
+            Operator.Type: TokenType.MINUS or TokenType.PLUS,
+            Right: Expr.Literal { Value: double }
+        };
+    }
+
+    private static Expr UnwrapNumericOperand(Expr expression)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case Expr.Grouping grouping:
+                    expression = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expression = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expression = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expression = nonNull.Expression;
+                    continue;
+                default:
+                    return expression;
+            }
+        }
+    }
+
+    private static bool IsNumericType(TypeSystem.TypeInfo? type) => type is
+        TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+        or TypeSystem.TypeInfo.NumberLiteral;
 
     private static bool IsBitwiseOrShiftOp(TokenType op) => op is
         TokenType.AMPERSAND or TokenType.PIPE or TokenType.CARET or
