@@ -59,7 +59,6 @@ public abstract partial class ExpressionEmitterBase
 
                 EmitExpressionAsDouble(methodGet.Object);
                 IL.Emit(OpCodes.Ldc_I4, digits);
-                IL.Emit(OpCodes.Ldstr, $"F{digits}");
                 IL.Emit(OpCodes.Call, Ctx.Runtime!.NumberToFixedDouble);
                 SetStackType(StackType.String);
                 return true;

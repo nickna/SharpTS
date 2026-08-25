@@ -1160,8 +1160,10 @@ public class EmittedRuntime
     public MethodBuilder GlobalEncodeURIComponent { get; set; } = null!;
     public MethodBuilder GlobalDecodeURIComponent { get; set; } = null!;
     public MethodBuilder NumberToFixed { get; set; } = null!;
-    /// <summary>Typed intrinsic fixed formatter: native receiver/digits plus precomputed format.</summary>
+    /// <summary>Typed intrinsic exact fixed formatter: native receiver and digits.</summary>
     public MethodBuilder NumberToFixedDouble { get; set; } = null!;
+    public FieldBuilder NumberFixedUInt64FormatterField { get; set; } = null!;
+    public MethodBuilder NumberFixedUInt64FormatterCallback { get; set; } = null!;
     public MethodBuilder NumberToPrecision { get; set; } = null!;
     public MethodBuilder NumberToExponential { get; set; } = null!;
     public MethodBuilder NumberToStringRadix { get; set; } = null!;
