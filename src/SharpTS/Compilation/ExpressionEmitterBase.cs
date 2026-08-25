@@ -493,9 +493,13 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
     private bool HasNativeNumericLocal(Expr expression)
     {
         expression = UnwrapNumericOperand(expression);
-        return expression is Expr.Variable variable
-            && Ctx.Locals.TryGetLocal(variable.Name.Lexeme, out var local)
-            && local.LocalType == Types.Double;
+        if (expression is not Expr.Variable variable)
+            return false;
+
+        string name = variable.Name.Lexeme;
+        return (Ctx.Locals.TryGetLocal(name, out var local)
+                && local.LocalType == Types.Double)
+            || GetHoistedVariableField(name)?.FieldType == Types.Double;
     }
 
     private static bool IsSimpleNumericOperand(Expr expression)

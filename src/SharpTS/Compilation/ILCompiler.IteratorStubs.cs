@@ -77,6 +77,8 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
                 il.Emit(OpCodes.Ldarg, i);
+                if (field.FieldType == _types.Double)
+                    il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
                 il.Emit(OpCodes.Stfld, field);
             }
         }
@@ -140,7 +142,12 @@ public partial class ILCompiler
             {
                 il.Emit(OpCodes.Dup);  // Keep state machine reference on stack
                 il.Emit(OpCodes.Ldarg, i + paramOffset);
-                if (i < paramTypes.Length && paramTypes[i].ParameterType.IsValueType)
+                Type? sourceType = i < paramTypes.Length
+                    ? paramTypes[i].ParameterType
+                    : null;
+                if (field.FieldType == _types.Double && sourceType != _types.Double)
+                    il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                else if (field.FieldType == _types.Object && sourceType?.IsValueType == true)
                     il.Emit(OpCodes.Box, paramTypes[i].ParameterType);
                 il.Emit(OpCodes.Stfld, field);
             }

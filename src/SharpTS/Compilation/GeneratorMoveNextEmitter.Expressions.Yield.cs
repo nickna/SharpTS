@@ -22,13 +22,18 @@ public partial class GeneratorMoveNextEmitter
         // try's ordinary sync segments because the yield itself suspends, so
         // capture just this non-suspending operation and route failures to the
         // surrounding JavaScript catch.
-        var valueTemp = _il.DeclareLocal(typeof(object));
+        bool nativeNumberYield = _builder.NativeNumberCurrentField != null;
+        var valueTemp = _il.DeclareLocal(
+            nativeNumberYield ? _types.Double : typeof(object));
         if (y.Value != null)
         {
             EmitTryBodyOperation(() =>
             {
                 EmitExpression(y.Value);
-                EnsureBoxed();
+                if (nativeNumberYield)
+                    EnsureDouble();
+                else
+                    EnsureBoxed();
                 // Leave requires an empty evaluation stack; carry the guarded
                 // operand through a local and reload it after the protected block.
                 _il.Emit(OpCodes.Stloc, valueTemp);
@@ -43,7 +48,8 @@ public partial class GeneratorMoveNextEmitter
         // 2. Store value in <>2__current field
         _il.Emit(OpCodes.Ldarg_0);
         _il.Emit(OpCodes.Ldloc, valueTemp);
-        _il.Emit(OpCodes.Stfld, _builder.CurrentField);
+        _il.Emit(OpCodes.Stfld,
+            _builder.NativeNumberCurrentField ?? _builder.CurrentField);
 
         // 3. Set state to the resume point
         _il.Emit(OpCodes.Ldarg_0);

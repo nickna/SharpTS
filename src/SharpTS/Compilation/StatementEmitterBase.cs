@@ -69,9 +69,14 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
             // Hoisted variable - store to field
             if (v.Initializer != null)
             {
-                EmitExpression(v.Initializer);
-                EnsureBoxed();
-                var temp = IL.DeclareLocal(typeof(object));
+                if (field.FieldType == Types.Double)
+                    EmitExpressionAsDouble(v.Initializer);
+                else
+                {
+                    EmitExpression(v.Initializer);
+                    EnsureBoxed();
+                }
+                var temp = IL.DeclareLocal(field.FieldType);
                 IL.Emit(OpCodes.Stloc, temp);
                 IL.Emit(OpCodes.Ldarg_0);
                 IL.Emit(OpCodes.Ldloc, temp);
@@ -173,8 +178,11 @@ public abstract class StatementEmitterBase : ExpressionEmitterBase
     protected virtual void EmitConditionCheck(Expr condition)
     {
         EmitExpression(condition);
-        EnsureBoxed();
-        EmitTruthyCheck();
+        if (_helpers.StackType != StackType.Boolean)
+        {
+            EnsureBoxed();
+            EmitTruthyCheck();
+        }
     }
 
     /// <summary>

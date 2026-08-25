@@ -2,6 +2,7 @@ using System.Collections;
 using System.Reflection;
 using System.Reflection.Emit;
 using SharpTS.Parsing;
+using SharpTS.TypeSystem;
 
 namespace SharpTS.Compilation;
 
@@ -38,6 +39,8 @@ public partial class ILCompiler
 
         // Analyze the generator function for yield points and hoisted variables
         var analysis = _generators.Analyzer.Analyze(funcStmt);
+        var nativeFieldTypes = GetStableGeneratorFieldTypes(funcStmt);
+        bool useNativeNumberCurrent = CanUseNativeNumberCurrent(analysis, nativeFieldTypes);
 
         // #775: a free-function generator binds its own dynamic `this` (it is a `function*`, never an
         // arrow). When its body uses `this`, the stub captures the active dynamic receiver — the
@@ -50,10 +53,19 @@ public partial class ILCompiler
 
         // Create the state machine builder
         var smBuilder = new GeneratorStateMachineBuilder(_moduleBuilder, _types, _generators.StateMachineCounter++);
-        smBuilder.DefineStateMachine(funcName, analysis, isInstanceMethod: false, runtime: _runtime, hasDynamicThis: hasDynamicThis);
+        smBuilder.DefineStateMachine(
+            funcName,
+            analysis,
+            isInstanceMethod: false,
+            runtime: _runtime,
+            hasDynamicThis: hasDynamicThis,
+            hoistedFieldTypes: nativeFieldTypes,
+            useNativeNumberCurrent: useNativeNumberCurrent);
 
         _generators.StateMachines[qualifiedName] = smBuilder;
         _generators.Functions[qualifiedName] = funcStmt;
+        if (useNativeNumberCurrent && _stableSelfCallFunctions.Contains(funcStmt))
+            _generators.StableNativeNumberFunctions.Add(qualifiedName);
 
         // Record the AST node so PropagateFunctionDCRequirements can resolve arrows nested in this
         // generator back to its qualified name, and lift captured-and-mutated locals into a shared
@@ -106,6 +118,94 @@ public partial class ILCompiler
             int regularCount = funcStmt.Parameters.Count(p => !p.IsRest);
             _functions.RestParams[qualifiedName] = (restIndex, regularCount);
         }
+    }
+
+    private IReadOnlyDictionary<string, Type> GetStableGeneratorFieldTypes(
+        Stmt.Function function)
+    {
+        var result = new Dictionary<string, Type>(StringComparer.Ordinal);
+        foreach (var parameter in function.Parameters)
+        {
+            if (_typeMap?.IsStableNumericStateMachineParameter(parameter) == true)
+                result[parameter.Name.Lexeme] = _types.Double;
+        }
+
+        if (_typeMap != null && function.Body != null)
+        {
+            var collector = new StableGeneratorLocalCollector(_typeMap, result, _types.Double);
+            foreach (var statement in function.Body)
+                collector.Visit(statement);
+        }
+        return result;
+    }
+
+    private bool CanUseNativeNumberCurrent(
+        GeneratorStateAnalyzer.GeneratorFunctionAnalysis analysis,
+        IReadOnlyDictionary<string, Type> nativeFieldTypes)
+    {
+        if (analysis.YieldPoints.Count == 0 || analysis.HasYieldStar)
+            return false;
+
+        foreach (var point in analysis.YieldPoints)
+        {
+            Expr.Yield yield = point.YieldExpr;
+            if (yield.IsDelegating || yield.Value == null ||
+                _typeMap?.Get(yield.Value) is not
+                    (TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                    or TypeSystem.TypeInfo.NumberLiteral))
+            {
+                return false;
+            }
+
+            Expr value = yield.Value;
+            while (true)
+            {
+                switch (value)
+                {
+                    case Expr.Grouping grouping:
+                        value = grouping.Expression;
+                        continue;
+                    case Expr.TypeAssertion assertion:
+                        value = assertion.Expression;
+                        continue;
+                    case Expr.Satisfies satisfies:
+                        value = satisfies.Expression;
+                        continue;
+                    case Expr.NonNullAssertion nonNull:
+                        value = nonNull.Expression;
+                        continue;
+                }
+                break;
+            }
+
+            if (value is Expr.Literal { Value: double })
+                continue;
+            if (value is Expr.Variable variable
+                && nativeFieldTypes.GetValueOrDefault(variable.Name.Lexeme) == _types.Double)
+            {
+                continue;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private sealed class StableGeneratorLocalCollector(
+        TypeMap typeMap,
+        Dictionary<string, Type> result,
+        Type doubleType) : Parsing.Visitors.AstVisitorBase
+    {
+        protected override void VisitVar(Stmt.Var statement)
+        {
+            if (typeMap.IsStableNumericStateMachineLocal(statement))
+                result[statement.Name.Lexeme] = doubleType;
+            base.VisitVar(statement);
+        }
+
+        // Nested functions own independent state machines and are analyzed when
+        // their own definitions are emitted.
+        protected override void VisitFunction(Stmt.Function statement) { }
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
     }
 
     /// <summary>

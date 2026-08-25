@@ -190,6 +190,23 @@ internal static class StableNumericLoopCaptureAnalyzer
                     collector.MarkStablePromiseCaptures();
                     MarkStableBoundParameter(statement, function, declaration.Name.Lexeme);
                 }
+                else if (_functionStack.TryPeek(out enclosing)
+                    && enclosing is Stmt.Function
+                    {
+                        IsAsync: false,
+                        IsGenerator: true
+                    } generator
+                    && IsStableNumericGeneratorLoop(statement, declaration.Name.Lexeme))
+                {
+                    // A canonical numeric range generator necessarily carries its loop
+                    // counter and bound across every yield.  Keeping those two proven-
+                    // numeric bindings in double fields removes the otherwise mandatory
+                    // box/re-coerce cycle on every MoveNext re-entry.  The generator's
+                    // public object ABI remains unchanged; only its private suspension
+                    // storage is specialized.
+                    _typeMap.MarkStableNumericStateMachineLocal(declaration);
+                    MarkStableBoundParameter(statement, generator, declaration.Name.Lexeme);
+                }
             }
 
             base.VisitFor(statement);
@@ -259,6 +276,44 @@ internal static class StableNumericLoopCaptureAnalyzer
                 safety.Visit(loop.Condition);
             safety.Visit(loop.Body);
             return safety.Safe;
+        }
+
+        private static bool IsStableNumericGeneratorLoop(Stmt.For loop, string name)
+        {
+            if (loop.Condition is not Expr.Binary
+                {
+                    Operator.Type: TokenType.LESS,
+                    Left: Expr.Variable conditionCounter,
+                    Right: Expr.Variable
+                }
+                || conditionCounter.Name.Lexeme != name
+                || loop.Increment is not Expr.PostfixIncrement
+                {
+                    Operand: Expr.Variable incrementCounter,
+                    Operator.Type: TokenType.PLUS_PLUS
+                }
+                || incrementCounter.Name.Lexeme != name)
+            {
+                return false;
+            }
+
+            // Start deliberately with the exact range shape that exposed the
+            // regression.  A wider generator body can mutate, capture, delegate,
+            // or otherwise expose the counter across suspension; those shapes keep
+            // object storage until they receive their own proof.
+            Stmt body = loop.Body;
+            if (body is Stmt.Block { Statements: [Stmt.Expression expression] })
+                body = new Stmt.Expression(expression.Expr);
+
+            return body is Stmt.Expression
+            {
+                Expr: Expr.Yield
+                {
+                    IsDelegating: false,
+                    Value: Expr.Variable yielded
+                }
+            }
+            && yielded.Name.Lexeme == name;
         }
     }
 

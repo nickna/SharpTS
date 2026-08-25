@@ -1077,13 +1077,21 @@ public partial class ILEmitter
         }
 
         // For generators, use IEnumerable-based iteration
-        if (iterableType is TypeInfo.Generator)
+        if (iterableType is TypeInfo.Generator generatorType)
         {
             var genStartLabel = builder.DefineLabel("forof_gen_start");
             var genEndLabel = builder.DefineLabel("forof_gen_end");
             var genContinueLabel = builder.DefineLabel("forof_gen_continue");
             _ctx.EnterLoop(genEndLabel, genContinueLabel, labelNames);
-            EmitForOfEnumerator(f, genStartLabel, genEndLabel, genContinueLabel);
+            if (IsStableNativeNumberGeneratorCall(f.Iterable, generatorType))
+            {
+                EmitForOfNativeNumberGenerator(
+                    f, genStartLabel, genEndLabel, genContinueLabel);
+            }
+            else
+            {
+                EmitForOfEnumerator(f, genStartLabel, genEndLabel, genContinueLabel);
+            }
             return;
         }
 
@@ -1617,6 +1625,148 @@ public partial class ILEmitter
 
         builder.BeginFinallyBlock();
         var skipClose = builder.DefineLabel("forof_gen_skip_close");
+        IL.Emit(OpCodes.Ldloc, closeNeeded);
+        builder.Emit_Brfalse(skipClose);
+        IL.Emit(OpCodes.Ldloc, generatorLocal);
+        IL.Emit(OpCodes.Ldloc, throwing);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorClose);
+        builder.MarkLabel(skipClose);
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
+
+        builder.MarkLabel(continueLabel);
+        builder.Emit_Br(startLabel);
+
+        builder.MarkLabel(endLabel);
+        _ctx.Locals.ExitScope();
+        _ctx.ExitLoop();
+    }
+
+    private bool IsStableNativeNumberGeneratorCall(
+        Expr iterable,
+        TypeInfo.Generator generatorType)
+    {
+        if (generatorType.YieldType is not
+            (TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+            or TypeInfo.NumberLiteral))
+        {
+            return false;
+        }
+
+        while (true)
+        {
+            switch (iterable)
+            {
+                case Expr.Grouping grouping:
+                    iterable = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    iterable = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    iterable = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    iterable = nonNull.Expression;
+                    continue;
+            }
+            break;
+        }
+
+        if (iterable is not Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Variable callee
+            } call
+            || call.Arguments.Any(argument => argument is Expr.Spread))
+        {
+            return false;
+        }
+
+        string name = callee.Name.Lexeme;
+        string resolvedName = _ctx.ResolveFunctionName(name);
+        if (_ctx.StableNativeNumberGeneratorFunctions?.Contains(resolvedName) != true
+            || !_ctx.Functions.ContainsKey(resolvedName)
+            || _ctx.TopLevelStaticVars?.ContainsKey(name) == true)
+        {
+            return false;
+        }
+
+        // Match the ordinary direct-call resolver's conservative shadowing
+        // boundary. The optimized loop is valid only when evaluating the call
+        // above necessarily created the exact emitted state machine.
+        return !_ctx.TryGetParameter(name, out _)
+            && !_ctx.CellBindingLocals.ContainsKey(name)
+            && !_ctx.Locals.HasLocal(name)
+            && _ctx.CapturedFunctionLocals?.Contains(name) != true
+            && _ctx.CapturedArrowLocals?.Contains(name) != true
+            && _ctx.ParentArrowCapturedLocals?.Contains(name) != true
+            && _ctx.ExtraArrowScopeBindings?.ContainsKey(name) != true
+            && _ctx.CapturedFields?.ContainsKey(name) != true;
+    }
+
+    private void EmitForOfNativeNumberGenerator(
+        Stmt.ForOf f,
+        Label startLabel,
+        Label endLabel,
+        Label continueLabel)
+    {
+        var builder = _ctx.ILBuilder;
+        var generatorLocal = IL.DeclareLocal(
+            _ctx.Runtime!.NativeNumberGeneratorInterfaceType);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.NativeNumberGeneratorInterfaceType);
+        IL.Emit(OpCodes.Stloc, generatorLocal);
+
+        var loopVar = _ctx.Locals.DeclareLocal(
+            f.Variable.Lexeme, _ctx.Types.Double);
+        var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
+        var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
+
+        builder.MarkLabel(startLabel);
+        EmitCancellationCheck();
+
+        IL.Emit(OpCodes.Ldloc, generatorLocal);
+        IL.Emit(OpCodes.Callvirt,
+            _ctx.Runtime.NativeNumberGeneratorMoveNextMethod);
+        builder.Emit_Brfalse(endLabel);
+
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, closeNeeded);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, throwing);
+
+        var escapingTargets = new HashSet<Label>();
+        foreach (var loop in _ctx.LoopLabels)
+        {
+            escapingTargets.Add(loop.BreakLabel);
+            escapingTargets.Add(loop.ContinueLabel);
+        }
+
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
+
+        IL.Emit(OpCodes.Ldloc, generatorLocal);
+        IL.Emit(OpCodes.Callvirt,
+            _ctx.Runtime.NativeNumberGeneratorCurrentMethod);
+        IL.Emit(OpCodes.Stloc, loopVar);
+
+        _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
+            closeNeeded, continueLabel, escapingTargets));
+        EmitStatement(f.Body);
+        _iteratorLoopCompletionScopes.Pop();
+
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, closeNeeded);
+        builder.Emit_Leave(continueLabel);
+
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, throwing);
+        IL.Emit(OpCodes.Rethrow);
+
+        builder.BeginFinallyBlock();
+        var skipClose = builder.DefineLabel("forof_native_gen_skip_close");
         IL.Emit(OpCodes.Ldloc, closeNeeded);
         builder.Emit_Brfalse(skipClose);
         IL.Emit(OpCodes.Ldloc, generatorLocal);

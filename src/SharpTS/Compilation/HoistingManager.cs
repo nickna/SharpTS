@@ -65,11 +65,14 @@ public class HoistingManager
     /// <summary>
     /// Defines fields for all hoisted locals.
     /// </summary>
-    public void DefineHoistedLocals(IEnumerable<string> names)
+    public void DefineHoistedLocals(
+        IEnumerable<string> names,
+        IReadOnlyDictionary<string, Type>? fieldTypes = null)
     {
         foreach (var name in names)
         {
-            var field = _typeBuilder.DefineField(name, _objectType, FieldAttributes.Public);
+            Type fieldType = fieldTypes?.GetValueOrDefault(name) ?? _objectType;
+            var field = _typeBuilder.DefineField(name, fieldType, FieldAttributes.Public);
             HoistedLocals[name] = field;
         }
     }
