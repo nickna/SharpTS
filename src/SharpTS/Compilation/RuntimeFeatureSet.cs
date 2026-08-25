@@ -157,6 +157,11 @@ public sealed class RuntimeFeatureSet
     // Number prototype/static mutation makes typed number method calls observable
     // through ordinary property lookup. Direct formatting requires this false.
     public bool UsesNumberPrototypeMutation { get; set; } = true;
+    // Any observable access to RegExp.prototype, replacement of the global
+    // constructor, dynamic evaluation, or opaque descriptor/prototype mutation
+    // can replace the intrinsic test/exec bindings. The allocation-free literal
+    // test path requires this to remain false.
+    public bool UsesRegExpPrototypeMutation { get; set; } = true;
     // A write to the global parseInt binding (or opaque eval) requires live
     // globalThis lookup instead of the direct typed parsing intrinsic.
     public bool UsesGlobalParseIntMutation { get; set; } = true;

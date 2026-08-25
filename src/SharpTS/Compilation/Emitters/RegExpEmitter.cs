@@ -22,25 +22,27 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         if (methodName is not ("test" or "exec"))
             return false;
 
-        // Emit the RegExp object
-        emitter.EmitExpression(receiver);
-        emitter.EmitBoxIfNeeded(receiver);
-
-        switch (methodName)
+        if (methodName == "test" && IsStableIntrinsicTest(emitter, receiver, arguments))
         {
-            case "test":
-                // regex.test(str) -> bool
-                EmitStringArgOrEmpty(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.RegExpTest);
-                il.Emit(OpCodes.Box, ctx.Types.Boolean);
-                return true;
-
-            default:
-                // exec: regex.exec(str) -> array|null
-                EmitStringArgOrEmpty(emitter, arguments);
-                il.Emit(OpCodes.Call, ctx.Runtime!.RegExpExec);
-                return true;
+            // The receiver is the exact non-global/non-sticky literal node that
+            // RegexLiteralHoistAnalyzer proved cannot escape. With the prototype
+            // bindings also stable, call $RegExp.Test directly: its non-stateful
+            // branch is Regex.IsMatch and returns a native IL bool.
+            emitter.EmitExpression(receiver);
+            emitter.EmitBoxIfNeeded(receiver);
+            il.Emit(OpCodes.Castclass, ctx.Runtime!.TSRegExpType);
+            EmitStableStringArgument(emitter, arguments);
+            il.Emit(OpCodes.Callvirt, ctx.Runtime.TSRegExpTestMethod);
+            emitter.SetStackType(StackType.Boolean);
+            return true;
         }
+
+        // Escaped/aliased receivers and every observable or ambiguous case use
+        // ordinary property lookup. This preserves own/prototype method and
+        // accessor overrides, then lets RegExp.prototype.test perform the full
+        // RegExpExec operation (including a custom exec and strict lastIndex).
+        EmitDynamicMethodCall(emitter, receiver, methodName, arguments);
+        return true;
     }
 
     /// <summary>
@@ -107,14 +109,50 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
 
     #region Helper Methods
 
-    /// <summary>
-    /// Emits the first argument as a string, or <c>"undefined"</c> when no
-    /// arguments are supplied. ECMA-262 §22.2.6.{2,8} test/exec begin with
-    /// <c>S = ? ToString(string)</c>; passing no string yields
-    /// <c>ToString(undefined) === "undefined"</c>. Test262 patterns like
-    /// <c>/undefined/.exec()</c> rely on that coercion.
-    /// </summary>
-    private static void EmitStringArgOrEmpty(IEmitterContext emitter, List<Expr> arguments)
+    private static bool IsStableIntrinsicTest(
+        IEmitterContext emitter, Expr receiver, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (ctx.RuntimeFeatures?.UsesRegExpPrototypeMutation != false
+            || receiver is not Expr.RegexLiteral literal
+            || ctx.Runtime?.RegexHoistFields?.ContainsKey(literal) != true
+            || arguments.Count > 1)
+            return false;
+
+        return arguments.Count == 0 || IsSideEffectFreeString(arguments[0], ctx);
+    }
+
+    private static bool IsSideEffectFreeString(Expr expression, CompilationContext ctx)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case Expr.Grouping grouping:
+                    expression = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expression = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expression = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expression = nonNull.Expression;
+                    continue;
+            }
+
+            break;
+        }
+
+        if (expression is not Expr.Variable and not Expr.Literal { Value: string })
+            return false;
+
+        return ctx.TypeMap?.Get(expression) is TypeSystem.TypeInfo.String
+            or TypeSystem.TypeInfo.StringLiteral;
+    }
+
+    private static void EmitStableStringArgument(IEmitterContext emitter, List<Expr> arguments)
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
@@ -129,6 +167,36 @@ public sealed class RegExpEmitter : ITypeEmitterStrategy
         {
             il.Emit(OpCodes.Ldstr, "undefined");
         }
+    }
+
+    private static void EmitDynamicMethodCall(
+        IEmitterContext emitter, Expr receiver, string methodName, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitBoxIfNeeded(receiver);
+        var receiverLocal = emitter.SpillStackToObjectLocal();
+
+        // Property lookup precedes ArgumentListEvaluation.
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldstr, methodName);
+        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        var functionLocal = emitter.SpillStackToObjectLocal();
+
+        if (arguments.Any(argument => argument is Expr.Spread))
+            emitter.EmitArgsArrayWithSpread(arguments);
+        else
+            emitter.EmitArgsArray(arguments);
+        var argumentsLocal = emitter.SpillStackToObjectLocal();
+
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldloc, functionLocal);
+        il.Emit(OpCodes.Ldloc, argumentsLocal);
+        il.Emit(OpCodes.Castclass, ctx.Types.ObjectArray);
+        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        emitter.SetStackUnknown();
     }
 
     #endregion

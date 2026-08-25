@@ -193,6 +193,25 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("/^[a-z]+$/.test('abc');", false)]
+    [InlineData("const prototype = RegExp.prototype;", true)]
+    [InlineData("RegExp.prototype.test = function() { return false; };", true)]
+    [InlineData("Object.defineProperty(RegExp.prototype, 'exec', { value: null });", true)]
+    [InlineData("const prototype = Object.getPrototypeOf(/x/);", true)]
+    [InlineData("const prototype = (/x/ as any).__proto__;", true)]
+    [InlineData("const dynamicFunction = Function;", true)]
+    [InlineData("globalThis.RegExp = RegExp;", true)]
+    [InlineData("eval('void 0');", true)]
+    public void DetectsRegExpPrototypeMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(expected, features.UsesRegExpPrototypeMutation);
+    }
+
+    [Theory]
     [InlineData("parseInt('10', 10);", false)]
     [InlineData("globalThis.parseInt = function() { return 1; };", true)]
     [InlineData("globalThis['parseInt'] = function() { return 1; };", true)]
