@@ -39,8 +39,9 @@ minimums are kept in the raw results artifact for deeper analysis.
 "@
 
 # Parse results into a dictionary keyed by "bench|param".
-# Each line is: <runtime>|<bench>:<param>:<mean>:<min>:<stdev>
-# (older <mean>-only lines are still accepted: min/stdev default to absent).
+# The first five payload fields remain
+# <bench>:<param>:<mean>:<min>:<stdev>. Newer harnesses append sampling,
+# workload-family, and launch metadata for the structured exporter.
 $data = [ordered]@{}
 foreach ($line in Get-Content $ResultsFile) {
     if (-not $line.Trim()) { continue }

@@ -46,21 +46,31 @@ jobs:
 
       - name: Run benchmarks
         shell: pwsh
-        run: ./benchmarks/cross-runtime/run-benchmarks.ps1
+        run: |
+          $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results'
+          "BENCH_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
+          ./benchmarks/cross-runtime/run-benchmarks.ps1 -OutputDirectory $resultsDir
 
       - name: Publish results to job summary
         shell: pwsh
         run: |
-          $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'bench-results'
-          "BENCH_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
           ./benchmarks/cross-runtime/format-results.ps1 `
-            -ResultsFile (Join-Path $resultsDir 'results.txt') `
+            -ResultsFile (Join-Path $env:BENCH_RESULTS_DIR 'results.txt') `
             -DotNetVersion (dotnet --version) `
             -NodeVersion (node -v) `
             -BunVersion (bun --version) `
             >> $env:GITHUB_STEP_SUMMARY
 
-      - name: Upload raw results
+      - name: Validate structured results
+        shell: pwsh
+        run: |
+          ./benchmarks/cross-runtime/test-snapshot.ps1
+          ./benchmarks/cross-runtime/validate-snapshot.ps1 `
+            (Join-Path $env:BENCH_RESULTS_DIR 'snapshot.json'), `
+            benchmarks/cross-runtime/snapshots/latest.json
+
+      - name: Upload raw and structured results
+        if: always() && env.BENCH_RESULTS_DIR != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: benchmark-results

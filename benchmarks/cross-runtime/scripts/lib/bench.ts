@@ -10,8 +10,8 @@
 // noise floor), then collects samples until a time budget elapses and reports
 // the per-call mean, min, and sample standard deviation.
 //
-// Output line (consumed by benchmarks/cross-runtime/format-results.ps1):
-//   BENCH:<name>:<param>:<meanMs>:<minMs>:<stdevMs>
+// Output line (consumed by the cross-runtime PowerShell tools):
+//   BENCH:<name>:<param>:<meanMs>:<minMs>:<stdevMs>:<samples>:<inner>:<sampledMs>
 
 import { performance } from "perf_hooks";
 
@@ -33,6 +33,7 @@ export function bench(name: string, param: number, fn: () => number): void {
     let guard: number = 0;
     const samples: number[] = [];
     let total: number = 0;
+    let inner: number = 1;
 
     // One measured call up front. This both probes the cost and, when a single
     // call is already heavy (e.g. the tree-walking interpreter on a big input),
@@ -69,7 +70,6 @@ export function bench(name: string, param: number, fn: () => number): void {
             guard = guard + fn();
         }
 
-        let inner: number = 1;
         while (inner < MAX_INNER) {
             const c0: number = performance.now();
             for (let k: number = 0; k < inner; k++) {
@@ -123,7 +123,10 @@ export function bench(name: string, param: number, fn: () => number): void {
         console.log("guard:" + guard);
     }
 
-    console.log("BENCH:" + name + ":" + param + ":" + round(mean) + ":" + round(min) + ":" + round(stdev));
+    console.log(
+        "BENCH:" + name + ":" + param + ":" + round(mean) + ":" + round(min) + ":" +
+        round(stdev) + ":" + samples.length + ":" + inner + ":" + round(total),
+    );
 }
 
 // Async counterpart to `bench`. Each invocation is awaited inside the timed
@@ -139,6 +142,7 @@ export async function benchAsync(
     let guard: number = 0;
     const samples: number[] = [];
     let total: number = 0;
+    let inner: number = 1;
 
     const probeStart: number = performance.now();
     guard = guard + await fn();
@@ -166,7 +170,6 @@ export async function benchAsync(
             guard = guard + await fn();
         }
 
-        let inner: number = 1;
         while (inner < MAX_INNER) {
             const c0: number = performance.now();
             for (let k: number = 0; k < inner; k++) {
@@ -218,5 +221,8 @@ export async function benchAsync(
         console.log("guard:" + guard);
     }
 
-    console.log("BENCH:" + name + ":" + param + ":" + round(mean) + ":" + round(min) + ":" + round(stdev));
+    console.log(
+        "BENCH:" + name + ":" + param + ":" + round(mean) + ":" + round(min) + ":" +
+        round(stdev) + ":" + samples.length + ":" + inner + ":" + round(total),
+    );
 }
