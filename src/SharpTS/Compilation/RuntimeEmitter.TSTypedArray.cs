@@ -940,4 +940,27 @@ public partial class RuntimeEmitter
             && m.GetParameters()[0].ParameterType == typeof(byte).MakeByRefType())!;
         return EmitGenerics.MakeGenericMethod(open, elementType);
     }
+
+    internal static MethodInfo GetByteArrayDataReference()
+    {
+        var methods = typeof(System.Runtime.InteropServices.MemoryMarshal).GetMethods();
+        var open = Array.Find(methods, m => m.Name == "GetArrayDataReference"
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is [{ ParameterType.IsArray: true }])!;
+        return EmitGenerics.MakeGenericMethod(open, typeof(byte));
+    }
+
+    internal static MethodInfo UnsafeAddByteOffset()
+    {
+        var methods = typeof(System.Runtime.CompilerServices.Unsafe).GetMethods();
+        var open = Array.Find(methods, m => m.Name == "Add"
+            && m.IsGenericMethodDefinition
+            && m.GetParameters() is
+            [
+                { ParameterType.IsByRef: true },
+                { ParameterType: var offsetType }
+            ]
+            && offsetType == typeof(int))!;
+        return EmitGenerics.MakeGenericMethod(open, typeof(byte));
+    }
 }

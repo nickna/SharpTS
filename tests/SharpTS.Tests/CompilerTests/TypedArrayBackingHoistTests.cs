@@ -58,6 +58,105 @@ public sealed class TypedArrayBackingHoistTests
             instruction.Operand is MethodBase { Name: "ReadUnaligned" or "WriteUnaligned" });
     }
 
+    [Fact]
+    public void ExactInt32Stencil_CoalescesNeighborBoundsChecks()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                let sum: number = 0;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        var instructions = ReadInstructions(hot).ToArray();
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "GetArrayDataReference" });
+        Assert.Equal(3, instructions.Count(instruction =>
+            instruction.Operand is MethodBase { Name: "ReadUnaligned" }));
+        Assert.DoesNotContain(instructions, IsUnboxedAccessorCall);
+    }
+
+    [Fact]
+    public void ExactInt32Stencil_OutOfRangeStillFaults()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                let sum: number = 0;
+                for (let i: number = 0; i < 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        var exception = Assert.Throws<TargetInvocationException>(() => hot.Invoke(null, [3d]));
+        Assert.IsType<IndexOutOfRangeException>(exception.InnerException);
+    }
+
+    [Fact]
+    public void ExactInt32CounterWrite_KeepsRangeSafeArithmeticNative()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                for (let i: number = 0; i < n; i++) {
+                    data[i] = i * 3 - (i % 7);
+                }
+                return n;
+            }
+            """, "hot");
+
+        var instructions = ReadInstructions(hot).ToArray();
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Stind_I4);
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Rem);
+        Assert.DoesNotContain(instructions, IsUnboxedAccessorCall);
+    }
+
+    [Fact]
+    public void Int32CounterWrite_UnsafeRangeRetainsDoubleNarrowing()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                for (let i: number = 0; i < n; i++) {
+                    data[i] = i * 100000;
+                }
+                return n;
+            }
+            """, "hot");
+
+        var instructions = ReadInstructions(hot).ToArray();
+        Assert.DoesNotContain(instructions, instruction => instruction.OpCode == OpCodes.Stind_I4);
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "WriteUnaligned" });
+    }
+
+    [Fact]
+    public void Int32CounterWrite_NegativeZeroRetainsDoubleSemantics()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                let result: number = 1;
+                for (let i: number = 0; i < n; i++) {
+                    result = (data[i] = i * -0);
+                }
+                return 1 / result;
+            }
+            """, "hot");
+
+        var instructions = ReadInstructions(hot).ToArray();
+        Assert.DoesNotContain(instructions, instruction => instruction.OpCode == OpCodes.Stind_I4);
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "WriteUnaligned" });
+        Assert.Equal(double.NegativeInfinity, (double)hot.Invoke(null, [1d])!);
+    }
+
     [Theory]
     [MemberData(nameof(FallbackPrograms))]
     public void UnsafeLifetime_RetainsConcreteAccessorFallback(string source)
@@ -93,7 +192,16 @@ public sealed class TypedArrayBackingHoistTests
                 for (let i: number = 0; i < n; i++) data[i] += i * 0.5;
                 return n;
             }
-            console.log(hot(8));
+            function stencil(n: number): number {
+                const data = new Int32Array(n);
+                for (let i: number = 0; i < n; i++) data[i] = i * 3 - (i % 7);
+                let sum: number = 0;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            console.log(hot(8), stencil(8));
             """;
 
         Assert.Empty(Infrastructure.TestHarness.CompileAndVerifyOnly(source));

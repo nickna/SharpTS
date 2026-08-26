@@ -45,4 +45,23 @@ public sealed class TypedArrayBackingHoistParityTests
 
         Assert.Equal("11\n21\n99\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void ExactInt32Stencil_PreservesIntegralWriteAndReadSemantics(ExecutionMode mode)
+    {
+        const string source = """
+            function stencil(n: number): number {
+                const data = new Int32Array(n);
+                for (let i: number = 0; i < n; i++) data[i] = i * 3 - (i % 7);
+                let sum: number = 0;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            console.log(stencil(8));
+            """;
+
+        Assert.Equal("7\n", TestHarness.Run(source, mode));
+    }
 }

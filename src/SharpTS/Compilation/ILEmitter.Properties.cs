@@ -1669,12 +1669,20 @@ public partial class ILEmitter
             var idxLocal = IL.DeclareLocal(_ctx.Types.Int32);
             IL.Emit(OpCodes.Stloc, idxLocal);
 
+            bool hasDirectBacking =
+                TryGetDirectTypedArrayBacking(si.Object, sta.ElementType, out var backing);
+            if (hasDirectBacking
+                && TryEmitDirectInt32CounterWrite(si.Index, si.Value, backing, idxLocal))
+            {
+                return;
+            }
+
             EmitExpression(si.Value);
             EnsureDouble();
             var valLocal = IL.DeclareLocal(_ctx.Types.Double);
             IL.Emit(OpCodes.Stloc, valLocal);
 
-            if (TryGetDirectTypedArrayBacking(si.Object, sta.ElementType, out var backing))
+            if (hasDirectBacking)
             {
                 EmitDirectTypedArrayWrite(backing, idxLocal, valLocal);
                 IL.Emit(OpCodes.Ldloc, valLocal);
