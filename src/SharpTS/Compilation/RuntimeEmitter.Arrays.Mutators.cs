@@ -475,6 +475,41 @@ public partial class RuntimeEmitter
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
     }
 
+    private void EmitArrayShiftTyped(
+        TypeBuilder typeBuilder, EmittedRuntime runtime, ArrayElementsDescriptor desc)
+    {
+        var listType = desc.GetListType(_types);
+        var elementType = desc.GetElementType(_types);
+        var method = typeBuilder.DefineMethod(
+            $"ArrayShift{desc.Kind}",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [listType]);
+        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayShiftDouble = method;
+        else runtime.ArrayShiftBool = method;
+
+        var il = method.GetILGenerator();
+        var nonEmpty = il.DefineLabel();
+        var first = il.DeclareLocal(elementType);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Brtrue, nonEmpty);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nonEmpty);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, first);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "RemoveAt", _types.Int32));
+        il.Emit(OpCodes.Ldloc, first);
+        il.Emit(OpCodes.Box, elementType);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayShiftProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -596,6 +631,47 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Guarded packed-number-array shift. Exact numeric $Array instances use the
+    /// unboxed store; every unusual receiver delegates to the complete prototype
+    /// algorithm without first materializing the numeric store.
+    /// </summary>
+    private void EmitArrayShiftNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayShiftNumber",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.ArrayShiftNumber = method;
+        var il = method.GetILGenerator();
+        var fallback = il.DefineLabel();
+        var array = il.DeclareLocal(runtime.TSArrayType);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldtoken, runtime.TSArrayType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayCanMutateNumericGetter);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayShiftNumeric);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.ArrayShiftProto);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayUnshift(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
@@ -626,6 +702,103 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(frozenLabel);
         GuestErrorEmitter.ThrowTypeError(il, runtime, "Cannot modify a frozen or sealed array");
+    }
+
+    private void EmitArrayUnshiftTyped(
+        TypeBuilder typeBuilder, EmittedRuntime runtime, ArrayElementsDescriptor desc)
+    {
+        var listType = desc.GetListType(_types);
+        var elementType = desc.GetElementType(_types);
+        var method = typeBuilder.DefineMethod(
+            $"ArrayUnshift{desc.Kind}",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [listType, elementType]);
+        if (desc.Kind == ArrayElementsKind.Double) runtime.ArrayUnshiftDouble = method;
+        else runtime.ArrayUnshiftBool = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(listType, "Insert", _types.Int32, elementType));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Guarded packed-number-array unshift. The typed double vector is allocated
+    /// only by the direct call site; fallback boxes it once for the generic
+    /// Array.prototype algorithm.
+    /// </summary>
+    private void EmitArrayUnshiftNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayUnshiftNumber",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.Object, _types.DoubleArray]);
+        runtime.ArrayUnshiftNumber = method;
+        var il = method.GetILGenerator();
+        var fallback = il.DefineLabel();
+        var array = il.DeclareLocal(runtime.TSArrayType);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "GetType"));
+        il.Emit(OpCodes.Ldtoken, runtime.TSArrayType);
+        il.Emit(OpCodes.Call, _types.TypeGetTypeFromHandle);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayCanMutateNumericGetter);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayUnshiftNumeric);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallback);
+        var boxed = il.DeclareLocal(_types.ObjectArray);
+        var index = il.DeclareLocal(_types.Int32);
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Stloc, boxed);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Bge, done);
+        il.Emit(OpCodes.Ldloc, boxed);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldelem_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, loop);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, boxed);
+        il.Emit(OpCodes.Call, runtime.ArrayUnshiftProto);
+        il.Emit(OpCodes.Ret);
     }
 
     // Typed push for promoted number[]/boolean[] locals (#857/#860): appends an

@@ -26,6 +26,11 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (methodName is "shift" or "unshift"
+            && (ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+                || ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
+            return false;
+
         if (methodName == "slice" && TryEmitNumericSliceCall(emitter, receiver, arguments))
             return true;
         if (methodName == "sort" && TryEmitNumericSortCall(emitter, receiver, arguments))

@@ -1157,9 +1157,15 @@ public partial class RuntimeEmitter
         EmitArrayPop(typeBuilder, runtime);
         EmitArrayPopProto(typeBuilder, runtime);
         EmitArrayShift(typeBuilder, runtime);
+        EmitArrayShiftTyped(typeBuilder, runtime, ArrayElements.Double);
+        EmitArrayShiftTyped(typeBuilder, runtime, ArrayElements.Bool);
         EmitArrayShiftProto(typeBuilder, runtime);
+        EmitArrayShiftNumber(typeBuilder, runtime);
         EmitArrayUnshift(typeBuilder, runtime);
+        EmitArrayUnshiftTyped(typeBuilder, runtime, ArrayElements.Double);
+        EmitArrayUnshiftTyped(typeBuilder, runtime, ArrayElements.Bool);
         EmitArrayUnshiftProto(typeBuilder, runtime);
+        EmitArrayUnshiftNumber(typeBuilder, runtime);
         EmitArraySlice(typeBuilder, runtime);
         // Array callback methods must come after InvokeValue and IsTruthy
         EmitArrayMap(typeBuilder, runtime);

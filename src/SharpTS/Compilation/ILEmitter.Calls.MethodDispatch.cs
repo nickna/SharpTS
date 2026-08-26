@@ -113,6 +113,22 @@ public partial class ILEmitter
             return;
         }
 
+        if (methodName == "shift" && !methodGet.Optional && arguments.Count == 0
+            && methodGet.Object is Expr.Variable shiftVar
+            && _ctx.TryGetPromotedArrayLocal(shiftVar.Name.Lexeme) is { } shiftProm)
+        {
+            EmitPromotedArrayShift(shiftProm.Local, shiftProm.Descriptor);
+            return;
+        }
+
+        if (methodName == "unshift" && !methodGet.Optional
+            && methodGet.Object is Expr.Variable unshiftVar
+            && _ctx.TryGetPromotedArrayLocal(unshiftVar.Name.Lexeme) is { } unshiftProm)
+        {
+            EmitPromotedArrayUnshift(unshiftProm.Local, unshiftProm.Descriptor, arguments);
+            return;
+        }
+
         // Escaping number[] push (number[] unboxing): the receiver is a statically `number[]`
         // expression that is NOT a promoted local — so its runtime value is a $Array (numeric or boxed,
         // never List<double>: the promoted-local branch above + the escape analyzer guarantee that).
@@ -130,6 +146,49 @@ public partial class ILEmitter
             && arguments.All(a => IsNumericType(_ctx.TypeMap?.Get(a))))
         {
             EmitEscapingNumberArrayPush(methodGet.Object, arguments);
+            return;
+        }
+
+        // Escaping number[] receivers retain their packed-double $Array storage.
+        // Whole-program feature gates prove the direct intrinsic is unmodified;
+        // the emitted helper repeats exact-type/numeric-mode guards and falls back
+        // for holes, boxed arrays, subclasses, and non-extensible receivers.
+        if (methodName == "shift" && !methodGet.Optional && arguments.Count == 0
+            && _ctx.TypeMap?.Get(methodGet.Object) is TypeSystem.TypeInfo.Array
+            && ArrayElements.Resolve(_ctx.TypeMap.Get(methodGet.Object)) is
+                { Kind: ArrayElementsKind.Double }
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == false
+            && !_ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            EmitExpression(methodGet.Object);
+            EmitBoxIfNeeded(methodGet.Object);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayShiftNumber);
+            SetStackUnknown();
+            return;
+        }
+
+        if (methodName == "unshift" && !methodGet.Optional
+            && _ctx.TypeMap?.Get(methodGet.Object) is TypeSystem.TypeInfo.Array
+            && ArrayElements.Resolve(_ctx.TypeMap.Get(methodGet.Object)) is
+                { Kind: ArrayElementsKind.Double }
+            && arguments.All(argument => argument is not Expr.Spread
+                && IsNumericType(_ctx.TypeMap.Get(argument)))
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == false
+            && !_ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            EmitExpression(methodGet.Object);
+            EmitBoxIfNeeded(methodGet.Object);
+            IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Double);
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                EmitExpressionAsDouble(arguments[i]);
+                IL.Emit(OpCodes.Stelem_R8);
+            }
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayUnshiftNumber);
+            SetStackType(StackType.Double);
             return;
         }
 
@@ -234,6 +293,15 @@ public partial class ILEmitter
                 EmitPromiseInstanceMethodCall(methodGet, methodName, arguments);
                 return;
             }
+        }
+
+        if (objType is TypeSystem.TypeInfo.Array
+            && methodName is ("shift" or "unshift")
+            && (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+                || _ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
+        {
+            EmitDynamicMethodCallPreservingThis(methodGet.Object, methodName, arguments);
+            return;
         }
 
         // Type-first dispatch: Use TypeEmitterRegistry if we have type information

@@ -668,7 +668,7 @@ public partial class ILCompiler
         _classes.CompactStorageClasses.UnionWith(
             CompactClassStorageAnalyzer.Analyze(statements, _typeMap, _features));
         TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
-        ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, _features);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ObjectLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
     }

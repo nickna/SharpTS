@@ -960,7 +960,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesGlobalParseIntMutation = true;
                 if (IsArrayPrototype(s.Object)
                     || s.Name.Lexeme == "__proto__"
-                    || (s.Name.Lexeme == "push" && CouldTargetArray(s.Object)))
+                    || (IsArrayMutatorName(s.Name.Lexeme) && CouldTargetArray(s.Object)))
                     _set.UsesArrayPrototypeMutation = true;
                 if (s.Object is Expr.Variable osv)
                     HandleMemberAccess(osv.Name.Lexeme, s.Name.Lexeme);
@@ -1030,7 +1030,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesGlobalParseIntMutation = true;
                 if (IsArrayPrototype(si.Object)
                     || si.Index is Expr.Literal { Value: "__proto__" }
-                    || (si.Index is Expr.Literal { Value: "push" }
+                    || (si.Index is Expr.Literal { Value: string arrayMethod }
+                        && IsArrayMutatorName(arrayMethod)
                         && CouldTargetArray(si.Object)))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(si.Object);
@@ -1214,7 +1215,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesDatePrototypeMutation = true;
                 if (IsGlobalObject(cs.Object) && cs.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
-                if (cs.Name.Lexeme == "push" && CouldTargetArray(cs.Object))
+                if (IsArrayMutatorName(cs.Name.Lexeme) && CouldTargetArray(cs.Object))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(cs.Object);
                 VisitExpr(cs.Value);
@@ -1245,7 +1246,8 @@ public sealed class RuntimeFeatureDetector
                 if (IsGlobalObject(csi.Object)
                     && csi.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
-                if (csi.Index is Expr.Literal { Value: "push" }
+                if (csi.Index is Expr.Literal { Value: string compoundArrayMethod }
+                    && IsArrayMutatorName(compoundArrayMethod)
                     && CouldTargetArray(csi.Object))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(csi.Object);
@@ -1282,7 +1284,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesDatePrototypeMutation = true;
                 if (IsGlobalObject(ls.Object) && ls.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
-                if (ls.Name.Lexeme == "push" && CouldTargetArray(ls.Object))
+                if (IsArrayMutatorName(ls.Name.Lexeme) && CouldTargetArray(ls.Object))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(ls.Object);
                 VisitExpr(ls.Value);
@@ -1313,7 +1315,8 @@ public sealed class RuntimeFeatureDetector
                 if (IsGlobalObject(lsi.Object)
                     && lsi.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
-                if (lsi.Index is Expr.Literal { Value: "push" }
+                if (lsi.Index is Expr.Literal { Value: string logicalArrayMethod }
+                    && IsArrayMutatorName(logicalArrayMethod)
                     && CouldTargetArray(lsi.Object))
                     _set.UsesArrayPrototypeMutation = true;
                 VisitExpr(lsi.Object);
@@ -1378,7 +1381,7 @@ public sealed class RuntimeFeatureDetector
                     if (IsGlobalObject(deletedProperty.Object)
                         && deletedProperty.Name.Lexeme == "parseInt")
                         _set.UsesGlobalParseIntMutation = true;
-                    if (deletedProperty.Name.Lexeme == "push"
+                    if (IsArrayMutatorName(deletedProperty.Name.Lexeme)
                         && CouldTargetArray(deletedProperty.Object))
                         _set.UsesArrayPrototypeMutation = true;
                 }
@@ -1410,7 +1413,8 @@ public sealed class RuntimeFeatureDetector
                     if (IsGlobalObject(deletedIndex.Object)
                         && deletedIndex.Index is Expr.Literal { Value: "parseInt" })
                         _set.UsesGlobalParseIntMutation = true;
-                    if (deletedIndex.Index is Expr.Literal { Value: "push" }
+                    if (deletedIndex.Index is Expr.Literal { Value: string deletedArrayMethod }
+                        && IsArrayMutatorName(deletedArrayMethod)
                         && CouldTargetArray(deletedIndex.Object))
                         _set.UsesArrayPrototypeMutation = true;
                 }
@@ -1827,11 +1831,22 @@ public sealed class RuntimeFeatureDetector
             || _typeMap?.Get(expr) is TypeInfo.Promise;
     }
 
-    private static bool IsArrayPrototype(Expr expr) => expr is Expr.Get
+    private static bool IsArrayPrototype(Expr expr) => expr switch
     {
-        Object: Expr.Variable { Name.Lexeme: "Array" },
-        Name.Lexeme: "prototype"
+        Expr.Get
+        {
+            Object: Expr.Variable { Name.Lexeme: "Array" },
+            Name.Lexeme: "prototype"
+        } => true,
+        Expr.Grouping grouping => IsArrayPrototype(grouping.Expression),
+        Expr.TypeAssertion assertion => IsArrayPrototype(assertion.Expression),
+        Expr.Satisfies satisfies => IsArrayPrototype(satisfies.Expression),
+        Expr.NonNullAssertion nonNull => IsArrayPrototype(nonNull.Expression),
+        _ => false
     };
+
+    private static bool IsArrayMutatorName(string name) =>
+        name is "push" or "shift" or "unshift";
 
     private bool CouldTargetArray(Expr expr)
     {
