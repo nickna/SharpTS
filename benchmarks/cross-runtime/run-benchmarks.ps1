@@ -2,6 +2,7 @@
 param(
     [switch]$Smoke,
     [switch]$NoBuild,
+    [switch]$NoSnapshot,
 
     [string[]]$Workloads = @(),
 
@@ -123,12 +124,14 @@ if (-not $NoBuild) {
 # Detect Node.js version for --experimental-strip-types
 $node = $null
 $nodeFlags = @()
+$nodeVersionForSnapshot = $null
 if (-not $Smoke -and $Runtimes -contains 'node') {
     $node = Get-Command $NodeExecutable -ErrorAction SilentlyContinue
     if ($node) {
         $nodeVersion = Invoke-Captured { & $node.Source -v }
         if ($nodeVersion.ExitCode -eq 0) {
             $nodeVersionFull = ([string]$nodeVersion.Output[0]) -replace '^v', ''
+            $nodeVersionForSnapshot = "v$nodeVersionFull"
             $nodeMajor = [int]($nodeVersionFull -split '\.')[0]
             if ($nodeMajor -lt 23) {
                 $nodeFlags = @('--experimental-strip-types', '--no-warnings')
@@ -148,18 +151,33 @@ $bun = if (-not $Smoke -and $Runtimes -contains 'bun') {
 } else {
     $null
 }
+$bunVersionForSnapshot = if ($bun) {
+    $detectedBunVersion = Invoke-Captured { & $bun.Source --version }
+    if ($detectedBunVersion.ExitCode -eq 0) { [string]$detectedBunVersion.Output[0] } else { $null }
+} else {
+    $null
+}
 
 # Tag and persist a runtime's BENCH output. If none was produced (a crash, a
 # compile/parse error, a missing API), warn loudly and echo the tail of the
 # captured output instead of silently leaving a '-' in the results table.
 function Emit-Runtime {
-    param([string]$Runtime, [object]$Output, [string]$ResultsFile)
+    param(
+        [string]$Benchmark,
+        [string]$Runtime,
+        [int]$Launch,
+        [object]$Output,
+        [string]$ResultsFile
+    )
     $lines = @($Output)
     $benchLines = @($lines | Where-Object { $_ -match '^BENCH:' })
     if ($benchLines.Count -eq 0) {
         return $false
     }
-    $benchLines | ForEach-Object { "$Runtime|$($_ -replace '^BENCH:','')" } | Add-Content $ResultsFile
+    $benchLines | ForEach-Object {
+        $payload = $_ -replace '^BENCH:', ''
+        '{0}|{1}:{2}:{3}' -f $Runtime, $payload, $Benchmark, $Launch
+    } | Add-Content $ResultsFile
     return $true
 }
 
@@ -167,11 +185,12 @@ function Complete-Runtime {
     param(
         [string]$Benchmark,
         [string]$Runtime,
+        [int]$Launch,
         [object]$Result,
         [string]$ResultsFile
     )
 
-    $emitted = Emit-Runtime $Runtime $Result.Output $ResultsFile
+    $emitted = Emit-Runtime $Benchmark $Runtime $Launch $Result.Output $ResultsFile
     if ($Result.ExitCode -ne 0) {
         Add-Failure "$Benchmark [$Runtime] exited with code $($Result.ExitCode)"
         Show-Diagnostics $Runtime $Result.Output
@@ -256,19 +275,19 @@ try {
                         $result = Invoke-Captured {
                             dotnet run -c Release --no-build --project $SharpTSProject -- $script.FullName
                         }
-                        Complete-Runtime $benchName 'interpreter' $result $ResultsFile
+                        Complete-Runtime $benchName 'interpreter' $launch $result $ResultsFile
                     }
                     'compiled' {
                         if ($compiledReady) {
                             $result = Invoke-Captured { dotnet $dllPath }
-                            Complete-Runtime $benchName 'compiled' $result $ResultsFile
+                            Complete-Runtime $benchName 'compiled' $launch $result $ResultsFile
                         }
                     }
                     'node' {
                         if ($node) {
                             $nodeArgs = $nodeFlags + @($script.FullName)
                             $result = Invoke-Captured { & $node.Source @nodeArgs }
-                            Complete-Runtime $benchName 'node' $result $ResultsFile
+                            Complete-Runtime $benchName 'node' $launch $result $ResultsFile
                         } else {
                             Add-Failure "$benchName [node] could not run because Node.js is unavailable"
                         }
@@ -276,7 +295,7 @@ try {
                     'bun' {
                         if ($bun) {
                             $result = Invoke-Captured { & bun run $script.FullName }
-                            Complete-Runtime $benchName 'bun' $result $ResultsFile
+                            Complete-Runtime $benchName 'bun' $launch $result $ResultsFile
                         } else {
                             Write-Host '  [bun] not installed, skipping'
                         }
@@ -293,6 +312,17 @@ Write-Host ''
 if ($Smoke) {
     Write-Host "=== Smoke-compiled $($scripts.Count) benchmark workload(s) ==="
 } else {
+    if (-not $NoSnapshot) {
+        $SnapshotFile = Join-Path $OutputDir 'snapshot.json'
+        & (Join-Path $HarnessDir 'export-snapshot.ps1') `
+            -ResultsFile $ResultsFile `
+            -OutputFile $SnapshotFile `
+            -RepositoryRoot $RepoRoot `
+            -SelectedRuntimes $Runtimes `
+            -NodeVersion $nodeVersionForSnapshot `
+            -BunVersion $bunVersionForSnapshot
+        Write-Host "=== Structured snapshot written to $SnapshotFile ==="
+    }
     Write-Host "=== Results written to $ResultsFile ==="
     Get-Content $ResultsFile
 }

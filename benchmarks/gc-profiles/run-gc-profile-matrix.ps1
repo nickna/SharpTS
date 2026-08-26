@@ -420,7 +420,7 @@ $benchRows = [Collections.Generic.List[object]]::new()
 foreach ($measurement in $measurements) {
     foreach ($line in $measurement.benchLines) {
         $parts = $line -split ':'
-        if ($parts.Count -ne 6) { continue }
+        if ($parts.Count -lt 6) { continue }
         $benchRows.Add([pscustomobject]@{
             platform = $measurement.platform
             runtimeProfile = if ($measurement.runtime -eq 'node') { 'node' } else { $measurement.profile }

@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/nickna/SharpTS/main/benchmarks/cross-runtime/snapshot-v1.schema.json",
+  "title": "SharpTS cross-runtime benchmark snapshot",
+  "description": "One machine-bound run of the SharpTS in-process workload benchmark suite.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "run", "methodology", "cases"],
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/nickna/SharpTS/main/benchmarks/cross-runtime/snapshot-v1.schema.json"
+    },
+    "schemaVersion": { "const": 1 },
+    "run": { "$ref": "#/$defs/run" },
+    "methodology": { "$ref": "#/$defs/methodology" },
+    "cases": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/case" }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "run": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestampUtc", "revision", "environment", "tools"],
+      "properties": {
+        "timestampUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["commit", "dirty"],
+          "properties": {
+            "commit": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            "dirty": { "type": "boolean" }
+          }
+        },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operatingSystem", "architecture", "cpu", "runner"],
+          "properties": {
+            "operatingSystem": { "$ref": "#/$defs/nonEmptyString" },
+            "architecture": { "$ref": "#/$defs/nonEmptyString" },
+            "cpu": { "$ref": "#/$defs/nonEmptyString" },
+            "runner": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dotnet", "runtimes"],
+          "properties": {
+            "dotnet": { "$ref": "#/$defs/nonEmptyString" },
+            "runtimes": {
+              "type": "array",
+              "minItems": 4,
+              "maxItems": 4,
+              "items": { "$ref": "#/$defs/runtimeTool" }
+            }
+          }
+        }
+      }
+    },
+    "runtimeTool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "selected", "available", "version"],
+      "properties": {
+        "id": {
+          "enum": ["interpreter", "compiled", "node", "bun"]
+        },
+        "selected": { "type": "boolean" },
+        "available": { "type": "boolean" },
+        "version": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["harnessVersion", "id", "timingScope", "clock", "includes", "excludes", "sampling"],
+      "properties": {
+        "harnessVersion": { "const": 1 },
+        "id": { "const": "performance-now-auto-batched-v1" },
+        "timingScope": { "const": "inProcessWorkload" },
+        "clock": { "const": "performance.now" },
+        "includes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "excludes": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/nonEmptyString" }
+        },
+        "sampling": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "warmupCapMilliseconds",
+            "minimumSampleDurationMilliseconds",
+            "targetDurationMilliseconds",
+            "minimumSamples",
+            "hardCapMilliseconds",
+            "maximumSamples"
+          ],
+          "properties": {
+            "warmupCapMilliseconds": { "type": "number", "minimum": 0 },
+            "minimumSampleDurationMilliseconds": { "type": "number", "exclusiveMinimum": 0 },
+            "targetDurationMilliseconds": { "type": "number", "exclusiveMinimum": 0 },
+            "minimumSamples": { "type": "integer", "minimum": 1 },
+            "hardCapMilliseconds": { "type": "number", "exclusiveMinimum": 0 },
+            "maximumSamples": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "family", "name", "parameters", "unit", "direction", "runtimes"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*/[a-z0-9][a-z0-9-]*\\?n=[0-9.eE+-]+$"
+        },
+        "family": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "parameters": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["n"],
+          "properties": {
+            "n": { "type": "number", "minimum": 0 }
+          }
+        },
+        "unit": {
+          "enum": ["milliseconds", "bytes", "operationsPerSecond"]
+        },
+        "direction": {
+          "enum": ["lowerIsBetter", "higherIsBetter"]
+        },
+        "runtimes": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": { "$ref": "#/$defs/runtimeRecord" }
+        }
+      }
+    },
+    "runtimeRecord": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "status", "measurements"],
+          "properties": {
+            "id": {
+              "enum": ["interpreter", "compiled", "node", "bun"]
+            },
+            "status": { "const": "measured" },
+            "measurements": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/measurement" }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "status", "reason"],
+          "properties": {
+            "id": {
+              "enum": ["interpreter", "compiled", "node", "bun"]
+            },
+            "status": { "const": "missing" },
+            "reason": {
+              "enum": ["notSelected", "unavailable", "noMeasurement"]
+            }
+          }
+        }
+      ]
+    },
+    "measurement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "launch",
+        "mean",
+        "minimum",
+        "standardDeviation",
+        "sampleCount",
+        "innerIterations",
+        "sampledDuration"
+      ],
+      "properties": {
+        "launch": { "type": "integer", "minimum": 1 },
+        "mean": { "type": "number", "minimum": 0 },
+        "minimum": { "type": "number", "minimum": 0 },
+        "standardDeviation": { "type": "number", "minimum": 0 },
+        "sampleCount": { "type": "integer", "minimum": 1 },
+        "innerIterations": { "type": "integer", "minimum": 1 },
+        "sampledDuration": { "type": "number", "minimum": 0 }
+      }
+    }
+  }
+}

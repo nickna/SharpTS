@@ -36,7 +36,7 @@ function ConvertFrom-SharpTSBenchmarkResults {
         }
 
         $fields = $runtimeAndPayload[1] -split ':'
-        if ($fields.Count -ne 5) {
+        if ($fields.Count -lt 5) {
             throw "Malformed benchmark payload: $line"
         }
 

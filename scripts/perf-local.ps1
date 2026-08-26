@@ -245,6 +245,7 @@ function Invoke-OneMeasurement {
             '-Runtimes', $runtimeList,
             '-Launches', '1',
             '-OutputDirectory', $scratch,
+            '-NoSnapshot',
             '-NoBuild'
         )
         if ($Variant -eq 'candidate') {
@@ -264,6 +265,7 @@ function Invoke-OneMeasurement {
         '-Runtimes', $runtimeList,
         '-Launches', '1',
         '-OutputDirectory', $scratch,
+        '-NoSnapshot',
         '-NoBuild'
     )
     Invoke-WslChecked (Join-BashCommand $arguments)
