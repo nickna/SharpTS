@@ -27,8 +27,14 @@ public class TypeMap
     private readonly Dictionary<Token, ClassScalarReplacementInfo> _scalarReplaceableClassLocals =
         new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.ForOf> _stableNumericMapIterations = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Stmt.ForOf, StableCustomIteratorInfo> _stableCustomIteratorLoops =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<Expr.ArrowFunction, StableCustomIteratorInfo> _stableCustomIteratorNextMethods =
+        new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stablePrimitivePromiseThenCalls = new(ReferenceEqualityComparer.Instance);
     private readonly Dictionary<Expr.ArrowFunction, HashSet<string>> _stableNumericCaptureFields = new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<object, HashSet<string>> _stableNumericFunctionCaptureFields = new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Token> _stableCustomIteratorNumericAccumulators = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Var> _stableNumericStateMachineLocals = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Stmt.Parameter> _stableNumericStateMachineParameters = new(ReferenceEqualityComparer.Instance);
     private readonly HashSet<Expr.Get> _stableExactPrimitiveMethodCalls = new(ReferenceEqualityComparer.Instance);
@@ -276,6 +282,21 @@ public class TypeMap
     public bool IsStableNumericMapIteration(Stmt.ForOf loop) =>
         _stableNumericMapIterations.Contains(loop);
 
+    public void MarkStableCustomIterator(
+        Stmt.ForOf loop, StableCustomIteratorInfo info)
+    {
+        _stableCustomIteratorLoops[loop] = info;
+        _stableCustomIteratorNextMethods[info.NextMethod] = info;
+    }
+
+    public bool TryGetStableCustomIterator(
+        Stmt.ForOf loop, out StableCustomIteratorInfo info) =>
+        _stableCustomIteratorLoops.TryGetValue(loop, out info!);
+
+    public bool TryGetStableCustomIteratorNext(
+        Expr.ArrowFunction method, out StableCustomIteratorInfo info) =>
+        _stableCustomIteratorNextMethods.TryGetValue(method, out info!);
+
     /// <summary>
     /// Marks a direct <c>Promise.prototype.then</c> access whose receiver is a fresh,
     /// non-escaping intrinsic Promise binding and whose sole inline fulfillment
@@ -307,6 +328,29 @@ public class TypeMap
     public bool IsStableNumericCaptureField(Expr.ArrowFunction arrow, string name) =>
         _stableNumericCaptureFields.TryGetValue(arrow, out var names)
         && names.Contains(name);
+
+    /// <summary>
+    /// Marks a function-owned captured numeric binding whose shared display-class
+    /// slot can remain an unboxed <c>double</c>. The stable custom-iterator analyzer
+    /// only records bindings initialized before iterator creation, referenced by the
+    /// exact non-escaping <c>next</c> closure, and kept numeric by every write.
+    /// </summary>
+    public void MarkStableNumericFunctionCaptureField(object callable, string name)
+    {
+        if (!_stableNumericFunctionCaptureFields.TryGetValue(callable, out var names))
+            _stableNumericFunctionCaptureFields[callable] = names = [];
+        names.Add(name);
+    }
+
+    public bool IsStableNumericFunctionCaptureField(object callable, string name) =>
+        _stableNumericFunctionCaptureFields.TryGetValue(callable, out var names)
+        && names.Contains(name);
+
+    public void MarkStableCustomIteratorNumericAccumulator(Token name) =>
+        _stableCustomIteratorNumericAccumulators.Add(name);
+
+    public bool IsStableCustomIteratorNumericAccumulator(Token name) =>
+        _stableCustomIteratorNumericAccumulators.Contains(name);
 
     /// <summary>
     /// Marks an explicitly numeric local whose complete state-machine lifetime has

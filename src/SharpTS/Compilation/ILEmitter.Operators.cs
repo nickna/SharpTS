@@ -1819,9 +1819,9 @@ public partial class ILEmitter
         if (_ctx.CapturedFunctionLocals?.Contains(incDCName) == true &&
             _ctx.FunctionDisplayClassFields?.TryGetValue(incDCName, out var funcDCField) == true)
         {
-            // Store to function display class field (always boxed).
-            if (isTypedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            var temp = IL.DeclareLocal(_ctx.Types.Object);
+            bool numericField = funcDCField.FieldType == _ctx.Types.Double;
+            if (isTypedDouble && !numericField) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            var temp = IL.DeclareLocal(funcDCField.FieldType);
             IL.Emit(OpCodes.Stloc, temp);
             if (_ctx.FunctionDisplayClassLocal != null)
             {
@@ -1843,8 +1843,11 @@ public partial class ILEmitter
                 _ctx.EmitConvertForParamSlot(IL, name);
                 IL.Emit(OpCodes.Starg, funcParamSync);
             }
-            if (resultIsUnboxedDouble) IL.Emit(OpCodes.Box, _ctx.Types.Double);
-            SetStackUnknown();
+            if (resultIsUnboxedDouble && !numericField) IL.Emit(OpCodes.Box, _ctx.Types.Double);
+            if (numericField)
+                SetStackType(StackType.Double);
+            else
+                SetStackUnknown();
             return;
         }
 
@@ -2002,6 +2005,10 @@ public partial class ILEmitter
             // Check if this is a typed double local
             var localType = _ctx.Locals.GetLocalType(v.Name.Lexeme);
             bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
+            string prefixDCName = _ctx.ResolveFunctionDCFieldName(v.Name.Lexeme);
+            if (!isTypedDouble &&
+                _ctx.FunctionDisplayClassFields?.TryGetValue(prefixDCName, out var prefixDCField) == true)
+                isTypedDouble = prefixDCField.FieldType == _ctx.Types.Double;
 
             if (!isTypedDouble)
             {
@@ -2198,6 +2205,10 @@ public partial class ILEmitter
             // Check if this is a typed double local
             var localType = _ctx.Locals.GetLocalType(v.Name.Lexeme);
             bool isTypedDouble = localType != null && _ctx.Types.IsDouble(localType);
+            string postfixDCName = _ctx.ResolveFunctionDCFieldName(v.Name.Lexeme);
+            if (!isTypedDouble &&
+                _ctx.FunctionDisplayClassFields?.TryGetValue(postfixDCName, out var postfixDCField) == true)
+                isTypedDouble = postfixDCField.FieldType == _ctx.Types.Double;
 
             if (!isTypedDouble)
             {
@@ -3056,7 +3067,17 @@ public partial class ILEmitter
         var leftType = _ctx.TypeMap.Get(b.Left);
         var rightType = _ctx.TypeMap.Get(b.Right);
 
-        return IsNumericType(leftType) && IsNumericType(rightType);
+        return IsNumericOperand(b.Left, leftType) && IsNumericOperand(b.Right, rightType);
+    }
+
+    private bool IsNumericOperand(Expr expression, TypeSystem.TypeInfo? type)
+    {
+        if (IsNumericType(type))
+            return true;
+        while (expression is Expr.Grouping grouping)
+            expression = grouping.Expression;
+        return expression is Expr.Variable variable &&
+            _ctx.Locals.GetLocal(variable.Name.Lexeme)?.LocalType == _ctx.Types.Double;
     }
 
     private bool IsStringPlusOperation(Expr.Binary b)

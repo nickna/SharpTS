@@ -539,6 +539,17 @@ public partial class RuntimeEmitter
         gmIL.Emit(OpCodes.Ldfld, methodField);
         gmIL.Emit(OpCodes.Ret);
 
+        var getTargetBuilder = typeBuilder.DefineMethod(
+            "GetTarget",
+            MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            _types.Object,
+            Type.EmptyTypes);
+        runtime.TSFunctionGetTarget = getTargetBuilder;
+        var gtIL = getTargetBuilder.GetILGenerator();
+        gtIL.Emit(OpCodes.Ldarg_0);
+        gtIL.Emit(OpCodes.Ldfld, targetField);
+        gtIL.Emit(OpCodes.Ret);
+
         // Helper method: private static object[] AdjustArgs(MethodInfo method, object[] args)
         var adjustArgsMethod = EmitTSFunctionAdjustArgsHelper(typeBuilder, runtime, paramCountField, hasListRestField, hasArrayRestField, padUndefinedMaskField);
 

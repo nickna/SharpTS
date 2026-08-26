@@ -83,6 +83,11 @@ public class EmittedRuntime
     public ConstructorBuilder TSFunctionCtorWithCache { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
     public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
+    public MethodBuilder TSFunctionGetTarget { get; set; } = null!;
+    public Type StableNumberIteratorResultType { get; set; } = null!;
+    public ConstructorInfo StableNumberIteratorResultCtor { get; set; } = null!;
+    public FieldInfo StableNumberIteratorResultValueField { get; set; } = null!;
+    public FieldInfo StableNumberIteratorResultDoneField { get; set; } = null!;
     public MethodBuilder TSFunctionBindThis { get; set; } = null!;
     public MethodBuilder TSFunctionLengthGetter { get; set; } = null!;
     public MethodBuilder TSFunctionNameGetter { get; set; } = null!;

@@ -57,6 +57,8 @@ public sealed class RuntimeFeatureSet
     /// </summary>
     internal HashSet<string> CompactObjectRecordStablePushShapes { get; } =
         new(StringComparer.Ordinal);
+    internal HashSet<string> CompactObjectRecordStableIteratorShapes { get; } =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Generic-looking compact-record slots whose literal initializers prove that the

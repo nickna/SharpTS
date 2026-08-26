@@ -646,6 +646,9 @@ public partial class ILCompiler
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
         _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
+        // The stable iterator result shape must be known before Phase 1 emits its
+        // result carrier. Closure-based eligibility is rechecked later.
+        StableCustomIteratorAnalyzer.Analyze(statements, _typeMap, null, _features);
         return statements;
     }
 
@@ -653,6 +656,8 @@ public partial class ILCompiler
     {
         Phase2_AnalyzeClosures(statements);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        StableCustomIteratorAnalyzer.Analyze(
+            statements, _typeMap, _closures.Analyzer, _features);
         NumericMapLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StablePrimitivePromiseThenAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer);
@@ -1324,6 +1329,12 @@ public partial class ILCompiler
             if (modules.Any(module => module.IsCommonJs))
                 _features.UsesCjsRequire = true;
         }
+
+        // As in the single-file path, discover the result ABI before Phase 1
+        // emits runtime types; closure-based eligibility is rechecked after the
+        // combined module closure analysis.
+        StableCustomIteratorAnalyzer.Analyze(
+            allStatements, _typeMap, null, _features);
 
         return allStatements;
     }

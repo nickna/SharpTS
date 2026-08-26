@@ -149,14 +149,20 @@ public partial class ILEmitter
 
             if (v.Initializer != null)
             {
-                EmitExpression(v.Initializer);
-                EmitBoxIfNeeded(v.Initializer);
+                if (funcDisplayField.FieldType == _ctx.Types.Double)
+                    EmitExpressionAsDouble(v.Initializer);
+                else
+                {
+                    EmitExpression(v.Initializer);
+                    EmitBoxIfNeeded(v.Initializer);
+                }
             }
             else if (v.TypeAnnotation == "number")
             {
                 // Typed number without initializer defaults to 0
                 IL.Emit(OpCodes.Ldc_R8, 0.0);
-                IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                if (funcDisplayField.FieldType == _ctx.Types.Object)
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
             }
             else
             {
@@ -569,6 +575,12 @@ public partial class ILEmitter
     /// </summary>
     private bool CanUseUnboxedLocal(Stmt.Var v)
     {
+        // Stable custom iteration proves its value binding is numeric. For the
+        // exact `acc = acc + value` loop shape, that proof also removes the
+        // checker's conservative any/undefined flow from the accumulator.
+        if (_ctx.TypeMap?.IsStableCustomIteratorNumericAccumulator(v.Name) == true)
+            return true;
+
         // #367: a number-typed local that an `any`/`undefined` value may have (transitively) been
         // assigned must use an object slot — an unboxed double slot would coerce the runtime
         // `undefined` sentinel to NaN at the store. The type checker flags such declarations (and,
@@ -1128,6 +1140,15 @@ public partial class ILEmitter
         TypeInfo? iterableType = _ctx.TypeMap?.Get(f.Iterable);
         EmitExpression(f.Iterable);
 
+        if (_ctx.TypeMap?.TryGetStableCustomIterator(f, out var stableIterator) == true)
+        {
+            EmitBoxIfNeeded(f.Iterable);
+            var stableIterable = IL.DeclareLocal(_ctx.Types.Object);
+            IL.Emit(OpCodes.Stloc, stableIterable);
+            EmitStableCustomIterator(f, stableIterable, stableIterator, labelNames);
+            return;
+        }
+
         if (iterableType is TypeInfo.Map
             && _ctx.TypeMap?.IsStableNumericMapIteration(f) == true)
         {
@@ -1507,6 +1528,139 @@ public partial class ILEmitter
         builder.MarkLabel(endLabel);
         IL.Emit(OpCodes.Ldloca, enumeratorLocal);
         IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(enumeratorType, "Dispose")!);
+        _ctx.ExitLoop();
+        _ctx.Locals.ExitScope();
+    }
+
+    private void EmitStableCustomIterator(
+        Stmt.ForOf loop,
+        LocalBuilder iterableLocal,
+        StableCustomIteratorInfo info,
+        IReadOnlyList<string>? labelNames)
+    {
+        _ctx.ArrowMethods.TryGetValue(info.NextMethod, out var nextMethod);
+        Type resultType = _ctx.Runtime!.StableNumberIteratorResultType;
+        var valueField = _ctx.Runtime.StableNumberIteratorResultValueField;
+        var doneField = _ctx.Runtime.StableNumberIteratorResultDoneField;
+        if (nextMethod is null ||
+            nextMethod.ReturnType != resultType)
+        {
+            throw new InvalidOperationException(
+                $"Stable custom iterator proof did not match emitted result shape " +
+                $"(method={nextMethod?.ReturnType}, result={resultType}, " +
+                $"value={valueField?.FieldType}, done={doneField?.FieldType}).");
+        }
+
+        var builder = _ctx.ILBuilder;
+
+        // GetIteratorFromMethod, once: preserve observable iterator acquisition and this binding.
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.SymbolIterator);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.GetIteratorFunction);
+        var iteratorFunction = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, iteratorFunction);
+        IL.Emit(OpCodes.Ldloc, iterableLocal);
+        IL.Emit(OpCodes.Ldloc, iteratorFunction);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Newarr, _ctx.Types.Object);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.InvokeMethodValue);
+        var iteratorObject = IL.DeclareLocal(_ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, iteratorObject);
+
+        // Get(iterator, "next"), once. The analyzer proved this exact data method cannot
+        // be reassigned or observed through an alias, so subsequent steps call it directly.
+        IL.Emit(OpCodes.Ldloc, iteratorObject);
+        IL.Emit(OpCodes.Ldstr, "next");
+        IL.Emit(OpCodes.Call, _ctx.Runtime.GetProperty);
+        IL.Emit(OpCodes.Castclass, _ctx.Runtime.TSFunctionType);
+        var nextFunction = IL.DeclareLocal(_ctx.Runtime.TSFunctionType);
+        IL.Emit(OpCodes.Stloc, nextFunction);
+
+        LocalBuilder? nextTarget = null;
+        bool capturing = _ctx.DisplayClasses.TryGetValue(
+            info.NextMethod, out var displayClass);
+        if (capturing)
+        {
+            nextTarget = IL.DeclareLocal(displayClass!);
+            IL.Emit(OpCodes.Ldloc, nextFunction);
+            IL.Emit(OpCodes.Callvirt, _ctx.Runtime.TSFunctionGetTarget);
+            IL.Emit(OpCodes.Castclass, displayClass!);
+            IL.Emit(OpCodes.Stloc, nextTarget);
+        }
+
+        var start = builder.DefineLabel("forof_stable_iterator_start");
+        var end = builder.DefineLabel("forof_stable_iterator_end");
+        var body = builder.DefineLabel("forof_stable_iterator_body");
+        var cont = builder.DefineLabel("forof_stable_iterator_continue");
+        var result = IL.DeclareLocal(resultType);
+        var loopVar = _ctx.Locals.DeclareLocal(
+            loop.Variable.Lexeme, _ctx.Types.Double);
+        var closeNeeded = IL.DeclareLocal(_ctx.Types.Boolean);
+        var throwing = IL.DeclareLocal(_ctx.Types.Boolean);
+
+        _ctx.EnterLoop(end, cont, labelNames ?? CompilationContext.NoLabels);
+        builder.MarkLabel(start);
+        EmitCancellationCheck();
+
+        if (nextTarget is not null)
+            IL.Emit(OpCodes.Ldloc, nextTarget);
+        if (info.NextMethod.HasOwnThis)
+            IL.Emit(OpCodes.Ldloc, iteratorObject);
+        IL.Emit(capturing ? OpCodes.Callvirt : OpCodes.Call, nextMethod);
+        IL.Emit(OpCodes.Stloc, result);
+        IL.Emit(OpCodes.Ldloc, result);
+        IL.Emit(OpCodes.Ldfld, doneField);
+        builder.Emit_Brfalse(body);
+        builder.Emit_Br(end);
+
+        builder.MarkLabel(body);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, closeNeeded);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, throwing);
+
+        var escapingTargets = new HashSet<Label>();
+        foreach (var enclosing in _ctx.LoopLabels)
+        {
+            escapingTargets.Add(enclosing.BreakLabel);
+            escapingTargets.Add(enclosing.ContinueLabel);
+        }
+
+        _ctx.ExceptionBlockDepth++;
+        builder.BeginExceptionBlock();
+        IL.Emit(OpCodes.Ldloc, result);
+        IL.Emit(OpCodes.Ldfld, valueField);
+        IL.Emit(OpCodes.Stloc, loopVar);
+
+        _iteratorLoopCompletionScopes.Push(new IteratorLoopCompletionScope(
+            closeNeeded, cont, escapingTargets));
+        EmitStatement(loop.Body);
+        _iteratorLoopCompletionScopes.Pop();
+
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, closeNeeded);
+        builder.Emit_Leave(cont);
+
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, throwing);
+        IL.Emit(OpCodes.Rethrow);
+
+        builder.BeginFinallyBlock();
+        var skipClose = builder.DefineLabel("forof_stable_iterator_skip_close");
+        IL.Emit(OpCodes.Ldloc, closeNeeded);
+        builder.Emit_Brfalse(skipClose);
+        IL.Emit(OpCodes.Ldloc, iteratorObject);
+        IL.Emit(OpCodes.Ldloc, throwing);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.IteratorClose);
+        builder.MarkLabel(skipClose);
+        builder.EndExceptionBlock();
+        _ctx.ExceptionBlockDepth--;
+
+        builder.MarkLabel(cont);
+        builder.Emit_Br(start);
+        builder.MarkLabel(end);
         _ctx.ExitLoop();
         _ctx.Locals.ExitScope();
     }
@@ -2036,6 +2190,11 @@ public partial class ILEmitter
                 && _ctx.FunctionDisplayClassFields?.TryGetValue(name, out var functionField) == true
                 && _ctx.FunctionDisplayClassLocal != null)
             {
+                // A value-type slot is emitted only after proving initialization
+                // precedes creation of its sole iterator closure, so it cannot be
+                // observed in TDZ and cannot hold the sentinel.
+                if (functionField.FieldType.IsValueType)
+                    continue;
                 IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 IL.Emit(OpCodes.Ldsfld, _ctx.Runtime!.LexicalUninitializedInstance);
                 IL.Emit(OpCodes.Stfld, functionField);
@@ -2305,6 +2464,9 @@ public partial class ILEmitter
 
         if (r.Value != null)
         {
+            if (TryEmitStableIteratorResultReturn(returnType, r.Value))
+                goto emit_return;
+
             if (_ctx.Types.IsDouble(returnType) && r.Value is Expr.GetIndex)
                 EmitExpressionAsDouble(r.Value);
             else
@@ -2399,6 +2561,7 @@ public partial class ILEmitter
             }
         }
 
+    emit_return:
         if (_abruptCompletionScopes.TryPeek(out var completion))
         {
             if (_ctx.ReturnValueLocal == null && !_ctx.HasDeferredVoidReturn)
@@ -2444,6 +2607,51 @@ public partial class ILEmitter
         // EmitBoxIfNeeded, it sees StackType.Double and incorrectly boxes the
         // next value (e.g., an array reference) as a Double.
         SetStackUnknown();
+    }
+
+    private bool TryEmitStableIteratorResultReturn(Type returnType, Expr expression)
+    {
+        if (_ctx.Runtime?.StableNumberIteratorResultType != returnType)
+            return false;
+
+        while (true)
+        {
+            switch (expression)
+            {
+                case Expr.Grouping grouping:
+                    expression = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expression = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expression = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expression = nonNull.Expression;
+                    continue;
+            }
+            break;
+        }
+
+        if (expression is not Expr.ObjectLiteral
+            {
+                Properties:
+                [
+                    { IsSpread: false, Kind: Expr.ObjectPropertyKind.Value, Key: var valueKey, Value: var value },
+                    { IsSpread: false, Kind: Expr.ObjectPropertyKind.Value, Key: var doneKey, Value: var done }
+                ]
+            } ||
+            GetPropertyKeyString(valueKey!) != "value" ||
+            GetPropertyKeyString(doneKey!) != "done")
+            return false;
+
+        EmitExpressionAsDouble(value);
+        EmitExpression(done);
+        EnsureBoolean();
+        IL.Emit(OpCodes.Newobj, _ctx.Runtime.StableNumberIteratorResultCtor);
+        SetStackUnknown();
+        return true;
     }
 
     protected override void EmitBreak(Stmt.Break b)
