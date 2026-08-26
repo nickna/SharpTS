@@ -42,34 +42,45 @@ public static class ForLoopAnalyzer
 
     /// <summary>
     /// Identifies a for-loop counter eligible for the native <c>Int64</c> representation, or null.
-    /// Stricter than <see cref="Analyze"/>: requires an INTEGER-literal initializer, a pure
-    /// <c>++</c>/<c>--</c> step, a numeric condition, no closure capture, and no reassignment or
-    /// re-declaration of the counter anywhere in the body (so it only ever changes by ±1). Unlike
+    /// Stricter than <see cref="Analyze"/>: requires an integer initializer, an integer-preserving
+    /// step, a numeric condition, no closure capture, and no reassignment or re-declaration of the
+    /// counter anywhere in the body. An initializer may also be the square of an already-proven
+    /// outer integer counter, and the step may add that outer counter; these admit the canonical
+    /// nested sieve loop while keeping every stored value integral. Unlike
     /// <see cref="Analyze"/> it does NOT bail on an explicit <c>: number</c> annotation — the common
     /// real-world / benchmark form <c>for (let i: number = 0; i &lt; n; i++)</c> must qualify.
     ///
-    /// Soundness: TS <c>number</c> is a double, but an integer counter stepping by ±1 stays exactly
-    /// representable as both <c>long</c> and <c>double</c> for any loop that terminates in finite
-    /// time (≤ 2^53), so reads materialized as <c>conv.r8</c> are bit-identical to today's double
-    /// counter. Values only ever observed as doubles; no native-int arithmetic is exposed.
+    /// Soundness: TS <c>number</c> is a double, but every admitted initializer and step is composed
+    /// solely of already-proven integer counters. Values stay exactly representable as both
+    /// <c>long</c> and <c>double</c> for terminating loops within the safe-integer range, so reads
+    /// materialized as <c>conv.r8</c> are bit-identical to today's double counter.
     /// </summary>
-    public static string? AnalyzeIntegerCounter(Stmt.For forLoop, ClosureAnalyzer? closureAnalyzer)
+    public static string? AnalyzeIntegerCounter(
+        Stmt.For forLoop,
+        ClosureAnalyzer? closureAnalyzer,
+        IReadOnlySet<string>? activeIntegerCounters = null)
     {
         if (forLoop.Initializer is not Stmt.Var varDecl)
             return null;
 
         string varName = varDecl.Name.Lexeme;
 
-        // Initializer must be an INTEGER literal (0, 1, -1, …).
-        if (!TryGetNumericLiteral(varDecl.Initializer, out double initialValue))
-            return null;
-        if (double.IsNaN(initialValue) || double.IsInfinity(initialValue)
-            || initialValue != Math.Truncate(initialValue))
+        // Usually an INTEGER literal (0, 1, -1, …). A nested sieve starts at
+        // `i * i`, where `i` is an already-proven native integer counter.
+        bool literalInitializer = TryGetNumericLiteral(varDecl.Initializer, out double initialValue)
+            && !double.IsNaN(initialValue)
+            && !double.IsInfinity(initialValue)
+            && initialValue == Math.Truncate(initialValue);
+        bool derivedInitializer = IsActiveIntegerSquare(
+            varDecl.Initializer, activeIntegerCounters);
+        if (!literalInitializer && !derivedInitializer)
             return null;
 
-        // Step must be exactly ++ or -- on the counter (prototype scope: no += / i = i + k yet).
-        if (forLoop.Increment is not (Expr.PostfixIncrement or Expr.PrefixIncrement)
-            || !IsSimpleIncDecOf(forLoop.Increment, varName))
+        // Besides ++/--, admit `j = j + i` when i is an active outer integer
+        // counter. The emitted assignment then stays in native Int64 arithmetic.
+        if (forLoop.Increment == null
+            || !IsIntegerCounterIncrement(
+                forLoop.Increment, varName, activeIntegerCounters))
             return null;
 
         // Must not be captured by a closure (a captured counter needs the boxed/cell representation,
@@ -91,9 +102,9 @@ public static class ForLoopAnalyzer
         if (forLoop.Condition != null && !IsNumericComparison(forLoop.Condition, varName))
             return null;
 
-        // The counter must change ONLY via the ++/-- increment clause: bail if the body or
+        // The counter must change ONLY via the validated increment clause: bail if the body or
         // condition reassigns, compound-assigns, ++/-- s, or re-declares it (a shadowing nested
-        // counter). The increment clause itself is the validated ++/-- step, so it is not scanned.
+        // counter). The increment clause itself was checked above, so it is not scanned.
         if (CounterMutatedInBody(forLoop.Body, varName)
             || (forLoop.Condition != null && CounterMutatedInExpr(forLoop.Condition, varName)))
             return null;
@@ -107,6 +118,41 @@ public static class ForLoopAnalyzer
         Expr.PrefixIncrement pri => IsVariableReference(pri.Operand, varName),
         _ => false
     };
+
+    private static bool IsActiveIntegerSquare(
+        Expr? initializer,
+        IReadOnlySet<string>? activeIntegerCounters) =>
+        initializer is Expr.Binary
+        {
+            Operator.Type: TokenType.STAR,
+            Left: Expr.Variable left,
+            Right: Expr.Variable right
+        }
+        && left.Name.Lexeme == right.Name.Lexeme
+        && activeIntegerCounters?.Contains(left.Name.Lexeme) == true;
+
+    private static bool IsIntegerCounterIncrement(
+        Expr increment,
+        string varName,
+        IReadOnlySet<string>? activeIntegerCounters)
+    {
+        if (IsSimpleIncDecOf(increment, varName))
+            return true;
+
+        return increment is Expr.Assign
+        {
+            Name.Lexeme: var target,
+            Value: Expr.Binary
+            {
+                Operator.Type: TokenType.PLUS,
+                Left: Expr.Variable left,
+                Right: Expr.Variable right
+            }
+        }
+        && target == varName
+        && left.Name.Lexeme == varName
+        && activeIntegerCounters?.Contains(right.Name.Lexeme) == true;
+    }
 
     private static bool CounterMutatedInBody(Stmt body, string varName)
     {
@@ -239,9 +285,10 @@ public static class ForLoopAnalyzer
             if (!IsComparisonOperator(binary.Operator.Type))
                 return false;
 
-            // At least one side must reference the variable
-            bool leftIsVar = IsVariableReference(binary.Left, varName);
-            bool rightIsVar = IsVariableReference(binary.Right, varName);
+            // At least one side must reference the variable. The reference can
+            // be nested in numeric arithmetic, e.g. `i * i < n`.
+            bool leftIsVar = ContainsVariableReference(binary.Left, varName);
+            bool rightIsVar = ContainsVariableReference(binary.Right, varName);
 
             if (!leftIsVar && !rightIsVar)
                 return false;
@@ -280,6 +327,17 @@ public static class ForLoopAnalyzer
     {
         return expr is Expr.Variable v && v.Name.Lexeme == varName;
     }
+
+    private static bool ContainsVariableReference(Expr expr, string varName) => expr switch
+    {
+        Expr.Variable variable => variable.Name.Lexeme == varName,
+        Expr.Binary binary =>
+            ContainsVariableReference(binary.Left, varName)
+            || ContainsVariableReference(binary.Right, varName),
+        Expr.Unary unary => ContainsVariableReference(unary.Right, varName),
+        Expr.Grouping grouping => ContainsVariableReference(grouping.Expression, varName),
+        _ => false
+    };
 
     /// <summary>
     /// Checks if an expression is likely numeric (conservative check).
@@ -395,9 +453,9 @@ public static class ForLoopAnalyzer
     /// <summary>
     /// Flags any mutation of the named counter inside a loop body: assignment, compound-assignment,
     /// ++/--, or re-declaration (a shadowing nested-loop counter of the same name). Used by
-    /// <see cref="AnalyzeIntegerCounter"/> to guarantee the counter only ever changes by the
-    /// loop's ±1 increment clause, so the native Int64 representation can never observe a
-    /// non-integer or out-of-step value.
+    /// <see cref="AnalyzeIntegerCounter"/> to guarantee the counter only ever changes by its
+    /// separately validated increment clause, so the native Int64 representation cannot observe
+    /// an unapproved non-integer value.
     /// </summary>
     private class CounterMutationVisitor : Parsing.Visitors.AstVisitorBase
     {

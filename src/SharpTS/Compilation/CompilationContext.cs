@@ -30,6 +30,12 @@ public enum StackType
 public record struct HoistedArrayEntry(LocalBuilder TypedLocal, ArrayElementsDescriptor Descriptor);
 
 /// <summary>
+/// A loop-scoped span over a promoted <c>List&lt;bool&gt;</c>. Indexed writes that
+/// grow the list refresh this local before any later access can observe it.
+/// </summary>
+public readonly record struct HoistedPromotedBooleanSpan(LocalBuilder SpanLocal);
+
+/// <summary>
 /// Entry in the hoisted typed-array cache (#928): a loop-invariant variable statically typed as a
 /// numeric TypedArray, cast to its concrete <c>$XArray</c> type ONCE before the loop. The element
 /// index fast paths load <see cref="TypedLocal"/> directly instead of re-emitting
@@ -349,6 +355,23 @@ public partial class CompilationContext
     public HoistedArrayEntry? TryGetHoistedArray(string variableName)
     {
         foreach (var cache in HoistedArrayCaches)
+        {
+            if (cache.TryGetValue(variableName, out var entry))
+                return entry;
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Loop-scoped <c>Span&lt;bool&gt;</c> caches for nonescaping promoted arrays.
+    /// An outer loop's span is reused by nested loops.
+    /// </summary>
+    public Stack<Dictionary<string, HoistedPromotedBooleanSpan>>
+        HoistedPromotedBooleanSpans { get; } = new();
+
+    public HoistedPromotedBooleanSpan? TryGetHoistedPromotedBooleanSpan(string variableName)
+    {
+        foreach (var cache in HoistedPromotedBooleanSpans)
         {
             if (cache.TryGetValue(variableName, out var entry))
                 return entry;

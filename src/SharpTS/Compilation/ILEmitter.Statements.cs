@@ -11,6 +11,23 @@ public partial class ILEmitter
 {
     private readonly Stack<(string Name, LocalBuilder Key, LocalBuilder Value)> _stableMapEntryBindings = new();
 
+    private static readonly System.Reflection.MethodInfo BoolListSetCount =
+        EmitGenerics.MakeGenericMethod(
+            typeof(System.Runtime.InteropServices.CollectionsMarshal)
+                .GetMethod(nameof(System.Runtime.InteropServices.CollectionsMarshal.SetCount))!,
+            typeof(bool));
+    private static readonly System.Reflection.MethodInfo BoolListAsSpan =
+        EmitGenerics.MakeGenericMethod(
+            typeof(System.Runtime.InteropServices.CollectionsMarshal)
+                .GetMethod(nameof(System.Runtime.InteropServices.CollectionsMarshal.AsSpan))!,
+            typeof(bool));
+    private static readonly System.Reflection.MethodInfo BoolSpanFill =
+        typeof(Span<bool>).GetMethod("Fill", [typeof(bool)])!;
+    private static readonly System.Reflection.MethodInfo BoolSpanLength =
+        typeof(Span<bool>).GetProperty("Length")!.GetGetMethod()!;
+    private static readonly System.Reflection.MethodInfo BoolSpanGetItem =
+        typeof(Span<bool>).GetProperty("Item")!.GetGetMethod()!;
+
     private Type PromotedObjectValueClrType(TypeInfo? type) => type switch
     {
         TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => _ctx.Types.Double,
@@ -22,6 +39,15 @@ public partial class ILEmitter
 
     protected override void EmitConditionCheck(Expr condition)
     {
+        // A promoted boolean[] local is already a concrete List<bool>. In condition
+        // position an out-of-range read and an in-range false element are both false,
+        // so the value can stay unboxed across the bounds-check merge. The general
+        // expression path must still box its in-range result to merge with `undefined`;
+        // owning this consumer-specific shape removes one Boolean allocation per sieve
+        // probe without changing raw array-read semantics.
+        if (TryEmitPromotedBooleanArrayCondition(condition))
+            return;
+
         EmitExpression(condition);
         if (_stackType == StackType.Boolean)
         {
@@ -39,6 +65,65 @@ public partial class ILEmitter
             EnsureBoxed();
             EmitTruthyCheck();
         }
+    }
+
+    private bool TryEmitPromotedBooleanArrayCondition(Expr condition)
+    {
+        if (condition is not Expr.GetIndex
+            {
+                Optional: false,
+                Object: Expr.Variable array,
+                Index: var index
+            }
+            || _ctx.TryGetPromotedArrayLocal(array.Name.Lexeme) is not
+                { Descriptor.Kind: ArrayElementsKind.Bool } promoted
+            || _ctx.TypeMap?.Get(index) is not
+                (TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } or TypeInfo.NumberLiteral))
+        {
+            return false;
+        }
+
+        var outOfBounds = IL.DefineLabel();
+        var end = IL.DefineLabel();
+        var indexLocal = IL.DeclareLocal(_ctx.Types.Int32);
+        Type listType = promoted.Descriptor.GetListType(_ctx.Types);
+        var hoistedSpan = _ctx.TryGetHoistedPromotedBooleanSpan(array.Name.Lexeme);
+
+        EmitIndexAsInt32(index);
+        IL.Emit(OpCodes.Stloc, indexLocal);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        if (hoistedSpan is { } spanForLength)
+        {
+            IL.Emit(OpCodes.Ldloca, spanForLength.SpanLocal);
+            IL.Emit(OpCodes.Call, BoolSpanLength);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldloc, promoted.Local);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!);
+        }
+        IL.Emit(OpCodes.Bge_Un, outOfBounds);
+
+        if (hoistedSpan is { } spanForRead)
+        {
+            IL.Emit(OpCodes.Ldloca, spanForRead.SpanLocal);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Call, BoolSpanGetItem);
+            IL.Emit(OpCodes.Ldind_U1);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Ldloc, promoted.Local);
+            IL.Emit(OpCodes.Ldloc, indexLocal);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(listType, "get_Item", _ctx.Types.Int32));
+        }
+        IL.Emit(OpCodes.Br, end);
+
+        IL.MarkLabel(outOfBounds);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.MarkLabel(end);
+        SetStackType(StackType.Boolean);
+        return true;
     }
 
     protected override void EmitVarDeclaration(Stmt.Var v)
@@ -493,11 +578,15 @@ public partial class ILEmitter
         // int directly. The analyzer guarantees the counter is non-captured, non-reassigned, and
         // integer-initialized, so this early return safely bypasses the capture/array paths below.
         if (_integerLoopCounterName == v.Name.Lexeme
-            && TryGetIntegerCounterInit(v.Initializer, out long counterInit))
+            && (TryGetIntegerCounterInit(v.Initializer, out _)
+                || (v.Initializer != null && IsIntegerCounterValueI8(v.Initializer))))
         {
             var intLocal = _ctx.Locals.DeclareLocal(v.Name.Lexeme, _ctx.Types.Int64);
             _ctx.IntegerCounterLocals.Add(v.Name.Lexeme);
-            IL.Emit(OpCodes.Ldc_I8, counterInit);
+            if (TryGetIntegerCounterInit(v.Initializer, out long counterInit))
+                IL.Emit(OpCodes.Ldc_I8, counterInit);
+            else
+                _ = TryEmitIntegerCounterValueI8(v.Initializer!);
             IL.Emit(OpCodes.Stloc, intLocal);
             return;
         }
@@ -769,7 +858,8 @@ public partial class ILEmitter
         // counter with a native Int64 slot. Save/restore the field so nested loops don't clobber it.
         var savedIntCounterName = _integerLoopCounterName;
         string? activeIntCounter = ForLoopAnalyzer.IntegerCounterEnabled
-            ? ForLoopAnalyzer.AnalyzeIntegerCounter(f, _ctx.ClosureAnalyzer)
+            ? ForLoopAnalyzer.AnalyzeIntegerCounter(
+                f, _ctx.ClosureAnalyzer, _ctx.IntegerCounterLocals)
             : null;
         if (activeIntCounter != null)
             _integerLoopCounterName = activeIntCounter;
@@ -783,6 +873,14 @@ public partial class ILEmitter
             // Emit initializer (declares loop variable in current scope)
             if (f.Initializer != null)
                 EmitStatement(f.Initializer);
+
+            // The Count Primes setup loop fills a fresh promoted boolean[] with
+            // `true`. Emit a compact native fill loop and jump over the ordinary
+            // JavaScript loop when the runtime bound is safely bounded. The cold
+            // fallback retains the general loop for NaN, infinity, negatives,
+            // oversized inputs, or a non-empty receiver.
+            Label? promotedBooleanFillComplete =
+                EmitPromotedBooleanFillFastPath(f);
 
             // A tightly-proven `for (let i = 0; i < n; i++) a.push(pureValue)`
             // can reserve its boxed-array storage once. This removes geometric
@@ -809,6 +907,10 @@ public partial class ILEmitter
             var hoisted = EmitArrayHoistPreamble(f.Body, f.Condition, f.Increment);
             // Typed-array receiver hoist (#928): cast loop-invariant numeric TypedArray receivers once.
             var taHoisted = EmitTypedArrayHoistPreamble(f.Body, f.Condition, f.Increment);
+            // Promoted boolean arrays can expose one stable Span<bool> per loop. Direct
+            // indexed growth refreshes the span; method-call mutation is rejected by analysis.
+            var boolSpanHoisted = EmitPromotedBooleanSpanHoistPreamble(
+                f.Body, f.Condition, f.Increment);
 
             var builder = _ctx.ILBuilder;
             var startLabel = builder.DefineLabel("for_start");
@@ -850,6 +952,7 @@ public partial class ILEmitter
             // Pop hoisted cache
             if (hoisted) _ctx.HoistedArrayCaches.Pop();
             if (taHoisted) _ctx.HoistedTypedArrayCaches.Pop();
+            if (boolSpanHoisted) _ctx.HoistedPromotedBooleanSpans.Pop();
 
             if (activeCells != null)
                 foreach (var (name, prior) in activeCells)
@@ -857,6 +960,9 @@ public partial class ILEmitter
                     if (prior != null) _ctx.CellBindingLocals[name] = prior;
                     else _ctx.CellBindingLocals.Remove(name);
                 }
+
+            if (promotedBooleanFillComplete.HasValue)
+                builder.MarkLabel(promotedBooleanFillComplete.Value);
 
             _ctx.Locals.ExitScope();
         }
@@ -871,6 +977,68 @@ public partial class ILEmitter
         }
     }
 
+    private Label? EmitPromotedBooleanFillFastPath(Stmt.For loop)
+    {
+        if (!CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation)
+            || reservation.Value is not Expr.Literal { Value: true }
+            || loop.Initializer is not Stmt.Var { IsVar: false }
+            || _ctx.TryGetPromotedArrayLocal(reservation.Array.Name.Lexeme) is not
+                { Descriptor.Kind: ArrayElementsKind.Bool } promoted)
+        {
+            return null;
+        }
+
+        Type listType = promoted.Descriptor.GetListType(_ctx.Types);
+        var countGetter = _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!;
+        var ensureCapacity = _ctx.Types.GetMethod(
+            listType, "EnsureCapacity", _ctx.Types.Int32);
+        var boundLocal = IL.DeclareLocal(_ctx.Types.Double);
+        var countLocal = IL.DeclareLocal(_ctx.Types.Int32);
+        var fallback = _ctx.ILBuilder.DefineLabel("promoted_bool_fill_fallback");
+        var complete = _ctx.ILBuilder.DefineLabel("promoted_bool_fill_complete");
+
+        // A previous append would make replacing this loop with an exact-size fill
+        // incorrect. The usual sieve receiver is freshly constructed and empty.
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Callvirt, countGetter);
+        IL.Emit(OpCodes.Brtrue, fallback);
+
+        EmitExpressionAsDouble(reservation.Bound);
+        IL.Emit(OpCodes.Stloc, boundLocal);
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Ldc_R8, 0.0);
+        IL.Emit(OpCodes.Blt_Un, fallback); // negative or NaN
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Ldc_R8, 1_000_000.0);
+        IL.Emit(OpCodes.Bgt_Un, fallback); // oversized or NaN
+
+        IL.Emit(OpCodes.Ldloc, boundLocal);
+        IL.Emit(OpCodes.Call, typeof(Math).GetMethod("Ceiling", [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Stloc, countLocal);
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Callvirt, ensureCapacity);
+        IL.Emit(OpCodes.Pop);
+
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Ldloc, countLocal);
+        IL.Emit(OpCodes.Call, BoolListSetCount);
+
+        var spanLocal = IL.DeclareLocal(typeof(Span<bool>));
+        IL.Emit(OpCodes.Ldloc, promoted.Local);
+        IL.Emit(OpCodes.Call, BoolListAsSpan);
+        IL.Emit(OpCodes.Stloc, spanLocal);
+        IL.Emit(OpCodes.Ldloca, spanLocal);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Call, BoolSpanFill);
+        _ctx.ILBuilder.Emit_Br(complete);
+
+        _ctx.ILBuilder.MarkLabel(fallback);
+        SetStackUnknown();
+        return complete;
+    }
+
     private void EmitCountedPushReservation(Stmt.For loop)
     {
         if (!CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation))
@@ -880,13 +1048,15 @@ public partial class ILEmitter
         if (arrayLocal is null)
             return;
 
-        var listType = _ctx.Types.ListOfObject;
+        var promoted = _ctx.TryGetPromotedArrayLocal(reservation.Array.Name.Lexeme);
+        var sourceLocal = promoted?.Local ?? arrayLocal;
+        var listType = promoted?.Descriptor.GetListType(_ctx.Types) ?? _ctx.Types.ListOfObject;
         var listLocal = IL.DeclareLocal(listType);
         var countLocal = IL.DeclareLocal(_ctx.Types.Double);
         var skipLabel = _ctx.ILBuilder.DefineLabel("counted_push_reserve_skip");
 
-        IL.Emit(OpCodes.Ldloc, arrayLocal);
-        if (arrayLocal.LocalType != listType)
+        IL.Emit(OpCodes.Ldloc, sourceLocal);
+        if (sourceLocal.LocalType != listType)
             IL.Emit(OpCodes.Isinst, listType);
         IL.Emit(OpCodes.Stloc, listLocal);
         IL.Emit(OpCodes.Ldloc, listLocal);
@@ -1082,6 +1252,45 @@ public partial class ILEmitter
         }
 
         _ctx.HoistedArrayCaches.Push(cache);
+        return true;
+    }
+
+    /// <summary>
+    /// Acquires one <c>Span&lt;bool&gt;</c> for each promoted boolean array used by
+    /// indexed operations in the loop. The analyzer rejects receiver method calls
+    /// that could resize the list; the direct index-set fallback refreshes the span
+    /// after any out-of-range growth.
+    /// </summary>
+    private bool EmitPromotedBooleanSpanHoistPreamble(
+        Stmt body,
+        Expr? condition,
+        Expr? increment)
+    {
+        var candidates = PromotedBooleanSpanHoistAnalyzer.AnalyzeFor(
+            body, condition, increment);
+        Dictionary<string, HoistedPromotedBooleanSpan>? cache = null;
+
+        foreach (string name in candidates)
+        {
+            if (_ctx.TryGetHoistedPromotedBooleanSpan(name) != null)
+                continue;
+            if (_ctx.TryGetPromotedArrayLocal(name) is not
+                { Descriptor.Kind: ArrayElementsKind.Bool } promoted)
+            {
+                continue;
+            }
+
+            var spanLocal = IL.DeclareLocal(typeof(Span<bool>));
+            IL.Emit(OpCodes.Ldloc, promoted.Local);
+            IL.Emit(OpCodes.Call, BoolListAsSpan);
+            IL.Emit(OpCodes.Stloc, spanLocal);
+
+            cache ??= new Dictionary<string, HoistedPromotedBooleanSpan>();
+            cache[name] = new HoistedPromotedBooleanSpan(spanLocal);
+        }
+
+        if (cache == null) return false;
+        _ctx.HoistedPromotedBooleanSpans.Push(cache);
         return true;
     }
 

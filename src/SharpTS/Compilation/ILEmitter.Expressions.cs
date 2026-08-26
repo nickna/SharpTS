@@ -415,6 +415,13 @@ public partial class ILEmitter
             return;
         }
 
+        // A nested integer loop may advance as `j = j + i`, where both j and
+        // the outer i are proven native Int64 counters. Own the assignment before
+        // the general path materializes both operands as doubles and attempts to
+        // store that double in the Int64 slot.
+        if (TryEmitIntegerCounterAssignment(a))
+            return;
+
         var assignmentDCName = _ctx.ResolveFunctionDCFieldName(a.Name.Lexeme);
         FieldBuilder? assignmentDCField = null;
         if (_ctx.CapturedFunctionLocals?.Contains(assignmentDCName) == true)

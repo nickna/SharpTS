@@ -72,12 +72,25 @@ public partial class ILEmitter
             || _ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
             return false;
 
-        // Preserve the still-cheaper typed-array paths: promoted locals append
-        // directly to List<T>, while escaping number[] receivers call
-        // $Array.PushDouble without boxing or representation deoptimization.
+        // A discarded push on a promoted local needs neither the JavaScript length
+        // result nor the result-producing ArrayPush{Double,Bool} helper. Append the
+        // unboxed element directly to the concrete List<T> slot.
         if (methodGet.Object is Expr.Variable pushVariable
-            && _ctx.TryGetPromotedArrayLocal(pushVariable.Name.Lexeme) is not null)
-            return false;
+            && _ctx.TryGetPromotedArrayLocal(pushVariable.Name.Lexeme) is { } promoted)
+        {
+            Type listType = promoted.Descriptor.GetListType(_ctx.Types);
+            Type elementType = promoted.Descriptor.GetElementType(_ctx.Types);
+            IL.Emit(OpCodes.Ldloc, promoted.Local);
+            EmitExpression(arguments[0]);
+            if (promoted.Descriptor.Kind == ArrayElementsKind.Double) EnsureDouble();
+            else EnsureBoolean();
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(listType, "Add", elementType));
+            SetStackUnknown();
+            return true;
+        }
+
+        // Preserve the still-cheaper escaping number[] path, which calls
+        // $Array.PushDouble without boxing or representation deoptimization.
         if (ArrayElements.Resolve(receiverType) is { Kind: ArrayElementsKind.Double }
             && IsNumericType(_ctx.TypeMap?.Get(arguments[0])))
             return false;
