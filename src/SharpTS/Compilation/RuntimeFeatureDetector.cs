@@ -1029,6 +1029,7 @@ public sealed class RuntimeFeatureDetector
                     && si.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
                 if (IsArrayPrototype(si.Object)
+                    || (CouldTargetArray(si.Object) && IsSymbolIterator(si.Index))
                     || si.Index is Expr.Literal { Value: "__proto__" }
                     || (si.Index is Expr.Literal { Value: string arrayMethod }
                         && IsArrayMutatorName(arrayMethod)
@@ -1246,7 +1247,8 @@ public sealed class RuntimeFeatureDetector
                 if (IsGlobalObject(csi.Object)
                     && csi.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
-                if (csi.Index is Expr.Literal { Value: string compoundArrayMethod }
+                if ((CouldTargetArray(csi.Object) && IsSymbolIterator(csi.Index))
+                    || csi.Index is Expr.Literal { Value: string compoundArrayMethod }
                     && IsArrayMutatorName(compoundArrayMethod)
                     && CouldTargetArray(csi.Object))
                     _set.UsesArrayPrototypeMutation = true;
@@ -1315,7 +1317,8 @@ public sealed class RuntimeFeatureDetector
                 if (IsGlobalObject(lsi.Object)
                     && lsi.Index is Expr.Literal { Value: "parseInt" })
                     _set.UsesGlobalParseIntMutation = true;
-                if (lsi.Index is Expr.Literal { Value: string logicalArrayMethod }
+                if ((CouldTargetArray(lsi.Object) && IsSymbolIterator(lsi.Index))
+                    || lsi.Index is Expr.Literal { Value: string logicalArrayMethod }
                     && IsArrayMutatorName(logicalArrayMethod)
                     && CouldTargetArray(lsi.Object))
                     _set.UsesArrayPrototypeMutation = true;
@@ -1413,7 +1416,8 @@ public sealed class RuntimeFeatureDetector
                     if (IsGlobalObject(deletedIndex.Object)
                         && deletedIndex.Index is Expr.Literal { Value: "parseInt" })
                         _set.UsesGlobalParseIntMutation = true;
-                    if (deletedIndex.Index is Expr.Literal { Value: string deletedArrayMethod }
+                    if ((CouldTargetArray(deletedIndex.Object) && IsSymbolIterator(deletedIndex.Index))
+                        || deletedIndex.Index is Expr.Literal { Value: string deletedArrayMethod }
                         && IsArrayMutatorName(deletedArrayMethod)
                         && CouldTargetArray(deletedIndex.Object))
                         _set.UsesArrayPrototypeMutation = true;
@@ -1842,6 +1846,20 @@ public sealed class RuntimeFeatureDetector
         Expr.TypeAssertion assertion => IsArrayPrototype(assertion.Expression),
         Expr.Satisfies satisfies => IsArrayPrototype(satisfies.Expression),
         Expr.NonNullAssertion nonNull => IsArrayPrototype(nonNull.Expression),
+        _ => false
+    };
+
+    private static bool IsSymbolIterator(Expr expr) => expr switch
+    {
+        Expr.Get
+        {
+            Object: Expr.Variable { Name.Lexeme: "Symbol" },
+            Name.Lexeme: "iterator"
+        } => true,
+        Expr.Grouping grouping => IsSymbolIterator(grouping.Expression),
+        Expr.TypeAssertion assertion => IsSymbolIterator(assertion.Expression),
+        Expr.Satisfies satisfies => IsSymbolIterator(satisfies.Expression),
+        Expr.NonNullAssertion nonNull => IsSymbolIterator(nonNull.Expression),
         _ => false
     };
 

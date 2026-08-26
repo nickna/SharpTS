@@ -17,6 +17,9 @@ public partial class ILEmitter
 {
     protected override void EmitGet(Expr.Get g)
     {
+        if (TryEmitStableRecordDestructureGet(g))
+            return;
+
         if (!g.Optional
             && g.Name.Lexeme == "length"
             && g.Object is Expr.Variable restLength
@@ -988,6 +991,9 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (TryEmitStableArrayDestructureGet(gi))
+            return;
+
         if (TryEmitFlattenedNumericRestIndex(gi))
             return;
 

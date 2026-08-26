@@ -1165,6 +1165,7 @@ public partial class RuntimeEmitter
         var collectDoneLabel = il.DefineLabel();
         var tryBufferLabel = il.DefineLabel();
         var throwLabel = il.DefineLabel();
+        var customArrayIteratorLabel = il.DefineLabel();
 
         // Create result list
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ListOfObject, _types.EmptyTypes));
@@ -1173,6 +1174,24 @@ public partial class RuntimeEmitter
         // Check for null input
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Brfalse, throwLabel);
+
+        // An array can carry an own @@iterator. Only programs that can install one pay
+        // this probe; the stable majority retain the zero-dispatch backing-list path.
+        if (_features.UsesArrayPrototypeMutation)
+        {
+            var noCustomArrayIterator = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+            il.Emit(OpCodes.Brfalse, noCustomArrayIterator);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
+            il.Emit(OpCodes.Stloc, iterFnLocal);
+            il.Emit(OpCodes.Ldloc, iterFnLocal);
+            il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+            il.Emit(OpCodes.Brfalse, customArrayIteratorLabel);
+            il.MarkLabel(noCustomArrayIterator);
+        }
 
         // 1a. Stage E.2: fast path for $Array — return its backing list directly.
         // Since `$Array` inherits List<object?> (M2 decision), Elements is just
@@ -1418,6 +1437,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_1);  // Symbol.iterator
         il.Emit(OpCodes.Call, runtime.GetIteratorFunction);
         il.Emit(OpCodes.Stloc, iterFnLocal);
+
+        if (_features.UsesArrayPrototypeMutation)
+            il.MarkLabel(customArrayIteratorLabel);
 
         // If no iterator function was found, try the CLR enumerable fallback.
         // Explicit null is not absence and flows to InvokeMethodValue, which

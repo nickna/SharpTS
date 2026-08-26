@@ -1265,7 +1265,7 @@ public partial class Interpreter
     {
         switch (value)
         {
-            case SharpTSArray:
+            case SharpTSArray array when !array.HasSymbolProperty(SharpTSSymbol.Iterator):
                 return value;
             // Typed arrays / buffers expose index access but no [Symbol.iterator] in this runtime, so
             // GetIterableElements would throw; read their elements directly into a fresh Array (#781).

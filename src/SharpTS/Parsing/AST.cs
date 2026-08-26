@@ -309,6 +309,13 @@ public record Decorator(Token AtToken, Expr Expression);
 /// or compiled by <see cref="ILCompiler"/>.
 /// </remarks>
 /// <seealso cref="Expr"/>
+public enum DestructuringSourceKind
+{
+    None,
+    Array,
+    Object
+}
+
 public abstract record Stmt
 {
     public record Expression(Expr Expr) : Stmt;
@@ -327,7 +334,7 @@ public abstract record Stmt
     /// inferred type is still kept). Set by the destructuring desugarer to carry the binding pattern's
     /// shape so a mixed array literal source infers as a tuple instead of an array (#783). Erased at
     /// runtime (interpreter and IL compiler ignore it).</param>
-    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null, bool IsDeclare = false) : Stmt;
+    public record Var(Token Name, string? TypeAnnotation, Expr? Initializer, bool HasDefiniteAssignmentAssertion = false, bool IsVar = false, TypeNode? TypeAnnotationNode = null, Expr? HoistTypeInferenceInitializer = null, TypeNode? InitializerContext = null, bool IsDeclare = false, DestructuringSourceKind DestructuringSource = DestructuringSourceKind.None) : Stmt;
     /// <summary>
     /// Const variable declaration. Separate from Var for cleaner const-specific handling (e.g., unique symbol).
     /// Initializer is non-nullable since const always requires initialization.

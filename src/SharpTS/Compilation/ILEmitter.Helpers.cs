@@ -322,6 +322,14 @@ public partial class ILEmitter
 
     public override void EmitExpressionAsDouble(Expr expr)
     {
+        if (expr is Expr.Get stableRecordGet
+            && TryEmitStableRecordDestructureGetAsDouble(stableRecordGet))
+            return;
+
+        if (expr is Expr.GetIndex stableArrayGet
+            && TryEmitStableArrayDestructureGetAsDouble(stableArrayGet))
+            return;
+
         if (expr is Expr.GetIndex flattenedRestIndex
             && TryEmitFlattenedNumericRestIndex(flattenedRestIndex))
             return;

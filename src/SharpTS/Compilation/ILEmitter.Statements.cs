@@ -462,7 +462,7 @@ public partial class ILEmitter
             // initializer is created as a NUMERIC $Array; otherwise emit the initializer normally.
             if (!TryEmitNumericEmptyArrayInit(v))
             {
-                if (_ctx.Types.IsDouble(localType) && v.Initializer is Expr.GetIndex)
+                if (_ctx.Types.IsDouble(localType))
                     EmitExpressionAsDouble(v.Initializer);
                 else
                     EmitExpression(v.Initializer);
@@ -479,6 +479,7 @@ public partial class ILEmitter
                 }
             }
             IL.Emit(OpCodes.Stloc, local);
+            RegisterStableDestructuringSource(v, local);
 
             foreach (var (dcInstance, field) in _ctx.SelfCaptureWriteBacks)
             {

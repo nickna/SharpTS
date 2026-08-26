@@ -42,7 +42,21 @@ public class ArrayDestructureHandler : ICallHandler
         // array/tuple/string the index access reads directly — and tuple positional element types
         // stay intact.
         if (IsIndexAddressable(ctx.TypeMap?.Get(arg)))
+        {
+            if (ctx.RuntimeFeatures?.UsesArrayPrototypeMutation != true &&
+                ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != true)
+                return true;
+
+            // An own/prototype Symbol.iterator replacement makes positional reads observably
+            // wrong even for a statically typed array. Materialize through the iterator protocol
+            // when whole-program analysis cannot prove the built-in iterator remains intact.
+            il.Emit(OpCodes.Ldsfld, ctx.Runtime!.SymbolIterator);
+            il.Emit(OpCodes.Ldtoken, ctx.Runtime.RuntimeType);
+            il.Emit(OpCodes.Call, ctx.Types.GetMethod(ctx.Types.Type, "GetTypeFromHandle"));
+            il.Emit(OpCodes.Call, ctx.Runtime.IterateToList);
+            il.Emit(OpCodes.Newobj, ctx.Runtime.TSArrayCtor);
             return true;
+        }
 
         // Otherwise normalize at runtime:
         //   ArrayDestructureSource(value, Symbol.iterator, runtimeType)
