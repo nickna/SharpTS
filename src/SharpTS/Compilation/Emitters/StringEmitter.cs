@@ -71,6 +71,8 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 return true;
 
             case "replace":
+                if (TryEmitStableRegExpReplace(emitter, receiver, arguments))
+                    return true;
                 EmitReplace(emitter, arguments);
                 return true;
 
@@ -322,6 +324,66 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         // The helper performs @@replace dispatch before deciding whether the
         // original replacement is callable or needs ToString coercion.
         il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
+    }
+
+    private static bool TryEmitStableRegExpReplace(
+        IEmitterContext emitter, Expr receiver, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (ctx.RuntimeFeatures?.UsesRegExpPrototypeMutation != false
+            || arguments.Count != 2
+            || arguments[0] is not Expr.RegexLiteral literal
+            || literal.Flags.IndexOfAny(['u', 'v', 'y']) >= 0
+            || ctx.Runtime?.RegexHoistFields?.ContainsKey(literal) != true
+            || !IsSideEffectFreePrimitiveString(receiver, ctx)
+            || !IsSideEffectFreePrimitiveString(arguments[1], ctx))
+            return false;
+
+        // The ordinary method prologue has already left the unwrapped receiver
+        // string on the stack. Spill it so the instance regex can be loaded
+        // first for the typed helper call.
+        var inputLocal = ctx.IL.DeclareLocal(ctx.Types.String);
+        ctx.IL.Emit(OpCodes.Stloc, inputLocal);
+
+        ctx.IL.Emit(OpCodes.Ldloc, inputLocal);
+        emitter.EmitExpression(literal);
+        emitter.EmitBoxIfNeeded(literal);
+        ctx.IL.Emit(OpCodes.Castclass, ctx.Runtime.TSRegExpType);
+        emitter.EmitExpression(arguments[1]);
+        ctx.IL.Emit(literal.Flags.Contains('g') ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.StableRegExpReplace);
+        emitter.SetStackType(StackType.String);
+        return true;
+    }
+
+    private static bool IsSideEffectFreePrimitiveString(Expr expression, CompilationContext ctx)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case Expr.Grouping grouping:
+                    expression = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expression = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expression = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expression = nonNull.Expression;
+                    continue;
+            }
+
+            break;
+        }
+
+        if (expression is not Expr.Variable and not Expr.Literal { Value: string })
+            return false;
+
+        return ctx.TypeMap?.Get(expression) is TypeSystem.TypeInfo.String
+            or TypeSystem.TypeInfo.StringLiteral;
     }
 
     private static void EmitSplit(IEmitterContext emitter, List<Expr> arguments)

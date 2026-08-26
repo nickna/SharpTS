@@ -1374,6 +1374,7 @@ public class EmittedRuntime
     public MethodBuilder RegExpSetLastIndex { get; set; } = null!;
     public MethodBuilder StringMatchRegExp { get; set; } = null!;
     public MethodBuilder StringTryInvokeSymbolMethod { get; set; } = null!;
+    public MethodBuilder StableRegExpReplace { get; set; } = null!;
     public MethodBuilder StringReplaceRegExp { get; set; } = null!;
     public MethodBuilder StringReplaceAllRegExp { get; set; } = null!;
     public MethodBuilder StringSearchRegExp { get; set; } = null!;
@@ -1419,6 +1420,7 @@ public class EmittedRuntime
     public MethodBuilder TSRegExpTestMethod { get; set; } = null!;
     public MethodBuilder TSRegExpExecMethod { get; set; } = null!;
     public MethodBuilder TSRegExpToStringMethod { get; set; } = null!;
+    public MethodBuilder TSRegExpReplaceMethod { get; set; } = null!;
     // ECMA-262 (ES2025) RegExp.escape static — emitted standalone on $RegExp.
     public MethodBuilder TSRegExpEscapeMethod { get; set; } = null!;
     public MethodBuilder BuildNamedGroups { get; set; } = null!;

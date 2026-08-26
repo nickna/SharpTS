@@ -28,6 +28,8 @@ public class RegexBenchmarks
     // comparison.
     private readonly Regex _nativeValidator = new(
         "^[a-z]+$", RegexOptions.ECMAScript | RegexOptions.Compiled);
+    private readonly Regex _nativeReplace = new(
+        "foo", RegexOptions.ECMAScript | RegexOptions.Compiled);
 
     [Params(100, 10_000, 100_000)]
     public int N { get; set; }
@@ -58,6 +60,16 @@ public class RegexBenchmarks
     [BenchmarkCategory("RegexLiteral")]
     public object? SharpTS_RegexLiteralLoop()
         => BenchmarkHarness.InvokeCompiled(_tsLiteral, ReplaceInput, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("RegexLiteral")]
+    public int NativeCSharp_RegexReplaceLoop()
+    {
+        int total = 0;
+        for (int i = 0; i < N; i++)
+            total += _nativeReplace.Replace(ReplaceInput, "bar").Length;
+        return total;
+    }
 
     [Benchmark]
     [BenchmarkCategory("RegexValidator")]

@@ -2653,16 +2653,27 @@ public partial class RuntimeEmitter
             [_types.String, _types.String, _types.Boolean]
         );
         _tsRegExpReplaceMethod = method;
+        runtime.TSRegExpReplaceMethod = method;
 
         var il = method.GetILGenerator();
         var globalLabel = il.DefineLabel();
-        var endLabel = il.DefineLabel();
+        var replacementReadyLabel = il.DefineLabel();
 
         // Preprocess replacement string: \`$0\` stays literal in JS (.NET would
         // expand to entire match) and \`$0N\` with N > captureCount is literal
         // (.NET-ECMAScript flag expands $0 greedily). Pass captureCount =
         // _regex.GetGroupNumbers().Length - 1 (group 0 is the match itself).
         var escapedLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4, (int)'$');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.Char])!);
+        var preprocessLabel = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, preprocessLabel);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Stloc, escapedLocal);
+        il.Emit(OpCodes.Br, replacementReadyLabel);
+
+        il.MarkLabel(preprocessLabel);
         il.Emit(OpCodes.Ldarg_2);
         // captureCount = _regex.GetGroupNumbers().Length - 1
         il.Emit(OpCodes.Ldarg_0);
@@ -2674,6 +2685,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Sub);
         il.Emit(OpCodes.Call, _tsRegExpEscapeJsReplacementMethod);
         il.Emit(OpCodes.Stloc, escapedLocal);
+        il.MarkLabel(replacementReadyLabel);
 
         // if (isGlobal)
         il.Emit(OpCodes.Ldarg_3);
@@ -3550,7 +3562,8 @@ public partial class RuntimeEmitter
             "ExpandReplacementSpec",
             MethodAttributes.Private | MethodAttributes.Static,
             _types.String,
-            [_types.String, _types.String, _types.String, _types.Int32, _types.ListOfObject]);
+            [_types.String, _types.String, _types.String, _types.Int32,
+                _types.ListOfObject, _types.Object]);
         _tsRegExpExpandReplacementSpecMethod = method;
 
         var il = method.GetILGenerator();
@@ -3561,6 +3574,8 @@ public partial class RuntimeEmitter
         var consumed = il.DeclareLocal(_types.Int32);
         var capture = il.DeclareLocal(_types.Object);
         var tailStart = il.DeclareLocal(_types.Int32);
+        var namedClose = il.DeclareLocal(_types.Int32);
+        var namedValue = il.DeclareLocal(_types.Object);
 
         var stringLength = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
         var stringChars = _types.GetMethod(_types.String, "get_Chars", _types.Int32);
@@ -3661,9 +3676,65 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Br, tokenDone);
 
+        // $<name>. This syntax is active only when the match result exposes a
+        // named-captures object; without one it remains ordinary replacement
+        // text. Missing/unmatched named captures substitute the empty string.
+        il.MarkLabel(notSuffix);
+        var notNamedCapture = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, next);
+        il.Emit(OpCodes.Ldc_I4, (int)'<');
+        il.Emit(OpCodes.Bne_Un, notNamedCapture);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Brfalse, notNamedCapture);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, notNamedCapture);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4, (int)'>');
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "IndexOf", _types.Char, _types.Int32));
+        il.Emit(OpCodes.Stloc, namedClose);
+        il.Emit(OpCodes.Ldloc, namedClose);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Blt, notNamedCapture);
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, namedClose);
+        il.Emit(OpCodes.Ldloc, i);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "Substring", _types.Int32, _types.Int32));
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, namedValue);
+        var namedDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, namedValue);
+        il.Emit(OpCodes.Brfalse, namedDone);
+        il.Emit(OpCodes.Ldloc, namedValue);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, namedDone);
+        il.Emit(OpCodes.Ldloc, sb);
+        il.Emit(OpCodes.Ldloc, namedValue);
+        il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Callvirt, appendString);
+        il.Emit(OpCodes.Pop);
+        il.MarkLabel(namedDone);
+        il.Emit(OpCodes.Ldloc, namedClose);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, i);
+        il.Emit(OpCodes.Br, loopTest);
+
         // $n / $nn. A nonexistent capture leaves '$' literal and lets the
         // following digit(s) be processed normally on subsequent iterations.
-        il.MarkLabel(notSuffix);
+        il.MarkLabel(notNamedCapture);
         il.Emit(OpCodes.Ldloc, next);
         il.Emit(OpCodes.Ldc_I4, (int)'0');
         il.Emit(OpCodes.Blt, ordinary);
@@ -4012,6 +4083,8 @@ public partial class RuntimeEmitter
         var captureValue = il.DeclareLocal(_types.Object);
         var replacement = il.DeclareLocal(_types.String);
         var currentIndex = il.DeclareLocal(_types.Int32);
+        var namedCaptures = il.DeclareLocal(_types.Object);
+        var hasNamedCaptures = il.DeclareLocal(_types.Boolean);
 
         var listAdd = _types.GetMethod(_types.ListOfObject, "Add", _types.Object);
         var listCountGet = _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!;
@@ -4201,13 +4274,32 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, length);
         il.Emit(OpCodes.Blt, captureLoop);
 
-        // Functional replacement: [matched, ...captures, position, S].
+        il.Emit(OpCodes.Ldloc, execResult);
+        il.Emit(OpCodes.Ldstr, "groups");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Stloc, namedCaptures);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, hasNamedCaptures);
+        var namedCapturesReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, namedCaptures);
+        il.Emit(OpCodes.Brfalse, namedCapturesReady);
+        il.Emit(OpCodes.Ldloc, namedCaptures);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, namedCapturesReady);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, hasNamedCaptures);
+        il.MarkLabel(namedCapturesReady);
+
+        // Functional replacement: [matched, ...captures, position, S,
+        // groups?]. The final groups object is present only for named captures.
         il.Emit(OpCodes.Ldloc, replacementFunctionLocal);
         il.Emit(OpCodes.Brfalse, stringReplacement);
         var callArgs = il.DeclareLocal(_types.ObjectArray);
         il.Emit(OpCodes.Ldloc, captures);
         il.Emit(OpCodes.Callvirt, listCountGet);
         il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, hasNamedCaptures);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Newarr, _types.Object);
         il.Emit(OpCodes.Stloc, callArgs);
@@ -4254,6 +4346,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Ldloc, sLocal);
         il.Emit(OpCodes.Stelem_Ref);
+        var callbackArgsReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, hasNamedCaptures);
+        il.Emit(OpCodes.Brfalse, callbackArgsReady);
+        il.Emit(OpCodes.Ldloc, callArgs);
+        il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Callvirt, listCountGet);
+        il.Emit(OpCodes.Ldc_I4_3);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Ldloc, namedCaptures);
+        il.Emit(OpCodes.Stelem_Ref);
+        il.MarkLabel(callbackArgsReady);
         il.Emit(OpCodes.Ldloc, replacementFunctionLocal);
         il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
         il.Emit(OpCodes.Ldloc, callArgs);
@@ -4268,6 +4371,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, matched);
         il.Emit(OpCodes.Ldloc, position);
         il.Emit(OpCodes.Ldloc, captures);
+        il.Emit(OpCodes.Ldloc, namedCaptures);
         il.Emit(OpCodes.Call, _tsRegExpExpandReplacementSpecMethod);
         il.Emit(OpCodes.Stloc, replacement);
         il.MarkLabel(haveReplacement);
