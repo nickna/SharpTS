@@ -55,6 +55,11 @@ public partial class RuntimeEmitter
         // re-use the pre-allocated TypeBuilder + MethodBuilders.
         DefineRuntimeClassPhase1(moduleBuilder, runtime);
 
+        // Guest throws use a dedicated exception carrying the original value.
+        // Define it immediately after the phase-1 runtime signatures because its
+        // lazy Message getter calls the forward-declared Stringify helper.
+        EmitThrownValueExceptionType(moduleBuilder, runtime);
+
         // Emit IUnionType marker interface first (union types need to implement this)
         EmitIUnionTypeInterface(moduleBuilder, runtime);
 

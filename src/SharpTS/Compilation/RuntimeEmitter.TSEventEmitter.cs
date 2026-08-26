@@ -451,8 +451,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, innerLocal);
 
         // object reason: a $Promise rejection carries it in .Reason; a raw
-        // Task faulted by a guest `throw` carries the guest value in the
-        // exception's __tsValue (recovered by WrapException).
+        // Task faulted by a guest `throw` carries the guest value in a
+        // $ThrownValueException (or legacy __tsValue metadata).
         var reasonLocal = il.DeclareLocal(_types.Object);
         var notRejected = il.DefineLabel();
         var haveReason = il.DefineLabel();
@@ -465,6 +465,16 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, reasonLocal);
         il.Emit(OpCodes.Br, haveReason);
         il.MarkLabel(notRejected);
+        var checkMetadata = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, innerLocal);
+        il.Emit(OpCodes.Isinst, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Brfalse, checkMetadata);
+        il.Emit(OpCodes.Ldloc, innerLocal);
+        il.Emit(OpCodes.Castclass, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Call, runtime.ThrownValueExceptionValueGetter);
+        il.Emit(OpCodes.Stloc, reasonLocal);
+        il.Emit(OpCodes.Br, haveReason);
+        il.MarkLabel(checkMetadata);
         // reason = inner.Data.Contains("__tsValue") ? inner.Data["__tsValue"] : inner
         var dataGetter = typeof(Exception).GetProperty("Data")!.GetGetMethod()!;
         var dataContains = typeof(System.Collections.IDictionary).GetMethod("Contains", [_types.Object])!;

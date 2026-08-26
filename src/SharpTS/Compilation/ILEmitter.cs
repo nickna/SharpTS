@@ -36,6 +36,7 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
     private readonly LocalVariableResolver _resolver;
     private readonly Stack<AbruptCompletionScope> _abruptCompletionScopes = [];
     private readonly Stack<IteratorLoopCompletionScope> _iteratorLoopCompletionScopes = [];
+    private readonly Stack<LocalThrowScope> _localThrowScopes = [];
 
     private sealed class AbruptCompletionScope
     {
@@ -60,6 +61,12 @@ public partial class ILEmitter : StatementEmitterBase, IEmitterContext
         LocalBuilder CloseNeeded,
         Label ContinueTarget,
         HashSet<Label> EscapingTargets);
+
+    private sealed record LocalThrowScope(
+        LocalBuilder Value,
+        Label CatchBody,
+        int AbruptCompletionDepth,
+        int IteratorCompletionDepth);
 
     // Abstract property implementations for ExpressionEmitterBase
     protected override ILGenerator IL => _ctx.IL;

@@ -667,7 +667,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         throwIL.Emit(OpCodes.Stfld, StateField);
 
         // If error is already an Exception, rethrow it directly
-        // Otherwise, use CreateException to properly wrap the value with __tsValue
+        // Otherwise, use CreateException to carry the exact guest value.
         var isExceptionLabel = throwIL.DefineLabel();
         var createExceptionLabel = throwIL.DefineLabel();
 
@@ -676,7 +676,7 @@ public class GeneratorStateMachineBuilder : StateMachineBuilderBase, IIteratorSt
         throwIL.Emit(OpCodes.Dup);
         throwIL.Emit(OpCodes.Brtrue, isExceptionLabel);
 
-        // Not an exception - use CreateException to wrap with __tsValue
+        // Not an exception - use CreateException to carry the exact guest value.
         throwIL.Emit(OpCodes.Pop);
         throwIL.Emit(OpCodes.Ldarg_1);
         throwIL.Emit(OpCodes.Call, _runtime!.CreateException);

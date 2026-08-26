@@ -12,23 +12,8 @@ public partial class RuntimeEmitter
         var method = (MethodBuilder)runtime.CreateException;
 
         var il = method.GetILGenerator();
-        var exLocal = il.DeclareLocal(_types.Exception);
-
-        // var ex = new Exception(value?.ToString() ?? "null")
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.Stringify);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.Exception, _types.String));
-        il.Emit(OpCodes.Stloc, exLocal);
-
-        // ex.Data["__tsValue"] = value;  (preserve original value)
-        il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
-        il.Emit(OpCodes.Ldstr, "__tsValue");
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.IDictionary, "set_Item"));
-
-        // return ex;
-        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Newobj, runtime.ThrownValueExceptionCtor);
         il.Emit(OpCodes.Ret);
     }
 
@@ -44,6 +29,7 @@ public partial class RuntimeEmitter
 
         var il = method.GetILGenerator();
         var fallbackLabel = il.DefineLabel();
+        var checkMetadataLabel = il.DefineLabel();
         var checkTsValueLabel = il.DefineLabel();
         var unwrapLoopLabel = il.DefineLabel();
         var tsValueLocal = il.DeclareLocal(_types.Object);
@@ -75,6 +61,18 @@ public partial class RuntimeEmitter
 
         il.MarkLabel(checkTsValueLabel);
 
+        // The normal guest-throw path stores the value directly on a dedicated
+        // exception. Check it before touching Exception.Data so a local catch
+        // never creates or probes the dictionary-backed metadata store.
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Isinst, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Brfalse, checkMetadataLabel);
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Castclass, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Call, runtime.ThrownValueExceptionValueGetter);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(checkMetadataLabel);
         // Check if ex.Data contains "__tsValue" (TypeScript throw value)
         // if (ex.Data.Contains("__tsValue")) return ex.Data["__tsValue"];
         il.Emit(OpCodes.Ldloc, exLocal);
@@ -253,7 +251,7 @@ public partial class RuntimeEmitter
         // Create new $ReferenceError(message)
         il.Emit(OpCodes.Newobj, runtime.TSReferenceErrorCtor);
 
-        // Wrap as System.Exception using CreateException helper (stores original value in Data["__tsValue"])
+        // Wrap as System.Exception using the dedicated guest-value carrier.
         il.Emit(OpCodes.Call, runtime.CreateException);
         il.Emit(OpCodes.Throw);
     }

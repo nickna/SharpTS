@@ -184,6 +184,25 @@ public class CompilationServiceTests
         Assert.Contains("boom", run.Error);
     }
 
+    [Theory]
+    [InlineData("throw 42;", "42")]
+    [InlineData("throw true;", "true")]
+    [InlineData("throw null;", "null")]
+    [InlineData("throw undefined;", "undefined")]
+    [InlineData("throw \"plain\";", "plain")]
+    public void Execute_GuestPrimitiveThrow_ReportsLazyGuestMessage(
+        string source,
+        string expected)
+    {
+        var result = CompilationService.Compile(source);
+        Assert.True(result.Success);
+
+        var run = CompilationService.Execute(result.AssemblyBytes!, new StringWriter());
+
+        Assert.False(run.Success);
+        Assert.Equal(expected, run.Error);
+    }
+
     [Fact]
     public void Execute_InvalidAssembly_ReportsFailedLoadAndAggregateTime()
     {

@@ -2623,55 +2623,67 @@ public partial class ILEmitter
             return;
         }
 
-        // Use ValidatedILBuilder for exception block operations - it tracks depth automatically
-        // and validates proper Begin/End pairing
+        if (t.CatchBlock == null)
+            throw new InvalidOperationException("A try statement requires a catch or finally block.");
+
+        // Keep a real CLR handler for exceptions crossing calls/reflection, but
+        // route syntactically local guest throws directly to the JavaScript catch
+        // body. CLR unwind dominates sparse local-throw time even after removing
+        // wrapper metadata; a typed value local preserves the same catch identity
+        // without allocating or unwinding.
         var builder = _ctx.ILBuilder;
+        var catchValue = IL.DeclareLocal(_ctx.Types.Object);
+        var catchBody = builder.DefineLabel("js_local_catch");
+        var afterCatch = builder.DefineLabel("js_local_catch_done");
 
         _ctx.ExceptionBlockDepth++;
         builder.BeginExceptionBlock();
 
-        foreach (var stmt in t.TryBlock)
+        _localThrowScopes.Push(new LocalThrowScope(
+            catchValue,
+            catchBody,
+            _abruptCompletionScopes.Count,
+            _iteratorLoopCompletionScopes.Count));
+        try
         {
-            EmitStatement(stmt);
-        }
-
-        if (t.CatchBlock != null)
-        {
-            builder.BeginCatchBlock(_ctx.Types.Exception);
-            _ctx.Locals.EnterScope();
-            try
-            {
-                if (t.CatchParam != null)
-                {
-                    var exLocal = _ctx.Locals.DeclareLocal(t.CatchParam.Lexeme, _ctx.Types.Object);
-                    IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
-                    IL.Emit(OpCodes.Stloc, exLocal);
-                }
-                else
-                {
-                    IL.Emit(OpCodes.Pop);
-                }
-
-                foreach (var stmt in t.CatchBlock)
-                    EmitStatement(stmt);
-            }
-            finally
-            {
-                _ctx.Locals.ExitScope();
-            }
-        }
-
-        if (t.FinallyBlock != null)
-        {
-            builder.BeginFinallyBlock();
-            foreach (var stmt in t.FinallyBlock)
-            {
+            foreach (var stmt in t.TryBlock)
                 EmitStatement(stmt);
-            }
         }
+        finally
+        {
+            _localThrowScopes.Pop();
+        }
+        builder.Emit_Leave(afterCatch);
+
+        builder.BeginCatchBlock(_ctx.Types.Exception);
+        if (t.CatchParam != null)
+        {
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.WrapException);
+            IL.Emit(OpCodes.Stloc, catchValue);
+        }
+        else
+        {
+            IL.Emit(OpCodes.Pop);
+        }
+        builder.Emit_Leave(catchBody);
 
         builder.EndExceptionBlock();
         _ctx.ExceptionBlockDepth--;
+
+        builder.MarkLabel(catchBody);
+        _ctx.Locals.EnterScope();
+        try
+        {
+            if (t.CatchParam != null)
+                _ctx.Locals.RegisterLocal(t.CatchParam.Lexeme, catchValue);
+            foreach (var stmt in t.CatchBlock)
+                EmitStatement(stmt);
+        }
+        finally
+        {
+            _ctx.Locals.ExitScope();
+        }
+        builder.MarkLabel(afterCatch);
     }
 
     /// <summary>
@@ -2815,6 +2827,18 @@ public partial class ILEmitter
 
     protected override void EmitThrow(Stmt.Throw t)
     {
+        if (_localThrowScopes.TryPeek(out var localThrow) &&
+            localThrow.AbruptCompletionDepth == _abruptCompletionScopes.Count &&
+            localThrow.IteratorCompletionDepth == _iteratorLoopCompletionScopes.Count)
+        {
+            EmitExpression(t.Value);
+            EmitBoxIfNeeded(t.Value);
+            IL.Emit(OpCodes.Stloc, localThrow.Value);
+            SetStackUnknown();
+            _ctx.ILBuilder.Emit_Leave(localThrow.CatchBody);
+            return;
+        }
+
         EmitExpression(t.Value);
         EmitBoxIfNeeded(t.Value);
         IL.Emit(OpCodes.Call, _ctx.Runtime!.CreateException);
