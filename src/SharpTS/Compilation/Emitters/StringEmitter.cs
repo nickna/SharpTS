@@ -422,7 +422,9 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 return false;
 
             emitter.EmitExpression(receiver);
+            emitter.EmitConversionForParameter(receiver, ctx.Types.String);
             emitter.EmitExpression(arguments[0]);
+            emitter.EmitConversionForParameter(arguments[0], ctx.Types.String);
             if (arguments.Count == 2)
                 emitter.EmitExpressionAsDouble(arguments[1]);
             else
@@ -447,6 +449,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
             return false;
 
         emitter.EmitExpression(receiver);
+        emitter.EmitConversionForParameter(receiver, ctx.Types.String);
         if (arguments.Count > 0)
             emitter.EmitExpressionAsDouble(arguments[0]);
         else

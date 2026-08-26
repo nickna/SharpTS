@@ -193,16 +193,19 @@ public sealed class StablePrimitiveStringIntrinsicTests
     {
         const string source = IntrinsicFunctions + """
             const boxed: any = new String("abcdef");
+            const localized = new Date(Date.UTC(2024, 0, 15))
+                .toLocaleDateString("en-US", { timeZone: "UTC" });
             console.log(find("abcdef", "cd", 0));
             console.log(contains("abcdef", "cd", 0));
             console.log(takeSlice("abcdef", 1, 4));
             console.log(takeSubstring("abcdef", 4, 1));
             console.log(boxed.slice(1, 4));
+            console.log(localized.includes("2024"));
             """;
 
         var (errors, output) = TestHarness.CompileVerifyAndRun(source);
         Assert.Empty(errors);
-        Assert.Equal("2\ntrue\nbcd\nbcd\nbcd\n", output);
+        Assert.Equal("2\ntrue\nbcd\nbcd\nbcd\ntrue\n", output);
     }
 
     private static Assembly Compile(string source)
