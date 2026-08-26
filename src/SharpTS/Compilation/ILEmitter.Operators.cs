@@ -27,6 +27,9 @@ public partial class ILEmitter
         if (TryEmitExternalBinaryOperator(b))
             return;
 
+        if (TryEmitDirectInt32TypedArrayStencil(b))
+            return;
+
         // instanceof/in are valid with any operand type — bypass bigint-arithmetic path
         // so a bigint LHS gets boxed and flows through the normal InstanceOf/HasIn runtime call.
         if (IsBigIntOperation(b) && b.Operator.Type is not (TokenType.IN or TokenType.INSTANCEOF))
@@ -1217,6 +1220,340 @@ public partial class ILEmitter
 
         backing = default;
         return false;
+    }
+
+    /// <summary>
+    /// Emits the common three-point Int32 stencil with one element-range guard and unchecked
+    /// neighboring reads. The ordinary lowering independently checks <c>i - 1</c>, <c>i</c>, and
+    /// <c>i + 1</c> against the byte array. For an exact non-escaping backing all three indexes and
+    /// reads are pure, so one unsigned center/range check preserves the same first-fault behavior
+    /// while letting RyuJIT use a single base-plus-scaled-index address in the hot body.
+    /// </summary>
+    private bool TryEmitDirectInt32TypedArrayStencil(Expr.Binary expression)
+    {
+        if (expression.Operator.Type != TokenType.PLUS
+            || expression.Left is not Expr.Binary
+            {
+                Operator.Type: TokenType.MINUS,
+                Left: Expr.GetIndex left,
+                Right: Expr.Binary { Operator.Type: TokenType.STAR } scaledCenter
+            }
+            || expression.Right is not Expr.GetIndex right
+            || !TryMatchTimesTwoGetIndex(scaledCenter, out var center)
+            || center.Index is not Expr.Variable counter
+            || !IsIntegerCounterLocal(counter.Name.Lexeme)
+            || !MatchesCounterOffset(left.Index, counter.Name.Lexeme, -1)
+            || !MatchesCounterOffset(right.Index, counter.Name.Lexeme, 1)
+            || !TryMatchExactInt32Receiver(left, out var receiverName)
+            || !TryMatchExactInt32Receiver(center, out var centerReceiver)
+            || !TryMatchExactInt32Receiver(right, out var rightReceiver)
+            || centerReceiver != receiverName
+            || rightReceiver != receiverName
+            || !TryGetDirectTypedArrayBacking(left.Object, "Int32", out var backing)
+            || backing.Layout is not
+                { BytesPerElement: 4, Signed: true, IsFloat: false })
+        {
+            return false;
+        }
+
+        EmitIndexAsInt32(center.Index);
+        var centerIndex = IL.DeclareLocal(_ctx.Types.Int32);
+        IL.Emit(OpCodes.Stloc, centerIndex);
+
+        // (uint)(center - 1) < (uint)(length - 2) proves both neighboring indexes.
+        // The unsigned form also rejects negative centers and lengths below three.
+        var inRange = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, centerIndex);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Blt_Un, inRange);
+        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(inRange);
+
+        var centerReference = IL.DeclareLocal(_ctx.Types.Byte.MakeByRefType());
+        IL.Emit(OpCodes.Ldloc, backing.BufferLocal);
+        IL.Emit(OpCodes.Call, RuntimeEmitter.GetByteArrayDataReference());
+        IL.Emit(OpCodes.Ldloc, centerIndex);
+        IL.Emit(OpCodes.Ldc_I4_4);
+        IL.Emit(OpCodes.Mul);
+        IL.Emit(OpCodes.Call, RuntimeEmitter.UnsafeAddByteOffset());
+        IL.Emit(OpCodes.Stloc, centerReference);
+
+        EmitDirectInt32Read(centerReference, -4);
+        EmitDirectInt32Read(centerReference, 0);
+        IL.Emit(OpCodes.Ldc_R8, 2d);
+        IL.Emit(OpCodes.Mul);
+        IL.Emit(OpCodes.Sub);
+        EmitDirectInt32Read(centerReference, 4);
+        IL.Emit(OpCodes.Add);
+        SetStackType(StackType.Double);
+        return true;
+    }
+
+    private bool TryMatchExactInt32Receiver(Expr.GetIndex access, out string receiverName)
+    {
+        if (!access.Optional
+            && access.Object is Expr.Variable receiver
+            && _ctx.TypeMap?.Get(access.Object) is TypeInfo.TypedArray { ElementType: "Int32" })
+        {
+            receiverName = receiver.Name.Lexeme;
+            return true;
+        }
+
+        receiverName = "";
+        return false;
+    }
+
+    private static bool TryMatchTimesTwoGetIndex(
+        Expr.Binary multiplication,
+        out Expr.GetIndex access)
+    {
+        if (TryGetIntLiteralValue(multiplication.Left, out long left) && left == 2
+            && multiplication.Right is Expr.GetIndex right)
+        {
+            access = right;
+            return true;
+        }
+        if (TryGetIntLiteralValue(multiplication.Right, out long rightValue) && rightValue == 2
+            && multiplication.Left is Expr.GetIndex leftAccess)
+        {
+            access = leftAccess;
+            return true;
+        }
+
+        access = null!;
+        return false;
+    }
+
+    private static bool MatchesCounterOffset(Expr index, string counterName, long offset) =>
+        index is Expr.Binary
+        {
+            Operator.Type: TokenType.PLUS or TokenType.MINUS,
+            Left: Expr.Variable variable,
+            Right: var literal
+        }
+        && variable.Name.Lexeme == counterName
+        && TryGetIntLiteralValue(literal, out long value)
+        && (index is Expr.Binary { Operator.Type: TokenType.PLUS }
+            ? value
+            : -value) == offset;
+
+    private void EmitDirectInt32Read(LocalBuilder centerReference, int byteOffset)
+    {
+        IL.Emit(OpCodes.Ldloc, centerReference);
+        if (byteOffset != 0)
+        {
+            IL.Emit(OpCodes.Ldc_I4, byteOffset);
+            IL.Emit(OpCodes.Call, RuntimeEmitter.UnsafeAddByteOffset());
+        }
+        RuntimeEmitter.EmitReadElementAsDouble(
+            IL, bytesPerElement: 4, signed: true, isFloat: false);
+    }
+
+    /// <summary>
+    /// Keeps a pure, statically range-safe integer-counter expression native through an exact
+    /// Int32Array write. The counter round-trip guard preserves the existing behavior after an
+    /// Int64 counter leaves the Int32 range; the cold branch then evaluates and narrows the original
+    /// double expression. For an in-range array index, the range proof guarantees every arithmetic
+    /// intermediate and the assignment result are exactly representable as both Int32 and double.
+    /// </summary>
+    private bool TryEmitDirectInt32CounterWrite(
+        Expr index,
+        Expr value,
+        HoistedTypedArrayBacking backing,
+        LocalBuilder indexLocal)
+    {
+        if (backing.Layout is not { BytesPerElement: 4, Signed: true, IsFloat: false }
+            || index is not Expr.Variable counter
+            || !IsIntegerCounterLocal(counter.Name.Lexeme)
+            || !TryAnalyzeInt32CounterExpression(value, counter.Name.Lexeme, out _))
+        {
+            return false;
+        }
+
+        var slow = IL.DefineLabel();
+        var end = IL.DefineLabel();
+
+        // A native Int64 counter can exceed Int32 even though its typed-array index is Conv_I4.
+        // Take the specialized path only while that conversion is lossless.
+        IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counter.Name.Lexeme)!);
+        IL.Emit(OpCodes.Ldloc, indexLocal);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Bne_Un, slow);
+
+        EmitInt32CounterExpression(value, counter.Name.Lexeme, indexLocal);
+        var nativeValue = IL.DeclareLocal(_ctx.Types.Int32);
+        IL.Emit(OpCodes.Stloc, nativeValue);
+
+        EmitDirectTypedArrayElementReference(backing, indexLocal);
+        IL.Emit(OpCodes.Ldloc, nativeValue);
+        IL.Emit(OpCodes.Unaligned, (byte)1);
+        IL.Emit(OpCodes.Stind_I4);
+        IL.Emit(OpCodes.Ldloc, nativeValue);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Br, end);
+
+        IL.MarkLabel(slow);
+        EmitExpression(value);
+        EnsureDouble();
+        var doubleValue = IL.DeclareLocal(_ctx.Types.Double);
+        IL.Emit(OpCodes.Stloc, doubleValue);
+        EmitDirectTypedArrayWrite(backing, indexLocal, doubleValue);
+        IL.Emit(OpCodes.Ldloc, doubleValue);
+
+        IL.MarkLabel(end);
+        SetStackType(StackType.Double);
+        return true;
+    }
+
+    private readonly record struct Int32ExpressionRange(long Minimum, long Maximum);
+
+    private static bool TryAnalyzeInt32CounterExpression(
+        Expr expression,
+        string counterName,
+        out Int32ExpressionRange range)
+    {
+        // A byte[]-backed Int32Array cannot contain more than this many valid indexes.
+        const long maximumCounter = int.MaxValue / 4L - 1;
+
+        switch (expression)
+        {
+            case Expr.Grouping grouping:
+                return TryAnalyzeInt32CounterExpression(
+                    grouping.Expression, counterName, out range);
+
+            case Expr.Variable variable when variable.Name.Lexeme == counterName:
+                range = new(0, maximumCounter);
+                return true;
+
+            case var literal when !IsNegativeZeroLiteral(literal)
+                && TryGetIntLiteralValue(literal, out long value)
+                && value is >= int.MinValue and <= int.MaxValue:
+                range = new(value, value);
+                return true;
+
+            case Expr.Binary binary
+                when binary.Operator.Type is TokenType.PLUS or TokenType.MINUS or
+                    TokenType.STAR or TokenType.PERCENT
+                    && TryAnalyzeInt32CounterExpression(binary.Left, counterName, out var left)
+                    && TryAnalyzeInt32CounterExpression(binary.Right, counterName, out var right)
+                    && TryCombineInt32Ranges(binary.Operator.Type, left, right, out range):
+                return true;
+        }
+
+        range = default;
+        return false;
+    }
+
+    private static bool TryCombineInt32Ranges(
+        TokenType operation,
+        Int32ExpressionRange left,
+        Int32ExpressionRange right,
+        out Int32ExpressionRange range)
+    {
+        long minimum;
+        long maximum;
+        try
+        {
+            switch (operation)
+            {
+                case TokenType.PLUS:
+                    minimum = checked(left.Minimum + right.Minimum);
+                    maximum = checked(left.Maximum + right.Maximum);
+                    break;
+                case TokenType.MINUS:
+                    minimum = checked(left.Minimum - right.Maximum);
+                    maximum = checked(left.Maximum - right.Minimum);
+                    break;
+                case TokenType.STAR:
+                    long a = checked(left.Minimum * right.Minimum);
+                    long b = checked(left.Minimum * right.Maximum);
+                    long c = checked(left.Maximum * right.Minimum);
+                    long d = checked(left.Maximum * right.Maximum);
+                    minimum = Math.Min(Math.Min(a, b), Math.Min(c, d));
+                    maximum = Math.Max(Math.Max(a, b), Math.Max(c, d));
+                    break;
+                case TokenType.PERCENT
+                    when left.Minimum >= 0
+                        && right.Minimum == right.Maximum
+                        && right.Minimum > 0:
+                    minimum = 0;
+                    maximum = Math.Min(left.Maximum, right.Maximum - 1);
+                    break;
+                default:
+                    range = default;
+                    return false;
+            }
+        }
+        catch (OverflowException)
+        {
+            range = default;
+            return false;
+        }
+
+        if (minimum < int.MinValue || maximum > int.MaxValue)
+        {
+            range = default;
+            return false;
+        }
+
+        range = new(minimum, maximum);
+        return true;
+    }
+
+    private static bool IsNegativeZeroLiteral(Expr expression) => expression switch
+    {
+        Expr.Literal { Value: double value } =>
+            value == 0d && BitConverter.DoubleToInt64Bits(value) < 0,
+        Expr.Unary
+        {
+            Operator.Type: TokenType.MINUS,
+            Right: Expr.Literal { Value: double value }
+        } => value == 0d,
+        _ => false
+    };
+
+    private void EmitInt32CounterExpression(
+        Expr expression,
+        string counterName,
+        LocalBuilder indexLocal)
+    {
+        switch (expression)
+        {
+            case Expr.Grouping grouping:
+                EmitInt32CounterExpression(grouping.Expression, counterName, indexLocal);
+                return;
+
+            case Expr.Variable variable when variable.Name.Lexeme == counterName:
+                IL.Emit(OpCodes.Ldloc, indexLocal);
+                return;
+
+            case var literal when TryGetIntLiteralValue(literal, out long value):
+                IL.Emit(OpCodes.Ldc_I4, checked((int)value));
+                return;
+
+            case Expr.Binary binary:
+                EmitInt32CounterExpression(binary.Left, counterName, indexLocal);
+                EmitInt32CounterExpression(binary.Right, counterName, indexLocal);
+                IL.Emit(binary.Operator.Type switch
+                {
+                    TokenType.PLUS => OpCodes.Add,
+                    TokenType.MINUS => OpCodes.Sub,
+                    TokenType.STAR => OpCodes.Mul,
+                    TokenType.PERCENT => OpCodes.Rem,
+                    _ => throw new InvalidOperationException(
+                        $"Unsupported native Int32 expression operator {binary.Operator.Type}.")
+                });
+                return;
+
+            default:
+                throw new InvalidOperationException(
+                    "Native Int32 expression emission did not match its range proof.");
+        }
     }
 
     private void EmitDirectTypedArrayRead(
