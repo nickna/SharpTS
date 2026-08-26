@@ -1779,6 +1779,126 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
+    /// Zero-argument numeric slice entry point. A packed dense ordinary array
+    /// clones its double[] store directly; every observable or boxed shape
+    /// delegates to the existing generic slice and is wrapped normally.
+    /// </summary>
+    private void EmitArraySliceNumber(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArraySliceNumber",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.ArraySliceNumber = method;
+
+        var il = method.GetILGenerator();
+        var array = il.DeclareLocal(runtime.TSArrayType);
+        var count = il.DeclareLocal(_types.Int32);
+        var fallback = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayIsNumericGetter);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayNumericCountGetter);
+        il.Emit(OpCodes.Stloc, count);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayCloneNumeric);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(fallback);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Newarr, _types.Object);
+        il.Emit(OpCodes.Call, runtime.ArraySlice);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Guarded packed-double sort entry point for a proven pure numeric
+    /// comparator. The boxed adapter is carried only for the fallback branch;
+    /// the hot branch invokes the typed comparator and merge kernel without
+    /// object snapshots or per-comparison boxing.
+    /// </summary>
+    private void EmitArraySortNumeric(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var typedComparator = typeof(Func<double, double, double>);
+        var boxedComparator = typeof(Func<object, object, double>);
+        var method = typeBuilder.DefineMethod(
+            "ArraySortNumeric",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, typedComparator, boxedComparator]);
+        runtime.ArraySortNumeric = method;
+
+        var il = method.GetILGenerator();
+        var array = il.DeclareLocal(runtime.TSArrayType);
+        var count = il.DeclareLocal(_types.Int32);
+        var frozenMarker = il.DeclareLocal(_types.Object);
+        var fallback = il.DefineLabel();
+        var fallbackReady = il.DefineLabel();
+        var returnReceiver = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Stloc, array);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Brfalse, fallbackReady);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayIsNumericGetter);
+        il.Emit(OpCodes.Brfalse, fallback);
+
+        // Preserve the existing frozen-array behavior without materializing a
+        // packed receiver merely to discover that sort returns it unchanged.
+        il.Emit(OpCodes.Ldsfld, runtime.FrozenObjectsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloca, frozenMarker);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.ConditionalWeakTable,
+            "TryGetValue",
+            _types.Object,
+            _types.Object.MakeByRefType()));
+        il.Emit(OpCodes.Brtrue, returnReceiver);
+
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayNumericCountGetter);
+        il.Emit(OpCodes.Stloc, count);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Call, runtime.ArraySortCanUseDenseFastPath);
+        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, runtime.TSArraySortNumeric);
+        il.Emit(OpCodes.Br, returnReceiver);
+
+        il.MarkLabel(fallback);
+        il.Emit(OpCodes.Ldloc, array);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayEnsureBoxed);
+        il.MarkLabel(fallbackReady);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.ListOfObject);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.ArraySortDirectNumber);
+        il.Emit(OpCodes.Pop);
+
+        il.MarkLabel(returnReceiver);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
     /// Emits the shape guard shared by sort's snapshot and write-back phases.
     /// It performs no indexed Get/Set/Delete operations and invokes no guest
     /// code, so a failed check can safely fall through to the observable path.
@@ -1821,12 +1941,29 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Call, runtime.PDSHasIndexedOwnProperty);
         il.Emit(OpCodes.Brtrue, returnFalse);
 
-        // The raw backing must still represent every snapshotted index.
+        // The raw backing must still represent every snapshotted index. A
+        // packed-double $Array deliberately has an empty inherited List, so a
+        // Count mismatch gets one representation-aware retry before bailing.
+        var backingLengthReady = il.DefineLabel();
+        var numericArray = il.DeclareLocal(runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, receiverList);
         il.Emit(OpCodes.Callvirt,
             _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
         il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Beq, backingLengthReady);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSArrayType);
+        il.Emit(OpCodes.Stloc, numericArray);
+        il.Emit(OpCodes.Ldloc, numericArray);
+        il.Emit(OpCodes.Brfalse, returnFalse);
+        il.Emit(OpCodes.Ldloc, numericArray);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayIsNumericGetter);
+        il.Emit(OpCodes.Brfalse, returnFalse);
+        il.Emit(OpCodes.Ldloc, numericArray);
+        il.Emit(OpCodes.Callvirt, runtime.TSArrayNumericCountGetter);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Bne_Un, returnFalse);
+        il.MarkLabel(backingLengthReady);
 
         var notTSArray = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

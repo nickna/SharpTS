@@ -1210,6 +1210,8 @@ public partial class RuntimeEmitter
         // MethodBuilder is available to InvokeValue's Type-callee dispatch.
         EmitArraySort(typeBuilder, runtime);
         EmitArraySortDirect(typeBuilder, runtime);
+        EmitArraySliceNumber(typeBuilder, runtime);
+        EmitArraySortNumeric(typeBuilder, runtime);
         EmitArraySortProto(typeBuilder, runtime);
         EmitArrayToSorted(typeBuilder, runtime);
         EmitArrayToSortedGeneric(typeBuilder, runtime);

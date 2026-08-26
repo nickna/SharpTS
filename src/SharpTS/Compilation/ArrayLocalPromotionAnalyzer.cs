@@ -50,6 +50,8 @@ public static class ArrayLocalPromotionAnalyzer
             if (!visitor.ElementToken.TryGetValue(key, out var token)) continue; // no Double/Bool use seen
             if (closures?.IsVariableCaptured(key.Name) == true) continue;
             typeMap.MarkPromotableArrayLocal(nameToken, token);
+            if (visitor.NumericSliceSortReceivers.TryGetValue(key, out var receiverToken))
+                typeMap.MarkStableNumericSliceSortReceiver(receiverToken);
         }
     }
 
@@ -68,6 +70,20 @@ public static class ArrayLocalPromotionAnalyzer
 
         /// <summary>(scope, name) → candidate declaration's name token (empty-array-literal local).</summary>
         public Dictionary<(int Scope, string Name), Token> Candidates { get; } = new();
+
+        /// <summary>
+        /// Fresh zero-argument numeric slice candidates. Unlike the older
+        /// List&lt;T&gt; promotions, these keep an object slot but reuse the same
+        /// non-escape proof to admit a representation-preserving sort kernel.
+        /// </summary>
+        private HashSet<(int Scope, string Name)> NumericSliceCandidates { get; } = new();
+
+        /// <summary>
+        /// Candidate key to the exact receiver token of its one admitted sort.
+        /// The token is published to TypeMap only if the candidate survives all
+        /// later escape, alias, capture, and redeclaration checks.
+        /// </summary>
+        public Dictionary<(int Scope, string Name), Token> NumericSliceSortReceivers { get; } = new();
 
         /// <summary>How many times each (scope, name) is declared.</summary>
         public Dictionary<(int Scope, string Name), int> DeclCount { get; } = new();
@@ -113,6 +129,8 @@ public static class ArrayLocalPromotionAnalyzer
                 // own uses. (Empty-literal candidates get their element kind from their uses instead.)
                 if (initializer is Expr.Call)
                     ElementToken[key] = TokenType.TYPE_NUMBER;
+                if (IsNumericSliceInitializer(initializer))
+                    NumericSliceCandidates.Add(key);
             }
 
             // Visit the initializer for completeness: `[]` has no sub-uses, but a `src.map(cb)` init
@@ -124,10 +142,80 @@ public static class ArrayLocalPromotionAnalyzer
 
         private bool IsPromotableArrayInitializer(Expr? init) =>
             init is Expr.ArrayLiteral { Elements.Count: 0 }
+            || IsNumericSliceInitializer(init)
             || (init is Expr.Call { Callee: Expr.Get { Object: Expr.Variable, Name.Lexeme: "map", Optional: false } } mc
                 && IsTypedNonCapturingNumericMapper(mc.Arguments))
             || (init is Expr.Call { Callee: Expr.Get { Object: Expr.Variable, Name.Lexeme: "filter", Optional: false } } fc
                 && IsTypedNonCapturingNumericPredicate(fc.Arguments));
+
+        private bool IsNumericSliceInitializer(Expr? init) =>
+            init is Expr.Call
+            {
+                Optional: false,
+                Callee: Expr.Get
+                {
+                    Object: Expr.Variable source,
+                    Name.Lexeme: "slice",
+                    Optional: false
+                },
+                Arguments.Count: 0
+            }
+            && IsNumberArrayReceiver(source);
+
+        protected override void VisitExpression(Stmt.Expression stmt)
+        {
+            // Only a discarded `copy.sort((a,b)=>a-b)` may consume a fresh
+            // numeric-slice candidate. Using sort's receiver result (alias,
+            // return, comparison, argument pass) falls through VisitCall and
+            // disqualifies the local through the ordinary bare-variable rule.
+            if (stmt.Expr is Expr.Call
+                {
+                    Optional: false,
+                    Callee: Expr.Get
+                    {
+                        Object: Expr.Variable receiver,
+                        Name.Lexeme: "sort",
+                        Optional: false
+                    },
+                    Arguments: [Expr.ArrowFunction comparator]
+                }
+                && NumericSliceCandidates.Contains((_scope, receiver.Name.Lexeme))
+                && IsPureNumericDifference(comparator))
+            {
+                NotePermittedReceiver(receiver);
+                NumericSliceSortReceivers[(_scope, receiver.Name.Lexeme)] = receiver.Name;
+                Visit(comparator);
+                return;
+            }
+
+            base.VisitExpression(stmt);
+        }
+
+        private bool IsPureNumericDifference(Expr.ArrowFunction comparator)
+        {
+            if (comparator.HasOwnThis
+                || comparator.IsAsync
+                || comparator.IsGenerator
+                || comparator.Parameters.Count != 2
+                || comparator.Parameters.Any(parameter =>
+                    parameter.IsRest || parameter.IsOptional || parameter.DefaultValue != null)
+                || comparator.Parameters[0].Type != "number"
+                || comparator.Parameters[1].Type != "number"
+                || comparator.ReturnType != null && comparator.ReturnType != "number"
+                || _closures?.GetCaptures(comparator).Count > 0
+                || comparator.ExpressionBody is not Expr.Binary
+                {
+                    Operator.Type: TokenType.MINUS,
+                    Left: Expr.Variable left,
+                    Right: Expr.Variable right
+                })
+            {
+                return false;
+            }
+
+            return left.Name.Lexeme == comparator.Parameters[0].Name.Lexeme
+                && right.Name.Lexeme == comparator.Parameters[1].Name.Lexeme;
+        }
 
         protected override void VisitGetIndex(Expr.GetIndex expr)
         {

@@ -252,6 +252,7 @@ public class EmittedRuntime
     public MethodBuilder ArrayShiftProto { get; set; } = null!;
     public MethodBuilder ArrayUnshift { get; set; } = null!;
     public MethodBuilder ArraySlice { get; set; } = null!;
+    public MethodBuilder ArraySliceNumber { get; set; } = null!;
     public MethodBuilder ArrayMap { get; set; } = null!;
     public MethodBuilder ArrayMapDirect { get; set; } = null!;
     public MethodBuilder ArrayMapDouble { get; set; } = null!;
@@ -296,6 +297,7 @@ public class EmittedRuntime
     public MethodBuilder ArraySort { get; set; } = null!;
     public MethodBuilder ArraySortDirect { get; set; } = null!;
     public MethodBuilder ArraySortDirectNumber { get; set; } = null!;
+    public MethodBuilder ArraySortNumeric { get; set; } = null!;
     public MethodBuilder ArraySortProto { get; set; } = null!;
     public MethodBuilder ArraySortCanUseDenseFastPath { get; set; } = null!;
     public MethodBuilder ArrayToSorted { get; set; } = null!;
@@ -1550,6 +1552,10 @@ public class EmittedRuntime
     public MethodBuilder TSArraySetDouble { get; set; } = null!;
     public MethodBuilder TSArrayPushDouble { get; set; } = null!;
     public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;
+    public MethodBuilder TSArrayIsNumericGetter { get; set; } = null!;
+    public MethodBuilder TSArrayNumericCountGetter { get; set; } = null!;
+    public MethodBuilder TSArrayCloneNumeric { get; set; } = null!;
+    public MethodBuilder TSArraySortNumeric { get; set; } = null!;
     // Flips an empty $Array into numeric (unboxed double[]) mode — emitted at
     // statically-number[] array-creation sites so escaping number[] arrays start
     // unboxed. No-op on a non-empty / sparse array (stays boxed).
