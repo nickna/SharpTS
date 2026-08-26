@@ -217,15 +217,36 @@ public sealed class ClassRegistry
     /// </summary>
     public MethodBuilder? ResolveInstanceMethod(string className, string methodName)
     {
+        return TryResolveInstanceMethod(className, methodName, out _, out var method)
+            ? method
+            : null;
+    }
+
+    /// <summary>
+    /// Resolves an instance method and the emitted class that declares it by walking
+    /// up the inheritance chain.
+    /// </summary>
+    public bool TryResolveInstanceMethod(
+        string className,
+        string methodName,
+        out string declaringClassName,
+        out MethodBuilder method)
+    {
         string? current = className;
         while (current != null)
         {
             if (_instanceMethods.TryGetValue(current, out var methods) &&
-                methods.TryGetValue(methodName, out var method))
-                return method;
+                methods.TryGetValue(methodName, out var resolvedMethod))
+            {
+                declaringClassName = current;
+                method = resolvedMethod;
+                return true;
+            }
             current = _superclass.GetValueOrDefault(current);
         }
-        return null;
+        declaringClassName = null!;
+        method = null!;
+        return false;
     }
 
     /// <summary>

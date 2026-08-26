@@ -85,6 +85,54 @@ public sealed class StablePrimitiveClassMethodTests
     }
 
     [Fact]
+    public void InheritedAndSuperPrimitiveCalls_UseDeclaringClassTypedCore()
+    {
+        const string source = """
+            class Base {
+                step(): number { return 1; }
+            }
+            class Middle extends Base { }
+            class Leaf extends Middle { }
+            class Override extends Middle {
+                step(): number { return 2; }
+            }
+            class SuperCall extends Base {
+                step(): number { return super.step() + 1; }
+            }
+            function inherited(): number {
+                const value = new Leaf();
+                return value.step();
+            }
+            function overridden(): number {
+                const value = new Override();
+                return value.step();
+            }
+            function viaSuper(): number {
+                const value = new SuperCall();
+                return value.step();
+            }
+            console.log(inherited(), overridden(), viaSuper());
+            """;
+
+        Assembly assembly = Compile(source);
+        MethodInfo baseCore = FindTypedCore(assembly.GetType("Base")!, "step");
+        MethodInfo overrideCore = FindTypedCore(assembly.GetType("Override")!, "step");
+        MethodInfo superCallCore = FindTypedCore(assembly.GetType("SuperCall")!, "step");
+
+        AssertTypedCoreCallWithoutObjectAbi(
+            ReadInstructions(FindFunction(assembly, "inherited")), baseCore);
+        AssertTypedCoreCallWithoutObjectAbi(
+            ReadInstructions(FindFunction(assembly, "overridden")), overrideCore);
+        Assert.DoesNotContain(ReadInstructions(FindFunction(assembly, "overridden")), instruction =>
+            instruction.Operand is MethodBase method && method.Name == baseCore.Name);
+        AssertTypedCoreCallWithoutObjectAbi(
+            ReadInstructions(superCallCore), baseCore);
+
+        Assert.Equal("1 2 2\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+    }
+
+    [Fact]
     public void MutableAndArgumentsSensitiveMethods_RetainPublicWrapperPath()
     {
         Assembly assembly = Compile("""
@@ -145,7 +193,8 @@ public sealed class StablePrimitiveClassMethodTests
     public void EscapedCapturedAndPrototypeObservableReceivers_RetainWrapperPath()
     {
         Assembly escapedAssembly = Compile("""
-            class Counter { step(): number { return 1; } }
+            class Base { step(): number { return 1; } }
+            class Counter extends Base { }
             function escape(value: Counter): void { }
             function escaped(): number {
                 const counter = new Counter();
@@ -167,7 +216,8 @@ public sealed class StablePrimitiveClassMethodTests
             && method.ReturnType == typeof(object));
 
         Assembly prototypeAssembly = Compile("""
-            class Counter { step(): number { return 1; } }
+            class Base { step(): number { return 1; } }
+            class Counter extends Base { }
             const observed = Counter.prototype;
             function exact(): number {
                 const counter = new Counter();
@@ -177,6 +227,49 @@ public sealed class StablePrimitiveClassMethodTests
         Assert.Contains(ReadInstructions(FindFunction(prototypeAssembly, "exact")), instruction =>
             instruction.Operand is MethodInfo { Name: "step" } method
             && method.ReturnType == typeof(object));
+    }
+
+    [Fact]
+    public void GenericBaseAndNonPrimitiveReturns_RetainObjectAbi()
+    {
+        const string source = """
+            class Box<T> {
+                value: T;
+                constructor(value: T) { this.value = value; }
+                read(): T { return this.value; }
+            }
+            class NumberBox extends Box<number> {
+                doubled(): number { return super.read() * 2; }
+            }
+            class Results {
+                objectValue(): object { return { value: 3 }; }
+                unionValue(flag: boolean): number | string { return flag ? 4 : "four"; }
+            }
+            function inheritedGeneric(): number {
+                const box = new NumberBox(3);
+                return box.read();
+            }
+            function nonPrimitive(flag: boolean): number | string {
+                const results = new Results();
+                results.objectValue();
+                return results.unionValue(flag);
+            }
+            console.log(inheritedGeneric(), new NumberBox(3).doubled(), nonPrimitive(false));
+            """;
+
+        Assembly assembly = Compile(source);
+        Assert.DoesNotContain(
+            assembly.GetType("Box")!.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic),
+            method => method.Name.StartsWith("$typed$read$", StringComparison.Ordinal));
+        Assert.DoesNotContain(
+            assembly.GetType("Results")!.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic),
+            method => method.Name.StartsWith("$typed$", StringComparison.Ordinal));
+        Assert.Contains(ReadInstructions(FindFunction(assembly, "inheritedGeneric")), instruction =>
+            instruction.Operand is MethodInfo { Name: "read" } method
+            && method.ReturnType == typeof(object));
+
+        Assert.Equal("3 6 four\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
 
     [Fact]
@@ -245,9 +338,34 @@ public sealed class StablePrimitiveClassMethodTests
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
         var typeMap = new TypeChecker().Check(statements);
         var deadCodeInfo = new DeadCodeAnalyzer(typeMap).Analyze(statements);
-        var compiler = new ILCompiler($"issue_1457_{Guid.NewGuid():N}");
+        var compiler = new ILCompiler($"issue_1485_{Guid.NewGuid():N}");
         compiler.Compile(statements, typeMap, deadCodeInfo);
         return Assembly.Load(compiler.SaveToBytes());
+    }
+
+    private static MethodInfo FindTypedCore(Type type, string methodName) =>
+        Assert.Single(type.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic),
+            method => method.DeclaringType == type
+                && method.Name.StartsWith(
+                $"$typed${methodName}$", StringComparison.Ordinal));
+
+    private static void AssertTypedCoreCallWithoutObjectAbi(
+        IEnumerable<(OpCode OpCode, MemberInfo? Operand)> instructions,
+        MethodInfo core)
+    {
+        var il = instructions.ToArray();
+        Assert.Contains(il, instruction =>
+            instruction.OpCode == OpCodes.Call
+            && instruction.Operand is MethodBase method
+            && method.Name == core.Name);
+        Assert.DoesNotContain(il, instruction =>
+            instruction.OpCode == OpCodes.Callvirt
+            && instruction.Operand is MethodInfo { ReturnType: not null } method
+            && method.ReturnType == typeof(object));
+        Assert.DoesNotContain(il, instruction =>
+            instruction.OpCode is var opCode
+            && (opCode == OpCodes.Box || opCode == OpCodes.Unbox_Any)
+            && instruction.Operand == typeof(double));
     }
 
     private static MethodInfo FindFunction(Assembly assembly, string name) =>

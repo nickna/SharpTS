@@ -307,6 +307,70 @@ export function classMethodReuse(n: number): number {
     return sum;
 }
 
+class InheritanceBaseCounter {
+    value: number;
+
+    constructor(value: number) {
+        this.value = value;
+    }
+
+    step(): number {
+        this.value = this.value + 1;
+        return this.value;
+    }
+}
+
+class InheritanceLeafCounter extends InheritanceBaseCounter { }
+
+class OverrideCounter extends InheritanceBaseCounter {
+    step(): number {
+        this.value = this.value + 1;
+        return this.value;
+    }
+}
+
+class SuperCounter extends InheritanceBaseCounter {
+    step(): number {
+        return super.step();
+    }
+}
+
+export function classMethodInheritanceBase(n: number): number {
+    const counter = new InheritanceBaseCounter(0);
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + counter.step();
+    }
+    return sum;
+}
+
+export function classMethodInherited(n: number): number {
+    const counter = new InheritanceLeafCounter(0);
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + counter.step();
+    }
+    return sum;
+}
+
+export function classMethodOverride(n: number): number {
+    const counter = new OverrideCounter(0);
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + counter.step();
+    }
+    return sum;
+}
+
+export function classMethodSuper(n: number): number {
+    const counter = new SuperCounter(0);
+    let sum: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        sum = sum + counter.step();
+    }
+    return sum;
+}
+
 export function classConstruction(n: number): number {
     let sum: number = 0;
     for (let i: number = 0; i < n; i++) {

@@ -506,15 +506,18 @@ public partial class ILEmitter
             return true;
         }
 
-        // Look up the method in the class hierarchy
-        var methodBuilder = _ctx.ResolveInstanceMethod(className, methodName);
-        if (methodBuilder == null)
+        // Look up the method and its owner in the class hierarchy. An inherited
+        // primitive core is registered on the declaring base, not the exact
+        // receiver's derived class.
+        if (!_ctx.TryResolveInstanceMethod(
+                className, methodName, out string declaringClassName, out var methodBuilder))
             return false;
 
         MethodBuilder dispatchBuilder = methodBuilder;
         MethodBuilder? typedCore = null;
         bool useTypedCore = _ctx.TypeMap?.IsStableExactPrimitiveMethodCall(methodGet) == true
-            && _ctx.TypedPrimitiveInstanceMethodCores?.TryGetValue(className, out var classCores) == true
+            && _ctx.TypedPrimitiveInstanceMethodCores?.TryGetValue(
+                declaringClassName, out var classCores) == true
             && classCores.TryGetValue(methodName, out typedCore);
         if (useTypedCore)
             dispatchBuilder = typedCore!;
@@ -701,19 +704,31 @@ public partial class ILEmitter
         // ResolveClassName is idempotent for already-qualified names, so always safe to call.
         string resolvedSuperName = _ctx.ResolveClassName(superclassName);
 
-        // Look up the method directly on the superclass (not walking up — that's what
-        // ResolveInstanceMethod does, but we specifically want the super's version)
-        var methodBuilder = _ctx.ResolveInstanceMethod(resolvedSuperName, methodName);
-        if (methodBuilder == null)
+        // Resolve from the immediate superclass, walking farther up only when it does
+        // not declare the method. Keep the declaring class so its typed core can be
+        // selected rather than looking in the current derived class.
+        if (!_ctx.TryResolveInstanceMethod(
+                resolvedSuperName, methodName, out string declaringClassName, out var methodBuilder))
             return false;
+
+        MethodBuilder dispatchBuilder = methodBuilder;
+        MethodBuilder? typedCore = null;
+        bool useTypedCore = _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == false
+            && !_ctx.RuntimeFeatures.UsesObjectIntegrityMutation
+            && !_ctx.RuntimeFeatures.UsesClassPrototypeMutation
+            && _ctx.TypedPrimitiveInstanceMethodCores?.TryGetValue(
+                declaringClassName, out var classCores) == true
+            && classCores.TryGetValue(methodName, out typedCore);
+        if (useTypedCore)
+            dispatchBuilder = typedCore!;
 
         // Generic superclasses need the member referenced through the instantiated base
         // (e.g. Base<float64>::count) — an open MethodDef token is not executable (#178)
         if (!EmitterTypeHelpers.TryResolveSuperCall(
-                _ctx.CurrentClassBuilder, methodBuilder, _ctx.EmittingTypeBuilder, out var superTarget))
+                _ctx.CurrentClassBuilder, dispatchBuilder, _ctx.EmittingTypeBuilder, out var superTarget))
             return false;
 
-        var methodParams = methodBuilder.GetParameters();
+        var methodParams = dispatchBuilder.GetParameters();
 
         // Emit: this.Base::method(args) via non-virtual Call
         IL.Emit(OpCodes.Ldarg_0);  // load 'this'
@@ -739,7 +754,12 @@ public partial class ILEmitter
 
         // Use Call (NOT Callvirt) to bypass virtual dispatch
         IL.Emit(OpCodes.Call, superTarget);
-        SetStackUnknown();
+        if (useTypedCore && _ctx.Types.IsDouble(dispatchBuilder.ReturnType))
+            SetStackType(StackType.Double);
+        else if (useTypedCore && _ctx.Types.IsBoolean(dispatchBuilder.ReturnType))
+            SetStackType(StackType.Boolean);
+        else
+            SetStackUnknown();
         return true;
     }
 

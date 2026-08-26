@@ -232,6 +232,25 @@ public partial class CompilationContext
     }
 
     /// <summary>
+    /// Resolves an instance method and the emitted class that declares it by walking
+    /// up the inheritance chain.
+    /// </summary>
+    public bool TryResolveInstanceMethod(
+        string className,
+        string methodName,
+        out string declaringClassName,
+        out MethodBuilder method)
+    {
+        if (ClassRegistry is not null)
+            return ClassRegistry.TryResolveInstanceMethod(
+                className, methodName, out declaringClassName, out method);
+
+        declaringClassName = null!;
+        method = null!;
+        return false;
+    }
+
+    /// <summary>
     /// Resolve an instance getter by walking up the inheritance chain.
     /// </summary>
     public MethodBuilder? ResolveInstanceGetter(string className, string propertyName)
