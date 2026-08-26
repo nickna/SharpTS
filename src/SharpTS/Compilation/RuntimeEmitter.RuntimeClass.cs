@@ -1280,6 +1280,7 @@ public partial class RuntimeEmitter
         EmitStringSubstr(typeBuilder, runtime);
         EmitStringIndexOf(typeBuilder, runtime);
         EmitStringIndexOfFrom(typeBuilder, runtime);
+        EmitPrimitiveStringIntrinsics(typeBuilder, runtime);
         EmitStringReplace(typeBuilder, runtime);
         EmitStringIncludes(typeBuilder, runtime);
         EmitStringStartsWith(typeBuilder, runtime);

@@ -215,6 +215,26 @@ public class RuntimeFeatureDetectorTests
     }
 
     [Theory]
+    [InlineData("const value: string = 'abc'; value.indexOf('b');", false)]
+    [InlineData("const prototype = String.prototype;", true)]
+    [InlineData("String.prototype.indexOf = function() { return 0; };", true)]
+    [InlineData("String.prototype['slice'] = function() { return ''; };", true)]
+    [InlineData("const S = String; S.prototype.includes = function() { return false; };", true)]
+    [InlineData("const p = String.prototype; p.substring = function() { return ''; };", true)]
+    [InlineData("globalThis.String = String;", true)]
+    [InlineData("globalThis['String'] = String;", true)]
+    [InlineData("Object.defineProperty(String.prototype, 'indexOf', { value: null });", true)]
+    [InlineData("eval('void 0');", true)]
+    public void DetectsStringPrototypeMutationRisk(string source, bool expected)
+    {
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var typeMap = new TypeChecker().Check(statements);
+        var features = new RuntimeFeatureDetector().Detect(statements, typeMap);
+
+        Assert.Equal(expected, features.UsesStringPrototypeMutation);
+    }
+
+    [Theory]
     [InlineData("Number.prototype.toString = function() { return 'x'; };", false)]
     [InlineData("Number.parseInt = function() { return 0; };", true)]
     [InlineData("globalThis.Number = Number;", true)]

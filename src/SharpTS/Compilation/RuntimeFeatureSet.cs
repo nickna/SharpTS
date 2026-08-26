@@ -162,6 +162,10 @@ public sealed class RuntimeFeatureSet
     // Number prototype mutation makes typed number instance methods observable
     // through ordinary property lookup. Direct formatting requires this false.
     public bool UsesNumberPrototypeMutation { get; set; } = true;
+    // String prototype/constructor mutation makes primitive string method
+    // bindings observable through ordinary property lookup. Fixed-arity typed
+    // intrinsics require this to remain false.
+    public bool UsesStringPrototypeMutation { get; set; } = true;
     // Replacing Number or mutating its static properties requires live lookup of
     // Number.parseInt and the other constructor-owned built-ins.
     public bool UsesNumberConstructorMutation { get; set; } = true;

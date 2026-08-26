@@ -404,6 +404,10 @@ public class EmittedRuntime
     public MethodBuilder StringSubstr { get; set; } = null!;
     public MethodBuilder StringIndexOf { get; set; } = null!;
     public MethodBuilder StringIndexOfFrom { get; set; } = null!;
+    public MethodBuilder StringIndexOfPrimitive { get; set; } = null!;
+    public MethodBuilder StringIncludesPrimitive { get; set; } = null!;
+    public MethodBuilder StringSlicePrimitive { get; set; } = null!;
+    public MethodBuilder StringSubstringPrimitive { get; set; } = null!;
     public MethodBuilder StringToUpperCase { get; set; } = null!;
     public MethodBuilder StringToLowerCase { get; set; } = null!;
     public MethodBuilder StringTrim { get; set; } = null!;
