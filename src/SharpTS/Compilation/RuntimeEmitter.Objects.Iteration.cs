@@ -1524,7 +1524,7 @@ public partial class RuntimeEmitter
 
         // ECMA-262 §20.1.2.7 Object.fromEntries step 1:
         // RequireObjectCoercible — throws TypeError on null/undefined.
-        // Use TSTypeError + CreateException so __tsValue carries through to
+        // Use TSTypeError + CreateException so the exact value carries through to
         // catch/then handlers as a real TypeError instance.
         var requireOcThrowLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);

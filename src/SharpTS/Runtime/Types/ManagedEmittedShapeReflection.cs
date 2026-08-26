@@ -45,6 +45,8 @@ internal static class ManagedEmittedShapeReflection
             ManagedEmittedShape.Date => type.Name == "$TSDate",
             ManagedEmittedShape.PromiseRejectedException =>
                 type.Name == "$PromiseRejectedException",
+            ManagedEmittedShape.ThrownValueException =>
+                type.Name == "$ThrownValueException",
             ManagedEmittedShape.HasFields => HasAssemblyLocalFieldsContract(type),
             _ => false
         };
@@ -156,6 +158,7 @@ internal static class ManagedEmittedShapeReflection
         ManagedEmittedShape.ArrayBuffer => "$ArrayBuffer",
         ManagedEmittedShape.Date => "$TSDate",
         ManagedEmittedShape.PromiseRejectedException => "$PromiseRejectedException",
+        ManagedEmittedShape.ThrownValueException => "$ThrownValueException",
         ManagedEmittedShape.HasFields => "$IHasFields object",
         _ => shape.ToString()
     };
@@ -170,5 +173,6 @@ internal enum ManagedEmittedShape
     ArrayBuffer,
     Date,
     PromiseRejectedException,
+    ThrownValueException,
     HasFields
 }

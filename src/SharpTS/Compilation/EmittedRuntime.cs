@@ -1490,6 +1490,12 @@ public class EmittedRuntime
     public MethodBuilder ErrorIsError { get; set; } = null!;
     public MethodBuilder AggregateErrorGetErrors { get; set; } = null!;
 
+    // $ThrownValueException : Exception — the allocation-light carrier for a
+    // guest `throw` value. Message is derived lazily at a host boundary.
+    public Type ThrownValueExceptionType { get; set; } = null!;
+    public ConstructorBuilder ThrownValueExceptionCtor { get; set; } = null!;
+    public MethodBuilder ThrownValueExceptionValueGetter { get; set; } = null!;
+
     // Promise type - emitted for standalone assemblies
     // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
     public Type TSPromiseType { get; set; } = null!;

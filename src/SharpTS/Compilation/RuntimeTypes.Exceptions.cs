@@ -16,6 +16,17 @@ public static partial class RuntimeTypes
         while (ex is System.Reflection.TargetInvocationException && ex.InnerException is not null)
             ex = ex.InnerException;
 
+        var type = ex.GetType();
+        if (ManagedEmittedShapeReflection.IsShape(
+                type, ManagedEmittedShape.ThrownValueException))
+        {
+            var valueProperty = ManagedEmittedShapeReflection.GetPublicProperty(
+                type, ManagedEmittedShape.ThrownValueException, "Value")
+                ?? throw new InvalidOperationException(
+                    "Compiler-emitted $ThrownValueException has no Value property.");
+            return valueProperty.GetValue(ex)!;
+        }
+
         // Promise rejection exceptions carry the original rejection value
         // (for example, a raw string from Promise.reject("msg")).
         if (ex is SharpTSPromiseRejectedException runtimeRejection)
@@ -23,7 +34,6 @@ public static partial class RuntimeTypes
             return runtimeRejection.Reason ?? new SharpTSError(ex.Message);
         }
 
-        var type = ex.GetType();
         if (ManagedEmittedShapeReflection.IsShape(
                 type, ManagedEmittedShape.PromiseRejectedException))
         {
