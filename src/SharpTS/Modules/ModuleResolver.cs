@@ -1126,13 +1126,12 @@ public class ModuleResolver
 
             // ESM modules (and scripts) can also reach modules via bare require() — it's a
             // global in SharpTS, mirroring Node's createRequire interop. Walk the body for
-            // literal require() specifiers that resolve to embedded stdlib facades so they
-            // get bundled into compiled output (#1217); without this the emitter's require()
-            // lowering finds the facade in neither CommonJsGetExportsMethods nor
-            // ModuleExportFields and lowers the call to a runtime MODULE_NOT_FOUND throw.
-            // Scoped to stdlib on purpose: user modules reached only via require() stay
-            // runtime-lazy in the interpreter and out of the static type-check graph.
-            CollectCjsRequireDependencies(module, statements, absolutePath, decoratorMode, stdlibOnly: true);
+            // literal require() specifiers so they get bundled into compiled output. This
+            // covers both the global require interop (#1217) and the canonical
+            // `const require = createRequire(import.meta.url)` pattern from node:module.
+            // Compiled mode is strict-AOT, so every literal target must be present in the
+            // static graph; the interpreter still resolves the same call lazily.
+            CollectCjsRequireDependencies(module, statements, absolutePath, decoratorMode);
 
             return module;
         }
@@ -1290,9 +1289,8 @@ public class ModuleResolver
     /// Unresolvable specifiers are also ignored — they'll either resolve via the optional-dep
     /// runtime throw path or surface as a compile error from the IL emitter.
     /// </summary>
-    /// <param name="stdlibOnly">When true (ESM/script callers, #1217), only specifiers that
-    /// resolve to embedded stdlib modules are loaded; user modules reached via require()
-    /// from non-CJS files stay runtime-lazy.</param>
+    /// <param name="stdlibOnly">When true, only specifiers that resolve to embedded stdlib
+    /// modules are loaded. Current callers include all literal targets for strict AOT.</param>
     private void CollectCjsRequireDependencies(
         ParsedModule module,
         List<Stmt> statements,

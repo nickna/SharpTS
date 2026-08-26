@@ -241,7 +241,8 @@ public sealed class RuntimeFeatureDetector
         // Strip "node:" prefix that Node.js permits on builtins.
         var p = path.StartsWith("node:") ? path[5..] : path;
         if (p is "dns/promises" or "fs/promises" or "primitive:fs/promises" or
-            "crypto/promises" or "stream/promises" or "readline/promises" or
+            "crypto/promises" or "stream/promises" or "stream/consumers" or
+            "primitive:stream/consumers" or "readline/promises" or
             "timers/promises" or "primitive:timers/promises")
         {
             _set.UsesPromise = true;
@@ -299,6 +300,14 @@ public sealed class RuntimeFeatureDetector
             case "stream/web":
                 _set.UsesNodeStreams = true;
                 if (p == "stream/web") _set.UsesWebStreams = true;
+                break;
+            case "stream/consumers":
+            case "primitive:stream/consumers":
+                _set.UsesNodeStreams = true;
+                _set.UsesWebStreams = true;
+                _set.UsesBuffer = true;
+                _set.UsesPromise = true;
+                _set.TypedArrays |= RuntimeFeatureSet.TypedArrayKinds.ArrayBuffer;
                 break;
             case "cluster":
                 _set.UsesCluster = true; break;

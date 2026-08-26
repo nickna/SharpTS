@@ -30,6 +30,8 @@ public static class PrimitiveModuleValues
             "timers" => TimersPrimitiveInterpreter.GetExports(),
             "timers/promises" => TimersPrimitiveInterpreter.GetPromisesExports(),
             "readline" => ReadlinePrimitiveInterpreter.GetExports(),
+            "module" => ModulePrimitiveInterpreter.GetExports(),
+            "stream/consumers" => StreamConsumersPrimitiveInterpreter.GetExports(),
             "fs" => FsModuleInterpreter.GetExports(),
             "fs/promises" => FsPromisesModuleInterpreter.GetExports(),
             "zlib" => ZlibModuleInterpreter.GetExports(),
@@ -43,6 +45,7 @@ public static class PrimitiveModuleValues
     public static bool HasInterpreterSupport(string primitiveName)
     {
         return primitiveName is "os" or "process" or "perf" or "tty" or "async_hooks"
-            or "timers" or "timers/promises" or "readline" or "fs" or "fs/promises" or "zlib";
+            or "timers" or "timers/promises" or "readline" or "module" or "stream/consumers"
+            or "fs" or "fs/promises" or "zlib";
     }
 }

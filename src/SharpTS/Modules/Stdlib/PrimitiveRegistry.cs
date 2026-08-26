@@ -29,6 +29,8 @@ public static class PrimitiveRegistry
         Prefix + "timers",
         Prefix + "timers/promises",
         Prefix + "readline",
+        Prefix + "module",
+        Prefix + "stream/consumers",
         Prefix + "fs",
         Prefix + "fs/promises",
         Prefix + "zlib",

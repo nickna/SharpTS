@@ -183,6 +183,16 @@ public abstract partial class ExpressionEmitterBase
                 IL.Emit(OpCodes.Call, initMethod);
             }
 
+            // require('assert') and require('assert/strict') return a callable
+            // function object rather than an ESM namespace object.
+            if (resolvedPath is "stdlib:node/assert.ts" or "stdlib:node/assert/strict.ts" &&
+                exportFields.TryGetValue("$default", out var defaultField))
+            {
+                IL.Emit(OpCodes.Ldsfld, defaultField);
+                SetStackUnknown();
+                return true;
+            }
+
             var dictType = Ctx.Types.DictionaryStringObject;
             var dictCtor = Ctx.Types.GetDefaultConstructor(dictType);
             var addMethod = Ctx.Types.GetMethod(dictType, "Add", Ctx.Types.String, Ctx.Types.Object);
