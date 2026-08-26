@@ -95,15 +95,18 @@ public partial class RuntimeEmitter
         var checkDataCloneErrorLabel = il.DefineLabel();
         var checkNodeErrorLabel = il.DefineLabel();
 
-        il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
-        il.Emit(OpCodes.Brfalse, checkDataCloneErrorLabel);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldloc, exLocal);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
+            il.Emit(OpCodes.Brfalse, checkDataCloneErrorLabel);
 
-        // It's a $PromiseRejectedException - return its Reason property
-        il.Emit(OpCodes.Ldloc, exLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
-        il.Emit(OpCodes.Call, runtime.TSPromiseRejectedExceptionReasonGetter);
-        il.Emit(OpCodes.Ret);
+            // It's a $PromiseRejectedException - return its Reason property
+            il.Emit(OpCodes.Ldloc, exLocal);
+            il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
+            il.Emit(OpCodes.Call, runtime.TSPromiseRejectedExceptionReasonGetter);
+            il.Emit(OpCodes.Ret);
+        }
 
         // Check for $DataCloneError (thrown by StructuredCloneCore, #1255) — return its
         // Message directly (a raw string, not wrapped in $Error), matching the

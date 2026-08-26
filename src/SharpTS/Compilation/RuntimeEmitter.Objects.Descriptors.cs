@@ -1967,15 +1967,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
         il.Emit(OpCodes.Brtrue, functionDescriptorCheckLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brfalse, notTSFunctionForDescLabel);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brfalse, notTSFunctionForDescLabel);
+        }
+        else
+        {
+            il.Emit(OpCodes.Br, notTSFunctionForDescLabel);
+        }
         il.MarkLabel(functionDescriptorCheckLabel);
 
         // name / length only — anything else on a function returns null.

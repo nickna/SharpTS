@@ -1232,25 +1232,28 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(notAnonymousDelegateForNamesLabel);
 
-        // Promise combinator element callbacks are anonymous built-in
-        // functions. Their own string keys are ordered length, name.
-        var notResolveCallbackForNamesLabel = il.DefineLabel();
-        var promiseCallbackNamesLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brfalse, notResolveCallbackForNamesLabel);
-        il.Emit(OpCodes.Br, promiseCallbackNamesLabel);
-        il.MarkLabel(notResolveCallbackForNamesLabel);
-        var notPromiseCallbackForNamesLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brfalse, notPromiseCallbackForNamesLabel);
-        il.MarkLabel(promiseCallbackNamesLabel);
-        AddName("length");
-        AddName("name");
-        il.Emit(OpCodes.Ldloc, namesLocal);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(notPromiseCallbackForNamesLabel);
+        if (_features.UsesPromise)
+        {
+            // Promise combinator element callbacks are anonymous built-in
+            // functions. Their own string keys are ordered length, name.
+            var notResolveCallbackForNamesLabel = il.DefineLabel();
+            var promiseCallbackNamesLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brfalse, notResolveCallbackForNamesLabel);
+            il.Emit(OpCodes.Br, promiseCallbackNamesLabel);
+            il.MarkLabel(notResolveCallbackForNamesLabel);
+            var notPromiseCallbackForNamesLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brfalse, notPromiseCallbackForNamesLabel);
+            il.MarkLabel(promiseCallbackNamesLabel);
+            AddName("length");
+            AddName("name");
+            il.Emit(OpCodes.Ldloc, namesLocal);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(notPromiseCallbackForNamesLabel);
+        }
 
         // System.Object Type → return the spec-known static names for the
         // JS Object constructor. ECMA-262 §20.1.2 lists prototype/name/length

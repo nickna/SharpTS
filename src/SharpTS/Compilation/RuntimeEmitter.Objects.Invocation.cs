@@ -182,15 +182,20 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Brtrue, writeCallbackWrapperLabel);
         }
 
-        var resolveCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brtrue, resolveCallbackLabel);
+        Label resolveCallbackLabel = default;
+        Label rejectCallbackLabel = default;
+        if (_features.UsesPromise)
+        {
+            resolveCallbackLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brtrue, resolveCallbackLabel);
 
-        var rejectCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brtrue, rejectCallbackLabel);
+            rejectCallbackLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brtrue, rejectCallbackLabel);
+        }
 
         var boundArrayMethodLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
@@ -514,19 +519,22 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        il.MarkLabel(resolveCallbackLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.PromiseResolveCallbackInvoke);
-        il.Emit(OpCodes.Ret);
+        if (_features.UsesPromise)
+        {
+            il.MarkLabel(resolveCallbackLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, runtime.PromiseResolveCallbackInvoke);
+            il.Emit(OpCodes.Ret);
 
-        il.MarkLabel(rejectCallbackLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
-        il.Emit(OpCodes.Ret);
+            il.MarkLabel(rejectCallbackLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, runtime.PromiseRejectCallbackInvoke);
+            il.Emit(OpCodes.Ret);
+        }
 
         il.MarkLabel(boundArrayMethodLabel);
         il.Emit(OpCodes.Ldarg_0);
@@ -733,9 +741,11 @@ public partial class RuntimeEmitter
             EmitWrapperCheck(runtime.TransformDoneCallbackType, runtime.TransformDoneCallbackInvoke);
             EmitWrapperCheck(runtime.WriteCallbackWrapperType, runtime.WriteCallbackWrapperInvoke);
         }
-        // Promise callbacks — always emitted (Promise infrastructure is core).
-        EmitWrapperCheck(runtime.PromiseResolveCallbackType, runtime.PromiseResolveCallbackInvoke);
-        EmitWrapperCheck(runtime.PromiseRejectCallbackType, runtime.PromiseRejectCallbackInvoke);
+        if (_features.UsesPromise)
+        {
+            EmitWrapperCheck(runtime.PromiseResolveCallbackType, runtime.PromiseResolveCallbackInvoke);
+            EmitWrapperCheck(runtime.PromiseRejectCallbackType, runtime.PromiseRejectCallbackInvoke);
+        }
 
         // After the chain, mark the final reject label so the fall-through code
         // below has somewhere to land.

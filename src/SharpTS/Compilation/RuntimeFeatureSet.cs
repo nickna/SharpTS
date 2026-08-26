@@ -13,8 +13,8 @@ namespace SharpTS.Compilation;
 ///
 /// Phase 1 covers Tier A categories from <c>docs/plans/runtime-tree-shaking.md</c>:
 /// network/HTTP/TLS/DNS/dgram/cluster/fs/streams/crypto/zlib/typed-arrays/etc.
-/// Tier B (Promise, RegExp, Date, Map/Set, iterator helpers) is not gated yet —
-/// those flags don't exist on this set.
+/// Later phases also gate Promise/async, RegExp, Date, Map/Set, and iterator
+/// helper families.
 /// </summary>
 public sealed class RuntimeFeatureSet
 {
@@ -109,6 +109,7 @@ public sealed class RuntimeFeatureSet
     public bool UsesIntl { get; set; } = true;              // Intl.NumberFormat, DateTimeFormat, Collator
     public bool UsesReflect { get; set; } = true;           // Reflect.set/get/deleteProperty/has/etc.
     public bool UsesIteratorHelpers { get; set; } = true;   // Iterator.prototype.map/filter/flatMap/take/drop
+    public bool UsesPromise { get; set; } = true;           // Promise references, async/await, and Promise-returning host/module surfaces
     public bool UsesDate { get; set; } = true;              // new Date(), Date.now(), Date.X
     public bool UsesRegExp { get; set; } = true;            // /pattern/ or new RegExp()
     public bool UsesBuffer { get; set; } = true;            // Buffer.from(), new Buffer() — also implied by crypto/fs/zlib/http/fetch/dgram

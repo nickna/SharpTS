@@ -37,6 +37,8 @@ public partial class RuntimeEmitter
     public EmittedRuntime EmitAll(ModuleBuilder moduleBuilder, RuntimeFeatureSet features)
     {
         _features = features;
+        if (_emitHosted)
+            _features.UsesPromise = true;
         var runtime = new EmittedRuntime();
 
         // Emit $Undefined singleton class first (other methods need this type)
@@ -102,8 +104,10 @@ public partial class RuntimeEmitter
         // Emit $IGenerator interface for generator return/throw support
         EmitGeneratorInterface(moduleBuilder, runtime);
 
-        // Emit $IAsyncGenerator interface for async generator return/throw support
-        EmitAsyncGeneratorInterface(moduleBuilder, runtime);
+        // Emit $IAsyncGenerator only when async-generator or for-await support
+        // can reference it.
+        if (features.UsesAsyncGenerator || features.UsesForAwaitOf)
+            EmitAsyncGeneratorInterface(moduleBuilder, runtime);
 
         // NOTE: $IteratorWrapper is emitted later, after iterator methods are defined
 
@@ -121,9 +125,10 @@ public partial class RuntimeEmitter
         // runs unconditionally inside EmitRuntimeClass below).
         EmitTSDataCloneErrorType(moduleBuilder, runtime);
 
-        // Emit $Promise class for standalone Promise support
+        // Emit $Promise class for standalone Promise support.
         // NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSPromise
-        EmitTSPromiseClass(moduleBuilder, runtime);
+        if (features.UsesPromise)
+            EmitTSPromiseClass(moduleBuilder, runtime);
 
         // Emit $ArrayHole singleton first — $Array methods reference
         // $ArrayHole.Instance for padding intermediate positions on sparse writes
@@ -452,7 +457,8 @@ public partial class RuntimeEmitter
         // and the body of the pre-declared NewPromiseCapabilityResult helper.
         // Must follow EmitConstructDynamicValue (it calls through that helper) and
         // EmitRuntimeClass (depends on InvokeValue / WrapException).
-        EmitPromiseCapabilitySupport(moduleBuilder, runtime);
+        if (features.UsesPromise)
+            EmitPromiseCapabilitySupport(moduleBuilder, runtime);
 
         // The async-from-sync adapter depends on iterator helpers plus
         // CoerceAwaitableToTask, all of which are now defined. It is gated on

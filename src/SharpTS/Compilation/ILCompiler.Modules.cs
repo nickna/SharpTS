@@ -442,7 +442,7 @@ public partial class ILCompiler
         // executes the reaction before the next statement in the same script
         // job. Leave then/catch/finally results to the normal microtask
         // checkpoint (#1440). Explicit `await` remains on the path below.
-        if (exprStmt.Expr is Expr.Call
+        if (_features?.UsesPromise == true && exprStmt.Expr is Expr.Call
             {
                 Callee: Expr.Get { Name.Lexeme: "then" or "catch" or "finally" }
             })
@@ -497,29 +497,36 @@ public partial class ILCompiler
         var waitForTaskLabel = il.DefineLabel();
         var isTaskLabel = il.DefineLabel();
 
-        // NewPromiseCapability can legitimately return a native Promise/Task
-        // from a custom constructor. JavaScript discards an unused expression;
-        // do not let SharpTS's standalone top-level auto-await extension turn
-        // an intentionally ignored rejection into an uncaught program error.
-        il.Emit(OpCodes.Ldloc, exprResult);
-        il.Emit(OpCodes.Call, _runtime.ShouldAutoAwaitPromiseMethod);
-        il.Emit(OpCodes.Brfalse, notTaskLabel);
+        if (_features?.UsesPromise == true)
+        {
+            // Custom capabilities opt out of SharpTS's standalone auto-await.
+            il.Emit(OpCodes.Ldloc, exprResult);
+            il.Emit(OpCodes.Call, _runtime.ShouldAutoAwaitPromiseMethod);
+            il.Emit(OpCodes.Brfalse, notTaskLabel);
+        }
 
         // Check for Task<object> first
         il.Emit(OpCodes.Ldloc, exprResult);
         il.Emit(OpCodes.Isinst, _types.TaskOfObject);
         il.Emit(OpCodes.Brtrue, isTaskLabel);
 
-        // Check for $Promise (async function return type)
-        il.Emit(OpCodes.Ldloc, exprResult);
-        il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
-        il.Emit(OpCodes.Brfalse, notTaskLabel);
+        if (_features?.UsesPromise == true)
+        {
+            // Check for $Promise (async function return type)
+            il.Emit(OpCodes.Ldloc, exprResult);
+            il.Emit(OpCodes.Isinst, _runtime.TSPromiseType);
+            il.Emit(OpCodes.Brfalse, notTaskLabel);
 
-        // It's a $Promise - extract its underlying Task
-        il.Emit(OpCodes.Ldloc, exprResult);
-        il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
-        il.Emit(OpCodes.Br, waitForTaskLabel);
+            // It's a $Promise - extract its underlying Task
+            il.Emit(OpCodes.Ldloc, exprResult);
+            il.Emit(OpCodes.Castclass, _runtime.TSPromiseType);
+            il.Emit(OpCodes.Callvirt, _runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Br, waitForTaskLabel);
+        }
+        else
+        {
+            il.Emit(OpCodes.Br, notTaskLabel);
+        }
 
         // It's a Task<object> directly
         il.MarkLabel(isTaskLabel);

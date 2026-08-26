@@ -15,7 +15,7 @@ public class PromiseCombinatorSchedulingTests
     [Fact]
     public void AdoptPromiseCombinatorResult_AllowsInlineInternalContinuation()
     {
-        var lexer = new Lexer("const value = 1;");
+        var lexer = new Lexer("Promise.resolve(1);");
         var parser = new Parser(lexer.ScanTokens());
         var statements = parser.ParseOrThrow();
         var typeMap = new TypeChecker().Check(statements);

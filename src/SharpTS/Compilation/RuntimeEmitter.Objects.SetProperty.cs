@@ -276,15 +276,16 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brtrue, pdsStoreLabel);
         }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brtrue, pdsStoreLabel);
-        // The intrinsic Promise representation is Task<object?>. It is still
-        // an ordinary extensible ECMAScript object and must retain expando
-        // writes such as `promise.then = customThen`.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
-        il.Emit(OpCodes.Brtrue, pdsStoreLabel);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Brtrue, pdsStoreLabel);
+            // The intrinsic Promise representation is Task<object?>.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            il.Emit(OpCodes.Brtrue, pdsStoreLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSErrorType);
         il.Emit(OpCodes.Brtrue, pdsStoreLabel);
@@ -587,12 +588,15 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Isinst, runtime.TSRegExpType);
             il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
         }
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
-        il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSErrorType);
         il.Emit(OpCodes.Brtrue, fieldsPdsStoreLabel);

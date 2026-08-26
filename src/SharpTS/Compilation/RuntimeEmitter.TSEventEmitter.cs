@@ -417,16 +417,19 @@ public partial class RuntimeEmitter
         // a raw Task<object>, while other paths may hand back a $Promise wrapper.
         var taskLocal = il.DeclareLocal(_types.TaskOfObject);
         var haveTask = il.DefineLabel();
-        var notPromise = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brfalse, notPromise);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
-        il.Emit(OpCodes.Stloc, taskLocal);
-        il.Emit(OpCodes.Br, haveTask);
-        il.MarkLabel(notPromise);
+        if (_features.UsesPromise)
+        {
+            var notPromise = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Brfalse, notPromise);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Castclass, runtime.TSPromiseType);
+            il.Emit(OpCodes.Callvirt, runtime.TSPromiseTaskGetter);
+            il.Emit(OpCodes.Stloc, taskLocal);
+            il.Emit(OpCodes.Br, haveTask);
+            il.MarkLabel(notPromise);
+        }
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, _types.TaskOfObject);
         il.Emit(OpCodes.Brfalse, ret);
@@ -454,17 +457,20 @@ public partial class RuntimeEmitter
         // Task faulted by a guest `throw` carries the guest value in the
         // exception's __tsValue (recovered by WrapException).
         var reasonLocal = il.DeclareLocal(_types.Object);
-        var notRejected = il.DefineLabel();
         var haveReason = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
-        il.Emit(OpCodes.Brfalse, notRejected);
-        il.Emit(OpCodes.Ldloc, innerLocal);
-        il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
-        il.Emit(OpCodes.Callvirt, runtime.TSPromiseRejectedExceptionReasonGetter);
-        il.Emit(OpCodes.Stloc, reasonLocal);
-        il.Emit(OpCodes.Br, haveReason);
-        il.MarkLabel(notRejected);
+        if (_features.UsesPromise)
+        {
+            var notRejected = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, innerLocal);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseRejectedExceptionType);
+            il.Emit(OpCodes.Brfalse, notRejected);
+            il.Emit(OpCodes.Ldloc, innerLocal);
+            il.Emit(OpCodes.Castclass, runtime.TSPromiseRejectedExceptionType);
+            il.Emit(OpCodes.Callvirt, runtime.TSPromiseRejectedExceptionReasonGetter);
+            il.Emit(OpCodes.Stloc, reasonLocal);
+            il.Emit(OpCodes.Br, haveReason);
+            il.MarkLabel(notRejected);
+        }
         // reason = inner.Data.Contains("__tsValue") ? inner.Data["__tsValue"] : inner
         var dataGetter = typeof(Exception).GetProperty("Data")!.GetGetMethod()!;
         var dataContains = typeof(System.Collections.IDictionary).GetMethod("Contains", [_types.Object])!;

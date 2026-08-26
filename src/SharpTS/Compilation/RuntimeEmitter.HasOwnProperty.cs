@@ -151,15 +151,25 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
+        }
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, _types.FuncObjectArrayToObject);
         il.Emit(OpCodes.Brtrue, functionOwnPropertyCheck);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brfalse, notTSFunction);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brfalse, notTSFunction);
+        }
+        else
+        {
+            il.Emit(OpCodes.Br, notTSFunction);
+        }
         il.MarkLabel(functionOwnPropertyCheck);
         // If `name` or `length` was deleted on this instance, the property is
         // no longer own — report false. Per ECMA-262 §17, both are configurable.
