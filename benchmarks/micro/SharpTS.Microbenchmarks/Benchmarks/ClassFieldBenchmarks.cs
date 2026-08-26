@@ -53,6 +53,50 @@ public class ClassMethodReuseBenchmarks : ClassFieldBenchmarkBase
 [MemoryDiagnoser]
 [RankColumn]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class InheritedClassMethodBenchmarks : ClassFieldBenchmarkBase
+{
+    private Func<double, double> _direct = null!;
+    private Func<double, double> _inherited = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _direct = LoadCompiled("classMethodInheritanceBase");
+        _inherited = LoadCompiled("classMethodInherited");
+    }
+
+    [Benchmark(Baseline = true)]
+    public double DirectBaseMethod() => _direct(N);
+
+    [Benchmark]
+    public double InheritedBaseMethod() => _inherited(N);
+}
+
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class SuperClassMethodBenchmarks : ClassFieldBenchmarkBase
+{
+    private Func<double, double> _directOverride = null!;
+    private Func<double, double> _super = null!;
+
+    [GlobalSetup]
+    public void Setup()
+    {
+        _directOverride = LoadCompiled("classMethodOverride");
+        _super = LoadCompiled("classMethodSuper");
+    }
+
+    [Benchmark(Baseline = true)]
+    public double DirectOverride() => _directOverride(N);
+
+    [Benchmark]
+    public double OverrideCallingSuper() => _super(N);
+}
+
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class ClassConstructionBenchmarks : ClassFieldBenchmarkBase
 {
     [GlobalSetup]
