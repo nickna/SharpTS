@@ -7,7 +7,8 @@ param(
     [switch]$RealWindow,
     [switch]$PublishOnly,
     [switch]$NativeAot,
-    [switch]$EnforcePerformanceBudgets
+    [switch]$EnforcePerformanceBudgets,
+    [string]$PerformanceEvidencePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -50,6 +51,9 @@ $canExecute = -not $PublishOnly -and (
     ($RuntimeIdentifier.EndsWith("-arm64", [StringComparison]::Ordinal) -and $osArchitecture -eq "Arm64"))
 $consumerExecutableName = "SharpTS.Gui.Sdk.Consumer" + $(if ($isWindowsRid) { ".exe" } else { "" })
 $cliExecutableName = "cli_app_with_spaces" + $(if ($isWindowsRid) { ".exe" } else { "" })
+if ($PerformanceEvidencePath -and -not $NativeAot) {
+    throw "PerformanceEvidencePath requires -NativeAot."
+}
 $candidatePackagePath = $null
 if (-not [string]::IsNullOrWhiteSpace($CandidatePackage)) {
     $candidatePackagePath = [IO.Path]::GetFullPath($CandidatePackage, $repositoryRoot)
@@ -150,6 +154,8 @@ function Measure-Application([string]$Executable, [string[]]$Arguments, [string]
             $peakWorkingSetBytes = [Math]::Max($peakWorkingSetBytes, $process.WorkingSet64)
         }
         $stopwatch.Stop()
+        $process.Refresh()
+        $peakWorkingSetBytes = [Math]::Max($peakWorkingSetBytes, $process.PeakWorkingSet64)
         if ($process.ExitCode -ne 0) {
             throw "$Executable $($Arguments -join ' ') failed with exit code $($process.ExitCode)."
         }
@@ -161,6 +167,104 @@ function Measure-Application([string]$Executable, [string[]]$Arguments, [string]
     finally {
         $process.Dispose()
     }
+}
+
+function Write-NativeAotPerformanceEvidence(
+    [object]$Budgets,
+    [long]$ExecutableBytes,
+    [long]$ShippingBytes,
+    [object]$ApplicationMeasurement
+) {
+    if ([string]::IsNullOrWhiteSpace($PerformanceEvidencePath)) { return }
+
+    $commit = @(& git -C $repositoryRoot rev-parse HEAD 2>$null)
+    if ($LASTEXITCODE -ne 0 -or $commit.Count -ne 1 -or $commit[0] -notmatch '^[0-9a-f]{40}$') {
+        throw "Could not resolve the SharpTS revision for performance evidence."
+    }
+    $status = @(& git -C $repositoryRoot status --porcelain --untracked-files=no 2>$null)
+    if ($LASTEXITCODE -ne 0) { throw "Could not inspect the SharpTS worktree for performance evidence." }
+    $dotnetVersion = @(& dotnet --version 2>$null | Select-Object -First 1)
+    if ($LASTEXITCODE -ne 0 -or $dotnetVersion.Count -ne 1) {
+        throw "Could not resolve the .NET SDK version for performance evidence."
+    }
+
+    $coldStartup = [ordered]@{
+        id = "coldStartup"
+        unit = "milliseconds"
+        budget = [ordered]@{
+            limit = [double]$Budgets.nativeAot.maxColdStartupMilliseconds
+            sourceId = "nativeAot.maxColdStartupMilliseconds"
+        }
+    }
+    $peakWorkingSet = [ordered]@{
+        id = "peakWorkingSet"
+        unit = "bytes"
+        budget = [ordered]@{
+            limit = [double]$Budgets.nativeAot.maxPeakWorkingSetBytes
+            sourceId = "nativeAot.maxPeakWorkingSetBytes"
+        }
+    }
+    if ($null -eq $ApplicationMeasurement) {
+        $reason = if ($canExecute) { "notRun" } else { "notExecutable" }
+        $coldStartup.status = "missing"
+        $coldStartup.reason = $reason
+        $peakWorkingSet.status = "missing"
+        $peakWorkingSet.reason = $reason
+    }
+    else {
+        $coldStartup.status = "measured"
+        $coldStartup.actual = [double]$ApplicationMeasurement.ElapsedMilliseconds
+        if ([long]$ApplicationMeasurement.PeakWorkingSetBytes -gt 0) {
+            $peakWorkingSet.status = "measured"
+            $peakWorkingSet.actual = [double]$ApplicationMeasurement.PeakWorkingSetBytes
+        }
+        else {
+            $peakWorkingSet.status = "missing"
+            $peakWorkingSet.reason = "notAvailable"
+        }
+    }
+
+    $cpu = if ($env:PROCESSOR_IDENTIFIER) { $env:PROCESSOR_IDENTIFIER.Trim() } else { "unknown" }
+    $evidence = [ordered]@{
+        sourceFormat = "sharpts-gui-packaging-v1"
+        run = [ordered]@{
+            timestampUtc = [DateTimeOffset]::UtcNow.ToString("o", [Globalization.CultureInfo]::InvariantCulture)
+            revision = [ordered]@{ commit = [string]$commit[0]; dirty = $status.Count -gt 0 }
+            environment = [ordered]@{
+                operatingSystem = [Runtime.InteropServices.RuntimeInformation]::OSDescription.Trim()
+                architecture = $osArchitecture.ToLowerInvariant()
+                processor = $cpu
+                runner = if ($env:RUNNER_NAME) { $env:RUNNER_NAME.Trim() } else { [Environment]::MachineName }
+            }
+            tools = [ordered]@{
+                dotnet = [string]$dotnetVersion[0]
+                runtimeIdentifier = $RuntimeIdentifier
+            }
+        }
+        measurements = @(
+            $coldStartup
+            $peakWorkingSet
+            [ordered]@{
+                id = "executableSize"; unit = "bytes"; status = "measured"; actual = $ExecutableBytes
+                budget = [ordered]@{ limit = [double]$Budgets.nativeAot.maxExecutableBytes; sourceId = "nativeAot.maxExecutableBytes" }
+            }
+            [ordered]@{
+                id = "shippingSize"; unit = "bytes"; status = "measured"; actual = $ShippingBytes
+                budget = [ordered]@{ limit = [double]$Budgets.nativeAot.maxShippingBytes; sourceId = "nativeAot.maxShippingBytes" }
+            }
+        )
+    }
+    $fullPath = if ([IO.Path]::IsPathRooted($PerformanceEvidencePath)) {
+        [IO.Path]::GetFullPath($PerformanceEvidencePath)
+    } else {
+        [IO.Path]::GetFullPath($PerformanceEvidencePath, $repositoryRoot)
+    }
+    [IO.Directory]::CreateDirectory((Split-Path -Parent $fullPath)) | Out-Null
+    [IO.File]::WriteAllText(
+        $fullPath,
+        ($evidence | ConvertTo-Json -Depth 10) + [Environment]::NewLine,
+        [Text.UTF8Encoding]::new($false))
+    Write-Host "Native AOT performance evidence: $fullPath"
 }
 Invoke-DotNet @(
     "publish", "src\SharpTS.Gui.Host\SharpTS.Gui.Host.csproj", "-c", "Release",
@@ -480,6 +584,8 @@ if ($NativeAot) {
     $performanceBudgets = Get-Content -LiteralPath (Join-Path $repositoryRoot "benchmarks\micro\SharpTS.Gui.Benchmarks\PerformanceBudgets.json") -Raw | ConvertFrom-Json
     $nativeAotMaxExecutableBytes = $performanceBudgets.nativeAot.maxExecutableBytes
     $nativeAotMaxTotalBytes = $performanceBudgets.nativeAot.maxShippingBytes
+    $nativeAotMeasurement = $null
+    Write-NativeAotPerformanceEvidence $performanceBudgets $nativeAotExecutableBytes $nativeAotTotalBytes $nativeAotMeasurement
     if ($nativeAotExecutableBytes -gt $nativeAotMaxExecutableBytes) {
         throw "Native AOT executable budget exceeded: $nativeAotExecutableBytes bytes > $nativeAotMaxExecutableBytes bytes."
     }
@@ -493,6 +599,7 @@ if ($NativeAot) {
         $nativeAotMeasurement = Measure-Application $nativeAotExecutable @(
             "--headless", "--trace", $nativeAotTrace, "--", "--smoke-close") $nativeAotPublishRoot
         Assert-GuestTrace $nativeAotTrace "Native AOT application"
+        Write-NativeAotPerformanceEvidence $performanceBudgets $nativeAotExecutableBytes $nativeAotTotalBytes $nativeAotMeasurement
         Write-Host "Native AOT cold startup: $($nativeAotMeasurement.ElapsedMilliseconds) ms; peak working set: $($nativeAotMeasurement.PeakWorkingSetBytes) bytes."
         if ($EnforcePerformanceBudgets -and
             $nativeAotMeasurement.ElapsedMilliseconds -gt $performanceBudgets.nativeAot.maxColdStartupMilliseconds) {

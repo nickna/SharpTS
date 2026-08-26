@@ -1,0 +1,311 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/nickna/SharpTS/main/benchmarks/snapshots/snapshot-v2.schema.json",
+  "title": "SharpTS public performance snapshot",
+  "description": "A dated collection of machine-bound benchmark runs. Runs are never combined across environments.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["$schema", "schemaVersion", "generatedAtUtc", "runs"],
+  "properties": {
+    "$schema": {
+      "const": "https://raw.githubusercontent.com/nickna/SharpTS/main/benchmarks/snapshots/snapshot-v2.schema.json"
+    },
+    "schemaVersion": { "const": 2 },
+    "generatedAtUtc": { "type": "string", "format": "date-time" },
+    "runs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          { "$ref": "#/$defs/crossRuntimeRun" },
+          { "$ref": "#/$defs/normalizedRun" }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "nonEmptyString": { "type": "string", "minLength": 1 },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "dirty"],
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "dirty": { "type": "boolean" }
+      }
+    },
+    "crossRuntimeRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "source", "snapshot"],
+      "properties": {
+        "suite": { "const": "cross-runtime" },
+        "source": { "const": "snapshot-v1" },
+        "snapshot": {
+          "type": "object",
+          "required": ["$schema", "schemaVersion", "run", "methodology", "cases"],
+          "properties": {
+            "$schema": {
+              "const": "https://raw.githubusercontent.com/nickna/SharpTS/main/benchmarks/cross-runtime/snapshot-v1.schema.json"
+            },
+            "schemaVersion": { "const": 1 },
+            "run": {
+              "type": "object",
+              "required": ["timestampUtc", "revision", "environment", "tools"]
+            },
+            "methodology": { "type": "object" },
+            "cases": { "type": "array", "minItems": 1 }
+          }
+        }
+      }
+    },
+    "benchmarkDotNetHost": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "benchmarkDotNetCaption", "benchmarkDotNetVersion", "operatingSystem",
+        "processorName", "physicalProcessorCount", "physicalCoreCount", "logicalCoreCount",
+        "runtimeVersion", "architecture", "hasAttachedDebugger", "hasRyuJit", "configuration",
+        "dotNetCliVersion", "chronometerFrequencyHertz", "hardwareTimerKind"
+      ],
+      "properties": {
+        "benchmarkDotNetCaption": { "$ref": "#/$defs/nonEmptyString" },
+        "benchmarkDotNetVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "operatingSystem": { "$ref": "#/$defs/nonEmptyString" },
+        "processorName": { "$ref": "#/$defs/nonEmptyString" },
+        "physicalProcessorCount": { "type": ["integer", "null"], "minimum": 1 },
+        "physicalCoreCount": { "type": ["integer", "null"], "minimum": 1 },
+        "logicalCoreCount": { "type": ["integer", "null"], "minimum": 1 },
+        "runtimeVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "architecture": { "$ref": "#/$defs/nonEmptyString" },
+        "hasAttachedDebugger": { "type": "boolean" },
+        "hasRyuJit": { "type": "boolean" },
+        "configuration": { "$ref": "#/$defs/nonEmptyString" },
+        "dotNetCliVersion": { "$ref": "#/$defs/nonEmptyString" },
+        "chronometerFrequencyHertz": { "type": "number", "exclusiveMinimum": 0 },
+        "hardwareTimerKind": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "runMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["timestampUtc", "revision", "environment", "tools"],
+      "properties": {
+        "timestampUtc": { "type": "string", "format": "date-time" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operatingSystem", "architecture", "processor", "runner"],
+          "properties": {
+            "operatingSystem": { "$ref": "#/$defs/nonEmptyString" },
+            "architecture": { "$ref": "#/$defs/nonEmptyString" },
+            "processor": { "$ref": "#/$defs/nonEmptyString" },
+            "runner": { "$ref": "#/$defs/nonEmptyString" },
+            "benchmarkDotNetHost": { "$ref": "#/$defs/benchmarkDotNetHost" }
+          }
+        },
+        "tools": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dotnet"],
+          "properties": {
+            "dotnet": { "$ref": "#/$defs/nonEmptyString" },
+            "benchmarkDotNet": { "$ref": "#/$defs/nonEmptyString" },
+            "runtime": { "$ref": "#/$defs/nonEmptyString" },
+            "runtimeIdentifier": { "$ref": "#/$defs/nonEmptyString" }
+          }
+        }
+      }
+    },
+    "methodology": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "sourceFormat", "timingScope", "units"],
+      "properties": {
+        "id": { "$ref": "#/$defs/nonEmptyString" },
+        "sourceFormat": {
+          "enum": ["benchmarkdotnet-json-with-sharpts-metadata-v1", "sharpts-gui-packaging-v1"]
+        },
+        "timingScope": { "$ref": "#/$defs/nonEmptyString" },
+        "units": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["duration", "allocation", "throughput", "gc"],
+          "properties": {
+            "duration": { "const": "nanoseconds" },
+            "allocation": { "const": "bytes" },
+            "throughput": { "const": "operationsPerSecond" },
+            "gc": { "const": "collectionsPer1000Operations" }
+          }
+        },
+        "budgetContract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "schemaVersion"],
+          "properties": {
+            "path": { "$ref": "#/$defs/nonEmptyString" },
+            "schemaVersion": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    },
+    "parameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "value"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "value": { "type": ["string", "number", "boolean", "null"] }
+      }
+    },
+    "statistics": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status", "sampleCount", "meanNanoseconds", "minimumNanoseconds",
+            "maximumNanoseconds", "standardDeviationNanoseconds", "originalValuesNanoseconds"
+          ],
+          "properties": {
+            "status": { "const": "measured" },
+            "sampleCount": { "type": "integer", "minimum": 1 },
+            "meanNanoseconds": { "type": "number", "minimum": 0 },
+            "minimumNanoseconds": { "type": "number", "minimum": 0 },
+            "maximumNanoseconds": { "type": "number", "minimum": 0 },
+            "standardDeviationNanoseconds": { "type": "number", "minimum": 0 },
+            "originalValuesNanoseconds": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "reason"],
+          "properties": {
+            "status": { "const": "missing" },
+            "reason": { "$ref": "#/$defs/missingReason" }
+          }
+        }
+      ]
+    },
+    "missingReason": {
+      "enum": ["noMeasurement", "notAvailable", "notRun", "notExecutable", "notApplicable"]
+    },
+    "budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["limit", "sourceId"],
+      "properties": {
+        "limit": { "type": "number", "minimum": 0 },
+        "sourceId": { "$ref": "#/$defs/nonEmptyString" }
+      }
+    },
+    "measurement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "unit", "direction", "status", "actual"],
+          "properties": {
+            "id": { "$ref": "#/$defs/measurementId" },
+            "unit": { "$ref": "#/$defs/unit" },
+            "direction": { "$ref": "#/$defs/direction" },
+            "status": { "const": "measured" },
+            "actual": { "type": "number", "minimum": 0 },
+            "budget": { "$ref": "#/$defs/budget" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id", "unit", "direction", "status", "reason"],
+          "properties": {
+            "id": { "$ref": "#/$defs/measurementId" },
+            "unit": { "$ref": "#/$defs/unit" },
+            "direction": { "$ref": "#/$defs/direction" },
+            "status": { "const": "missing" },
+            "reason": { "$ref": "#/$defs/missingReason" },
+            "budget": { "$ref": "#/$defs/budget" }
+          }
+        }
+      ]
+    },
+    "measurementId": {
+      "enum": [
+        "mean", "throughput", "allocated", "gen0Collections", "gen1Collections",
+        "gen2Collections", "coldStartup", "peakWorkingSet", "executableSize", "shippingSize"
+      ]
+    },
+    "unit": {
+      "enum": ["nanoseconds", "operationsPerSecond", "bytes", "collectionsPer1000Operations"]
+    },
+    "direction": { "enum": ["lowerIsBetter", "higherIsBetter"] },
+    "benchmarkCase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id", "family", "method", "categories", "parameters", "implementation",
+        "operationsPerInvoke", "displayInfo", "measurements"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9%.-]*/[a-z0-9][a-z0-9%.-]*(\\?.+)?$" },
+        "family": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "method": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "categories": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "uniqueItems": true
+        },
+        "parameters": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/parameter" }
+        },
+        "implementation": {
+          "enum": [
+            "sharpTsCompiled", "sharpTsInterpreter", "equivalentCSharp", "idiomaticCSharp",
+            "componentProbe", "sharpTsGui", "directAvalonia", "compiledXaml"
+          ]
+        },
+        "operationsPerInvoke": { "type": "integer", "minimum": 1 },
+        "displayInfo": { "$ref": "#/$defs/nonEmptyString" },
+        "statistics": { "$ref": "#/$defs/statistics" },
+        "measurements": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/measurement" }
+        }
+      }
+    },
+    "normalizedRun": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["suite", "source", "run", "methodology", "cases"],
+      "properties": {
+        "suite": { "enum": ["compiler-micro", "gui"] },
+        "source": { "enum": ["benchmarkDotNet", "nativeAotPackaging"] },
+        "run": { "$ref": "#/$defs/runMetadata" },
+        "methodology": { "$ref": "#/$defs/methodology" },
+        "cases": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/benchmarkCase" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "suite": { "const": "compiler-micro" } } },
+          "then": { "properties": { "source": { "const": "benchmarkDotNet" } } }
+        },
+        {
+          "if": { "properties": { "source": { "const": "nativeAotPackaging" } } },
+          "then": { "properties": { "suite": { "const": "gui" } } }
+        }
+      ]
+    }
+  }
+}

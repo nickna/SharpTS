@@ -10,7 +10,7 @@ allocations, and input-to-render latency. Direct Avalonia construction and the s
 Run a Release baseline from the repository root:
 
 ```powershell
-dotnet run -c Release --project benchmarks/micro/SharpTS.Gui.Benchmarks -- --exporters JSON CSV GitHub
+dotnet run -c Release --project benchmarks/micro/SharpTS.Gui.Benchmarks
 ```
 
 Verify the generated CSV against the versioned timing and allocation limits:
@@ -18,6 +18,11 @@ Verify the generated CSV against the versioned timing and allocation limits:
 ```powershell
 ./benchmarks/micro/SharpTS.Gui.Benchmarks/Verify-PerformanceBudgets.ps1
 ```
+
+The run always emits BenchmarkDotNet JSON plus a SharpTS metadata companion with
+typed parameters, categories, and operations-per-invoke. The
+[public snapshot exporter](../../benchmarks/snapshots/README.md) joins those
+structured files to the release budgets without parsing Markdown.
 
 BenchmarkDotNet results are sensitive to hardware, runtime, power state, and machine load. Record
 the machine and runtime metadata with any intentionally committed report, compare trends on a
@@ -50,6 +55,9 @@ directory to 65 MiB. `Run-PackagedConsumer.ps1 -NativeAot` always enforces those
 artifact limits. `-EnforcePerformanceBudgets` additionally enforces a 1.5-second cold Headless
 startup and a 256 MiB peak working-set ceiling in the Desktop GUI and distribution workflows.
 The harness records both process measurements even when enforcement is disabled.
+Pass `-PerformanceEvidencePath <path>` to export those process measurements plus
+the executable and complete shipping-directory sizes, budgets, revision, and
+environment. A measurement that cannot run is recorded explicitly rather than as zero.
 
 Cross-publishing `win-arm64` does not satisfy the ARM64 performance gate. Final Native AOT linking,
 execution, and measurement require the Visual C++ ARM64 linker workload and native ARM64 Windows
@@ -71,7 +79,9 @@ x64 RyuJIT AVX2. The benchmark host did not report the processor model.
 | Keyed insert/move/remove | 449.22 us | 109.30 KB |
 | Input-to-render latency | 396.46 us | 87.77 KB |
 
-This run used one invocation per iteration to preserve complete mount and update lifecycles.
+This run used one benchmark-method invocation per iteration to preserve complete mount and update lifecycles.
+`BatchedScalarUpdates` performs ten logical operations per invocation, which the
+structured metadata and public snapshot record explicitly.
 BenchmarkDotNet warned that individual iteration times were below its recommended 100 ms minimum
 and that several distributions were multimodal.
 

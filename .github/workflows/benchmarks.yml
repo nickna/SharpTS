@@ -12,7 +12,8 @@ permissions:
   contents: read
 
 jobs:
-  benchmark:
+  cross-runtime:
+    name: Cross-runtime comparison
     runs-on: ubuntu-24.04
     timeout-minutes: 60
 
@@ -68,6 +69,11 @@ jobs:
           ./benchmarks/cross-runtime/validate-snapshot.ps1 `
             (Join-Path $env:BENCH_RESULTS_DIR 'snapshot.json'), `
             benchmarks/cross-runtime/snapshots/latest.json
+          ./benchmarks/snapshots/export-snapshot.ps1 `
+            -CrossRuntimeSnapshot (Join-Path $env:BENCH_RESULTS_DIR 'snapshot.json') `
+            -OutputFile (Join-Path $env:BENCH_RESULTS_DIR 'public-cross-runtime.json')
+          ./benchmarks/snapshots/validate-snapshot.ps1 `
+            (Join-Path $env:BENCH_RESULTS_DIR 'public-cross-runtime.json')
 
       - name: Upload raw and structured results
         if: always() && env.BENCH_RESULTS_DIR != ''
@@ -75,4 +81,128 @@ jobs:
         with:
           name: benchmark-results
           path: ${{ env.BENCH_RESULTS_DIR }}
+          retention-days: 30
+
+  compiler-micro:
+    name: Compiler headroom
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Run BenchmarkDotNet compiler suite
+        shell: pwsh
+        run: |
+          $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'compiler-micro-results'
+          "COMPILER_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
+          dotnet run -c Release `
+            --project benchmarks/micro/SharpTS.Microbenchmarks `
+            -- --job Short --filter '*' --artifacts $resultsDir
+      - name: Export compiler snapshot run
+        shell: pwsh
+        run: |
+          $reports = @(Get-ChildItem -LiteralPath $env:COMPILER_RESULTS_DIR -Recurse -File -Filter '*report-full-compressed.json' | ForEach-Object FullName)
+          $metadata = @(Get-ChildItem -LiteralPath $env:COMPILER_RESULTS_DIR -Recurse -File -Filter '*sharpts-metadata.json' | ForEach-Object FullName)
+          ./benchmarks/snapshots/export-snapshot.ps1 `
+            -CompilerMicro `
+            -ReportPath $reports `
+            -MetadataPath $metadata `
+            -OutputFile (Join-Path $env:COMPILER_RESULTS_DIR 'public-compiler-micro.json')
+          ./benchmarks/snapshots/validate-snapshot.ps1 `
+            (Join-Path $env:COMPILER_RESULTS_DIR 'public-compiler-micro.json')
+      - name: Upload compiler evidence
+        if: always() && env.COMPILER_RESULTS_DIR != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: compiler-micro-results
+          path: ${{ env.COMPILER_RESULTS_DIR }}
+          retention-days: 30
+
+  gui:
+    name: GUI budgets
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Run BenchmarkDotNet GUI suite
+        shell: pwsh
+        run: |
+          $resultsDir = Join-Path ([System.IO.Path]::GetTempPath()) 'gui-benchmark-results'
+          "GUI_RESULTS_DIR=$resultsDir" >> $env:GITHUB_ENV
+          dotnet run -c Release `
+            --project benchmarks/micro/SharpTS.Gui.Benchmarks `
+            -- --filter '*' --artifacts $resultsDir
+      - name: Verify budgets and export GUI snapshot run
+        shell: pwsh
+        run: |
+          $report = @(Get-ChildItem -LiteralPath $env:GUI_RESULTS_DIR -Recurse -File -Filter '*report-full-compressed.json' | ForEach-Object FullName)
+          $metadata = @(Get-ChildItem -LiteralPath $env:GUI_RESULTS_DIR -Recurse -File -Filter '*sharpts-metadata.json' | ForEach-Object FullName)
+          $csv = Get-ChildItem -LiteralPath $env:GUI_RESULTS_DIR -Recurse -File -Filter '*-report.csv' | Select-Object -First 1 -ExpandProperty FullName
+          ./benchmarks/micro/SharpTS.Gui.Benchmarks/Verify-PerformanceBudgets.ps1 -ReportPath $csv
+          ./benchmarks/snapshots/export-snapshot.ps1 `
+            -GuiBenchmark `
+            -ReportPath $report `
+            -MetadataPath $metadata `
+            -BudgetPath benchmarks/micro/SharpTS.Gui.Benchmarks/PerformanceBudgets.json `
+            -OutputFile (Join-Path $env:GUI_RESULTS_DIR 'public-gui.json')
+          ./benchmarks/snapshots/validate-snapshot.ps1 `
+            (Join-Path $env:GUI_RESULTS_DIR 'public-gui.json')
+      - name: Upload GUI evidence
+        if: always() && env.GUI_RESULTS_DIR != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: gui-benchmark-results
+          path: ${{ env.GUI_RESULTS_DIR }}
+          retention-days: 30
+
+  public-snapshot:
+    name: Compose public snapshot
+    needs: [cross-runtime, compiler-micro, gui]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: benchmark-results
+          path: artifacts/cross-runtime
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: compiler-micro-results
+          path: artifacts/compiler-micro
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: gui-benchmark-results
+          path: artifacts/gui
+      - name: Merge suite runs without merging environments
+        shell: pwsh
+        run: |
+          $snapshots = @(
+            'artifacts/cross-runtime/public-cross-runtime.json'
+            'artifacts/compiler-micro/public-compiler-micro.json'
+            'artifacts/gui/public-gui.json'
+          )
+          ./benchmarks/snapshots/merge-snapshots.ps1 `
+            -Path $snapshots `
+            -OutputFile artifacts/public-snapshot.json `
+            -RequireAllSuites
+          ./benchmarks/snapshots/validate-snapshot.ps1 artifacts/public-snapshot.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: public-performance-snapshot
+          path: artifacts/public-snapshot.json
+          if-no-files-found: error
           retention-days: 30

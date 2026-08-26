@@ -115,13 +115,24 @@ jobs:
         run: scripts/test-gui-distribution.ps1
       - name: Packaged x64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+        run: |
+          $evidence = 'artifacts/desktop-gui/win-x64/performance-evidence.json'
+          tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 `
+            -RuntimeIdentifier win-x64 -RealWindow -NativeAot -EnforcePerformanceBudgets `
+            -PerformanceEvidencePath $evidence `
+            -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+          ./benchmarks/snapshots/export-snapshot.ps1 `
+            -GuiPackagingEvidence $evidence `
+            -OutputFile artifacts/desktop-gui/win-x64/public-native-aot.json
+          ./benchmarks/snapshots/validate-snapshot.ps1 artifacts/desktop-gui/win-x64/public-native-aot.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: desktop-gui-windows-x64
           path: |
             artifacts/desktop-gui/win-x64/*-trace.json
+            artifacts/desktop-gui/win-x64/*evidence.json
+            artifacts/desktop-gui/win-x64/public-native-aot.json
             artifacts/desktop-gui/win-x64/published single file/*.exe
             artifacts/desktop-gui/win-x64/published native aot/*.exe
             artifacts/desktop-gui/win-x64/cli published single file/*.exe
@@ -177,13 +188,24 @@ jobs:
           path: artifacts/desktop-gui/candidate
       - name: Packaged ARM64 SDK, Native AOT, performance budgets, and real windows
         shell: pwsh
-        run: tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+        run: |
+          $evidence = 'artifacts/desktop-gui/win-arm64/performance-evidence.json'
+          tests/fixtures/SharpTS.Gui.Sdk.Consumer/Run-PackagedConsumer.ps1 `
+            -RuntimeIdentifier win-arm64 -RealWindow -NativeAot -EnforcePerformanceBudgets `
+            -PerformanceEvidencePath $evidence `
+            -CandidatePackage "artifacts/desktop-gui/candidate/${{ needs.gui-sdk-candidate.outputs.package_file_name }}"
+          ./benchmarks/snapshots/export-snapshot.ps1 `
+            -GuiPackagingEvidence $evidence `
+            -OutputFile artifacts/desktop-gui/win-arm64/public-native-aot.json
+          ./benchmarks/snapshots/validate-snapshot.ps1 artifacts/desktop-gui/win-arm64/public-native-aot.json
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         if: always()
         with:
           name: desktop-gui-windows-arm64-native
           path: |
             artifacts/desktop-gui/win-arm64/*-trace.json
+            artifacts/desktop-gui/win-arm64/*evidence.json
+            artifacts/desktop-gui/win-arm64/public-native-aot.json
             artifacts/desktop-gui/win-arm64/published single file/*.exe
             artifacts/desktop-gui/win-arm64/published native aot/*.exe
             artifacts/desktop-gui/win-arm64/cli published single file/*.exe

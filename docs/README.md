@@ -50,6 +50,7 @@ known gaps, use [STATUS.md](../STATUS.md).
 - [Language server](language-server.md)
 - [External benchmark harness](../benchmarks/cross-runtime/README.md)
 - [Managed microbenchmarks](../benchmarks/micro/SharpTS.Microbenchmarks/README.md)
+- [Public performance snapshots](../benchmarks/snapshots/README.md)
 
 ## Contributor and maintainer material
 
