@@ -35,15 +35,15 @@ export function bench(name: string, param: number, fn: () => number): void {
     let total: number = 0;
     let inner: number = 1;
 
-    // One measured call up front. This both probes the cost and, when a single
-    // call is already heavy (e.g. the tree-walking interpreter on a big input),
-    // doubles as the first sample — so a 48-second call costs one call, not
-    // three (warmup + calibration + sampling would each force a full call).
+    // One measured call up front. Only a genuinely heavy call (at least the
+    // entire warmup budget) doubles as the first sample. A merely JIT-cold
+    // sub-100ms call continues through warmup/calibration; otherwise SharpTS can
+    // be misclassified as an unbatched slow workload while Node is batched.
     const probeStart: number = performance.now();
     guard = guard + fn();
     const firstMs: number = performance.now() - probeStart;
 
-    if (firstMs >= MIN_SAMPLE_MS) {
+    if (firstMs >= WARMUP_CAP_MS) {
         // A single call is reliably measurable — sample one call at a time,
         // bounded by the budget and the hard cap (slow cases end up with few
         // samples, and thus stdev 0, which is honest).
@@ -148,7 +148,7 @@ export async function benchAsync(
     guard = guard + await fn();
     const firstMs: number = performance.now() - probeStart;
 
-    if (firstMs >= MIN_SAMPLE_MS) {
+    if (firstMs >= WARMUP_CAP_MS) {
         samples.push(firstMs);
         total = firstMs;
         while (samples.length < MAX_SAMPLES) {

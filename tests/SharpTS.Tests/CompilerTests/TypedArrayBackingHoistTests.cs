@@ -75,9 +75,159 @@ public sealed class TypedArrayBackingHoistTests
         var instructions = ReadInstructions(hot).ToArray();
         Assert.Contains(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "GetArrayDataReference" });
-        Assert.Equal(3, instructions.Count(instruction =>
+        // Three reads in the guarded integer arm and three in the semantic double fallback.
+        Assert.Equal(6, instructions.Count(instruction =>
             instruction.Operand is MethodBase { Name: "ReadUnaligned" }));
+        Assert.True(instructions.Count(instruction => instruction.OpCode == OpCodes.Conv_I8) >= 3);
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Mul);
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "DoubleToInt64Bits" });
         Assert.DoesNotContain(instructions, IsUnboxedAccessorCall);
+    }
+
+    [Fact]
+    public void ExactInt32Kernel_VersionsFillAndReductionAsIntegerLoops()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                for (let i: number = 0; i < n; i++) {
+                    data[i] = i * 3 - (i % 7);
+                }
+                let sum: number = 0;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        Assert.Equal(7d, (double)hot.Invoke(null, [8d])!);
+        Assert.True(hot.GetMethodBody()!.LocalVariables.Count(local =>
+            local.LocalType == typeof(long)) >= 5);
+
+        var instructions = ReadInstructions(hot).ToArray();
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Stind_I4);
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "DoubleToInt64Bits" });
+    }
+
+    [Fact]
+    public void ExactInt32Stencil_FractionalAccumulatorTakesDoubleFallback()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                for (let i: number = 0; i < n; i++) data[i] = i * 3 - (i % 7);
+                let sum: number = 0.5;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        Assert.Equal(7.5d, (double)hot.Invoke(null, [8d])!);
+    }
+
+    [Fact]
+    public void ExactInt32Stencil_NegativeZeroTakesDoubleFallback()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                let sum: number = -0;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return 1 / sum;
+            }
+            """, "hot");
+
+        Assert.Equal(double.NegativeInfinity, (double)hot.Invoke(null, [2d])!);
+    }
+
+    [Fact]
+    public void ExactInt32Stencil_SafeIntegerExitRoundsThenFallsBack()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(3);
+                data[0] = 1;
+                data[1] = 0;
+                data[2] = 1;
+                let sum: number = 9007199254740991;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        Assert.Equal(9_007_199_254_740_992d, (double)hot.Invoke(null, [3d])!);
+    }
+
+    [Fact]
+    public void ExactInt32Stencil_FractionalBoundTakesGenericLoop()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(4);
+                data[0] = 1;
+                data[1] = 2;
+                data[2] = 4;
+                data[3] = 8;
+                let sum: number = 0;
+                for (let i: number = 1; i < n - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        Assert.Equal(3d, (double)hot.Invoke(null, [3.5d])!);
+    }
+
+    [Fact]
+    public void ExactInt32Fill_FractionalBoundTakesGenericLoop()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(4);
+                for (let i: number = 0; i < n; i++) {
+                    data[i] = i * 3 - (i % 7);
+                }
+                return data[3];
+            }
+            """, "hot");
+
+        Assert.Equal(6d, (double)hot.Invoke(null, [3.5d])!);
+    }
+
+    [Fact]
+    public void ExactInt32Stencil_UsesWideIntegerArithmeticBeforeOneDoubleConversion()
+    {
+        MethodInfo hot = CompileFunction("""
+            function hot(n: number): number {
+                const data = new Int32Array(n);
+                data[0] = -2147483648;
+                data[1] = 2147483647;
+                data[2] = -2147483648;
+                let sum: number = 0;
+                for (let i: number = 1; i < 2; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        // The 3-point term is -8,589,934,590: wider than Int32 but exactly
+        // representable as Int64 and JavaScript Number.
+        Assert.Equal(-8_589_934_590d, (double)hot.Invoke(null, [3d])!);
+
+        var instructions = ReadInstructions(hot).ToArray();
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Conv_I8);
+        Assert.Contains(instructions, instruction => instruction.OpCode == OpCodes.Conv_R8);
     }
 
     [Fact]

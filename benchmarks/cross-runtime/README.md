@@ -87,10 +87,12 @@ For repeatable candidate-vs-baseline runs on native Windows and WSL, see
 
 Each workload calls `bench(name, param, fn)` from `scripts/lib/bench.ts`, which:
 
-1. Probes once; if a single call is already ≥ 1 ms it samples one call at a time
-   (honest for slow cases like the tree-walking interpreter on big inputs).
-2. Otherwise warms the JIT, calibrates an inner batch until a sample spans ≥ 1 ms
-   (lifting fast cases above the timer noise floor), then samples to a budget.
+1. Probes once; if that call consumes the full 100 ms warmup budget it samples one
+   call at a time (honest for slow cases like the tree-walking interpreter on big inputs).
+2. Otherwise it performs a time-bounded warmup, then calibrates an inner batch until
+   a sample spans ≥ 1 ms (lifting fast cases above timer and call-overhead noise), and
+   samples to a budget. This prevents a runtime's cold first-tier JIT from selecting a
+   different sampling method than an already-fast optimizing JIT.
 3. Emits one line per case, consumed by the PowerShell formatter and exporter:
 
    ```

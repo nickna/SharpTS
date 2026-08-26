@@ -885,6 +885,16 @@ public partial class RuntimeEmitter
         }
     }
 
+    // Stack in: [ref byte]. Stack out: [int64]. The exact Int32 stencil lowering keeps
+    // its three loads and arithmetic integral, then widens the final (at most 34-bit)
+    // result once. This is bit-identical to JavaScript Number arithmetic for Int32 inputs
+    // while replacing three per-element conversions with one conversion of the final term.
+    internal static void EmitReadInt32AsInt64(ILGenerator il)
+    {
+        il.Emit(OpCodes.Call, UnsafeReadUnaligned(typeof(int)));
+        il.Emit(OpCodes.Conv_I8);
+    }
+
     // Stack in: [ref byte, double value]. Narrows the double to the element type and stores it.
     // Conv opcodes mirror the boxed Set so the fast path and boxed fallback agree exactly.
     internal static void EmitNarrowDoubleAndWrite(ILGenerator il, int bytesPerElement, bool signed, bool isFloat)

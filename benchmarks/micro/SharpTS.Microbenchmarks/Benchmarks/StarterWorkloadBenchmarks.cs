@@ -269,6 +269,29 @@ public class TypedArrayBenchmarks : ComputationalBenchmarkBase
 [MemoryDiagnoser]
 [RankColumn]
 [Orderer(SummaryOrderPolicy.FastestToSlowest)]
+public class Int32TypedArrayBenchmarks : ComputationalBenchmarkBase
+{
+    private Func<double, double> _int32Kernel = null!;
+
+    [Params(1000, 100000, 1000000)]
+    public int N { get; set; }
+
+    [GlobalSetup]
+    public void Setup() => _int32Kernel = LoadCompiled("int32Kernel");
+
+    [Benchmark]
+    public double SharpTS() => _int32Kernel(N);
+
+    [Benchmark]
+    public double Idiomatic() => IdiomaticCSharp.Int32Kernel(N);
+
+    [Benchmark]
+    public object? Equivalent() => EquivalentCSharp.Int32Kernel((double)N);
+}
+
+[MemoryDiagnoser]
+[RankColumn]
+[Orderer(SummaryOrderPolicy.FastestToSlowest)]
 public class BinaryTreesBenchmarks : ComputationalBenchmarkBase
 {
     private Func<double, double> _binaryTrees = null!;

@@ -99,6 +99,26 @@ public static class IdiomaticCSharp
     }
 
     /// <summary>
+    /// Int32 typed-array kernel with native storage and integer stencil terms.
+    /// The Int64 accumulator avoids C# overflow while matching the exact result
+    /// of JavaScript Number arithmetic for this workload.
+    /// </summary>
+    public static double Int32Kernel(int n)
+    {
+        var a = new int[n];
+        for (int i = 0; i < n; i++)
+        {
+            a[i] = i * 3 - (i % 7);
+        }
+        long sum = 0;
+        for (int i = 1; i < n - 1; i++)
+        {
+            sum += (long)a[i - 1] - 2L * a[i] + a[i + 1];
+        }
+        return sum;
+    }
+
+    /// <summary>
     /// binary-trees (CLBG) - build a node tree to `depth`, then checksum it.
     /// </summary>
     public static int BinaryTrees(int depth) => ItemCheck(BuildTree(depth));

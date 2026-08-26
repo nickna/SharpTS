@@ -249,6 +249,21 @@ export function typedArrayKernel(n: number): number {
     return sum;
 }
 
+// Int32 counterpart to typedArrayKernel. Keeping this exact body in the shared
+// source lets the cross-runtime suite compare against Node while BenchmarkDotNet
+// measures the same compiled method against native and boxed C# baselines.
+export function int32Kernel(n: number): number {
+    const a = new Int32Array(n);
+    for (let i: number = 0; i < n; i++) {
+        a[i] = i * 3 - (i % 7);
+    }
+    let sum: number = 0;
+    for (let i: number = 1; i < n - 1; i++) {
+        sum = sum + (a[i - 1] - 2 * a[i] + a[i + 1]);
+    }
+    return sum;
+}
+
 // binary-trees (Computer Language Benchmarks Game): build a `{ left, right }`
 // object tree to `depth`, then checksum it. Allocates and discards heavily —
 // exercises the GC and recursion rather than arithmetic.
