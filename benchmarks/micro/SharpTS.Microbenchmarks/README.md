@@ -26,7 +26,7 @@ the timed region**.
 
 | Path | Purpose |
 |------|---------|
-| `Program.cs` | BenchmarkDotNet entry point (GitHub-Markdown + HTML exporters, `MemoryDiagnoser`, rank/ops-per-sec columns). |
+| `Program.cs` | BenchmarkDotNet entry point (JSON + GitHub-Markdown + HTML exporters, `MemoryDiagnoser`, rank/ops-per-sec columns). |
 | `Benchmarks/*.cs` | One file per workload family (computational, async/Promise, starter workloads, arrays, Map/Set, property access, object literals, regex). |
 | `Baselines/*.cs` | Native-type C# ceilings plus `object?`/boxing controls for the dynamic-typing tax. |
 | `Infrastructure/BenchmarkHarness.cs` | Compile TS → DLL, load it, resolve compiled methods/delegates. |
@@ -66,8 +66,11 @@ the same flat benchmark discovery without running any timed benchmark:
 dotnet run -c Release --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke
 ```
 
-Results (Markdown + HTML, plus allocation columns) are written under
-`BenchmarkDotNet.Artifacts/`.
+Results (structured JSON, Markdown, HTML, and allocation columns) are written
+under `BenchmarkDotNet.Artifacts/`. A `*-sharpts-metadata.json` companion records
+typed parameters, categories, and operations-per-invoke directly from
+BenchmarkDotNet descriptors. See the [public snapshot exporter](../../snapshots/README.md)
+for normalized compiler-headroom publication.
 
 ## Conventions
 

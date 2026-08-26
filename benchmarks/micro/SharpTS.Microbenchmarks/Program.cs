@@ -1,9 +1,11 @@
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Running;
 using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Exporters.Json;
 using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Order;
+using SharpTS.Benchmarks;
 using SharpTS.Microbenchmarks.Infrastructure;
 
 namespace SharpTS.Microbenchmarks;
@@ -25,12 +27,14 @@ class Program
         var config = ManualConfig.Create(DefaultConfig.Instance)
             .AddExporter(MarkdownExporter.GitHub)
             .AddExporter(HtmlExporter.Default)
+            .AddExporter(JsonExporter.FullCompressed)
             .AddDiagnoser(MemoryDiagnoser.Default)
             .AddColumn(RankColumn.Arabic)
             .AddColumn(StatisticColumn.OperationsPerSecond)
             .WithOrderer(new DefaultOrderer(SummaryOrderPolicy.FastestToSlowest));
 
-        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+        var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+        StructuredBenchmarkMetadata.Write(summaries);
     }
 
     private static void CompileEmbeddedTypeScript()

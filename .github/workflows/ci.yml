@@ -110,6 +110,7 @@ jobs:
           ./benchmarks/cross-runtime/test-snapshot.ps1
           ./benchmarks/cross-runtime/validate-snapshot.ps1 `
             benchmarks/cross-runtime/snapshots/latest.json
+          ./benchmarks/snapshots/test-snapshot.ps1
           ./benchmarks/cross-runtime/run-benchmarks.ps1 -Smoke -NoBuild
           dotnet run --configuration Release --no-build `
             --project benchmarks/micro/SharpTS.Microbenchmarks -- --smoke

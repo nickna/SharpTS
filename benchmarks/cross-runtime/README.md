@@ -36,6 +36,11 @@ important but are not mixed into the workload metric.
 | `scripts/lib/bench.ts` | Shared synchronous and asynchronous timing harnesses (auto-batching, warmup, mean/min/stdev). |
 | `scripts/lib/algorithms.ts` | Algorithm bodies **shared byte-identical** with the microbenchmark suite (embedded there as a resource). |
 
+The schema-v1 file remains the versioned contract for this one suite. The
+[schema-v2 public snapshot](../snapshots/README.md) embeds it as an independent
+run beside compiler-micro and GUI evidence, preserving this environment and
+methodology rather than flattening unlike measurements together.
+
 ## Running
 
 ```powershell

@@ -8,5 +8,6 @@
     <PackageReference Include="Avalonia.Headless" />
     <PackageReference Include="BenchmarkDotNet" />
     <ProjectReference Include="..\..\..\src\SharpTS.Gui\SharpTS.Gui.csproj" />
+    <Compile Include="..\StructuredBenchmarkMetadata.cs" Link="StructuredBenchmarkMetadata.cs" />
   </ItemGroup>
 </Project>

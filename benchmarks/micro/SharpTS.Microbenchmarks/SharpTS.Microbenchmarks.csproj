@@ -25,6 +25,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\SharpTS\SharpTS.csproj" />
+    <Compile Include="..\StructuredBenchmarkMetadata.cs" Link="Infrastructure\StructuredBenchmarkMetadata.cs" />
   </ItemGroup>
 
   <!-- Embed TypeScript source files as resources for pre-compilation -->
