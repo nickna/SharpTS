@@ -35,13 +35,20 @@ export function bench(name: string, param: number, fn: () => number): void {
     let total: number = 0;
     let inner: number = 1;
 
-    // One measured call up front. This both probes the cost and, when a single
-    // call is already heavy (e.g. the tree-walking interpreter on a big input),
-    // doubles as the first sample — so a 48-second call costs one call, not
-    // three (warmup + calibration + sampling would each force a full call).
+    // One measured call up front. This probes the cost and, when a single call
+    // is genuinely heavy (e.g. the tree-walking interpreter on a big input),
+    // doubles as the first sample. A sub-warmup-cap result that crosses the 1ms
+    // boundary is confirmed once: first-call JIT can otherwise misclassify a
+    // microsecond workload as slow and disable both warmup and auto-batching.
     const probeStart: number = performance.now();
     guard = guard + fn();
-    const firstMs: number = performance.now() - probeStart;
+    let firstMs: number = performance.now() - probeStart;
+
+    if (firstMs >= MIN_SAMPLE_MS && firstMs < WARMUP_CAP_MS) {
+        const confirmStart: number = performance.now();
+        guard = guard + fn();
+        firstMs = performance.now() - confirmStart;
+    }
 
     if (firstMs >= MIN_SAMPLE_MS) {
         // A single call is reliably measurable — sample one call at a time,
@@ -146,7 +153,13 @@ export async function benchAsync(
 
     const probeStart: number = performance.now();
     guard = guard + await fn();
-    const firstMs: number = performance.now() - probeStart;
+    let firstMs: number = performance.now() - probeStart;
+
+    if (firstMs >= MIN_SAMPLE_MS && firstMs < WARMUP_CAP_MS) {
+        const confirmStart: number = performance.now();
+        guard = guard + await fn();
+        firstMs = performance.now() - confirmStart;
+    }
 
     if (firstMs >= MIN_SAMPLE_MS) {
         samples.push(firstMs);
