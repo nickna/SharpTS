@@ -134,6 +134,23 @@ public class DnsAsyncTests
     }
 
     [Theory, ModeData]
+    public void Resolve4_Callback_IsNeverInline(ExecutionMode mode)
+    {
+        using var server = CreateAddressServer();
+        var output = RunWithFakeDns(server, """
+            import * as dns from 'dns';
+            let synchronous = true;
+            dns.resolve4('fake.test', (err: any) => {
+                console.log(err === null);
+                console.log(synchronous);
+            });
+            synchronous = false;
+            """, mode);
+
+        Assert.Equal("true\nfalse\n", output);
+    }
+
+    [Theory, ModeData]
     public void Reverse_Loopback(ExecutionMode mode)
     {
         // dns.reverse uses the OS resolver (getaddrinfo); 127.0.0.1 reverse-resolves

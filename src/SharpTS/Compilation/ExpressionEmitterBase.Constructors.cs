@@ -193,10 +193,8 @@ public abstract partial class ExpressionEmitterBase
             // `import { AsyncLocalStorage } from 'async_hooks'` (ESM-strict);
             // the class is a pure-TS class in stdlib/node/async_hooks.ts that
             // wraps the underlying $AsyncLocalStorage instance via primitive:async_hooks.
-            case "Resolver":
-                IL.Emit(OpCodes.Call, Ctx.Runtime!.DnsResolverFactory);
-                SetStackUnknown();
-                return true;
+            // Resolver — migrated to stdlib/node/dns.ts. Like AsyncLocalStorage,
+            // it is now an ordinary imported TS class wrapping a primitive handle.
 
             // net.BlockList / net.SocketAddress (#1069). Guarded on the emitted
             // ctor being present (UsesNet) so a user class with the same name
@@ -706,7 +704,7 @@ public abstract partial class ExpressionEmitterBase
             "ByteLengthQueuingStrategy" => TryEmitBuiltInConstructor("ByteLengthQueuingStrategy", arguments),
             "CountQueuingStrategy" => TryEmitBuiltInConstructor("CountQueuingStrategy", arguments),
             "Agent" => TryEmitAgentConstructor(arguments),
-            "Resolver" => TryEmitResolverConstructor(),
+            // "Resolver" — migrated to the stdlib/node/dns.ts class.
             "BlockList" => TryEmitBuiltInConstructor("BlockList", arguments),
             "SocketAddress" => TryEmitBuiltInConstructor("SocketAddress", arguments),
             "X509Certificate" => TryEmitBuiltInConstructor("X509Certificate", arguments),
@@ -726,13 +724,6 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Ldnull);
         }
         IL.Emit(OpCodes.Call, Ctx.Runtime!.HttpAgentFactory);
-        _helpers.SetStackUnknown();
-        return true;
-    }
-
-    private bool TryEmitResolverConstructor()
-    {
-        IL.Emit(OpCodes.Call, Ctx.Runtime!.DnsResolverFactory);
         _helpers.SetStackUnknown();
         return true;
     }

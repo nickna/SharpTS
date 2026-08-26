@@ -9,7 +9,7 @@ namespace SharpTS.Modules.Stdlib;
 /// <remarks>
 /// The set is narrow and stable by design. Growing it is a conscious architectural
 /// choice — each primitive is an irreducible C# capability that TypeScript cannot
-/// express (OS detection, filesystem I/O, environment access, etc.).
+/// express (OS detection, filesystem I/O, DNS resolution, environment access, etc.).
 /// </remarks>
 public static class PrimitiveRegistry
 {
@@ -34,6 +34,8 @@ public static class PrimitiveRegistry
         Prefix + "fs",
         Prefix + "fs/promises",
         Prefix + "zlib",
+        Prefix + "dns",
+        Prefix + "dns/promises",
     };
 
     /// <summary>

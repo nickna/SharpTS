@@ -240,7 +240,7 @@ public sealed class RuntimeFeatureDetector
     {
         // Strip "node:" prefix that Node.js permits on builtins.
         var p = path.StartsWith("node:") ? path[5..] : path;
-        if (p is "dns/promises" or "fs/promises" or "primitive:fs/promises" or
+        if (p is "dns/promises" or "primitive:dns/promises" or "fs/promises" or "primitive:fs/promises" or
             "crypto/promises" or "stream/promises" or "stream/consumers" or
             "primitive:stream/consumers" or "readline/promises" or
             "timers/promises" or "primitive:timers/promises")
@@ -260,6 +260,8 @@ public sealed class RuntimeFeatureDetector
                 _set.UsesDgram = true; break;
             case "dns":
             case "dns/promises":
+            case "primitive:dns":
+            case "primitive:dns/promises":
                 _set.UsesDns = true; break;
             case "fs":
             case "fs/promises":
@@ -870,6 +872,11 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                // crypto.X509Certificate exposes Date-valued accessors. Their
+                // receiver is nominally opaque to the feature walk, so retain
+                // Date support when either accessor is referenced.
+                if (g.Name.Lexeme is "validFromDate" or "validToDate")
+                    _set.UsesDate = true;
                 // A Date-typed parameter may be the only Date value in the source.
                 // Preserve its runtime helpers without treating ubiquitous method
                 // spellings such as toString/valueOf as Date usage on other types.
@@ -1009,6 +1016,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                if (gi.Index is Expr.Literal { Value: "validFromDate" or "validToDate" })
+                    _set.UsesDate = true;
                 if (IsDatePrototype(gi))
                     _set.UsesDatePrototypeMutation = true;
                 if (IsStringPrototype(gi))

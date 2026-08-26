@@ -229,7 +229,7 @@ public class DnsResolverTests
 
     #endregion
 
-    #region cancel is a no-op
+    #region cancel
 
     [Theory, ModeData]
     public void Resolver_Cancel_DoesNotThrow(ExecutionMode mode)

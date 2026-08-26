@@ -7,11 +7,9 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// Parity tests for crypto KeyObject completeness (#1059) and ECDH raw-point
 /// encodings + FIPS shims (#1060).
 ///
-/// Compiled scope: ECDH raw-point getPublicKey/getPrivateKey/computeSecret,
-/// asymmetricKeyDetails.namedCurve, generateKey/generateKeySync, getFips/fips.
-/// Documented compiled-deferred (interpreter-only tests): KeyObject jwk/der
-/// import+export, equals(), ECDH.convertKey, compressed-point computeSecret input,
-/// one-shot crypto.diffieHellman().
+/// Covers ECDH raw-point conversion/agreement, KeyObject JWK/DER import and
+/// export, structural equality, public-key derivation, one-shot Diffie-Hellman,
+/// key generation, and the non-FIPS shims in both execution modes.
 /// </summary>
 public class CryptoKeyEcdhParityTests
 {
@@ -138,9 +136,9 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    // ----- Interpreter-only (compiled-deferred surface) -----
+    // ----- KeyObject / static ECDH parity -----
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void KeyObject_JwkRoundTrip_Rsa(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -159,7 +157,68 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
+    public void KeyObject_DerRoundTrip_Rsa(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const pair = crypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+                const pub = crypto.createPublicKey(pair.publicKey);
+                const pubDer = pub.export({ format: 'der', type: 'spki' });
+                const pubBack = crypto.createPublicKey({ key: pubDer, format: 'der', type: 'spki' });
+                console.log(pub.equals(pubBack));
+                const priv = crypto.createPrivateKey(pair.privateKey);
+                const privDer = priv.export({ format: 'der', type: 'pkcs8' });
+                const privBack = crypto.createPrivateKey({ key: privDer, format: 'der', type: 'pkcs8' });
+                console.log(priv.equals(privBack));
+                """
+        };
+        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void Ecdh_ComputeSecret_AcceptsCompressedPoints(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                const alice = crypto.createECDH('prime256v1');
+                const bob = crypto.createECDH('prime256v1');
+                const alicePub = alice.generateKeys('hex', 'compressed');
+                const bobPub = bob.generateKeys('hex', 'compressed');
+                const s1 = alice.computeSecret(bobPub, 'hex', 'hex');
+                const s2 = bob.computeSecret(alicePub, 'hex', 'hex');
+                console.log(s1 === s2);
+                """
+        };
+        Assert.Equal("true\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
+    public void Ecdh_ConvertKey_AllSupportedNistCurves(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as crypto from 'crypto';
+                for (const curve of ['prime256v1', 'secp384r1', 'secp521r1']) {
+                    const ecdh = crypto.createECDH(curve);
+                    const uncompressed = ecdh.generateKeys('hex');
+                    const compressed = crypto.ECDH.convertKey(
+                        uncompressed, curve, 'hex', 'hex', 'compressed');
+                    const roundtrip = crypto.ECDH.convertKey(
+                        compressed, curve, 'hex', 'hex', 'uncompressed');
+                    console.log(roundtrip === uncompressed);
+                }
+                """
+        };
+        Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void KeyObject_Equals(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -177,7 +236,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void CreatePublicKey_FromPrivateKeyObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -194,7 +253,7 @@ public class CryptoKeyEcdhParityTests
         Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Ecdh_ConvertKey_And_OneShotDiffieHellman(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
@@ -207,8 +266,20 @@ public class CryptoKeyEcdhParityTests
                 console.log(compressed.length === 66);
                 const roundtrip = crypto.ECDH.convertKey(compressed, 'prime256v1', 'hex', 'hex', 'uncompressed');
                 console.log(roundtrip === uncompressed);
+
+                const alice = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+                const bob = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+                const s1 = crypto.diffieHellman({
+                    privateKey: crypto.createPrivateKey(alice.privateKey),
+                    publicKey: crypto.createPublicKey(bob.publicKey),
+                });
+                const s2 = crypto.diffieHellman({
+                    privateKey: crypto.createPrivateKey(bob.privateKey),
+                    publicKey: crypto.createPublicKey(alice.publicKey),
+                });
+                console.log(s1.toString('hex') === s2.toString('hex'));
                 """
         };
-        Assert.Equal("true\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
+        Assert.Equal("true\ntrue\ntrue\n", TestHarness.RunModules(files, "main.ts", mode));
     }
 }

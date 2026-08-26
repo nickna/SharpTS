@@ -493,6 +493,7 @@ public partial class RuntimeEmitter
         EmitEcPointHelpers(runtimeTypeBuilder, runtime);
         EmitTSECDHEncodeResult(runtimeTypeBuilder, runtime);
         EmitTSECDHDecodeInput(runtimeTypeBuilder, runtime);
+        EmitCryptoEcdhConvertKey(runtimeTypeBuilder, runtime);
         EmitTSECDHComputeSecretHelper(runtimeTypeBuilder, runtime);
     }
 
@@ -540,33 +541,44 @@ public partial class RuntimeEmitter
             [typeof(ReadOnlySpan<byte>), typeof(int).MakeByRefType()])!);
         il.Emit(OpCodes.Br, importedLabel);
 
-        // Raw point: prefix 0x04/0x06/0x07 (uncompressed/hybrid) with length 1+2*fieldLen.
+        // Raw point: decode uncompressed/hybrid or compressed coordinates.
         il.MarkLabel(rawPointLabel);
+        var xLocal = il.DeclareLocal(_types.ByteArray);
+        var yLocal = il.DeclareLocal(_types.ByteArray);
+        var compressedPointLabel = il.DefineLabel();
+        var coordinatesReadyLabel = il.DefineLabel();
+        var invalidPointLabel = il.DefineLabel();
 
-        // Compressed (0x02/0x03) is a documented compiled ceiling: length == 1+fieldLen.
-        var notCompressedLabel = il.DefineLabel();
+        // Uncompressed/hybrid length is 1 + 2*fieldLen.
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldlen);
         il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldarg_2);      // fieldLen
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);          // 1 + fieldLen
-        il.Emit(OpCodes.Bne_Un, notCompressedLabel);
-        il.Emit(OpCodes.Ldstr, "ECDH.computeSecret: compressed-point input is not supported in compiled mode (interpreter only)");
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
-        il.Emit(OpCodes.Throw);
-        il.MarkLabel(notCompressedLabel);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Bne_Un, compressedPointLabel);
 
-        // Build ECParameters { Curve = self's curve, Q = { X, Y } } and import.
-        var selfParamsLocal = il.DeclareLocal(typeof(ECParameters));
-        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportParameters", [_types.Boolean])!);
-        il.Emit(OpCodes.Stloc, selfParamsLocal);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x04);
+        var fullPrefixReady = il.DefineLabel();
+        il.Emit(OpCodes.Beq, fullPrefixReady);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x06);
+        il.Emit(OpCodes.Beq, fullPrefixReady);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x07);
+        il.Emit(OpCodes.Bne_Un, invalidPointLabel);
+        il.MarkLabel(fullPrefixReady);
 
         // x = new byte[fieldLen]; Array.Copy(otherBytes, 1, x, 0, fieldLen)
-        var xLocal = il.DeclareLocal(_types.ByteArray);
-        var yLocal = il.DeclareLocal(_types.ByteArray);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Newarr, _types.Byte);
         il.Emit(OpCodes.Stloc, xLocal);
@@ -588,6 +600,56 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Ldarg_2);
         il.Emit(OpCodes.Call, _types.ArrayCopy5);
+        il.Emit(OpCodes.Br, coordinatesReadyLabel);
+
+        // Compressed point: 0x02/0x03 || X.
+        il.MarkLabel(compressedPointLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Bne_Un, invalidPointLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x02);
+        var compressedPrefixReady = il.DefineLabel();
+        il.Emit(OpCodes.Beq, compressedPrefixReady);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x03);
+        il.Emit(OpCodes.Bne_Un, invalidPointLabel);
+        il.MarkLabel(compressedPrefixReady);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Stloc, xLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldloc, xLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
+        il.Emit(OpCodes.Ldloc, xLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x03);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.EcdhDecompressY);
+        il.Emit(OpCodes.Stloc, yLocal);
+
+        il.MarkLabel(coordinatesReadyLabel);
+
+        // Build ECParameters { Curve = self's curve, Q = { X, Y } } and import.
+        var selfParamsLocal = il.DeclareLocal(typeof(ECParameters));
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ExportParameters", [_types.Boolean])!);
+        il.Emit(OpCodes.Stloc, selfParamsLocal);
 
         // otherParams = new ECParameters { Curve = selfParams.Curve, Q = new ECPoint { X = x, Y = y } }
         var otherParamsLocal = il.DeclareLocal(typeof(ECParameters));
@@ -619,6 +681,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, otherEcdhLocal);
         il.Emit(OpCodes.Ldloc, otherParamsLocal);
         il.Emit(OpCodes.Callvirt, typeof(ECDiffieHellman).GetMethod("ImportParameters", [typeof(ECParameters)])!);
+        il.Emit(OpCodes.Br, importedLabel);
+
+        il.MarkLabel(invalidPointLabel);
+        il.Emit(OpCodes.Ldstr, "Invalid EC public key point");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
+        il.Emit(OpCodes.Throw);
 
         il.MarkLabel(importedLabel);
 
@@ -802,6 +870,206 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldstr, "Input must be a Buffer, byte array, or string");
         il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
         il.Emit(OpCodes.Throw);
+    }
+
+    /// <summary>
+    /// Emits the first-class crypto.ECDH.convertKey wrapper. The object-shaped
+    /// signature lets $TSFunction supply optional arguments normally.
+    /// </summary>
+    private void EmitCryptoEcdhConvertKey(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoWrapper_ECDH_convertKey",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object, _types.Object, _types.Object, _types.Object, _types.Object]);
+        runtime.CryptoEcdhConvertKey = method;
+
+        var il = method.GetILGenerator();
+        var curveLocal = il.DeclareLocal(_types.String);
+        var inputEncodingLocal = il.DeclareLocal(_types.String);
+        var outputEncodingLocal = il.DeclareLocal(_types.String);
+        var formatLocal = il.DeclareLocal(_types.String);
+        var fieldLenLocal = il.DeclareLocal(_types.Int32);
+        var bytesLocal = il.DeclareLocal(_types.ByteArray);
+        var xLocal = il.DeclareLocal(_types.ByteArray);
+        var yLocal = il.DeclareLocal(_types.ByteArray);
+
+        // Normalize the string-shaped arguments. Missing optional arguments stay null.
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, curveLocal);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, inputEncodingLocal);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, outputEncodingLocal);
+        il.Emit(OpCodes.Ldarg, 4);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, formatLocal);
+
+        var haveCurve = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, curveLocal);
+        il.Emit(OpCodes.Brtrue, haveCurve);
+        il.Emit(OpCodes.Ldstr, "ECDH.convertKey requires a curve name");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(haveCurve);
+        il.Emit(OpCodes.Ldloc, curveLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "ToLowerInvariant")!);
+        il.Emit(OpCodes.Stloc, curveLocal);
+
+        var p256 = il.DefineLabel();
+        var p384 = il.DefineLabel();
+        var p521 = il.DefineLabel();
+        var curveReady = il.DefineLabel();
+        foreach (var name in new[] { "prime256v1", "secp256r1", "p-256" })
+        {
+            il.Emit(OpCodes.Ldloc, curveLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, p256);
+        }
+        foreach (var name in new[] { "secp384r1", "p-384" })
+        {
+            il.Emit(OpCodes.Ldloc, curveLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, p384);
+        }
+        foreach (var name in new[] { "secp521r1", "p-521" })
+        {
+            il.Emit(OpCodes.Ldloc, curveLocal);
+            il.Emit(OpCodes.Ldstr, name);
+            il.Emit(OpCodes.Call, _types.StringOpEquality);
+            il.Emit(OpCodes.Brtrue, p521);
+        }
+        il.Emit(OpCodes.Ldstr, "Unsupported ECDH curve");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
+        il.Emit(OpCodes.Throw);
+        il.MarkLabel(p256);
+        il.Emit(OpCodes.Ldc_I4, 32);
+        il.Emit(OpCodes.Stloc, fieldLenLocal);
+        il.Emit(OpCodes.Br, curveReady);
+        il.MarkLabel(p384);
+        il.Emit(OpCodes.Ldc_I4, 48);
+        il.Emit(OpCodes.Stloc, fieldLenLocal);
+        il.Emit(OpCodes.Br, curveReady);
+        il.MarkLabel(p521);
+        il.Emit(OpCodes.Ldc_I4, 66);
+        il.Emit(OpCodes.Stloc, fieldLenLocal);
+        il.MarkLabel(curveReady);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, inputEncodingLocal);
+        il.Emit(OpCodes.Call, runtime.TSECDHDecodeInput);
+        il.Emit(OpCodes.Stloc, bytesLocal);
+
+        var compressed = il.DefineLabel();
+        var coordinatesReady = il.DefineLabel();
+        var invalidPoint = il.DefineLabel();
+
+        // Uncompressed/hybrid: prefix plus X and Y.
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldloc, fieldLenLocal);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Bne_Un, compressed);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x04);
+        var fullPrefixReady = il.DefineLabel();
+        il.Emit(OpCodes.Beq, fullPrefixReady);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x06);
+        il.Emit(OpCodes.Beq, fullPrefixReady);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x07);
+        il.Emit(OpCodes.Bne_Un, invalidPoint);
+        il.MarkLabel(fullPrefixReady);
+        EmitCopyPointCoordinate(il, bytesLocal, xLocal, fieldLenLocal, yCoordinate: false);
+        EmitCopyPointCoordinate(il, bytesLocal, yLocal, fieldLenLocal, yCoordinate: true);
+        il.Emit(OpCodes.Br, coordinatesReady);
+
+        // Compressed: prefix plus X; recover Y using the curve equation.
+        il.MarkLabel(compressed);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ldloc, fieldLenLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Bne_Un, invalidPoint);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x02);
+        var compressedPrefixReady = il.DefineLabel();
+        il.Emit(OpCodes.Beq, compressedPrefixReady);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x03);
+        il.Emit(OpCodes.Bne_Un, invalidPoint);
+        il.MarkLabel(compressedPrefixReady);
+        EmitCopyPointCoordinate(il, bytesLocal, xLocal, fieldLenLocal, yCoordinate: false);
+        il.Emit(OpCodes.Ldloc, xLocal);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_U1);
+        il.Emit(OpCodes.Ldc_I4, 0x03);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Ldloc, fieldLenLocal);
+        il.Emit(OpCodes.Call, runtime.EcdhDecompressY);
+        il.Emit(OpCodes.Stloc, yLocal);
+
+        il.MarkLabel(coordinatesReady);
+        il.Emit(OpCodes.Ldloc, xLocal);
+        il.Emit(OpCodes.Ldloc, yLocal);
+        il.Emit(OpCodes.Ldloc, fieldLenLocal);
+        il.Emit(OpCodes.Ldloc, formatLocal);
+        il.Emit(OpCodes.Call, runtime.EcdhEncodePoint);
+        il.Emit(OpCodes.Ldloc, outputEncodingLocal);
+        il.Emit(OpCodes.Call, runtime.TSECDHEncodeResult);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalidPoint);
+        il.Emit(OpCodes.Ldstr, "Invalid EC public key point");
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.ArgumentException, [_types.String])!);
+        il.Emit(OpCodes.Throw);
+    }
+
+    private void EmitCopyPointCoordinate(
+        ILGenerator il,
+        LocalBuilder bytesLocal,
+        LocalBuilder coordinateLocal,
+        LocalBuilder fieldLenLocal,
+        bool yCoordinate)
+    {
+        il.Emit(OpCodes.Ldloc, fieldLenLocal);
+        il.Emit(OpCodes.Newarr, _types.Byte);
+        il.Emit(OpCodes.Stloc, coordinateLocal);
+        il.Emit(OpCodes.Ldloc, bytesLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        if (yCoordinate)
+        {
+            il.Emit(OpCodes.Ldloc, fieldLenLocal);
+            il.Emit(OpCodes.Add);
+        }
+        il.Emit(OpCodes.Ldloc, coordinateLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, fieldLenLocal);
+        il.Emit(OpCodes.Call, _types.ArrayCopy5);
     }
 
     // Instance fields for two-phase BoundECDHMethod emission

@@ -39,8 +39,9 @@ public static class BuiltInModuleRegistry
         "stream/web",
         "http",
         "worker_threads",
-        "dns",
-        "dns/promises",
+        // "dns" / "dns/promises" — migrated to stdlib/node/dns{,/promises}.ts.
+        //   The public callback surface is derived from promise primitives so both
+        //   execution modes share callback scheduling and argument shaping.
         "net",
         "https",
         "tls",

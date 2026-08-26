@@ -7,8 +7,8 @@ namespace SharpTS.Tests.SharedTests.BuiltInModules;
 /// Tests for crypto.X509Certificate (#1064). Uses a fixed self-signed RSA-2048
 /// certificate (CN=sharpts.test, SAN: DNS sharpts.test + *.wild.sharpts.test,
 /// IP 127.0.0.1, email admin@sharpts.test; valid 2020-01-01 → 2050-01-01, CA:false).
-/// Compiled-deferred members (checkEmail, toLegacyObject, infoAccess, email SAN
-/// rendering) are tested interpreted-only.
+/// The certificate inspection surface is exercised in both execution modes.
+/// infoAccess remains unavailable when the BCL cannot expose the extension.
 /// </summary>
 public class CryptoX509Tests
 {
@@ -181,10 +181,10 @@ KQIDAQAB
         Assert.Equal("true\n", output);
     }
 
-    // --- interpreter-only surface (compiled defers: checkEmail, toLegacyObject, email SANs) ---
+    // --- extended X509 surface ---
 
-    [Theory, InterpretedOnlyData]
-    public void X509_CheckEmail_And_LegacyObject_InterpOnly(ExecutionMode mode)
+    [Theory, ModeData]
+    public void X509_CheckEmail_And_LegacyObject(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>
         {

@@ -296,7 +296,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, hostedTimer);
         il.Emit(OpCodes.Ldfld, runtime.VirtualTimerArgs);
         il.Emit(OpCodes.Call, runtime.InvokeValue);
-        il.Emit(OpCodes.Pop);
+        if (_features.UsesPromise)
+            il.Emit(OpCodes.Call, runtime.ObserveDiscardedPromiseResult);
+        else
+            il.Emit(OpCodes.Pop);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Ret);
 
@@ -555,7 +558,10 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, timerLocal);
         il.Emit(OpCodes.Ldfld, runtime.VirtualTimerArgs);
         il.Emit(OpCodes.Call, runtime.InvokeValue);
-        il.Emit(OpCodes.Pop); // Discard result
+        if (_features.UsesPromise)
+            il.Emit(OpCodes.Call, runtime.ObserveDiscardedPromiseResult);
+        else
+            il.Emit(OpCodes.Pop);
 
         il.BeginCatchBlock(typeof(Exception));
         il.Emit(OpCodes.Pop); // Discard exception

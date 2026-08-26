@@ -35,6 +35,8 @@ public static class PrimitiveModuleValues
             "fs" => FsModuleInterpreter.GetExports(),
             "fs/promises" => FsPromisesModuleInterpreter.GetExports(),
             "zlib" => ZlibModuleInterpreter.GetExports(),
+            "dns" => DnsModuleInterpreter.GetPrimitiveExports(),
+            "dns/promises" => DnsModuleInterpreter.GetPromisesExports(),
             _ => throw new Exception($"Unknown primitive module: primitive:{primitiveName}")
         };
     }
@@ -46,6 +48,6 @@ public static class PrimitiveModuleValues
     {
         return primitiveName is "os" or "process" or "perf" or "tty" or "async_hooks"
             or "timers" or "timers/promises" or "readline" or "module" or "stream/consumers"
-            or "fs" or "fs/promises" or "zlib";
+            or "fs" or "fs/promises" or "zlib" or "dns" or "dns/promises";
     }
 }

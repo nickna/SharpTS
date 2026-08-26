@@ -103,8 +103,9 @@ console.log(digest, randomUUID());
 ```
 
 Available algorithms are those accepted by the current declaration/runtime pair and the host .NET
-cryptography provider. Unsupported EdDSA/X25519/X448 operations raise a clear error. Some advanced
-key import/export and certificate helpers remain subject to the mode ceilings listed in status.
+cryptography provider. Unsupported EdDSA/X25519/X448 operations raise a clear error. KeyObject PEM,
+DER, and JWK forms, ECDH point conversion, one-shot EC Diffie-Hellman, and X.509 email/legacy
+inspection have interpreter/compiled parity; `X509Certificate.infoAccess` remains unavailable.
 
 ## fs
 
@@ -300,8 +301,9 @@ Source-specific multicast has platform/family limitations documented by raised e
 result-order configuration, and `Resolver`. `dns/promises` and `dns.promises` expose promise forms.
 
 `lookup` uses the OS resolver (including hosts-file policy); `resolve*` uses DNS queries. Resolver
-errors expose Node-style codes. Cancellation and callback timing have the compiled deviation noted
-in status.
+errors expose Node-style codes. A shared TypeScript facade owns callback/promise normalization while
+the host primitive performs transport; callbacks are asynchronous and `Resolver.cancel()` promptly
+invalidates outstanding generations in both execution modes.
 
 ## child_process
 
