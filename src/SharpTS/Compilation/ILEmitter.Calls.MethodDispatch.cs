@@ -102,6 +102,29 @@ public partial class ILEmitter
         if (TryEmitStableNumberConversionCall(methodGet, arguments))
             return;
 
+        // Proven dense numeric includes: ArrayLocalPromotionAnalyzer admits this
+        // call only while the receiver remains a non-escaping List<double> and the
+        // intrinsic Array.prototype binding is globally stable. Both arguments are
+        // native doubles and the helper returns native bool, so the million-element
+        // scan has no per-element or result boxing.
+        if (methodName == "includes" && !methodGet.Optional
+            && methodGet.Object is Expr.Variable includesVariable
+            && _ctx.TryGetPromotedArrayLocal(includesVariable.Name.Lexeme) is
+                { Descriptor.Kind: ArrayElementsKind.Double } includesPromotion
+            && arguments.Count is 1 or 2
+            && arguments.All(argument => IsNumericType(_ctx.TypeMap?.Get(argument))))
+        {
+            IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
+            EmitExpressionAsDouble(arguments[0]);
+            if (arguments.Count == 2)
+                EmitExpressionAsDouble(arguments[1]);
+            else
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludesDouble);
+            SetStackType(StackType.Boolean);
+            return;
+        }
+
         // Promoted typed-array local push (#857/#860): append unboxed elements directly to the
         // bare List<T> via the typed helper — bypassing ArrayEmitter's $Array unwrap/copy and the
         // per-element boxing. Handled here (not in ArrayEmitter) because EnsureDouble/EnsureBoolean
@@ -110,6 +133,22 @@ public partial class ILEmitter
             && _ctx.TryGetPromotedArrayLocal(pushVar.Name.Lexeme) is { } pushProm)
         {
             EmitPromotedArrayPush(pushProm.Local, pushProm.Descriptor, arguments);
+            return;
+        }
+
+        if (methodName == "shift" && !methodGet.Optional && arguments.Count == 0
+            && methodGet.Object is Expr.Variable shiftVar
+            && _ctx.TryGetPromotedArrayLocal(shiftVar.Name.Lexeme) is { } shiftProm)
+        {
+            EmitPromotedArrayShift(shiftProm.Local, shiftProm.Descriptor);
+            return;
+        }
+
+        if (methodName == "unshift" && !methodGet.Optional
+            && methodGet.Object is Expr.Variable unshiftVar
+            && _ctx.TryGetPromotedArrayLocal(unshiftVar.Name.Lexeme) is { } unshiftProm)
+        {
+            EmitPromotedArrayUnshift(unshiftProm.Local, unshiftProm.Descriptor, arguments);
             return;
         }
 
@@ -130,6 +169,49 @@ public partial class ILEmitter
             && arguments.All(a => IsNumericType(_ctx.TypeMap?.Get(a))))
         {
             EmitEscapingNumberArrayPush(methodGet.Object, arguments);
+            return;
+        }
+
+        // Escaping number[] receivers retain their packed-double $Array storage.
+        // Whole-program feature gates prove the direct intrinsic is unmodified;
+        // the emitted helper repeats exact-type/numeric-mode guards and falls back
+        // for holes, boxed arrays, subclasses, and non-extensible receivers.
+        if (methodName == "shift" && !methodGet.Optional && arguments.Count == 0
+            && _ctx.TypeMap?.Get(methodGet.Object) is TypeSystem.TypeInfo.Array
+            && ArrayElements.Resolve(_ctx.TypeMap.Get(methodGet.Object)) is
+                { Kind: ArrayElementsKind.Double }
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == false
+            && !_ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            EmitExpression(methodGet.Object);
+            EmitBoxIfNeeded(methodGet.Object);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayShiftNumber);
+            SetStackUnknown();
+            return;
+        }
+
+        if (methodName == "unshift" && !methodGet.Optional
+            && _ctx.TypeMap?.Get(methodGet.Object) is TypeSystem.TypeInfo.Array
+            && ArrayElements.Resolve(_ctx.TypeMap.Get(methodGet.Object)) is
+                { Kind: ArrayElementsKind.Double }
+            && arguments.All(argument => argument is not Expr.Spread
+                && IsNumericType(_ctx.TypeMap.Get(argument)))
+            && _ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors == false
+            && !_ctx.RuntimeFeatures.UsesArrayPrototypeMutation)
+        {
+            EmitExpression(methodGet.Object);
+            EmitBoxIfNeeded(methodGet.Object);
+            IL.Emit(OpCodes.Ldc_I4, arguments.Count);
+            IL.Emit(OpCodes.Newarr, _ctx.Types.Double);
+            for (int i = 0; i < arguments.Count; i++)
+            {
+                IL.Emit(OpCodes.Dup);
+                IL.Emit(OpCodes.Ldc_I4, i);
+                EmitExpressionAsDouble(arguments[i]);
+                IL.Emit(OpCodes.Stelem_R8);
+            }
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayUnshiftNumber);
+            SetStackType(StackType.Double);
             return;
         }
 
@@ -234,6 +316,15 @@ public partial class ILEmitter
                 EmitPromiseInstanceMethodCall(methodGet, methodName, arguments);
                 return;
             }
+        }
+
+        if (objType is TypeSystem.TypeInfo.Array
+            && methodName is ("shift" or "unshift" or "includes")
+            && (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+                || _ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
+        {
+            EmitDynamicMethodCallPreservingThis(methodGet.Object, methodName, arguments);
+            return;
         }
 
         // Type-first dispatch: Use TypeEmitterRegistry if we have type information

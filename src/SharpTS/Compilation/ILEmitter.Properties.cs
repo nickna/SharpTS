@@ -17,6 +17,9 @@ public partial class ILEmitter
 {
     protected override void EmitGet(Expr.Get g)
     {
+        if (TryEmitStableRecordDestructureGet(g))
+            return;
+
         if (!g.Optional
             && g.Name.Lexeme == "length"
             && g.Object is Expr.Variable restLength
@@ -988,6 +991,9 @@ public partial class ILEmitter
 
     protected override void EmitGetIndex(Expr.GetIndex gi)
     {
+        if (TryEmitStableArrayDestructureGet(gi))
+            return;
+
         if (TryEmitFlattenedNumericRestIndex(gi))
             return;
 
@@ -1936,6 +1942,58 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Call, pushMethod);
             if (i < arguments.Count - 1)
                 IL.Emit(OpCodes.Pop); // discard intermediate length; keep only the final one
+        }
+        SetStackType(StackType.Double);
+    }
+
+    private void EmitPromotedArrayShift(LocalBuilder list, ArrayElementsDescriptor desc)
+    {
+        IL.Emit(OpCodes.Ldloc, list);
+        IL.Emit(OpCodes.Call, desc.Kind == ArrayElementsKind.Double
+            ? _ctx.Runtime!.ArrayShiftDouble
+            : _ctx.Runtime!.ArrayShiftBool);
+        SetStackUnknown();
+    }
+
+    private void EmitPromotedArrayUnshift(
+        LocalBuilder list,
+        ArrayElementsDescriptor desc,
+        List<Expr> arguments)
+    {
+        var listType = desc.GetListType(_ctx.Types);
+        if (arguments.Count == 0)
+        {
+            IL.Emit(OpCodes.Ldloc, list);
+            IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!);
+            IL.Emit(OpCodes.Conv_R8);
+            SetStackType(StackType.Double);
+            return;
+        }
+
+        // ECMAScript evaluates every argument before moving any element. Spill
+        // them in source order, then prepend in reverse order so the final array
+        // preserves the original argument order without an object[] pack.
+        var elementType = desc.GetElementType(_ctx.Types);
+        var values = new LocalBuilder[arguments.Count];
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            EmitExpression(arguments[i]);
+            if (desc.Kind == ArrayElementsKind.Double) EnsureDouble();
+            else EnsureBoolean();
+            values[i] = IL.DeclareLocal(elementType);
+            IL.Emit(OpCodes.Stloc, values[i]);
+        }
+
+        var helper = desc.Kind == ArrayElementsKind.Double
+            ? _ctx.Runtime!.ArrayUnshiftDouble
+            : _ctx.Runtime!.ArrayUnshiftBool;
+        for (int i = arguments.Count - 1; i >= 0; i--)
+        {
+            IL.Emit(OpCodes.Ldloc, list);
+            IL.Emit(OpCodes.Ldloc, values[i]);
+            IL.Emit(OpCodes.Call, helper);
+            if (i != 0)
+                IL.Emit(OpCodes.Pop);
         }
         SetStackType(StackType.Double);
     }

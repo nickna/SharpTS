@@ -388,7 +388,7 @@ public partial class ILCompiler
             capturedLocals = renameAware;
         }
 
-        RegisterFunctionDisplayClass(qualifiedFunctionName, capturedLocals);
+        RegisterFunctionDisplayClass(qualifiedFunctionName, capturedLocals, funcStmt);
     }
 
     /// <summary>
@@ -398,7 +398,10 @@ public partial class ILCompiler
     /// async-method / standalone-arrow path (only the promoted async-written captures, #682). The caller
     /// decides membership; this only builds the type.
     /// </summary>
-    private void RegisterFunctionDisplayClass(string qualifiedFunctionName, IEnumerable<string> capturedLocals)
+    private void RegisterFunctionDisplayClass(
+        string qualifiedFunctionName,
+        IEnumerable<string> capturedLocals,
+        object? callable = null)
     {
         // Create display class type. The counter guarantees a unique type name; '.' and ':' in the key
         // (async-method keys are "<Class>::<method>") are sanitized to valid identifier characters.
@@ -412,7 +415,11 @@ public partial class ILCompiler
         var fieldMap = new Dictionary<string, FieldBuilder>();
         foreach (var varName in capturedLocals)
         {
-            var field = displayClass.DefineField(varName, _types.Object, FieldAttributes.Public);
+            Type fieldType = callable is not null &&
+                _typeMap?.IsStableNumericFunctionCaptureField(callable, varName) == true
+                ? _types.Double
+                : _types.Object;
+            var field = displayClass.DefineField(varName, fieldType, FieldAttributes.Public);
             fieldMap[varName] = field;
         }
 
@@ -589,9 +596,15 @@ public partial class ILCompiler
                 {
                     il.Emit(OpCodes.Ldloc, displayLocal);
                     il.Emit(OpCodes.Ldarg, i);
-                    // Box if the parameter is a value type (numbers are double)
+                    // Box value-type parameters only for the general object ABI.
                     Type paramType = i < methodParams.Length ? methodParams[i].ParameterType : typeof(object);
-                    if (paramType.IsValueType)
+                    if (field.FieldType == _types.Double && paramType != _types.Double)
+                    {
+                        if (paramType.IsValueType)
+                            il.Emit(OpCodes.Box, paramType);
+                        il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+                    }
+                    else if (field.FieldType == _types.Object && paramType.IsValueType)
                     {
                         il.Emit(OpCodes.Box, paramType);
                     }

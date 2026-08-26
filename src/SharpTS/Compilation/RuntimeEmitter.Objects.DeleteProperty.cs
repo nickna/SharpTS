@@ -635,6 +635,27 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
             il.Emit(OpCodes.Stloc, tsArrIndexDescLocal);
+
+            // Sealing makes every existing own indexed property non-configurable,
+            // including dense elements that do not have an explicit PDS entry.
+            // Missing numeric properties still delete successfully.
+            var tsArrIndexNotSealedLabel = il.DefineLabel();
+            var tsArrIndexSealedPropertyLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, runtime.PDSIsSealed);
+            il.Emit(OpCodes.Brfalse, tsArrIndexNotSealedLabel);
+            il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
+            il.Emit(OpCodes.Brtrue, tsArrIndexSealedPropertyLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.TSArrayType);
+            il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
+            il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
+            il.Emit(OpCodes.Brfalse, tsArrIndexNotSealedLabel);
+            il.MarkLabel(tsArrIndexSealedPropertyLabel);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(tsArrIndexNotSealedLabel);
+
             il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);
             il.Emit(OpCodes.Brfalse, tsArrIndexDescriptorConfigurableLabel);
             il.Emit(OpCodes.Ldloc, tsArrIndexDescLocal);

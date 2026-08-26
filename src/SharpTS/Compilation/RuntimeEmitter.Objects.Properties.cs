@@ -869,7 +869,12 @@ public partial class RuntimeEmitter
             "toString", "toLocaleString"
         ];
 
-        foreach (var methodName in methodNames)
+        // When source code can replace array methods or install descriptors,
+        // resolve the live own/prototype slot below. The compact bound-method
+        // shortcut is valid only while those shapes are proven immutable.
+        foreach (var methodName in methodNames.Where(_ =>
+                     !_features.UsesArrayPrototypeMutation
+                     && !_features.UsesDynamicPropertyDescriptors))
         {
             var skipLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_1);

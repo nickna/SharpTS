@@ -83,6 +83,11 @@ public class EmittedRuntime
     public ConstructorBuilder TSFunctionCtorWithCache { get; set; } = null!;
     public MethodBuilder TSFunctionInvoke { get; set; } = null!;
     public MethodBuilder TSFunctionInvokeWithThis { get; set; } = null!;
+    public MethodBuilder TSFunctionGetTarget { get; set; } = null!;
+    public Type StableNumberIteratorResultType { get; set; } = null!;
+    public ConstructorInfo StableNumberIteratorResultCtor { get; set; } = null!;
+    public FieldInfo StableNumberIteratorResultValueField { get; set; } = null!;
+    public FieldInfo StableNumberIteratorResultDoneField { get; set; } = null!;
     public MethodBuilder TSFunctionBindThis { get; set; } = null!;
     public MethodBuilder TSFunctionLengthGetter { get; set; } = null!;
     public MethodBuilder TSFunctionNameGetter { get; set; } = null!;
@@ -249,8 +254,14 @@ public class EmittedRuntime
     public MethodBuilder ArrayPop { get; set; } = null!;
     public MethodBuilder ArrayPopProto { get; set; } = null!;
     public MethodBuilder ArrayShift { get; set; } = null!;
+    public MethodBuilder ArrayShiftDouble { get; set; } = null!;
+    public MethodBuilder ArrayShiftBool { get; set; } = null!;
     public MethodBuilder ArrayShiftProto { get; set; } = null!;
+    public MethodBuilder ArrayShiftNumber { get; set; } = null!;
     public MethodBuilder ArrayUnshift { get; set; } = null!;
+    public MethodBuilder ArrayUnshiftDouble { get; set; } = null!;
+    public MethodBuilder ArrayUnshiftBool { get; set; } = null!;
+    public MethodBuilder ArrayUnshiftNumber { get; set; } = null!;
     public MethodBuilder ArraySlice { get; set; } = null!;
     public MethodBuilder ArraySliceNumber { get; set; } = null!;
     public MethodBuilder ArrayMap { get; set; } = null!;
@@ -285,6 +296,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayReduceDouble { get; set; } = null!;
     public MethodBuilder ArrayReduceRight { get; set; } = null!;
     public MethodBuilder ArrayIncludes { get; set; } = null!;
+    public MethodBuilder ArrayIncludesProto { get; set; } = null!;
+    public MethodBuilder ArrayIncludesDouble { get; set; } = null!;
     public MethodBuilder ArrayIndexOf { get; set; } = null!;
     public MethodBuilder ArrayLastIndexOf { get; set; } = null!;
     public MethodBuilder ArrayJoin { get; set; } = null!;
@@ -391,6 +404,10 @@ public class EmittedRuntime
     public MethodBuilder StringSubstr { get; set; } = null!;
     public MethodBuilder StringIndexOf { get; set; } = null!;
     public MethodBuilder StringIndexOfFrom { get; set; } = null!;
+    public MethodBuilder StringIndexOfPrimitive { get; set; } = null!;
+    public MethodBuilder StringIncludesPrimitive { get; set; } = null!;
+    public MethodBuilder StringSlicePrimitive { get; set; } = null!;
+    public MethodBuilder StringSubstringPrimitive { get; set; } = null!;
     public MethodBuilder StringToUpperCase { get; set; } = null!;
     public MethodBuilder StringToLowerCase { get; set; } = null!;
     public MethodBuilder StringTrim { get; set; } = null!;
@@ -1361,6 +1378,7 @@ public class EmittedRuntime
     public MethodBuilder RegExpSetLastIndex { get; set; } = null!;
     public MethodBuilder StringMatchRegExp { get; set; } = null!;
     public MethodBuilder StringTryInvokeSymbolMethod { get; set; } = null!;
+    public MethodBuilder StableRegExpReplace { get; set; } = null!;
     public MethodBuilder StringReplaceRegExp { get; set; } = null!;
     public MethodBuilder StringReplaceAllRegExp { get; set; } = null!;
     public MethodBuilder StringSearchRegExp { get; set; } = null!;
@@ -1406,6 +1424,7 @@ public class EmittedRuntime
     public MethodBuilder TSRegExpTestMethod { get; set; } = null!;
     public MethodBuilder TSRegExpExecMethod { get; set; } = null!;
     public MethodBuilder TSRegExpToStringMethod { get; set; } = null!;
+    public MethodBuilder TSRegExpReplaceMethod { get; set; } = null!;
     // ECMA-262 (ES2025) RegExp.escape static — emitted standalone on $RegExp.
     public MethodBuilder TSRegExpEscapeMethod { get; set; } = null!;
     public MethodBuilder BuildNamedGroups { get; set; } = null!;
@@ -1437,6 +1456,7 @@ public class EmittedRuntime
     public MethodBuilder TSErrorMessageSetter { get; set; } = null!;
     public MethodBuilder TSErrorStackGetter { get; set; } = null!;
     public MethodBuilder TSErrorStackSetter { get; set; } = null!;
+    public MethodBuilder TSErrorCapturedStackSetter { get; set; } = null!;
     public MethodBuilder TSErrorCauseGetter { get; set; } = null!;
     public MethodBuilder TSErrorCauseSetter { get; set; } = null!;
     public MethodBuilder TSErrorHasCauseGetter { get; set; } = null!;
@@ -1444,7 +1464,6 @@ public class EmittedRuntime
     public MethodBuilder TSErrorCodeSetter { get; set; } = null!;
     public MethodBuilder TSErrorSyscallGetter { get; set; } = null!;
     public MethodBuilder TSErrorSyscallSetter { get; set; } = null!;
-    public MethodBuilder TSErrorCaptureStackTrace { get; set; } = null!;
 
     // $TypeError
     public Type TSTypeErrorType { get; set; } = null!;
@@ -1560,6 +1579,9 @@ public class EmittedRuntime
     public MethodBuilder TSArrayEnsureBoxed { get; set; } = null!;
     public MethodBuilder TSArrayIsNumericGetter { get; set; } = null!;
     public MethodBuilder TSArrayNumericCountGetter { get; set; } = null!;
+    public MethodBuilder TSArrayCanMutateNumericGetter { get; set; } = null!;
+    public MethodBuilder TSArrayShiftNumeric { get; set; } = null!;
+    public MethodBuilder TSArrayUnshiftNumeric { get; set; } = null!;
     public MethodBuilder TSArrayCloneNumeric { get; set; } = null!;
     public MethodBuilder TSArraySortNumeric { get; set; } = null!;
     // Flips an empty $Array into numeric (unboxed double[]) mode — emitted at

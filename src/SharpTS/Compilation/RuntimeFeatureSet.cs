@@ -57,6 +57,8 @@ public sealed class RuntimeFeatureSet
     /// </summary>
     internal HashSet<string> CompactObjectRecordStablePushShapes { get; } =
         new(StringComparer.Ordinal);
+    internal HashSet<string> CompactObjectRecordStableIteratorShapes { get; } =
+        new(StringComparer.Ordinal);
 
     /// <summary>
     /// Generic-looking compact-record slots whose literal initializers prove that the
@@ -160,6 +162,13 @@ public sealed class RuntimeFeatureSet
     // Number prototype mutation makes typed number instance methods observable
     // through ordinary property lookup. Direct formatting requires this false.
     public bool UsesNumberPrototypeMutation { get; set; } = true;
+    // String prototype/constructor mutation makes primitive string method
+    // bindings observable through ordinary property lookup. Fixed-arity typed
+    // intrinsics require this to remain false.
+    public bool UsesStringPrototypeMutation { get; set; } = true;
+    // Replacing the global Math object or one of its function properties makes
+    // direct Math.min/max interception observable. Typed folds require this false.
+    public bool UsesMathMutation { get; set; } = true;
     // Replacing Number or mutating its static properties requires live lookup of
     // Number.parseInt and the other constructor-owned built-ins.
     public bool UsesNumberConstructorMutation { get; set; } = true;

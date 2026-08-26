@@ -68,11 +68,52 @@ public partial class RuntimeEmitter
         // WithFunction first: StringReplaceRegExp delegates to it for callable
         // replacements, so its MethodBuilder must be assigned beforehand.
         EmitStringReplaceWithFunction(typeBuilder, runtime);
+        EmitStableRegExpReplace(typeBuilder, runtime);
         EmitStringReplaceRegExp(typeBuilder, runtime);
         EmitStringReplaceAllRegExp(typeBuilder, runtime);
         EmitStringSearchRegExp(typeBuilder, runtime);
         EmitStringSplitRegExp(typeBuilder, runtime);
         EmitStringSplitProto(typeBuilder, runtime);
+    }
+
+    /// <summary>
+    /// Emits the allocation-light path for a stable intrinsic regex literal and
+    /// primitive replacement string. Substitution tokens retain the complete
+    /// RegExp @@replace algorithm; ordinary replacement text can call the typed
+    /// regex helper directly without symbol lookup or argument-array creation.
+    /// </summary>
+    private void EmitStableRegExpReplace(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "StableRegExpReplace",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String, runtime.TSRegExpType, _types.String, _types.Boolean]);
+        runtime.StableRegExpReplace = method;
+
+        var il = method.GetILGenerator();
+        var ordinaryReplacementLabel = il.DefineLabel();
+
+        // JavaScript substitution tokens need the spec path, particularly
+        // $<name>, whose spelling differs from .NET's ${name} syntax.
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldc_I4, (int)'$');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Contains", [_types.Char])!);
+        il.Emit(OpCodes.Brfalse, ordinaryReplacementLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, runtime.TSRegExpSymReplaceHelper);
+        il.Emit(OpCodes.Castclass, _types.String);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(ordinaryReplacementLabel);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Ldarg_3);
+        il.Emit(OpCodes.Call, runtime.TSRegExpReplaceMethod);
+        il.Emit(OpCodes.Ret);
     }
 
     /// <summary>

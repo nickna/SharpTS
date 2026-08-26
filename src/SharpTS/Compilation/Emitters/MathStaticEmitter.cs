@@ -46,6 +46,18 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         // Handle variadic min/max (JavaScript allows any number of arguments)
         if (methodName is "min" or "max")
         {
+            // A replaced Math binding/property must be obtained and invoked as
+            // an ordinary live property. Returning false leaves that work to
+            // the generic call emitter.
+            if (ctx.RuntimeFeatures?.UsesMathMutation != false)
+                return false;
+
+            if (EmitsUnboxedFixedArityMinMax(emitter, methodName, arguments))
+            {
+                EmitUnboxedFixedArityMinMax(emitter, methodName, arguments);
+                return true;
+            }
+
             // Spread args (\`Math.max(...arr)\`) have a runtime-unknown count, so the
             // inline per-arg loop below can't expand them. Route to the variadic
             // \`object[]\`-taking adapter, feeding a spread-expanded args array — the
@@ -421,6 +433,60 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
         return false;
     }
 
+    internal static bool EmitsUnboxedFixedArityMinMax(
+        IEmitterContext emitter, string methodName, IReadOnlyList<Expr> arguments)
+    {
+        if (methodName is not ("min" or "max")
+            || emitter.Context.RuntimeFeatures?.UsesMathMutation != false
+            || arguments.Any(argument => argument is Expr.Spread))
+            return false;
+
+        return arguments.All(argument =>
+            emitter.Context.TypeMap?.Get(argument) is
+                TypeSystem.TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                or TypeSystem.TypeInfo.NumberLiteral
+                or TypeSystem.TypeInfo.Enum { Kind: TypeSystem.EnumKind.Numeric });
+    }
+
+    private static void EmitUnboxedFixedArityMinMax(
+        IEmitterContext emitter, string methodName, IReadOnlyList<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+        if (arguments.Count == 0)
+        {
+            il.Emit(OpCodes.Ldc_R8,
+                methodName == "min"
+                    ? double.PositiveInfinity
+                    : double.NegativeInfinity);
+            emitter.SetStackType(StackType.Double);
+            return;
+        }
+
+        // Evaluate every argument exactly once and in source order with a
+        // clear evaluation stack. The locals remain native doubles, so this
+        // also handles suspending/effectful numeric expressions without an
+        // object spill or a ToNumber boundary.
+        var values = new LocalBuilder[arguments.Count];
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            values[i] = il.DeclareLocal(ctx.Types.Double);
+            emitter.EmitExpressionAsDouble(arguments[i]);
+            il.Emit(OpCodes.Stloc, values[i]);
+        }
+
+        MethodInfo fold = methodName == "min"
+            ? ctx.Types.GetMethod(ctx.Types.Math, "Min", ctx.Types.Double, ctx.Types.Double)
+            : ctx.Types.GetMethod(ctx.Types.Math, "Max", ctx.Types.Double, ctx.Types.Double);
+        il.Emit(OpCodes.Ldloc, values[0]);
+        for (int i = 1; i < values.Length; i++)
+        {
+            il.Emit(OpCodes.Ldloc, values[i]);
+            il.Emit(OpCodes.Call, fold);
+        }
+        emitter.SetStackType(StackType.Double);
+    }
+
     /// <summary>
     /// Attempts to emit IL for bare access to a Math static member without
     /// a call — data constants (<c>PI</c>, <c>E</c>) and method references
@@ -434,6 +500,11 @@ public sealed class MathStaticEmitter : IStaticTypeEmitterStrategy
     {
         var ctx = emitter.Context;
         var il = ctx.IL;
+
+        // Property replacement also affects value-form reads (`const f =
+        // Math.min`) and numeric constants. Let ordinary live lookup observe it.
+        if (ctx.RuntimeFeatures?.UsesMathMutation == true)
+            return false;
 
         // ECMA-262 21.3.1: numeric constants on the Math object.
         switch (propertyName)

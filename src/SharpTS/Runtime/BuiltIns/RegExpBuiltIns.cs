@@ -1010,6 +1010,9 @@ public static class RegExpBuiltIns
                     : ToStr(interp, capture));
             }
 
+            object? namedCaptures = interp.GetProperty(match, "groups");
+            bool hasNamedCaptures = namedCaptures is not (null or SharpTSUndefined);
+
             string replacement;
             if (isCallable)
             {
@@ -1018,6 +1021,8 @@ public static class RegExpBuiltIns
                 callArgs.AddRange(captures);
                 callArgs.Add((double)position);
                 callArgs.Add(s);
+                if (hasNamedCaptures)
+                    callArgs.Add(namedCaptures);
                 var fnResult = FunctionBuiltIns.CallWithThis(
                     interp, (ISharpTSCallable)replaceValue!,
                     SharpTSUndefined.Instance, callArgs);
@@ -1026,7 +1031,8 @@ public static class RegExpBuiltIns
             else
             {
                 replacement = ExpandReplacement(
-                    interp, replaceStr, s, matchStr, position, captures);
+                    interp, replaceStr, s, matchStr, position, captures,
+                    hasNamedCaptures ? namedCaptures : null);
             }
 
             // Append the un-modified slice + replacement.
@@ -1048,7 +1054,8 @@ public static class RegExpBuiltIns
         string input,
         string matched,
         int position,
-        List<object?> captures)
+        List<object?> captures,
+        object? namedCaptures)
     {
         var result = new System.Text.StringBuilder(replacement.Length);
         for (int i = 0; i < replacement.Length; i++)
@@ -1079,6 +1086,20 @@ public static class RegExpBuiltIns
                     result.Append(input, tailStart, input.Length - tailStart);
                     i++;
                     continue;
+            }
+
+            if (next == '<' && namedCaptures is not null)
+            {
+                int close = replacement.IndexOf('>', i + 2);
+                if (close >= 0)
+                {
+                    string name = replacement.Substring(i + 2, close - i - 2);
+                    object? namedValue = interp.GetProperty(namedCaptures, name);
+                    if (namedValue is not (null or SharpTSUndefined))
+                        result.Append(ToStr(interp, namedValue));
+                    i = close;
+                    continue;
+                }
             }
 
             if (next == '0'

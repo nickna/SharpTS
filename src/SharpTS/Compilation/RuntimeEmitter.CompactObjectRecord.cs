@@ -33,7 +33,8 @@ public partial class RuntimeEmitter
             if (shape.Fields.Count is < 1 or > 4)
                 continue;
             bool specializeStablePushScalars =
-                _features.CompactObjectRecordStablePushShapes.Contains(fingerprint);
+                _features.CompactObjectRecordStablePushShapes.Contains(fingerprint) ||
+                _features.CompactObjectRecordStableIteratorShapes.Contains(fingerprint);
 
             var typeBuilder = EmitTypeDefinitions.DefineType(
                 moduleBuilder,

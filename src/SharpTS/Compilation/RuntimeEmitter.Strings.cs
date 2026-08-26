@@ -383,6 +383,270 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    /// <summary>
+    /// Emits allocation-free overloads for the fixed-arity primitive string
+    /// intrinsics. Their signatures deliberately contain no <see cref="object"/>
+    /// or <c>object[]</c> slots, so a statically proven call stays in typed IL.
+    /// </summary>
+    private void EmitPrimitiveStringIntrinsics(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        MethodBuilder toInteger = EmitPrimitiveStringToInteger(typeBuilder);
+        MethodImplAttributes inlineAndOptimize =
+            MethodImplAttributes.AggressiveInlining |
+            MethodImplAttributes.AggressiveOptimization;
+        var lengthGetter = _types.GetProperty(_types.String, "Length").GetGetMethod()!;
+        var substring = _types.GetMethod(
+            _types.String, "Substring", _types.Int32, _types.Int32);
+        var indexOfOrdinal = _types.GetMethod(
+            _types.String, "IndexOf",
+            [_types.String, _types.Int32, typeof(StringComparison)])!;
+        var min = _types.GetMethod(_types.Math, "Min", _types.Int32, _types.Int32);
+        var max = _types.GetMethod(_types.Math, "Max", _types.Int32, _types.Int32);
+
+        var indexOf = typeBuilder.DefineMethod(
+            "StringIndexOfPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Double,
+            [_types.String, _types.String, _types.Double]);
+        indexOf.SetImplementationFlags(inlineAndOptimize);
+        runtime.StringIndexOfPrimitive = indexOf;
+        {
+            var il = indexOf.GetILGenerator();
+            var start = il.DeclareLocal(_types.Int32);
+
+            // Clamp ToIntegerOrInfinity(position) to [0, string.length]. In
+            // particular, an empty needle at a position beyond the end must
+            // return length rather than -1.
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, toInteger);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, max);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, lengthGetter);
+            il.Emit(OpCodes.Call, min);
+            il.Emit(OpCodes.Stloc, start);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloc, start);
+            il.Emit(OpCodes.Ldc_I4, (int)StringComparison.Ordinal);
+            il.Emit(OpCodes.Callvirt, indexOfOrdinal);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var includes = typeBuilder.DefineMethod(
+            "StringIncludesPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.String, _types.String, _types.Double]);
+        includes.SetImplementationFlags(inlineAndOptimize);
+        runtime.StringIncludesPrimitive = includes;
+        {
+            var il = includes.GetILGenerator();
+            var found = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, indexOf);
+            il.Emit(OpCodes.Ldc_R8, 0.0);
+            il.Emit(OpCodes.Bge, found);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(found);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var slice = typeBuilder.DefineMethod(
+            "StringSlicePrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String, _types.Double, _types.Double, _types.Boolean]);
+        slice.SetImplementationFlags(inlineAndOptimize);
+        runtime.StringSlicePrimitive = slice;
+        {
+            var il = slice.GetILGenerator();
+            var length = il.DeclareLocal(_types.Int32);
+            var from = il.DeclareLocal(_types.Int32);
+            var to = il.DeclareLocal(_types.Int32);
+            var nonNegativeStart = il.DefineLabel();
+            var startReady = il.DefineLabel();
+            var hasEnd = il.DefineLabel();
+            var nonNegativeEnd = il.DefineLabel();
+            var endReady = il.DefineLabel();
+            var returnSubstring = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, lengthGetter);
+            il.Emit(OpCodes.Stloc, length);
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, toInteger);
+            il.Emit(OpCodes.Stloc, from);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Bge, nonNegativeStart);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, max);
+            il.Emit(OpCodes.Stloc, from);
+            il.Emit(OpCodes.Br, startReady);
+            il.MarkLabel(nonNegativeStart);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Call, min);
+            il.Emit(OpCodes.Stloc, from);
+            il.MarkLabel(startReady);
+
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brtrue, hasEnd);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Stloc, to);
+            il.Emit(OpCodes.Br, endReady);
+            il.MarkLabel(hasEnd);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, toInteger);
+            il.Emit(OpCodes.Stloc, to);
+            il.Emit(OpCodes.Ldloc, to);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Bge, nonNegativeEnd);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Ldloc, to);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, max);
+            il.Emit(OpCodes.Stloc, to);
+            il.Emit(OpCodes.Br, endReady);
+            il.MarkLabel(nonNegativeEnd);
+            il.Emit(OpCodes.Ldloc, to);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Call, min);
+            il.Emit(OpCodes.Stloc, to);
+            il.MarkLabel(endReady);
+
+            il.Emit(OpCodes.Ldloc, to);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Bgt, returnSubstring);
+            il.Emit(OpCodes.Ldstr, "");
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(returnSubstring);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Ldloc, to);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Callvirt, substring);
+            il.Emit(OpCodes.Ret);
+        }
+
+        var substringPrimitive = typeBuilder.DefineMethod(
+            "StringSubstringPrimitive",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.String,
+            [_types.String, _types.Double, _types.Double, _types.Boolean]);
+        substringPrimitive.SetImplementationFlags(inlineAndOptimize);
+        runtime.StringSubstringPrimitive = substringPrimitive;
+        {
+            var il = substringPrimitive.GetILGenerator();
+            var length = il.DeclareLocal(_types.Int32);
+            var start = il.DeclareLocal(_types.Int32);
+            var end = il.DeclareLocal(_types.Int32);
+            var from = il.DeclareLocal(_types.Int32);
+            var to = il.DeclareLocal(_types.Int32);
+            var hasEnd = il.DefineLabel();
+            var endReady = il.DefineLabel();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Callvirt, lengthGetter);
+            il.Emit(OpCodes.Stloc, length);
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, toInteger);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, max);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Call, min);
+            il.Emit(OpCodes.Stloc, start);
+
+            il.Emit(OpCodes.Ldarg_3);
+            il.Emit(OpCodes.Brtrue, hasEnd);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Stloc, end);
+            il.Emit(OpCodes.Br, endReady);
+            il.MarkLabel(hasEnd);
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, toInteger);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Call, max);
+            il.Emit(OpCodes.Ldloc, length);
+            il.Emit(OpCodes.Call, min);
+            il.Emit(OpCodes.Stloc, end);
+            il.MarkLabel(endReady);
+
+            il.Emit(OpCodes.Ldloc, start);
+            il.Emit(OpCodes.Ldloc, end);
+            il.Emit(OpCodes.Call, min);
+            il.Emit(OpCodes.Stloc, from);
+            il.Emit(OpCodes.Ldloc, start);
+            il.Emit(OpCodes.Ldloc, end);
+            il.Emit(OpCodes.Call, max);
+            il.Emit(OpCodes.Stloc, to);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Ldloc, to);
+            il.Emit(OpCodes.Ldloc, from);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Callvirt, substring);
+            il.Emit(OpCodes.Ret);
+        }
+    }
+
+    private MethodBuilder EmitPrimitiveStringToInteger(TypeBuilder typeBuilder)
+    {
+        var method = typeBuilder.DefineMethod(
+            "StringToIntegerOrInfinityPrimitive",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Int32,
+            [_types.Double]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveInlining);
+
+        var il = method.GetILGenerator();
+        var notNaN = il.DefineLabel();
+        var belowMaximum = il.DefineLabel();
+        var aboveMinimum = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Double, "IsNaN", _types.Double));
+        il.Emit(OpCodes.Brfalse, notNaN);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(notNaN);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_R8, (double)int.MaxValue);
+        il.Emit(OpCodes.Blt, belowMaximum);
+        il.Emit(OpCodes.Ldc_I4, int.MaxValue);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(belowMaximum);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_R8, (double)int.MinValue);
+        il.Emit(OpCodes.Bgt, aboveMinimum);
+        il.Emit(OpCodes.Ldc_I4, int.MinValue);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(aboveMinimum);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
     private void EmitStringReplace(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(

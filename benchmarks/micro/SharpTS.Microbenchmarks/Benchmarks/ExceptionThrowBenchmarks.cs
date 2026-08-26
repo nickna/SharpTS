@@ -19,6 +19,9 @@ public class ExceptionThrowBenchmarks
     private Func<double, double> _tryCatchNoThrow = null!;
     private Func<double, double> _primitiveThrow = null!;
     private Func<double, double> _errorThrow = null!;
+    private Func<double, double> _errorConstruction = null!;
+    private Func<double, double> _firstStackRead = null!;
+    private Func<double, double> _repeatedStackRead = null!;
 
     [Params(100_000)]
     public int N { get; set; }
@@ -44,6 +47,12 @@ public class ExceptionThrowBenchmarks
             compiled, "throwPrimitiveSparse");
         _errorThrow = BenchmarkHarness.GetCompiledNumberFunc(
             compiled, "throwErrorSparse");
+        _errorConstruction = BenchmarkHarness.GetCompiledNumberFunc(
+            compiled, "constructErrorSparse");
+        _firstStackRead = BenchmarkHarness.GetCompiledNumberFunc(
+            compiled, "firstErrorStackRead");
+        _repeatedStackRead = BenchmarkHarness.GetCompiledNumberFunc(
+            compiled, "repeatedErrorStackRead");
     }
 
     [Benchmark(Baseline = true)]
@@ -57,4 +66,13 @@ public class ExceptionThrowBenchmarks
 
     [Benchmark]
     public double ErrorThrow() => _errorThrow(N);
+
+    [Benchmark]
+    public double ErrorConstructionNoStackRead() => _errorConstruction(N);
+
+    [Benchmark]
+    public double ErrorFirstStackRead() => _firstStackRead(N);
+
+    [Benchmark]
+    public double ErrorRepeatedStackRead() => _repeatedStackRead(N);
 }

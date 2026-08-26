@@ -646,6 +646,9 @@ public partial class ILCompiler
         statements = NestedFunctionLifter.Lift(statements, _entryPointDebugScope?.Spans);
         _lexicalBindingNames = LexicalBindingNameCollector.Collect(statements);
         _features ??= new RuntimeFeatureDetector().Detect(statements, _typeMap);
+        // The stable iterator result shape must be known before Phase 1 emits its
+        // result carrier. Closure-based eligibility is rechecked later.
+        StableCustomIteratorAnalyzer.Analyze(statements, _typeMap, null, _features);
         return statements;
     }
 
@@ -653,6 +656,8 @@ public partial class ILCompiler
     {
         Phase2_AnalyzeClosures(statements);
         StableMapIterationAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        StableCustomIteratorAnalyzer.Analyze(
+            statements, _typeMap, _closures.Analyzer, _features);
         NumericMapLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         StablePrimitivePromiseThenAnalyzer.Analyze(
             statements, _typeMap, _closures.Analyzer);
@@ -668,7 +673,7 @@ public partial class ILCompiler
         _classes.CompactStorageClasses.UnionWith(
             CompactClassStorageAnalyzer.Analyze(statements, _typeMap, _features));
         TypedArrayHoistAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
-        ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
+        ArrayLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer, _features);
         StringAccumulatorPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
         ObjectLocalPromotionAnalyzer.Analyze(statements, _typeMap, _closures.Analyzer);
     }
@@ -1009,11 +1014,28 @@ public partial class ILCompiler
                 fieldBuilders[name] = structType.DefineField(name, clr, FieldAttributes.Public);
             }
 
+            var keyMetadataField = structType.DefineField(
+                "$Keys", _types.ObjectArray,
+                FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly);
+            var shapeInitializer = structType.DefineTypeInitializer().GetILGenerator();
+            shapeInitializer.Emit(OpCodes.Ldc_I4, shape.Fields.Count);
+            shapeInitializer.Emit(OpCodes.Newarr, _types.Object);
+            for (int index = 0; index < shape.Fields.Count; index++)
+            {
+                shapeInitializer.Emit(OpCodes.Dup);
+                shapeInitializer.Emit(OpCodes.Ldc_I4, index);
+                shapeInitializer.Emit(OpCodes.Ldstr, shape.Fields[index].Name);
+                shapeInitializer.Emit(OpCodes.Stelem_Ref);
+            }
+            shapeInitializer.Emit(OpCodes.Stsfld, keyMetadataField);
+            shapeInitializer.Emit(OpCodes.Ret);
+
             var info = new ObjectShapeTypeInfo
             {
                 ClrType = structType,
                 Fields = shape.Fields.Select(f => (f.Name, f.Kind)).ToList(),
                 FieldBuilders = fieldBuilders,
+                KeyMetadataField = keyMetadataField,
             };
             _closures.ObjectShapes.ByKey[shape.CanonicalKey] = info;
             _closures.ObjectShapes.ByClrType[structType] = info;
@@ -1324,6 +1346,12 @@ public partial class ILCompiler
             if (modules.Any(module => module.IsCommonJs))
                 _features.UsesCjsRequire = true;
         }
+
+        // As in the single-file path, discover the result ABI before Phase 1
+        // emits runtime types; closure-based eligibility is rechecked after the
+        // combined module closure analysis.
+        StableCustomIteratorAnalyzer.Analyze(
+            allStatements, _typeMap, null, _features);
 
         return allStatements;
     }

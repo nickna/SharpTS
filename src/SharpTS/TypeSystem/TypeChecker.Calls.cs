@@ -557,6 +557,22 @@ public partial class TypeChecker
             { result = new TypeInfo.Error(errorVar.Name.Lexeme); return true; }
         }
 
+        // Math.min/max always produce a Number (or throw while coercing an
+        // argument).  Math itself is otherwise modeled as `any`, but retaining
+        // this result type lets annotated numeric callers keep their native
+        // double return slot.  A lexical Math binding is user code and must go
+        // through ordinary callable resolution instead.
+        if (call.Callee is Expr.Get mathGet &&
+            mathGet.Object is Expr.Variable mathVar &&
+            mathVar.Name.Lexeme == "Math" &&
+            _environment.Get("Math") is null &&
+            mathGet.Name.Lexeme is "min" or "max")
+        {
+            foreach (var arg in call.Arguments)
+                CheckExpr(arg is Expr.Spread spread ? spread.Expression : arg);
+            { result = TypeInfo.Primitive.Number; return true; }
+        }
+
         // Handle Object.keys(), Object.values(), Object.entries()
         if (call.Callee is Expr.Get get &&
             get.Object is Expr.Variable objVar &&

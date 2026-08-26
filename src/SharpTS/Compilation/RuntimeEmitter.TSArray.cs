@@ -317,6 +317,18 @@ public partial class RuntimeEmitter
             MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
             _types.Int32, Type.EmptyTypes);
         runtime.TSArrayNumericCountGetter = numericCountGetter;
+        var canMutateNumericGetter = typeBuilder.DefineMethod("get_CanMutateNumeric",
+            MethodAttributes.Assembly | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+            _types.Boolean, Type.EmptyTypes);
+        runtime.TSArrayCanMutateNumericGetter = canMutateNumericGetter;
+        var shiftNumeric = typeBuilder.DefineMethod("ShiftNumeric",
+            MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            _types.Object, Type.EmptyTypes);
+        runtime.TSArrayShiftNumeric = shiftNumeric;
+        var unshiftNumeric = typeBuilder.DefineMethod("UnshiftNumeric",
+            MethodAttributes.Assembly | MethodAttributes.HideBySig,
+            _types.Double, [_types.DoubleArray]);
+        runtime.TSArrayUnshiftNumeric = unshiftNumeric;
         var cloneNumeric = typeBuilder.DefineMethod("CloneNumeric",
             MethodAttributes.Assembly | MethodAttributes.HideBySig,
             typeBuilder, Type.EmptyTypes);
@@ -340,6 +352,175 @@ public partial class RuntimeEmitter
             var il = numericCountGetter.GetILGenerator();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ret);
+        }
+        {
+            var il = canMutateNumericGetter.GetILGenerator();
+            var unavailable = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsNumericField);
+            il.Emit(OpCodes.Brfalse, unavailable);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsFrozenField);
+            il.Emit(OpCodes.Brtrue, unavailable);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayIsSealedField);
+            il.Emit(OpCodes.Brtrue, unavailable);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNonExtensibleField);
+            il.Emit(OpCodes.Brtrue, unavailable);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(unavailable);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ret);
+        }
+
+        // Packed numeric shift/unshift kernels. Their callers require the exact
+        // $Array type and CanMutateNumeric; all observable or deoptimized shapes
+        // stay on ArrayShiftProto/ArrayUnshiftProto.
+        {
+            var il = shiftNumeric.GetILGenerator();
+            var nonEmpty = il.DefineLabel();
+            var skipCopy = il.DefineLabel();
+            var first = il.DeclareLocal(_types.Double);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Brtrue, nonEmpty);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(nonEmpty);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldelem_R8);
+            il.Emit(OpCodes.Stloc, first);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ble, skipCopy);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Call, _types.ArrayCopy5);
+
+            il.MarkLabel(skipCopy);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Sub);
+            il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+            il.Emit(OpCodes.Ldloc, first);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+        }
+        {
+            var il = unshiftNumeric.GetILGenerator();
+            var nonEmptyItems = il.DefineLabel();
+            var haveStore = il.DefineLabel();
+            var capacityReady = il.DefineLabel();
+            var required = il.DeclareLocal(_types.Int32);
+            var newCapacity = il.DeclareLocal(_types.Int32);
+
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Brtrue, nonEmptyItems);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Ret);
+
+            il.MarkLabel(nonEmptyItems);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Add);
+            il.Emit(OpCodes.Stloc, required);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Brtrue, haveStore);
+            il.Emit(OpCodes.Ldc_I4_4);
+            il.Emit(OpCodes.Ldloc, required);
+            il.Emit(OpCodes.Call, _types.MathMaxInt32);
+            il.Emit(OpCodes.Stloc, newCapacity);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, newCapacity);
+            il.Emit(OpCodes.Newarr, _types.Double);
+            il.Emit(OpCodes.Stfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Br, capacityReady);
+
+            il.MarkLabel(haveStore);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldloc, required);
+            il.Emit(OpCodes.Bge, capacityReady);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldc_I4_2);
+            il.Emit(OpCodes.Mul);
+            il.Emit(OpCodes.Ldloc, required);
+            il.Emit(OpCodes.Call, _types.MathMaxInt32);
+            il.Emit(OpCodes.Stloc, newCapacity);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldflda, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldloc, newCapacity);
+            il.Emit(OpCodes.Call, arrayResize);
+
+            il.MarkLabel(capacityReady);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Call, _types.ArrayCopy5);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, _tsArrayNumStoreField);
+            il.Emit(OpCodes.Ldc_I4_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldlen);
+            il.Emit(OpCodes.Conv_I4);
+            il.Emit(OpCodes.Call, _types.ArrayCopy5);
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, required);
+            il.Emit(OpCodes.Stfld, _tsArrayNumCountField);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldloc, required);
+            il.Emit(OpCodes.Conv_I8);
+            il.Emit(OpCodes.Stfld, _tsArrayLengthField);
+            il.Emit(OpCodes.Ldloc, required);
+            il.Emit(OpCodes.Conv_R8);
             il.Emit(OpCodes.Ret);
         }
 

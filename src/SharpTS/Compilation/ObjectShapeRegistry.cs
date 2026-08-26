@@ -38,4 +38,10 @@ public sealed class ObjectShapeTypeInfo
 
     /// <summary>Field name → its <see cref="FieldBuilder"/> on <see cref="ClrType"/>.</summary>
     public required Dictionary<string, FieldBuilder> FieldBuilders { get; init; }
+
+    /// <summary>
+    /// Cached ordered enumerable string keys for direct <c>Object.keys</c> materialization.
+    /// The emitted array is internal to the generated assembly and copied into every mutable result.
+    /// </summary>
+    public required FieldBuilder KeyMetadataField { get; init; }
 }

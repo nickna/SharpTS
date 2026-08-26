@@ -1574,6 +1574,14 @@ public abstract partial class ExpressionEmitterBase
 
         // Type-first dispatch via TypeEmitterRegistry
         var objType = Ctx.TypeMap?.Get(methodGet.Object);
+        if (objType is TypeSystem.TypeInfo.Array
+            && methodName == "includes"
+            && (Ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+                || Ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
+        {
+            EmitDynamicMethodCallPreservingThis(methodGet.Object, methodName, c.Arguments);
+            return true;
+        }
         if (objType != null && Ctx.TypeEmitterRegistry != null)
         {
             var strategy = Ctx.TypeEmitterRegistry.GetStrategy(objType);

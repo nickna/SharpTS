@@ -415,13 +415,19 @@ public partial class ILEmitter
             return;
         }
 
-        // Direct numeric locals already coerce their RHS to double below. Ask the
+        var assignmentDCName = _ctx.ResolveFunctionDCFieldName(a.Name.Lexeme);
+        FieldBuilder? assignmentDCField = null;
+        if (_ctx.CapturedFunctionLocals?.Contains(assignmentDCName) == true)
+            _ctx.FunctionDisplayClassFields?.TryGetValue(assignmentDCName, out assignmentDCField);
+
+        // Direct numeric locals and proven numeric function-capture slots coerce
+        // their RHS to double up front, avoiding a box/unbox round trip.
         // expression emitter for that representation up front for number[] reads,
         // allowing the guarded GetDouble arm to avoid a box/unbox round trip.
         var assignmentLocal = _ctx.Locals.GetLocal(a.Name.Lexeme);
-        if (a.Value is Expr.GetIndex
-            && assignmentLocal != null
-            && _ctx.Types.IsDouble(assignmentLocal.LocalType))
+        if ((assignmentDCField?.FieldType == _ctx.Types.Double) ||
+            (a.Value is Expr.GetIndex && assignmentLocal != null &&
+             _ctx.Types.IsDouble(assignmentLocal.LocalType)))
         {
             EmitExpressionAsDouble(a.Value);
         }
@@ -462,10 +468,41 @@ public partial class ILEmitter
         // 1. Function display class fields (captured function-local vars)
         // Check this BEFORE regular locals to ensure we use the shared storage.
         // #838: remap a write-captured block-scope shadow to its renamed DC storage key in an arrow body.
-        var assignDCName = _ctx.ResolveFunctionDCFieldName(a.Name.Lexeme);
-        if (_ctx.CapturedFunctionLocals?.Contains(assignDCName) == true &&
-            _ctx.FunctionDisplayClassFields?.TryGetValue(assignDCName, out var funcDCField) == true)
+        if (assignmentDCField is { } funcDCField)
         {
+            if (funcDCField.FieldType == _ctx.Types.Double)
+            {
+                EnsureDouble();
+                IL.Emit(OpCodes.Dup);
+                var numericTemp = IL.DeclareLocal(_ctx.Types.Double);
+                IL.Emit(OpCodes.Stloc, numericTemp);
+                if (_ctx.FunctionDisplayClassLocal != null)
+                {
+                    IL.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
+                }
+                else if (_ctx.CurrentArrowFunctionDCField != null)
+                {
+                    IL.Emit(OpCodes.Ldarg_0);
+                    IL.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
+                }
+                else
+                {
+                    IL.Emit(OpCodes.Pop);
+                    SetStackType(StackType.Double);
+                    return;
+                }
+                IL.Emit(OpCodes.Ldloc, numericTemp);
+                IL.Emit(OpCodes.Stfld, funcDCField);
+                if (_ctx.FunctionDisplayClassLocal != null &&
+                    _ctx.TryGetParameter(a.Name.Lexeme, out var numericParamSync))
+                {
+                    IL.Emit(OpCodes.Ldloc, numericTemp);
+                    IL.Emit(OpCodes.Starg, numericParamSync);
+                }
+                SetStackType(StackType.Double);
+                return;
+            }
+
             EmitBoxIfNeeded(a.Value);
             IL.Emit(OpCodes.Dup);
             // Store to field: need temp since value is on top of stack

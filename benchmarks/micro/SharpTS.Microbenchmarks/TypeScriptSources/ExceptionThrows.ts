@@ -55,3 +55,38 @@ function throwErrorSparse(n: number): number {
     }
     return sum;
 }
+
+function constructErrorSparse(n: number): number {
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        if ((i & 1023) === 0) {
+            const error = new Error("sparse");
+            total = total + error.message.length;
+        }
+    }
+    return total;
+}
+
+function firstErrorStackRead(n: number): number {
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        if ((i & 1023) === 0) {
+            const error = new Error("sparse");
+            total = total + error.stack!.length;
+        }
+    }
+    return total;
+}
+
+function repeatedErrorStackRead(n: number): number {
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        if ((i & 1023) === 0) {
+            const error = new Error("sparse");
+            const first = error.stack!;
+            const second = error.stack!;
+            total = total + (first === second ? second.length : -1);
+        }
+    }
+    return total;
+}

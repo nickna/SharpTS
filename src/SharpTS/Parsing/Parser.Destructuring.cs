@@ -164,7 +164,9 @@ public partial class Parser
         // Carry the pattern's shape as a contextual type so a mixed array-literal source (`[[7], 8]`)
         // infers as a tuple instead of an array — otherwise `_dest[0]` is a non-indexable union and a
         // nested pattern (`[m]`) fails to type-check (#783). Erased at runtime.
-        statements.Add(new Stmt.Var(temp, null, normalizedInit, InitializerContext: BuildArrayPatternShape(pattern)));
+        statements.Add(new Stmt.Var(temp, null, normalizedInit,
+            InitializerContext: BuildArrayPatternShape(pattern),
+            DestructuringSource: DestructuringSourceKind.Array));
 
         int index = 0;
         foreach (var element in pattern.Elements)
@@ -228,7 +230,8 @@ public partial class Parser
 
         // const _dest0 = initializer;
         Token temp = GenerateTempVar(pattern.Line);
-        statements.Add(new Stmt.Var(temp, null, initializer));
+        statements.Add(new Stmt.Var(temp, null, initializer,
+            DestructuringSource: DestructuringSourceKind.Object));
 
         foreach (var prop in pattern.Properties)
         {
@@ -389,7 +392,8 @@ public partial class Parser
     {
         // _srcN = __arrayDestructure(source) — normalize any iterable to an indexable array (#685).
         Token srcTemp = GenerateTempVar(line);
-        stmts.Add(new Stmt.Var(srcTemp, null, MakeArrayDestructureCall(source, line)));
+        stmts.Add(new Stmt.Var(srcTemp, null, MakeArrayDestructureCall(source, line),
+            DestructuringSource: DestructuringSourceKind.Array));
         Expr src = new Expr.Variable(srcTemp);
 
         for (int i = 0; i < arr.Elements.Count; i++)
@@ -412,7 +416,8 @@ public partial class Parser
     {
         // _srcN = source — object patterns read properties directly (no iterator normalization).
         Token srcTemp = GenerateTempVar(line);
-        stmts.Add(new Stmt.Var(srcTemp, null, source));
+        stmts.Add(new Stmt.Var(srcTemp, null, source,
+            DestructuringSource: DestructuringSourceKind.Object));
         Expr src = new Expr.Variable(srcTemp);
         var usedKeys = new List<Expr>();
 

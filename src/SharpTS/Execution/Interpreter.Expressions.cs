@@ -622,7 +622,7 @@ public partial class Interpreter
             if (prop.IsSpread)
             {
                 object? spreadValue = (await ctx.EvaluateExprAsync(prop.Value)).ToObject();
-                ApplySpreadToFields(spreadValue, stringFields);
+                symbolFields = ApplySpreadToFields(spreadValue, stringFields, symbolFields);
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
@@ -701,7 +701,7 @@ public partial class Interpreter
             if (prop.IsSpread)
             {
                 object? spreadValue = Evaluate(prop.Value);
-                ApplySpreadToFields(spreadValue, stringFields);
+                symbolFields = ApplySpreadToFields(spreadValue, stringFields, symbolFields);
             }
             else if (prop.Kind == Expr.ObjectPropertyKind.Getter)
             {
@@ -790,35 +790,71 @@ public partial class Interpreter
     /// Applies a spread value's properties to the target fields dictionary.
     /// Shared between sync and async object evaluation paths.
     /// </summary>
-    private static void ApplySpreadToFields(object? spreadValue, Dictionary<string, object?> stringFields)
+    private Dictionary<SharpTSSymbol, object?>? ApplySpreadToFields(
+        object? spreadValue,
+        Dictionary<string, object?> stringFields,
+        Dictionary<SharpTSSymbol, object?>? symbolFields)
     {
         // CopyDataProperties skips null/undefined. Other primitives are
         // ToObject-coerced: only strings contribute enumerable index keys;
         // number/boolean/symbol/bigint wrappers have none.
         if (spreadValue is null or SharpTSUndefined)
-            return;
+            return symbolFields;
         if (spreadValue is string text)
         {
             for (int i = 0; i < text.Length; i++)
                 stringFields[i.ToString()] = text[i].ToString();
-            return;
+            return symbolFields;
         }
         if (spreadValue is bool or double or int or long or float or decimal
             or SharpTSSymbol or SharpTSBigInt or System.Numerics.BigInteger)
-            return;
+            return symbolFields;
 
         if (spreadValue is SharpTSObject spreadObj)
         {
-            foreach (var kv in spreadObj.Fields)
+            // CopyDataProperties snapshots own keys, filters enumerability, then performs a live
+            // [[Get]]. This invokes getters exactly once and includes enumerable Symbols after the
+            // string-key section of OrdinaryOwnPropertyKeys.
+            foreach (string key in spreadObj.OwnEnumerableKeys())
             {
-                stringFields[kv.Key] = kv.Value;
+                stringFields[key] = GetPropertyValue(spreadObj, key);
+            }
+            foreach (SharpTSSymbol symbol in spreadObj.GetSymbolPropertyNames())
+            {
+                if (spreadObj.GetOwnPropertyDescriptor(symbol)?.Enumerable != true)
+                    continue;
+                (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(spreadObj, symbol);
             }
         }
         else if (spreadValue is SharpTSInstance inst)
         {
-            foreach (var key in inst.GetFieldNames())
+            foreach (string key in inst.OwnEnumerableKeys())
             {
-                stringFields[key] = inst.GetRawField(key);
+                stringFields[key] = GetPropertyValue(inst, key);
+            }
+            foreach (SharpTSSymbol symbol in inst.GetSymbolPropertyNames())
+                (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(inst, symbol);
+        }
+        else if (spreadValue is SharpTSProxy proxy)
+        {
+            // Keep the Proxy algorithm unified: one mixed [[OwnPropertyKeys]] snapshot, then an
+            // observable descriptor query and [[Get]] for each still-enumerable key.
+            foreach (object? key in proxy.TrapOwnPropertyKeys(this))
+            {
+                object? descriptor = key switch
+                {
+                    string name => proxy.TrapGetOwnPropertyDescriptor(name, this),
+                    SharpTSSymbol symbol => proxy.TrapGetOwnPropertyDescriptor(symbol, this),
+                    _ => null
+                };
+                if (descriptor is null or SharpTSUndefined
+                    || !SharpTSPropertyDescriptor.FromAnyObject(descriptor).Enumerable)
+                    continue;
+
+                if (key is SharpTSSymbol symbolKey)
+                    (symbolFields ??= [])[symbolKey] = proxy.TrapGet(symbolKey, this);
+                else
+                    stringFields[(string)key!] = proxy.TrapGet((string)key!, this);
             }
         }
         // Plain Dictionary<string, object?> — used by runtime helpers like
@@ -835,6 +871,7 @@ public partial class Interpreter
         {
             throw new InterpreterException("Spread in object literal requires an object.");
         }
+        return symbolFields;
     }
 
     /// <summary>

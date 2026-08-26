@@ -97,8 +97,9 @@ public class LocalVariableResolver : IVariableResolver
                 // Direct access from function body - use the local
                 _il.Emit(OpCodes.Ldloc, _ctx.FunctionDisplayClassLocal);
                 _il.Emit(OpCodes.Ldfld, funcDCField);
-                _ctx.EmitLexicalTdzValueCheck(_il, name);
-                return StackType.Unknown;
+                if (!funcDCField.FieldType.IsValueType)
+                    _ctx.EmitLexicalTdzValueCheck(_il, name);
+                return MapTypeToStackType(funcDCField.FieldType);
             }
 
             if (_ctx.CurrentArrowFunctionDCField != null)
@@ -133,8 +134,9 @@ public class LocalVariableResolver : IVariableResolver
                     _il.Emit(OpCodes.Ldfld, _ctx.CurrentArrowFunctionDCField);
                     _il.Emit(OpCodes.Ldfld, funcDCField);
                 }
-                _ctx.EmitLexicalTdzValueCheck(_il, name);
-                return StackType.Unknown;
+                if (!funcDCField.FieldType.IsValueType)
+                    _ctx.EmitLexicalTdzValueCheck(_il, name);
+                return MapTypeToStackType(funcDCField.FieldType);
             }
 
             // No DC access available — fall through to other checks
@@ -316,7 +318,9 @@ public class LocalVariableResolver : IVariableResolver
         if (_ctx.CapturedFunctionLocals?.Contains(dcName) == true &&
             _ctx.FunctionDisplayClassFields?.TryGetValue(dcName, out var funcDCField) == true)
         {
-            var temp = _il.DeclareLocal(_types.Object);
+            var temp = _il.DeclareLocal(funcDCField.FieldType);
+            if (funcDCField.FieldType == _types.Double)
+                _il.Emit(OpCodes.Call, _ctx.Runtime!.ConvertToNumber);
             _il.Emit(OpCodes.Stloc, temp);
 
             if (_ctx.FunctionDisplayClassLocal != null)

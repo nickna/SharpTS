@@ -1157,9 +1157,15 @@ public partial class RuntimeEmitter
         EmitArrayPop(typeBuilder, runtime);
         EmitArrayPopProto(typeBuilder, runtime);
         EmitArrayShift(typeBuilder, runtime);
+        EmitArrayShiftTyped(typeBuilder, runtime, ArrayElements.Double);
+        EmitArrayShiftTyped(typeBuilder, runtime, ArrayElements.Bool);
         EmitArrayShiftProto(typeBuilder, runtime);
+        EmitArrayShiftNumber(typeBuilder, runtime);
         EmitArrayUnshift(typeBuilder, runtime);
+        EmitArrayUnshiftTyped(typeBuilder, runtime, ArrayElements.Double);
+        EmitArrayUnshiftTyped(typeBuilder, runtime, ArrayElements.Bool);
         EmitArrayUnshiftProto(typeBuilder, runtime);
+        EmitArrayUnshiftNumber(typeBuilder, runtime);
         EmitArraySlice(typeBuilder, runtime);
         // Array callback methods must come after InvokeValue and IsTruthy
         EmitArrayMap(typeBuilder, runtime);
@@ -1197,6 +1203,8 @@ public partial class RuntimeEmitter
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime);
         EmitArrayIncludes(typeBuilder, runtime);
+        EmitArrayIncludesProto(typeBuilder, runtime);
+        EmitArrayIncludesDouble(typeBuilder, runtime);
         EmitArrayIndexOf(typeBuilder, runtime);
         EmitArrayLastIndexOf(typeBuilder, runtime);
         // ECMA-262 Array.prototype.* accepts any array-like (length + indexed
@@ -1272,6 +1280,7 @@ public partial class RuntimeEmitter
         EmitStringSubstr(typeBuilder, runtime);
         EmitStringIndexOf(typeBuilder, runtime);
         EmitStringIndexOfFrom(typeBuilder, runtime);
+        EmitPrimitiveStringIntrinsics(typeBuilder, runtime);
         EmitStringReplace(typeBuilder, runtime);
         EmitStringIncludes(typeBuilder, runtime);
         EmitStringStartsWith(typeBuilder, runtime);

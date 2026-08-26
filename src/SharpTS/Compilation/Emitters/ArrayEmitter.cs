@@ -26,6 +26,19 @@ public sealed class ArrayEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (methodName is "shift" or "unshift"
+            && (ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+                || ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
+            return false;
+
+        // includes may observe holes through inherited indexed properties and
+        // its prototype binding is writable/deletable. Programs that touch
+        // either surface must resolve and invoke the live method value.
+        if (methodName == "includes"
+            && (ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
+                || ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
+            return false;
+
         if (methodName == "slice" && TryEmitNumericSliceCall(emitter, receiver, arguments))
             return true;
         if (methodName == "sort" && TryEmitNumericSortCall(emitter, receiver, arguments))

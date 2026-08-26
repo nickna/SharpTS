@@ -10,19 +10,23 @@ namespace SharpTS.Compilation;
 /// typed fields (#862). Direct sibling of <see cref="ArrayLocalPromotionAnalyzer"/> and
 /// <see cref="NonEscapingArrowLocalAnalyzer"/>: a name qualifies only if it is provably non-escaping, so
 /// the promoted struct (which has no dynamic-object semantics — no descriptors, enumerability, prototype,
-/// <c>delete</c>, spread, freeze) is never observed anywhere those would be needed. A candidate <c>o</c>
+/// <c>delete</c>, freeze) is never observed anywhere those would be needed. Stable object spread is
+/// represented by direct copies between compatible shape structs; a connected source/result chain is
+/// promoted only when every member remains non-escaping. A candidate <c>o</c>
 /// qualifies iff ALL hold:
 /// <list type="number">
 ///   <item>declared <c>const</c>/<c>let</c> with an initializer that is a <em>simple</em> object literal —
-///         every property is a plain <c>key: value</c> (no spread, no computed/string-literal key, no
-///         method, no getter/setter, no <c>{ a = 5 }</c> cover-grammar shorthand-default), keys are
-///         unique, and every value's static type is a primitive <c>number</c>/<c>boolean</c>/<c>string</c>
+///         every property is either a plain <c>key: value</c> or a spread of an earlier candidate local
+///         (no computed/string-literal key, method, getter/setter, or <c>{ a = 5 }</c>
+///         cover-grammar shorthand-default), and every final value's static type is a primitive
+///         <c>number</c>/<c>boolean</c>/<c>string</c>
 ///         (which inherently excludes <c>any</c>/<c>undefined</c>-admitting fields a typed slot would
 ///         silently coerce);</item>
-///   <item>the ONLY uses are constant-key field reads <c>o.KEY</c> and writes <c>o.KEY = v</c> where
-///         <c>KEY</c> is one of the literal's own fields (and a write's value is the same primitive kind).
+///   <item>the ONLY uses are constant-key field reads <c>o.KEY</c>, same-kind writes
+///         <c>o.KEY = v</c>, stable spread, and direct <c>Object.keys(o)</c> calls. The latter can
+///         materialize the immutable key metadata without exposing the struct itself.
 ///         Any other appearance of the bare variable — argument pass, return, store to another binding,
-///         spread, <c>===</c>, <c>typeof</c>, <c>o[expr]</c>, <c>o.unknownKey</c>, <c>delete</c>,
+///         unstable spread, <c>===</c>, <c>typeof</c>, <c>o[expr]</c>, <c>o.unknownKey</c>, <c>delete</c>,
 ///         compound/logical member assign, reassignment — disqualifies it;</item>
 ///   <item>the name is declared exactly once in the whole program (conservative guard against scope
 ///         ambiguity / shadowing without full scope resolution);</item>
@@ -46,11 +50,33 @@ public static class ObjectLocalPromotionAnalyzer
         foreach (var stmt in program)
             visitor.Visit(stmt);
 
-        foreach (var (name, candidate) in visitor.Candidates)
+        var eligible = new HashSet<string>(visitor.Candidates.Keys, StringComparer.Ordinal);
+        foreach (var name in visitor.Candidates.Keys)
         {
-            if (visitor.Disqualified.Contains(name)) continue;
-            if (visitor.DeclCount.GetValueOrDefault(name) != 1) continue;
-            if (closures?.IsVariableCaptured(name) == true) continue;
+            if (visitor.Disqualified.Contains(name)
+                || visitor.DeclCount.GetValueOrDefault(name) != 1
+                || closures?.IsVariableCaptured(name) == true)
+                eligible.Remove(name);
+        }
+
+        // A generic object cannot consume a promoted struct as a spread source, and a promoted result
+        // cannot snapshot a generic source. Therefore an instability anywhere in a spread-connected
+        // component invalidates both endpoints, transitively.
+        bool changed;
+        do
+        {
+            changed = false;
+            foreach (var (source, target) in visitor.SpreadEdges)
+            {
+                if (eligible.Contains(source) && eligible.Contains(target)) continue;
+                changed |= eligible.Remove(source);
+                changed |= eligible.Remove(target);
+            }
+        } while (changed);
+
+        foreach (var name in eligible)
+        {
+            var candidate = visitor.Candidates[name];
             typeMap.MarkPromotableObjectLocal(candidate.NameToken, candidate.Shape);
         }
     }
@@ -59,8 +85,20 @@ public static class ObjectLocalPromotionAnalyzer
     {
         private readonly TypeMap _typeMap = typeMap;
 
-        /// <summary>name → its candidate declaration (name token, shape, and the field-name set for O(1) membership).</summary>
-        public Dictionary<string, (Token NameToken, ObjectShapeInfo Shape, HashSet<string> FieldNames)> Candidates { get; } = new();
+        public sealed record Candidate(
+            Token NameToken,
+            ObjectShapeInfo Shape,
+            HashSet<string> FieldNames);
+
+        /// <summary>name → its candidate declaration and final merged shape.</summary>
+        public Dictionary<string, Candidate> Candidates { get; } = new(StringComparer.Ordinal);
+
+        /// <summary>Stable spread dependency edges (source, result).</summary>
+        public List<(string Source, string Target)> SpreadEdges { get; } = [];
+
+        /// <summary>Spread-bearing candidate literal → its declaration, for specialized visitation.</summary>
+        private Dictionary<Expr.ObjectLiteral, string> SpreadLiteralOwners { get; } =
+            new(ReferenceEqualityComparer.Instance);
 
         /// <summary>How many times each name is declared anywhere (any kind of binding).</summary>
         public Dictionary<string, int> DeclCount { get; } = new();
@@ -80,8 +118,16 @@ public static class ObjectLocalPromotionAnalyzer
             DeclCount[lexeme] = DeclCount.GetValueOrDefault(lexeme) + 1;
 
             if (initializer is Expr.ObjectLiteral lit && !Candidates.ContainsKey(lexeme)
-                && TryBuildShape(lit, out var shape, out var fieldNames))
-                Candidates[lexeme] = (name, shape, fieldNames);
+                && TryBuildShape(lit, out var shape, out var fieldNames, out var spreadSources))
+            {
+                Candidates[lexeme] = new Candidate(name, shape, fieldNames);
+                if (spreadSources.Count != 0)
+                {
+                    SpreadLiteralOwners[lit] = lexeme;
+                    foreach (var source in spreadSources)
+                        SpreadEdges.Add((source, lexeme));
+                }
+            }
 
             // Visit the initializer so its sub-uses are accounted for. The literal's own property
             // values reference OTHER variables (e.g. `i` in `{ x: i }`), not `o`, so this never
@@ -119,6 +165,43 @@ public static class ObjectLocalPromotionAnalyzer
             base.VisitSet(expr);
         }
 
+        protected override void VisitCall(Expr.Call expr)
+        {
+            // Object.keys over a closed promoted shape (#1506) observes only a fresh array of the
+            // record's fixed enumerable string keys. The emitter does not load/box the struct.
+            if (!expr.Optional && expr.Arguments is [Expr.Variable receiver]
+                && expr.Callee is Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Object" },
+                    Name.Lexeme: "keys"
+                }
+                && Candidates.ContainsKey(receiver.Name.Lexeme))
+                return;
+
+            base.VisitCall(expr);
+        }
+
+        protected override void VisitObjectLiteral(Expr.ObjectLiteral expr)
+        {
+            if (!SpreadLiteralOwners.ContainsKey(expr))
+            {
+                base.VisitObjectLiteral(expr);
+                return;
+            }
+
+            // A spread source occurrence is the one additional permitted use of a stable candidate.
+            // Do not visit that bare variable (the dependency edge handles its eligibility); do visit
+            // every explicit initializer so reads, writes, and side effects are analyzed normally.
+            foreach (var prop in expr.Properties)
+            {
+                if (prop.IsSpread && prop.Value is Expr.Variable spreadVar
+                    && Candidates.ContainsKey(spreadVar.Name.Lexeme))
+                    continue;
+                Visit(prop.Value);
+            }
+        }
+
         protected override void VisitVariable(Expr.Variable expr)
         {
             // Catch-all: any bare variable occurrence not consumed by a permitted read/write override
@@ -131,32 +214,65 @@ public static class ObjectLocalPromotionAnalyzer
         /// Builds the shape for a candidate object literal, or returns false if the literal is not a
         /// simple fixed-shape primitive record. See the class summary for the rules.
         /// </summary>
-        private bool TryBuildShape(Expr.ObjectLiteral lit, out ObjectShapeInfo shape, out HashSet<string> fieldNames)
+        private bool TryBuildShape(
+            Expr.ObjectLiteral lit,
+            out ObjectShapeInfo shape,
+            out HashSet<string> fieldNames,
+            out List<string> spreadSources)
         {
             shape = null!;
             fieldNames = null!;
+            spreadSources = [];
             if (lit.Properties.Count == 0) return false;
 
             var fields = new List<ObjectShapeField>(lit.Properties.Count);
             var names = new HashSet<string>(StringComparer.Ordinal);
+            var fieldIndexes = new Dictionary<string, int>(StringComparer.Ordinal);
+            bool hasSpread = lit.Properties.Any(p => p.IsSpread);
             foreach (var prop in lit.Properties)
             {
-                if (prop.IsSpread || prop.Kind != Expr.ObjectPropertyKind.Value || prop.IsShorthandDefault)
+                if (prop.IsSpread)
+                {
+                    if (prop.Value is not Expr.Variable spreadVar
+                        || !Candidates.TryGetValue(spreadVar.Name.Lexeme, out var source))
+                        return false;
+
+                    spreadSources.Add(spreadVar.Name.Lexeme);
+                    foreach (var sourceField in source.Shape.Fields)
+                        UpsertField(sourceField.Name, sourceField.Kind);
+                    continue;
+                }
+
+                if (prop.Kind != Expr.ObjectPropertyKind.Value || prop.IsShorthandDefault)
                     return false;
                 if (prop.Key is not Expr.IdentifierKey idk)
                     return false; // computed / string-literal / numeric keys: not o.KEY-accessible
                 var fname = idk.Name.Lexeme;
-                if (!names.Add(fname))
-                    return false; // duplicate key
                 if (ClassifyKind(_typeMap.Get(prop.Value)) is not { } kind)
                     return false; // non-primitive / undefined-admitting field
-                fields.Add(new ObjectShapeField(fname, kind));
+                if (!hasSpread && names.Contains(fname))
+                    return false; // retain the original conservative rule for ordinary literals
+                UpsertField(fname, kind);
             }
 
             var key = string.Join(";", fields.Select(f => f.Name + ":" + f.Kind));
             shape = new ObjectShapeInfo(key, fields);
             fieldNames = names;
             return true;
+
+            void UpsertField(string name, TokenType kind)
+            {
+                if (fieldIndexes.TryGetValue(name, out int index))
+                {
+                    // Object spread overwrites without moving the key in enumeration order.
+                    fields[index] = new ObjectShapeField(name, kind);
+                    return;
+                }
+
+                fieldIndexes[name] = fields.Count;
+                names.Add(name);
+                fields.Add(new ObjectShapeField(name, kind));
+            }
         }
 
         private static TokenType FieldKind(ObjectShapeInfo shape, string name)

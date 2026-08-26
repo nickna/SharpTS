@@ -230,6 +230,11 @@ public partial class ILCompiler
                     }
                 }
             }
+            if (_typeMap?.TryGetStableCustomIteratorNext(arrow, out var stableIterator) == true &&
+                _runtime.StableNumberIteratorResultType is { } iteratorResultType)
+            {
+                returnType = iteratorResultType;
+            }
             _closures.ArrowReturnTypes[arrow] = returnType;
 
             // For object methods, add __this as the first parameter

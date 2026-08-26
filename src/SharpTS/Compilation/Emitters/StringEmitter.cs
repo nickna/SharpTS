@@ -17,6 +17,22 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        if (methodName is "indexOf" or "includes" or "slice" or "substring")
+        {
+            // A live String prototype/constructor makes the method binding
+            // observable. Resolve it before evaluating arguments, exactly like
+            // an ordinary JavaScript method call.
+            if (ctx.RuntimeFeatures?.UsesStringPrototypeMutation != false)
+            {
+                EmitDynamicMethodCall(emitter, receiver, methodName, arguments);
+                return true;
+            }
+
+            if (TryEmitPrimitiveStringIntrinsic(
+                    emitter, receiver, methodName, arguments))
+                return true;
+        }
+
         // replaceAll performs observable @@replace dispatch before ToString(this).
         // Preserve a boxed String receiver until the runtime helper has offered
         // the custom protocol method the original value.
@@ -71,6 +87,8 @@ public sealed class StringEmitter : ITypeEmitterStrategy
                 return true;
 
             case "replace":
+                if (TryEmitStableRegExpReplace(emitter, receiver, arguments))
+                    return true;
                 EmitReplace(emitter, arguments);
                 return true;
 
@@ -322,6 +340,199 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         // The helper performs @@replace dispatch before deciding whether the
         // original replacement is callable or needs ToString coercion.
         il.Emit(OpCodes.Call, ctx.Runtime!.StringReplaceRegExp);
+    }
+
+    private static bool TryEmitStableRegExpReplace(
+        IEmitterContext emitter, Expr receiver, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (ctx.RuntimeFeatures?.UsesRegExpPrototypeMutation != false
+            || arguments.Count != 2
+            || arguments[0] is not Expr.RegexLiteral literal
+            || literal.Flags.IndexOfAny(['u', 'v', 'y']) >= 0
+            || ctx.Runtime?.RegexHoistFields?.ContainsKey(literal) != true
+            || !IsSideEffectFreePrimitiveString(receiver, ctx)
+            || !IsSideEffectFreePrimitiveString(arguments[1], ctx))
+            return false;
+
+        // The ordinary method prologue has already left the unwrapped receiver
+        // string on the stack. Spill it so the instance regex can be loaded
+        // first for the typed helper call.
+        var inputLocal = ctx.IL.DeclareLocal(ctx.Types.String);
+        ctx.IL.Emit(OpCodes.Stloc, inputLocal);
+
+        ctx.IL.Emit(OpCodes.Ldloc, inputLocal);
+        emitter.EmitExpression(literal);
+        emitter.EmitBoxIfNeeded(literal);
+        ctx.IL.Emit(OpCodes.Castclass, ctx.Runtime.TSRegExpType);
+        emitter.EmitExpression(arguments[1]);
+        ctx.IL.Emit(literal.Flags.Contains('g') ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        ctx.IL.Emit(OpCodes.Call, ctx.Runtime.StableRegExpReplace);
+        emitter.SetStackType(StackType.String);
+        return true;
+    }
+
+    private static bool IsSideEffectFreePrimitiveString(Expr expression, CompilationContext ctx)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case Expr.Grouping grouping:
+                    expression = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expression = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expression = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expression = nonNull.Expression;
+                    continue;
+            }
+
+            break;
+        }
+
+        if (expression is not Expr.Variable and not Expr.Literal { Value: string })
+            return false;
+
+        return ctx.TypeMap?.Get(expression) is TypeSystem.TypeInfo.String
+            or TypeSystem.TypeInfo.StringLiteral;
+    }
+
+    private static bool TryEmitPrimitiveStringIntrinsic(
+        IEmitterContext emitter,
+        Expr receiver,
+        string methodName,
+        List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        if (!IsSideEffectFreePrimitiveString(receiver, ctx))
+            return false;
+
+        bool isSearch = methodName is "indexOf" or "includes";
+        if (isSearch)
+        {
+            if (arguments.Count is < 1 or > 2
+                || !IsSideEffectFreePrimitiveString(arguments[0], ctx)
+                || (arguments.Count == 2
+                    && !IsSideEffectFreePrimitiveNumber(arguments[1], ctx)))
+                return false;
+
+            emitter.EmitExpression(receiver);
+            emitter.EmitConversionForParameter(receiver, ctx.Types.String);
+            emitter.EmitExpression(arguments[0]);
+            emitter.EmitConversionForParameter(arguments[0], ctx.Types.String);
+            if (arguments.Count == 2)
+                emitter.EmitExpressionAsDouble(arguments[1]);
+            else
+                ctx.IL.Emit(OpCodes.Ldc_R8, 0.0);
+
+            if (methodName == "indexOf")
+            {
+                ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.StringIndexOfPrimitive);
+                emitter.SetStackType(StackType.Double);
+            }
+            else
+            {
+                ctx.IL.Emit(OpCodes.Call, ctx.Runtime!.StringIncludesPrimitive);
+                emitter.SetStackType(StackType.Boolean);
+            }
+            return true;
+        }
+
+        if (arguments.Count > 2
+            || arguments.Any(argument =>
+                !IsSideEffectFreePrimitiveNumber(argument, ctx)))
+            return false;
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitConversionForParameter(receiver, ctx.Types.String);
+        if (arguments.Count > 0)
+            emitter.EmitExpressionAsDouble(arguments[0]);
+        else
+            ctx.IL.Emit(OpCodes.Ldc_R8, 0.0);
+        if (arguments.Count > 1)
+            emitter.EmitExpressionAsDouble(arguments[1]);
+        else
+            ctx.IL.Emit(OpCodes.Ldc_R8, 0.0);
+        ctx.IL.Emit(arguments.Count > 1 ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
+        ctx.IL.Emit(
+            OpCodes.Call,
+            methodName == "slice"
+                ? ctx.Runtime!.StringSlicePrimitive
+                : ctx.Runtime!.StringSubstringPrimitive);
+        emitter.SetStackType(StackType.String);
+        return true;
+    }
+
+    private static bool IsSideEffectFreePrimitiveNumber(
+        Expr expression, CompilationContext ctx)
+    {
+        while (true)
+        {
+            switch (expression)
+            {
+                case Expr.Grouping grouping:
+                    expression = grouping.Expression;
+                    continue;
+                case Expr.TypeAssertion assertion:
+                    expression = assertion.Expression;
+                    continue;
+                case Expr.Satisfies satisfies:
+                    expression = satisfies.Expression;
+                    continue;
+                case Expr.NonNullAssertion nonNull:
+                    expression = nonNull.Expression;
+                    continue;
+            }
+
+            break;
+        }
+
+        bool sideEffectFree = expression is Expr.Variable
+            or Expr.Literal { Value: double }
+            || expression is Expr.Unary unary
+                && IsSideEffectFreePrimitiveNumber(unary.Right, ctx);
+        return sideEffectFree
+            && ctx.TypeMap?.Get(expression) is TypeSystem.TypeInfo.Primitive
+                { Type: TokenType.TYPE_NUMBER }
+                or TypeSystem.TypeInfo.NumberLiteral;
+    }
+
+    private static void EmitDynamicMethodCall(
+        IEmitterContext emitter,
+        Expr receiver,
+        string methodName,
+        List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        emitter.EmitExpression(receiver);
+        emitter.EmitBoxIfNeeded(receiver);
+        var receiverLocal = emitter.SpillStackToObjectLocal();
+
+        // GetValue precedes ArgumentListEvaluation for a method call.
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldstr, methodName);
+        il.Emit(OpCodes.Call, ctx.Runtime!.GetProperty);
+        var functionLocal = emitter.SpillStackToObjectLocal();
+
+        if (arguments.Any(argument => argument is Expr.Spread))
+            emitter.EmitArgsArrayWithSpread(arguments);
+        else
+            emitter.EmitArgsArray(arguments);
+        var argumentsLocal = emitter.SpillStackToObjectLocal();
+
+        il.Emit(OpCodes.Ldloc, receiverLocal);
+        il.Emit(OpCodes.Ldloc, functionLocal);
+        il.Emit(OpCodes.Ldloc, argumentsLocal);
+        il.Emit(OpCodes.Castclass, ctx.Types.ObjectArray);
+        il.Emit(OpCodes.Call, ctx.Runtime.InvokeMethodValue);
+        emitter.SetStackUnknown();
     }
 
     private static void EmitSplit(IEmitterContext emitter, List<Expr> arguments)

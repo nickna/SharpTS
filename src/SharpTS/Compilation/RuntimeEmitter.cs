@@ -93,6 +93,9 @@ public partial class RuntimeEmitter
         // IsDefined read that backstops the (ref-asm-fragile) parameter-name check. (#738)
         EmitExpectsThisAttribute(moduleBuilder, runtime);
 
+        if (features.CompactObjectRecordStableIteratorShapes.Count > 0)
+            EmitStableNumberIteratorResult(moduleBuilder, runtime);
+
         // Emit TSFunction class first (other methods depend on it)
         EmitTSFunctionClass(moduleBuilder, runtime);
 
