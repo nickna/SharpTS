@@ -230,8 +230,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Br, afterExceptionLabel);
 
         // Unwrap the AggregateException Task.Exception always wraps faults in;
-        // WrapException then yields the guest value (__tsValue / rejection
-        // Reason / message dictionary fallback).
+        // WrapException then yields the guest value (dedicated carrier / rejection
+        // Reason / legacy metadata / message fallback).
         il.MarkLabel(hasExceptionLabel);
         il.Emit(OpCodes.Stloc, aggExLocal);
         il.Emit(OpCodes.Ldloc, aggExLocal);
@@ -269,7 +269,7 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldfld, anyState.RejectionReasonsField);  // errors list
         il.Emit(OpCodes.Ldnull);  // message (use default)
         il.Emit(OpCodes.Newobj, runtime.TSAggregateErrorCtor);
-        // Wrap with CreateException to store in Data["__tsValue"]
+        // Wrap with CreateException to preserve the exact AggregateError value.
         il.Emit(OpCodes.Call, runtime.CreateException);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.TaskCompletionSourceOfObject, "TrySetException", [_types.Exception]));
         il.Emit(OpCodes.Pop);  // discard bool result

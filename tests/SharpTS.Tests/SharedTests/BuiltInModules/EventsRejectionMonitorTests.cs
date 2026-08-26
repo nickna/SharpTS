@@ -37,6 +37,30 @@ public class EventsRejectionMonitorTests
     }
 
     [Theory, ModeData]
+    public void CaptureRejections_PreservesRawGuestReason(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import { EventEmitter } from 'events';
+                async function main(): Promise<void> {
+                    const marker: any = {};
+                    const ee = new EventEmitter({ captureRejections: true });
+                    let same = false;
+                    ee.on('error', (reason: any) => { same = reason === marker; });
+                    ee.on('go', async () => { throw marker; });
+                    ee.emit('go');
+                    await new Promise((resolve: any) => setTimeout(resolve, 10));
+                    console.log(same);
+                }
+                main();
+                """
+        };
+
+        Assert.Equal("true\n", TestHarness.RunModules(files, "main.ts", mode));
+    }
+
+    [Theory, ModeData]
     public void CaptureRejections_Off_DoesNotRouteToError(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

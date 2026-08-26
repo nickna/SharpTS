@@ -21,7 +21,7 @@ public partial class RuntimeEmitter
 
         // try { return JsonParseHelper(arg); }
         // catch (Exception ex) {
-        //   if (ex.Data.Contains("__tsValue")) rethrow;
+        //   if (ex is $ThrownValueException || ex.Data.Contains("__tsValue")) rethrow;
         //   throw $SyntaxError(ex.Message); // ECMA-262 24.5.1.1: parse failures throw SyntaxError
         // }
         il.BeginExceptionBlock();
@@ -34,6 +34,13 @@ public partial class RuntimeEmitter
         var exLocal = il.DeclareLocal(_types.Exception);
         il.Emit(OpCodes.Stloc, exLocal);
         var rethrowLabel = il.DefineLabel();
+        var checkMetadataLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, exLocal);
+        il.Emit(OpCodes.Isinst, runtime.ThrownValueExceptionType);
+        il.Emit(OpCodes.Brfalse, checkMetadataLabel);
+        il.Emit(OpCodes.Br, rethrowLabel);
+
+        il.MarkLabel(checkMetadataLabel);
         il.Emit(OpCodes.Ldloc, exLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Exception, "Data").GetGetMethod()!);
         il.Emit(OpCodes.Ldstr, "__tsValue");
