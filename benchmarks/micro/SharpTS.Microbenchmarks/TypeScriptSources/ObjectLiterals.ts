@@ -70,3 +70,24 @@ function spreadMutationEscapeLoop(n: number): number {
     }
     return total;
 }
+
+function objectKeysExactLoop(n: number): number {
+    const bdnExactKeysRecord = { alpha: 1, beta: 2, gamma: 3, delta: 4 };
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const bdnExactKeys: string[] = Object.keys(bdnExactKeysRecord);
+        total = total + bdnExactKeys.length;
+    }
+    return total;
+}
+
+function objectKeysMutationLoop(n: number): number {
+    const bdnMutatedKeysRecord: any = { alpha: 1, beta: 2, gamma: 3 };
+    bdnMutatedKeysRecord.delta = 4;
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const bdnMutatedKeys: string[] = Object.keys(bdnMutatedKeysRecord);
+        total = total + bdnMutatedKeys.length;
+    }
+    return total;
+}

@@ -22,6 +22,8 @@ public class ObjectLiteralsBenchmarks
     private MethodInfo _tsSpreadOne = null!;
     private MethodInfo _tsSpreadMultiple = null!;
     private MethodInfo _tsSpreadEscape = null!;
+    private MethodInfo _tsObjectKeysExact = null!;
+    private MethodInfo _tsObjectKeysMutation = null!;
 
     [Params(100, 10_000, 1_000_000)]
     public int N { get; set; }
@@ -45,6 +47,8 @@ public class ObjectLiteralsBenchmarks
         _tsSpreadOne = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "spreadOneSourceLoop");
         _tsSpreadMultiple = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "spreadMultipleOverwriteLoop");
         _tsSpreadEscape = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "spreadMutationEscapeLoop");
+        _tsObjectKeysExact = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "objectKeysExactLoop");
+        _tsObjectKeysMutation = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "objectKeysMutationLoop");
     }
 
     [Benchmark]
@@ -76,4 +80,14 @@ public class ObjectLiteralsBenchmarks
     [BenchmarkCategory("SpreadMutationEscape")]
     public object? SharpTS_SpreadMutationEscapeLoop()
         => BenchmarkHarness.InvokeCompiled(_tsSpreadEscape, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("ObjectKeysExact")]
+    public object? SharpTS_ObjectKeysExactLoop()
+        => BenchmarkHarness.InvokeCompiled(_tsObjectKeysExact, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("ObjectKeysMutation")]
+    public object? SharpTS_ObjectKeysMutationLoop()
+        => BenchmarkHarness.InvokeCompiled(_tsObjectKeysMutation, (double)N);
 }

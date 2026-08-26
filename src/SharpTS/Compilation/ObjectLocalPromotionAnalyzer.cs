@@ -22,8 +22,9 @@ namespace SharpTS.Compilation;
 ///         <c>number</c>/<c>boolean</c>/<c>string</c>
 ///         (which inherently excludes <c>any</c>/<c>undefined</c>-admitting fields a typed slot would
 ///         silently coerce);</item>
-///   <item>the ONLY uses are constant-key field reads <c>o.KEY</c> and writes <c>o.KEY = v</c> where
-///         <c>KEY</c> is one of the literal's own fields (and a write's value is the same primitive kind).
+///   <item>the ONLY uses are constant-key field reads <c>o.KEY</c>, same-kind writes
+///         <c>o.KEY = v</c>, stable spread, and direct <c>Object.keys(o)</c> calls. The latter can
+///         materialize the immutable key metadata without exposing the struct itself.
 ///         Any other appearance of the bare variable — argument pass, return, store to another binding,
 ///         unstable spread, <c>===</c>, <c>typeof</c>, <c>o[expr]</c>, <c>o.unknownKey</c>, <c>delete</c>,
 ///         compound/logical member assign, reassignment — disqualifies it;</item>
@@ -162,6 +163,23 @@ public static class ObjectLocalPromotionAnalyzer
                 return;
             }
             base.VisitSet(expr);
+        }
+
+        protected override void VisitCall(Expr.Call expr)
+        {
+            // Object.keys over a closed promoted shape (#1506) observes only a fresh array of the
+            // record's fixed enumerable string keys. The emitter does not load/box the struct.
+            if (!expr.Optional && expr.Arguments is [Expr.Variable receiver]
+                && expr.Callee is Expr.Get
+                {
+                    Optional: false,
+                    Object: Expr.Variable { Name.Lexeme: "Object" },
+                    Name.Lexeme: "keys"
+                }
+                && Candidates.ContainsKey(receiver.Name.Lexeme))
+                return;
+
+            base.VisitCall(expr);
         }
 
         protected override void VisitObjectLiteral(Expr.ObjectLiteral expr)

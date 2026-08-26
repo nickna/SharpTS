@@ -17,6 +17,18 @@ public sealed class ObjectStaticEmitter : IStaticTypeEmitterStrategy
         var ctx = emitter.Context;
         var il = ctx.IL;
 
+        // Closed non-escaping record (#1506): Object.keys(o) needs a fresh mutable result, but it
+        // does not need to box/materialize o or enter GetKeys' descriptor/reflection dispatch. Shape
+        // field order is the proven enumerable string-key order for this restricted record domain.
+        if (methodName == "keys" && arguments is [Expr.Variable receiver]
+            && ctx.TryGetPromotedObjectLocal(receiver.Name.Lexeme) is { } promoted)
+        {
+            il.Emit(OpCodes.Ldsfld, promoted.Shape.KeyMetadataField);
+            il.Emit(OpCodes.Newobj, ctx.Types.GetConstructor(
+                ctx.Types.ListOfObject, ctx.Types.IEnumerableOfObject));
+            return true;
+        }
+
         // Object methods take exactly one argument. The first arg is pushed
         // by the shared prologue below. Object.is is the exception — missing
         // arg1 should default to undefined (not null) so Object.is() returns

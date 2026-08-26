@@ -196,6 +196,25 @@ public class ObjectLocalPromotionTests
         Assert.Equal("9759\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Promoted_ObjectKeysIsFreshMutableAndKeepsClosedShape(ExecutionMode mode)
+    {
+        var source = """
+            function f(): string {
+                const record = { first: 1, second: 2 };
+                record.first = 3;
+                const firstKeys: string[] = Object.keys(record);
+                firstKeys[0] = "changed";
+                firstKeys.push("extra");
+                const secondKeys: string[] = Object.keys(record);
+                return firstKeys.join(",") + "|" + secondKeys.join(",") + "|" + record.first;
+            }
+            console.log(f());
+            """;
+
+        Assert.Equal("changed,second,extra|first,second|3\n", TestHarness.Run(source, mode));
+    }
+
     // ── Escape cases: must fall back, must stay correct ────────────────────
 
     [Theory, ModeData]
@@ -326,6 +345,51 @@ public class ObjectLocalPromotionTests
             """;
 
         Assert.Equal("1\n2\n1\n2\n2\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Escape_ObjectKeysNumericSymbolsAndShapeMutationUseGenericOrdering(ExecutionMode mode)
+    {
+        var source = """
+            const sym: symbol = Symbol("hidden");
+            const record: any = {
+                10: "ten",
+                first: "a",
+                2: "two",
+                1: "one",
+                [sym]: "symbol"
+            };
+            record.last = "z";
+            console.log(Object.keys(record).join(","));
+            """;
+
+        Assert.Equal("1,2,10,first,last\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Escape_ObjectKeysAccessorAndProxyRemainObservable(ExecutionMode mode)
+    {
+        var source = """
+            let getterCalls: number = 0;
+            const accessor: any = {
+                a: 1,
+                get b(): number { getterCalls = getterCalls + 1; return 2; }
+            };
+            console.log(Object.keys(accessor).join(","));
+            console.log(getterCalls);
+
+            let ownKeysCalls: number = 0;
+            const proxy: any = new Proxy({ x: 1, y: 2 }, {
+                ownKeys(target: any): any[] {
+                    ownKeysCalls = ownKeysCalls + 1;
+                    return Reflect.ownKeys(target);
+                }
+            });
+            console.log(Object.keys(proxy).join(","));
+            console.log(ownKeysCalls);
+            """;
+
+        Assert.Equal("a,b\n0\nx,y\n1\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

@@ -1014,11 +1014,28 @@ public partial class ILCompiler
                 fieldBuilders[name] = structType.DefineField(name, clr, FieldAttributes.Public);
             }
 
+            var keyMetadataField = structType.DefineField(
+                "$Keys", _types.ObjectArray,
+                FieldAttributes.Assembly | FieldAttributes.Static | FieldAttributes.InitOnly);
+            var shapeInitializer = structType.DefineTypeInitializer().GetILGenerator();
+            shapeInitializer.Emit(OpCodes.Ldc_I4, shape.Fields.Count);
+            shapeInitializer.Emit(OpCodes.Newarr, _types.Object);
+            for (int index = 0; index < shape.Fields.Count; index++)
+            {
+                shapeInitializer.Emit(OpCodes.Dup);
+                shapeInitializer.Emit(OpCodes.Ldc_I4, index);
+                shapeInitializer.Emit(OpCodes.Ldstr, shape.Fields[index].Name);
+                shapeInitializer.Emit(OpCodes.Stelem_Ref);
+            }
+            shapeInitializer.Emit(OpCodes.Stsfld, keyMetadataField);
+            shapeInitializer.Emit(OpCodes.Ret);
+
             var info = new ObjectShapeTypeInfo
             {
                 ClrType = structType,
                 Fields = shape.Fields.Select(f => (f.Name, f.Kind)).ToList(),
                 FieldBuilders = fieldBuilders,
+                KeyMetadataField = keyMetadataField,
             };
             _closures.ObjectShapes.ByKey[shape.CanonicalKey] = info;
             _closures.ObjectShapes.ByClrType[structType] = info;

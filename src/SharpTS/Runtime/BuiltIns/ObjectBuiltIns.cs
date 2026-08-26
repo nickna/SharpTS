@@ -64,7 +64,7 @@ public static partial class ObjectBuiltIns
     /// Throws for non-object receivers; <paramref name="apiName"/> qualifies the message.
     /// </summary>
     private static IEnumerable<KeyValuePair<string, object?>> EnumerateOwnEnumerable(
-        Interpreter interpreter, object? arg, string apiName)
+        Interpreter interpreter, object? arg, string apiName, bool includeValues = true)
     {
         switch (arg)
         {
@@ -95,7 +95,8 @@ public static partial class ObjectBuiltIns
                     if (!Compilation.RuntimeTypes.IsTruthy(enumerable))
                         continue;
 
-                    yield return new(key, proxy.TrapGet(key, interpreter));
+                    yield return new(key,
+                        includeValues ? proxy.TrapGet(key, interpreter) : null);
                 }
                 yield break;
             case SharpTSObject obj:
@@ -103,47 +104,53 @@ public static partial class ObjectBuiltIns
                 // reading values. A getter may add or delete siblings without
                 // changing the key list being traversed by entries()/values().
                 foreach (var k in obj.OwnEnumerableKeys().ToList())
-                    yield return new(k, interpreter.GetProperty(obj, k));
+                    yield return new(k,
+                        includeValues ? interpreter.GetProperty(obj, k) : null);
                 yield break;
             case SharpTSArray arr:
                 foreach (var key in arr.OwnEnumerableKeys())
-                    yield return new(key, interpreter.GetProperty(arr, key));
+                    yield return new(key,
+                        includeValues ? interpreter.GetProperty(arr, key) : null);
                 yield break;
             case SharpTSInstance inst:
                 foreach (var n in inst.GetFieldNames())
-                    yield return new(n, inst.GetRawField(n));
+                    yield return new(n, includeValues ? inst.GetRawField(n) : null);
                 yield break;
             case IDictionary<string, object?> dict:
                 foreach (var kv in dict)
-                    yield return kv;
+                    yield return includeValues ? kv : new(kv.Key, null);
                 yield break;
             case SharpTSMath math:
                 foreach (var kv in math.OwnEnumerableProperties)
-                    yield return new(kv.Key, kv.Value);
+                    yield return new(kv.Key, includeValues ? kv.Value : null);
                 yield break;
             case SharpTSJSON json:
                 foreach (var key in json.OwnEnumerableKeys())
-                    yield return new(key, json.TryGetExtra(key));
+                    yield return new(key, includeValues ? json.TryGetExtra(key) : null);
                 yield break;
             case SharpTSDate date:
                 foreach (var key in date.OwnEnumerableKeys())
-                    yield return new(key, date.TryGetExtra(key));
+                    yield return new(key, includeValues ? date.TryGetExtra(key) : null);
                 yield break;
             case SharpTSRegExp regex:
                 foreach (var key in regex.OwnEnumerableKeys())
-                    yield return new(key, regex.TryGetProperty(key, out var value) ? value : null);
+                    yield return new(key,
+                        includeValues && regex.TryGetProperty(key, out var value) ? value : null);
                 yield break;
             case SharpTSError error:
                 foreach (var key in error.OwnEnumerableKeys())
-                    yield return new(key, interpreter.GetProperty(error, key));
+                    yield return new(key,
+                        includeValues ? interpreter.GetProperty(error, key) : null);
                 yield break;
             case SharpTSFunction fn:
                 foreach (var k in fn.PropertyKeys)
-                    yield return new(k, fn.TryGetProperty(k, out var v) ? v : null);
+                    yield return new(k,
+                        includeValues && fn.TryGetProperty(k, out var v) ? v : null);
                 yield break;
             case SharpTSArrowFunction arrowFn:
                 foreach (var k in arrowFn.PropertyKeys)
-                    yield return new(k, arrowFn.TryGetProperty(k, out var av) ? av : null);
+                    yield return new(k,
+                        includeValues && arrowFn.TryGetProperty(k, out var av) ? av : null);
                 yield break;
             case ISharpTSCallable:
                 yield break;
@@ -154,7 +161,10 @@ public static partial class ObjectBuiltIns
 
     private static RuntimeValue KeysV2(Interpreter interpreter, RuntimeValue receiver, ReadOnlySpan<RuntimeValue> args)
     {
-        var keys = EnumerateOwnEnumerable(interpreter, args[0].ToObject(), "Object.keys()")
+        // Object.keys performs key/descriptor discovery only; unlike values/entries, it must never
+        // perform [[Get]] or invoke accessors/proxy get traps.
+        var keys = EnumerateOwnEnumerable(
+                interpreter, args[0].ToObject(), "Object.keys()", includeValues: false)
             .Select(kv => (object?)kv.Key).ToList();
         return RuntimeValue.FromObject(new SharpTSArray(keys));
     }
