@@ -37,6 +37,10 @@ public sealed class RuntimeFeatureDetector
         "String"
     };
     private readonly HashSet<string> _stringPrototypeAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _mathAliases = new(StringComparer.Ordinal)
+    {
+        "Math"
+    };
     private readonly HashSet<string> _dateConstructorAliases = new(StringComparer.Ordinal)
     {
         "Date"
@@ -106,6 +110,7 @@ public sealed class RuntimeFeatureDetector
             UsesArrayPrototypeMutation = false,
             UsesNumberPrototypeMutation = false,
             UsesStringPrototypeMutation = false,
+            UsesMathMutation = false,
             UsesNumberConstructorMutation = false,
             UsesRegExpPrototypeMutation = false,
             UsesGlobalParseIntMutation = false,
@@ -334,6 +339,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesDatePrototypeMutation = true;
                     _set.UsesRegExpPrototypeMutation = true;
                     _set.UsesStringPrototypeMutation = true;
+                    _set.UsesMathMutation = true;
                 }
                 break;
 
@@ -677,6 +683,7 @@ public sealed class RuntimeFeatureDetector
                 {
                     TrackNumberAlias(var.Name.Lexeme, var.Initializer);
                     TrackStringAlias(var.Name.Lexeme, var.Initializer);
+                    TrackMathAlias(var.Name.Lexeme, var.Initializer);
                     TrackDateAlias(var.Name.Lexeme, var.Initializer);
                     if (_opaqueValueBindings.Contains(var.Name.Lexeme))
                         MarkPotentiallyMaterialized(var.Initializer);
@@ -687,6 +694,7 @@ public sealed class RuntimeFeatureDetector
             case Stmt.Const cst:
                 TrackNumberAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackStringAlias(cst.Name.Lexeme, cst.Initializer);
+                TrackMathAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackDateAlias(cst.Name.Lexeme, cst.Initializer);
                 if (_opaqueValueBindings.Contains(cst.Name.Lexeme))
                     MarkPotentiallyMaterialized(cst.Initializer);
@@ -871,6 +879,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesNumberPrototypeMutation = true;
                 if (IsStringPrototype(g) || g.Name.Lexeme == "__proto__")
                     _set.UsesStringPrototypeMutation = true;
+                if (g.Name.Lexeme == "__proto__" && IsMathObject(g.Object))
+                    _set.UsesMathMutation = true;
                 if (IsRegExpPrototype(g))
                     _set.UsesRegExpPrototypeMutation = true;
                 if (IsDatePrototype(g)
@@ -893,6 +903,7 @@ public sealed class RuntimeFeatureDetector
                     {
                         _set.UsesRegExpPrototypeMutation = true;
                         _set.UsesStringPrototypeMutation = true;
+                        _set.UsesMathMutation = true;
                     }
                     if ((ov.Name.Lexeme == "Object"
                             && g.Name.Lexeme is "defineProperty" or "defineProperties" or "create")
@@ -968,6 +979,9 @@ public sealed class RuntimeFeatureDetector
                 if (IsStringMutationTarget(s.Object)
                     || (IsGlobalObject(s.Object) && s.Name.Lexeme == "String"))
                     _set.UsesStringPrototypeMutation = true;
+                if (IsMathObject(s.Object)
+                    || (IsGlobalObject(s.Object) && s.Name.Lexeme == "Math"))
+                    _set.UsesMathMutation = true;
                 if (IsNumberConstructorMutationTarget(s.Object, s.Name.Lexeme))
                     _set.UsesNumberConstructorMutation = true;
                 if (IsRegExpMutationTarget(s.Object)
@@ -1040,6 +1054,10 @@ public sealed class RuntimeFeatureDetector
                     || (IsGlobalObject(si.Object)
                         && si.Index is Expr.Literal { Value: "String" }))
                     _set.UsesStringPrototypeMutation = true;
+                if (IsMathObject(si.Object)
+                    || (IsGlobalObject(si.Object)
+                        && si.Index is Expr.Literal { Value: "Math" }))
+                    _set.UsesMathMutation = true;
                 if (si.Index is Expr.Literal { Value: string setIndexNumberProperty }
                     && IsNumberConstructorMutationTarget(
                         si.Object, setIndexNumberProperty))
@@ -1072,6 +1090,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesNumberConstructorMutation = true;
                     _set.UsesRegExpPrototypeMutation = true;
                     _set.UsesStringPrototypeMutation = true;
+                    _set.UsesMathMutation = true;
                     _set.UsesGlobalParseIntMutation = true;
                 }
                 if (c.Callee is Expr.Get
@@ -1100,6 +1119,7 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesNumberConstructorMutation = true;
                     _set.UsesRegExpPrototypeMutation = true;
                     _set.UsesStringPrototypeMutation = true;
+                    _set.UsesMathMutation = true;
                 }
                 if (c.Callee is not Expr.Variable directSourceCall ||
                     !_sourceFunctions.Contains(directSourceCall.Name.Lexeme))
@@ -1196,6 +1216,7 @@ public sealed class RuntimeFeatureDetector
 
             case Expr.Assign asg:
                 TrackStringAlias(asg.Name.Lexeme, asg.Value);
+                TrackMathAlias(asg.Name.Lexeme, asg.Value);
                 TrackDateAlias(asg.Name.Lexeme, asg.Value);
                 if (asg.Name.Lexeme == "Promise")
                     _set.UsesPromisePrototypeMutation = true;
@@ -1208,6 +1229,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesRegExpPrototypeMutation = true;
                 if (asg.Name.Lexeme == "String")
                     _set.UsesStringPrototypeMutation = true;
+                if (asg.Name.Lexeme == "Math")
+                    _set.UsesMathMutation = true;
                 if (asg.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 if (_opaqueValueBindings.Contains(asg.Name.Lexeme))
@@ -1224,6 +1247,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesRegExpPrototypeMutation = true;
                 if (ca.Name.Lexeme == "String")
                     _set.UsesStringPrototypeMutation = true;
+                if (ca.Name.Lexeme == "Math")
+                    _set.UsesMathMutation = true;
                 if (ca.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 VisitExpr(ca.Value);
@@ -1239,6 +1264,9 @@ public sealed class RuntimeFeatureDetector
                 if (IsStringMutationTarget(cs.Object)
                     || (IsGlobalObject(cs.Object) && cs.Name.Lexeme == "String"))
                     _set.UsesStringPrototypeMutation = true;
+                if (IsMathObject(cs.Object)
+                    || (IsGlobalObject(cs.Object) && cs.Name.Lexeme == "Math"))
+                    _set.UsesMathMutation = true;
                 if (IsNumberConstructorMutationTarget(cs.Object, cs.Name.Lexeme))
                     _set.UsesNumberConstructorMutation = true;
                 if (IsRegExpMutationTarget(cs.Object))
@@ -1270,6 +1298,10 @@ public sealed class RuntimeFeatureDetector
                     || (IsGlobalObject(csi.Object)
                         && csi.Index is Expr.Literal { Value: "String" }))
                     _set.UsesStringPrototypeMutation = true;
+                if (IsMathObject(csi.Object)
+                    || (IsGlobalObject(csi.Object)
+                        && csi.Index is Expr.Literal { Value: "Math" }))
+                    _set.UsesMathMutation = true;
                 if (csi.Index is Expr.Literal { Value: string compoundNumberProperty }
                     && IsNumberConstructorMutationTarget(
                         csi.Object, compoundNumberProperty))
@@ -1303,6 +1335,8 @@ public sealed class RuntimeFeatureDetector
                     _set.UsesRegExpPrototypeMutation = true;
                 if (la.Name.Lexeme == "String")
                     _set.UsesStringPrototypeMutation = true;
+                if (la.Name.Lexeme == "Math")
+                    _set.UsesMathMutation = true;
                 if (la.Name.Lexeme == "parseInt")
                     _set.UsesGlobalParseIntMutation = true;
                 VisitExpr(la.Value);
@@ -1318,6 +1352,9 @@ public sealed class RuntimeFeatureDetector
                 if (IsStringMutationTarget(ls.Object)
                     || (IsGlobalObject(ls.Object) && ls.Name.Lexeme == "String"))
                     _set.UsesStringPrototypeMutation = true;
+                if (IsMathObject(ls.Object)
+                    || (IsGlobalObject(ls.Object) && ls.Name.Lexeme == "Math"))
+                    _set.UsesMathMutation = true;
                 if (IsNumberConstructorMutationTarget(ls.Object, ls.Name.Lexeme))
                     _set.UsesNumberConstructorMutation = true;
                 if (IsRegExpMutationTarget(ls.Object))
@@ -1349,6 +1386,10 @@ public sealed class RuntimeFeatureDetector
                     || (IsGlobalObject(lsi.Object)
                         && lsi.Index is Expr.Literal { Value: "String" }))
                     _set.UsesStringPrototypeMutation = true;
+                if (IsMathObject(lsi.Object)
+                    || (IsGlobalObject(lsi.Object)
+                        && lsi.Index is Expr.Literal { Value: "Math" }))
+                    _set.UsesMathMutation = true;
                 if (lsi.Index is Expr.Literal { Value: string logicalNumberProperty }
                     && IsNumberConstructorMutationTarget(
                         lsi.Object, logicalNumberProperty))
@@ -1845,6 +1886,32 @@ public sealed class RuntimeFeatureDetector
             _stringPrototypeAliases.Add(name);
     }
 
+    private bool IsMathObject(Expr expr) => expr switch
+    {
+        Expr.Variable variable => _mathAliases.Contains(variable.Name.Lexeme),
+        Expr.Get
+        {
+            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
+            Name.Lexeme: "Math"
+        } => true,
+        Expr.GetIndex
+        {
+            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
+            Index: Expr.Literal { Value: "Math" }
+        } => true,
+        Expr.Grouping grouping => IsMathObject(grouping.Expression),
+        Expr.TypeAssertion assertion => IsMathObject(assertion.Expression),
+        Expr.Satisfies satisfies => IsMathObject(satisfies.Expression),
+        Expr.NonNullAssertion nonNull => IsMathObject(nonNull.Expression),
+        _ => false
+    };
+
+    private void TrackMathAlias(string name, Expr initializer)
+    {
+        if (IsMathObject(initializer))
+            _mathAliases.Add(name);
+    }
+
     private static bool IsRegExpConstructor(Expr expr) => expr switch
     {
         Expr.Variable { Name.Lexeme: "RegExp" } => true,
@@ -2232,6 +2299,8 @@ public sealed class RuntimeFeatureDetector
     {
         if (IsStringMutationTarget(target))
             _set.UsesStringPrototypeMutation = true;
+        if (IsMathObject(target))
+            _set.UsesMathMutation = true;
         MarkObjectLiteralShape(target);
         TypeInfo? type = _typeMap?.Get(target);
         if (type is TypeInfo.Any or TypeInfo.Unknown)

@@ -166,6 +166,9 @@ public sealed class RuntimeFeatureSet
     // bindings observable through ordinary property lookup. Fixed-arity typed
     // intrinsics require this to remain false.
     public bool UsesStringPrototypeMutation { get; set; } = true;
+    // Replacing the global Math object or one of its function properties makes
+    // direct Math.min/max interception observable. Typed folds require this false.
+    public bool UsesMathMutation { get; set; } = true;
     // Replacing Number or mutating its static properties requires live lookup of
     // Number.parseInt and the other constructor-owned built-ins.
     public bool UsesNumberConstructorMutation { get; set; } = true;

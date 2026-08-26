@@ -33,6 +33,11 @@ public class GlobalThisChainHandler : ICallHandler
         {
             return false;
         }
+        if (namespaceName == "Math"
+            && ctx.RuntimeFeatures?.UsesMathMutation == true)
+        {
+            return false;
+        }
 
         // Handle globalThis.console.log() etc.
         if (namespaceName == "console")
@@ -55,6 +60,12 @@ public class GlobalThisChainHandler : ICallHandler
                 && methodName == "parseInt"
                 && NumberStaticEmitter.EmitsUnboxedDecimalParseInt(
                     emitter, call.Arguments))
+            {
+                emitter.SetStackType(StackType.Double);
+            }
+            else if (namespaceName == "Math"
+                && MathStaticEmitter.EmitsUnboxedFixedArityMinMax(
+                    emitter, methodName, call.Arguments))
             {
                 emitter.SetStackType(StackType.Double);
             }

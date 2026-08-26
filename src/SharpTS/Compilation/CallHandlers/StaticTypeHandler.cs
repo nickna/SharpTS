@@ -30,6 +30,12 @@ public class StaticTypeHandler : ICallHandler
         {
             return false;
         }
+        if (staticVar.Name.Lexeme == "Math"
+            && (emitter.HasVariable("Math")
+                || ctx.RuntimeFeatures?.UsesMathMutation == true))
+        {
+            return false;
+        }
 
         var staticStrategy = ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
         if (staticStrategy == null)
@@ -42,6 +48,12 @@ public class StaticTypeHandler : ICallHandler
             && staticGet.Name.Lexeme == "parseInt"
             && NumberStaticEmitter.EmitsUnboxedDecimalParseInt(
                 emitter, call.Arguments))
+        {
+            emitter.SetStackType(StackType.Double);
+        }
+        else if (staticVar.Name.Lexeme == "Math"
+            && MathStaticEmitter.EmitsUnboxedFixedArityMinMax(
+                emitter, staticGet.Name.Lexeme, call.Arguments))
         {
             emitter.SetStackType(StackType.Double);
         }
