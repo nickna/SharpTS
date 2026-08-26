@@ -1,16 +1,18 @@
 using System.Diagnostics;
-using System.Runtime.ExceptionServices;
-using System.Runtime.InteropServices;
 using SharpTS.Execution;
+using SharpTS.ProcessTreeFixture;
 using SharpTS.Runtime;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
+using Xunit.Sdk;
 
 namespace SharpTS.Tests.RuntimeTests;
 
+[Collection("ExternalProcessTests")]
 public sealed class OwnedProcessRegistryTests
 {
     private static readonly TimeSpan ExitTimeout = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan FixtureReadyTimeout = TimeSpan.FromSeconds(10);
 
     [Fact]
     public void InterpreterDispose_TerminatesOnlyItsOwnProcesses()
@@ -45,29 +47,32 @@ public sealed class OwnedProcessRegistryTests
     }
 
     [Fact]
-    public void ProcessTreeTermination_TerminatesDescendants()
+    public async Task ProcessTreeTermination_TerminatesDescendants()
     {
         using Process parent = StartParentThatReportsChildPid();
+        Task<string> stderrTask = parent.StandardError.ReadToEndAsync();
+        var readiness = Stopwatch.StartNew();
         Process? child = null;
 
         try
         {
-            // Keep the PID handshake off the ThreadPool: under the suite's aggressive
-            // parallelism, an awaited continuation can be delayed past the child's lifetime.
-            string? line = null;
-            Exception? readException = null;
-            var reader = new Thread(() =>
+            string? line;
+            try
             {
-                try { line = parent.StandardOutput.ReadLine(); }
-                catch (Exception exception) { readException = exception; }
-            }) { IsBackground = true };
-            reader.Start();
+                line = await parent.StandardOutput.ReadLineAsync().WaitAsync(FixtureReadyTimeout);
+            }
+            catch (TimeoutException)
+            {
+                string diagnostics = StopFixtureAndDescribe(parent, stderrTask, readiness.Elapsed);
+                throw new XunitException($"Timed out waiting for the fixture parent to report a child PID. {diagnostics}");
+            }
 
-            Assert.True(reader.Join(TimeSpan.FromSeconds(10)), "Timed out waiting for the parent to report a child PID.");
-            if (readException is not null)
-                ExceptionDispatchInfo.Capture(readException).Throw();
-
-            Assert.True(int.TryParse(line, out int childPid), $"Parent did not report a child PID. Output: {line ?? "<null>"}");
+            if (!int.TryParse(line, out int childPid))
+            {
+                string diagnostics = StopFixtureAndDescribe(parent, stderrTask, readiness.Elapsed);
+                throw new XunitException(
+                    $"Fixture parent did not report a valid child PID. Output: {line ?? "<null>"}. {diagnostics}");
+            }
 
             child = Process.GetProcessById(childPid);
             Assert.False(child.HasExited);
@@ -82,6 +87,7 @@ public sealed class OwnedProcessRegistryTests
             ProcessTreeTermination.Terminate(parent);
             ProcessTreeTermination.Terminate(child);
             child?.Dispose();
+            ObserveFixtureStderr(stderrTask);
         }
     }
 
@@ -126,63 +132,78 @@ public sealed class OwnedProcessRegistryTests
 
     private static Process StartLongRunningProcess()
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell.exe" : "/bin/sh",
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            startInfo.ArgumentList.Add("-NoProfile");
-            startInfo.ArgumentList.Add("-NonInteractive");
-            startInfo.ArgumentList.Add("-Command");
-            startInfo.ArgumentList.Add("Start-Sleep -Seconds 120");
-        }
-        else
-        {
-            startInfo.ArgumentList.Add("-c");
-            startInfo.ArgumentList.Add("sleep 120");
-        }
-
-        return Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start long-running test process.");
+        return Process.Start(CreateFixtureStartInfo("child"))
+            ?? throw new InvalidOperationException("Failed to start long-running test process.");
     }
 
     private static Process StartParentThatReportsChildPid()
     {
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "powershell.exe" : "/bin/sh",
-            UseShellExecute = false,
-            CreateNoWindow = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-        {
-            startInfo.ArgumentList.Add("-NoProfile");
-            startInfo.ArgumentList.Add("-NonInteractive");
-            startInfo.ArgumentList.Add("-Command");
-            startInfo.ArgumentList.Add(
-                "$child = Start-Process powershell.exe -ArgumentList '-NoProfile','-NonInteractive','-Command','Start-Sleep -Seconds 120' " +
-                "-PassThru -WindowStyle Hidden; [Console]::Out.WriteLine($child.Id); $child.WaitForExit()");
-        }
-        else
-        {
-            startInfo.ArgumentList.Add("-c");
-            startInfo.ArgumentList.Add("sleep 120 & echo $!; wait");
-        }
-
-        return Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start process-tree test parent.");
+        ProcessStartInfo startInfo = CreateFixtureStartInfo("parent");
+        startInfo.RedirectStandardOutput = true;
+        startInfo.RedirectStandardError = true;
+        return Process.Start(startInfo)
+            ?? throw new InvalidOperationException("Failed to start process-tree test parent.");
     }
 
     private static (string Command, string Arguments) LongRunningGuestCommand()
     {
-        return RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
-            ? ("powershell.exe", "['-NoProfile', '-NonInteractive', '-Command', 'Start-Sleep -Seconds 120']")
-            : ("/bin/sh", "['-c', 'sleep 120']");
+        string fixturePath = EscapeTypeScriptString(typeof(ProcessTreeFixtureMarker).Assembly.Location);
+        return ("dotnet", $"['{fixturePath}', 'child']");
+    }
+
+    private static ProcessStartInfo CreateFixtureStartInfo(string mode)
+    {
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = "dotnet",
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+        startInfo.ArgumentList.Add(typeof(ProcessTreeFixtureMarker).Assembly.Location);
+        startInfo.ArgumentList.Add(mode);
+        return startInfo;
+    }
+
+    private static string EscapeTypeScriptString(string value)
+    {
+        return value.Replace("\\", "\\\\").Replace("'", "\\'");
+    }
+
+    private static string StopFixtureAndDescribe(
+        Process parent,
+        Task<string> stderrTask,
+        TimeSpan elapsed)
+    {
+        ProcessTreeTermination.Terminate(parent);
+        string stderr = ObserveFixtureStderr(stderrTask);
+
+        string exitState;
+        try
+        {
+            exitState = parent.HasExited ? $"exited with code {parent.ExitCode}" : "still running";
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or ObjectDisposedException)
+        {
+            exitState = $"exit state unavailable ({exception.GetType().Name})";
+        }
+
+        string stderrDescription = string.IsNullOrWhiteSpace(stderr) ? "<empty>" : stderr.Trim();
+        return $"Parent PID: {parent.Id}; elapsed: {elapsed.TotalMilliseconds:F0} ms; parent {exitState}; stderr: {stderrDescription}";
+    }
+
+    private static string ObserveFixtureStderr(Task<string> stderrTask)
+    {
+        try
+        {
+            if (!stderrTask.Wait(ExitTimeout))
+                return "<stderr did not close within the cleanup deadline>";
+
+            return stderrTask.GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            return $"<stderr read failed: {exception.GetType().Name}: {exception.Message}>";
+        }
     }
 
     private static bool WaitUntilExited(Process process)
