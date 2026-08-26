@@ -11,6 +11,15 @@ public partial class ILEmitter
 {
     private readonly Stack<(string Name, LocalBuilder Key, LocalBuilder Value)> _stableMapEntryBindings = new();
 
+    private Type PromotedObjectValueClrType(TypeInfo? type) => type switch
+    {
+        TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER } => _ctx.Types.Double,
+        TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN } => _ctx.Types.Boolean,
+        TypeInfo.String => _ctx.Types.String,
+        _ => throw new InvalidOperationException(
+            $"Promoted object field has unsupported static type '{type}'")
+    };
+
     protected override void EmitConditionCheck(Expr condition)
     {
         EmitExpression(condition);
@@ -325,6 +334,54 @@ public partial class ILEmitter
             var structLocal = _ctx.Locals.DeclareLocal(v.Name.Lexeme, shapeType.ClrType);
             IL.Emit(OpCodes.Ldloca, structLocal);
             IL.Emit(OpCodes.Initobj, shapeType.ClrType);
+
+            if (shapeLit.Properties.Any(p => p.IsSpread))
+            {
+                // Stable exact object spread (#1505). Snapshot each source field at the precise
+                // spread position: an explicit initializer between two spreads may mutate a source,
+                // so loading only the final source state would violate CopyDataProperties order.
+                // Explicit values also go through temporaries so overwritten initializers still run.
+                var finalValues = new Dictionary<string, LocalBuilder>(StringComparer.Ordinal);
+                foreach (var prop in shapeLit.Properties)
+                {
+                    if (prop.IsSpread)
+                    {
+                        var spreadVar = (Expr.Variable)prop.Value;
+                        var source = _ctx.TryGetPromotedObjectLocal(spreadVar.Name.Lexeme)
+                            ?? throw new InvalidOperationException(
+                                $"Promoted object spread source '{spreadVar.Name.Lexeme}' has no shape local");
+
+                        foreach (var sourceField in source.Shape.Fields)
+                        {
+                            var sourceBuilder = source.Shape.FieldBuilders[sourceField.Name];
+                            var snapshot = IL.DeclareLocal(sourceBuilder.FieldType);
+                            IL.Emit(OpCodes.Ldloca, source.Local);
+                            IL.Emit(OpCodes.Ldfld, sourceBuilder);
+                            IL.Emit(OpCodes.Stloc, snapshot);
+                            finalValues[sourceField.Name] = snapshot;
+                        }
+                        continue;
+                    }
+
+                    var fieldName = ((Expr.IdentifierKey)prop.Key!).Name.Lexeme;
+                    Type valueType = PromotedObjectValueClrType(_ctx.TypeMap.Get(prop.Value));
+                    var value = IL.DeclareLocal(valueType);
+                    EmitExpression(prop.Value);
+                    EnsureForFieldType(valueType);
+                    IL.Emit(OpCodes.Stloc, value);
+                    finalValues[fieldName] = value;
+                }
+
+                foreach (var field in shapeType.Fields)
+                {
+                    var fieldBuilder = shapeType.FieldBuilders[field.Name];
+                    IL.Emit(OpCodes.Ldloca, structLocal);
+                    IL.Emit(OpCodes.Ldloc, finalValues[field.Name]);
+                    IL.Emit(OpCodes.Stfld, fieldBuilder);
+                }
+                return;
+            }
+
             // Evaluate every field initializer in source order (preserving side effects), even a field
             // never read later, and store into its typed struct field.
             foreach (var prop in shapeLit.Properties)

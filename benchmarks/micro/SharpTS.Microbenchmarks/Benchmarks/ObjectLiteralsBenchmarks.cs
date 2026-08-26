@@ -6,10 +6,9 @@ using SharpTS.Microbenchmarks.Infrastructure;
 namespace SharpTS.Microbenchmarks.Benchmarks;
 
 /// <summary>
-/// Object-literal allocation benchmarks. Each <c>{ ... }</c> in TS source
-/// emits <c>new Dictionary&lt;string, object&gt;()</c> + N <c>set_Item</c>
-/// calls + a no-op <c>CreateObject</c> helper call. Measures the per-iter
-/// cost in tight loops — return values, options bags, tree builders.
+/// Object-literal allocation benchmarks. Measures fixed records, nested/dynamic
+/// objects, stable exact spread, overwrite order, and an escaping spread control
+/// in tight loops such as options-bag and tree-building workloads.
 /// </summary>
 [MemoryDiagnoser]
 [RankColumn]
@@ -20,6 +19,9 @@ public class ObjectLiteralsBenchmarks
     private MethodInfo _tsSmall = null!;
     private MethodInfo _tsMedium = null!;
     private MethodInfo _tsNested = null!;
+    private MethodInfo _tsSpreadOne = null!;
+    private MethodInfo _tsSpreadMultiple = null!;
+    private MethodInfo _tsSpreadEscape = null!;
 
     [Params(100, 10_000, 1_000_000)]
     public int N { get; set; }
@@ -40,6 +42,9 @@ public class ObjectLiteralsBenchmarks
         _tsSmall = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "smallLiteralLoop");
         _tsMedium = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "mediumLiteralLoop");
         _tsNested = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "nestedLiteralLoop");
+        _tsSpreadOne = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "spreadOneSourceLoop");
+        _tsSpreadMultiple = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "spreadMultipleOverwriteLoop");
+        _tsSpreadEscape = BenchmarkHarness.GetCompiledMethod(_tsAssembly, "spreadMutationEscapeLoop");
     }
 
     [Benchmark]
@@ -56,4 +61,19 @@ public class ObjectLiteralsBenchmarks
     [BenchmarkCategory("NestedLiteral")]
     public object? SharpTS_NestedLiteralLoop()
         => BenchmarkHarness.InvokeCompiled(_tsNested, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("SpreadOneSource")]
+    public object? SharpTS_SpreadOneSourceLoop()
+        => BenchmarkHarness.InvokeCompiled(_tsSpreadOne, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("SpreadMultipleOverwrite")]
+    public object? SharpTS_SpreadMultipleOverwriteLoop()
+        => BenchmarkHarness.InvokeCompiled(_tsSpreadMultiple, (double)N);
+
+    [Benchmark]
+    [BenchmarkCategory("SpreadMutationEscape")]
+    public object? SharpTS_SpreadMutationEscapeLoop()
+        => BenchmarkHarness.InvokeCompiled(_tsSpreadEscape, (double)N);
 }

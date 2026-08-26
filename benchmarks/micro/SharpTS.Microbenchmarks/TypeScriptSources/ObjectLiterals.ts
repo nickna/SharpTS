@@ -33,3 +33,40 @@ function nestedLiteralLoop(n: number): number {
     }
     return total;
 }
+
+function spreadOneSourceLoop(n: number): number {
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const oneSource = { a: i, b: i + 1, c: i + 2 };
+        const oneResult = { ...oneSource, d: i + 3 };
+        total = total + oneResult.a + oneResult.d;
+    }
+    return total;
+}
+
+function spreadMultipleOverwriteLoop(n: number): number {
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const overwriteFirst = { a: i, b: i + 1, c: i + 2 };
+        const overwriteSecond = { b: i + 3, c: i + 4, d: i + 5 };
+        const overwriteResult = { ...overwriteFirst, b: i + 6, ...overwriteSecond, c: i + 7 };
+        total = total + overwriteResult.a + overwriteResult.b + overwriteResult.c + overwriteResult.d;
+    }
+    return total;
+}
+
+function consumeSpreadResult(value: any): number {
+    value.d = value.d + 1;
+    return value.a + value.d;
+}
+
+function spreadMutationEscapeLoop(n: number): number {
+    let total: number = 0;
+    for (let i: number = 0; i < n; i++) {
+        const escapeSource = { a: i, b: i + 1, c: i + 2 };
+        const escapeResult = { ...escapeSource, d: i + 3 };
+        escapeResult.b = escapeResult.b + 1;
+        total = total + consumeSpreadResult(escapeResult);
+    }
+    return total;
+}

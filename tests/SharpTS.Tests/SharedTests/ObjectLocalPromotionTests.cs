@@ -11,9 +11,10 @@ namespace SharpTS.Tests.SharedTests;
 /// <c>Dictionary&lt;string, object&gt;</c> lookup with boxing.
 ///
 /// These run against BOTH the interpreter and the compiler. The positive cases exercise the promoted
-/// fast paths; the escape cases must NOT be promoted (they fall back to the general Dictionary path) and
-/// must still produce correct results — i.e. interpreter/compiled parity must hold even when the object
-/// is passed, returned, spread, enumerated, dynamically indexed, compared, captured, or compound-assigned.
+/// fast paths, including stable spread chains; the escape cases must NOT be promoted (they fall back to
+/// the general object path) and must still produce correct results — i.e. interpreter/compiled parity
+/// must hold even when the object is passed, returned, dynamically spread, enumerated, indexed,
+/// compared, captured, or compound-assigned.
 /// A wrong escape rule, or a miscompiled struct fast path, surfaces here as a compiled-mode mismatch.
 /// </summary>
 public class ObjectLocalPromotionTests
@@ -152,6 +153,49 @@ public class ObjectLocalPromotionTests
         Assert.Equal("21\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Promoted_StableSpreadCopiesPrimitiveShape(ExecutionMode mode)
+    {
+        var source = """
+            function f(n: number): number {
+                let total: number = 0;
+                for (let i: number = 0; i < n; i++) {
+                    const source = { x: i, y: i + 1 };
+                    const result = { ...source, z: i + 2 };
+                    total = total + result.x + result.y + result.z;
+                }
+                return total;
+            }
+            console.log(f(10));
+            """;
+
+        Assert.Equal("165\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Promoted_MultipleSpreadsSnapshotAtEvaluationPosition(ExecutionMode mode)
+    {
+        // The first spread must observe x=1, while the second spread observes the intervening write.
+        // `changed` and the overwritten y initializer must still be evaluated in source order.
+        var source = """
+            function f(): number {
+                const source = { x: 1, y: 2 };
+                const other = { y: 4, z: 5 };
+                const result = {
+                    ...source,
+                    changed: (source.x = 9),
+                    ...other,
+                    ...source,
+                    y: 7
+                };
+                return result.x * 1000 + result.y * 100 + result.z * 10 + result.changed;
+            }
+            console.log(f());
+            """;
+
+        Assert.Equal("9759\n", TestHarness.Run(source, mode));
+    }
+
     // ── Escape cases: must fall back, must stay correct ────────────────────
 
     [Theory, ModeData]
@@ -197,6 +241,91 @@ public class ObjectLocalPromotionTests
             """;
 
         Assert.Equal("6\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Escape_SpreadResultPassedAndMutatedFallsBackAsAComponent(ExecutionMode mode)
+    {
+        var source = """
+            function consume(value: any): number {
+                value.x = value.x + 10;
+                return value.x + value.y + value.z;
+            }
+            function f(): number {
+                const source = { x: 1, y: 2 };
+                const result = { ...source, z: 3 };
+                result.y = 20;
+                return consume(result) + source.x;
+            }
+            console.log(f());
+            """;
+
+        Assert.Equal("35\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Escape_DynamicSpreadPreservesKeysSymbolsGettersAndNullishSources(ExecutionMode mode)
+    {
+        var source = """
+            let calls: number = 0;
+            const sym: symbol = Symbol("s");
+            const dynamic: any = {
+                2: "two",
+                first: "a",
+                get value(): number { calls = calls + 1; return calls; },
+                [sym]: "symbol"
+            };
+            const result: any = {
+                before: "b",
+                ...(null as any),
+                ...dynamic,
+                ...(undefined as any),
+                first: "overwritten",
+                after: "z"
+            };
+            console.log(Object.keys(result).join(","));
+            console.log(result.first);
+            console.log(result.value);
+            console.log(result[sym]);
+            console.log(calls);
+            """;
+
+        Assert.Equal(
+            "2,before,first,value,after\noverwritten\n1\nsymbol\n1\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Escape_ProxySpreadUsesOneKeySnapshot(ExecutionMode mode)
+    {
+        var source = """
+            const target: any = { a: 1, b: 2 };
+            let ownKeysCount: number = 0;
+            let descriptorCount: number = 0;
+            let getCount: number = 0;
+            const proxy: any = new Proxy(target, {
+                ownKeys(inner: any): any[] {
+                    ownKeysCount = ownKeysCount + 1;
+                    return Reflect.ownKeys(inner);
+                },
+                getOwnPropertyDescriptor(inner: any, key: any): any {
+                    descriptorCount = descriptorCount + 1;
+                    return Reflect.getOwnPropertyDescriptor(inner, key);
+                },
+                get(inner: any, key: any): any {
+                    getCount = getCount + 1;
+                    return inner[key];
+                }
+            });
+            const result: any = { ...proxy };
+            console.log(result.a);
+            console.log(result.b);
+            console.log(ownKeysCount);
+            console.log(descriptorCount);
+            console.log(getCount);
+            """;
+
+        Assert.Equal("1\n2\n1\n2\n2\n", TestHarness.Run(source, mode));
     }
 
     [Theory, ModeData]

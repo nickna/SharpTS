@@ -35,25 +35,57 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
         var listType = _types.ListOfObject;
         var keysLocal = il.DeclareLocal(listType);
+        var symbolKeysLocal = il.DeclareLocal(listType);
         var indexLocal = il.DeclareLocal(_types.Int32);
-        var keyLocal = il.DeclareLocal(_types.String);
+        var keyLocal = il.DeclareLocal(_types.Object);
+        var descriptorLocal = il.DeclareLocal(_types.Object);
+        var sourceIsProxyLocal = il.DeclareLocal(_types.Boolean);
+        var proxySource = il.DefineLabel();
+        var ordinarySource = il.DefineLabel();
+        var keysReady = il.DefineLabel();
         var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
+        var nextKey = il.DefineLabel();
+        var returnLabel = il.DefineLabel();
+        var ordinaryEnumerableCheck = il.DefineLabel();
+        var enumerableCheckDone = il.DefineLabel();
 
         // CopyDataProperties silently ignores null and undefined sources.
         il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Brfalse, loopEnd);
+        il.Emit(OpCodes.Brfalse, returnLabel);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
-        il.Emit(OpCodes.Brtrue, loopEnd);
+        il.Emit(OpCodes.Brtrue, returnLabel);
 
-        // Snapshot enumerable own string keys, then perform a live [[Get]] for
-        // each key.  Besides matching CopyDataProperties semantics for
-        // accessors/descriptors, this supports every ordinary emitted carrier,
-        // including compact records whose slots live behind $IHasFields.
+        // Snapshot the complete mixed [[OwnPropertyKeys]] list once. Proxy ownKeys must be invoked
+        // exactly once; ordinary carriers reuse GetKeys' mature enumerable-string ordering and append
+        // Symbols for per-key descriptor filtering.
+        if (_features.UsesProxy)
+        {
+            EmitProxyTypeCheck(
+                il, () => il.Emit(OpCodes.Ldarg_1), proxySource, ordinarySource);
+            il.MarkLabel(proxySource);
+            il.Emit(OpCodes.Ldc_I4_1);
+            il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
+            EmitProxyOwnKeysCompiledCall(il, runtime, () => il.Emit(OpCodes.Ldarg_1));
+            il.Emit(OpCodes.Stloc, keysLocal);
+            il.Emit(OpCodes.Br, keysReady);
+        }
+
+        il.MarkLabel(ordinarySource);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, sourceIsProxyLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.GetKeys);
         il.Emit(OpCodes.Stloc, keysLocal);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, runtime.GetOwnPropertySymbols);
+        il.Emit(OpCodes.Castclass, listType);
+        il.Emit(OpCodes.Stloc, symbolKeysLocal);
+        il.Emit(OpCodes.Ldloc, keysLocal);
+        il.Emit(OpCodes.Ldloc, symbolKeysLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            listType, "AddRange", [_types.IEnumerableOfObject])!);
+        il.MarkLabel(keysReady);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Stloc, indexLocal);
 
@@ -61,28 +93,57 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Count").GetGetMethod()!);
-        il.Emit(OpCodes.Bge, loopEnd);
+        il.Emit(OpCodes.Bge, returnLabel);
         il.Emit(OpCodes.Ldloc, keysLocal);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(listType, "Item").GetGetMethod()!);
-        il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, keyLocal);
+
+        // Proxy [[GetOwnProperty]] is observable and may report that a snapshotted key disappeared.
+        il.Emit(OpCodes.Ldloc, sourceIsProxyLocal);
+        il.Emit(OpCodes.Brfalse, ordinaryEnumerableCheck);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.ObjectGetOwnPropertyDescriptor);
+        il.Emit(OpCodes.Stloc, descriptorLocal);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Brfalse, nextKey);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Isinst, runtime.UndefinedType);
+        il.Emit(OpCodes.Brtrue, nextKey);
+        il.Emit(OpCodes.Ldloc, descriptorLocal);
+        il.Emit(OpCodes.Ldstr, "enumerable");
+        il.Emit(OpCodes.Call, runtime.GetProperty);
+        il.Emit(OpCodes.Call, runtime.IsTruthy);
+        il.Emit(OpCodes.Brfalse, nextKey);
+        il.Emit(OpCodes.Br, enumerableCheckDone);
+
+        // GetKeys already filtered ordinary string keys. Symbols need their descriptor bit checked.
+        il.MarkLabel(ordinaryEnumerableCheck);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.IsSymbolMethod);
+        il.Emit(OpCodes.Brfalse, enumerableCheckDone);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldloc, keyLocal);
+        il.Emit(OpCodes.Call, runtime.PropertyIsEnumerableHelperMethod);
+        il.Emit(OpCodes.Brfalse, nextKey);
+        il.MarkLabel(enumerableCheckDone);
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, keyLocal);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Ldloc, keyLocal);
-        il.Emit(OpCodes.Call, runtime.GetProperty);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(
-            _types.DictionaryStringObject, "set_Item", _types.String, _types.Object));
+        il.Emit(OpCodes.Call, runtime.GetIndex);
+        il.Emit(OpCodes.Call, runtime.SetIndex);
 
+        il.MarkLabel(nextKey);
         il.Emit(OpCodes.Ldloc, indexLocal);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
         il.Emit(OpCodes.Stloc, indexLocal);
         il.Emit(OpCodes.Br, loopStart);
 
-        il.MarkLabel(loopEnd);
+        il.MarkLabel(returnLabel);
         il.Emit(OpCodes.Ret);
     }
 
