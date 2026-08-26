@@ -433,14 +433,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Isinst, runtime.FunctionApplyWrapperType);
         il.Emit(OpCodes.Brtrue, functionLabel);
 
-        // Promise resolving functions are callable built-ins even though their
-        // optimized CLR representation is not a $TSFunction/delegate.
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brtrue, functionLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brtrue, functionLabel);
+        if (_features.UsesPromise)
+        {
+            // Promise resolving functions are callable built-ins even though
+            // their optimized CLR representation is not a $TSFunction/delegate.
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brtrue, functionLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brtrue, functionLabel);
+        }
 
         // Delegate => "function"
         il.Emit(OpCodes.Ldarg_0);
@@ -751,15 +754,18 @@ public partial class RuntimeEmitter
         // subclasses, which derive from $Promise) wrap their task instead of
         // being one — accept them here; raw tasks fall through to the
         // IsAssignableFrom below.
-        var notTaskTargetLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, classTypeLocal);
-        il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-        il.Emit(OpCodes.Bne_Un, notTaskTargetLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brtrue, trueLabel);
-        il.MarkLabel(notTaskTargetLabel);
+        if (_features.UsesPromise)
+        {
+            var notTaskTargetLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, classTypeLocal);
+            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+            il.Emit(OpCodes.Bne_Un, notTaskTargetLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Brtrue, trueLabel);
+            il.MarkLabel(notTaskTargetLabel);
+        }
 
         // Generic class target: `b instanceof Box` emits the OPEN generic
         // definition (Box`1) while instances carry constructed types

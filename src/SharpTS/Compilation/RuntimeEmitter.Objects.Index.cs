@@ -1841,12 +1841,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
         il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
+        if (_features.UsesPromise)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brtrue, tsFunctionDeleteIdxLabel);
+        }
 
         // $Array — `delete arr[i]` turns the slot into a hole via DeleteAt.
         // Must come BEFORE the trueLabel fallthrough so we actually delete;

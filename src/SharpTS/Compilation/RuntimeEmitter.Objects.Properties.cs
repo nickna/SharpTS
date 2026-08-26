@@ -1425,42 +1425,41 @@ public partial class RuntimeEmitter
             il.MarkLabel(notRegExpLabel);
         }
 
-        // Task<object?> (Promise) - check for then/catch/finally
-        var promiseLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.TaskOfObject);
-        il.Emit(OpCodes.Brtrue, promiseLabel);
+        Label promiseLabel = default;
+        if (_features.UsesPromise)
+        {
+            // Task<object?> (Promise) - check for then/catch/finally
+            promiseLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, _types.TaskOfObject);
+            il.Emit(OpCodes.Brtrue, promiseLabel);
 
-        // User Promise subclass (#242): a guest class extending Promise
-        // derives from $Promise AND implements $IHasFields. Its class members
-        // (declared fields, getters, methods) take precedence over the
-        // built-in promise surface; the per-class GetProperty returns
-        // $Undefined on miss, in which case we fall through to the ordinary
-        // $Promise dispatch below. Mirrors the $Array subclass arm above.
-        var notPromiseSubclassLabel = il.DefineLabel();
-        var promiseSubclassMissLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brfalse, notPromiseSubclassLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Brfalse, notPromiseSubclassLabel);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
-        il.Emit(OpCodes.Dup);
-        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
-        il.Emit(OpCodes.Beq, promiseSubclassMissLabel);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(promiseSubclassMissLabel);
-        il.Emit(OpCodes.Pop);
-        il.MarkLabel(notPromiseSubclassLabel);
+            // User Promise subclass (#242): declared class members take
+            // precedence over the intrinsic Promise surface.
+            var notPromiseSubclassLabel = il.DefineLabel();
+            var promiseSubclassMissLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Brfalse, notPromiseSubclassLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Brfalse, notPromiseSubclassLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Castclass, runtime.IHasFieldsInterface);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Callvirt, runtime.IHasFieldsGetProperty);
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+            il.Emit(OpCodes.Beq, promiseSubclassMissLabel);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(promiseSubclassMissLabel);
+            il.Emit(OpCodes.Pop);
+            il.MarkLabel(notPromiseSubclassLabel);
 
-        // $Promise type (used by fetch, etc.) - check for then/catch/finally
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
-        il.Emit(OpCodes.Brtrue, promiseLabel);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.TSPromiseType);
+            il.Emit(OpCodes.Brtrue, promiseLabel);
+        }
 
         // ArrayBuffer / SharedArrayBuffer / DataView / TypedArray dispatch arms —
         // skipped when no typed-array kind is referenced. The handler bodies
@@ -1624,42 +1623,43 @@ public partial class RuntimeEmitter
         // implement that via EmitDispatchToTarget.
         var callableWrapperLabel = il.DefineLabel();
 
-        // Promise resolving functions are ECMAScript anonymous built-ins, not
-        // ordinary reflected methods. Their host Invoke(object[]) signature
-        // must not leak through as length 0.
-        var notPromiseResolveCallbackLabel = il.DefineLabel();
-        var promiseCallbackMetadataLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
-        il.Emit(OpCodes.Brfalse, notPromiseResolveCallbackLabel);
-        il.Emit(OpCodes.Br, promiseCallbackMetadataLabel);
-        il.MarkLabel(notPromiseResolveCallbackLabel);
-        var notPromiseCallbackLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
-        il.Emit(OpCodes.Brfalse, notPromiseCallbackLabel);
-        il.MarkLabel(promiseCallbackMetadataLabel);
-        var promiseCallbackNotLengthLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "length");
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, promiseCallbackNotLengthLabel);
-        il.Emit(OpCodes.Ldc_R8, 1.0);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(promiseCallbackNotLengthLabel);
-        var promiseCallbackNotNameLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Ldstr, "name");
-        il.Emit(OpCodes.Call, _types.GetMethod(
-            _types.String, "op_Equality", _types.String, _types.String));
-        il.Emit(OpCodes.Brfalse, promiseCallbackNotNameLabel);
-        il.Emit(OpCodes.Ldstr, string.Empty);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(promiseCallbackNotNameLabel);
-        il.Emit(OpCodes.Br, callableWrapperLabel);
-        il.MarkLabel(notPromiseCallbackLabel);
+        if (_features.UsesPromise)
+        {
+            // Promise resolving functions are ECMAScript anonymous built-ins.
+            var notPromiseResolveCallbackLabel = il.DefineLabel();
+            var promiseCallbackMetadataLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+            il.Emit(OpCodes.Brfalse, notPromiseResolveCallbackLabel);
+            il.Emit(OpCodes.Br, promiseCallbackMetadataLabel);
+            il.MarkLabel(notPromiseResolveCallbackLabel);
+            var notPromiseCallbackLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+            il.Emit(OpCodes.Brfalse, notPromiseCallbackLabel);
+            il.MarkLabel(promiseCallbackMetadataLabel);
+            var promiseCallbackNotLengthLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "length");
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, promiseCallbackNotLengthLabel);
+            il.Emit(OpCodes.Ldc_R8, 1.0);
+            il.Emit(OpCodes.Box, _types.Double);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(promiseCallbackNotLengthLabel);
+            var promiseCallbackNotNameLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldstr, "name");
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
+            il.Emit(OpCodes.Brfalse, promiseCallbackNotNameLabel);
+            il.Emit(OpCodes.Ldstr, string.Empty);
+            il.Emit(OpCodes.Ret);
+            il.MarkLabel(promiseCallbackNotNameLabel);
+            il.Emit(OpCodes.Br, callableWrapperLabel);
+            il.MarkLabel(notPromiseCallbackLabel);
+        }
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
@@ -1835,19 +1835,19 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(notFunctionLabel);
 
-            // typeof(Task<object>) → return Promise.prototype singleton.
-            // Hosts then/catch/finally + constructor pointer. Required for
-            // Test262 patterns like `Promise.prototype.then instanceof Function`
-            // and `typeof Promise.prototype.finally === "function"`.
-            var notPromiseProtoLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Bne_Un, notPromiseProtoLabel);
-            il.Emit(OpCodes.Call, runtime.PromisePrototypePopulateMethod);
-            il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(notPromiseProtoLabel);
+            if (_features.UsesPromise)
+            {
+                // typeof(Task<object>) → return Promise.prototype singleton.
+                var notPromiseProtoLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldtoken, _types.TaskOfObject);
+                il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+                il.Emit(OpCodes.Bne_Un, notPromiseProtoLabel);
+                il.Emit(OpCodes.Call, runtime.PromisePrototypePopulateMethod);
+                il.Emit(OpCodes.Ldsfld, runtime.PromisePrototypeField);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(notPromiseProtoLabel);
+            }
 
             // typeof($RegExp) → return RegExp.prototype singleton. Hosts the
             // five well-known-symbol-keyed methods (@@match, etc.) used by
@@ -2181,21 +2181,24 @@ public partial class RuntimeEmitter
             // $IHasFields, but their JS static table still participates in the
             // constructor inheritance chain (Custom.resolve → Promise.resolve).
             il.MarkLabel(baseProbeDeclaredLabel);
-            var noBaseBuiltInLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, walkTypeLocal);
-            il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
-            il.Emit(OpCodes.Call, _types.GetMethod(
-                _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
-            il.Emit(OpCodes.Bne_Un, noBaseBuiltInLabel);
-            il.Emit(OpCodes.Ldloc, walkTypeLocal);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
-            il.Emit(OpCodes.Stloc, baseBuiltInLocal);
-            il.Emit(OpCodes.Ldloc, baseBuiltInLocal);
-            il.Emit(OpCodes.Brfalse, noBaseBuiltInLabel);
-            il.Emit(OpCodes.Ldloc, baseBuiltInLocal);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(noBaseBuiltInLabel);
+            if (_features.UsesPromise)
+            {
+                var noBaseBuiltInLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldloc, walkTypeLocal);
+                il.Emit(OpCodes.Ldtoken, runtime.TSPromiseType);
+                il.Emit(OpCodes.Call, _types.GetMethod(
+                    _types.Type, "GetTypeFromHandle", _types.RuntimeTypeHandle));
+                il.Emit(OpCodes.Bne_Un, noBaseBuiltInLabel);
+                il.Emit(OpCodes.Ldloc, walkTypeLocal);
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, runtime.LookupBuiltInStaticMember);
+                il.Emit(OpCodes.Stloc, baseBuiltInLocal);
+                il.Emit(OpCodes.Ldloc, baseBuiltInLocal);
+                il.Emit(OpCodes.Brfalse, noBaseBuiltInLabel);
+                il.Emit(OpCodes.Ldloc, baseBuiltInLocal);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(noBaseBuiltInLabel);
+            }
 
             // No expando or built-in shadow on this ancestor — probe its declared statics, but
             // only when it is an emitted user class ($IHasFields.IsAssignableFrom).
@@ -2470,6 +2473,8 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
 
+        if (_features.UsesPromise)
+        {
         // Promise (Task<object?> or $Promise) handler - return TSFunction wrappers for then/catch/finally
         il.MarkLabel(promiseLabel);
 
@@ -2611,6 +2616,7 @@ public partial class RuntimeEmitter
         // Unknown promise property - return null
         il.Emit(OpCodes.Ldnull);
         il.Emit(OpCodes.Ret);
+        }
 
     }
 

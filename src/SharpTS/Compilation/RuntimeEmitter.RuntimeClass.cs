@@ -237,14 +237,14 @@ public partial class RuntimeEmitter
         // proto-accessor helpers can compare against it. Reuse here.
         var regexpPrototypeField = runtime.RegExpPrototypeField;
 
-        // Promise.prototype field — Dict<string,object> populated lazily on
-        // first read by EmitPromisePrototypePopulate. Forward-declared so
-        // EmitGetProperty's Type branch can emit the Ldsfld + Call sequence
-        // when `Promise.prototype` is read as a value.
-        runtime.PromisePrototypeField = typeBuilder.DefineField(
-            "_promisePrototype",
-            _types.DictionaryStringObject,
-            FieldAttributes.Public | FieldAttributes.Static);
+        // Promise.prototype is entirely absent from Promise-free assemblies.
+        if (_features.UsesPromise)
+        {
+            runtime.PromisePrototypeField = typeBuilder.DefineField(
+                "_promisePrototype",
+                _types.DictionaryStringObject,
+                FieldAttributes.Public | FieldAttributes.Static);
+        }
 
         var classPrototypeCacheType = _types.MakeGenericType(
             _types.DictionaryOpen, _types.Type, _types.Object);
@@ -405,57 +405,61 @@ public partial class RuntimeEmitter
         // not be rethrown by that host convenience. Track those result objects
         // weakly so the entry-point emitter can distinguish them without
         // changing their JavaScript identity or adding an observable property.
-        var nonAutoAwaitPromisesField = typeBuilder.DefineField(
-            "_nonAutoAwaitPromises",
-            _types.ConditionalWeakTable,
-            FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
-        );
-        runtime.NonAutoAwaitPromisesField = nonAutoAwaitPromisesField;
-
-        var markNonAutoAwaitPromise = typeBuilder.DefineMethod(
-            "MarkNonAutoAwaitPromise",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Void,
-            [_types.Object]);
-        runtime.MarkNonAutoAwaitPromiseMethod = markNonAutoAwaitPromise;
+        FieldBuilder? nonAutoAwaitPromisesField = null;
+        if (_features.UsesPromise)
         {
-            var il = markNonAutoAwaitPromise.GetILGenerator();
-            var doneLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Brfalse, doneLabel);
-            il.Emit(OpCodes.Ldsfld, nonAutoAwaitPromisesField);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(
-                _types.ConditionalWeakTable, "AddOrUpdate", [_types.Object, _types.Object]));
-            il.MarkLabel(doneLabel);
-            il.Emit(OpCodes.Ret);
-        }
+            nonAutoAwaitPromisesField = typeBuilder.DefineField(
+                "_nonAutoAwaitPromises",
+                _types.ConditionalWeakTable,
+                FieldAttributes.Public | FieldAttributes.Static | FieldAttributes.InitOnly
+            );
+            runtime.NonAutoAwaitPromisesField = nonAutoAwaitPromisesField;
 
-        var shouldAutoAwaitPromise = typeBuilder.DefineMethod(
-            "ShouldAutoAwaitPromise",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Boolean,
-            [_types.Object]);
-        runtime.ShouldAutoAwaitPromiseMethod = shouldAutoAwaitPromise;
-        {
-            var il = shouldAutoAwaitPromise.GetILGenerator();
-            var valueLocal = il.DeclareLocal(_types.Object);
-            var nonNullLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Brtrue, nonNullLabel);
-            il.Emit(OpCodes.Ldc_I4_1);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(nonNullLabel);
-            il.Emit(OpCodes.Ldsfld, nonAutoAwaitPromisesField);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldloca, valueLocal);
-            il.Emit(OpCodes.Callvirt, _types.GetMethod(
-                _types.ConditionalWeakTable, "TryGetValue",
-                [_types.Object, _types.Object.MakeByRefType()]));
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ceq);
-            il.Emit(OpCodes.Ret);
+            var markNonAutoAwaitPromise = typeBuilder.DefineMethod(
+                "MarkNonAutoAwaitPromise",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Void,
+                [_types.Object]);
+            runtime.MarkNonAutoAwaitPromiseMethod = markNonAutoAwaitPromise;
+            {
+                var il = markNonAutoAwaitPromise.GetILGenerator();
+                var doneLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Brfalse, doneLabel);
+                il.Emit(OpCodes.Ldsfld, nonAutoAwaitPromisesField);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                    _types.ConditionalWeakTable, "AddOrUpdate", [_types.Object, _types.Object]));
+                il.MarkLabel(doneLabel);
+                il.Emit(OpCodes.Ret);
+            }
+
+            var shouldAutoAwaitPromise = typeBuilder.DefineMethod(
+                "ShouldAutoAwaitPromise",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Boolean,
+                [_types.Object]);
+            runtime.ShouldAutoAwaitPromiseMethod = shouldAutoAwaitPromise;
+            {
+                var il = shouldAutoAwaitPromise.GetILGenerator();
+                var valueLocal = il.DeclareLocal(_types.Object);
+                var nonNullLabel = il.DefineLabel();
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Brtrue, nonNullLabel);
+                il.Emit(OpCodes.Ldc_I4_1);
+                il.Emit(OpCodes.Ret);
+                il.MarkLabel(nonNullLabel);
+                il.Emit(OpCodes.Ldsfld, nonAutoAwaitPromisesField);
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldloca, valueLocal);
+                il.Emit(OpCodes.Callvirt, _types.GetMethod(
+                    _types.ConditionalWeakTable, "TryGetValue",
+                    [_types.Object, _types.Object.MakeByRefType()]));
+                il.Emit(OpCodes.Ldc_I4_0);
+                il.Emit(OpCodes.Ceq);
+                il.Emit(OpCodes.Ret);
+            }
         }
 
         // Static sentinel field for null/undefined Map keys
@@ -518,7 +522,8 @@ public partial class RuntimeEmitter
         DefineNativeErrorPrototypePopulateShells(typeBuilder, runtime);
         DefineFunctionPrototypePopulateShell(typeBuilder, runtime);
         DefineRegExpPrototypePopulateShell(typeBuilder, runtime);
-        DefinePromisePrototypePopulateShell(typeBuilder, runtime);
+        if (_features.UsesPromise)
+            DefinePromisePrototypePopulateShell(typeBuilder, runtime);
 
         // The exact toFixed fast path writes straight into the result string.
         // Predeclare its cached callback before emitting the type initializer so
@@ -622,10 +627,12 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
         cctorIL.Emit(OpCodes.Stsfld, regexpPrototypeField);
 
-        // Promise.prototype starts empty; populated lazily by
-        // EmitPromisePrototypePopulate on first `Promise.prototype` read.
-        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
-        cctorIL.Emit(OpCodes.Stsfld, runtime.PromisePrototypeField);
+        if (_features.UsesPromise)
+        {
+            // Promise.prototype starts empty; populated lazily on first read.
+            cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+            cctorIL.Emit(OpCodes.Stsfld, runtime.PromisePrototypeField);
+        }
 
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(classPrototypeCacheType));
         cctorIL.Emit(OpCodes.Stsfld, classPrototypeCacheField);
@@ -654,9 +661,11 @@ public partial class RuntimeEmitter
         cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
         cctorIL.Emit(OpCodes.Stsfld, deletedBuiltinsField);
 
-        // Initialize custom-capability top-level auto-await exclusions.
-        cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
-        cctorIL.Emit(OpCodes.Stsfld, nonAutoAwaitPromisesField);
+        if (nonAutoAwaitPromisesField is not null)
+        {
+            cctorIL.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ConditionalWeakTable));
+            cctorIL.Emit(OpCodes.Stsfld, nonAutoAwaitPromisesField);
+        }
 
         // Link the built-in singletons (Math, JSON, Boolean/Number/String/Array
         // prototypes) to Object.prototype via PDS. ECMA-262 declares each of
@@ -790,21 +799,24 @@ public partial class RuntimeEmitter
         EmitIsTruthy(typeBuilder, runtime);
         // Promise resolving callbacks need the adoption helper token before
         // EmitPromiseMethods fills in its body later in this method.
-        runtime.CoerceAwaitableToTaskMethod ??= typeBuilder.DefineMethod(
-            "CoerceAwaitableToTask",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.TaskOfObject,
-            [_types.Object]);
-        runtime.PromiseResolveValueMethod ??= typeBuilder.DefineMethod(
-            "PromiseResolveValue",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.TaskOfObject,
-            [_types.Object]);
-        runtime.ResolvePreparedPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
-            "ResolvePreparedPromiseCapability",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object, _types.Object]);
+        if (_features.UsesPromise)
+        {
+            runtime.CoerceAwaitableToTaskMethod ??= typeBuilder.DefineMethod(
+                "CoerceAwaitableToTask",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.TaskOfObject,
+                [_types.Object]);
+            runtime.PromiseResolveValueMethod ??= typeBuilder.DefineMethod(
+                "PromiseResolveValue",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.TaskOfObject,
+                [_types.Object]);
+            runtime.ResolvePreparedPromiseCapabilityMethod ??= typeBuilder.DefineMethod(
+                "ResolvePreparedPromiseCapability",
+                MethodAttributes.Public | MethodAttributes.Static,
+                _types.Object,
+                [_types.Object, _types.Object]);
+        }
         // Promise reaction state machines are emitted before the microtask
         // infrastructure. Reserve the shared FIFO job-enqueue token now; its
         // body is filled by EmitQueueMicrotaskMethod later in this method.
@@ -816,7 +828,8 @@ public partial class RuntimeEmitter
         // Promise resolving callbacks are callable built-ins. Define their
         // representation before TypeOf so it can classify them as functions;
         // InvokeValue consumes the same types later in this method.
-        EmitPromiseCallbackTypes(moduleBuilder, runtime);
+        if (_features.UsesPromise)
+            EmitPromiseCallbackTypes(moduleBuilder, runtime);
         EmitTypeOf(typeBuilder, runtime);
         EmitAdd(typeBuilder, runtime);
         // Equals body needs runtime.ToJsString for the ECMA-262 7.2.14
@@ -933,7 +946,8 @@ public partial class RuntimeEmitter
         // consumes the same helper later.
         EmitIsConstructor(typeBuilder, runtime);
         // Promise methods must come before GetProperty (which needs PromiseThen for typeof p.then)
-        EmitPromiseMethods(typeBuilder, runtime);
+        if (_features.UsesPromise)
+            EmitPromiseMethods(typeBuilder, runtime);
         // TypedArray detection helpers must come before GetProperty (which uses IsTypedArrayMethod)
         EmitTypedArrayDetectionHelpers(typeBuilder, runtime);
         // AbortController/AbortSignal methods must come before GetProperty,
@@ -1035,11 +1049,13 @@ public partial class RuntimeEmitter
             EmitMapCollectionIteratorType(moduleBuilder, runtime);
         if (_features.UsesSet)
             EmitSetCollectionIteratorType(moduleBuilder, runtime);
-        EmitPromiseResolveValue(moduleBuilder, runtime);
+        if (_features.UsesPromise)
+            EmitPromiseResolveValue(moduleBuilder, runtime);
         // Promise combinators reserve their normalization method token early,
         // but its incremental custom-iterator body needs both the basic
         // protocol helpers and $IteratorWrapper.
-        EmitNormalizePromiseList(typeBuilder, runtime);
+        if (_features.UsesPromise)
+            EmitNormalizePromiseList(typeBuilder, runtime);
         // Advanced iterator methods (IterateToList) - needs IteratorWrapperCtor
         EmitIteratorMethodsAdvanced(typeBuilder, runtime);
         // ES2025 Iterator Helper methods and lazy wrapper types
@@ -1098,7 +1114,8 @@ public partial class RuntimeEmitter
         EmitObjectCreate(typeBuilder, runtime, prototypeStoreField);
         // Promise keyed-combinator shells are declared with Promise methods,
         // but their implementation needs all of the object-model helpers above.
-        EmitPromiseKeyedMethodBodies(runtime);
+        if (_features.UsesPromise)
+            EmitPromiseKeyedMethodBodies(runtime);
         EmitObjectPreventExtensions(typeBuilder, runtime, nonExtensibleObjectsField, frozenObjectsField, sealedObjectsField);
         EmitObjectGetPrototypeOf(typeBuilder, runtime, prototypeStoreField);
         EmitObjectSetPrototypeOf(typeBuilder, runtime, prototypeStoreField, nonExtensibleObjectsField);
@@ -1395,8 +1412,11 @@ public partial class RuntimeEmitter
         // `Promise.prototype.then.call(p, fn)` routes correctly. Must come
         // after EmitPromiseMethods so the helper bodies can reference the
         // state-machine entry points.
-        EmitPromisePrototypeHelpers(typeBuilder, runtime);
-        EmitPromisePrototypePopulate(typeBuilder, runtime);
+        if (_features.UsesPromise)
+        {
+            EmitPromisePrototypeHelpers(typeBuilder, runtime);
+            EmitPromisePrototypePopulate(typeBuilder, runtime);
+        }
         // Map methods — gated on UsesMap. EmitMapGroupBy (`Map.groupBy(...)`)
         // depends on Map's own MapHas/Set/Get methods so it folds up under
         // the same gate. ObjectGroupBy stays unconditional (it builds a plain
@@ -1518,11 +1538,13 @@ public partial class RuntimeEmitter
         EmitSetIntervalMethod(typeBuilder, runtime);
         EmitClearIntervalMethod(typeBuilder, runtime);
         // Timer promise methods (timers/promises module)
-        EmitTimerPromisesMethods(typeBuilder, runtime);
+        if (_features.UsesPromise)
+            EmitTimerPromisesMethods(typeBuilder, runtime);
         // Timer module wrappers for namespace imports (import * as timers from 'timers')
         EmitTimerModuleWrappers(typeBuilder, runtime);
         // Timer promises module wrappers for named/namespace imports (import { setTimeout } from 'timers/promises')
-        EmitTimerPromisesModuleWrappers(typeBuilder, runtime);
+        if (_features.UsesPromise)
+            EmitTimerPromisesModuleWrappers(typeBuilder, runtime);
         // Process global methods (env, argv, nextTick) - must be after timer methods for nextTick
         EmitProcessMethods(typeBuilder, runtime);
         // Zlib module methods — gated.

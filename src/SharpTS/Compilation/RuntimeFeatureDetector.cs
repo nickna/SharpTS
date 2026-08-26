@@ -19,13 +19,8 @@ namespace SharpTS.Compilation;
 /// at runtime, which is much worse.
 /// </para>
 ///
-/// <para>
-/// <b>What's NOT detected.</b> Tier B features (<c>$Promise</c> + state machines,
-/// <c>$RegExp</c>, <c>$TSDate</c>, <c>$Map</c>/<c>$Set</c>) aren't in the feature
-/// set yet — those get emitted unconditionally for now and will be gated in
-/// Phase 2. Likewise <c>$Runtime</c> itself is always emitted; per-method
-/// shaking inside it is Phase 3.
-/// </para>
+/// <para><c>$Runtime</c> itself remains unconditional, but optional type and
+/// method families within it are feature-gated.</para>
 /// </summary>
 public sealed class RuntimeFeatureDetector
 {
@@ -76,6 +71,7 @@ public sealed class RuntimeFeatureDetector
             UsesIntl = false,
             UsesReflect = false,
             UsesIteratorHelpers = false,
+            UsesPromise = false,
             UsesDate = false,
             UsesRegExp = false,
             UsesBuffer = false,
@@ -206,6 +202,18 @@ public sealed class RuntimeFeatureDetector
         {
             _set.UsesAbortController = true;
         }
+        // Promise is a shared dependency of async syntax and of emitted module
+        // families that expose Promise-returning APIs. Keep these implications
+        // coarse and conservative: over-emission is preferable to leaving a
+        // metadata reference to an omitted $Promise helper.
+        if (_set.UsesPromisePrototypeMutation || _set.UsesDynamicImport ||
+            _set.UsesAsyncGenerator || _set.UsesForAwaitOf || _set.UsesFetch ||
+            _set.UsesHttp || _set.UsesDns || _set.UsesFs || _set.UsesCrypto ||
+            _set.UsesNodeStreams || _set.UsesWebStreams || _set.UsesReadline ||
+            _set.UsesChildProcess || _set.UsesVm || _set.UsesSourceExecution)
+        {
+            _set.UsesPromise = true;
+        }
         if (_set.UsesDynamicImport || _set.UsesSourceExecution || _set.UsesVm ||
             _set.UsesCjsRequire)
         {
@@ -221,6 +229,12 @@ public sealed class RuntimeFeatureDetector
     {
         // Strip "node:" prefix that Node.js permits on builtins.
         var p = path.StartsWith("node:") ? path[5..] : path;
+        if (p is "dns/promises" or "fs/promises" or "primitive:fs/promises" or
+            "crypto/promises" or "stream/promises" or "readline/promises" or
+            "timers/promises" or "primitive:timers/promises")
+        {
+            _set.UsesPromise = true;
+        }
         switch (p)
         {
             case "net":
@@ -237,6 +251,7 @@ public sealed class RuntimeFeatureDetector
                 _set.UsesDns = true; break;
             case "fs":
             case "fs/promises":
+            case "primitive:fs/promises":
                 _set.UsesFs = true; break;
             case "crypto":
             case "crypto/promises":
@@ -288,6 +303,9 @@ public sealed class RuntimeFeatureDetector
                 break;
             case "async_hooks":
                 _set.UsesAsyncLocalStorage = true; break;
+            case "timers/promises":
+            case "primitive:timers/promises":
+                _set.UsesPromise = true; break;
         }
     }
 
@@ -452,6 +470,11 @@ public sealed class RuntimeFeatureDetector
             case "Date":
                 _set.UsesDate = true; break;
 
+            // Promise — direct static calls, construction, subclassing, and
+            // value-form aliases all need the complete emitted Promise family.
+            case "Promise":
+                _set.UsesPromise = true; break;
+
             // RegExp — bare identifier covers `new RegExp(...)` and
             // `RegExp.X` constructors. Regex literals (/pattern/) get a
             // separate trigger via VisitExpr's RegexLiteral case.
@@ -524,6 +547,7 @@ public sealed class RuntimeFeatureDetector
             case "globalThis":
             case "global":
                 _set.UsesObjectIntegrityMutation = true;
+                _set.UsesPromise = true;
                 _set.UsesRegExpPrototypeMutation = true;
                 _set.UsesFetch = true;
                 _set.UsesTextEncoding = true;
@@ -673,13 +697,23 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Using usg:
-                // `using` statement walks an iterable; visit the initializer expression.
-                // (AST shape: Using(declarations, etc.) — be defensive about field access.)
+                if (usg.IsAsync)
+                    _set.UsesPromise = true;
+                foreach (var binding in usg.Bindings)
+                {
+                    if (binding.DestructuringPattern is not null)
+                        VisitExpr(binding.DestructuringPattern);
+                    VisitExpr(binding.Initializer);
+                }
                 break;
 
             case Stmt.Function fn:
-                if (fn.IsAsync && fn.IsGenerator)
-                    _set.UsesAsyncGenerator = true;
+                if (fn.IsAsync)
+                {
+                    _set.UsesPromise = true;
+                    if (fn.IsGenerator)
+                        _set.UsesAsyncGenerator = true;
+                }
                 foreach (var p in fn.Parameters)
                     if (p.DefaultValue is not null) VisitExpr(p.DefaultValue);
                 if (fn.Body is not null)
@@ -693,8 +727,12 @@ public sealed class RuntimeFeatureDetector
                     // Class methods can be `async *foo()` — async generators.
                     // The Stmt.Function visit happens via ClassMembersBuild,
                     // not the top-level Stmt switch, so re-check the flags here.
-                    if (m.IsAsync && m.IsGenerator)
-                        _set.UsesAsyncGenerator = true;
+                    if (m.IsAsync)
+                    {
+                        _set.UsesPromise = true;
+                        if (m.IsGenerator)
+                            _set.UsesAsyncGenerator = true;
+                    }
                     foreach (var p in m.Parameters)
                         if (p.DefaultValue is not null) VisitExpr(p.DefaultValue);
                     if (m.Body is not null)
@@ -742,7 +780,10 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Stmt.ForOf fo:
                 if (fo.IsAsync)
+                {
                     _set.UsesForAwaitOf = true;
+                    _set.UsesPromise = true;
+                }
                 VisitExpr(fo.Iterable);
                 VisitStmt(fo.Body);
                 break;
@@ -788,6 +829,8 @@ public sealed class RuntimeFeatureDetector
     private void VisitExpr(Expr? expr)
     {
         if (expr is null) return;
+        if (_typeMap?.Get(expr) is TypeInfo.Promise)
+            _set.UsesPromise = true;
         switch (expr)
         {
             case Expr.Variable v:
@@ -1439,8 +1482,12 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.ArrowFunction af:
-                if (af.IsAsync && af.IsGenerator)
-                    _set.UsesAsyncGenerator = true;
+                if (af.IsAsync)
+                {
+                    _set.UsesPromise = true;
+                    if (af.IsGenerator)
+                        _set.UsesAsyncGenerator = true;
+                }
                 foreach (var ap in af.Parameters)
                     if (ap.DefaultValue is not null) VisitExpr(ap.DefaultValue);
                 if (af.ExpressionBody is not null) VisitExpr(af.ExpressionBody);
@@ -1466,9 +1513,11 @@ public sealed class RuntimeFeatureDetector
                 VisitExpr(sat.Expression);
                 break;
             case Expr.Await aw:
+                _set.UsesPromise = true;
                 VisitExpr(aw.Expression);
                 break;
             case Expr.DynamicImport dimp:
+                _set.UsesPromise = true;
                 _set.UsesDynamicImport = true;
                 _set.PotentiallyMaterializesUnknownCompactObjectRecordShape = true;
                 VisitExpr(dimp.PathExpression);
@@ -1485,8 +1534,12 @@ public sealed class RuntimeFeatureDetector
                 if (ce.SuperclassExpr is not null) VisitExpr(ce.SuperclassExpr);
                 foreach (var m in ce.Methods)
                 {
-                    if (m.IsAsync && m.IsGenerator)
-                        _set.UsesAsyncGenerator = true;
+                    if (m.IsAsync)
+                    {
+                        _set.UsesPromise = true;
+                        if (m.IsGenerator)
+                            _set.UsesAsyncGenerator = true;
+                    }
                     foreach (var mp in m.Parameters)
                         if (mp.DefaultValue is not null) VisitExpr(mp.DefaultValue);
                     if (m.Body is not null)
