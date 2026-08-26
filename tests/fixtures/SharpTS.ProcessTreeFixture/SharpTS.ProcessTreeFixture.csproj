@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- TargetFramework / ImplicitUsings / Nullable inherited from Directory.Build.props. -->
+    <IsPackable>false</IsPackable>
+    <RootNamespace>SharpTS.ProcessTreeFixture</RootNamespace>
+    <AssemblyName>SharpTS.ProcessTreeFixture</AssemblyName>
+  </PropertyGroup>
+
+</Project>

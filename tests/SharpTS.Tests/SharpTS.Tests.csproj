@@ -41,6 +41,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\fixtures\SharpTS.ProcessTreeFixture\SharpTS.ProcessTreeFixture.csproj" />
     <ProjectReference Include="..\..\src\SharpTS\SharpTS.csproj" />
     <ProjectReference Include="..\..\src\SharpTS.DebugAdapter\SharpTS.DebugAdapter.csproj" />
     <ProjectReference Include="..\..\src\SharpTS.Sdk.Tasks\SharpTS.Sdk.Tasks.csproj" />
