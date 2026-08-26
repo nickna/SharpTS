@@ -1456,6 +1456,7 @@ public class EmittedRuntime
     public MethodBuilder TSErrorMessageSetter { get; set; } = null!;
     public MethodBuilder TSErrorStackGetter { get; set; } = null!;
     public MethodBuilder TSErrorStackSetter { get; set; } = null!;
+    public MethodBuilder TSErrorCapturedStackSetter { get; set; } = null!;
     public MethodBuilder TSErrorCauseGetter { get; set; } = null!;
     public MethodBuilder TSErrorCauseSetter { get; set; } = null!;
     public MethodBuilder TSErrorHasCauseGetter { get; set; } = null!;
@@ -1463,7 +1464,6 @@ public class EmittedRuntime
     public MethodBuilder TSErrorCodeSetter { get; set; } = null!;
     public MethodBuilder TSErrorSyscallGetter { get; set; } = null!;
     public MethodBuilder TSErrorSyscallSetter { get; set; } = null!;
-    public MethodBuilder TSErrorCaptureStackTrace { get; set; } = null!;
 
     // $TypeError
     public Type TSTypeErrorType { get; set; } = null!;

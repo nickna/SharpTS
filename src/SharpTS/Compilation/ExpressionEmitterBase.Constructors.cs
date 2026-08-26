@@ -816,6 +816,13 @@ public abstract partial class ExpressionEmitterBase
             IL.Emit(OpCodes.Stelem_Ref);
         }
         IL.Emit(OpCodes.Call, Ctx.Runtime!.CreateError);
+        var createdError = IL.DeclareLocal(Ctx.Types.Object);
+        IL.Emit(OpCodes.Stloc, createdError);
+        IL.Emit(OpCodes.Ldloc, createdError);
+        IL.Emit(OpCodes.Castclass, Ctx.Runtime.TSErrorType);
+        IL.Emit(OpCodes.Ldstr, Ctx.CurrentMethod?.Name ?? "Main");
+        IL.Emit(OpCodes.Callvirt, Ctx.Runtime.TSErrorCapturedStackSetter);
+        IL.Emit(OpCodes.Ldloc, createdError);
         SetStackUnknown();
     }
 

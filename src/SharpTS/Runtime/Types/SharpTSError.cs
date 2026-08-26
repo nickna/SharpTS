@@ -12,6 +12,8 @@ namespace SharpTS.Runtime.Types;
 public class SharpTSError : ITypeCategorized
 {
     private readonly SharpTSObject _properties = new([]);
+    private string? _stack;
+    private System.Diagnostics.StackTrace? _capturedStack;
 
     /// <inheritdoc />
     public TypeCategory RuntimeCategory => TypeCategory.Error;
@@ -36,7 +38,27 @@ public class SharpTSError : ITypeCategorized
     /// <summary>
     /// The stack trace at the point the error was created.
     /// </summary>
-    public string Stack { get; set; }
+    public string Stack
+    {
+        get
+        {
+            if (_stack is not null)
+                return _stack;
+
+            var captured = _capturedStack;
+            if (captured is null)
+                return "";
+
+            _stack = FormatStackTrace(captured);
+            _capturedStack = null;
+            return _stack;
+        }
+        set
+        {
+            _stack = value;
+            _capturedStack = null;
+        }
+    }
 
     /// <summary>
     /// The Node.js error code (e.g., "ENOENT", "ECONNREFUSED").
@@ -98,7 +120,7 @@ public class SharpTSError : ITypeCategorized
         ErrorTypeName = name;
         Name = name;
         Message = message ?? "";
-        Stack = CaptureStackTrace();
+        _capturedStack = CaptureStackTrace();
     }
 
     /// <summary>
@@ -116,16 +138,18 @@ public class SharpTSError : ITypeCategorized
     /// <summary>
     /// Captures a stack trace at the current point.
     /// </summary>
-    private static string CaptureStackTrace()
+    private static System.Diagnostics.StackTrace CaptureStackTrace()
     {
-        // Get the stack trace, skipping the Error constructor frames
-        var stackTrace = new System.Diagnostics.StackTrace(skipFrames: 3, fNeedFileInfo: true);
-        var frames = stackTrace.GetFrames();
+        // Preserve the creation-time call chain but leave its public string
+        // representation unbuilt until Stack is observed.
+        return new System.Diagnostics.StackTrace(skipFrames: 3, fNeedFileInfo: true);
+    }
 
+    private static string FormatStackTrace(System.Diagnostics.StackTrace captured)
+    {
+        var frames = captured.GetFrames();
         if (frames == null || frames.Length == 0)
-        {
             return "";
-        }
 
         var sb = new System.Text.StringBuilder();
         foreach (var frame in frames)
@@ -137,18 +161,12 @@ public class SharpTSError : ITypeCategorized
             var (typeName, methodName) = displayName;
 
             if (!string.IsNullOrEmpty(typeName))
-            {
                 sb.Append($"    at {typeName}.{methodName}");
-            }
             else
-            {
                 sb.Append($"    at {methodName}");
-            }
 
             if (!string.IsNullOrEmpty(fileName))
-            {
                 sb.Append($" ({fileName}:{lineNumber})");
-            }
             sb.AppendLine();
         }
 

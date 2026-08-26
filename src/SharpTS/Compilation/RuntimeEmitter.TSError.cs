@@ -13,6 +13,7 @@ public partial class RuntimeEmitter
     private FieldBuilder _tsErrorNameField = null!;
     private FieldBuilder _tsErrorMessageField = null!;
     private FieldBuilder _tsErrorStackField = null!;
+    private FieldBuilder _tsErrorCapturedStackField = null!;
     private FieldBuilder _tsErrorCauseField = null!;
     private FieldBuilder _tsErrorHasCauseField = null!;
     private FieldBuilder _tsErrorCodeField = null!;
@@ -52,13 +53,12 @@ public partial class RuntimeEmitter
         _tsErrorNameField = typeBuilder.DefineField("_name", _types.String, FieldAttributes.Private);
         _tsErrorMessageField = typeBuilder.DefineField("_message", _types.String, FieldAttributes.Private);
         _tsErrorStackField = typeBuilder.DefineField("_stack", _types.String, FieldAttributes.Private);
+        _tsErrorCapturedStackField = typeBuilder.DefineField(
+            "_capturedStack", _types.String, FieldAttributes.Private);
         _tsErrorCauseField = typeBuilder.DefineField("_cause", _types.Object, FieldAttributes.Private);
         _tsErrorHasCauseField = typeBuilder.DefineField("_hasCause", _types.Boolean, FieldAttributes.Private);
         _tsErrorCodeField = typeBuilder.DefineField("_code", _types.String, FieldAttributes.Private);
         _tsErrorSyscallField = typeBuilder.DefineField("_syscall", _types.String, FieldAttributes.Private);
-
-        // CaptureStackTrace helper - must be emitted first since the constructor calls it
-        EmitCaptureStackTrace(typeBuilder, runtime);
 
         // Protected constructor: protected $Error(string name, string? message)
         // Must be emitted before message constructor since it calls this one
@@ -71,6 +71,7 @@ public partial class RuntimeEmitter
         EmitTSErrorNameProperty(typeBuilder, runtime);
         EmitTSErrorMessageProperty(typeBuilder, runtime);
         EmitTSErrorStackProperty(typeBuilder, runtime);
+        EmitTSErrorCapturedStackSetter(typeBuilder, runtime);
         EmitTSErrorCauseProperty(typeBuilder, runtime);
         EmitTSErrorCodeProperty(typeBuilder, runtime);
         EmitTSErrorSyscallProperty(typeBuilder, runtime);
@@ -134,10 +135,11 @@ public partial class RuntimeEmitter
         il.MarkLabel(hasMessage);
         il.Emit(OpCodes.Stfld, _tsErrorMessageField);
 
-        // _stack = CaptureStackTrace()
+        // Runtime-created errors get a stable marker. Direct guest construction
+        // replaces it with the emitting method's interned creation-site token.
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Call, runtime.TSErrorCaptureStackTrace);
-        il.Emit(OpCodes.Stfld, _tsErrorStackField);
+        il.Emit(OpCodes.Ldstr, "<runtime>");
+        il.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
 
         il.Emit(OpCodes.Ret);
     }
@@ -241,8 +243,45 @@ public partial class RuntimeEmitter
         );
         runtime.TSErrorStackGetter = getter;
         var getIL = getter.GetILGenerator();
+        var formatCapture = getIL.DefineLabel();
+
+        // Return an explicitly assigned or already-formatted value.
         getIL.Emit(OpCodes.Ldarg_0);
         getIL.Emit(OpCodes.Ldfld, _tsErrorStackField);
+        getIL.Emit(OpCodes.Dup);
+        getIL.Emit(OpCodes.Brtrue, formatCapture);
+        getIL.Emit(OpCodes.Pop);
+
+        // No capture can only occur after an explicit null assignment; expose
+        // the same string-shaped fallback as an empty captured trace.
+        var captured = getIL.DeclareLocal(_types.String);
+        var hasCapture = getIL.DefineLabel();
+        getIL.Emit(OpCodes.Ldarg_0);
+        getIL.Emit(OpCodes.Ldfld, _tsErrorCapturedStackField);
+        getIL.Emit(OpCodes.Stloc, captured);
+        getIL.Emit(OpCodes.Ldloc, captured);
+        getIL.Emit(OpCodes.Brtrue, hasCapture);
+        getIL.Emit(OpCodes.Ldstr, "");
+        getIL.Emit(OpCodes.Ret);
+
+        // Format once, cache the string, and release the captured frames.
+        getIL.MarkLabel(hasCapture);
+        var formatted = getIL.DeclareLocal(_types.String);
+        getIL.Emit(OpCodes.Ldstr, "    at ");
+        getIL.Emit(OpCodes.Ldloc, captured);
+        getIL.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "Concat", [_types.String, _types.String])!);
+        getIL.Emit(OpCodes.Stloc, formatted);
+        getIL.Emit(OpCodes.Ldarg_0);
+        getIL.Emit(OpCodes.Ldloc, formatted);
+        getIL.Emit(OpCodes.Stfld, _tsErrorStackField);
+        getIL.Emit(OpCodes.Ldarg_0);
+        getIL.Emit(OpCodes.Ldnull);
+        getIL.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
+        getIL.Emit(OpCodes.Ldloc, formatted);
+        getIL.Emit(OpCodes.Ret);
+
+        getIL.MarkLabel(formatCapture);
         getIL.Emit(OpCodes.Ret);
         prop.SetGetMethod(getter);
 
@@ -258,8 +297,31 @@ public partial class RuntimeEmitter
         setIL.Emit(OpCodes.Ldarg_0);
         setIL.Emit(OpCodes.Ldarg_1);
         setIL.Emit(OpCodes.Stfld, _tsErrorStackField);
+        setIL.Emit(OpCodes.Ldarg_0);
+        setIL.Emit(OpCodes.Ldnull);
+        setIL.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
         setIL.Emit(OpCodes.Ret);
         prop.SetSetMethod(setter);
+    }
+
+    private void EmitTSErrorCapturedStackSetter(
+        TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "SetCapturedStackFrame",
+            MethodAttributes.Public | MethodAttributes.HideBySig,
+            _types.Void,
+            [_types.String]);
+        runtime.TSErrorCapturedStackSetter = method;
+
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Stfld, _tsErrorStackField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Stfld, _tsErrorCapturedStackField);
+        il.Emit(OpCodes.Ret);
     }
 
     private void EmitTSErrorCauseProperty(TypeBuilder typeBuilder, EmittedRuntime runtime)
@@ -417,190 +479,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldfld, _tsErrorMessageField);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String, _types.String])!);
-        il.Emit(OpCodes.Ret);
-    }
-
-    private void EmitCaptureStackTrace(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        // private static string CaptureStackTrace()
-        var method = typeBuilder.DefineMethod(
-            "CaptureStackTrace",
-            MethodAttributes.Private | MethodAttributes.Static,
-            _types.String,
-            Type.EmptyTypes
-        );
-        runtime.TSErrorCaptureStackTrace = method;
-
-        var il = method.GetILGenerator();
-
-        // var stackTrace = new StackTrace(skipFrames: 3, fNeedFileInfo: true);
-        var stackTraceLocal = il.DeclareLocal(_types.StackTrace);
-        il.Emit(OpCodes.Ldc_I4_3); // skipFrames
-        il.Emit(OpCodes.Ldc_I4_1); // fNeedFileInfo = true
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StackTrace, [_types.Int32, _types.Boolean])!);
-        il.Emit(OpCodes.Stloc, stackTraceLocal);
-
-        // var frames = stackTrace.GetFrames();
-        var framesLocal = il.DeclareLocal(_types.MakeArrayType(_types.StackFrame));
-        il.Emit(OpCodes.Ldloc, stackTraceLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackTrace, "GetFrames")!);
-        il.Emit(OpCodes.Stloc, framesLocal);
-
-        // if (frames == null || frames.Length == 0) return "";
-        var hasFramesLabel = il.DefineLabel();
-        var returnEmptyLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldloc, framesLocal);
-        il.Emit(OpCodes.Brfalse, returnEmptyLabel);
-        il.Emit(OpCodes.Ldloc, framesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Bgt, hasFramesLabel);
-
-        il.MarkLabel(returnEmptyLabel);
-        il.Emit(OpCodes.Ldstr, "");
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(hasFramesLabel);
-
-        // var sb = new StringBuilder();
-        var sbLocal = il.DeclareLocal(_types.StringBuilder);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.StringBuilder, Type.EmptyTypes)!);
-        il.Emit(OpCodes.Stloc, sbLocal);
-
-        // Loop through frames
-        var indexLocal = il.DeclareLocal(_types.Int32);
-        var loopStart = il.DefineLabel();
-        var loopEnd = il.DefineLabel();
-        var frameLocal = il.DeclareLocal(_types.StackFrame);
-        var methodLocal = il.DeclareLocal(_types.MethodBase);
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Stloc, indexLocal);
-
-        il.MarkLabel(loopStart);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldloc, framesLocal);
-        il.Emit(OpCodes.Ldlen);
-        il.Emit(OpCodes.Conv_I4);
-        il.Emit(OpCodes.Bge, loopEnd);
-
-        // frame = frames[index]
-        il.Emit(OpCodes.Ldloc, framesLocal);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldelem_Ref);
-        il.Emit(OpCodes.Stloc, frameLocal);
-
-        // method = frame.GetMethod()
-        il.Emit(OpCodes.Ldloc, frameLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackFrame, "GetMethod")!);
-        il.Emit(OpCodes.Stloc, methodLocal);
-
-        // if (method == null) continue
-        var processMethodLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Brtrue, processMethodLabel);
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(processMethodLabel);
-
-        // sb.Append("    at ");
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldstr, "    at ");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-
-        // Get type name
-        var typeNameLocal = il.DeclareLocal(_types.String);
-        var declaringTypeLocal = il.DeclareLocal(_types.Type);
-        var skipTypeLabel = il.DefineLabel();
-        var afterTypeLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodBase, "DeclaringType")!.GetGetMethod()!);
-        il.Emit(OpCodes.Stloc, declaringTypeLocal);
-        il.Emit(OpCodes.Ldloc, declaringTypeLocal);
-        il.Emit(OpCodes.Brfalse, skipTypeLabel);
-
-        // sb.Append(typeName + ".")
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldloc, declaringTypeLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.Type, "Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldstr, ".");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(skipTypeLabel);
-
-        // sb.Append(method.Name)
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldloc, methodLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.MethodBase, "Name")!.GetGetMethod()!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-
-        // Add file info if available
-        var fileNameLocal = il.DeclareLocal(_types.String);
-        var noFileLabel = il.DefineLabel();
-
-        il.Emit(OpCodes.Ldloc, frameLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackFrame, "GetFileName")!);
-        il.Emit(OpCodes.Stloc, fileNameLocal);
-        il.Emit(OpCodes.Ldloc, fileNameLocal);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty")!);
-        il.Emit(OpCodes.Brtrue, noFileLabel);
-
-        // sb.Append(" (" + fileName + ":" + lineNumber + ")")
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldstr, " (");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldloc, fileNameLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldstr, ":");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldloc, frameLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StackFrame, "GetFileLineNumber")!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.Int32])!);
-        il.Emit(OpCodes.Pop);
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Ldstr, ")");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "Append", [_types.String])!);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(noFileLabel);
-
-        // sb.AppendLine()
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "AppendLine", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Pop);
-
-        // index++
-        il.Emit(OpCodes.Ldloc, indexLocal);
-        il.Emit(OpCodes.Ldc_I4_1);
-        il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, indexLocal);
-        il.Emit(OpCodes.Br, loopStart);
-
-        il.MarkLabel(loopEnd);
-
-        // return sb.ToString().TrimEnd()
-        il.Emit(OpCodes.Ldloc, sbLocal);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.StringBuilder, "ToString", Type.EmptyTypes)!);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "TrimEnd", Type.EmptyTypes)!);
         il.Emit(OpCodes.Ret);
     }
 
