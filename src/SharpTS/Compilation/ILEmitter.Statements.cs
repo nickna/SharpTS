@@ -1421,8 +1421,15 @@ public partial class ILEmitter
             // The analyzer proved that the receiver is a fresh, non-escaping
             // Map<number, number> and that the entry binding is observed only
             // through literal [0]/[1] reads.
-            EmitBoxIfNeeded(f.Iterable);
-            var stableMapIterable = IL.DeclareLocal(_ctx.Types.Object);
+            var promotedMap = f.Iterable is Expr.Variable stableMapVariable
+                ? _ctx.TryGetPromotedNumericMapLocal(stableMapVariable.Name.Lexeme)
+                : null;
+            if (promotedMap is null)
+                EmitBoxIfNeeded(f.Iterable);
+            var stableMapIterable = IL.DeclareLocal(
+                promotedMap is null
+                    ? _ctx.Types.Object
+                    : _ctx.Types.DictionaryDoubleDouble);
             IL.Emit(OpCodes.Stloc, stableMapIterable);
             EmitStableNumericMapIteration(f, stableMapIterable, labelNames);
             return;
@@ -1721,9 +1728,10 @@ public partial class ILEmitter
 
     /// <summary>
     /// Direct backing-dictionary loop for the non-escaping numeric Map shape
-    /// marked by <see cref="StableMapIterationAnalyzer"/>. Key/value objects are
-    /// held in locals and exposed to literal entry-index reads by
-    /// <c>TryEmitStableMapEntryIndex</c>; no JavaScript entry array is created.
+    /// marked by <see cref="StableMapIterationAnalyzer"/>. A promoted local uses
+    /// native <c>double</c> keys/values; the boxed fallback unboxes its entries.
+    /// Both representations expose typed locals to literal entry-index reads via
+    /// <c>TryEmitStableMapEntryIndex</c>, so no JavaScript entry array is created.
     /// </summary>
     private void EmitStableNumericMapIteration(
         Stmt.ForOf f,
@@ -1731,12 +1739,18 @@ public partial class ILEmitter
         IReadOnlyList<string>? labelNames)
     {
         var builder = _ctx.ILBuilder;
-        var dictType = _ctx.Types.DictionaryObjectObject;
+        bool promoted = iterableLocal.LocalType == _ctx.Types.DictionaryDoubleDouble;
+        var dictType = promoted
+            ? _ctx.Types.DictionaryDoubleDouble
+            : _ctx.Types.DictionaryObjectObject;
         var kvpType = EmitGenerics.MakeGenericType(
-            _ctx.Types.KeyValuePairOpen, _ctx.Types.Object, _ctx.Types.Object);
+            _ctx.Types.KeyValuePairOpen,
+            promoted ? _ctx.Types.Double : _ctx.Types.Object,
+            promoted ? _ctx.Types.Double : _ctx.Types.Object);
         var enumeratorType = EmitGenerics.MakeGenericType(
             typeof(Dictionary<,>.Enumerator).GetGenericTypeDefinition(),
-            _ctx.Types.Object, _ctx.Types.Object);
+            promoted ? _ctx.Types.Double : _ctx.Types.Object,
+            promoted ? _ctx.Types.Double : _ctx.Types.Object);
 
         var startLabel = builder.DefineLabel("forof_stable_map_start");
         var endLabel = builder.DefineLabel("forof_stable_map_end");
@@ -1744,7 +1758,8 @@ public partial class ILEmitter
 
         var dictLocal = IL.DeclareLocal(dictType);
         IL.Emit(OpCodes.Ldloc, iterableLocal);
-        IL.Emit(OpCodes.Castclass, dictType);
+        if (iterableLocal.LocalType != dictType)
+            IL.Emit(OpCodes.Castclass, dictType);
         IL.Emit(OpCodes.Stloc, dictLocal);
 
         var enumeratorLocal = IL.DeclareLocal(enumeratorType);
@@ -1770,12 +1785,14 @@ public partial class ILEmitter
 
         IL.Emit(OpCodes.Ldloca, currentLocal);
         IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(kvpType, "Key")!.GetGetMethod()!);
-        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+        if (!promoted)
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
         IL.Emit(OpCodes.Stloc, keyLocal);
 
         IL.Emit(OpCodes.Ldloca, currentLocal);
         IL.Emit(OpCodes.Call, _ctx.Types.GetProperty(kvpType, "Value")!.GetGetMethod()!);
-        IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
+        if (!promoted)
+            IL.Emit(OpCodes.Unbox_Any, _ctx.Types.Double);
         IL.Emit(OpCodes.Stloc, valueLocal);
 
         _stableMapEntryBindings.Push((f.Variable.Lexeme, keyLocal, valueLocal));
