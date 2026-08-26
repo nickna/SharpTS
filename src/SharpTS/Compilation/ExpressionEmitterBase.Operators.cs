@@ -742,7 +742,9 @@ public abstract partial class ExpressionEmitterBase
         string url = path;
         if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
         {
-            url = "file:///" + url.Replace("\\", "/");
+            url = System.IO.Path.IsPathRooted(path)
+                ? new Uri(System.IO.Path.GetFullPath(path)).AbsoluteUri
+                : "file:///" + path.Replace("\\", "/");
         }
         string dirname = string.IsNullOrEmpty(path) ? "" : System.IO.Path.GetDirectoryName(path) ?? "";
 

@@ -85,6 +85,22 @@ public class ImportMetaTests
     }
 
     [Theory, ModeData]
+    public void ImportMeta_ModuleUrlUsesCanonicalFileUri(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                const url = import.meta.url;
+                console.log(url.startsWith('file:///'));
+                console.log(!url.startsWith('file:////'));
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Equal("true\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
     public void ImportMeta_UrlStartsWithFile_InSingleFileMode(ExecutionMode mode)
     {
         var source = """

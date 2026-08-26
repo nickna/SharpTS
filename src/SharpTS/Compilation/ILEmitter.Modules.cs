@@ -760,7 +760,9 @@ public partial class ILEmitter
         string url = path;
         if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
         {
-            url = "file:///" + url.Replace("\\", "/");
+            url = Path.IsPathRooted(path)
+                ? new Uri(Path.GetFullPath(path)).AbsoluteUri
+                : "file:///" + path.Replace("\\", "/");
         }
         string dirname = string.IsNullOrEmpty(path) ? "" : Path.GetDirectoryName(path) ?? "";
 
