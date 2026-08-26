@@ -1203,6 +1203,8 @@ public partial class RuntimeEmitter
         // Search helpers use ToIntegerOrInfinity for spec-compliant fromIndex clamping.
         EmitToIntegerOrInfinityHelper(typeBuilder, runtime);
         EmitArrayIncludes(typeBuilder, runtime);
+        EmitArrayIncludesProto(typeBuilder, runtime);
+        EmitArrayIncludesDouble(typeBuilder, runtime);
         EmitArrayIndexOf(typeBuilder, runtime);
         EmitArrayLastIndexOf(typeBuilder, runtime);
         // ECMA-262 Array.prototype.* accepts any array-like (length + indexed

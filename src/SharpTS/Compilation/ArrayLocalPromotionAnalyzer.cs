@@ -18,8 +18,9 @@ namespace SharpTS.Compilation;
 /// <list type="number">
 ///   <item>declared <c>const</c>/<c>let</c> with an empty array-literal initializer (<c>[]</c>);</item>
 ///   <item>every use resolves the array element type to <c>number</c> or <c>boolean</c>;</item>
-///   <item>the ONLY uses are <c>x[i]</c> read, <c>x[i] = v</c> write, <c>x.length</c>, and
-///         the dense mutators <c>x.push(...)</c>, <c>x.shift()</c>, and <c>x.unshift(...)</c> — any
+///   <item>the ONLY uses are <c>x[i]</c> read, <c>x[i] = v</c> write, <c>x.length</c>,
+///         stable numeric <c>x.includes(value, fromIndex?)</c>, and the dense mutators
+///         <c>x.push(...)</c>, <c>x.shift()</c>, and <c>x.unshift(...)</c> — any
 ///         other appearance of the bare variable (argument pass, return, store,
 ///         spread, <c>for…of</c>, <c>===</c>, reassignment, <c>delete x[i]</c>, <c>pop</c>/any other
 ///         method or property) disqualifies it;</item>
@@ -270,6 +271,26 @@ public static class ArrayLocalPromotionAnalyzer
 
         protected override void VisitCall(Expr.Call expr)
         {
+            // A stable intrinsic includes call over a number[] can scan the promoted
+            // List<double> directly. Restrict both arguments to statically numeric
+            // values so no ToNumber coercion (and therefore no user code or mutation)
+            // is skipped. Omitted search arguments and all non-numeric shapes retain
+            // the generic Array.prototype algorithm.
+            if (expr.Callee is Expr.Get
+                {
+                    Object: Expr.Variable includesReceiver,
+                    Optional: false,
+                    Name.Lexeme: "includes"
+                }
+                && expr.Arguments.Count is 1 or 2
+                && IsNumberArrayReceiver(includesReceiver)
+                && expr.Arguments.All(IsNumberExpression))
+            {
+                NotePermittedReceiver(includesReceiver);
+                foreach (var arg in expr.Arguments) Visit(arg);
+                return;
+            }
+
             // Dense shift/unshift are representable directly by the promoted List<T>.
             // Evaluate every unshift argument before mutation in the emitter; here we
             // apply the same undefined-sentinel guard as push/index writes.
@@ -360,6 +381,10 @@ public static class ArrayLocalPromotionAnalyzer
             }
             base.VisitCall(expr);
         }
+
+        private bool IsNumberExpression(Expr expression) =>
+            _typeMap.Get(expression) is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                or TypeInfo.NumberLiteral;
 
         /// <summary>
         /// True if <paramref name="arguments"/> is a single inline, non-capturing arrow with one

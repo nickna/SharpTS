@@ -99,7 +99,7 @@ public partial class RuntimeEmitter
         Wire("every",          runtime.ArrayEvery,          1);
         Wire("reduce",         runtime.ArrayReduce,         1);
         Wire("reduceRight",    runtime.ArrayReduceRight,    1);
-        Wire("includes",       runtime.ArrayIncludes,       1);
+        Wire("includes",       runtime.ArrayIncludesProto,  1);
         Wire("indexOf",        runtime.ArrayIndexOf,        1);
         Wire("lastIndexOf",    runtime.ArrayLastIndexOf,    1);
         Wire("join",           runtime.ArrayJoin,           1);

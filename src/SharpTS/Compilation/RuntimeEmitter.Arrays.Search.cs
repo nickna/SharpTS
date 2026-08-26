@@ -6,6 +6,174 @@ namespace SharpTS.Compilation;
 
 public partial class RuntimeEmitter
 {
+    /// <summary>
+    /// Variadic Array.prototype.includes entry point. Keeping the original
+    /// argument count distinguishes an omitted searchElement (undefined) from
+    /// an explicitly supplied null while still forwarding the optional
+    /// fromIndex to the complete boxed algorithm.
+    /// </summary>
+    private void EmitArrayIncludesProto(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayIncludesProto",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.ListOfObject, _types.ObjectArray]);
+        var paramArrayCtor = typeof(ParamArrayAttribute).GetConstructor(Type.EmptyTypes)!;
+        method.DefineParameter(2, ParameterAttributes.None, "args")
+            .SetCustomAttribute(paramArrayCtor, CustomAttributeEncoder.EmptyBlob);
+        runtime.ArrayIncludesProto = method;
+
+        var il = method.GetILGenerator();
+        var haveSearch = il.DefineLabel();
+        var afterSearch = il.DefineLabel();
+        var haveFromIndex = il.DefineLabel();
+        var afterFromIndex = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Brtrue, haveSearch);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Br, afterSearch);
+        il.MarkLabel(haveSearch);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.MarkLabel(afterSearch);
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Ldc_I4_2);
+        il.Emit(OpCodes.Bge, haveFromIndex);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Br, afterFromIndex);
+        il.MarkLabel(haveFromIndex);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.MarkLabel(afterFromIndex);
+        il.Emit(OpCodes.Call, runtime.ArrayIncludes);
+        il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>
+    /// Emits the allocation-free SameValueZero scan used only for a proven
+    /// dense, non-escaping <c>number[]</c> promoted to <c>List&lt;double&gt;</c>.
+    /// The caller supplies an already-numeric fromIndex (zero when omitted), so
+    /// ToIntegerOrInfinity can be implemented without boxing or observable
+    /// coercion. NaN matches NaN and CLR equality supplies signed-zero parity.
+    /// </summary>
+    private void EmitArrayIncludesDouble(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "ArrayIncludesDouble",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Boolean,
+            [_types.ListOfDouble, _types.Double, _types.Double]);
+        method.SetImplementationFlags(MethodImplAttributes.AggressiveOptimization);
+        runtime.ArrayIncludesDouble = method;
+
+        var il = method.GetILGenerator();
+        var len = il.DeclareLocal(_types.Int32);
+        var n = il.DeclareLocal(_types.Double);
+        var index = il.DeclareLocal(_types.Int32);
+        var element = il.DeclareLocal(_types.Double);
+        var returnFalse = il.DefineLabel();
+        var normalizeFinite = il.DefineLabel();
+        var nonNegative = il.DefineLabel();
+        var startReady = il.DefineLabel();
+        var loop = il.DefineLabel();
+        var notEqual = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfDouble, "Count").GetGetMethod()!);
+        il.Emit(OpCodes.Stloc, len);
+        il.Emit(OpCodes.Ldloc, len);
+        il.Emit(OpCodes.Brfalse, returnFalse);
+
+        // n = Math.Truncate(fromIndex); NaN becomes +0 per ToIntegerOrInfinity.
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.Math, "Truncate", _types.Double));
+        il.Emit(OpCodes.Stloc, n);
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Ceq);
+        il.Emit(OpCodes.Brtrue, normalizeFinite);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Stloc, n);
+
+        il.MarkLabel(normalizeFinite);
+        // +Infinity and every finite n >= len cannot match.
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Ldloc, len);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Bge, returnFalse);
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Ldc_R8, 0.0);
+        il.Emit(OpCodes.Bge, nonNegative);
+
+        // Negative infinity and n <= -len both clamp to zero. Avoid conv.i4
+        // for infinity by comparing in double space before conversion.
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Ldloc, len);
+        il.Emit(OpCodes.Neg);
+        il.Emit(OpCodes.Conv_R8);
+        var negativeInRange = il.DefineLabel();
+        il.Emit(OpCodes.Bgt, negativeInRange);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, startReady);
+
+        il.MarkLabel(negativeInRange);
+        il.Emit(OpCodes.Ldloc, len);
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, startReady);
+
+        il.MarkLabel(nonNegative);
+        il.Emit(OpCodes.Ldloc, n);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stloc, index);
+
+        il.MarkLabel(startReady);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, len);
+        il.Emit(OpCodes.Bge, returnFalse);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfDouble, "get_Item", _types.Int32));
+        il.Emit(OpCodes.Stloc, element);
+
+        il.Emit(OpCodes.Ldloc, element);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Ceq);
+        var returnTrue = il.DefineLabel();
+        il.Emit(OpCodes.Brtrue, returnTrue);
+        il.Emit(OpCodes.Ldloc, element);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
+        il.Emit(OpCodes.Brfalse, notEqual);
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Call, _types.DoubleIsNaN);
+        il.Emit(OpCodes.Brtrue, returnTrue);
+
+        il.MarkLabel(notEqual);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.Emit(OpCodes.Br, loop);
+
+        il.MarkLabel(returnTrue);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnFalse);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitArrayIncludes(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(

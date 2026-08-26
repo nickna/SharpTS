@@ -102,6 +102,29 @@ public partial class ILEmitter
         if (TryEmitStableNumberConversionCall(methodGet, arguments))
             return;
 
+        // Proven dense numeric includes: ArrayLocalPromotionAnalyzer admits this
+        // call only while the receiver remains a non-escaping List<double> and the
+        // intrinsic Array.prototype binding is globally stable. Both arguments are
+        // native doubles and the helper returns native bool, so the million-element
+        // scan has no per-element or result boxing.
+        if (methodName == "includes" && !methodGet.Optional
+            && methodGet.Object is Expr.Variable includesVariable
+            && _ctx.TryGetPromotedArrayLocal(includesVariable.Name.Lexeme) is
+                { Descriptor.Kind: ArrayElementsKind.Double } includesPromotion
+            && arguments.Count is 1 or 2
+            && arguments.All(argument => IsNumericType(_ctx.TypeMap?.Get(argument))))
+        {
+            IL.Emit(OpCodes.Ldloc, includesPromotion.Local);
+            EmitExpressionAsDouble(arguments[0]);
+            if (arguments.Count == 2)
+                EmitExpressionAsDouble(arguments[1]);
+            else
+                IL.Emit(OpCodes.Ldc_R8, 0.0);
+            IL.Emit(OpCodes.Call, _ctx.Runtime!.ArrayIncludesDouble);
+            SetStackType(StackType.Boolean);
+            return;
+        }
+
         // Promoted typed-array local push (#857/#860): append unboxed elements directly to the
         // bare List<T> via the typed helper — bypassing ArrayEmitter's $Array unwrap/copy and the
         // per-element boxing. Handled here (not in ArrayEmitter) because EnsureDouble/EnsureBoolean
@@ -296,7 +319,7 @@ public partial class ILEmitter
         }
 
         if (objType is TypeSystem.TypeInfo.Array
-            && methodName is ("shift" or "unshift")
+            && methodName is ("shift" or "unshift" or "includes")
             && (_ctx.RuntimeFeatures?.UsesDynamicPropertyDescriptors != false
                 || _ctx.RuntimeFeatures.UsesArrayPrototypeMutation))
         {

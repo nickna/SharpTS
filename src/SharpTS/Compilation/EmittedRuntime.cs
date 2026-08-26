@@ -296,6 +296,8 @@ public class EmittedRuntime
     public MethodBuilder ArrayReduceDouble { get; set; } = null!;
     public MethodBuilder ArrayReduceRight { get; set; } = null!;
     public MethodBuilder ArrayIncludes { get; set; } = null!;
+    public MethodBuilder ArrayIncludesProto { get; set; } = null!;
+    public MethodBuilder ArrayIncludesDouble { get; set; } = null!;
     public MethodBuilder ArrayIndexOf { get; set; } = null!;
     public MethodBuilder ArrayLastIndexOf { get; set; } = null!;
     public MethodBuilder ArrayJoin { get; set; } = null!;

@@ -142,7 +142,7 @@ public static class BuiltInTypes
             "reduceRight" => new TypeInfo.Function(
                 [new TypeInfo.Function([AnyType, elementType, NumberType, new TypeInfo.Array(elementType)], AnyType, RequiredParams: 2), AnyType],
                 AnyType, RequiredParams: 1), // initialValue is optional
-            "includes" => new TypeInfo.Function([elementType], BooleanType),
+            "includes" => new TypeInfo.Function([elementType, AnyType], BooleanType, RequiredParams: 1),
             // ECMA-262 23.1.3.17 / 23.1.3.18: fromIndex is coerced via
             // ToIntegerOrInfinity — accepts objects (with valueOf/toString),
             // strings ("Infinity"), booleans, etc. Signature widened to Any so
