@@ -43,6 +43,29 @@ assert.strictEqual(2 + 2, 4);
 await assert.rejects(Promise.reject(new Error("expected")));
 ```
 
+`assert/strict` exposes the same callable strict namespace as `assert.strict`; its legacy
+`equal`/`deepEqual` names use strict comparisons. Both `require("assert")` and
+`require("assert/strict")` return callable CommonJS exports.
+
+## module
+
+`module` exports `builtinModules`, `isBuiltin`, `createRequire`, and `syncBuiltinESMExports`.
+`builtinModules` is the canonical list of SharpTS-supported Node specifiers, and `isBuiltin`
+accepts bare or `node:` names.
+
+```typescript
+import { createRequire, isBuiltin } from "node:module";
+
+const require = createRequire(import.meta.url);
+const config = require("./config.cjs");
+console.log(isBuiltin("node:fs"), config);
+```
+
+In compiled output, `createRequire` follows strict-AOT rules: bind the result to a variable named
+`require` and use one string-literal specifier per call. Interpreter mode also honors the supplied
+base path dynamically. `syncBuiltinESMExports` is a no-op because embedded modules have one export
+namespace rather than separate mutable CJS and ESM tables.
+
 ## buffer
 
 `buffer` exports `Buffer`, `SlowBuffer`, `atob`, `btoa`, `isUtf8`, `isAscii`, `transcode`, constants,
@@ -52,6 +75,11 @@ Static APIs include `Buffer.from`, `alloc`, `allocUnsafe`, `concat`, `isBuffer`,
 `byteLength`, and `compare`. Instances support string conversion, slice/subarray, copy, write, fill,
 search/compare/equality, integer reads/writes, and `toJSON`. Maintained encodings include UTF-8,
 UTF-16LE/UCS-2, ASCII/Latin-1/binary, hex, base64, and base64url where the operation accepts them.
+
+## console
+
+The `console` module exposes the existing global console surface, including `log`, `info`, `debug`,
+`error`, `warn`, timers, counters, grouping, assertions, tables, directory inspection, and traces.
 
 ## crypto
 
@@ -125,6 +153,9 @@ console.log(path.join("dist", "app.dll"));
 console.log(path.parse("/tmp/archive.tar.gz").ext);
 ```
 
+`path/posix` and `path/win32` are also importable submodules and default-export their corresponding
+explicit path namespace.
+
 ## os
 
 `os` exports `platform`, `arch`, `cpus`, `hostname`, `homedir`, `tmpdir`, `type`, `release`,
@@ -182,6 +213,13 @@ await delay(100);
 Context flows through .NET asynchronous execution. Optional trailing callback arguments on `run`
 and `exit` are a known facade gap; close over values instead.
 
+## diagnostics_channel
+
+`diagnostics_channel` exports `channel`, `hasSubscribers`, `subscribe`, `unsubscribe`, `Channel`,
+`tracingChannel`, and `TracingChannel`. Named channels are process-local singletons and publish
+synchronously. Store bindings call compatible `AsyncLocalStorage.run` objects. Tracing channels
+provide sync, promise, and callback lifecycle helpers.
+
 ## perf_hooks
 
 `perf_hooks` exports `performance` (`now`, `timeOrigin`, marks, measures, entry queries and clears)
@@ -193,6 +231,12 @@ and `PerformanceObserver` for mark/measure entries.
 `question`, `questionSync`, `prompt`, `pause`, `resume`, `write`, `setPrompt`, `getPrompt`, and
 `close`.
 
+## readline/promises
+
+`readline/promises` exports `createInterface` and `Interface`. `question` returns a promise and
+accepts an abort signal. Input still uses the host's blocking console reader internally, so this is
+a promise-shaped compatibility layer rather than non-blocking terminal I/O.
+
 ## stream
 
 `stream` exports `Readable`, `Writable`, `Duplex`, `Transform`, and `PassThrough`, plus `pipeline`,
@@ -203,6 +247,17 @@ helpers such as `toArray`, `forEach`, `map`, and `filter`.
 ## stream/promises
 
 `stream/promises` exposes promise-returning `pipeline` and `finished`.
+
+## stream/consumers
+
+`stream/consumers` exports `arrayBuffer`, `blob`, `buffer`, `bytes`, `json`, and `text`. The helpers
+consume maintained Node `Readable` objects and WHATWG `ReadableStream` objects. `bytes` uses the
+SharpTS `Buffer` backing, which represents Node's Uint8Array-compatible byte view. `arrayBuffer`
+returns the native SharpTS `ArrayBuffer`; `blob` returns a stdlib Blob-compatible value with
+`size`, `type`, `arrayBuffer`, `bytes`, `text`, `slice`, and `stream` (global `Blob` constructor
+identity is not guaranteed in compiled mode). The maintained Phase 1 contract drains data already
+queued before the consumer call; waiting for future chunks from a live pull source remains outside
+this surface.
 
 ## stream/web
 
@@ -289,6 +344,19 @@ and legacy `parse`.
 
 `util` includes `promisify`, `callbackify`, `deprecate`, `format`, `inspect`, the `types` predicate
 object, `TextEncoder`, and `TextDecoder` where declared.
+
+`util/types` is an importable submodule for the maintained `util.types` predicate set, including
+collection, promise, error, ArrayBuffer/view, boxed primitive, function-kind, and typed-array
+checks.
+
+## v8
+
+`v8` exports `serialize`, `deserialize`, `getHeapStatistics`, `getHeapSpaceStatistics`,
+`setFlagsFromString`, and `cachedDataVersionTag`. Serialization preserves circular references and
+maintained arrays, objects, maps, sets, dates, regular expressions, BigInts, special numbers, and
+buffers. Its bytes use a SharpTS-private format and are not interchangeable with Node/V8 wire
+data. Heap statistics are managed-runtime approximations, and `setFlagsFromString` is accepted as
+an intentional no-op because SharpTS does not host V8.
 
 ## zlib
 

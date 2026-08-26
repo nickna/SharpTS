@@ -66,21 +66,21 @@ irrelevant: `strictNullChecks` defaults on, most other strictness flags default 
 
 ## 4. Node.js built-in modules
 
-SharpTS recognizes bare and `node:` forms for 34 maintained Node module specifiers. This is a
+SharpTS recognizes bare and `node:` forms for 44 maintained Node module specifiers. This is a
 compatible subset, not a claim to implement every export in the corresponding Node release. The
 [Node API guide](docs/node-modules-api.md) is the user reference; breadth and depth work is tracked
 on [#1282](https://github.com/nickna/SharpTS/issues/1282).
 
 | Category | Modules | Status and boundaries |
 | --- | --- | --- |
-| Files, paths, and process | `fs`, `fs/promises`, `path`, `os`, `process`, `tty` | ✅ Core sync/async filesystem operations, streams/watchers, platform/path variants, process lifecycle and stdio. Some POSIX and rejection lifecycle behavior remains mode/platform-specific. |
-| Data and utilities | `assert`, `buffer`, `crypto`, `querystring`, `string_decoder`, `url`, `util`, `zlib` | ✅ Broad tested subsets. Crypto is bounded by .NET algorithms; selected advanced key APIs remain interpreter-only. |
-| Events and scheduling | `events`, `async_hooks`, `timers`, `timers/promises`, `perf_hooks`, `readline` | ✅ Includes EventEmitter, AsyncLocalStorage, timer promises, performance entries/observer, and readline basics. |
-| Streams and networking | `stream`, `stream/promises`, `stream/web`, `http`, `https`, `net`, `tls`, `dgram`, `dns`, `dns/promises` | ✅ HTTP/TCP/TLS/UDP/DNS and stream subsets. Resolver callback timing and a few platform facilities have documented deviations. |
+| Files, paths, and process | `fs`, `fs/promises`, `path`, `path/posix`, `path/win32`, `os`, `process`, `tty`, `module` | ✅ Core sync/async filesystem operations, explicit path variants, process lifecycle and stdio, built-in discovery, and scoped literal `createRequire`. Some POSIX and rejection lifecycle behavior remains mode/platform-specific. |
+| Data and utilities | `assert`, `assert/strict`, `buffer`, `console`, `crypto`, `querystring`, `string_decoder`, `url`, `util`, `util/types`, `v8`, `zlib` | ✅ Broad tested subsets. Crypto is bounded by .NET algorithms; `v8` uses a SharpTS-private serialization format and approximate managed-heap statistics. |
+| Events and scheduling | `events`, `async_hooks`, `diagnostics_channel`, `timers`, `timers/promises`, `perf_hooks`, `readline`, `readline/promises` | ✅ Includes EventEmitter, AsyncLocalStorage, synchronous diagnostics publication/tracing, timer promises, performance entries/observer, and callback/promise readline surfaces. |
+| Streams and networking | `stream`, `stream/consumers`, `stream/promises`, `stream/web`, `http`, `https`, `net`, `tls`, `dgram`, `dns`, `dns/promises` | ✅ HTTP/TCP/TLS/UDP/DNS and stream subsets, including consumers for already-queued Node/Web readables. Live pull-source consumption, resolver callback timing, and a few platform facilities have documented deviations. |
 | Processes and isolation | `child_process`, `cluster`, `worker_threads`, `vm` | ⚠️ Main APIs are available, but the implementation uses .NET processes/threads and does not reproduce every Node isolation/resource option. Some compiled operations require the co-located managed runtime and source payload. |
 
-Modules absent from the maintained surface include `module`, `v8`, `http2`,
-`diagnostics_channel`, and `node:test`. Per-export signatures and examples are in the
+Modules absent from the maintained surface include `http2`, `inspector`, `repl`,
+`sqlite`, and `node:test`. Per-export signatures and examples are in the
 [Node API guide](docs/node-modules-api.md).
 
 Several user-facing modules are TypeScript sources embedded from `src/SharpTS/stdlib/node`; host I/O remains

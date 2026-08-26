@@ -564,6 +564,15 @@ public static partial class BuiltInModuleTypes
             // Readline's primitive surface is the full module surface — the TS
             // facade wraps the returned Interface and forwards calls dynamically.
             "readline" => GetReadlineModuleTypes(),
+            "module" => new Dictionary<string, TypeInfo>
+            {
+                ["createRequire"] = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared),
+            },
+            "stream/consumers" => new Dictionary<string, TypeInfo>
+            {
+                ["drainQueuedWebStream"] = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared),
+                ["bufferToArrayBuffer"] = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared),
+            },
             // Primitive fs types reuse the user-facing module type shapes — the
             // primitive surface matches the Node surface; the TS facade re-exports
             // the sync ops and derives the callback forms from primitive:fs/promises.

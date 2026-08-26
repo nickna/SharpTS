@@ -1852,7 +1852,13 @@ public partial class Interpreter
         // Convert to file:// URL format if it's a file path
         if (!string.IsNullOrEmpty(url) && !url.StartsWith("file://"))
         {
-            url = "file:///" + url.Replace("\\", "/");
+            // Absolute POSIX paths already begin with '/'. Prefixing file:/// by
+            // hand produced file:////tmp/... on Linux, which createRequire could
+            // not map back to the in-memory module path. Let Uri apply the
+            // platform-specific drive/root and escaping rules instead.
+            url = Path.IsPathRooted(path)
+                ? new Uri(Path.GetFullPath(path)).AbsoluteUri
+                : "file:///" + path.Replace("\\", "/");
         }
 
         return RuntimeValue.FromObject(new SharpTSObject(new Dictionary<string, object?>

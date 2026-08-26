@@ -31,6 +31,16 @@ public partial class Interpreter
     /// <exception cref="InterpreterException">If the module cannot be resolved or fails to load.</exception>
     internal object? RequireCommonJsModule(string specifier)
     {
+        string callerPath = _currentModule?.Path ?? _moduleResolver?.GetType().Name ?? "";
+        return RequireCommonJsModule(specifier, callerPath);
+    }
+
+    /// <summary>
+    /// Resolves a CommonJS module relative to an explicit caller path. Used by
+    /// <c>module.createRequire(filename)</c>.
+    /// </summary>
+    internal object? RequireCommonJsModule(string specifier, string callerPath)
+    {
         if (_moduleResolver == null)
         {
             throw new InterpreterException(
@@ -38,7 +48,6 @@ public partial class Interpreter
         }
 
         // Resolve relative to the calling module's directory.
-        string callerPath = _currentModule?.Path ?? _moduleResolver.GetType().Name;
         string resolvedPath;
         try
         {
@@ -99,6 +108,14 @@ public partial class Interpreter
         if (instance == null)
         {
             return null;
+        }
+        // Node's assert entry points are callable CommonJS exports. Their ESM
+        // facades expose the callable object as the default export while named
+        // imports remain available to ESM consumers.
+        if (resolvedPath is "stdlib:node/assert.ts" or "stdlib:node/assert/strict.ts" &&
+            instance.DefaultExport != null)
+        {
+            return instance.DefaultExport;
         }
         return instance.CommonJsModuleObject != null
             ? instance.CommonJsModuleObject.GetProperty("exports")

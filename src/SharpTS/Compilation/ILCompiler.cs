@@ -1202,6 +1202,8 @@ public partial class ILCompiler
         // "util" — migrated to stdlib/node/util.ts (pure-TS port).
         // "readline" — migrated to stdlib/node/readline.ts; emitter registered under primitive:readline only.
         _builtInModuleEmitterRegistry.Register(new ReadlinePrimitiveEmitter());
+        _builtInModuleEmitterRegistry.Register(new ModulePrimitiveEmitter());
+        _builtInModuleEmitterRegistry.Register(new StreamConsumersPrimitiveEmitter());
         _builtInModuleEmitterRegistry.Register(new ChildProcessModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new BufferModuleEmitter());
         // "zlib" — migrated to stdlib/node/zlib.ts; emitter registered under primitive:zlib only.

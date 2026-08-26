@@ -103,6 +103,7 @@ public partial class RuntimeEmitter
         var errorMethod = EmitReadableStreamErrorMethod(streamBuilder);
         var desiredSizeMethod = EmitReadableStreamDesiredSizeProperty(streamBuilder);
         var readMethod = EmitReadableStreamRead(streamBuilder, runtime);
+        runtime.ReadableStreamDrainQueuedChunks = EmitReadableStreamDrainQueuedChunks(streamBuilder);
         EmitReadableStreamGetReader(streamBuilder, readerCtor);
         var cancelMethod = EmitReadableStreamCancel(streamBuilder, runtime);
         var pipeToMethod = EmitReadableStreamPipeTo(streamBuilder, readMethod, cancelMethod, runtime);
@@ -150,6 +151,34 @@ public partial class RuntimeEmitter
         _readableStreamControllerField = t.DefineField("_controller", _types.Object, FieldAttributes.Private);
         _readableStreamReaderField = t.DefineField("_reader", _types.Object, FieldAttributes.Private);
         _readableStreamPendingReadsField = t.DefineField("_pendingReads", _pendingReadsQueueType, FieldAttributes.Private);
+    }
+
+    /// <summary>
+    /// Drains the chunks already queued by a synchronously-started/closed stream.
+    /// Used by the stream/consumers facade; async pull sources continue to use
+    /// their reader path rather than this snapshot helper.
+    /// </summary>
+    private MethodBuilder EmitReadableStreamDrainQueuedChunks(TypeBuilder t)
+    {
+        var method = t.DefineMethod(
+            "DrainQueuedChunks",
+            MethodAttributes.Public,
+            _types.Object,
+            Type.EmptyTypes);
+        var il = method.GetILGenerator();
+        var chunks = il.DeclareLocal(_listOfObject);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, _readableStreamQueueField);
+        il.Emit(OpCodes.Stloc, chunks);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, _types.GetConstructor(_listOfObject, Type.EmptyTypes)!);
+        il.Emit(OpCodes.Stfld, _readableStreamQueueField);
+
+        il.Emit(OpCodes.Ldloc, chunks);
+        il.Emit(OpCodes.Ret);
+        return method;
     }
 
     private ConstructorBuilder EmitReadableStreamConstructor(

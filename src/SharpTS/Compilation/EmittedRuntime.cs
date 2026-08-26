@@ -2951,6 +2951,7 @@ public class EmittedRuntime
     public MethodBuilder ReadableStreamEnqueue { get; set; } = null!;
     public MethodBuilder ReadableStreamCloseStream { get; set; } = null!;
     public MethodBuilder ReadableStreamErrorStream { get; set; } = null!;
+    public MethodBuilder ReadableStreamDrainQueuedChunks { get; set; } = null!;
     /// <summary>
     /// Static $ReadableStream.From(object iterable) → object (#269) — eagerly
     /// drains a guest iterable into a closed readable stream.
