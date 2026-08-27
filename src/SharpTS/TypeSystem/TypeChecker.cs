@@ -611,10 +611,17 @@ public partial class TypeChecker
         if (_definiteAssignmentStack.TryPeek(out var state) &&
             state.TryGetValue(symbol, out bool assigned) && !assigned)
         {
-            throw new TypeCheckException(
+            var error = new TypeCheckException(
                 $" Variable '{name.Lexeme}' is used before being assigned.",
                 line: name.Line,
                 tsCode: "TS2454");
+            // A use-before-assignment diagnostic does not make the expression untypable. In
+            // recovery mode keep checking with the variable's declared type so an enclosing
+            // assignment can also report its own incompatibility on the same line, as tsc does.
+            if (_recoveryMode)
+                RecordTypeError(error);
+            else
+                throw error;
         }
     }
 
@@ -1640,7 +1647,7 @@ public partial class TypeChecker
             }
         }
 
-        // Second pass: type-check each module with imports resolved
+        // Second pass: type-check each module with imports resolved.
         foreach (var module in modules)
         {
             ThrowIfCancellationRequested();
@@ -1681,6 +1688,14 @@ public partial class TypeChecker
                         // the script path (CheckWithRecovery). Without it, module-mode errors render
                         // with no location (#468).
                         _currentStatementLine = TryGetStmtLine(stmt);
+                        bool previousRecoveryMode = _recoveryMode;
+                        // Namespace checking has its own two-pass/member loops. Let those nested
+                        // loops recover independently; otherwise the first bad namespace member (or
+                        // function statement inside it) aborts the rest of the namespace. Ordinary
+                        // top-level functions remain statement-atomic so an error cannot leave
+                        // partial flow narrowing behind and create cascade diagnostics.
+                        _recoveryMode = previousRecoveryMode ||
+                            stmt is Stmt.Namespace or Stmt.Export { Declaration: Stmt.Namespace };
                         try
                         {
                             CheckStmt(stmt);
@@ -1688,6 +1703,10 @@ public partial class TypeChecker
                         catch (TypeCheckException ex)
                         {
                             RecordTypeError(ex);
+                        }
+                        finally
+                        {
+                            _recoveryMode = previousRecoveryMode;
                         }
                     }
                 }
@@ -1742,6 +1761,9 @@ public partial class TypeChecker
                             // the script path (CheckWithRecovery). Without it, module-mode errors render
                             // with no location (#468).
                             _currentStatementLine = TryGetStmtLine(stmt);
+                            bool previousRecoveryMode = _recoveryMode;
+                            _recoveryMode = previousRecoveryMode ||
+                                stmt is Stmt.Namespace or Stmt.Export { Declaration: Stmt.Namespace };
                             try
                             {
                                 CheckStmt(stmt);
@@ -1749,6 +1771,10 @@ public partial class TypeChecker
                             catch (TypeCheckException ex)
                             {
                                 RecordTypeError(ex);
+                            }
+                            finally
+                            {
+                                _recoveryMode = previousRecoveryMode;
                             }
                         }
                     }

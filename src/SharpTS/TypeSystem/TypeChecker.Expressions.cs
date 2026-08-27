@@ -1724,6 +1724,10 @@ public partial class TypeChecker
 
         if (!IsCompatible(declaredType, valueType))
         {
+            // The write occurs for control-flow purposes even when its value is ill-typed. Mark the
+            // target assigned before reporting the mismatch so a later read does not gain a
+            // cascading TS2454 that tsc does not emit.
+            MarkDefinitelyAssigned(assign.Name);
             // An assignment synthesized from a duplicate `var` declaration (VarHoister) that
             // fails against the established type is tsc's TS2403: subsequent variable
             // declarations must have the same type.

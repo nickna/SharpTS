@@ -372,6 +372,7 @@ public partial class Parser
                 // `name!: T`, `name: T = value`) and ES (`name`, `name = value`,
                 // `name;`) forms. The name may be an identifier, keyword, or
                 // string/numeric literal (e.g. `1: string`, `"1": string`).
+                bool isLiteralName = Peek().Type is TokenType.STRING or TokenType.NUMBER;
                 Token fieldName = ConsumePropertyNameOrLiteral("Expect field name.");
                 bool isOptional = Match(TokenType.QUESTION);
                 bool hasDefiniteAssignment = Match(TokenType.BANG);
@@ -413,7 +414,7 @@ public partial class Parser
                     Match(TokenType.SEMICOLON);
                 else
                     ConsumeSemicolon("Expect ';' after field declaration.");
-                var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare, TypeAnnotationNode: typeAnnotationNode);
+                var field = new Stmt.Field(fieldName, typeAnnotation, initializer, isStatic, access, isReadonly, isOptional, hasDefiniteAssignment, memberDecorators, IsPrivate: false, IsDeclare: isMemberDeclare, TypeAnnotationNode: typeAnnotationNode, IsLiteralName: isLiteralName);
                 fields.Add(field);
                 if (isStatic)
                 {

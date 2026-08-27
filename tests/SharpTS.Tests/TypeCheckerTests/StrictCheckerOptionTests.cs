@@ -126,4 +126,35 @@ public class StrictCheckerOptionTests
             Diagnose(source, TypeCheckerOptions.Strict),
             d => d.TsCode == "TS2564");
     }
+
+    [Fact]
+    public void StrictPropertyInitialization_OnlyReportsIdentifierNamedFields()
+    {
+        const string source = """
+            class C {
+                identifier: string;
+                1: string;
+                'literal': string;
+            }
+            """;
+
+        var diagnostics = Diagnose(source, TypeCheckerOptions.Strict);
+        var error = Assert.Single(diagnostics, d => d.TsCode == "TS2564");
+        Assert.Contains("'identifier'", error.Message);
+    }
+
+    [Fact]
+    public void InvalidAssignment_ReportsUseBeforeAssignmentAndStillAdvancesFlow()
+    {
+        const string source = """
+            let source: { foo: string };
+            let target: { foo: number };
+            target = source;
+            source = target;
+            """;
+
+        var diagnostics = Diagnose(source, TypeCheckerOptions.Strict);
+        Assert.Equal(2, diagnostics.Count(d => d.TsCode == "TS2322"));
+        Assert.Single(diagnostics, d => d.TsCode == "TS2454");
+    }
 }

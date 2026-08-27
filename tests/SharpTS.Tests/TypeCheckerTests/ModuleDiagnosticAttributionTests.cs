@@ -64,4 +64,40 @@ public class ModuleDiagnosticAttributionTests
         Assert.NotNull(errors[0].Location);
         Assert.Equal(3, errors[0].Line);
     }
+
+    [Fact]
+    public void ScriptModule_NestedBodiesRecoverAllAssignmentErrors()
+    {
+        var diags = CheckModule(
+            "main.ts",
+            """
+            namespace N {
+                let x: number;
+                x = "one";
+                x = "two";
+                function f() {
+                    let y: number;
+                    y = "three";
+                    y = "four";
+                }
+            }
+            """);
+
+        var errors = diags.Where(d => d.Severity == DiagnosticSeverity.Error).ToList();
+        Assert.Equal(4, errors.Count);
+        Assert.All(errors, d => Assert.Equal("TS2322", d.TsCode));
+    }
+
+    [Fact]
+    public void ScriptModule_RecheckingSameClassDeclarationKeepsNominalIdentity()
+    {
+        var diags = CheckModule(
+            "main.ts",
+            """
+            class S { foo: string; }
+            var s: S;
+            """);
+
+        Assert.DoesNotContain(diags, d => d.TsCode == "TS2403");
+    }
 }

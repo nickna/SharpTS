@@ -217,6 +217,29 @@ public class NominalTypingTests
     }
 
     [Fact]
+    public void MergedInterface_ClassPrivateBrandWinsOverPublicMember()
+    {
+        // A merged public declaration of `foo` does not erase the private class origin inherited
+        // by another declaration of the same interface.
+        var source = """
+            class Base { private foo: string = "base"; }
+            interface I { foo: string; }
+            interface I extends Base {}
+            class Pub { public foo: string = "public"; }
+
+            let base: Base;
+            let iface: I;
+            base = iface;
+            iface = base;
+            let pub: Pub;
+            iface = pub;
+            """;
+
+        var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));
+        Assert.Contains("Type Error", ex.Message);
+    }
+
+    [Fact]
     public void SameShapeClass_WithExtraMembers_AssignableToSmallerTarget()
     {
         // Width subtyping: a source with extra public members is assignable to an unbranded

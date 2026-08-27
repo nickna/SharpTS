@@ -365,7 +365,7 @@ public abstract record Stmt
     /// Class field declaration. For computed property names (e.g., [Symbol("key")]: type),
     /// ComputedKey contains the expression and Name is a synthetic token.
     /// </summary>
-    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, bool HasDefiniteAssignmentAssertion = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, TypeNode? TypeAnnotationNode = null) : Stmt;
+    public record Field(Token Name, string? TypeAnnotation, Expr? Initializer, bool IsStatic = false, AccessModifier Access = AccessModifier.Public, bool IsReadonly = false, bool IsOptional = false, bool HasDefiniteAssignmentAssertion = false, List<Decorator>? Decorators = null, bool IsPrivate = false, bool IsDeclare = false, Expr? ComputedKey = null, TypeNode? TypeAnnotationNode = null, bool IsLiteralName = false) : Stmt;
     /// <summary>
     /// Getter/setter declaration. For computed accessor names (e.g., static get [Symbol.species]()),
     /// ComputedKey contains the expression and Name is a synthetic token.
