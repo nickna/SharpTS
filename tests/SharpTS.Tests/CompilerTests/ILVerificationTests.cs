@@ -879,6 +879,29 @@ public class ILVerificationTests
     }
 
     [Fact]
+    public void NetFacadeImport_PassesILVerification()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as net from 'net';
+                const list = new net.BlockList();
+                list.addAddress('127.0.0.1');
+                const address = new net.SocketAddress({ family: 'ipv6', address: '2001:db8::1' });
+                const socket = new net.Socket({ highWaterMark: 1024 });
+                console.log(net.connect === net.createConnection);
+                console.log(list.check('127.0.0.1'));
+                console.log(address.address);
+                console.log(socket.writableHighWaterMark);
+                """
+        };
+
+        var errors = TestHarness.CompileModulesAndVerifyOnly(files, "main.ts");
+
+        Assert.Empty(errors);
+    }
+
+    [Fact]
     public void FsFacadeImport_PassesILVerification()
     {
         // #1246: importing `fs` emitted 68 unverifiable methods across the facade. Two shapes,

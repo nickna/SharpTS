@@ -283,6 +283,11 @@ response in that way is acceptable.
 socket paths expose EventEmitter and stream behavior, backpressure, half-close options, connection
 limits, address information, and block rules.
 
+A shared TypeScript facade owns strict IP-literal parsing, public constructor/argument normalization,
+`SocketAddress`, `BlockList` validation and newest-first rule display, and auto-family compatibility
+state. Native primitives retain the stateful socket/server transport and an opaque block-list handle
+used to reject peers directly on the accept thread.
+
 ## tls
 
 `tls` exports `createServer`, `connect`, `createSecureContext`, `Server`, `TLSSocket`,

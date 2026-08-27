@@ -196,20 +196,6 @@ public abstract partial class ExpressionEmitterBase
             // Resolver — migrated to stdlib/node/dns.ts. Like AsyncLocalStorage,
             // it is now an ordinary imported TS class wrapping a primitive handle.
 
-            // net.BlockList / net.SocketAddress (#1069). Guarded on the emitted
-            // ctor being present (UsesNet) so a user class with the same name
-            // still resolves when the net module is not in play.
-            case "BlockList" when Ctx.Runtime?.BlockListCtor != null:
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.BlockListCtor);
-                SetStackUnknown();
-                return true;
-
-            case "SocketAddress" when Ctx.Runtime?.SocketAddressCtor != null:
-                EmitBoxedArgOrNull(arguments, 0);
-                IL.Emit(OpCodes.Newobj, Ctx.Runtime!.SocketAddressCtor);
-                SetStackUnknown();
-                return true;
-
             // crypto.X509Certificate (#1064). Guarded on the emitted ctor being
             // present (UsesCrypto) so a user class with the same name still resolves.
             case "X509Certificate" when Ctx.Runtime?.X509CertificateCtor != null:
@@ -705,8 +691,7 @@ public abstract partial class ExpressionEmitterBase
             "CountQueuingStrategy" => TryEmitBuiltInConstructor("CountQueuingStrategy", arguments),
             "Agent" => TryEmitAgentConstructor(arguments),
             // "Resolver" — migrated to the stdlib/node/dns.ts class.
-            "BlockList" => TryEmitBuiltInConstructor("BlockList", arguments),
-            "SocketAddress" => TryEmitBuiltInConstructor("SocketAddress", arguments),
+            // BlockList / SocketAddress migrated to stdlib/node/net.ts classes.
             "X509Certificate" => TryEmitBuiltInConstructor("X509Certificate", arguments),
             _ => false
         };

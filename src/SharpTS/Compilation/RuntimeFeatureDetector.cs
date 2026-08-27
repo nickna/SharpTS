@@ -250,6 +250,7 @@ public sealed class RuntimeFeatureDetector
         switch (p)
         {
             case "net":
+            case "primitive:net":
                 _set.UsesNet = true; break;
             case "http":
             case "https":

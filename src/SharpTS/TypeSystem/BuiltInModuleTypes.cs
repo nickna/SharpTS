@@ -526,7 +526,7 @@ public static partial class BuiltInModuleTypes
             "https" => GetHttpModuleTypes(),
             // "dns" / "dns/promises" — migrated to embedded stdlib TypeScript;
             // their public types flow from the facade source.
-            "net" => GetNetModuleTypes(),
+            // "net" — migrated to stdlib/node/net.ts; public types flow from TS.
             "tls" => GetTlsModuleTypes(),
             "dgram" => GetDgramModuleTypes(),
             "cluster" => GetClusterModuleTypes(),
@@ -584,7 +584,20 @@ public static partial class BuiltInModuleTypes
             "zlib" => GetZlibModuleTypes(),
             "dns" => GetDnsPrimitiveTypes(),
             "dns/promises" => GetDnsPromisesModuleTypes(),
+            "net" => GetNetPrimitiveTypes(),
             _ => null
+        };
+    }
+
+    private static Dictionary<string, TypeInfo> GetNetPrimitiveTypes()
+    {
+        var anyType = TypeInfo.Any.Shared;
+        return new Dictionary<string, TypeInfo>
+        {
+            ["createServer"] = new TypeInfo.Function([anyType, anyType], anyType, RequiredParams: 0),
+            ["createConnection"] = new TypeInfo.Function([anyType, anyType, anyType], anyType, RequiredParams: 1),
+            ["createSocket"] = new TypeInfo.Function([anyType], anyType, RequiredParams: 0),
+            ["createBlockList"] = new TypeInfo.Function([], anyType),
         };
     }
 

@@ -51,7 +51,8 @@ public static class BuiltInModuleValues
             "worker_threads" => WorkerThreadsModuleInterpreter.GetExports(),
             // "dns" / "dns/promises" — migrated to stdlib TypeScript facades;
             // DnsModuleInterpreter now backs primitive:dns{,/promises}.
-            "net" => NetModuleInterpreter.GetExports(),
+            // "net" — migrated to stdlib/node/net.ts; NetModuleInterpreter now
+            // backs only the stdlib-internal primitive:net seam.
             "https" => HttpModuleInterpreter.GetHttpsExports(), // real TLS server (#1049) + client over TLS (#1050)
             "tls" => TlsModuleInterpreter.GetExports(),
             "dgram" => DgramModuleInterpreter.GetExports(),

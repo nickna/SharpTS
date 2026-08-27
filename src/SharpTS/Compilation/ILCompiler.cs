@@ -1227,6 +1227,7 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new DnsModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new DnsPromisesModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new FsPromisesModuleEmitter());
+        // "net" migrated to stdlib/node/net.ts; emitter serves primitive:net.
         _builtInModuleEmitterRegistry.Register(new NetModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new TlsModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new DgramModuleEmitter());
