@@ -119,6 +119,13 @@ public partial class TypeChecker
             var instantiatedFunc = InstantiateGenericFunction(genericFunc, typeArgs);
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
+                for (int i = 0; i < call.Arguments.Count && i < instFunc.ParamTypes.Count; i++)
+                {
+                    if (call.Arguments[i] is Expr.ObjectLiteral && argTypes[i] is TypeInfo.Record freshRecord
+                        && HasNamedSymbolMembers(instFunc.ParamTypes[i]))
+                        CheckExcessProperties(freshRecord, instFunc.ParamTypes[i], call.Arguments[i]);
+                }
+
                 // Re-contextualize callback arguments after inference. The first pass may
                 // infer T from an ordinary value (or from an explicitly annotated callback);
                 // this pass gives unannotated arrow parameters the now-concrete delegate
@@ -176,6 +183,8 @@ public partial class TypeChecker
             // shortOut() { return func.apply(undefined, arguments); }` falls here).
             bool allParamsAny = funcType.ParamTypes.Count == 0
                 || funcType.ParamTypes.All(p => p is TypeInfo.Any);
+            if (funcType.ParamTypes.Count == 0 && call.Callee is Expr.GetIndex)
+                allParamsAny = false;
 
             // Only check min arity if no spreads (spreads can expand to any count)
             if (!hasSpread && !allParamsAny && nonSpreadCount < funcType.MinArity)
@@ -1167,8 +1176,49 @@ public partial class TypeChecker
         // `(x: E)` resolves to Object, not the more specific E.
         TypeInfo.Function bestMatch = matchingSignatures[0];
 
+        // Ambient generic declarations can be collected once during the preparatory module pass
+        // and again during the authoritative pass, which represents the same declaration as a
+        // GenericOverloadedFunction. Fresh object literals still receive the ordinary excess-
+        // property check against the selected instantiated signature.
+        for (int i = 0; i < call.Arguments.Count && i < bestMatch.ParamTypes.Count; i++)
+        {
+            if (call.Arguments[i] is Expr.ObjectLiteral && argTypes[i] is TypeInfo.Record freshRecord
+                && HasNamedSymbolMembers(bestMatch.ParamTypes[i]))
+                CheckExcessProperties(freshRecord, bestMatch.ParamTypes[i], call.Arguments[i]);
+        }
+
         return bestMatch.ReturnType;
     }
+
+    private static bool HasNamedSymbolMembers(TypeInfo type) => type switch
+    {
+        TypeInfo.Interface iface => iface.GetAllMembers().Any(member => member.Key.StartsWith("@@", StringComparison.Ordinal)),
+        TypeInfo.Record record => record.Fields.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)),
+        TypeInfo.Instance instance => HasNamedSymbolMembers(instance.ResolvedClassType),
+        TypeInfo.Class cls =>
+            cls.FieldTypes.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            cls.Methods.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            cls.Getters.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            cls.Setters.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            (cls.Superclass != null && HasNamedSymbolMembers(cls.Superclass)),
+        TypeInfo.MutableClass mutable =>
+            mutable.FieldTypes.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            mutable.Methods.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            mutable.Getters.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            mutable.Setters.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            (mutable.Superclass != null && HasNamedSymbolMembers(mutable.Superclass)),
+        TypeInfo.GenericClass genericClass =>
+            genericClass.FieldTypes.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            genericClass.Methods.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            genericClass.Getters.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            genericClass.Setters.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            (genericClass.Superclass != null && HasNamedSymbolMembers(genericClass.Superclass)),
+        TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface genericInterface } =>
+            genericInterface.Members.Keys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) ||
+            (genericInterface.Extends?.Any(parent => parent.GetAllMembers()
+                .Any(member => member.Key.StartsWith("@@", StringComparison.Ordinal))) ?? false),
+        _ => false,
+    };
 
     private TypeInfo ResolveMixedOverloadedCall(Expr.Call call, TypeInfo.OverloadSet overloadSet)
     {

@@ -364,6 +364,23 @@ public partial class TypeChecker
 
             var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
 
+            if (member.Name.Lexeme == "@@keyFor")
+            {
+                RecordTypeError(new TypeCheckException(
+                    "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                    line: member.Name.Line, tsCode: "TS2464"));
+            }
+
+            // Readonly symbol-valued members of the global SymbolConstructor are unique symbol
+            // declarations (`typeof Symbol.custom`), including declaration-merging augmentations.
+            if (interfaceStmt.Name.Lexeme == "SymbolConstructor"
+                && member.IsReadonly && memberType is TypeInfo.Symbol)
+            {
+                memberType = new TypeInfo.UniqueSymbol(
+                    "Symbol." + member.Name.Lexeme,
+                    $"typeof Symbol.{member.Name.Lexeme}");
+            }
+
             // Check if this is a duplicate member name (overload)
             if (members.TryGetValue(member.Name.Lexeme, out var existingType))
             {

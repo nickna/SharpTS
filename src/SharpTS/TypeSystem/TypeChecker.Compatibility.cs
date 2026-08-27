@@ -724,6 +724,15 @@ public partial class TypeChecker
             return actual is TypeInfo.Symbol or TypeInfo.UniqueSymbol;
         }
 
+        // The primitive `symbol` value is assignable to the boxed `Symbol` interface, just as
+        // number/string/boolean primitives are assignable to their wrapper interfaces. The reverse
+        // relation is intentionally rejected by the Symbol branch above.
+        if (expected is TypeInfo.Interface { Name: "Symbol" }
+            && actual is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+        {
+            return true;
+        }
+
         // BigInt type compatibility
         if (expected is TypeInfo.BigInt && actual is TypeInfo.BigInt)
         {

@@ -402,6 +402,11 @@ public partial class TypeChecker
     // not confused with an immediate read in the variable's declaring flow. Blocks deliberately
     // share their callable frame; assignments in them participate in the surrounding flow.
     private readonly Stack<Dictionary<BindingSymbol, bool>> _definiteAssignmentStack = new();
+    // A typeof guard can prove that a var has a runtime value in only one branch even though
+    // evaluating the condition itself reports TS2454. Keep that branch-local fact separate from
+    // the assignment map so it suppresses reads without leaking a synthetic assignment at joins.
+    private readonly HashSet<BindingSymbol> _definiteAssignmentReadAssumptions =
+        new(ReferenceEqualityComparer.Instance);
     private int _namespaceDepth;
 
     /// <summary>
@@ -611,6 +616,9 @@ public partial class TypeChecker
 
     private void ThrowIfUsedBeforeAssigned(Token name, BindingSymbol symbol)
     {
+        if (_definiteAssignmentReadAssumptions.Contains(symbol))
+            return;
+
         if (_definiteAssignmentStack.TryPeek(out var state) &&
             state.TryGetValue(symbol, out bool assigned) && !assigned)
         {
@@ -2615,6 +2623,7 @@ public partial class TypeChecker
 
     private static int? TryGetExprLine(Expr expr) => expr switch
     {
+        Expr.Grouping g => TryGetExprLine(g.Expression),
         Expr.Variable v => v.Name.Line,
         Expr.Set s => s.Name.Line,
         Expr.Get g => g.Name.Line,

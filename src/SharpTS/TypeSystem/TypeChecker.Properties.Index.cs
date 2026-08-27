@@ -674,7 +674,9 @@ public partial class TypeChecker
                 GetMemberType(objType, wellKnownName) is { } wellKnownType)
             {
                 if (!IsCompatible(wellKnownType, valueType))
-                    throw new TypeCheckException($" Cannot assign '{valueType}' to symbol index signature type '{wellKnownType}'.", tsCode: "TS2322");
+                    throw new TypeCheckException(
+                        $" Cannot assign '{valueType}' to symbol index signature type '{wellKnownType}'.",
+                        line: TryGetExprLine(setIndex.Value), tsCode: "TS2322");
                 return valueType;
             }
 

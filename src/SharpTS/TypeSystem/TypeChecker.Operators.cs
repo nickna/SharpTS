@@ -31,18 +31,93 @@ public partial class TypeChecker
             OperatorDescriptor.Plus => CheckPlusOperator(left, right, line),
             OperatorDescriptor.Arithmetic or OperatorDescriptor.Power => CheckArithmeticBinary(left, right, line),
             OperatorDescriptor.Comparison => CheckComparisonBinary(left, right, binary.Operator.Lexeme, line),
-            OperatorDescriptor.Equality => TypeInfo.Primitive.Boolean,
+            OperatorDescriptor.Equality => CheckEqualityOperator(left, right, binary.Operator.Type, line),
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
             OperatorDescriptor.In => CheckInOperator(right, line),
-            // instanceof operand validation (TS2358/TS2359) is intentionally NOT done here: the
-            // symbolType1 case needs `Symbol() || {}` to stay a `symbol | {}` union, but CheckLogical
-            // currently collapses it to a bare `symbol`, which would make a bare-symbol LHS check
-            // fire spuriously on `(Symbol() || {}) instanceof Object`. Deferred with that inference gap.
-            OperatorDescriptor.InstanceOf => TypeInfo.Primitive.Boolean,
+            OperatorDescriptor.InstanceOf => CheckInstanceOfOperator(left, right, line),
             _ => TypeInfo.Any.Shared
         };
     }
+
+    private TypeInfo CheckEqualityOperator(TypeInfo left, TypeInfo right, TokenType operatorType, int line)
+    {
+        // Check()/the execution harness intentionally permits JavaScript-valid comparisons that
+        // tsc diagnoses. Compiler and conformance paths collect the stricter TS2367 diagnostics.
+        bool collectingDiagnostics = _recoveryMode || _currentModule is not null;
+        if (!collectingDiagnostics)
+            return TypeInfo.Primitive.Boolean;
+
+        bool leftSymbol = ContainsSymbolType(left);
+        bool rightSymbol = ContainsSymbolType(right);
+        if (leftSymbol != rightSymbol)
+        {
+            TypeInfo other = leftSymbol ? right : left;
+            TypeInfo symbolSide = leftSymbol ? left : right;
+            bool looseNullishOverlap = operatorType is TokenType.EQUAL_EQUAL or TokenType.BANG_EQUAL
+                && ((ContainsNullType(other) && ContainsUndefinedType(symbolSide))
+                    || (ContainsUndefinedType(other) && ContainsNullType(symbolSide)));
+            bool disjoint = other is TypeInfo.Primitive
+                or TypeInfo.NumberLiteral or TypeInfo.String or TypeInfo.StringLiteral
+                or TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral
+                or TypeInfo.Null or TypeInfo.Undefined;
+            if (disjoint && !looseNullishOverlap)
+            {
+                throw new TypeCheckException(
+                    $"This comparison appears to be unintentional because the types '{left}' and '{right}' have no overlap.",
+                    line > 0 ? line : null, tsCode: "TS2367");
+            }
+        }
+        return TypeInfo.Primitive.Boolean;
+    }
+
+    private static bool ContainsNullType(TypeInfo type) =>
+        type is TypeInfo.Null || type is TypeInfo.Union { ContainsNull: true };
+
+    private static bool ContainsUndefinedType(TypeInfo type) =>
+        type is TypeInfo.Undefined || type is TypeInfo.Union { ContainsUndefined: true };
+
+    private TypeInfo CheckInstanceOfOperator(TypeInfo left, TypeInfo right, int line)
+    {
+        // Keep this validation scoped to the symbol campaign. The checker intentionally permits
+        // some other JavaScript-valid operands today (for example a string literal) even though
+        // tsc rejects them, and broadening that behavior belongs to a separate conformance batch.
+        bool collectingDiagnostics = _recoveryMode || _currentModule is not null;
+        if (collectingDiagnostics && ContainsSymbolType(left) && !CanBeInstanceOfLeftOperand(left))
+        {
+            throw new TypeCheckException(
+                "The left-hand side of an 'instanceof' expression must be of type 'any', an object type or a type parameter.",
+                line > 0 ? line : null, tsCode: "TS2358");
+        }
+
+        if (collectingDiagnostics && ContainsSymbolType(right) && !CanBeInstanceOfRightOperand(right))
+        {
+            throw new TypeCheckException(
+                "The right-hand side of an 'instanceof' expression must be either of type 'any', a class, function, or other type assignable to the 'Function' interface type, or an object type with a 'Symbol.hasInstance' method.",
+                line > 0 ? line : null, tsCode: "TS2359");
+        }
+        return TypeInfo.Primitive.Boolean;
+    }
+
+    private static bool CanBeInstanceOfLeftOperand(TypeInfo type) => type switch
+    {
+        TypeInfo.Any or TypeInfo.Inferred or TypeInfo.Unknown or TypeInfo.TypeParameter => true,
+        TypeInfo.Class or TypeInfo.GenericClass or TypeInfo.Instance or TypeInfo.Interface
+            or TypeInfo.Record or TypeInfo.Array or TypeInfo.Tuple or TypeInfo.Function
+            or TypeInfo.GenericFunction or TypeInfo.Object => true,
+        TypeInfo.Union union => union.FlattenedTypes.All(CanBeInstanceOfLeftOperand),
+        _ => false,
+    };
+
+    private static bool CanBeInstanceOfRightOperand(TypeInfo type) => type switch
+    {
+        TypeInfo.Any or TypeInfo.Inferred or TypeInfo.Class or TypeInfo.GenericClass
+            or TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction => true,
+        TypeInfo.Interface itf => itf.IsCallable || itf.Members.ContainsKey("@@hasInstance"),
+        TypeInfo.Record record => record.IsCallable || record.Fields.ContainsKey("@@hasInstance"),
+        TypeInfo.Union union => union.FlattenedTypes.All(CanBeInstanceOfRightOperand),
+        _ => false,
+    };
 
     /// <summary>
     /// The `in` operator: the right operand must be an object / `any` / type parameter. tsc rejects
@@ -203,6 +278,16 @@ public partial class TypeChecker
     {
         TypeInfo leftType = CheckExpr(logical.Left);
 
+        Expr truthinessOperand = logical.Left is Expr.Grouping grouping
+            ? grouping.Expression
+            : logical.Left;
+        if (truthinessOperand is Expr.ObjectLiteral)
+        {
+            throw new TypeCheckException(
+                "This kind of expression is always truthy.",
+                line: TryGetExprLine(truthinessOperand), tsCode: "TS2872");
+        }
+
         // Apply expression-level narrowing for the right operand
         // For &&: right is evaluated when left is truthy, so apply "narrowed" types
         // For ||: right is evaluated when left is falsy, so apply "excluded" types.
@@ -272,6 +357,14 @@ public partial class TypeChecker
         if (leftType is TypeInfo.Any || rightType is TypeInfo.Any)
         {
             return TypeInfo.Any.Shared;
+        }
+
+        // Structural empty-object compatibility must not erase a primitive symbol arm. Keeping the
+        // union is what lets `(Symbol() || {}) instanceof Object` retain its object possibility.
+        if (ContainsSymbolType(leftType) != ContainsSymbolType(rightType)
+            && (CanBeInstanceOfLeftOperand(leftType) || CanBeInstanceOfLeftOperand(rightType)))
+        {
+            return new TypeInfo.Union([leftType, rightType]);
         }
 
         // If one is assignable to the other, return the broader type
@@ -812,6 +905,11 @@ public partial class TypeChecker
         // symbol members of SymbolConstructor are readonly).
         if (delete.Operand is Expr.Get get)
         {
+            if (get.Object is Expr.Variable { Name.Lexeme: "Symbol" }
+                && WellKnownSymbolTypes.TryGet(get.Name.Lexeme) is not null)
+            {
+                throw new TypeCheckException("The operand of a 'delete' operator cannot be a read-only property.", line: get.Name.Line, tsCode: "TS2704");
+            }
             TypeInfo recvType = CheckExpr(get.Object);
             if (recvType is TypeInfo.Interface itf && itf.IsMemberReadonly(get.Name.Lexeme))
                 throw new TypeCheckException("The operand of a 'delete' operator cannot be a read-only property.", line: get.Name.Line, tsCode: "TS2704");

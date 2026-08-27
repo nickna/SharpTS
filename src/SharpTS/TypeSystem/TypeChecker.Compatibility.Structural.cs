@@ -87,6 +87,23 @@ public partial class TypeChecker
             hasStringIndex = iface.StringIndexType != null;
             hasNumberIndex = iface.NumberIndexType != null;
         }
+        else if (expected is TypeInfo.InstantiatedGeneric
+                 { GenericDefinition: TypeInfo.GenericInterface genericInterface })
+        {
+            // Excess-property checking only needs the target's key set. Preserve it when a
+            // generic interface is instantiated (I<T>), including inherited non-generic
+            // members; the member value types are validated by ordinary assignability below.
+            foreach (var key in genericInterface.Members.Keys)
+                expectedKeys.Add(key);
+            if (genericInterface.Extends != null)
+            {
+                foreach (var parent in genericInterface.Extends)
+                    foreach (var member in parent.GetAllMembers())
+                        expectedKeys.Add(member.Key);
+            }
+            hasStringIndex = genericInterface.StringIndexType != null;
+            hasNumberIndex = genericInterface.NumberIndexType != null;
+        }
         else if (expected is TypeInfo.Class cls)
         {
             foreach (var field in cls.FieldTypes)
@@ -142,9 +159,38 @@ public partial class TypeChecker
         if (excessKeys.Count > 0)
         {
             string excessList = string.Join(", ", excessKeys.Select(k => $"'{k}'"));
+            int? excessLine = null;
+            if (excessKeys.Any(key => key.StartsWith("@@", StringComparison.Ordinal)) &&
+                sourceExpr is Expr.ObjectLiteral objectLiteral)
+            {
+                foreach (var property in objectLiteral.Properties)
+                {
+                    string? propertyName = property.Key switch
+                    {
+                        Expr.IdentifierKey identifier => identifier.Name.Lexeme,
+                        Expr.LiteralKey { Literal.Literal: string text } => text,
+                        Expr.LiteralKey { Literal.Literal: not null } literal => literal.Literal.Literal.ToString(),
+                        Expr.ComputedKey computed => TryGetWellKnownSymbolMemberName(computed.Expression),
+                        _ => null,
+                    };
+                    if (propertyName != null && propertyName.StartsWith("@@", StringComparison.Ordinal) &&
+                        excessKeys.Contains(propertyName))
+                    {
+                        excessLine = property.Key switch
+                        {
+                            Expr.IdentifierKey identifier => identifier.Name.Line,
+                            Expr.LiteralKey literal => literal.Literal.Line,
+                            Expr.ComputedKey computed => TryGetExprLine(computed.Expression),
+                            _ => null,
+                        };
+                        break;
+                    }
+                }
+            }
             throw new TypeCheckException(
                 $"Object literal may only specify known properties. " +
                 $"Excess {(excessKeys.Count == 1 ? "property" : "properties")}: {excessList}",
+                line: excessLine ?? TryGetExprLine(sourceExpr),
                 tsCode: "TS2353"
             );
         }
@@ -248,6 +294,8 @@ public partial class TypeChecker
         {
             FrozenDictionary<string, TypeInfo>? fields;
             FrozenDictionary<string, TypeInfo>? methods;
+            FrozenDictionary<string, TypeInfo>? getters;
+            FrozenDictionary<string, TypeInfo>? setters;
             TypeInfo? next;
             if (current is TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass gc } ig)
             {
@@ -261,18 +309,26 @@ public partial class TypeChecker
                 subs = GenericClassSubs(gc, args);
                 fields = gc.FieldTypes;
                 methods = gc.Methods;
+                getters = gc.Getters;
+                setters = gc.Setters;
                 next = gc.Superclass;
             }
             else
             {
                 fields = GetFieldTypes(current);
                 methods = GetMethods(current);
+                getters = GetGetters(current);
+                setters = GetSetters(current);
                 next = GetSuperclass(current);
             }
             if (fields is not null && fields.TryGetValue(name, out var fieldType))
                 return subs is null ? fieldType : Substitute(fieldType, subs);
             if (methods is not null && methods.TryGetValue(name, out var methodType))
                 return subs is null ? methodType : Substitute(methodType, subs);
+            if (getters is not null && getters.TryGetValue(name, out var getterType))
+                return subs is null ? getterType : Substitute(getterType, subs);
+            if (setters is not null && setters.TryGetValue(name, out var setterType))
+                return subs is null ? setterType : Substitute(setterType, subs);
             current = next;
         }
         return null;

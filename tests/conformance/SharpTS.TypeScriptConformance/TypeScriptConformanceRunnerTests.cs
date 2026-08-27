@@ -136,6 +136,65 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Theory]
+    [InlineData("Symbols/ES5SymbolProperty3.ts")]
+    [InlineData("Symbols/ES5SymbolProperty4.ts")]
+    [InlineData("Symbols/ES5SymbolProperty5.ts")]
+    [InlineData("Symbols/ES5SymbolProperty7.ts")]
+    [InlineData("es6/Symbols/symbolDeclarationEmit12.ts")]
+    [InlineData("es6/Symbols/symbolProperty11.ts")]
+    [InlineData("es6/Symbols/symbolProperty21.ts")]
+    [InlineData("es6/Symbols/symbolProperty24.ts")]
+    [InlineData("es6/Symbols/symbolProperty28.ts")]
+    [InlineData("es6/Symbols/symbolProperty40.ts")]
+    [InlineData("es6/Symbols/symbolProperty41.ts")]
+    [InlineData("es6/Symbols/symbolProperty46.ts")]
+    [InlineData("es6/Symbols/symbolProperty47.ts")]
+    [InlineData("es6/Symbols/symbolProperty55.ts")]
+    [InlineData("es6/Symbols/symbolProperty58.ts")]
+    [InlineData("es6/Symbols/symbolProperty59.ts")]
+    [InlineData("es6/Symbols/symbolProperty61.ts")]
+    [InlineData("es6/Symbols/symbolType1.ts")]
+    [InlineData("es6/Symbols/symbolType11.ts")]
+    [InlineData("es6/Symbols/symbolType15.ts")]
+    [InlineData("es6/Symbols/symbolType19.ts")]
+    [InlineData("es6/Symbols/symbolType3.ts")]
+    [InlineData("es6/Symbols/symbolType9.ts")]
+    public void RunOne_SymbolCampaign_MatchesPinnedDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("Symbols/ES5SymbolProperty1.ts")]
+    [InlineData("jsx/tsxElementResolution8.tsx")]
+    [InlineData("types/conditional/inferTypes1.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithCallSignatures.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithConstructSignatures.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints4.ts")]
+    public void RunOne_SymbolChanges_PreserveExistingPasses(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
     [InlineData("jsx/jsxParsingError4.tsx")]
     [InlineData("jsx/tsxDynamicTagName1.tsx")]
     [InlineData("jsx/tsxDynamicTagName6.tsx")]

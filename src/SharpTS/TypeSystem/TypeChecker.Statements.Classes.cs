@@ -19,9 +19,12 @@ public partial class TypeChecker
     /// access (an arbitrary computed key, e.g. <c>[myVar]()</c>, isn't modeled as a named member —
     /// it parses and runs but carries no static member type, mirroring computed accessors).
     /// </summary>
-    private static string? TryGetWellKnownSymbolMemberName(Expr? key) => key switch
+    private string? TryGetWellKnownSymbolMemberName(Expr? key) => key switch
     {
         Expr.Get { Object: Expr.Variable { Name.Lexeme: "Symbol" }, Name.Lexeme: var n } => "@@" + n,
+        Expr.Variable variable when _environment.Get(variable.Name.Lexeme) is TypeInfo.UniqueSymbol unique
+            && unique.DeclarationId.StartsWith("Symbol.", StringComparison.Ordinal) =>
+                "@@" + unique.DeclarationId["Symbol.".Length..],
         _ => null
     };
 
@@ -32,10 +35,33 @@ public partial class TypeChecker
     /// a symbol-keyed field is stored under the synthetic <c>&lt;computed&gt;</c> lexeme and never lines
     /// up with the interface's <c>@@iterator</c>, producing spurious missing-property errors.
     /// </summary>
-    private static string GetFieldMemberName(Stmt.Field field) =>
+    private string GetFieldMemberName(Stmt.Field field) =>
         field.ComputedKey != null
             ? (TryGetWellKnownSymbolMemberName(field.ComputedKey) ?? field.Name.Lexeme)
             : field.Name.Lexeme;
+
+    /// <summary>
+    /// CheckModules recovers between root declarations without setting the standalone checker's
+    /// recovery flag. A class body needs statement-level recovery too so an error in one method
+    /// does not hide later accessor and initialization diagnostics from the same declaration.
+    /// Keep this scoped to class bodies: control-flow helpers intentionally catch selected branch
+    /// diagnostics themselves and rely on ordinary nested blocks propagating to those catches.
+    /// </summary>
+    private void CheckClassBodyStatements(List<Stmt> statements, bool recoverComputedSymbolDiagnostics)
+    {
+        bool enableModuleRecovery = recoverComputedSymbolDiagnostics && !_recoveryMode && _currentModule != null;
+        if (enableModuleRecovery)
+            _recoveryMode = true;
+        try
+        {
+            CheckStmtList(statements);
+        }
+        finally
+        {
+            if (enableModuleRecovery)
+                _recoveryMode = false;
+        }
+    }
 
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
@@ -52,6 +78,11 @@ public partial class TypeChecker
         // identity per pass; otherwise `var s: S` looks like a conflicting TS2403 redeclaration
         // even though both displayed types are the very same source class.
         int declarationId = -classSymbol.Id;
+
+        bool recoverComputedSymbolDiagnostics =
+            classStmt.Fields.Any(field => TryGetWellKnownSymbolMemberName(field.ComputedKey) != null) ||
+            classStmt.Methods.Any(method => TryGetWellKnownSymbolMemberName(method.ComputedKey) != null) ||
+            (classStmt.Accessors?.Any(accessor => TryGetWellKnownSymbolMemberName(accessor.ComputedKey) != null) ?? false);
 
         // Check class decorators
         CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);
@@ -421,20 +452,20 @@ public partial class TypeChecker
                     }
                 }
 
-                // Computed accessor names (get [Symbol.x]()) have no static member
-                // name to register; their bodies are still checked later.
-                if (accessor.ComputedKey != null)
+                // Arbitrary computed names have no stable member identity. Well-known and augmented
+                // unique symbols do, and use the same @@ key as interfaces/object literals.
+                if (canonicalName == null)
                 {
                     continue;
                 }
 
-                string propName = accessor.Name.Lexeme;
+                string propName = canonicalName;
 
                 if (accessor.Kind.Type == TokenType.GET)
                 {
                     TypeInfo getterRetType = accessor.ReturnType != null
                         ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
-                        : TypeInfo.Any.Shared;
+                        : TypeInfo.Inferred.Shared;
                     mutableClass.Getters[propName] = getterRetType;
 
                     // Track abstract getters
@@ -447,7 +478,7 @@ public partial class TypeChecker
                 {
                     TypeInfo paramType = accessor.SetterParam?.Type != null
                         ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)!
-                        : TypeInfo.Any.Shared;
+                        : TypeInfo.Inferred.Shared;
                     mutableClass.Setters[propName] = paramType;
 
                     // Track abstract setters
@@ -461,7 +492,17 @@ public partial class TypeChecker
             // Validate that getter/setter pairs have matching types
             foreach (var propName in mutableClass.Getters.Keys.Intersect(mutableClass.Setters.Keys))
             {
-                if (!IsCompatible(mutableClass.Getters[propName], mutableClass.Setters[propName]))
+                TypeInfo getterType = mutableClass.Getters[propName];
+                TypeInfo setterType = mutableClass.Setters[propName];
+                if (getterType is TypeInfo.Inferred && setterType is not TypeInfo.Inferred)
+                {
+                    mutableClass.Getters[propName] = setterType;
+                }
+                else if (setterType is TypeInfo.Inferred && getterType is not TypeInfo.Inferred)
+                {
+                    mutableClass.Setters[propName] = getterType;
+                }
+                else if (!IsCompatible(getterType, setterType))
                 {
                     throw new TypeCheckException($" Getter and setter for '{propName}' have incompatible types.", tsCode: "TS2380");
                 }
@@ -898,6 +939,16 @@ public partial class TypeChecker
                     _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
                 };
 
+                // A script/namespace declaration can be checked once during module collection and
+                // again authoritatively. Re-resolve an explicit return annotation in the current
+                // pass so an earlier placeholder (notably a namespace-local interface) cannot leave
+                // the body permissively typed as any.
+                if (method.ReturnType != null)
+                {
+                    TypeInfo currentReturn = ResolveAnnotation(method.ReturnType, method.ReturnTypeNode)!;
+                    methodType = methodType with { ReturnType = currentReturn };
+                }
+
                 // Body-scope binding widens a bare `?`-optional parameter with `| undefined` (the
                 // caller may omit it) — the method's own callable signature (methodType) keeps the
                 // declared type.
@@ -958,7 +1009,7 @@ public partial class TypeChecker
                         // declaration kinds before the source-order body pass.
                         HoistFunctionDeclarations(method.Body);
                         HoistLexicalDeclarations(method.Body);
-                        CheckStmtList(method.Body);
+                        CheckClassBodyStatements(method.Body, recoverComputedSymbolDiagnostics);
 
                         // #367/#372: object-slot number/boolean-typed locals, parameters, and returns
                         // that an `any`/`undefined` value may have left holding the sentinel, so they
@@ -1043,15 +1094,16 @@ public partial class TypeChecker
                 foreach (var accessor in classStmt.Accessors)
                 {
                     TypeEnvironment accessorEnv = new TypeEnvironment(_environment);
+                    string? accessorName = accessor.ComputedKey != null
+                        ? TryGetWellKnownSymbolMemberName(accessor.ComputedKey)
+                        : accessor.Name.Lexeme;
 
                     TypeInfo accessorReturnType;
                     if (accessor.Kind.Type == TokenType.GET)
                     {
-                        // Computed-name accessors aren't registered in Getters/Setters
-                        // (no static member name); derive types from the declaration.
-                        accessorReturnType = accessor.ComputedKey != null
-                            ? (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : TypeInfo.Any.Shared)
-                            : classTypeForBody.Getters[accessor.Name.Lexeme];
+                        accessorReturnType = accessorName != null
+                            ? mutableClass.Getters[accessorName]
+                            : (accessor.ReturnType != null ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)! : TypeInfo.Any.Shared);
                     }
                     else
                     {
@@ -1060,9 +1112,9 @@ public partial class TypeChecker
                         // Add setter parameter to environment
                         if (accessor.SetterParam != null)
                         {
-                            TypeInfo setterParamType = accessor.ComputedKey != null
-                                ? (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared)
-                                : classTypeForBody.Setters[accessor.Name.Lexeme];
+                            TypeInfo setterParamType = accessorName != null
+                                ? mutableClass.Setters[accessorName]
+                                : (accessor.SetterParam.Type != null ? ResolveAnnotation(accessor.SetterParam.Type, accessor.SetterParam.TypeAnnotationNode)! : TypeInfo.Any.Shared);
                             DeclareValue(
                                 accessorEnv,
                                 accessor.SetterParam.Name,
@@ -1073,6 +1125,7 @@ public partial class TypeChecker
                     // Save and set context - accessor bodies are isolated from outer loop/switch/label context
                     TypeEnvironment previousEnvAcc = _environment;
                     TypeInfo? previousReturnAcc = _currentFunctionReturnType;
+                    var previousInferredAcc = _inferredReturnTypes;
                     int previousLoopDepthAcc = _loopDepth;
                     int previousSwitchDepthAcc = _switchDepth;
                     var previousActiveLabelsAcc = new Dictionary<string, ActiveLabel>(_activeLabels);
@@ -1080,6 +1133,10 @@ public partial class TypeChecker
 
                     _environment = accessorEnv;
                     _currentFunctionReturnType = accessorReturnType;
+                    bool inferringGetter = accessor.Kind.Type == TokenType.GET
+                        && accessorReturnType is TypeInfo.Inferred;
+                    if (inferringGetter)
+                        _inferredReturnTypes = new List<TypeInfo>();
                     _loopDepth = 0;
                     _switchDepth = 0;
                     _activeLabels.Clear();
@@ -1094,7 +1151,28 @@ public partial class TypeChecker
 
                     try
                     {
-                        CheckStmtList(accessor.Body);
+                        CheckClassBodyStatements(accessor.Body, recoverComputedSymbolDiagnostics);
+
+                        if (inferringGetter && accessorName != null)
+                        {
+                            var distinct = _inferredReturnTypes!
+                                .Distinct(TypeInfoEqualityComparer.Instance)
+                                .ToList();
+                            TypeInfo inferred = distinct.Count == 0
+                                ? TypeInfo.Void.Shared
+                                : CollapseOrCreateUnion(distinct);
+                            mutableClass.Getters[accessorName] = inferred;
+
+                            // An unannotated setter parameter is contextually typed from its getter.
+                            var pairedSetter = classStmt.Accessors.FirstOrDefault(candidate =>
+                                candidate.Kind.Type == TokenType.SET
+                                && (candidate.ComputedKey != null
+                                    ? TryGetWellKnownSymbolMemberName(candidate.ComputedKey)
+                                    : candidate.Name.Lexeme) == accessorName);
+                            if (pairedSetter?.SetterParam?.Type == null)
+                                mutableClass.Setters[accessorName] = inferred;
+                            anyInferredMethodReturnResolved = true;
+                        }
 
                         // #367/#372: object-slot number/boolean-typed locals and returns that may hold
                         // the undefined sentinel. The setter parameter always uses an object slot, so
@@ -1107,6 +1185,7 @@ public partial class TypeChecker
                         PopNarrowingScope();
                         _environment = previousEnvAcc;
                         _currentFunctionReturnType = previousReturnAcc;
+                        _inferredReturnTypes = previousInferredAcc;
                         _loopDepth = previousLoopDepthAcc;
                         _switchDepth = previousSwitchDepthAcc;
                         _activeLabels.Clear();
@@ -1154,6 +1233,34 @@ public partial class TypeChecker
             // so any comparison made against the placeholder during the body pass must not be reused.
             _compatibilityCache = null;
             _identityCompatibilityCache = null;
+
+            // Revalidate inferred computed methods against the corresponding implemented
+            // interface member. The initial implements pass necessarily saw an <inferred>
+            // placeholder; tsc reports the resolved mismatch on the member itself as TS2416.
+            if (classStmt.Interfaces != null)
+            {
+                TypeInfo.Class resolvedClass = mutableClass.Freeze();
+                foreach (var method in classStmt.Methods.Where(candidate =>
+                             candidate.ComputedKey != null && candidate.Body != null))
+                {
+                    string? memberName = TryGetWellKnownSymbolMemberName(method.ComputedKey);
+                    if (memberName == null
+                        || !resolvedClass.Methods.TryGetValue(memberName, out var actualMember))
+                        continue;
+
+                    foreach (var interfaceToken in classStmt.Interfaces)
+                    {
+                        if (_environment.GetTypeBinding(interfaceToken.Lexeme) is TypeInfo.Interface implemented
+                            && implemented.Members.TryGetValue(memberName, out var expectedMember)
+                            && !IsCompatible(expectedMember, actualMember))
+                        {
+                            RecordTypeError(new TypeCheckException(
+                                $"Property '[Symbol.{memberName[2..]}]' in type '{classStmt.Name.Lexeme}' is not assignable to the same property in base type '{implemented.Name}'.",
+                                line: TryGetExprLine(method.ComputedKey!), tsCode: "TS2416"));
+                        }
+                    }
+                }
+            }
         }
 
         // Symbol-index conformance (TS2411) runs HERE — after method bodies — so an un-annotated

@@ -927,7 +927,7 @@ public partial class TypeChecker
     /// — so it lands as a distinct named field instead of collapsing multiple accessors onto the
     /// literal string <c>"[computed]"</c>. Anything else falls back to <see cref="GetPropertyKeyNameForTypeCheck"/>.
     /// </summary>
-    private static string GetAccessorMemberName(Expr.PropertyKey key) =>
+    private string GetAccessorMemberName(Expr.PropertyKey key) =>
         key is Expr.ComputedKey ck && TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownName
             ? wellKnownName
             : GetPropertyKeyNameForTypeCheck(key);
