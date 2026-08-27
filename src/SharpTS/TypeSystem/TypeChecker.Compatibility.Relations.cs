@@ -144,8 +144,13 @@ public partial class TypeChecker
             if (actual is TypeInfo.Never) { result = true; return true; }  // never is bottom type
             if (actual is TypeInfo.Any) { result = true; return true; }    // any is assignable to anything
             if (actual is TypeInfo.Object) { result = true; return true; } // object to object
+            if (actual is TypeInfo.Union objectUnion)
+            {
+                result = objectUnion.FlattenedTypes.All(t => IsCompatible(expected, t));
+                return true;
+            }
             if (IsPrimitiveType(actual)) { result = false; return true; }  // reject primitives
-            if (actual is TypeInfo.Null or TypeInfo.Undefined) { result = false; return true; }
+            if (actual is TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Void) { result = false; return true; }
             // Accept: Record, Array, Instance, Class, Function, Map, Set, etc.
             result = true;
             return true;
@@ -162,6 +167,51 @@ public partial class TypeChecker
             return true;
         }
         result = false;
+        return false;
+    }
+
+    /// <summary>
+    /// Assignability for the non-generic global interfaces supplied by lib.d.ts. When a program
+    /// library is loaded these names resolve to <see cref="TypeInfo.Interface"/> rather than the
+    /// dedicated fallback types used by standalone checks; their fundamental wrapper semantics
+    /// must remain the same in both representations.
+    /// </summary>
+    private bool TryRelateGlobalLibraryTypes(TypeInfo expected, TypeInfo actual, out bool result)
+    {
+        result = false;
+        if (expected is not TypeInfo.Interface expectedInterface)
+            return false;
+
+        switch (expectedInterface.Name)
+        {
+            // TypeScript's `Object` interface accepts every non-nullish value, including
+            // primitives and enums. (`object`, handled separately above, rejects primitives.)
+            case "Object":
+                result = actual is TypeInfo.Union objectUnion
+                    ? objectUnion.FlattenedTypes.All(t => IsCompatible(expected, t))
+                    : actual is not TypeInfo.Null and not TypeInfo.Undefined and not TypeInfo.Void;
+                return true;
+
+            // Primitive values box to their corresponding wrapper target. The reverse direction
+            // is intentionally not added: `Number` is not assignable to `number`, for example.
+            case "String" when actual is TypeInfo.String or TypeInfo.StringLiteral
+                or TypeInfo.Enum { Kind: EnumKind.String }:
+            case "Number" when actual is TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }
+                or TypeInfo.NumberLiteral or TypeInfo.Enum { Kind: EnumKind.Numeric }:
+            case "Boolean" when actual is TypeInfo.Primitive { Type: TokenType.TYPE_BOOLEAN }
+                or TypeInfo.BooleanLiteral:
+                result = true;
+                return true;
+
+            // A constraint and a later annotation can be resolved on opposite sides of the
+            // declaration-collection boundary. Relate the lib interface and SharpTS's dedicated
+            // built-in representation, as well as repeated declarations of the same global.
+            case "Date" when actual is TypeInfo.Date or TypeInfo.Interface { Name: "Date" }:
+            case "RegExp" when actual is TypeInfo.RegExp or TypeInfo.Interface { Name: "RegExp" }:
+                result = true;
+                return true;
+        }
+
         return false;
     }
 
@@ -183,7 +233,8 @@ public partial class TypeChecker
     /// <summary>
     /// Null / undefined as source under strictNullChecks (the non-strict case is
     /// handled at the very top of IsCompatibleCore): assignable only to a matching
-    /// bare type or a union that includes null / undefined respectively.
+    /// bare type or a union that includes null / undefined respectively; undefined also satisfies
+    /// a void target.
     /// </summary>
     private bool TryRelateNullUndefinedStrict(TypeInfo expected, TypeInfo actual, out bool result)
     {
@@ -200,7 +251,7 @@ public partial class TypeChecker
         if (actual is TypeInfo.Undefined)
         {
             if (expected is TypeInfo.Union u && u.ContainsUndefined) { result = true; return true; }
-            if (expected is TypeInfo.Undefined) { result = true; return true; }
+            if (expected is TypeInfo.Undefined or TypeInfo.Void) { result = true; return true; }
             result = false;
             return true;
         }

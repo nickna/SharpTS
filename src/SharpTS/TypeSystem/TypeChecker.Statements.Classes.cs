@@ -39,6 +39,13 @@ public partial class TypeChecker
 
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
+        bool previousRecoveryMode = _recoveryMode;
+        // Match generic-function diagnostics in module mode: independent class fields and members
+        // must still be checked after one generic relationship error.
+        if (_currentModule != null && classStmt.TypeParams is { Count: > 0 })
+            _recoveryMode = true;
+        try
+        {
         BindingSymbol classSymbol = RegisterValueDeclaration(classStmt.Name);
         // The same AST declaration is checked in preparatory and authoritative module passes.
         // Derive its nominal class identity from the stable binding rather than allocating a new
@@ -1154,6 +1161,11 @@ public partial class TypeChecker
         // it held at the string-index check earlier (ValidateClassPropertiesAgainstIndex).
         mutableClass.ResetFrozenCache();
         ValidateClassMembersAgainstSymbolIndex(classStmt, mutableClass.Freeze());
+        }
+        finally
+        {
+            _recoveryMode = previousRecoveryMode;
+        }
     }
 
     /// <summary>
@@ -1315,13 +1327,31 @@ public partial class TypeChecker
         using (new EnvironmentScope(this, classTypeEnv))
         {
 
+        bool TryResolveAmbientMember<T>(Func<T> resolve, out T value)
+        {
+            try
+            {
+                value = resolve();
+                return true;
+            }
+            catch (TypeCheckException ex) when (_recoveryMode)
+            {
+                RecordTypeError(ex);
+                value = default!;
+                return false;
+            }
+        }
+
         // Index signatures: [key: string|number|symbol]: ValueType. Resolved inside the class
         // type-environment scope so value types can reference the class's own type parameters.
         if (classStmt.IndexSignatures != null)
         {
             foreach (var indexSig in classStmt.IndexSignatures)
             {
-                TypeInfo valueType = ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!;
+                if (!TryResolveAmbientMember(
+                        () => ResolveAnnotation(indexSig.ValueType, indexSig.ValueTypeNode)!,
+                        out TypeInfo valueType))
+                    continue;
                 switch (indexSig.KeyType)
                 {
                     case TokenType.TYPE_STRING: mutableClass.StringIndexType = valueType; break;
@@ -1372,7 +1402,8 @@ public partial class TypeChecker
             {
                 // Single method declaration
                 var method = methods[0];
-                var funcType = BuildMethodFuncType(method);
+                if (!TryResolveAmbientMember(() => BuildMethodFuncType(method), out TypeInfo.Function funcType))
+                    continue;
 
                 if (method.IsStatic)
                     mutableClass.StaticMethods[methodName] = funcType;
@@ -1384,7 +1415,12 @@ public partial class TypeChecker
             else
             {
                 // Multiple overloaded signatures - create OverloadedFunction
-                var signatureTypes = methods.Select(BuildMethodFuncType).ToList();
+                var signatureTypes = new List<TypeInfo.Function>();
+                foreach (var method in methods)
+                    if (TryResolveAmbientMember(() => BuildMethodFuncType(method), out TypeInfo.Function signature))
+                        signatureTypes.Add(signature);
+                if (signatureTypes.Count == 0)
+                    continue;
                 var overloadedFunc = new TypeInfo.OverloadedFunction(signatureTypes, signatureTypes[0]);
 
                 if (methods[0].IsStatic)
@@ -1400,8 +1436,10 @@ public partial class TypeChecker
         foreach (var field in classStmt.Fields)
         {
             string fieldName = GetFieldMemberName(field);
-            TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
-                ?? TypeInfo.Any.Shared;
+            if (!TryResolveAmbientMember(
+                    () => ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode) ?? TypeInfo.Any.Shared,
+                    out TypeInfo fieldType))
+                continue;
 
             if (field.IsStatic)
             {
@@ -1430,9 +1468,12 @@ public partial class TypeChecker
                     continue;
                 }
 
-                TypeInfo accessorType = accessor.ReturnType != null
-                    ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
-                    : TypeInfo.Any.Shared;
+                if (!TryResolveAmbientMember(
+                        () => accessor.ReturnType != null
+                            ? ResolveAnnotation(accessor.ReturnType, accessor.ReturnTypeNode)!
+                            : TypeInfo.Any.Shared,
+                        out TypeInfo accessorType))
+                    continue;
 
                 if (accessor.Kind.Type == TokenType.GET)
                 {

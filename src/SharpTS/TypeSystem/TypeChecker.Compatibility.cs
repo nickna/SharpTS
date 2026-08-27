@@ -529,6 +529,8 @@ public partial class TypeChecker
 
         if (TryRelateNeverUnknownObject(expected, actual, out var neverUnknownObjectRel)) return neverUnknownObjectRel;
 
+        if (TryRelateGlobalLibraryTypes(expected, actual, out var globalLibraryRel)) return globalLibraryRel;
+
         if (TryRelateNullUndefinedStrict(expected, actual, out var nullUndefinedRel)) return nullUndefinedRel;
 
         if (TryRelateLiteralTypes(expected, actual, out var literalRel)) return literalRel;

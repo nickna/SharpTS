@@ -404,10 +404,11 @@ public partial class TypeChecker
                 }
             }
 
-            // A base property typed `any`/`undefined`/`null` accepts any override under the default
-            // (non-strict) configuration — e.g. `foo: typeof undefined` widens to `any` in tsc, so
-            // overriding it with a concrete type is not an error. Skip to avoid false positives.
-            if (baseType is TypeInfo.Any or TypeInfo.Undefined or TypeInfo.Null)
+            // A base property typed `any` always accepts the override. Nullish properties do so
+            // only without strictNullChecks; in strict mode `foo: typeof undefined` must reject a
+            // concrete override with TS2416.
+            if (baseType is TypeInfo.Any ||
+                (!_strictNullChecks && baseType is TypeInfo.Undefined or TypeInfo.Null))
                 continue;
 
             if (!classType.FieldTypes.TryGetValue(name, out var derivedType))

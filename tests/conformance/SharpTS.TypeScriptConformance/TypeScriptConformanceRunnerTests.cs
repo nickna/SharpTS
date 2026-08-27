@@ -187,6 +187,52 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Theory]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithDiscriminatedUnion.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/enumAssignability.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/enumAssignabilityInInheritance.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/typeParameterAssignability.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/typeParameterAssignability2.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/typeParameterAssignability3.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/undefinedAssignableToEveryType.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/enumIsNotASubtypeOfAnythingButNumber.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/nullIsSubtypeOfEverythingButUndefined.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithRecursiveConstraints.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/undefinedIsSubtypeOfEverything.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/unionSubtypeIfEveryConstituentTypeIsSubtype.ts")]
+    public void RunOne_RelationshipCampaign_MatchesPinnedDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("es6/Symbols/symbolProperty1.ts")]
+    [InlineData("jsx/tsxSpreadAttributesResolution13.tsx")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembersAccessibility.ts")]
+    public void RunOne_RelationshipCampaign_PreservesExistingPasses(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
     [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_syntax.ts")]
     [InlineData("jsx/jsxParsingError2.tsx")]
     [InlineData("jsx/jsxAttributeInitializer.ts")]
@@ -324,6 +370,53 @@ public class TypeScriptConformanceRunnerTests
 
             Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
             Assert.Contains(result.ActualDiagnostics ?? [], d => d.TsCode == "TS2322");
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void RunOne_ModuleRecovery_ReportsEveryErrorInsideFunctionBody()
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tmp, "function f<T, U>(t: T, u: U) {\n  t = u;\n  u = t;\n}\n");
+            var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
+
+            var errors = result.ActualDiagnostics ?? [];
+            Assert.Equal(2, errors.Count(d => d.TsCode == "TS2322"));
+            Assert.Contains(errors, d => d.TsCode == "TS2322" && d.Line == 2);
+            Assert.Contains(errors, d => d.TsCode == "TS2322" && d.Line == 3);
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void RunOne_ObjectTargetsRejectNullableUnion()
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tmp, "// @strictNullChecks: true\ndeclare let value: string | null;\nlet upper: Object = value;\nlet lower: object = value;\n");
+            var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
+
+            var errors = result.ActualDiagnostics ?? [];
+            Assert.Equal(2, errors.Count(d => d.TsCode == "TS2322"));
+        }
+        finally { File.Delete(tmp); }
+    }
+
+    [Fact]
+    public void RunOne_GenericAmbientClassRecovery_ReportsEveryInvalidMember()
+    {
+        var tmp = Path.GetTempFileName();
+        try
+        {
+            File.WriteAllText(tmp, "declare class C<T> {\n  first: unique symbol;\n  second(): unique symbol;\n}\n");
+            var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
+
+            var errors = result.ActualDiagnostics ?? [];
+            Assert.Equal(2, errors.Count(d => d.TsCode == "TS1331"));
         }
         finally { File.Delete(tmp); }
     }
