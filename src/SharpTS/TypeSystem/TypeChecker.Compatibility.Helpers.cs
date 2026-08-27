@@ -254,10 +254,9 @@ public partial class TypeChecker
                 if (!shadowed.Contains(name) && shadowed.Add(name)) yield return name;
         if (itf.Extends is { } bases)
         {
-            var own = itf.Members.Keys.ToHashSet();
             foreach (var b in bases)
                 foreach (var name in InterfaceNonPublicMemberNames(b, shadowed))
-                    if (!own.Contains(name)) yield return name;
+                    yield return name;
         }
     }
 
@@ -313,10 +312,12 @@ public partial class TypeChecker
             declaringId = brand.DeclaringClassId;
             return true;
         }
-        if (itf.Members.ContainsKey(name)) return true; // own interface member shadows bases (public)
         if (itf.Extends is { } bases)
             foreach (var b in bases)
                 if (TryGetInterfaceMemberBrand(b, name, out access, out declaringId)) return true;
+        // A class-derived private/protected brand wins over a merged public interface member of the
+        // same name. This is what preserves the class's nominal origin for `interface I extends C`.
+        if (itf.Members.ContainsKey(name)) return true;
         access = AccessModifier.Public;
         declaringId = 0;
         return false;

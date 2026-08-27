@@ -85,6 +85,21 @@ public class TypeParameterAssignabilityTests
     }
 
     [Fact]
+    public void UnconstrainedParameter_NotAssignableToAllOptionalTarget()
+    {
+        Assert.ThrowsAny<TypeCheckException>(() =>
+            TestHarness.RunInterpreted(
+                "function f<T>(value: T) { let weak: { s?: number } = value; }"));
+    }
+
+    [Fact]
+    public void ConstrainedParameter_AssignableToAllOptionalTarget()
+    {
+        TestHarness.RunInterpreted(
+            "function f<T extends { s?: number }>(value: T) { let weak: { s?: number } = value; }");
+    }
+
+    [Fact]
     public void Recovery_ReportsAllErrors_AtTheirOwnLines()
     {
         // Both assignments are errors; recovery must report both, each at its own line (not the

@@ -348,10 +348,16 @@ public abstract record TypeInfo
     {
         private static int _nextDeclarationId;
 
+        public MutableClass(string name, int stableDeclarationId) : this(name)
+        {
+            DeclarationId = stableDeclarationId;
+        }
+
         /// <summary>Unique per class declaration (one MutableClass is created per declaration);
         /// carried onto the frozen <see cref="ClassMetadataCore"/> so cache keys can tell
         /// same-name declarations apart.</summary>
-        public int DeclarationId { get; } = System.Threading.Interlocked.Increment(ref _nextDeclarationId);
+        public int DeclarationId { get; } =
+            System.Threading.Interlocked.Increment(ref _nextDeclarationId);
 
         public TypeInfo? Superclass { get; set; }  // Can be Class or InstantiatedGeneric
         public Dictionary<string, TypeInfo> Methods { get; } = [];

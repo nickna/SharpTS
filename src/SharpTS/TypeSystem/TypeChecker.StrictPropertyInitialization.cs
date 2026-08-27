@@ -18,7 +18,7 @@ public partial class TypeChecker
             return;
 
         var requiredFields = declaration.Fields
-            .Where(f => !f.IsStatic && !f.IsDeclare && !f.IsOptional &&
+            .Where(f => !f.IsStatic && !f.IsDeclare && !f.IsLiteralName && !f.IsOptional &&
                         !f.HasDefiniteAssignmentAssertion && f.Initializer == null)
             .Where(f =>
             {

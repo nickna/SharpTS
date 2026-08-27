@@ -39,7 +39,12 @@ public partial class TypeChecker
 
     private void CheckClassDeclaration(Stmt.Class classStmt)
     {
-        RegisterValueDeclaration(classStmt.Name);
+        BindingSymbol classSymbol = RegisterValueDeclaration(classStmt.Name);
+        // The same AST declaration is checked in preparatory and authoritative module passes.
+        // Derive its nominal class identity from the stable binding rather than allocating a new
+        // identity per pass; otherwise `var s: S` looks like a conflicting TS2403 redeclaration
+        // even though both displayed types are the very same source class.
+        int declarationId = -classSymbol.Id;
 
         // Check class decorators
         CheckDecorators(classStmt.Decorators, DecoratorTarget.Class);
@@ -48,7 +53,7 @@ public partial class TypeChecker
         // These are external type declarations (e.g., @DotNetType)
         if (classStmt.IsDeclare)
         {
-            CheckDeclareClass(classStmt);
+            CheckDeclareClass(classStmt, declarationId);
             return;
         }
 
@@ -89,7 +94,7 @@ public partial class TypeChecker
         // Create mutable class early so self-references in method return types work.
         // This allows methods like "next(): Node" to correctly resolve the return type.
         // The mutable class is populated during signature collection and frozen at the end.
-        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme)
+        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId)
         {
             Superclass = superclass,
             IsAbstract = classStmt.IsAbstract
@@ -1277,7 +1282,7 @@ public partial class TypeChecker
     /// For declare classes, we only validate signatures without requiring implementations.
     /// Used for @DotNetType external type declarations.
     /// </summary>
-    private void CheckDeclareClass(Stmt.Class classStmt)
+    private void CheckDeclareClass(Stmt.Class classStmt, int declarationId)
     {
         // Save reference to current environment for later registration
         TypeEnvironment parentEnv = _environment;
@@ -1300,7 +1305,7 @@ public partial class TypeChecker
         // Create mutable class early so self-references in method return types work.
         // This allows methods like "fromSeconds(): TimeSpan" to correctly resolve the return type.
         // The mutable class is populated during signature collection and frozen at the end.
-        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme)
+        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId)
         {
             Superclass = superclass,
             IsAbstract = classStmt.IsAbstract
