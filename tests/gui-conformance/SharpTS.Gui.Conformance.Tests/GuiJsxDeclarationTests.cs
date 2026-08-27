@@ -19,7 +19,7 @@ public sealed class GuiJsxDeclarationTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("Property 'onPress' is missing", result.Output, StringComparison.Ordinal);
         Assert.Contains("Element' is not assignable", result.Output, StringComparison.Ordinal);
-        Assert.Contains("Element[]' is not assignable", result.Output, StringComparison.Ordinal);
+        Assert.Contains("multiple children were provided", result.Output, StringComparison.Ordinal);
         Assert.Contains("__textBlockHandle", result.Output, StringComparison.Ordinal);
         Assert.Contains("__buttonHandle", result.Output, StringComparison.Ordinal);
     }
