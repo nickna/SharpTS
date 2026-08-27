@@ -753,10 +753,15 @@ public partial class TypeChecker
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
+        // Generic relationship suites commonly contain several independent assignments in one
+        // body. During module diagnostic checking, continue across those statements so each
+        // incompatible type-parameter direction is diagnosed. Standalone checks and ordinary
+        // functions remain statement-atomic, avoiding cascades after an earlier error.
+        if (suppress || (_currentModule != null && typeParams is { Count: > 0 }))
+            _recoveryMode = true;
         if (suppress)
         {
             // Collect-and-discard: continue past errors to observe every `return`, record nothing.
-            _recoveryMode = true;
             _suppressDiagnostics++;
         }
 
@@ -898,9 +903,9 @@ public partial class TypeChecker
             _activeLabels.Clear();
             foreach (var kvp in previousActiveLabels)
                 _activeLabels[kvp.Key] = kvp.Value;
+            _recoveryMode = previousRecoveryMode;
             if (suppress)
             {
-                _recoveryMode = previousRecoveryMode;
                 _suppressDiagnostics--;
             }
         }

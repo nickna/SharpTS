@@ -38,6 +38,38 @@ public class DiscriminatedUnionAssignabilityTests
     }
 
     [Fact]
+    public void BroadPrimitiveAndUndefinedDiscriminants_CoverCartesianProduct()
+    {
+        // `value` is correlated with the target's number/undefined branches while `kind`
+        // supplies the other axis. Neither source object relates to one target constituent
+        // without distributing both discriminant properties.
+        TestHarness.RunInterpreted("""
+            type Source = { kind: "a" | "b", value: number | undefined };
+            type Target =
+                | { kind: "a" | "b", value: number }
+                | { kind: "a", value: undefined }
+                | { kind: "b", value: undefined };
+            declare let source: Source;
+            declare let target: Target;
+            target = source;
+            """);
+    }
+
+    [Fact]
+    public void BroadPrimitiveAndUndefinedDiscriminants_UncoveredCombinationRejected()
+    {
+        Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted("""
+            type Source = { kind: "a" | "b", value: number | undefined };
+            type Target =
+                | { kind: "a" | "b", value: number }
+                | { kind: "a", value: undefined };
+            declare let source: Source;
+            declare let target: Target;
+            target = source;
+            """));
+    }
+
+    [Fact]
     public void UnmatchedCombination_Rejected()
     {
         // a=2 lands on { a: 2, b: 3 } whose b rejects 4 — the combination has no home.

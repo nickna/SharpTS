@@ -80,15 +80,15 @@ public class InheritanceMemberCompatibilityTests
     }
 
     [Fact]
-    public void BaseMemberTypedUndefined_AcceptsAnyOverride()
+    public void BaseMemberTypedUndefined_RejectsConcreteOverrideInStrictMode()
     {
-        // `typeof undefined` widens to `any` in the default (non-strict) configuration, so overriding
-        // it with a concrete type must not error (undefinedIsSubtypeOfEverything).
+        // `typeof undefined` remains the undefined type under strictNullChecks, so a concrete
+        // property cannot override it (undefinedIsSubtypeOfEverything).
         var diags = Check("""
             class Base { foo: typeof undefined; }
             class D extends Base { foo: string; }
             """);
-        AssertNoCode(diags, "TS2416");
+        AssertHasCode(diags, "TS2416");
     }
 
     // ---- TS2415: accessibility mismatch across an override ----
@@ -265,5 +265,20 @@ public class InheritanceMemberCompatibilityTests
             }
             """);
         AssertNoCode(diags, "TS2416");
+    }
+
+    [Fact]
+    public void GenericOverride_SubstitutesNestedGenericClassInstance()
+    {
+        // Base2<X>.foo is Foo<X>, and class type references are represented as
+        // Instance(InstantiatedGeneric). Substitution must recurse through that wrapper.
+        var diags = Check("""
+            class Foo<X> { foo: X; }
+            class Base2<X> { foo: Foo<X>; }
+            class Good<T extends Foo<U>, U extends Foo<T>> extends Base2<U> { foo: T; }
+            class Bad<T extends Foo<U>, U extends Foo<T>> extends Base2<U> { foo: U; }
+            """);
+        Assert.DoesNotContain(diags, d => d.TsCode == "TS2416" && d.Message.Contains("type 'Good'"));
+        Assert.Single(diags, d => d.TsCode == "TS2416" && d.Message.Contains("type 'Bad'"));
     }
 }

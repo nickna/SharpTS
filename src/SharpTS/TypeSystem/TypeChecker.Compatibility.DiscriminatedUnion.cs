@@ -170,9 +170,11 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// The unit-type constituents of a discriminant-capable type: literals, undefined/null, with
-    /// `boolean` expanding to <c>true | false</c> (tsc models it as that union). Null when the
-    /// type contains any non-unit constituent (then it cannot discriminate).
+    /// The unit-type constituents of a discriminant-capable type: literals, primitives, and
+    /// undefined/null, with `boolean` expanding to <c>true | false</c> (tsc models it as that
+    /// union). Broad string/number/bigint constituents remain one value-space branch: this lets a
+    /// correlated property such as <c>number | undefined</c> discriminate a target whose matching
+    /// properties are respectively <c>number</c> and <c>undefined</c>.
     /// </summary>
     private static List<TypeInfo>? UnitConstituents(TypeInfo type)
     {
@@ -183,6 +185,10 @@ public partial class TypeChecker
             {
                 case TypeInfo.StringLiteral or TypeInfo.NumberLiteral or TypeInfo.BooleanLiteral
                     or TypeInfo.BigIntLiteral or TypeInfo.Undefined or TypeInfo.Null:
+                    result.Add(t);
+                    break;
+                case TypeInfo.String or TypeInfo.BigInt:
+                case TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER }:
                     result.Add(t);
                     break;
                 case TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_BOOLEAN }:

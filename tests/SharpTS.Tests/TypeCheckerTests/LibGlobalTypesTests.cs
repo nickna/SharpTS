@@ -44,6 +44,17 @@ public class LibGlobalTypesTests
             """));
     }
 
+    [Theory]
+    [InlineData("Object")]
+    [InlineData("object")]
+    public void ObjectAnnotation_RejectsUnionContainingNull(string objectType)
+    {
+        Assert.ThrowsAny<TypeCheckException>(() => TestHarness.RunInterpreted($$"""
+            declare let value: string | null;
+            let target: {{objectType}} = value;
+            """));
+    }
+
     [Fact]
     public void StringWrapperAnnotation_RejectsNumericEnum()
     {

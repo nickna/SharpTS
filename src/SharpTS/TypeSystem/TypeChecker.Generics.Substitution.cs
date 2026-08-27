@@ -101,6 +101,11 @@ public partial class TypeChecker
                 new TypeInfo.InstantiatedGeneric(
                     ig.GenericDefinition,
                     ig.TypeArguments.Select(Sub).ToList()),
+            // Class type references are represented as Instance(InstantiatedGeneric). Recurse
+            // through the wrapper so substituting Base<T>.member: Foo<T> under Base<U> produces
+            // Foo<U>, rather than leaving the nested generic argument open.
+            TypeInfo.Instance instance =>
+                new TypeInfo.Instance(Sub(instance.ClassType)),
             // Handle new mapped type constructs
             TypeInfo.KeyOf keyOf =>
                 new TypeInfo.KeyOf(Sub(keyOf.SourceType)),
