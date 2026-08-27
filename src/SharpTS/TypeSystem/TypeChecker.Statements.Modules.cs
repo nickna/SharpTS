@@ -319,22 +319,33 @@ public partial class TypeChecker
                 // Merge the new members into the existing interface
                 var mergedMembers = new Dictionary<string, TypeInfo>(existingInterface.Members);
                 var mergedOptional = new HashSet<string>(existingInterface.OptionalMembers);
+                var mergedReadonly = existingInterface.ReadonlyMembers?.ToHashSet(StringComparer.Ordinal)
+                    ?? new HashSet<string>(StringComparer.Ordinal);
 
                 foreach (var member in interfaceStmt.Members)
                 {
                     var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
+                    if (name == "SymbolConstructor" && member.IsReadonly && memberType is TypeInfo.Symbol)
+                    {
+                        memberType = new TypeInfo.UniqueSymbol(
+                            "Symbol." + member.Name.Lexeme,
+                            $"typeof Symbol.{member.Name.Lexeme}");
+                    }
                     mergedMembers[member.Name.Lexeme] = memberType;
                     if (member.IsOptional)
                     {
                         mergedOptional.Add(member.Name.Lexeme);
                     }
+                    if (member.IsReadonly)
+                        mergedReadonly.Add(member.Name.Lexeme);
                 }
 
                 // Create the merged interface
                 var mergedInterface = existingInterface with
                 {
                     Members = mergedMembers.ToFrozenDictionary(),
-                    OptionalMembers = mergedOptional.ToFrozenSet()
+                    OptionalMembers = mergedOptional.ToFrozenSet(),
+                    ReadonlyMembers = mergedReadonly.ToFrozenSet()
                 };
 
                 // Re-define the merged interface (replaces existing definition)

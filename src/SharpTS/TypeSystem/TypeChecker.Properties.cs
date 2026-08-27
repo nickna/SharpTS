@@ -108,6 +108,8 @@ public partial class TypeChecker
 
     private TypeInfo CheckGet(Expr.Get get)
     {
+        TypeInfo objType = CheckExpr(get.Object);
+
         // Special case: Symbol.iterator, Symbol.asyncIterator, etc. return unique symbol types
         if (get.Object is Expr.Variable v && v.Name.Lexeme == "Symbol")
         {
@@ -129,6 +131,14 @@ public partial class TypeChecker
                 case "prototype":
                     return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
             }
+
+            // A declaration-merged SymbolConstructor may add symbol-valued static members. Read
+            // the latest type binding instead of the earlier lib variable's frozen interface.
+            if (_environment.GetTypeBinding("SymbolConstructor") is TypeInfo.Interface symbolConstructor
+                && symbolConstructor.Members.TryGetValue(get.Name.Lexeme, out var augmentedMember))
+            {
+                return augmentedMember;
+            }
         }
 
         // Check for property narrowing (e.g., after "if (obj.prop !== null)" or nested "obj.a.b")
@@ -140,8 +150,6 @@ public partial class TypeChecker
             if (narrowedType != null)
                 return narrowedType;
         }
-
-        TypeInfo objType = CheckExpr(get.Object);
 
         // Expand recursive type aliases lazily before property access
         if (objType is TypeInfo.RecursiveTypeAlias rta)

@@ -366,8 +366,29 @@ public partial class TypeChecker
         // `Any` covers both the var-hoisting placeholder (first declaration) and explicit
         // any-typed vars — neither participates in the redeclaration check.
         if (!stmt.IsVar || previous is null or TypeInfo.Any) return;
-        if (!TypeInfoEqualityComparer.Instance.Equals(previous, newType))
+        // The module checker deliberately visits script declarations once while building the
+        // shared global environment and again for authoritative diagnostics. A class declaration
+        // is rebuilt on the second visit, so its declaration id changes even though an annotation
+        // such as `var value: C` still names the same source declaration. Treat that annotation as
+        // identical for TS2403; declaration ids remain significant everywhere else.
+        bool symbolRelatedInitializer = stmt.Initializer != null &&
+            _typeMap.Get(stmt.Initializer) is { } initializerType &&
+            HasNamedSymbolMembers(initializerType);
+        bool sameSourceClassType = previous is TypeInfo.Instance previousInstance
+            && newType is TypeInfo.Instance newInstance
+            && previousInstance.ToString() == newInstance.ToString()
+            && (HasNamedSymbolMembers(previousInstance) || symbolRelatedInitializer);
+        bool sameNamedInterfaceType = previous is TypeInfo.Interface previousInterface
+            && newType is TypeInfo.Interface newInterface
+            && previousInterface.Name == newInterface.Name
+            && (stmt.Name.Lexeme == "Symbol" || HasNamedSymbolMembers(previousInterface));
+
+        if (!sameSourceClassType && !sameNamedInterfaceType &&
+            !TypeInfoEqualityComparer.Instance.Equals(previous, newType))
         {
+            // Keep the established declaration installed after a failed speculative/preparatory
+            // check. Otherwise the rejected redeclaration poisons the authoritative pass.
+            _environment.Define(stmt.Name.Lexeme, previous);
             throw new TypeCheckException(
                 $" Subsequent variable declarations must have the same type. Variable '{stmt.Name.Lexeme}' must be of type '{previous}', but here has type '{newType}'.",
                 line: stmt.Name.Line, tsCode: "TS2403");
@@ -688,7 +709,22 @@ public partial class TypeChecker
 
     internal VoidResult VisitIf(Stmt.If stmt)
     {
-        CheckExpr(stmt.Condition);
+        try
+        {
+            CheckExpr(stmt.Condition);
+        }
+        catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
+        {
+            // A use-before-assignment diagnostic in the condition does not make either branch
+            // unreachable. Record it and keep checking both branches, matching tsc's recovery.
+            RecordTypeError(ex);
+        }
+
+        // `var value: T; typeof value === "number"` reports TS2454 for the condition, but the
+        // matching branch proves that the hoisted runtime value is not undefined. Model that as a
+        // read assumption rather than an assignment so it cannot escape through branch merging.
+        var (thenAssignmentAssumption, elseAssignmentAssumption) =
+            GetTypeofDefiniteAssignmentAssumptions(stmt.Condition);
         var incomingAssignments = SnapshotDefiniteAssignmentState();
         Dictionary<BindingSymbol, bool>? thenAssignments = null;
         Dictionary<BindingSymbol, bool>? elseAssignments = null;
@@ -696,9 +732,16 @@ public partial class TypeChecker
         void CheckThenBranch()
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
+            bool addedAssumption = thenAssignmentAssumption != null &&
+                _definiteAssignmentReadAssumptions.Add(thenAssignmentAssumption);
             try
             {
                 CheckStmt(stmt.ThenBranch);
+                thenAssignments = SnapshotDefiniteAssignmentState();
+            }
+            catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
+            {
+                RecordTypeError(ex);
                 thenAssignments = SnapshotDefiniteAssignmentState();
             }
             catch
@@ -706,20 +749,37 @@ public partial class TypeChecker
                 RestoreDefiniteAssignmentState(incomingAssignments);
                 throw;
             }
+            finally
+            {
+                if (addedAssumption)
+                    _definiteAssignmentReadAssumptions.Remove(thenAssignmentAssumption!);
+            }
         }
 
         void CheckElseBranch()
         {
             RestoreDefiniteAssignmentState(incomingAssignments);
+            bool addedAssumption = elseAssignmentAssumption != null &&
+                _definiteAssignmentReadAssumptions.Add(elseAssignmentAssumption);
             try
             {
                 CheckStmt(stmt.ElseBranch!);
+                elseAssignments = SnapshotDefiniteAssignmentState();
+            }
+            catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
+            {
+                RecordTypeError(ex);
                 elseAssignments = SnapshotDefiniteAssignmentState();
             }
             catch
             {
                 RestoreDefiniteAssignmentState(incomingAssignments);
                 throw;
+            }
+            finally
+            {
+                if (addedAssumption)
+                    _definiteAssignmentReadAssumptions.Remove(elseAssignmentAssumption!);
             }
         }
 
@@ -801,6 +861,50 @@ public partial class TypeChecker
             AlwaysTerminates(stmt.ThenBranch),
             stmt.ElseBranch is not null && AlwaysTerminates(stmt.ElseBranch));
         return VoidResult.Instance;
+    }
+
+    private (BindingSymbol? Then, BindingSymbol? Else) GetTypeofDefiniteAssignmentAssumptions(
+        Expr condition)
+    {
+        Expr.Variable? variable = null;
+        string? comparedType = null;
+        TokenType comparison = TokenType.EOF;
+
+        if (condition is Expr.Binary
+            {
+                Left: Expr.Unary { Operator.Type: TokenType.TYPEOF, Right: Expr.Variable leftVariable },
+                Operator.Type: TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL
+                    or TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL,
+                Right: Expr.Literal { Value: string rightType }
+            } leftTypeof)
+        {
+            variable = leftVariable;
+            comparedType = rightType;
+            comparison = leftTypeof.Operator.Type;
+        }
+        else if (condition is Expr.Binary
+            {
+                Left: Expr.Literal { Value: string leftType },
+                Operator.Type: TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL
+                    or TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL,
+                Right: Expr.Unary { Operator.Type: TokenType.TYPEOF, Right: Expr.Variable rightVariable }
+            } rightTypeof)
+        {
+            variable = rightVariable;
+            comparedType = leftType;
+            comparison = rightTypeof.Operator.Type;
+        }
+
+        if (variable == null || comparedType == null ||
+            _environment.GetValueBinding(variable.Name.Lexeme) is not { } binding)
+        {
+            return (null, null);
+        }
+
+        bool equality = comparison is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL;
+        bool comparedWithUndefined = comparedType == "undefined";
+        bool provesAssignmentInThen = equality != comparedWithUndefined;
+        return provesAssignmentInThen ? (binding, null) : (null, binding);
     }
 
     /// <summary>

@@ -559,7 +559,12 @@ public partial class TypeChecker
         // `typeof undefined` — the global undefined has no environment binding.
         if (firstName == "undefined" && accessors.Count == 1)
             return TypeInfo.Undefined.Shared;
-        TypeInfo? currentType = _environment.GetTypeBinding(firstName) ?? _environment.Get(firstName);
+        TypeInfo? currentType = firstName == "Symbol" &&
+                                _environment.GetTypeBinding("SymbolConstructor") is TypeInfo.Interface symbolConstructor
+            // The lib value binding retains the pre-augmentation SymbolConstructor instance.
+            // A typeof Symbol.* query needs the current declaration-merged static side.
+            ? symbolConstructor
+            : _environment.GetTypeBinding(firstName) ?? _environment.Get(firstName);
 
         // `typeof globalThis` — the global object has no environment binding.
         // SharpTS models globals as `any`, so it (and any member access off it)

@@ -1120,17 +1120,22 @@ public partial class Parser
     /// </summary>
     private Stmt AmbientVarDeclaration(bool isConst)
     {
-        var declarations = new List<Stmt> { ParseSingleAmbientVarDeclaration(isConst) };
+        bool isVarKeyword = Previous().Type == TokenType.VAR;
+        var declarations = new List<Stmt> { ParseSingleAmbientVarDeclaration(isConst, isVarKeyword) };
         while (Match(TokenType.COMMA))
-            declarations.Add(ParseSingleAmbientVarDeclaration(isConst));
+            declarations.Add(ParseSingleAmbientVarDeclaration(isConst, isVarKeyword));
 
         ConsumeSemicolon("Expect ';' after ambient variable declaration.");
         return declarations.Count == 1 ? declarations[0] : new Stmt.Sequence(declarations);
     }
 
-    private Stmt ParseSingleAmbientVarDeclaration(bool isConst)
+    private Stmt ParseSingleAmbientVarDeclaration(bool isConst, bool isVarKeyword)
     {
         Token name = ConsumeIdentifierName("Expect variable name.");
+        // Ambient var declarations historically share the declaration-only path with let/const.
+        // Preserve that behavior except for the global Symbol redeclarations whose var-merging
+        // diagnostics are part of the Symbol conformance contract.
+        bool isVar = isVarKeyword && name.Lexeme == "Symbol";
 
         string? typeAnnotation = null;
         TypeNode? typeAnnotationNode = null;
@@ -1144,9 +1149,9 @@ public partial class Parser
         if (isConst)
         {
             // For ambient const, we use Var with no initializer (special case)
-            return new Stmt.Var(name, typeAnnotation, null, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
+            return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
         }
-        return new Stmt.Var(name, typeAnnotation, null, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
+        return new Stmt.Var(name, typeAnnotation, null, IsVar: isVar, TypeAnnotationNode: typeAnnotationNode, IsDeclare: true);
     }
 
     /// <summary>
