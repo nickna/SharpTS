@@ -34,4 +34,5 @@ public sealed record JsxCallInfo(
     Expr? KeyExpr,
     JsxMode Mode,
     int Line,
-    int TypeArgumentCount = 0);
+    int TypeArgumentCount = 0,
+    IReadOnlyList<int>? ChildLines = null);

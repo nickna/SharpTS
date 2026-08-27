@@ -194,6 +194,13 @@ public sealed class TypeScriptConformanceRunner
                         modules.Add(module);
                 }
             }
+
+            // Ambient modules discovered in referenced declaration fixtures are synthetic
+            // dependencies of those fixtures. Refresh the ordered union after all roots have
+            // registered their declarations so import-equals/default/named imports bind the
+            // populated ambient module rather than an earlier npm fallback.
+            resolver.RegisterAmbientModuleDeclarations(modules);
+            modules = resolver.GetModulesInOrder(modules);
         }
         catch (Exception ex)
         {
