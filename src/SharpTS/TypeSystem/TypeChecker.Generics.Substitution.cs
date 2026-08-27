@@ -89,6 +89,8 @@ public partial class TypeChecker
                 new TypeInfo.SpreadType(Sub(spread.Inner)),
             TypeInfo.Union union =>
                 new TypeInfo.Union(union.Types.Select(Sub).ToList()),
+            TypeInfo.Intersection intersection =>
+                new TypeInfo.Intersection(intersection.Types.Select(Sub).ToList()),
             // Assignability path (evalConditionals): fields only. Preserving call/construct signatures here
             // would feed generic construct-signature *assignment* relating (which erases/instantiates via
             // Substitute) types it does not yet compare correctly, regressing

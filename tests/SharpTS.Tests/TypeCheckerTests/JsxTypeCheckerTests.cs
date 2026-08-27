@@ -32,6 +32,8 @@ public class JsxTypeCheckerTests
     private static Expr.Property Attribute(string name, Expr value, int line = 1) =>
         new(new Expr.IdentifierKey(Identifier(name, line)), value);
 
+    private static Expr.Property Spread(Expr value) => new(null, value, IsSpread: true);
+
     private static Expr.Call JsxCall(
         JsxElementKind kind,
         string? tagName,
@@ -119,14 +121,61 @@ public class JsxTypeCheckerTests
     }
 
     [Fact]
-    public void WeakTypeNoOverlap_ReportsTs2559()
+    public void DirectAttributeNoOverlap_ReportsTs2322()
     {
         var call = JsxCall(JsxElementKind.Intrinsic, "div", new Expr.Literal("div"),
             new Expr.ObjectLiteral([Attribute("unknownAttr", new Expr.Literal(1))]));
 
         var result = Check(call);
 
+        Assert.Contains(result.Diagnostics, d => d.TsCode == "TS2322");
+        Assert.DoesNotContain(result.Diagnostics, d => d.TsCode == "TS2559");
+    }
+
+    [Fact]
+    public void SpreadOnlyWeakTypeNoOverlap_ReportsTs2559()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare const source: { unknownAttr: number };
+            """;
+        var call = JsxCall(JsxElementKind.Intrinsic, "div", new Expr.Literal("div"),
+            new Expr.ObjectLiteral([Spread(new Expr.Variable(Identifier("source")))]));
+
+        var result = Check(call, prelude);
+
         Assert.Contains(result.Diagnostics, d => d.TsCode == "TS2559");
+    }
+
+    [Fact]
+    public void AnySpreadSuppressesRequiredAndExcessAttributeDiagnostics()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare const source: any;
+            """;
+        var call = JsxCall(JsxElementKind.Intrinsic, "button", new Expr.Literal("button"),
+            new Expr.ObjectLiteral([Spread(new Expr.Variable(Identifier("source")))]));
+
+        Assert.Empty(Check(call, prelude).Diagnostics);
+    }
+
+    [Fact]
+    public void LaterRequiredSpread_ReportsOverwrittenDirectAttribute()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare const source: { label: string };
+            """;
+        var call = JsxCall(JsxElementKind.Intrinsic, "button", new Expr.Literal("button"),
+            new Expr.ObjectLiteral([
+                Attribute("label", new Expr.Literal("first"), line: 4),
+                Spread(new Expr.Variable(Identifier("source"))),
+            ]));
+
+        var diagnostic = Assert.Single(Check(call, prelude).Diagnostics,
+            item => item.TsCode == "TS2783");
+        Assert.Equal(4, diagnostic.Location?.Line);
     }
 
     [Fact]
@@ -142,6 +191,22 @@ public class JsxTypeCheckerTests
         var result = Check(call);
 
         Assert.Empty(result.Diagnostics);
+    }
+
+    [Fact]
+    public void DeclaredHyphenatedAttributeStillUsesItsDeclaredType()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element {}
+                interface IntrinsicElements { widget: { "data-count"?: number } }
+            }
+            """;
+        var call = JsxCall(JsxElementKind.Intrinsic, "widget", new Expr.Literal("widget"),
+            new Expr.ObjectLiteral([Attribute("data-count", new Expr.Literal("wrong"))]));
+
+        Assert.Contains(Check(call, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
     }
 
     [Fact]
@@ -380,6 +445,296 @@ public class JsxTypeCheckerTests
 
         Assert.Contains(result.Diagnostics,
             d => d.TsCode == "TS2741" && d.Message.Contains("'name'"));
+    }
+
+    [Fact]
+    public void DirectExcessAttributePreemptsMissingRequiredDiagnostic()
+    {
+        var call = JsxCall(JsxElementKind.Component, "Greeting",
+            new Expr.Variable(Identifier("Greeting")),
+            new Expr.ObjectLiteral([Attribute("naaame", new Expr.Literal("world"))]));
+
+        TypeCheckDiagnosticResult result = Check(call);
+
+        Assert.Contains(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+        Assert.DoesNotContain(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS2741");
+    }
+
+    [Fact]
+    public void MissingSpreadPropPreemptsSecondaryValueMismatch()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare const source: { excited: string };
+            """;
+        var call = JsxCall(JsxElementKind.Component, "Greeting",
+            new Expr.Variable(Identifier("Greeting")),
+            new Expr.ObjectLiteral([Spread(new Expr.Variable(Identifier("source")))]));
+
+        TypeCheckDiagnosticResult result = Check(call, prelude);
+
+        Assert.Single(result.Diagnostics, diagnostic => diagnostic.TsCode == "TS2741");
+    }
+
+    [Fact]
+    public void ClassComponent_UsesPropsInheritedThroughGenericBase()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element { __jsxElementBrand: string }
+                interface ElementClass { render(): JSX.Element }
+                interface ElementAttributesProperty { props: {} }
+            }
+            class Component<P> {
+                props: P;
+                constructor(props: P) { this.props = props; }
+                render(): JSX.Element { return {} as JSX.Element; }
+            }
+            class Widget extends Component<{ label: string }> {}
+            """;
+        var valid = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal("ok"))]));
+        var invalid = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal(42))]));
+
+        Assert.Empty(Check(valid, prelude).Diagnostics);
+        Assert.Contains(Check(invalid, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void ClassComponent_UsesPropsInheritedThroughAmbientGenericBase()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element { __jsxElementBrand: string }
+                interface ElementClass { render(): JSX.Element }
+                interface ElementAttributesProperty { props: {} }
+            }
+            declare class Component<P> {
+                props: P & { children?: any };
+                render(): JSX.Element;
+            }
+            class Widget extends Component<{ label: string }> {}
+            """;
+        var valid = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal("ok"))]));
+        var invalid = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal(42))]));
+
+        Assert.Empty(Check(valid, prelude).Diagnostics);
+        Assert.Contains(Check(invalid, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void ExportAssignmentSeesReferencedScriptNamespace()
+    {
+        string root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "sharpts-jsx-export-assignment"));
+        string declarations = Path.Combine(root, "globals.d.ts");
+        string legacyModule = Path.Combine(root, "legacy.d.ts");
+        string entry = Path.Combine(root, "index.tsx");
+        var files = new Dictionary<string, string>
+        {
+            [declarations] = """
+                namespace Legacy {
+                    export const marker: { label: string };
+                }
+                """,
+            [legacyModule] = """
+                /// <reference path="./globals.d.ts" />
+                export = Legacy;
+                """,
+            [entry] = """
+                import Legacy = require("./legacy");
+                const good: string = Legacy.marker.label;
+                const bad: number = Legacy.marker.label;
+                """,
+        };
+        var resolver = new ModuleResolver(entry, files, TypeScriptProgramOptions.Default with { Lib = [] })
+        {
+            JsxOptions = new JsxParseOptions(JsxMode.Preserve),
+            RecoverParseErrors = true,
+        };
+        ParsedModule program = resolver.LoadProgram(entry);
+        var modules = resolver.GetModulesInOrder(program);
+        ParsedModule exportingModule = resolver.LoadModule(legacyModule);
+        modules = modules
+            .OrderBy(module => ReferenceEquals(module, exportingModule) ? 0 : 1)
+            .ToList();
+        var checker = new TypeChecker(new TypeCheckerOptions { MaxErrors = 50 });
+
+        checker.CheckModules(modules, resolver);
+        var diagnostics = program.ParseDiagnostics.Concat(checker.GetDiagnostics()).ToList();
+
+        Assert.DoesNotContain(diagnostics,
+            diagnostic => diagnostic.TsCode == "TS2339" && diagnostic.Message.Contains("marker"));
+        Assert.Single(diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void FunctionComponent_IntersectionPropsAreChecked()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare function Intersected(props: { label: string } & { optional?: number }): JSX.Element;
+            """;
+        var valid = JsxCall(JsxElementKind.Component, "Intersected",
+            new Expr.Variable(Identifier("Intersected")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal("ok"))]));
+        var invalid = JsxCall(JsxElementKind.Component, "Intersected",
+            new Expr.Variable(Identifier("Intersected")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal(42))]));
+
+        Assert.Empty(Check(valid, prelude).Diagnostics);
+        Assert.Contains(Check(invalid, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void FunctionComponent_UnionInsideIntersectionSelectsCompatiblePropsBranch()
+    {
+        const string prelude = JsxPrelude + """
+
+            interface Canadian { street: string; postalCode: string }
+            interface American { street: string; zipCode: string }
+            declare function Address(props: (Canadian | American) & { children?: any }): JSX.Element;
+            """;
+        var canadian = JsxCall(JsxElementKind.Component, "Address",
+            new Expr.Variable(Identifier("Address")), new Expr.ObjectLiteral([
+                Attribute("street", new Expr.Literal("Main")),
+                Attribute("postalCode", new Expr.Literal("A1A")),
+            ]));
+        var american = JsxCall(JsxElementKind.Component, "Address",
+            new Expr.Variable(Identifier("Address")), new Expr.ObjectLiteral([
+                Attribute("street", new Expr.Literal("Main")),
+                Attribute("zipCode", new Expr.Literal("12345")),
+            ]));
+
+        Assert.Empty(Check(canadian, prelude).Diagnostics);
+        Assert.Empty(Check(american, prelude).Diagnostics);
+    }
+
+    [Fact]
+    public void DiscriminatedUnionProps_ReportMissingMemberFromSelectedBranch()
+    {
+        const string prelude = JsxPrelude + """
+
+            type TextProps = { editable: false }
+                           | { editable: true; onEdit: (value: string) => void };
+            declare function TextComponent(props: TextProps & { children?: any }): JSX.Element;
+            """;
+        var call = JsxCall(JsxElementKind.Component, "TextComponent",
+            new Expr.Variable(Identifier("TextComponent")),
+            new Expr.ObjectLiteral([Attribute("editable", new Expr.Literal(true))]));
+
+        Assert.Contains(Check(call, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void DiscriminatedUnionProps_AcceptNarrowedSpreadBranches()
+    {
+        const string prelude = JsxPrelude + """
+
+            type TextProps = { editable: false }
+                           | { editable: true; onEdit: (value: string) => void };
+            declare function TextComponent(props: TextProps & { children?: any }): JSX.Element;
+            declare const falseProps: { editable: false };
+            declare const trueProps: { editable: true; onEdit: (value: string) => void };
+            """;
+        var falseCall = JsxCall(JsxElementKind.Component, "TextComponent",
+            new Expr.Variable(Identifier("TextComponent")),
+            new Expr.ObjectLiteral([Spread(new Expr.Variable(Identifier("falseProps")))]));
+        var trueCall = JsxCall(JsxElementKind.Component, "TextComponent",
+            new Expr.Variable(Identifier("TextComponent")),
+            new Expr.ObjectLiteral([Spread(new Expr.Variable(Identifier("trueProps")))]));
+
+        Assert.Empty(Check(falseCall, prelude).Diagnostics);
+        Assert.Empty(Check(trueCall, prelude).Diagnostics);
+    }
+
+    [Fact]
+    public void ConstructorSignatureComponent_UsesInstanceShapeForEmptyAttributesMarker()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element {}
+                interface ElementAttributesProperty {}
+            }
+            interface WidgetConstructor { new (name: string): { label?: string } }
+            declare const Widget: WidgetConstructor;
+            """;
+        var valid = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal("ok"))]));
+        var invalid = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("other", new Expr.Literal(1))]));
+
+        Assert.Empty(Check(valid, prelude).Diagnostics);
+        Assert.Contains(Check(invalid, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
+    }
+
+    [Fact]
+    public void ConstructorSignatureComponent_MissingNamedAttributesPropertyReportsTs2607()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element {}
+                interface ElementAttributesProperty { props: any }
+            }
+            interface WidgetConstructor { new (name: string): { label?: string } }
+            declare const Widget: WidgetConstructor;
+            """;
+        var call = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")),
+            new Expr.ObjectLiteral([Attribute("label", new Expr.Literal("ok"))]));
+
+        Assert.Contains(Check(call, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2607");
+    }
+
+    [Fact]
+    public void ClassComponent_MissingNamedAttributesPropertyReportsTs2607()
+    {
+        const string prelude = """
+            declare const _jsx: any;
+            declare namespace JSX {
+                interface Element {}
+                interface ElementAttributesProperty { props: any }
+            }
+            class Widget { render(): JSX.Element { return {} as JSX.Element; } }
+            """;
+        var call = JsxCall(JsxElementKind.Component, "Widget",
+            new Expr.Variable(Identifier("Widget")), new Expr.ObjectLiteral([]));
+
+        Assert.Contains(Check(call, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2607");
+    }
+
+    [Fact]
+    public void MultipleChildrenPreserveTupleShape()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare const first: JSX.Element;
+            declare const second: JSX.Element;
+            declare const third: JSX.Element;
+            declare function Pair(props: { children: [JSX.Element, JSX.Element] }): JSX.Element;
+            """;
+        var valid = JsxCall(JsxElementKind.Component, "Pair",
+            new Expr.Variable(Identifier("Pair")), new Expr.ObjectLiteral([]),
+            new Expr.Variable(Identifier("first")), new Expr.Variable(Identifier("second")));
+        var invalid = JsxCall(JsxElementKind.Component, "Pair",
+            new Expr.Variable(Identifier("Pair")), new Expr.ObjectLiteral([]),
+            new Expr.Variable(Identifier("first")), new Expr.Variable(Identifier("second")),
+            new Expr.Variable(Identifier("third")));
+
+        Assert.Empty(Check(valid, prelude).Diagnostics);
+        Assert.Contains(Check(invalid, prelude).Diagnostics, diagnostic => diagnostic.TsCode == "TS2322");
     }
 
     [Fact]
