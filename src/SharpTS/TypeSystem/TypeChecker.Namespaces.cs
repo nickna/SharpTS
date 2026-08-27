@@ -61,6 +61,12 @@ public partial class TypeChecker
         {
             foreach (var (nestedName, nestedType) in existingNs.Types)
             {
+                // Seed every existing type, not only nested namespaces. Interface
+                // declaration merging inside a reopened namespace (notably global
+                // JSX.IntrinsicElements from React plus a user augmentation) needs the
+                // prior interface in the local environment so DefineOrMergeInterface can
+                // combine its members instead of replacing it.
+                namespaceEnv.DefineType(nestedName, nestedType);
                 if (nestedType is TypeInfo.Namespace nestedNs)
                 {
                     namespaceEnv.DefineNamespace(nestedName, nestedNs);

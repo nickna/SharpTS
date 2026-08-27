@@ -676,7 +676,10 @@ public partial class TypeChecker
     internal VoidResult VisitExpression(Stmt.Expression stmt)
     {
         CheckExpr(stmt.Expr);
-        if (stmt.Expr is Expr.Call assertCall)
+        // JSX is represented internally as a call, but its synthetic emit callee is not a
+        // user-written assertion function. Re-checking that callee here both duplicates work
+        // and, in preserve mode, invents a missing React diagnostic.
+        if (stmt.Expr is Expr.Call { JsxOrigin: null } assertCall)
         {
             ApplyAssertionNarrowing(assertCall);
         }

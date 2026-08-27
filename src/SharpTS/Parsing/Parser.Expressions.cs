@@ -289,6 +289,18 @@ public partial class Parser
     {
         Expr expr = Shift();
 
+        // In TSX, adjacent JSX roots are not a less-than comparison. tsc commits to both
+        // elements, reports TS2657 on the first root, and retains both ASTs so their normal
+        // JSX diagnostics still run. This covers both a newline-separated expression
+        // statement and `<div></div><div></div>` inside an initializer.
+        while (_jsx is not null && IsJsxRootExpression(expr) && IsJsxElementStart())
+        {
+            RecordErrorAt(JsxRootLine(expr),
+                "JSX expressions must have one parent element.", "TS2657");
+            Expr right = ParseJsxElement();
+            expr = new Expr.Comma(expr, right);
+        }
+
         while (Match(TokenType.GREATER, TokenType.GREATER_EQUAL, TokenType.LESS, TokenType.LESS_EQUAL, TokenType.IN, TokenType.INSTANCEOF))
         {
             Token op = Previous();
@@ -297,6 +309,27 @@ public partial class Parser
         }
 
         return expr;
+    }
+
+    private static bool IsJsxRootExpression(Expr expr) => expr switch
+    {
+        Expr.Call { JsxOrigin: not null } => true,
+        Expr.Comma comma => IsJsxRootExpression(comma.Right),
+        _ => false,
+    };
+
+    private static int JsxRootLine(Expr expr) => expr switch
+    {
+        Expr.Call { JsxOrigin: { } jsx } => jsx.Line,
+        Expr.Comma comma => JsxRootLine(comma.Left),
+        _ => 1,
+    };
+
+    private bool IsJsxElementStart()
+    {
+        if (!Check(TokenType.LESS)) return false;
+        TokenType next = PeekNext().Type;
+        return next is TokenType.GREATER or TokenType.IDENTIFIER || IsContextualKeyword(next);
     }
 
     private Expr Shift()
@@ -361,6 +394,23 @@ public partial class Parser
         // Check for generic arrow function: <T>(x) => ...
         if (Check(TokenType.LESS))
         {
+            if (_jsx is not null && PeekNext().Type == TokenType.SLASH)
+            {
+                int line = Peek().Line;
+                RecordErrorAt(line, "Declaration or statement expected.", "TS1128");
+                RecordErrorAt(line, "Expression expected.", "TS1109");
+                while (!IsAtEnd() && !Check(TokenType.SEMICOLON)) Advance();
+                return new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance);
+            }
+            if (_jsx is not null && PeekNext().Type == TokenType.DOT)
+            {
+                int line = Peek().Line;
+                RecordErrorAt(line, "Expression expected.", "TS1109");
+                RecordErrorAt(line, "Declaration or statement expected.", "TS1128");
+                while (!IsAtEnd() && !Check(TokenType.SEMICOLON)) Advance();
+                return new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance);
+            }
+
             var genericArrow = TryParseGenericArrowFunction();
             if (genericArrow != null) return genericArrow;
 
@@ -1478,6 +1528,24 @@ public partial class Parser
         {
             List<TypeParam>? typeParams = ParseTypeParameters();
             if (typeParams == null || typeParams.Count == 0)
+            {
+                _current = savedPosition;
+                return null;
+            }
+
+            // In TSX a lone unconstrained `<T>` is committed to JSX, even when the
+            // following tokens could form an arrow. A constraint, default, second type
+            // parameter, or trailing comma disambiguates the construct as a generic arrow.
+            // Preserve the token-level comma because ParseTypeParameters intentionally
+            // does not retain whether a single-parameter list ended in one.
+            bool hasTypeParameterComma = false;
+            for (int i = savedPosition; i < _current; i++)
+                hasTypeParameterComma |= _tokens[i].Type == TokenType.COMMA;
+            if (_jsx is not null &&
+                typeParams.Count == 1 &&
+                typeParams[0].Constraint is null &&
+                typeParams[0].Default is null &&
+                !hasTypeParameterComma)
             {
                 _current = savedPosition;
                 return null;

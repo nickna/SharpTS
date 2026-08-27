@@ -2145,6 +2145,28 @@ public partial class TypeChecker
             }
         }
 
+        // Every declaration in an ambient external module is exported even
+        // without an `export` modifier. The resolver represents
+        // `declare module "elements" { class MyElement {} }` as a synthetic
+        // module, so publish those declarations here before import-equals
+        // consumers build their namespace view.
+        if (module.IsAmbientModule)
+        {
+            foreach (Stmt declaration in module.Statements)
+            {
+                if (declaration is not (Stmt.Class or Stmt.Interface or Stmt.Function or
+                    Stmt.Var or Stmt.Const or Stmt.TypeAlias or Stmt.Enum or Stmt.Namespace))
+                {
+                    continue;
+                }
+
+                string exportedName = GetDeclarationName(declaration);
+                module.ExportedTypes[exportedName] = GetDeclaredType(declaration);
+                RecordExportedDeclarationBindings(
+                    module, declaration, exportedName, isDefault: false);
+            }
+        }
+
         // UMD declarations commonly pair `export = value` with
         // `export as namespace GlobalName`. Prefer the assignment type; for an
         // ESM-shaped declaration expose the complete module namespace.
@@ -2334,11 +2356,28 @@ public partial class TypeChecker
                                 throw new TypeCheckException($"Module '{import.ModulePath}' has no export named '{importedName}'", import.Keyword.Line, tsCode: "TS2305");
                             }
 
+                            bool hasValueExport = importedModule.ExportedValueBindings.ContainsKey(importedName);
+                            bool isTypeOnly = import.IsTypeOnly || spec.IsTypeOnly;
+                            if (reportErrors &&
+                                module.Path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase) &&
+                                !isTypeOnly &&
+                                !hasValueExport)
+                            {
+                                RecordTypeError(new TypeCheckException(
+                                    $"'{importedName}' is a type and cannot be imported in JavaScript files.",
+                                    spec.Imported.Line,
+                                    tsCode: "TS18042"));
+                            }
+
                             env.DefineImportAlias(
                                 localName, type,
-                                isValue: !import.IsTypeOnly && !spec.IsTypeOnly);
+                                // Some executable/embedded modules expose their value
+                                // surface without source binding provenance. Keep the
+                                // historical value alias for ordinary imports; the
+                                // binding map is still authoritative for the JSX-file
+                                // TS18042 diagnostic above.
+                                isValue: !isTypeOnly);
 
-                            bool isTypeOnly = import.IsTypeOnly || spec.IsTypeOnly;
                             Token localToken = spec.LocalName ?? spec.Imported;
                             if (!isTypeOnly &&
                                 importedModule.ExportedValueBindings.TryGetValue(

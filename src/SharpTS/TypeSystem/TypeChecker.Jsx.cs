@@ -29,7 +29,17 @@ public partial class TypeChecker
         }
         catch (TypeCheckException ex)
         {
-            ReportJsx(ex);
+            if (jsx.Mode == JsxMode.React && ex.Diagnostic.TsCode == "TS2304")
+            {
+                ReportJsx(new TypeCheckException(
+                    "This JSX tag requires the configured factory to be in scope.",
+                    jsx.Line,
+                    tsCode: "TS2874"));
+            }
+            else
+            {
+                ReportJsx(ex);
+            }
         }
 
         // Check every argument exactly once, structurally. The tag argument and the props
@@ -61,18 +71,47 @@ public partial class TypeChecker
             }
         }
 
-        TypeInfo propsType = jsx.PropsExpr is not null
-            ? CheckExpr(jsx.PropsExpr)
-            : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
+        TypeInfo propsType;
+        try
+        {
+            propsType = jsx.PropsExpr is not null
+                ? CheckExpr(jsx.PropsExpr)
+                : new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
+        }
+        catch (TypeCheckException ex)
+        {
+            ReportJsx(ex);
+            propsType = TypeInfo.Any.Shared;
+        }
 
         foreach (var argument in call.Arguments)
         {
             if (ReferenceEquals(argument, tagArgument) || ReferenceEquals(argument, jsx.PropsExpr))
                 continue;
-            CheckExpr(argument);
+            try
+            {
+                CheckExpr(argument);
+            }
+            catch (TypeCheckException ex)
+            {
+                // One malformed child must not prevent sibling JSX nodes or the
+                // enclosing intrinsic from contributing their own diagnostics.
+                ReportJsx(ex);
+            }
         }
 
         propsType = ApplyJsxChildrenContract(jsx, jsxNamespace, propsType);
+
+        if (jsx.Mode == JsxMode.React &&
+            jsx.TagName is { Length: > 0 } namespacedTag &&
+            namespacedTag.Contains(':') &&
+            char.IsUpper(namespacedTag[0]))
+        {
+            ReportJsx(new TypeCheckException(
+                "React components cannot include JSX namespace names.",
+                jsx.Line,
+                tsCode: "TS2639"));
+        }
 
         switch (jsx.Kind)
         {
@@ -91,6 +130,12 @@ public partial class TypeChecker
 
     private TypeInfo CheckJsxFactoryReference(Expr callee, JsxMode mode)
     {
+        // Preserve/react-native do not emit a factory call. The parser still lowers them to
+        // a JSX-origin call internally so the ordinary JSX checker can reuse the same AST,
+        // but that implementation detail must not invent a missing React diagnostic.
+        if (mode == JsxMode.Preserve)
+            return TypeInfo.Any.Shared;
+
         if (mode != JsxMode.React)
             return CheckExpr(callee);
 
@@ -129,9 +174,37 @@ public partial class TypeChecker
     private void CheckJsxComponent(
         JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo componentType, TypeInfo propsType)
     {
+        if (jsx.TypeArgumentCount > 0 && componentType is TypeInfo.Function)
+        {
+            ReportJsx(new TypeCheckException(
+                $"Expected 0 type arguments, but got {jsx.TypeArgumentCount}.",
+                jsx.Line,
+                tsCode: "TS2558"));
+            // Once the explicit arity is invalid, tsc does not continue through
+            // the component signature and report a secondary return-type error.
+            return;
+        }
+
         switch (componentType)
         {
             case TypeInfo.Any or TypeInfo.Unknown:
+                return;
+
+            // A member expression can select an intrinsic name dynamically
+            // (`const t = { tag: 'h1' }; <t.tag />`). String-valued tag
+            // expressions are valid JSX element constructors; a literal can
+            // still use the matching IntrinsicElements entry for prop checks.
+            case TypeInfo.StringLiteral literal:
+                CheckJsxIntrinsic(jsx with { TagName = literal.Value }, jsxNamespace, propsType);
+                return;
+
+            case TypeInfo.String when jsx.TagName?.Contains('.') == true ||
+                                      jsxNamespace?.Types.ContainsKey("IntrinsicElements") != true:
+                // An unconstrained JSX namespace has no finite intrinsic-name set to
+                // reject against. This also covers widened, initialized aliases such as
+                // `var CustomTag = "h1"; <CustomTag />`; when IntrinsicElements exists,
+                // plain string declarations remain invalid unless the tag is a dynamic
+                // member expression handled above.
                 return;
 
             case TypeInfo.Function fn:
@@ -746,7 +819,11 @@ public partial class TypeChecker
     /// </summary>
     private void ReportJsx(TypeCheckException ex)
     {
-        if (_recoveryMode)
+        // CheckModules performs per-statement recovery without toggling the standalone
+        // _recoveryMode flag. Treat its active module as recovery too; otherwise the first
+        // JSX diagnostic aborts a comma-recovered adjacent root and suppresses diagnostics
+        // for the retained sibling.
+        if (_recoveryMode || _currentModule is not null)
             RecordTypeError(ex);
         else
             throw ex;

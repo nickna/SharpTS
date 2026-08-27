@@ -387,6 +387,7 @@ public partial class Parser
                 bool computedOptional = Match(TokenType.QUESTION);
                 string computedType;
                 bool computedIsMethod = Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS);
+                bool computedHasExplicitType = computedIsMethod || Check(TokenType.COLON);
                 if (computedIsMethod)
                 {
                     computedType = ParseMethodSignature();
@@ -403,7 +404,10 @@ public partial class Parser
                 }
                 TypeNode? computedTypeNode = TakeTypeNode();
                 ConsumeInterfaceMemberSeparator();
-                members.Add(new Stmt.InterfaceMember(computedTok, computedType, computedOptional, computedReadonly, computedIsMethod, computedTypeNode));
+                members.Add(new Stmt.InterfaceMember(
+                    computedTok, computedType, computedOptional, computedReadonly,
+                    computedIsMethod, computedTypeNode,
+                    HasExplicitType: computedHasExplicitType));
                 continue;
             }
 
@@ -416,6 +420,7 @@ public partial class Parser
 
             string type;
             bool isMethod = Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS);
+            bool hasExplicitType = isMethod || Check(TokenType.COLON);
             if (isMethod)
             {
                 // Method signature: methodName(params): returnType or methodName<T>(params): returnType
@@ -434,7 +439,9 @@ public partial class Parser
             TypeNode? memberTypeNode = TakeTypeNode();
 
             ConsumeInterfaceMemberSeparator();
-            members.Add(new Stmt.InterfaceMember(memberName, type, isOptional, isReadonly, isMethod, memberTypeNode));
+            members.Add(new Stmt.InterfaceMember(
+                memberName, type, isOptional, isReadonly, isMethod, memberTypeNode,
+                HasExplicitType: hasExplicitType));
         }
 
         Consume(TokenType.RIGHT_BRACE, "Expect '}' after interface body.");
@@ -862,7 +869,8 @@ public partial class Parser
 
         if (isConst && initializer == null)
         {
-            throw new Exception($"Parse Error at line {name.Line}: 'const' declarations must be initialized.");
+            _uninitializedConstDeclarations.Add(name);
+            initializer = new Expr.Literal(SharpTS.Runtime.Types.SharpTSUndefined.Instance);
         }
 
         if (isConst)

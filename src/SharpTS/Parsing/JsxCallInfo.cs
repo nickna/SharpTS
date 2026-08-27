@@ -25,6 +25,7 @@ public enum JsxElementKind
 /// <param name="KeyExpr">Automatic-mode extracted key argument; null otherwise.</param>
 /// <param name="Mode">The jsx mode the element was lowered under.</param>
 /// <param name="Line">Source line of the opening tag (tokens carry no column).</param>
+/// <param name="TypeArgumentCount">Number of explicit JSX type arguments.</param>
 public sealed record JsxCallInfo(
     JsxElementKind Kind,
     string? TagName,
@@ -32,4 +33,5 @@ public sealed record JsxCallInfo(
     IReadOnlyList<Expr> ChildExprs,
     Expr? KeyExpr,
     JsxMode Mode,
-    int Line);
+    int Line,
+    int TypeArgumentCount = 0);

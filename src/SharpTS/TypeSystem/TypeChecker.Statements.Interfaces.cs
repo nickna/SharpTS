@@ -354,6 +354,14 @@ public partial class TypeChecker
         {
         foreach (var member in interfaceStmt.Members)
         {
+            if (_noImplicitAny && !member.IsMethod && !member.HasExplicitType)
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"Member '{member.Name.Lexeme}' implicitly has an 'any' type.",
+                    line: member.Name.Line,
+                    tsCode: "TS7008"));
+            }
+
             var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
 
             // Check if this is a duplicate member name (overload)

@@ -101,6 +101,61 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Theory]
+    [InlineData("checkJsxNamespaceNamesQuestionableForms.tsx")]
+    [InlineData("jsxAndTypeAssertion.tsx")]
+    [InlineData("jsxCheckJsxNoTypeArgumentsAllowed.tsx")]
+    [InlineData("jsxInvalidEsprimaTestSuite.tsx")]
+    [InlineData("jsxParsingError1.tsx")]
+    [InlineData("jsxParsingError2.tsx")]
+    [InlineData("jsxParsingError3.tsx")]
+    [InlineData("jsxParsingErrorImmediateSpreadInAttributeValue.tsx")]
+    [InlineData("jsxUnclosedParserRecovery.ts")]
+    [InlineData("tsxAttributeInvalidNames.tsx")]
+    [InlineData("tsxErrorRecovery1.tsx")]
+    [InlineData("tsxErrorRecovery2.tsx")]
+    [InlineData("tsxErrorRecovery3.tsx")]
+    [InlineData("tsxGenericArrowFunctionParsing.tsx")]
+    [InlineData("tsxNamespacedAttributeName1.tsx")]
+    [InlineData("tsxNamespacedTagName1.tsx")]
+    [InlineData("tsxNamespacedTagName2.tsx")]
+    [InlineData("tsxNoJsx.tsx")]
+    [InlineData("tsxOpeningClosingNames.tsx")]
+    [InlineData("tsxParseTests1.tsx")]
+    [InlineData("tsxParseTests2.tsx")]
+    [InlineData("unicodeEscapesInJsxtags.tsx")]
+    public void RunOne_JsxSyntaxRecoveryCampaign_MatchesPinnedDiagnostics(string fileName)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(TypeScriptConformancePaths.ConformanceDir(root), "jsx", fileName);
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{fileName}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("jsx/jsxParsingError4.tsx")]
+    [InlineData("jsx/tsxDynamicTagName1.tsx")]
+    [InlineData("jsx/tsxDynamicTagName6.tsx")]
+    [InlineData("jsx/tsxElementResolution17.tsx")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
+    public void RunOne_JsxRecoveryChanges_PreserveExistingPasses(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
     [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_syntax.ts")]
     [InlineData("jsx/jsxParsingError2.tsx")]
     [InlineData("jsx/jsxAttributeInitializer.ts")]
@@ -281,7 +336,7 @@ public class TypeScriptConformanceRunnerTests
     /// A <c>/fake-root</c> means no <c>*.errors.txt</c> baseline is found, so the outcome is
     /// uninteresting — what is pinned here is the directive → TypeChecker option wiring.
     /// </summary>
-    private static IReadOnlyList<string> ActualCodes(string source)
+    private static IReadOnlyList<BaselineDiagnostic> ActualDiagnostics(string source)
     {
         var tmp = Path.GetTempFileName();
         try
@@ -290,14 +345,46 @@ public class TypeScriptConformanceRunnerTests
             var result = new TypeScriptConformanceRunner("/fake-root").RunOne(tmp);
             Assert.NotEqual(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
             Assert.NotEqual(TypeScriptConformanceOutcome.TypeCheckError, result.Outcome);
-            return result.ActualDiagnostics?.Select(d => d.TsCode).ToList() ?? [];
+            return result.ActualDiagnostics ?? [];
         }
         finally { File.Delete(tmp); }
     }
 
+    private static IReadOnlyList<string> ActualCodes(string source) =>
+        ActualDiagnostics(source).Select(d => d.TsCode).ToList();
+
     // An unannotated parameter on a DECLARED function — the one shape SharpTS reports
     // noImplicitAny for. Arrows are deliberately exempt, so they cannot be used here.
     private const string ImplicitAnyParam = "function f(x) { return x; }\n";
+
+    [Fact]
+    public void MultipleJsxModes_SelectFinalHarnessVariant()
+    {
+        var codes = ActualCodes("""
+            // @strict: false
+            // @jsx: react, react-jsx
+            // @filename: view.tsx
+            declare namespace JSX { interface IntrinsicElements { div: {}; } }
+            <div />;
+            """);
+
+        Assert.DoesNotContain("TS17004", codes);
+    }
+
+    [Fact]
+    public void PreserveJsx_DoesNotRequireClassicFactory()
+    {
+        var diagnostics = ActualDiagnostics("""
+            // @strict: false
+            // @jsx: preserve
+            // @filename: view.tsx
+            declare namespace JSX { interface IntrinsicElements { div: {}; } }
+            <div />;
+            """);
+
+        Assert.DoesNotContain(diagnostics, d => d.TsCode == "TS2304");
+        Assert.DoesNotContain(diagnostics, d => d.TsCode == "TS17004");
+    }
 
     [Fact]
     public void NoDirectives_UseTypeScript6StrictDefault()
