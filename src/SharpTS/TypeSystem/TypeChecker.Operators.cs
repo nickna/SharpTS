@@ -693,18 +693,42 @@ public partial class TypeChecker
         // Without this, `thing &&= thing.original` spuriously flags `thing` as possibly
         // undefined/null on the very read that `&&=`'s short-circuit already guarantees is safe.
         TypeInfo valueType;
-        if (logical.Operator.Type == TokenType.AND_AND_EQUAL)
+        try
         {
-            var narrowedEnv = new TypeEnvironment(_environment);
-            narrowedEnv.Define(logical.Name.Lexeme, NarrowLogicalTruthy(varType));
-            using (new EnvironmentScope(this, narrowedEnv))
+            if (logical.Operator.Type == TokenType.AND_AND_EQUAL)
+            {
+                var narrowedEnv = new TypeEnvironment(_environment);
+                narrowedEnv.Define(logical.Name.Lexeme, NarrowLogicalTruthy(varType));
+                using (new EnvironmentScope(this, narrowedEnv))
+                {
+                    valueType = CheckExpr(logical.Value);
+                }
+            }
+            else
             {
                 valueType = CheckExpr(logical.Value);
             }
         }
-        else
+        catch (TypeCheckException) when (
+            _recoveryMode && logical.Operator.Type is
+                TokenType.OR_OR_EQUAL or TokenType.QUESTION_QUESTION_EQUAL)
         {
-            valueType = CheckExpr(logical.Value);
+            // Even when the RHS contains an error, reaching the next statement means this logical
+            // assignment completed. Both ||= and ??= therefore leave the target non-falsy/non-nullish
+            // respectively. Preserve that flow fact before statement recovery continues so a valid
+            // following call does not produce a cascading TS2722.
+            var assignedPathOnError = new Narrowing.NarrowingPath.Variable(logical.Name.Lexeme);
+            InvalidateNarrowingsFor(assignedPathOnError);
+            if (IsDeclaredTypeTracked(logical.Name.Lexeme))
+            {
+                var declaredType = GetDeclaredType(logical.Name.Lexeme) ?? varType;
+                var recoveredType = logical.Operator.Type == TokenType.OR_OR_EQUAL
+                    ? NarrowLogicalTruthy(varType)
+                    : ExpandNonNullable(varType);
+                if (NarrowToDeclaredSlot(declaredType, recoveredType) is { } narrowedSlot)
+                    _environment.Define(logical.Name.Lexeme, narrowedSlot);
+            }
+            throw;
         }
 
         // Invalidate any narrowings affected by this assignment

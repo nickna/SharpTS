@@ -68,6 +68,19 @@ public class FunctionCompatibilityTests
     }
 
     [Fact]
+    public void ArrayMapCallback_UsesRequiredIndexParameter()
+    {
+        var source = """
+            let arr = [10, 20, 30];
+            let result = arr.map((value: number, index: number) => value + index);
+            console.log(result.join(","));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("10,21,32\n", result);
+    }
+
+    [Fact]
     public void CallbackWithMoreParams_Incompatible()
     {
         // A callback cannot require more parameters than provided

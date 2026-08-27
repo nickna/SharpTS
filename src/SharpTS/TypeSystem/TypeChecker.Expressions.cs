@@ -453,6 +453,14 @@ public partial class TypeChecker
         if (sourceType is TypeInfo.Any || targetType is TypeInfo.Any)
             return targetType;
 
+        // An unconstrained type parameter can be instantiated with the source type, so the two
+        // types sufficiently overlap for an assertion (`null as T` is accepted by tsc). A
+        // constrained parameter is checked normally against its constraint and can still report
+        // TS2352 (`null as T extends Base`). This is assertion-only; assignability to a bare type
+        // parameter remains intentionally strict.
+        if (targetType is TypeInfo.TypeParameter { Constraint: null })
+            return targetType;
+
         // Check if types are related (either direction)
         if (IsCompatible(targetType, sourceType) || IsCompatible(sourceType, targetType))
             return targetType;
@@ -1720,7 +1728,19 @@ public partial class TypeChecker
             return declaredType;
         }
 
-        TypeInfo valueType = CheckExpr(assign.Value);
+        TypeInfo valueType;
+        try
+        {
+            valueType = CheckExpr(assign.Value);
+        }
+        catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
+        {
+            // The write still definitely assigns its target even when reading the RHS reports
+            // TS2454. Preserve that flow fact before the statement boundary records the error;
+            // otherwise a following reverse assignment produces a cascading TS2454.
+            MarkDefinitelyAssigned(assign.Name);
+            throw;
+        }
 
         if (!IsCompatible(declaredType, valueType))
         {

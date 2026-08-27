@@ -116,7 +116,10 @@ public static class BuiltInTypes
             "slice" => new TypeInfo.Function([NumberType, NumberType], new TypeInfo.Array(elementType), RequiredParams: 0), // start/end are optional
             // ECMA-262: callbackfn[, thisArg] — thisArg is optional Any
             "map" => new TypeInfo.Function(
-                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], AnyType, RequiredParams: 1), AnyType],
+                // TypeScript declares all three callback parameters as required. A supplied callback
+                // may still ignore trailing parameters through ordinary function compatibility; they
+                // must not be modeled as optional because strict comparison would then add undefined.
+                [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], AnyType), AnyType],
                 new TypeInfo.Array(AnyType), RequiredParams: 1),
             "filter" => new TypeInfo.Function(
                 [new TypeInfo.Function([elementType, NumberType, new TypeInfo.Array(elementType)], BooleanType, RequiredParams: 1), AnyType],

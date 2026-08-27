@@ -1231,6 +1231,8 @@ public partial class TypeChecker
     public TypeMap Check(List<Stmt> statements, SourceDocument? sourceDocument)
     {
         Bindings.Clear();
+        ResetInterfaceDeclarationTracking();
+        ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = sourceDocument;
 
         // Clear caches for fresh check
@@ -1298,6 +1300,8 @@ public partial class TypeChecker
         SourceDocument? sourceDocument)
     {
         Bindings.Clear();
+        ResetInterfaceDeclarationTracking();
+        ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = sourceDocument;
 
         _diagnostics.Clear();
@@ -1562,6 +1566,8 @@ public partial class TypeChecker
     {
         Bindings.Clear();
         _synthesizedJsxUses.Clear();
+        ResetInterfaceDeclarationTracking();
+        ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = null;
 
         // Clear compatibility cache for fresh check

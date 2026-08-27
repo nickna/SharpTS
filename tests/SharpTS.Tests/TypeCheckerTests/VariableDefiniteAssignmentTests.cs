@@ -50,6 +50,15 @@ public class VariableDefiniteAssignmentTests
     }
 
     [Fact]
+    public void RhsUseBeforeAssignmentStillAssignsTheTarget()
+    {
+        var diagnostics = Check("let source: number; let target: number; target = source; console.log(target);");
+
+        var diagnostic = Assert.Single(diagnostics, d => d.TsCode == "TS2454");
+        Assert.Contains("'source'", diagnostic.Message);
+    }
+
+    [Fact]
     public void RepeatedUninitializedVarDeclarationStaysUnassigned()
     {
         Assert.Contains(

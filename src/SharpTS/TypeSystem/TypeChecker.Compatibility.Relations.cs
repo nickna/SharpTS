@@ -138,6 +138,22 @@ public partial class TypeChecker
             return true;
         }
 
+        // The global `Object` interface is TypeScript's boxed-object supertype, distinct from the
+        // lowercase `object` keyword below: every non-nullish value (including primitives through
+        // their wrapper's apparent type) is assignable to it. It arrives here as the lib.d.ts
+        // interface rather than a dedicated TypeInfo node, so recognize the canonical name. Check
+        // union constituents individually to keep `string | null` rejected under strict null checks.
+        if (expected is TypeInfo.Interface { Name: "Object" })
+        {
+            result = actual switch
+            {
+                TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Unknown => false,
+                TypeInfo.Union union => union.FlattenedTypes.All(t => IsCompatible(expected, t)),
+                _ => true,
+            };
+            return true;
+        }
+
         // object type: accepts non-primitive, non-null values
         if (expected is TypeInfo.Object)
         {

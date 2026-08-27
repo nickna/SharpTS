@@ -12,20 +12,24 @@ namespace SharpTS.TypeSystem;
 public partial class TypeChecker
 {
     /// <summary>
-    /// Parameter positions whose DECLARED type is a naked type parameter being substituted with
-    /// a concrete type — tsc's <c>isInstantiatedGenericParameter</c>, which gates the callback
-    /// comparison rule (TypeScript #51620). Alpha-renames (parameter → parameter) do not mark;
+    /// Parameter positions whose declared type is a bare type parameter replaced while a signature
+    /// is instantiated — tsc's <c>isInstantiatedGenericParameter</c>, which
+    /// inspects the corresponding parameter on the uninstantiated target signature and gates the
+    /// callback comparison rule (TypeScript #51620). A nested shape such as
+    /// <c>(value: T) =&gt; void</c> is deliberately not marked: it remains subject to callback variance.
+    /// Alpha-renaming uses the non-evaluating substitution path and therefore does not mark;
     /// existing marks survive re-substitution.
     /// </summary>
-    private static FrozenSet<int>? MarkInstantiatedParamPositions(TypeInfo.Function func, Dictionary<string, TypeInfo> substitutions)
+    private static FrozenSet<int>? MarkInstantiatedParamPositions(
+        TypeInfo.Function func,
+        Dictionary<string, TypeInfo> substitutions)
     {
         HashSet<int>? marks = null;
         for (int i = 0; i < func.ParamTypes.Count; i++)
         {
             bool marked = func.IsInstantiatedTypeParamPosition(i) ||
                 (func.ParamTypes[i] is TypeInfo.TypeParameter tp &&
-                 substitutions.TryGetValue(tp.Name, out var replacement) &&
-                 replacement is not TypeInfo.TypeParameter);
+                 substitutions.ContainsKey(tp.Name));
             if (marked) (marks ??= []).Add(i);
         }
         return marks?.ToFrozenSet();
@@ -203,12 +207,11 @@ public partial class TypeChecker
 
     /// <summary>
     /// Like <see cref="Substitute"/>, but preserves (and substitutes into) a Record's call/construct
-    /// signatures and index types instead of dropping them. Used by the inheritance/extends relating
-    /// paths — interface-extends (TS2430) and class-extends index signatures (TS2415) — where a base
-    /// member or index value that is itself a construct/call signature must survive substitution to
-    /// be related against the derived one. General <see cref="Substitute"/> intentionally rebuilds a
-    /// Record fields-only (see the NOTE there) to keep generic construct-signature *assignment*
-    /// relating unchanged; this variant is scoped to the conformance checks that need the signatures.
+    /// signatures and index types instead of dropping them. Used by relationships where callable
+    /// structure is semantically significant: generic signature contextual instantiation/erasure,
+    /// interface extends (TS2430), and class-extends index signatures (TS2415). General
+    /// <see cref="Substitute"/> intentionally keeps its historical fields-only Record behavior;
+    /// these focused paths preserve the full shape.
     /// Records recurse so a nested Record field keeps its signatures too; every non-Record type
     /// delegates to <see cref="Substitute"/> (whose only signature-dropping happens at Record nodes,
     /// which this intercepts).

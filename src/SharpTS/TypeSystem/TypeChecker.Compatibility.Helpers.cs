@@ -677,16 +677,31 @@ public partial class TypeChecker
     /// slot (e.g. <c>(...a: number[])</c> yields <c>number</c> for every position). Returns null when
     /// the position is past a non-rest parameter list.
     /// </summary>
-    private static TypeInfo? EffectiveParamType(TypeInfo.Function f, int index)
+    private TypeInfo? EffectiveParamType(TypeInfo.Function f, int index)
     {
         int count = f.ParamTypes.Count;
         if (f.HasRestParam && count > 0)
         {
             int restIndex = count - 1;
-            if (index < restIndex) return f.ParamTypes[index];
+            if (index < restIndex)
+                return EffectiveFixedParamType(f, index);
             return f.ParamTypes[restIndex] is TypeInfo.Array arr ? arr.ElementType : f.ParamTypes[restIndex];
         }
-        return index < count ? f.ParamTypes[index] : null;
+        return index < count ? EffectiveFixedParamType(f, index) : null;
+    }
+
+    /// <summary>
+    /// Returns a fixed parameter's comparison type. Under strict null checking an optional or
+    /// default-valued parameter is observed as <c>T | undefined</c> by another signature, just as
+    /// it is at a call site. This is independent of exactOptionalPropertyTypes, which only changes
+    /// optional properties, not parameters.
+    /// </summary>
+    private TypeInfo EffectiveFixedParamType(TypeInfo.Function f, int index)
+    {
+        var type = f.ParamTypes[index];
+        return _strictNullChecks && index >= f.MinArity
+            ? CreateUnion(type, TypeInfo.Undefined.Shared)
+            : type;
     }
 
     /// <summary>
