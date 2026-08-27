@@ -100,6 +100,8 @@ export type {
     DropEffect,
     DropEvent,
     Thickness,
+    FontWeight,
+    TextAlignment,
     HorizontalAlignment,
     VerticalAlignment,
     Orientation,
@@ -115,6 +117,8 @@ export type {
     DrawingLineCap,
     DrawingLineJoin,
     DrawingCompositeMode,
+    SourceInfo,
+    GuiChildArray,
 } from "./runtime-types";
 
 export type {

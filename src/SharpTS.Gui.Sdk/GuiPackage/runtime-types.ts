@@ -103,7 +103,12 @@ export type DrawingCommand =
     { kind: "text"; text: string; x: number; y: number; width: number; height: number; fill: string; fontFamily?: string; fontSize: number; fontWeight?: FontWeight; fontStyle?: "normal" | "italic"; textAlignment?: "left" | "center" | "right"; textWrapping?: "noWrap" | "wrap"; opacity?: number; composite?: DrawingCompositeMode } |
     { kind: "image"; source: string; x: number; y: number; width: number; height: number; opacity?: number; composite?: "sourceOver" };
 /** A logical point used by polyline drawing commands. @category Core and Composition */
-export interface DrawingPoint { readonly x: number; readonly y: number; }
+export interface DrawingPoint {
+    /** Horizontal coordinate in device-independent pixels. */
+    readonly x: number;
+    /** Vertical coordinate in device-independent pixels. */
+    readonly y: number;
+}
 /** Supported stroke end-cap shapes. @category Core and Composition */
 export type DrawingLineCap = "butt" | "round" | "square";
 /** Supported stroke join shapes. @category Core and Composition */
@@ -111,8 +116,15 @@ export type DrawingLineJoin = "miter" | "round" | "bevel";
 /** Supported drawing compositing operations. @category Core and Composition */
 export type DrawingCompositeMode = "sourceOver" | "destinationOut";
 
-/** @internal */
-export interface SourceInfo { fileName: string; lineNumber: number; columnNumber: number; }
+/** Development source location attached to an element by the TSX development runtime. @category Core and Composition */
+export interface SourceInfo {
+    /** Source file reported by the TSX transform. */
+    fileName: string;
+    /** One-based source line reported by the TSX transform. */
+    lineNumber: number;
+    /** One-based source column reported by the TSX transform. */
+    columnNumber: number;
+}
 
 /** Immutable virtual element produced by TSX and consumed by the GUI renderer. @category Core and Composition */
 export interface GuiElement {
@@ -128,8 +140,13 @@ export interface GuiElement {
     readonly source: SourceInfo | null;
 }
 
-/** @internal */
-export interface GuiChildArray { readonly length: number; readonly [index: number]: GuiChild; }
+/** A nested array of GUI children accepted during composition. @category Core and Composition */
+export interface GuiChildArray {
+    /** Number of child values in the array. */
+    readonly length: number;
+    /** GUI child at the requested index. */
+    readonly [index: number]: GuiChild;
+}
 /** Content accepted by component and control children. @category Core and Composition */
 export type GuiChild = GuiElement | string | number | boolean | null | undefined | GuiChildArray;
 /** A nested array of textual control children. @category Core and Composition */

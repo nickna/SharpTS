@@ -1252,9 +1252,13 @@ export interface DrawingImage {
 }
 /** One pixel sampled from a rendered drawing document. @category Desktop Services */
 export interface DrawingPixel {
+    /** Red channel from zero to 255. */
     readonly red: number;
+    /** Green channel from zero to 255. */
     readonly green: number;
+    /** Blue channel from zero to 255. */
     readonly blue: number;
+    /** Alpha channel from zero to 255. */
     readonly alpha: number;
     /** Normalized #RRGGBB color when opaque, otherwise #AARRGGBB. */
     readonly color: string;
@@ -1287,7 +1291,12 @@ export type DrawingFloodFillResult =
     { readonly changed: false } |
     { readonly changed: true; readonly image: DrawingImage };
 /** Dimensions reported for a supported image source. @category Desktop Services */
-export interface ImageDimensions { readonly width: number; readonly height: number; }
+export interface ImageDimensions {
+    /** Image width in pixels. */
+    readonly width: number;
+    /** Image height in pixels. */
+    readonly height: number;
+}
 /** Options for showOpenFileDialog. @category Desktop Services */
 export interface OpenFileDialogOptions {
     /** Native dialog title. */
@@ -1400,27 +1409,56 @@ export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise
     return result.then(json => JSON.parse(json) as string[]);
 }
 
-/** Reads pixel dimensions from a packaged asset, local file, or PNG data URI. @category Desktop Services */
+/**
+ * Reads pixel dimensions from a packaged asset, local file, or PNG data URI.
+ * @param source - Packaged asset URI, local file path, or PNG data URI to inspect.
+ * @returns The decoded image width and height in pixels.
+ * @category Desktop Services
+ */
 export function getImageDimensions(source: string): Promise<ImageDimensions> {
     const result = DesktopBridge.GetImageDimensionsJsonAsync(source) as Promise<string>;
     return result.then(json => JSON.parse(json) as ImageDimensions);
 }
 
-/** Renders a validated drawing document to a transparency-preserving PNG file. @category Desktop Services */
+/**
+ * Renders a validated drawing document to a transparency-preserving PNG file.
+ * @param document - Bounded drawing document to composite and encode.
+ * @param path - Local destination path for the PNG file.
+ * @returns A promise completed after the PNG file is written.
+ * @category Desktop Services
+ */
 export function renderDrawingToPng(document: DrawingDocument, path: string): Promise<void> {
     return DesktopBridge.RenderDrawingToPngAsync(JSON.stringify(document), path) as any;
 }
-/** Renders a validated drawing document to a bounded PNG data URI, optionally applying effects. @category Desktop Services */
+/**
+ * Renders a validated drawing document to a bounded PNG data URI, optionally applying effects.
+ * @param document - Bounded drawing document to composite and encode.
+ * @param options - Ordered post-composition effects; omitted options apply no effects.
+ * @returns The encoded image, its PNG data URI, and pixel dimensions.
+ * @category Desktop Services
+ */
 export function renderDrawingToImage(document: DrawingDocument, options: RenderDrawingToImageOptions = {}): Promise<DrawingImage> {
     const result = DesktopBridge.RenderDrawingToImageJsonAsync(JSON.stringify(document), JSON.stringify(options)) as Promise<string>;
     return result.then(json => JSON.parse(json) as DrawingImage);
 }
-/** Samples one pixel from the fully composited drawing document. @category Desktop Services */
+/**
+ * Samples one pixel from the fully composited drawing document.
+ * @param document - Bounded drawing document to composite before sampling.
+ * @param point - Pixel coordinate to sample from the composited image.
+ * @returns The sampled red, green, blue, alpha, and normalized color values.
+ * @category Desktop Services
+ */
 export function sampleDrawingPixel(document: DrawingDocument, point: DrawingPoint): Promise<DrawingPixel> {
     const result = DesktopBridge.SampleDrawingPixelJsonAsync(JSON.stringify(document), point.x, point.y) as Promise<string>;
     return result.then(json => JSON.parse(json) as DrawingPixel);
 }
-/** Applies a contiguous, four-connected flood fill and returns a rasterized document image. @category Desktop Services */
+/**
+ * Applies a contiguous, four-connected flood fill and returns a rasterized document image.
+ * @param document - Bounded drawing document to composite before filling.
+ * @param options - Seed coordinate, replacement color, and optional channel tolerance.
+ * @returns Whether pixels changed and, when they did, the resulting rasterized image.
+ * @category Desktop Services
+ */
 export function floodFillDrawing(document: DrawingDocument, options: DrawingFloodFillOptions): Promise<DrawingFloodFillResult> {
     const result = DesktopBridge.FloodFillDrawingJsonAsync(JSON.stringify(document), JSON.stringify(options)) as Promise<string>;
     return result.then(json => JSON.parse(json) as DrawingFloodFillResult);
