@@ -219,6 +219,8 @@ public static class TsConfigLoader
                     StrictFunctionTypes = layer.StrictFunctionTypes ?? strictness.StrictFunctionTypes,
                     NoImplicitAny = layer.NoImplicitAny ?? strictness.NoImplicitAny,
                     NoImplicitThis = layer.NoImplicitThis ?? strictness.NoImplicitThis,
+                    UseUnknownInCatchVariables = layer.UseUnknownInCatchVariables
+                        ?? strictness.UseUnknownInCatchVariables,
                     StrictPropertyInitialization = layer.StrictPropertyInitialization ?? strictness.StrictPropertyInitialization,
                     ExactOptionalPropertyTypes = layer.ExactOptionalPropertyTypes ?? strictness.ExactOptionalPropertyTypes,
                     NoUncheckedIndexedAccess = layer.NoUncheckedIndexedAccess ?? strictness.NoUncheckedIndexedAccess,

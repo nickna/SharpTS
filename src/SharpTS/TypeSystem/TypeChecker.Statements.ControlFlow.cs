@@ -79,7 +79,8 @@ public partial class TypeChecker
             DeclareValue(
                 catchEnv,
                 tryCatch.CatchParam,
-                tryCatch.CatchParamType == "unknown"
+                tryCatch.CatchParamType == "unknown" ||
+                    (tryCatch.CatchParamType is null && Options.UseUnknownInCatchVariables)
                     ? TypeInfo.Unknown.Shared
                     : TypeInfo.Any.Shared);
 

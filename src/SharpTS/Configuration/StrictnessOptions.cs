@@ -25,6 +25,8 @@ public sealed record StrictnessOptions
 
     public bool? NoImplicitThis { get; init; }
 
+    public bool? UseUnknownInCatchVariables { get; init; }
+
     public bool? StrictPropertyInitialization { get; init; }
 
     public bool? ExactOptionalPropertyTypes { get; init; }
@@ -34,7 +36,7 @@ public sealed record StrictnessOptions
     /// <summary>True when this layer said nothing at all.</summary>
     public bool IsEmpty =>
         Strict is null && StrictNullChecks is null && StrictFunctionTypes is null && NoImplicitAny is null
-        && NoImplicitThis is null && StrictPropertyInitialization is null
+        && NoImplicitThis is null && UseUnknownInCatchVariables is null && StrictPropertyInitialization is null
         && ExactOptionalPropertyTypes is null && NoUncheckedIndexedAccess is null;
 
     /// <summary>
@@ -71,6 +73,9 @@ public sealed record StrictnessOptions
                 cli?.NoImplicitAny ?? tsConfig?.NoImplicitAny ?? umbrella ?? d.NoImplicitAny,
             NoImplicitThis =
                 cli?.NoImplicitThis ?? tsConfig?.NoImplicitThis ?? umbrella ?? d.NoImplicitThis,
+            UseUnknownInCatchVariables =
+                cli?.UseUnknownInCatchVariables ?? tsConfig?.UseUnknownInCatchVariables
+                ?? umbrella ?? d.UseUnknownInCatchVariables,
             StrictPropertyInitialization =
                 cli?.StrictPropertyInitialization ?? tsConfig?.StrictPropertyInitialization
                 ?? umbrella ?? d.StrictPropertyInitialization,

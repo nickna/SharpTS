@@ -41,7 +41,17 @@ public partial class TypeChecker
     internal VoidResult VisitSequence(Stmt.Sequence stmt)
     {
         foreach (var s in stmt.Statements)
-            CheckStmt(s);
+        {
+            if (!_recoveryMode)
+            {
+                CheckStmt(s);
+                continue;
+            }
+
+            try { CheckStmt(s); }
+            catch (TypeMismatchException ex) { RecordTypeError(ex); }
+            catch (TypeCheckException ex) { RecordTypeError(ex); }
+        }
         return VoidResult.Instance;
     }
 
@@ -102,6 +112,11 @@ public partial class TypeChecker
         else
         {
             _environment.DefineTypeAlias(stmt.Name.Lexeme, stmt.TypeDefinition, stmt.TypeDefinitionNode);
+            // A typeof-globalThis indexed access is observable even when the alias is
+            // never referenced, so resolve that targeted declaration form eagerly.
+            if (_hasDefaultLibraries &&
+                stmt.TypeDefinition.Contains("typeof globalThis", StringComparison.Ordinal))
+                _ = ResolveAnnotation(stmt.TypeDefinition, stmt.TypeDefinitionNode);
         }
         // After defining (so the alias stays usable even when a clause is malformed): validate
         // the infer declarations of every conditional type in the alias body.
@@ -138,6 +153,16 @@ public partial class TypeChecker
 
     internal VoidResult VisitVar(Stmt.Var stmt)
     {
+        if (_hasDefaultLibraries && !stmt.IsDeclare && stmt.IsVar &&
+            stmt.Name.Lexeme == "globalThis" && _currentFunctionReturnType is null &&
+            _namespaceDepth == 0 && _currentModule?.IsScript == true)
+        {
+            throw new TypeCheckException(
+                "Declaration name conflicts with built-in global identifier 'globalThis'.",
+                stmt.Name.Line,
+                tsCode: "TS2397");
+        }
+
         BindingSymbol variableSymbol = RegisterValueDeclaration(
             stmt.Name,
             mergeWithLocal: stmt.IsVar);
@@ -363,6 +388,11 @@ public partial class TypeChecker
     /// </summary>
     private void CheckVarRedeclaration(Stmt.Var stmt, TypeInfo? previous, TypeInfo newType)
     {
+        // A namespace body may legally declare a local var with the same name as
+        // the enclosing (merged) namespace; it shadows the self binding.
+        if (_namespaceDepth > 0 && _currentMergedNamespace?.Name == stmt.Name.Lexeme)
+            return;
+
         // `Any` covers both the var-hoisting placeholder (first declaration) and explicit
         // any-typed vars — neither participates in the redeclaration check.
         if (!stmt.IsVar || previous is null or TypeInfo.Any) return;

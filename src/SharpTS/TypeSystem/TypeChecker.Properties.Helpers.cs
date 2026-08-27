@@ -17,7 +17,7 @@ public partial class TypeChecker
     {
         return category switch
         {
-            TypeCategory.String => BuiltInTypes.GetStringMemberType(memberName),
+            TypeCategory.String => ResolveStringMemberType(memberName),
             TypeCategory.Array when objType is TypeInfo.Array arr =>
                 BuiltInTypes.GetArrayMemberType(memberName, arr.ElementType),
             TypeCategory.Tuple when objType is TypeInfo.Tuple tuple =>
@@ -35,7 +35,7 @@ public partial class TypeChecker
             TypeCategory.FinalizationRegistry when objType is TypeInfo.FinalizationRegistry fr =>
                 BuiltInTypes.GetFinalizationRegistryMemberType(memberName, fr.TargetType),
             TypeCategory.Date => BuiltInTypes.GetDateInstanceMemberType(memberName),
-            TypeCategory.RegExp => BuiltInTypes.GetRegExpMemberType(memberName),
+            TypeCategory.RegExp => ResolveRegExpMemberType(memberName),
             TypeCategory.Error when objType is TypeInfo.Error err =>
                 BuiltInTypes.GetErrorMemberType(memberName, err.Name),
             TypeCategory.Timeout => BuiltInTypes.GetTimeoutMemberType(memberName),
@@ -67,6 +67,22 @@ public partial class TypeChecker
                 BuiltInTypes.GetEventEmitterMemberType(memberName),
             _ => null
         };
+    }
+
+    private TypeInfo? ResolveStringMemberType(string memberName)
+    {
+        TypeInfo? member = BuiltInTypes.GetStringMemberType(memberName);
+        return !Options.RespectLoadedLibraries && memberName == "match" && member is TypeInfo.Function function
+            ? function with { ReturnType = TypeInfo.Any.Shared }
+            : member;
+    }
+
+    private TypeInfo? ResolveRegExpMemberType(string memberName)
+    {
+        TypeInfo? member = BuiltInTypes.GetRegExpMemberType(memberName);
+        return !Options.RespectLoadedLibraries && memberName == "exec" && member is TypeInfo.Function function
+            ? function with { ReturnType = TypeInfo.Any.Shared }
+            : member;
     }
 
     /// <summary>
@@ -255,6 +271,10 @@ public partial class TypeChecker
         if (ResolveObjectPrototypeMember(memberName.Lexeme) is { } protoMember)
         {
             return protoMember;
+        }
+        if (itf.StringIndexType is { } stringIndexType)
+        {
+            return WithUncheckedUndefined(stringIndexType);
         }
         throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", line: memberName.Line, tsCode: "TS2339");
     }

@@ -61,6 +61,14 @@ public partial class TypeChecker
         // This allows GetNamespace() to find previously-defined nested namespaces
         if (existingNs != null)
         {
+            // Only exported class/enum/namespace members have both value and type
+            // facets. Private variables from an earlier declaration body are not
+            // visible in a reopened namespace and must not be seeded here.
+            foreach (var (memberName, memberType) in existingNs.Values)
+            {
+                if (existingNs.Types.ContainsKey(memberName))
+                    namespaceEnv.Define(memberName, memberType);
+            }
             foreach (var (nestedName, nestedType) in existingNs.Types)
             {
                 // Seed every existing type, not only nested namespaces. Interface
@@ -109,13 +117,13 @@ public partial class TypeChecker
             {
                 if (_recoveryMode)
                 {
-                    try { CollectNamespaceMemberType(member, types); }
+                    try { CollectNamespaceMemberType(member, types, values); }
                     catch (TypeMismatchException ex) { RecordTypeError(ex); }
                     catch (TypeCheckException ex) { RecordTypeError(ex); }
                 }
                 else
                 {
-                    CollectNamespaceMemberType(member, types);
+                    CollectNamespaceMemberType(member, types, values);
                 }
                 CaptureNamespaceBindings(
                     namespaceEnv,
@@ -220,11 +228,16 @@ public partial class TypeChecker
     /// Collects type information from a namespace member (first pass).
     /// Registers classes, interfaces, enums, and nested namespaces.
     /// </summary>
-    private void CollectNamespaceMemberType(Stmt member, Dictionary<string, TypeInfo> types)
+    private void CollectNamespaceMemberType(
+        Stmt member,
+        Dictionary<string, TypeInfo> types,
+        Dictionary<string, TypeInfo> values)
     {
         // Unwrap export statements
+        bool isExported = false;
         if (member is Stmt.Export export && export.Declaration != null)
         {
+            isExported = true;
             member = export.Declaration;
         }
 
@@ -237,12 +250,16 @@ public partial class TypeChecker
                 if (nestedNsType != null)
                 {
                     types[nested.Name.Lexeme] = nestedNsType;
+                    if (isExported)
+                        values[nested.Name.Lexeme] = nestedNsType;
                 }
                 break;
 
             case Stmt.Class classStmt:
                 // Register class type (full check in second pass)
                 CheckClassSignature(classStmt, types);
+                if (isExported && _environment.Get(classStmt.Name.Lexeme) is { } classValue)
+                    values[classStmt.Name.Lexeme] = classValue;
                 break;
 
             case Stmt.Interface interfaceStmt:
@@ -260,6 +277,8 @@ public partial class TypeChecker
                 if (enumType != null)
                 {
                     types[enumStmt.Name.Lexeme] = enumType;
+                    if (isExported)
+                        values[enumStmt.Name.Lexeme] = enumType;
                 }
                 break;
 

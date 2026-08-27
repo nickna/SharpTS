@@ -35,6 +35,46 @@ public partial class TypeChecker
         TypeInfo objType = CheckExpr(getIndex.Object);
         TypeInfo indexType = CheckExpr(getIndex.Index);
 
+        if (_hasDefaultLibraries &&
+            getIndex.Index is Expr.Literal { Value: string directGlobalProperty } &&
+            (getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
+             getIndex.Object is Expr.This))
+        {
+            if (GetGlobalThisType().Members.TryGetValue(directGlobalProperty, out TypeInfo? directMember))
+                return directMember;
+            if (_globalObjectLexicalNames.Contains(directGlobalProperty))
+                throw new TypeCheckException(
+                    $"Property '{directGlobalProperty}' does not exist on type 'typeof globalThis'.",
+                    TryGetExprLine(getIndex.Object),
+                    tsCode: "TS2339");
+            if (!_noImplicitAny)
+                return TypeInfo.Any.Shared;
+            throw new TypeCheckException(
+                $"Element implicitly has an 'any' type because expression can't be used to index type 'typeof globalThis'.",
+                TryGetExprLine(getIndex.Object),
+                tsCode: "TS7053");
+        }
+
+        if (_hasDefaultLibraries &&
+            getIndex.Index is Expr.Literal { Value: string globalProperty } &&
+            ContainsGlobalThisType(objType) &&
+            !GetGlobalThisType().Members.TryGetValue(globalProperty, out TypeInfo? globalMember))
+        {
+            bool direct = getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
+                getIndex.Object is Expr.This;
+            if (!_noImplicitAny)
+                return TypeInfo.Any.Shared;
+            throw new TypeCheckException(
+                $"Property '{globalProperty}' is not available through the global object.",
+                TryGetExprLine(getIndex.Object),
+                tsCode: direct ? "TS7053" : "TS7015");
+        }
+        if (_hasDefaultLibraries &&
+            getIndex.Index is Expr.Literal { Value: string knownGlobalProperty } &&
+            ContainsGlobalThisType(objType) &&
+            GetGlobalThisType().Members.TryGetValue(knownGlobalProperty, out TypeInfo? knownGlobalMember))
+            return knownGlobalMember;
+
         // An enum-typed index (`x[E.A]` — enum member accesses type as the enum) participates
         // as its underlying key kind: numeric enums hit number index signatures, string enums
         // hit string ones.
@@ -123,6 +163,21 @@ public partial class TypeChecker
             List<TypeInfo> memberTypes = [];
             foreach (var member in union.FlattenedTypes)
             {
+                if (member is TypeInfo.Null or TypeInfo.Undefined)
+                {
+                    if (getIndex.Optional)
+                    {
+                        memberTypes.Add(TypeInfo.Undefined.Shared);
+                        continue;
+                    }
+
+                    var nullableError = NullableIndexAccessError(union, getIndex.Object);
+                    if (!_recoveryMode)
+                        throw nullableError;
+                    RecordTypeError(nullableError);
+                    continue;
+                }
+
                 try
                 {
                     var memberType = CheckGetIndexOnType(member, indexType, getIndex);
@@ -141,6 +196,8 @@ public partial class TypeChecker
                 }
             }
             // Return union of all member types
+            if (memberTypes.Count == 0)
+                return TypeInfo.Any.Shared;
             var unique = memberTypes.Distinct(TypeInfoEqualityComparer.Instance).ToList();
             return unique.Count == 1 ? unique[0] : new TypeInfo.Union(unique);
         }
@@ -237,6 +294,15 @@ public partial class TypeChecker
             // String literal index - look up specific property
             if (getIndex.Index is Expr.Literal { Value: string propName })
             {
+                if (objType is TypeInfo.Namespace namespaceType)
+                {
+                    if (namespaceType.Values.TryGetValue(propName, out TypeInfo? namespaceValue))
+                        return namespaceValue;
+                    if (namespaceType.Types.TryGetValue(propName, out TypeInfo? namespaceMemberType))
+                        return namespaceMemberType;
+                    if (propName == namespaceType.Name)
+                        return namespaceType;
+                }
                 if (objType is TypeInfo.Record rec && rec.Fields.TryGetValue(propName, out var fieldType))
                     return WithOptionalPropertyUndefined(fieldType, rec.IsFieldOptional(propName));
                 if (objType is TypeInfo.Interface itf && itf.Members.TryGetValue(propName, out var memberType))
@@ -365,6 +431,11 @@ public partial class TypeChecker
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
     }
+
+    private static bool ContainsGlobalThisType(TypeInfo type) =>
+        type is TypeInfo.Interface { Name: "typeof globalThis" } ||
+        type is TypeInfo.Intersection intersection &&
+            intersection.FlattenedTypes.Any(ContainsGlobalThisType);
 
     /// <summary>
     /// Object-like types on which a well-known-symbol index (<c>x[Symbol.iterator]</c>,

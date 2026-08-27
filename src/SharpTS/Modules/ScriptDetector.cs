@@ -1,4 +1,5 @@
 using SharpTS.Parsing;
+using SharpTS.Parsing.Visitors;
 
 namespace SharpTS.Modules;
 
@@ -22,6 +23,7 @@ public static class ScriptDetector
     /// <returns>True if the file is a script (no imports or exports), false if it's a module.</returns>
     public static bool IsScriptFile(List<Stmt> statements)
     {
+        var importMetaDetector = new ImportMetaDetector();
         foreach (var stmt in statements)
         {
             // Import statement makes this a module
@@ -43,8 +45,23 @@ public static class ScriptDetector
             // ImportRequire makes this a module (import x = require(...))
             if (stmt is Stmt.ImportRequire)
                 return false;
+
+            importMetaDetector.Visit(stmt);
+            if (importMetaDetector.Found)
+                return false;
         }
 
         return true;
+    }
+
+    private sealed class ImportMetaDetector : AstVisitorBase
+    {
+        public bool Found { get; private set; }
+
+        protected override void VisitImportMeta(Expr.ImportMeta expr)
+        {
+            Found = true;
+            ShouldContinue = false;
+        }
     }
 }
