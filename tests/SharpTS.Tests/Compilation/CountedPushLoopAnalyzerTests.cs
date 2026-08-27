@@ -18,6 +18,7 @@ public class CountedPushLoopAnalyzerTests
         Assert.True(CountedPushLoopAnalyzer.TryAnalyze(loop, out var reservation));
         Assert.Equal("items", reservation.Array.Name.Lexeme);
         Assert.Equal("n", reservation.Bound.Name.Lexeme);
+        Assert.IsType<Expr.ObjectLiteral>(reservation.Value);
     }
 
     [Theory]

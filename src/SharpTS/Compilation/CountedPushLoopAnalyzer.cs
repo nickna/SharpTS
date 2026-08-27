@@ -12,7 +12,8 @@ internal static class CountedPushLoopAnalyzer
 {
     internal readonly record struct Reservation(
         Expr.Variable Array,
-        Expr.Variable Bound);
+        Expr.Variable Bound,
+        Expr Value);
 
     internal static bool TryAnalyze(Stmt.For loop, out Reservation reservation)
     {
@@ -62,7 +63,7 @@ internal static class CountedPushLoopAnalyzer
             || !IsPure(arguments[0]))
             return false;
 
-        reservation = new Reservation(array, bound);
+        reservation = new Reservation(array, bound, arguments[0]);
         return true;
     }
 

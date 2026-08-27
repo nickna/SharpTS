@@ -61,6 +61,9 @@ try {
     Assert-True ($snapshotA.cases[0].runtimes[0].reason -ceq 'notSelected') 'Interpreter missing reason was notSelected.'
     Assert-True ($snapshotA.cases[0].runtimes[3].status -ceq 'missing') 'Bun should be explicitly missing.'
     Assert-True (-not $snapshotA.run.tools.runtimes[3].available) 'Unavailable Bun was marked available.'
+    Assert-True ($snapshotA.methodology.harnessVersion -eq 2) 'Expected confirmed-probe harness version 2.'
+    Assert-True ($snapshotA.methodology.id -ceq 'performance-now-confirmed-probe-auto-batched-v2') `
+        'Expected confirmed-probe methodology ID.'
 
     $snapshotFile = Join-Path $temporaryDirectory 'snapshot.json'
     [void](Export-SharpTSPublicBenchmarkSnapshot -ResultsFile $resultsA -OutputFile $snapshotFile @fixed)

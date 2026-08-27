@@ -91,9 +91,28 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["harnessVersion", "id", "timingScope", "clock", "includes", "excludes", "sampling"],
+      "oneOf": [
+        {
+          "properties": {
+            "harnessVersion": { "const": 1 },
+            "id": { "const": "performance-now-auto-batched-v1" }
+          }
+        },
+        {
+          "properties": {
+            "harnessVersion": { "const": 2 },
+            "id": { "const": "performance-now-confirmed-probe-auto-batched-v2" }
+          }
+        }
+      ],
       "properties": {
-        "harnessVersion": { "const": 1 },
-        "id": { "const": "performance-now-auto-batched-v1" },
+        "harnessVersion": { "enum": [1, 2] },
+        "id": {
+          "enum": [
+            "performance-now-auto-batched-v1",
+            "performance-now-confirmed-probe-auto-batched-v2"
+          ]
+        },
         "timingScope": { "const": "inProcessWorkload" },
         "clock": { "const": "performance.now" },
         "includes": {

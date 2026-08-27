@@ -7,8 +7,8 @@ namespace SharpTS.Compilation;
 /// <summary>
 /// Proves the deliberately narrow local lifetime in which an exact
 /// <c>Map&lt;number, number&gt;</c> may use <c>Dictionary&lt;double, double&gt;</c>
-/// storage. Any bare receiver observation, escape, alias, iteration, dynamic
-/// member access, widening call, reassignment, capture, direct eval, or
+/// storage. Any bare receiver observation, escape, alias, unproven iteration,
+/// dynamic member access, widening call, reassignment, capture, direct eval, or
 /// observable use of the intrinsic <c>Map</c> constructor disables promotion.
 /// </summary>
 internal static class NumericMapLocalPromotionAnalyzer
@@ -151,6 +151,26 @@ internal static class NumericMapLocalPromotionAnalyzer
             }
 
             base.VisitCall(expression);
+        }
+
+        protected override void VisitForOf(Stmt.ForOf statement)
+        {
+            // StableMapIterationAnalyzer runs before this pass and proves that
+            // this exact loop observes a fresh numeric Map only through literal
+            // entry[0]/entry[1] reads. That proof makes the receiver occurrence
+            // representation-transparent, so it need not disqualify native
+            // Dictionary<double, double> storage. Visit the body normally so
+            // every other candidate use still participates in escape analysis.
+            if (!statement.IsAsync
+                && statement.Iterable is Expr.Variable receiver
+                && IsExactNumericMap(_typeMap.Get(receiver))
+                && _typeMap.IsStableNumericMapIteration(statement))
+            {
+                Visit(statement.Body);
+                return;
+            }
+
+            base.VisitForOf(statement);
         }
 
         private bool IsPermittedCall(Expr.Call call, string methodName) => methodName switch

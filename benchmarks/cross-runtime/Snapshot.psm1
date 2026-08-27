@@ -419,8 +419,8 @@ function New-SharpTSPublicBenchmarkSnapshot {
             }
         }
         methodology = [pscustomobject][ordered]@{
-            harnessVersion = 1
-            id = 'performance-now-auto-batched-v1'
+            harnessVersion = 2
+            id = 'performance-now-confirmed-probe-auto-batched-v2'
             timingScope = 'inProcessWorkload'
             clock = 'performance.now'
             includes = @('one workload function invocation')

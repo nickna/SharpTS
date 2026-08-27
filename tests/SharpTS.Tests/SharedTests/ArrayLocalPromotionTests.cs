@@ -80,6 +80,56 @@ public class ArrayLocalPromotionTests
         Assert.Equal("84\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void Promoted_BooleanCondition_OutOfRangeIsFalse(ExecutionMode mode)
+    {
+        var source = """
+            function test(index: number): boolean {
+                const xs: boolean[] = [];
+                xs.push(true);
+                if (xs[index]) return true;
+                return false;
+            }
+            console.log(test(-1), test(1), test(0));
+            """;
+
+        Assert.Equal("false false true\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Promoted_BooleanTrueFill_PreservesFractionalAndFallbackBounds(ExecutionMode mode)
+    {
+        var source = """
+            function fill(n: number): number {
+                const xs: boolean[] = [];
+                for (let i: number = 0; i < n; i++) xs.push(true);
+                return xs.length;
+            }
+            console.log(fill(3.5), fill(0), fill(-2));
+            """;
+
+        Assert.Equal("4 0 0\n", TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
+    public void Promoted_IndexWrite_EvaluatesIndexBeforeValue(ExecutionMode mode)
+    {
+        var source = """
+            let order: string = "";
+            function index(): number { order = order + "i"; return 0; }
+            function value(): boolean { order = order + "v"; return false; }
+            function update(): boolean {
+                const xs: boolean[] = [];
+                xs.push(true);
+                xs[index()] = value();
+                return xs[0];
+            }
+            console.log(update(), order);
+            """;
+
+        Assert.Equal("false iv\n", TestHarness.Run(source, mode));
+    }
+
     // ── Escape cases: must fall back, must stay correct ────────────────────
 
     [Theory, ModeData]

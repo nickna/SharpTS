@@ -83,16 +83,6 @@ public sealed class NumericMapPromotionTests
 
     public static TheoryData<string> BailoutSources => new()
     {
-        // Iteration observes insertion order and entry identity.
-        """
-        function read(): number {
-            const map = new Map<number, number>();
-            map.set(1, 2);
-            let sum: number = 0;
-            for (const entry of map) sum = sum + entry[0] + entry[1];
-            return sum;
-        }
-        """,
         // forEach observes order, callback arguments, and receiver identity.
         """
         function read(): number {

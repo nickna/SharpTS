@@ -1633,23 +1633,80 @@ public partial class ILEmitter
             return;
         }
 
-        // Promoted typed-array local (#857/#860): the slot IS a List<double>/List<bool>, so write
-        // directly via the typed auto-extend setter — no isinst dispatch, no value boxing. Value is
-        // evaluated before index, matching the hoisted path's ordering.
+        // Promoted typed-array local (#857/#860): the slot IS a List<double>/List<bool>. Inline the
+        // overwhelmingly common in-range write as List<T>.set_Item and retain the typed auto-extend
+        // helper as a cold fallback. The receiver is a side-effect-free local, so evaluating index
+        // before value preserves JavaScript assignment order without an observable receiver load.
         if (si.Object is Expr.Variable promVarSet
             && _ctx.TryGetPromotedArrayLocal(promVarSet.Name.Lexeme) is { } promSet)
         {
+            EmitIndexAsInt32(si.Index);
+            var idxLocal = IL.DeclareLocal(_ctx.Types.Int32);
+            IL.Emit(OpCodes.Stloc, idxLocal);
+
             EmitExpression(si.Value);
             if (promSet.Descriptor.Kind == ArrayElementsKind.Double) EnsureDouble();
             else EnsureBoolean();
             var valLocal = IL.DeclareLocal(promSet.Descriptor.GetElementType(_ctx.Types));
             IL.Emit(OpCodes.Stloc, valLocal);
 
+            Type listType = promSet.Descriptor.GetListType(_ctx.Types);
+            var fallbackLabel = IL.DefineLabel();
+            var endLabel = IL.DefineLabel();
+            var hoistedBoolSpan = promSet.Descriptor.Kind == ArrayElementsKind.Bool
+                ? _ctx.TryGetHoistedPromotedBooleanSpan(promVarSet.Name.Lexeme)
+                : null;
+
+            IL.Emit(OpCodes.Ldloc, idxLocal);
+            if (hoistedBoolSpan is { } spanForLength)
+            {
+                IL.Emit(OpCodes.Ldloca, spanForLength.SpanLocal);
+                IL.Emit(OpCodes.Call, BoolSpanLength);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, promSet.Local);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetProperty(listType, "Count").GetGetMethod()!);
+            }
+            IL.Emit(OpCodes.Bge_Un, fallbackLabel);
+
+            if (hoistedBoolSpan is { } spanForWrite)
+            {
+                IL.Emit(OpCodes.Ldloca, spanForWrite.SpanLocal);
+                IL.Emit(OpCodes.Ldloc, idxLocal);
+                IL.Emit(OpCodes.Call, BoolSpanGetItem);
+                IL.Emit(OpCodes.Ldloc, valLocal);
+                IL.Emit(OpCodes.Stind_I1);
+            }
+            else
+            {
+                IL.Emit(OpCodes.Ldloc, promSet.Local);
+                IL.Emit(OpCodes.Ldloc, idxLocal);
+                IL.Emit(OpCodes.Ldloc, valLocal);
+                IL.Emit(OpCodes.Callvirt, _ctx.Types.GetMethod(
+                    listType,
+                    "set_Item",
+                    _ctx.Types.Int32,
+                    promSet.Descriptor.GetElementType(_ctx.Types)));
+            }
+            IL.Emit(OpCodes.Br, endLabel);
+
+            IL.MarkLabel(fallbackLabel);
             IL.Emit(OpCodes.Ldloc, promSet.Local);
-            EmitExpressionAsDouble(si.Index);
-            IL.Emit(OpCodes.Conv_I4);
+            IL.Emit(OpCodes.Ldloc, idxLocal);
             IL.Emit(OpCodes.Ldloc, valLocal);
             IL.Emit(OpCodes.Call, promSet.Descriptor.GetSetArrayElementMethod(_ctx.Runtime!));
+
+            // Auto-extension may replace List<T>'s backing array. Refresh the
+            // loop-local span before a later indexed access uses it.
+            if (hoistedBoolSpan is { } spanToRefresh)
+            {
+                IL.Emit(OpCodes.Ldloc, promSet.Local);
+                IL.Emit(OpCodes.Call, BoolListAsSpan);
+                IL.Emit(OpCodes.Stloc, spanToRefresh.SpanLocal);
+            }
+
+            IL.MarkLabel(endLabel);
 
             // Assignment expression result: the (unboxed) assigned value.
             IL.Emit(OpCodes.Ldloc, valLocal);

@@ -11,10 +11,14 @@ namespace SharpTS.Tests.CompilerTests;
 public sealed class StableMapIterationTests
 {
     [Fact]
-    public void StableNumericEntryReads_UseDirectDictionaryEnumerator()
+    public void StableNumericEntryReads_UsePromotedDictionaryEnumerator()
     {
         Assembly assembly = Compile(StableSource);
-        var instructions = ReadInstructions(FindFunction(assembly, "sumMap")).ToArray();
+        MethodInfo method = FindFunction(assembly, "sumMap");
+        var instructions = ReadInstructions(method).ToArray();
+
+        Assert.Contains(method.GetMethodBody()!.LocalVariables, local =>
+            IsDoubleDictionary(local.LocalType));
 
         Assert.Contains(instructions, instruction =>
             instruction.Operand is MethodBase
@@ -22,7 +26,7 @@ public sealed class StableMapIterationTests
                 Name: "GetEnumerator",
                 DeclaringType: { IsGenericType: true } declaringType
             }
-            && declaringType.GetGenericTypeDefinition() == typeof(Dictionary<,>));
+            && IsDoubleDictionary(declaringType));
         Assert.DoesNotContain(instructions, instruction =>
             instruction.Operand is MethodBase { Name: "MapEntries" or "NormalizeToEnumerator" });
         Assert.DoesNotContain(instructions, instruction =>
@@ -31,8 +35,39 @@ public sealed class StableMapIterationTests
                 DeclaringType: { IsGenericType: true } declaringType
             }
             && declaringType.GetGenericTypeDefinition() == typeof(List<>));
-        Assert.True(instructions.Count(instruction =>
-            instruction.OpCode == OpCodes.Unbox_Any && instruction.Operand == typeof(double)) >= 2);
+        Assert.DoesNotContain(instructions, instruction =>
+            (instruction.OpCode == OpCodes.Box || instruction.OpCode == OpCodes.Unbox_Any)
+            && instruction.Operand == typeof(double));
+    }
+
+    [Fact]
+    public void BenchmarkShape_UsesTypedStorageAndCapacityReservation()
+    {
+        Assembly assembly = Compile(BenchmarkShapeSource);
+        MethodInfo method = FindFunction(assembly, "mapIteration");
+        var instructions = ReadInstructions(method).ToArray();
+
+        Assert.Contains(method.GetMethodBody()!.LocalVariables, local =>
+            IsDoubleDictionary(local.LocalType));
+        Assert.Single(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "EnsureCapacity" } capacity
+            && IsDoubleDictionary(capacity.DeclaringType));
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "set_Item" } setItem
+            && IsDoubleDictionary(setItem.DeclaringType));
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "GetEnumerator" } getEnumerator
+            && IsDoubleDictionary(getEnumerator.DeclaringType));
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase
+            {
+                Name: "MapSet" or "MapEntries" or "NormalizeToEnumerator"
+            });
+        Assert.DoesNotContain(instructions, instruction =>
+            (instruction.OpCode == OpCodes.Box || instruction.OpCode == OpCodes.Unbox_Any)
+            && instruction.Operand == typeof(double));
+
+        Assert.Equal("20000\n", TestHarness.RunCompiled(BenchmarkShapeSource));
     }
 
     [Fact]
@@ -46,6 +81,39 @@ public sealed class StableMapIterationTests
     public void StableNumericEntryReads_WorkInStandaloneOutput()
     {
         Assert.Equal("18\n", TestHarness.RunCompiledStandalone(StableSource));
+    }
+
+    [Fact]
+    public void PromotedIteration_PreservesSameValueZeroAndInsertionOrder()
+    {
+        const string source = """
+            function inspect(): string {
+                const map = new Map<number, number>();
+                map.set(-0, 1);
+                map.set(0, 2);
+                map.set(NaN, 3);
+                map.set(NaN, 4);
+                map.set(2, 20);
+                map.set(1, 10);
+                map.set(2, 21);
+
+                let trace: string = "";
+                for (const entry of map) {
+                    if (Number.isNaN(entry[0])) {
+                        trace = trace + "n:" + entry[1] + ";";
+                    } else {
+                        trace = trace + entry[0] + ":" + entry[1] + ";";
+                    }
+                }
+                return trace + "size=" + map.size;
+            }
+            console.log(inspect());
+            """;
+
+        const string expected = "0:2;n:4;2:21;1:10;size=4\n";
+        Assert.Equal(expected, TestHarness.RunCompiled(source));
+        Assert.Equal(expected, TestHarness.RunCompiledStandalone(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
     }
 
     [Fact]
@@ -287,6 +355,22 @@ public sealed class StableMapIterationTests
         console.log(sumMap());
         """;
 
+    private const string BenchmarkShapeSource = """
+        function mapIteration(n: number): number {
+            const map = new Map<number, number>();
+            for (let i: number = 0; i < n; i++) {
+                map.set(i, i * 3 + 1);
+            }
+
+            let sum: number = 0;
+            for (const entry of map) {
+                sum = sum + entry[0] + entry[1];
+            }
+            return sum + map.size;
+        }
+        console.log(mapIteration(100));
+        """;
+
     private static Assembly Compile(string source)
     {
         var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
@@ -301,6 +385,13 @@ public sealed class StableMapIterationTests
         assembly.GetType("$Program")!
             .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)
             .Single(method => method.Name.EndsWith(name, StringComparison.Ordinal));
+
+    private static bool IsDoubleDictionary(Type? type) =>
+        type?.IsGenericType == true
+        && type.GetGenericTypeDefinition() == typeof(Dictionary<,>)
+        && type.GetGenericArguments() is [var key, var value]
+        && key == typeof(double)
+        && value == typeof(double);
 
     private static IEnumerable<(OpCode OpCode, MemberInfo? Operand)> ReadInstructions(
         MethodInfo method)

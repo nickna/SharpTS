@@ -105,6 +105,20 @@ public partial class ILEmitter
                 break;
 
             case Arithmetic arith:
+                // Integer-counter products/additions used to initialize and advance
+                // nested loops can remain native Int64 until an ordinary numeric
+                // consumer needs the JavaScript Number value.
+                if ((arith.Opcode == OpCodes.Add
+                        || arith.Opcode == OpCodes.Sub
+                        || arith.Opcode == OpCodes.Mul)
+                    && IsIntegerCounterValueI8(b))
+                {
+                    _ = TryEmitIntegerCounterValueI8(b);
+                    IL.Emit(OpCodes.Conv_R8);
+                    SetStackType(StackType.Double);
+                    break;
+                }
+
                 // #928: `counter % intLiteral` → native int64 rem instead of FP fmod (the dominant
                 // per-iteration write-kernel cost). Sound within the int-counter gate (truncated
                 // remainder matches JS for |i| ≤ 2^53). Falls through to the double path otherwise.
@@ -1760,6 +1774,19 @@ public partial class ILEmitter
                 IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(rv.Name.Lexeme)!);
                 IL.Emit(OpCodes.Add);
                 return true;
+
+            case Expr.Binary { Operator.Type: TokenType.PLUS or TokenType.MINUS or TokenType.STAR } b3
+                when IsIntegerCounterValueI8(b3.Left)
+                     && IsIntegerCounterValueI8(b3.Right):
+                _ = TryEmitIntegerCounterValueI8(b3.Left);
+                _ = TryEmitIntegerCounterValueI8(b3.Right);
+                IL.Emit(b3.Operator.Type switch
+                {
+                    TokenType.PLUS => OpCodes.Add,
+                    TokenType.MINUS => OpCodes.Sub,
+                    _ => OpCodes.Mul
+                });
+                return true;
         }
         return false;
     }
@@ -1780,8 +1807,27 @@ public partial class ILEmitter
             when b.Right is Expr.Variable rv
                  && IsIntegerCounterLocal(rv.Name.Lexeme)
                  && TryGetIntLiteralValue(b.Left, out _) => true,
+        Expr.Binary { Operator.Type: TokenType.PLUS or TokenType.MINUS or TokenType.STAR } b
+            when IsIntegerCounterValueI8(b.Left)
+                 && IsIntegerCounterValueI8(b.Right) => true,
         _ => false
     };
+
+    private bool TryEmitIntegerCounterAssignment(Expr.Assign assignment)
+    {
+        if (!IsIntegerCounterLocal(assignment.Name.Lexeme)
+            || !IsIntegerCounterValueI8(assignment.Value))
+        {
+            return false;
+        }
+
+        _ = TryEmitIntegerCounterValueI8(assignment.Value);
+        IL.Emit(OpCodes.Dup);
+        IL.Emit(OpCodes.Stloc, _ctx.Locals.GetLocal(assignment.Name.Lexeme)!);
+        IL.Emit(OpCodes.Conv_R8);
+        SetStackType(StackType.Double);
+        return true;
+    }
 
     /// <summary>
     /// Native int64 increment for an integer-counter local: <c>i++</c>/<c>i--</c> (postfix) or

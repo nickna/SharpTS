@@ -35,13 +35,22 @@ export function bench(name: string, param: number, fn: () => number): void {
     let total: number = 0;
     let inner: number = 1;
 
-    // One measured call up front. Only a genuinely heavy call (at least the
-    // entire warmup budget) doubles as the first sample. A merely JIT-cold
-    // sub-100ms call continues through warmup/calibration; otherwise SharpTS can
-    // be misclassified as an unbatched slow workload while Node is batched.
+    // One measured call up front. This probes the cost and, when a single call
+    // is genuinely heavy (e.g. the tree-walking interpreter on a big input),
+    // doubles as the first sample. A sub-warmup-cap result that crosses the 1ms
+    // boundary is confirmed once, but only a confirmed call that consumes the
+    // full warmup budget disables warmup and auto-batching. This prevents a cold
+    // first-tier JIT from selecting a different sampling method than an already
+    // optimized runtime.
     const probeStart: number = performance.now();
     guard = guard + fn();
-    const firstMs: number = performance.now() - probeStart;
+    let firstMs: number = performance.now() - probeStart;
+
+    if (firstMs >= MIN_SAMPLE_MS && firstMs < WARMUP_CAP_MS) {
+        const confirmStart: number = performance.now();
+        guard = guard + fn();
+        firstMs = performance.now() - confirmStart;
+    }
 
     if (firstMs >= WARMUP_CAP_MS) {
         // A single call is reliably measurable — sample one call at a time,
@@ -146,7 +155,13 @@ export async function benchAsync(
 
     const probeStart: number = performance.now();
     guard = guard + await fn();
-    const firstMs: number = performance.now() - probeStart;
+    let firstMs: number = performance.now() - probeStart;
+
+    if (firstMs >= MIN_SAMPLE_MS && firstMs < WARMUP_CAP_MS) {
+        const confirmStart: number = performance.now();
+        guard = guard + await fn();
+        firstMs = performance.now() - confirmStart;
+    }
 
     if (firstMs >= WARMUP_CAP_MS) {
         samples.push(firstMs);
