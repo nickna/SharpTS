@@ -9,6 +9,48 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    // Interface declarations are resolved once during pre-registration and can then be visited
+    // again by preparatory/module passes in the SAME environment. Track that provenance by
+    // declaration identity so the declaration replaces its own forward-reference placeholder on
+    // the first full visit and becomes idempotent on later visits. A different declaration with
+    // the same name still flows through DefineOrMergeInterface, preserving declaration merging.
+    private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> _preRegisteredInterfaces =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> _completedInterfaces =
+        new(ReferenceEqualityComparer.Instance);
+
+    private void ResetInterfaceDeclarationTracking()
+    {
+        _preRegisteredInterfaces.Clear();
+        _completedInterfaces.Clear();
+    }
+
+    private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
+        Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> declarations,
+        TypeEnvironment environment)
+    {
+        if (!declarations.TryGetValue(environment, out var result))
+        {
+            result = new HashSet<Stmt.Interface>(ReferenceEqualityComparer.Instance);
+            declarations[environment] = result;
+        }
+        return result;
+    }
+
+    private void DefineCompletedInterface(Stmt.Interface declaration, TypeInfo type)
+    {
+        var completed = InterfaceDeclarationsFor(_completedInterfaces, _environment);
+        if (!completed.Add(declaration))
+            return;
+
+        bool replacesPreRegistration =
+            InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Contains(declaration);
+        if (replacesPreRegistration)
+            _environment.DefineType(declaration.Name.Lexeme, type);
+        else
+            DefineOrMergeInterface(declaration.Name.Lexeme, type);
+    }
+
     private static void AddCallableSignature(List<TypeInfo> signatures, TypeInfo candidate)
     {
         switch (candidate)
@@ -313,6 +355,8 @@ public partial class TypeChecker
             );
             _environment.DefineType(interfaceStmt.Name.Lexeme, itfType);
         }
+
+        InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Add(interfaceStmt);
     }
 
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
@@ -643,7 +687,7 @@ public partial class TypeChecker
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 readonlyNumberIndex
             );
-            DefineOrMergeInterface(interfaceStmt.Name.Lexeme, genericItfType);
+            DefineCompletedInterface(interfaceStmt, genericItfType);
         }
         else
         {
@@ -661,7 +705,7 @@ public partial class TypeChecker
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 ReadonlyNumberIndex: readonlyNumberIndex
             );
-            DefineOrMergeInterface(interfaceStmt.Name.Lexeme, itfType);
+            DefineCompletedInterface(interfaceStmt, itfType);
         }
 
         ValidateInterfaceExtends(interfaceStmt, members, optionalMembers, extends);

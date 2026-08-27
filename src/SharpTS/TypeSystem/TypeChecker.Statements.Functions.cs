@@ -8,6 +8,25 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    // Script/module collection can visit the same body-less declaration again in the authoritative
+    // pass. Key by both environment and declaration identity so one declaration contributes one
+    // overload signature, while a distinct declaration with the same name still forms a real
+    // overload set.
+    private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Function>> _completedBodylessFunctions =
+        new(ReferenceEqualityComparer.Instance);
+
+    private void ResetFunctionDeclarationTracking() => _completedBodylessFunctions.Clear();
+
+    private bool MarkBodylessFunctionCompleted(Stmt.Function declaration)
+    {
+        if (!_completedBodylessFunctions.TryGetValue(_environment, out var declarations))
+        {
+            declarations = new HashSet<Stmt.Function>(ReferenceEqualityComparer.Instance);
+            _completedBodylessFunctions[_environment] = declarations;
+        }
+        return declarations.Add(declaration);
+    }
+
     /// <summary>
     /// Builds generic type parameters into <paramref name="env"/>, resolving constraints that may
     /// reference other parameters. Parameters are first defined without constraints so they can
@@ -576,6 +595,12 @@ public partial class TypeChecker
         // Check if this is an overload signature (no body)
         if (funcStmt.Body == null)
         {
+            // A preparatory pass may already have installed this exact declaration's signature in
+            // this environment. Do not turn a single ambient function into a two-entry overload
+            // merely because the authoritative pass visits it again.
+            if (!MarkBodylessFunctionCompleted(funcStmt))
+                return;
+
             // This is an overload signature - save for later
             if (!_pendingOverloadSignatures.TryGetValue(overloadKey, out var signatures))
             {
