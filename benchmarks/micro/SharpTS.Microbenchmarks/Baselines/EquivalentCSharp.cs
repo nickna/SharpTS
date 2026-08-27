@@ -124,6 +124,28 @@ public static class EquivalentCSharp
     }
 
     /// <summary>
+    /// Int32 kernel with boxed elements and Number-like double arithmetic. This
+    /// represents the dynamic lowering that SharpTS's exact typed-buffer path avoids.
+    /// </summary>
+    public static object? Int32Kernel(object? n)
+    {
+        int nInt = (int)Convert.ToDouble(n);
+        var a = new List<object?>(nInt);
+        for (int i = 0; i < nInt; i++)
+        {
+            a.Add((double)(i * 3 - (i % 7)));
+        }
+        double sum = 0;
+        for (int i = 1; i < nInt - 1; i++)
+        {
+            sum += Convert.ToDouble(a[i - 1])
+                - 2 * Convert.ToDouble(a[i])
+                + Convert.ToDouble(a[i + 1]);
+        }
+        return sum;
+    }
+
+    /// <summary>
     /// binary-trees using Dictionary&lt;string, object?&gt; nodes with dynamic
     /// property lookups - mirrors a boxed SharpTS object graph.
     /// </summary>

@@ -866,6 +866,17 @@ public partial class ILEmitter
 
         try
         {
+            if (activeIntCounter != null
+                && TryEmitExactInt32StencilReduction(f, activeIntCounter))
+            {
+                return;
+            }
+            if (activeIntCounter != null
+                && TryEmitExactInt32FillLoop(f, activeIntCounter))
+            {
+                return;
+            }
+
             // Inline base.EmitFor to insert array hoist preamble between
             // initializer and loop start.
             _ctx.Locals.EnterScope();
@@ -975,6 +986,456 @@ public partial class ILEmitter
                 _ctx.IntegerCounterLocals.Remove(activeIntCounter);
             _integerLoopCounterName = savedIntCounterName;
         }
+    }
+
+    /// <summary>
+    /// Versions the canonical <c>sum = sum + Int32 three-point stencil</c> loop. The hot
+    /// version compares the native Int64 counter to a guarded integer bound and keeps the
+    /// running sum integral. Fractional/NaN/out-of-range bounds, non-integral accumulators,
+    /// negative zero, or a sum that leaves Number's safe-integer range branch to the ordinary
+    /// double loop at the exact next iteration.
+    /// </summary>
+    private bool TryEmitExactInt32StencilReduction(Stmt.For loop, string counterName)
+    {
+        if (_ctx.ExceptionBlockDepth != 0
+            || loop.Initializer is not Stmt.Var counterDeclaration
+            || counterDeclaration.Name.Lexeme != counterName
+            || !TryGetIntegerCounterInit(counterDeclaration.Initializer, out long initialCounter)
+            || initialCounter != 1
+            || loop.Increment is not Expr.PostfixIncrement
+            {
+                Operator.Type: TokenType.PLUS_PLUS,
+                Operand: Expr.Variable incrementCounter
+            }
+            || incrementCounter.Name.Lexeme != counterName
+            || loop.Condition is not Expr.Binary
+            {
+                Operator.Type: TokenType.LESS,
+                Left: Expr.Variable conditionCounter,
+                Right: Expr.Binary
+                {
+                    Operator.Type: TokenType.MINUS,
+                    Left: Expr.Variable boundVariable,
+                    Right: var boundOffset
+                }
+            }
+            || conditionCounter.Name.Lexeme != counterName
+            || !TryGetIntLiteralValue(boundOffset, out long offset)
+            || offset != 1
+            || !_ctx.TryGetParameterType(boundVariable.Name.Lexeme, out var boundParameterType)
+            || boundParameterType != _ctx.Types.Double
+            || !TryMatchInt32StencilAccumulator(
+                loop.Body, counterName, out var accumulatorName, out var receiver)
+            || _ctx.Locals.GetLocal(accumulatorName) is not { } accumulatorDouble
+            || accumulatorDouble.LocalType != _ctx.Types.Double
+            || _ctx.Locals.GetLocal(receiver.Name.Lexeme) == null
+            || _ctx.Runtime == null)
+        {
+            return false;
+        }
+
+        var candidates = TypedArrayHoistAnalyzer.AnalyzeFor(
+            loop.Body, loop.Condition, loop.Increment, _ctx.TypeMap);
+        if (!candidates.TryGetValue(receiver.Name.Lexeme, out var candidate)
+            || candidate is not { ElementType: "Int32", CanHoistBacking: true })
+        {
+            return false;
+        }
+
+        _ctx.Locals.EnterScope();
+        EmitStatement(loop.Initializer);
+        bool typedArrayHoisted = EmitTypedArrayHoistPreamble(
+            loop.Body, loop.Condition, loop.Increment);
+        if (!typedArrayHoisted
+            || !TryGetDirectTypedArrayBacking(receiver, "Int32", out var backing)
+            || backing.Layout is not
+                { BytesPerElement: 4, Signed: true, IsFloat: false })
+        {
+            throw new InvalidOperationException(
+                "Exact Int32 stencil proof did not produce its direct backing.");
+        }
+
+        var counter = _ctx.Locals.GetLocal(counterName)!;
+        var boundDouble = IL.DeclareLocal(_ctx.Types.Double);
+        var boundInteger = IL.DeclareLocal(_ctx.Types.Int64);
+        var accumulatorInteger = IL.DeclareLocal(_ctx.Types.Int64);
+        var candidateInteger = IL.DeclareLocal(_ctx.Types.Int64);
+        var fastActive = IL.DeclareLocal(_ctx.Types.Boolean);
+        var centerIndex = IL.DeclareLocal(_ctx.Types.Int32);
+        var centerReference = IL.DeclareLocal(_ctx.Types.Byte.MakeByRefType());
+
+        var slowStart = IL.DefineLabel();
+        var fastStart = IL.DefineLabel();
+        var fastContinue = IL.DefineLabel();
+        var fastOverflow = IL.DefineLabel();
+        var end = IL.DefineLabel();
+
+        // The exact body cannot contain control flow, but adopting the loop labels preserves
+        // labeled break/continue resolution invariants for the surrounding emitter.
+        _ctx.EnterLoop(end, fastContinue);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, fastActive);
+
+        // Hoist `n - 1`: n is a typed parameter and the exact body only assigns the accumulator.
+        var loadedBound = _resolver.TryLoadVariable(boundVariable.Name.Lexeme);
+        if (loadedBound == null)
+            throw new InvalidOperationException("Unable to load Int32 stencil bound.");
+        SetStackType(loadedBound.Value);
+        EnsureDouble();
+        IL.Emit(OpCodes.Ldc_R8, 1d);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Stloc, boundDouble);
+
+        EmitExactIntegerGuard(boundDouble, -2_147_483_648d, 2_147_483_647d, slowStart);
+        IL.Emit(OpCodes.Ldloc, boundDouble);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Stloc, boundInteger);
+
+        // A safe integer can be accumulated exactly in Int64. Negative zero must remain on
+        // the double path because its sign is observable when the loop has no iterations.
+        EmitExactIntegerGuard(
+            accumulatorDouble,
+            -9_007_199_254_740_991d,
+            9_007_199_254_740_991d,
+            slowStart);
+        var accumulatorNotZero = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, accumulatorDouble);
+        IL.Emit(OpCodes.Ldc_R8, 0d);
+        IL.Emit(OpCodes.Bne_Un, accumulatorNotZero);
+        IL.Emit(OpCodes.Ldloc, accumulatorDouble);
+        IL.Emit(OpCodes.Call, typeof(BitConverter).GetMethod(
+            nameof(BitConverter.DoubleToInt64Bits), [_ctx.Types.Double])!);
+        IL.Emit(OpCodes.Ldc_I8, 0L);
+        IL.Emit(OpCodes.Blt, slowStart);
+        IL.MarkLabel(accumulatorNotZero);
+
+        IL.Emit(OpCodes.Ldloc, accumulatorDouble);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Stloc, accumulatorInteger);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Stloc, fastActive);
+        IL.Emit(OpCodes.Br, fastStart);
+
+        IL.MarkLabel(fastStart);
+        EmitCancellationCheckWithInt64AccumulatorFlush(
+            accumulatorDouble, accumulatorInteger);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldloc, boundInteger);
+        IL.Emit(OpCodes.Bge, end);
+
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Stloc, centerIndex);
+
+        var inRange = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, centerIndex);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Blt_Un, inRange);
+        EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
+        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(inRange);
+
+        IL.Emit(OpCodes.Ldloc, backing.BufferLocal);
+        IL.Emit(OpCodes.Call, RuntimeEmitter.GetByteArrayDataReference());
+        IL.Emit(OpCodes.Ldloc, centerIndex);
+        IL.Emit(OpCodes.Ldc_I4_4);
+        IL.Emit(OpCodes.Mul);
+        IL.Emit(OpCodes.Call, RuntimeEmitter.UnsafeAddByteOffset());
+        IL.Emit(OpCodes.Stloc, centerReference);
+
+        IL.Emit(OpCodes.Ldloc, accumulatorInteger);
+        EmitDirectInt32ReadAsInt64(centerReference, -4);
+        EmitDirectInt32ReadAsInt64(centerReference, 0);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Mul);
+        IL.Emit(OpCodes.Sub);
+        EmitDirectInt32ReadAsInt64(centerReference, 4);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, candidateInteger);
+
+        IL.Emit(OpCodes.Ldloc, candidateInteger);
+        IL.Emit(OpCodes.Ldc_I8, -9_007_199_254_740_991L);
+        IL.Emit(OpCodes.Blt, fastOverflow);
+        IL.Emit(OpCodes.Ldloc, candidateInteger);
+        IL.Emit(OpCodes.Ldc_I8, 9_007_199_254_740_991L);
+        IL.Emit(OpCodes.Bgt, fastOverflow);
+        IL.Emit(OpCodes.Ldloc, candidateInteger);
+        IL.Emit(OpCodes.Stloc, accumulatorInteger);
+
+        IL.MarkLabel(fastContinue);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counter);
+        IL.Emit(OpCodes.Br, fastStart);
+
+        // The current iteration's exact integer result is rounded to double once, exactly
+        // as Number addition would round it, and the next iteration resumes generic lowering.
+        IL.MarkLabel(fastOverflow);
+        IL.Emit(OpCodes.Ldloc, candidateInteger);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Stloc, accumulatorDouble);
+        IL.Emit(OpCodes.Ldc_I4_0);
+        IL.Emit(OpCodes.Stloc, fastActive);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counter);
+
+        IL.MarkLabel(slowStart);
+        EmitCancellationCheck();
+        EmitConditionCheck(loop.Condition);
+        IL.Emit(OpCodes.Brfalse, end);
+        EmitStatement(loop.Body);
+        EmitExpression(loop.Increment);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Br, slowStart);
+
+        IL.MarkLabel(end);
+        // Only the fast path reaches end with a stale double accumulator.
+        var finished = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, fastActive);
+        IL.Emit(OpCodes.Brfalse, finished);
+        EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
+        IL.MarkLabel(finished);
+
+        _ctx.ExitLoop();
+        _ctx.HoistedTypedArrayCaches.Pop();
+        _ctx.Locals.ExitScope();
+        SetStackUnknown();
+        return true;
+    }
+
+    /// <summary>
+    /// Versions the fill phase of the Int32 kernel. Once the typed parameter bound is
+    /// proven to be an Int32 integer, the loop uses a native comparison and writes the
+    /// analyzer-proven counter expression directly to the backing buffer. The assignment's
+    /// discarded Number result is never materialized.
+    /// </summary>
+    private bool TryEmitExactInt32FillLoop(Stmt.For loop, string counterName)
+    {
+        Stmt bodyStatement = loop.Body is Stmt.Block { Statements.Count: 1 } block
+            ? block.Statements[0]
+            : loop.Body;
+        if (_ctx.ExceptionBlockDepth != 0
+            || loop.Initializer is not Stmt.Var counterDeclaration
+            || counterDeclaration.Name.Lexeme != counterName
+            || !TryGetIntegerCounterInit(counterDeclaration.Initializer, out long initialCounter)
+            || initialCounter != 0
+            || loop.Increment is not Expr.PostfixIncrement
+            {
+                Operator.Type: TokenType.PLUS_PLUS,
+                Operand: Expr.Variable incrementCounter
+            }
+            || incrementCounter.Name.Lexeme != counterName
+            || loop.Condition is not Expr.Binary
+            {
+                Operator.Type: TokenType.LESS,
+                Left: Expr.Variable conditionCounter,
+                Right: Expr.Variable boundVariable
+            }
+            || conditionCounter.Name.Lexeme != counterName
+            || !_ctx.TryGetParameterType(boundVariable.Name.Lexeme, out var boundParameterType)
+            || boundParameterType != _ctx.Types.Double
+            || bodyStatement is not Stmt.Expression
+            {
+                Expr: Expr.SetIndex
+                {
+                    Object: Expr.Variable receiver,
+                    Index: Expr.Variable index,
+                    Value: var value
+                }
+            }
+            || index.Name.Lexeme != counterName
+            || _ctx.TypeMap?.Get(receiver) is not TypeInfo.TypedArray { ElementType: "Int32" }
+            || !TryAnalyzeInt32CounterExpression(value, counterName, out _)
+            || _ctx.Locals.GetLocal(receiver.Name.Lexeme) == null
+            || _ctx.Runtime == null)
+        {
+            return false;
+        }
+
+        var candidates = TypedArrayHoistAnalyzer.AnalyzeFor(
+            loop.Body, loop.Condition, loop.Increment, _ctx.TypeMap);
+        if (!candidates.TryGetValue(receiver.Name.Lexeme, out var candidate)
+            || candidate is not { ElementType: "Int32", CanHoistBacking: true })
+        {
+            return false;
+        }
+
+        _ctx.Locals.EnterScope();
+        EmitStatement(loop.Initializer);
+        bool typedArrayHoisted = EmitTypedArrayHoistPreamble(
+            loop.Body, loop.Condition, loop.Increment);
+        if (!typedArrayHoisted
+            || !TryGetDirectTypedArrayBacking(receiver, "Int32", out var backing)
+            || backing.Layout is not
+                { BytesPerElement: 4, Signed: true, IsFloat: false })
+        {
+            throw new InvalidOperationException(
+                "Exact Int32 fill proof did not produce its direct backing.");
+        }
+
+        var counter = _ctx.Locals.GetLocal(counterName)!;
+        var boundDouble = IL.DeclareLocal(_ctx.Types.Double);
+        var boundInteger = IL.DeclareLocal(_ctx.Types.Int64);
+        var indexInteger = IL.DeclareLocal(_ctx.Types.Int32);
+        var nativeValue = IL.DeclareLocal(_ctx.Types.Int32);
+        var slowStart = IL.DefineLabel();
+        var fastStart = IL.DefineLabel();
+        var fastContinue = IL.DefineLabel();
+        var end = IL.DefineLabel();
+
+        _ctx.EnterLoop(end, fastContinue);
+
+        var loadedBound = _resolver.TryLoadVariable(boundVariable.Name.Lexeme);
+        if (loadedBound == null)
+            throw new InvalidOperationException("Unable to load Int32 fill bound.");
+        SetStackType(loadedBound.Value);
+        EnsureDouble();
+        IL.Emit(OpCodes.Stloc, boundDouble);
+        EmitExactIntegerGuard(boundDouble, 0d, 2_147_483_647d, slowStart);
+        IL.Emit(OpCodes.Ldloc, boundDouble);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Stloc, boundInteger);
+
+        IL.MarkLabel(fastStart);
+        EmitCancellationCheck();
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldloc, boundInteger);
+        IL.Emit(OpCodes.Bge, end);
+
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Conv_I4);
+        IL.Emit(OpCodes.Stloc, indexInteger);
+        var inRange = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, indexInteger);
+        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
+        IL.Emit(OpCodes.Blt_Un, inRange);
+        IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(inRange);
+
+        EmitInt32CounterExpression(value, counterName, indexInteger);
+        IL.Emit(OpCodes.Stloc, nativeValue);
+        EmitDirectTypedArrayElementReference(backing, indexInteger);
+        IL.Emit(OpCodes.Ldloc, nativeValue);
+        IL.Emit(OpCodes.Unaligned, (byte)1);
+        IL.Emit(OpCodes.Stind_I4);
+
+        IL.MarkLabel(fastContinue);
+        IL.Emit(OpCodes.Ldloc, counter);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Conv_I8);
+        IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Stloc, counter);
+        IL.Emit(OpCodes.Br, fastStart);
+
+        IL.MarkLabel(slowStart);
+        EmitCancellationCheck();
+        EmitConditionCheck(loop.Condition);
+        IL.Emit(OpCodes.Brfalse, end);
+        EmitStatement(loop.Body);
+        EmitExpression(loop.Increment);
+        IL.Emit(OpCodes.Pop);
+        IL.Emit(OpCodes.Br, slowStart);
+
+        IL.MarkLabel(end);
+        _ctx.ExitLoop();
+        _ctx.HoistedTypedArrayCaches.Pop();
+        _ctx.Locals.ExitScope();
+        SetStackUnknown();
+        return true;
+    }
+
+    private bool TryMatchInt32StencilAccumulator(
+        Stmt body,
+        string counterName,
+        out string accumulatorName,
+        out Expr.Variable receiver)
+    {
+        Stmt statement = body is Stmt.Block { Statements.Count: 1 } block
+            ? block.Statements[0]
+            : body;
+        if (statement is Stmt.Expression
+            {
+                Expr: Expr.Assign
+                {
+                    Name: var accumulatorToken,
+                    Value: Expr.Binary
+                    {
+                        Operator.Type: TokenType.PLUS,
+                        Left: Expr.Variable accumulatorRead,
+                        Right: var stencilExpression
+                    }
+                }
+            }
+            && accumulatorRead.Name.Lexeme == accumulatorToken.Lexeme
+            && TryMatchExactInt32StencilShape(
+                stencilExpression, counterName, out _, out receiver))
+        {
+            accumulatorName = accumulatorToken.Lexeme;
+            return true;
+        }
+
+        accumulatorName = "";
+        receiver = null!;
+        return false;
+    }
+
+    private void EmitExactIntegerGuard(
+        LocalBuilder value,
+        double minimum,
+        double maximum,
+        Label fallback)
+    {
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Ldc_R8, minimum);
+        IL.Emit(OpCodes.Blt_Un, fallback);
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Ldc_R8, maximum);
+        IL.Emit(OpCodes.Bgt_Un, fallback);
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Ldloc, value);
+        IL.Emit(OpCodes.Call, _ctx.Types.GetMethod(
+            _ctx.Types.Math, nameof(Math.Truncate), _ctx.Types.Double));
+        IL.Emit(OpCodes.Bne_Un, fallback);
+    }
+
+    private void EmitInt64AccumulatorStore(LocalBuilder target, LocalBuilder accumulator)
+    {
+        IL.Emit(OpCodes.Ldloc, accumulator);
+        IL.Emit(OpCodes.Conv_R8);
+        IL.Emit(OpCodes.Stloc, target);
+    }
+
+    private void EmitCancellationCheckWithInt64AccumulatorFlush(
+        LocalBuilder target,
+        LocalBuilder accumulator)
+    {
+        if (_ctx.Runtime?.BuildCancellationExceptionMethod == null
+            || _ctx.Runtime.CancelRequestedField == null)
+        {
+            return;
+        }
+
+        var notCancelled = IL.DefineLabel();
+        IL.Emit(OpCodes.Volatile);
+        IL.Emit(OpCodes.Ldsfld, _ctx.Runtime.CancelRequestedField);
+        IL.Emit(OpCodes.Brfalse, notCancelled);
+        EmitInt64AccumulatorStore(target, accumulator);
+        IL.Emit(OpCodes.Call, _ctx.Runtime.BuildCancellationExceptionMethod);
+        IL.Emit(OpCodes.Throw);
+        IL.MarkLabel(notCancelled);
     }
 
     private Label? EmitPromotedBooleanFillFastPath(Stmt.For loop)

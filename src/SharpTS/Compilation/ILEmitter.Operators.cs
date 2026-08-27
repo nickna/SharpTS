@@ -1245,32 +1245,18 @@ public partial class ILEmitter
     /// </summary>
     private bool TryEmitDirectInt32TypedArrayStencil(Expr.Binary expression)
     {
-        if (expression.Operator.Type != TokenType.PLUS
-            || expression.Left is not Expr.Binary
-            {
-                Operator.Type: TokenType.MINUS,
-                Left: Expr.GetIndex left,
-                Right: Expr.Binary { Operator.Type: TokenType.STAR } scaledCenter
-            }
-            || expression.Right is not Expr.GetIndex right
-            || !TryMatchTimesTwoGetIndex(scaledCenter, out var center)
-            || center.Index is not Expr.Variable counter
-            || !IsIntegerCounterLocal(counter.Name.Lexeme)
-            || !MatchesCounterOffset(left.Index, counter.Name.Lexeme, -1)
-            || !MatchesCounterOffset(right.Index, counter.Name.Lexeme, 1)
-            || !TryMatchExactInt32Receiver(left, out var receiverName)
-            || !TryMatchExactInt32Receiver(center, out var centerReceiver)
-            || !TryMatchExactInt32Receiver(right, out var rightReceiver)
-            || centerReceiver != receiverName
-            || rightReceiver != receiverName
-            || !TryGetDirectTypedArrayBacking(left.Object, "Int32", out var backing)
+        if (!TryMatchExactInt32StencilShape(
+                expression, requiredCounterName: null, out var counterName, out var receiver)
+            || !IsIntegerCounterLocal(counterName)
+            || !TryGetDirectTypedArrayBacking(receiver, "Int32", out var backing)
             || backing.Layout is not
                 { BytesPerElement: 4, Signed: true, IsFloat: false })
         {
             return false;
         }
 
-        EmitIndexAsInt32(center.Index);
+        IL.Emit(OpCodes.Ldloc, _ctx.Locals.GetLocal(counterName)!);
+        IL.Emit(OpCodes.Conv_I4);
         var centerIndex = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Stloc, centerIndex);
 
@@ -1297,15 +1283,64 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Call, RuntimeEmitter.UnsafeAddByteOffset());
         IL.Emit(OpCodes.Stloc, centerReference);
 
-        EmitDirectInt32Read(centerReference, -4);
-        EmitDirectInt32Read(centerReference, 0);
-        IL.Emit(OpCodes.Ldc_R8, 2d);
+        EmitDirectInt32ReadAsInt64(centerReference, -4);
+        EmitDirectInt32ReadAsInt64(centerReference, 0);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        IL.Emit(OpCodes.Conv_I8);
         IL.Emit(OpCodes.Mul);
         IL.Emit(OpCodes.Sub);
-        EmitDirectInt32Read(centerReference, 4);
+        EmitDirectInt32ReadAsInt64(centerReference, 4);
         IL.Emit(OpCodes.Add);
+        IL.Emit(OpCodes.Conv_R8);
         SetStackType(StackType.Double);
         return true;
+    }
+
+    /// <summary>
+    /// Recognizes the exact three-point Int32 stencil without emitting IL. The whole-loop
+    /// reduction fast path and the ordinary expression fast path share this proof so their
+    /// accepted syntax and typed-array identity cannot drift apart.
+    /// </summary>
+    private bool TryMatchExactInt32StencilShape(
+        Expr expression,
+        string? requiredCounterName,
+        out string counterName,
+        out Expr.Variable receiver)
+    {
+        while (expression is Expr.Grouping grouping)
+            expression = grouping.Expression;
+
+        if (expression is Expr.Binary
+            {
+                Operator.Type: TokenType.PLUS,
+                Left: Expr.Binary
+                {
+                    Operator.Type: TokenType.MINUS,
+                    Left: Expr.GetIndex left,
+                    Right: Expr.Binary { Operator.Type: TokenType.STAR } scaledCenter
+                },
+                Right: Expr.GetIndex right
+            }
+            && TryMatchTimesTwoGetIndex(scaledCenter, out var center)
+            && center.Index is Expr.Variable counter
+            && (requiredCounterName == null || counter.Name.Lexeme == requiredCounterName)
+            && MatchesCounterOffset(left.Index, counter.Name.Lexeme, -1)
+            && MatchesCounterOffset(right.Index, counter.Name.Lexeme, 1)
+            && TryMatchExactInt32Receiver(left, out var receiverName)
+            && TryMatchExactInt32Receiver(center, out var centerReceiver)
+            && TryMatchExactInt32Receiver(right, out var rightReceiver)
+            && centerReceiver == receiverName
+            && rightReceiver == receiverName
+            && left.Object is Expr.Variable receiverVariable)
+        {
+            counterName = counter.Name.Lexeme;
+            receiver = receiverVariable;
+            return true;
+        }
+
+        counterName = "";
+        receiver = null!;
+        return false;
     }
 
     private bool TryMatchExactInt32Receiver(Expr.GetIndex access, out string receiverName)
@@ -1356,7 +1391,7 @@ public partial class ILEmitter
             ? value
             : -value) == offset;
 
-    private void EmitDirectInt32Read(LocalBuilder centerReference, int byteOffset)
+    private void EmitDirectInt32ReadAsInt64(LocalBuilder centerReference, int byteOffset)
     {
         IL.Emit(OpCodes.Ldloc, centerReference);
         if (byteOffset != 0)
@@ -1364,8 +1399,7 @@ public partial class ILEmitter
             IL.Emit(OpCodes.Ldc_I4, byteOffset);
             IL.Emit(OpCodes.Call, RuntimeEmitter.UnsafeAddByteOffset());
         }
-        RuntimeEmitter.EmitReadElementAsDouble(
-            IL, bytesPerElement: 4, signed: true, isFloat: false);
+        RuntimeEmitter.EmitReadInt32AsInt64(IL);
     }
 
     /// <summary>
