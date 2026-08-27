@@ -12,6 +12,7 @@ public sealed class DnsResolverInstance
 {
     private string[] _servers = [];
     private CancellationTokenSource _cts = new();
+    private long _cancelGeneration;
     private string? _localAddressV4;
     private string? _localAddressV6;
 
@@ -36,12 +37,16 @@ public sealed class DnsResolverInstance
     /// </summary>
     public CancellationToken CancellationToken => Volatile.Read(ref _cts).Token;
 
+    /// <summary>Monotonic generation used to include calls queued just before cancel().</summary>
+    public long CancelGeneration => Volatile.Read(ref _cancelGeneration);
+
     /// <summary>
     /// Cancels all outstanding queries (their callbacks/promises reject with
     /// ECANCELLED); later queries use a fresh token (#1072).
     /// </summary>
     public void Cancel()
     {
+        Interlocked.Increment(ref _cancelGeneration);
         var old = Interlocked.Exchange(ref _cts, new CancellationTokenSource());
         old.Cancel();
     }
@@ -124,6 +129,46 @@ public sealed class DnsResolverInstance
     public object ResolvePtr(string hostname) => DelegateResolve(hostname, "PTR", DnsRecordResolver.ResolvePtr);
     public object ResolveCaa(string hostname) => DelegateResolve(hostname, "CAA", DnsRecordResolver.ResolveCaa);
     public object ResolveNaptr(string hostname) => DelegateResolve(hostname, "NAPTR", DnsRecordResolver.ResolveNaptr);
+
+    /// <summary>
+    /// Runs one resolver operation on the thread pool and races it against the
+    /// cancellation generation active when the operation started. The blocking
+    /// socket query is cooperative at delivery time: cancellation rejects promptly
+    /// while the orphaned query is allowed to finish in the background.
+    /// </summary>
+    public async Task<object?> ResolveAsync(
+        string method,
+        string identifier,
+        string? rrtype = null,
+        long? expectedCancelGeneration = null)
+    {
+        var token = CancellationToken;
+        if (expectedCancelGeneration.HasValue && expectedCancelGeneration.Value != CancelGeneration)
+            throw new NodeError("ECANCELLED", $"query {method} ECANCELLED {identifier}");
+        var queryTask = Task.Run<object?>(() => method switch
+        {
+            "resolve" => Resolve(identifier, rrtype ?? "A"),
+            "resolve4" => Resolve4(identifier),
+            "resolve6" => Resolve6(identifier),
+            "reverse" => Reverse(identifier),
+            "resolveMx" => ResolveMx(identifier),
+            "resolveTxt" => ResolveTxt(identifier),
+            "resolveSrv" => ResolveSrv(identifier),
+            "resolveCname" => ResolveCname(identifier),
+            "resolveNs" => ResolveNs(identifier),
+            "resolveSoa" => ResolveSoa(identifier),
+            "resolvePtr" => ResolvePtr(identifier),
+            "resolveCaa" => ResolveCaa(identifier),
+            "resolveNaptr" => ResolveNaptr(identifier),
+            _ => throw new NodeError("ERR_INVALID_ARG_VALUE", $"Unknown resolver method: {method}")
+        });
+
+        var cancelTask = Task.Delay(Timeout.Infinite, token);
+        if (await Task.WhenAny(queryTask, cancelTask).ConfigureAwait(false) != queryTask)
+            throw new NodeError("ECANCELLED", $"query {method} ECANCELLED {identifier}");
+
+        return await queryTask.ConfigureAwait(false);
+    }
 
     private object DelegateResolve(string hostname, string rrtype, Func<string, List<object?>> defaultResolver)
     {

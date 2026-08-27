@@ -24,7 +24,7 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
         "generatePrime", "generatePrimeSync", "checkPrime", "checkPrimeSync",
         "randomFill", "constants",
         // #1059/#1060
-        "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup",
+        "generateKey", "generateKeySync", "getFips", "setFips", "createDiffieHellmanGroup", "diffieHellman", "ECDH",
         // #1064
         "X509Certificate",
         // WebCrypto (#1063)
@@ -91,6 +91,19 @@ public sealed class CryptoModuleEmitter : IBuiltInModuleEmitter
                 // crypto.fips — always false (non-FIPS build) (#1060)
                 il.Emit(OpCodes.Ldc_I4_0);
                 il.Emit(OpCodes.Box, ctx.Types.Boolean);
+                return true;
+            case "ECDH":
+                // Static ECDH namespace, currently exposing convertKey.
+                var dictType = ctx.Types.DictionaryStringObject;
+                il.Emit(OpCodes.Newobj, ctx.Types.GetDefaultConstructor(dictType));
+                il.Emit(OpCodes.Dup);
+                il.Emit(OpCodes.Ldstr, "convertKey");
+                il.Emit(OpCodes.Ldnull);
+                ctx.Types.EmitLoadMethodInfoViaHandle(il, ctx.Runtime!.CryptoEcdhConvertKey);
+                il.Emit(OpCodes.Newobj, ctx.Runtime.TSFunctionCtor);
+                il.Emit(OpCodes.Callvirt,
+                    ctx.Types.GetMethod(dictType, "Add", ctx.Types.String, ctx.Types.Object));
+                il.Emit(OpCodes.Call, ctx.Runtime.CreateObject);
                 return true;
             // WebCrypto (#1063): crypto.webcrypto and crypto.subtle
             case "webcrypto":

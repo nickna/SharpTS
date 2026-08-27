@@ -198,6 +198,7 @@ public partial class RuntimeEmitter
         var moduleBuilder = (ModuleBuilder)typeBuilder.Module;
         var promiseJobAwaiterType = DefinePromiseJobAwaiter(moduleBuilder, runtime);
         EmitTrackTopLevelPromiseReaction(typeBuilder, runtime);
+        EmitPromiseRejectionTracking(moduleBuilder, typeBuilder, runtime);
 
         // Static value-form methods need NewPromiseCapability before the
         // executor-support bodies are filled at the end of this emitter.
@@ -736,7 +737,7 @@ public partial class RuntimeEmitter
             [taskType, _types.Object, _types.Object]
         );
         runtime.PromiseThen = then;
-        EmitPromiseThenWrapper(then.GetILGenerator(), promiseThenSM);
+        EmitPromiseThenWrapper(then.GetILGenerator(), promiseThenSM, runtime);
         EmitPromiseThenMoveNext(promiseThenSM, runtime, promiseJobAwaiterType);
         promiseThenSM.Type.CreateType();
 

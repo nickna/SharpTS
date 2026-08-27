@@ -524,8 +524,8 @@ public static partial class BuiltInModuleTypes
             "stream/web" => GetStreamWebModuleTypes(),
             "http" => GetHttpModuleTypes(),
             "https" => GetHttpModuleTypes(),
-            "dns" => GetDnsModuleTypes(),
-            "dns/promises" => GetDnsPromisesModuleTypes(),
+            // "dns" / "dns/promises" — migrated to embedded stdlib TypeScript;
+            // their public types flow from the facade source.
             "net" => GetNetModuleTypes(),
             "tls" => GetTlsModuleTypes(),
             "dgram" => GetDgramModuleTypes(),
@@ -582,8 +582,24 @@ public static partial class BuiltInModuleTypes
             // streaming create*, crc32); the TS facade owns constants/codes and the
             // async callback forms.
             "zlib" => GetZlibModuleTypes(),
+            "dns" => GetDnsPrimitiveTypes(),
+            "dns/promises" => GetDnsPromisesModuleTypes(),
             _ => null
         };
+    }
+
+    private static Dictionary<string, TypeInfo> GetDnsPrimitiveTypes()
+    {
+        var types = GetDnsModuleTypes();
+        types["createResolver"] = new TypeInfo.Function([], TypeInfo.Any.Shared);
+        types["resolverSetServers"] = new TypeInfo.Function([TypeInfo.Any.Shared, TypeInfo.Any.Shared], TypeInfo.Void.Shared);
+        types["resolverGetServers"] = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Any.Shared);
+        types["resolverCancel"] = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Void.Shared);
+        types["resolverGetGeneration"] = new TypeInfo.Function([TypeInfo.Any.Shared], TypeInfo.Primitive.Number);
+        types["resolverSetLocalAddress"] = new TypeInfo.Function(
+            [TypeInfo.Any.Shared, TypeInfo.Any.Shared, TypeInfo.Any.Shared], TypeInfo.Void.Shared,
+            RequiredParams: 1);
+        return types;
     }
 
     /// <summary>

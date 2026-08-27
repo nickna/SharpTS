@@ -84,7 +84,7 @@ the [benchmark decision record](../benchmarks/gc-profiles/decision.md) for cross
 
 The emitted program contains its ordinary JavaScript runtime and normally has no metadata
 dependency on `SharpTS.dll`. Some features deliberately late-bind to the managed SharpTS runtime,
-including compiled `eval`, Proxy/Intl paths, selected `vm`/DNS behavior, and dynamic .NET events.
+including compiled `eval`, Proxy/Intl paths, selected `vm` behavior, and dynamic .NET events.
 The compiler records these requirements and copies `SharpTS.dll` beside the output only when one is
 present. Pure programs do not receive that copy.
 

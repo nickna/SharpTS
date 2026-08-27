@@ -93,12 +93,9 @@ public class ProcessLifecycleTests
         Assert.Equal("fired: false\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Process_UnhandledRejection_And_RejectionHandled(ExecutionMode mode)
     {
-        // Compiled-mode promise rejection tracking is a documented deferral
-        // (epic #1078) — interpreted-only until the $Promise emitter grows
-        // handler bookkeeping.
         var source = """
             let captured: any = null;
             process.on('unhandledRejection', (reason: any, promise: any) => {

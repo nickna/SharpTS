@@ -1523,6 +1523,16 @@ public class EmittedRuntime
     public MethodBuilder TSPromiseResolve { get; set; } = null!;
     public MethodBuilder TSPromiseReject { get; set; } = null!;
     public MethodBuilder TSPromiseGetValueAsync { get; set; } = null!;
+    /// <summary>
+    /// Observes a Task/$Promise returned from a callback whose result is otherwise
+    /// discarded, enabling process unhandled-rejection lifecycle events.
+    /// </summary>
+    public MethodBuilder ObserveDiscardedPromiseResult { get; set; } = null!;
+    /// <summary>
+    /// Marks a source promise handled when a callable rejection reaction is
+    /// attached through then/catch.
+    /// </summary>
+    public MethodBuilder NotifyPromiseRejectionHandler { get; set; } = null!;
 
     // Promise rejected exception
     public Type TSPromiseRejectedExceptionType { get; set; } = null!;
@@ -1980,6 +1990,13 @@ public class EmittedRuntime
     public MethodBuilder ProcessDispatchSignal { get; set; } = null!;
     public MethodBuilder ProcessEmitClosureInvoke { get; set; } = null!;
     public MethodBuilder ProcessGetPpid { get; set; } = null!;
+    public MethodBuilder ProcessGetUid { get; set; } = null!;
+    public MethodBuilder ProcessGetEuid { get; set; } = null!;
+    public MethodBuilder ProcessGetGid { get; set; } = null!;
+    public MethodBuilder ProcessGetEgid { get; set; } = null!;
+    public MethodBuilder ProcessGetGroups { get; set; } = null!;
+    public MethodBuilder ProcessSetUid { get; set; } = null!;
+    public MethodBuilder ProcessSetGid { get; set; } = null!;
     public MethodBuilder ProcessGetTitle { get; set; } = null!;
     public MethodBuilder ProcessSetTitle { get; set; } = null!;
     public MethodBuilder ProcessGetVersions { get; set; } = null!;
@@ -2136,6 +2153,8 @@ public class EmittedRuntime
     public MethodBuilder TSECDHGetMember { get; set; } = null!;
     public MethodBuilder TSECDHEncodeResult { get; set; } = null!;
     public MethodBuilder TSECDHDecodeInput { get; set; } = null!;
+    public MethodBuilder EcdhDecompressY { get; set; } = null!;
+    public MethodBuilder CryptoEcdhConvertKey { get; set; } = null!;
     public MethodBuilder TSECDHComputeSecretHelper { get; set; } = null!;
     public ConstructorBuilder BoundECDHMethodCtor { get; set; } = null!;
 
@@ -2165,6 +2184,14 @@ public class EmittedRuntime
     public MethodBuilder CryptoCreatePrivateKey { get; set; } = null!;
     public ConstructorBuilder TSKeyObjectCtorSecret { get; set; } = null!;
     public ConstructorBuilder TSKeyObjectCtorAsym { get; set; } = null!;
+    public ConstructorBuilder TSKeyObjectCtorRsa { get; set; } = null!;
+    public ConstructorBuilder TSKeyObjectCtorEc { get; set; } = null!;
+    public MethodBuilder TSKeyObjectToPublicKey { get; set; } = null!;
+    public MethodBuilder TSKeyObjectImportJwk { get; set; } = null!;
+    public MethodBuilder TSKeyObjectImportDer { get; set; } = null!;
+    public MethodBuilder TSKeyObjectGetOption { get; set; } = null!;
+    public MethodBuilder TSKeyObjectDeriveSecret { get; set; } = null!;
+    public MethodBuilder CryptoDiffieHellman { get; set; } = null!;
 
     // HTTP module methods
     public MethodBuilder Fetch { get; set; } = null!;
@@ -2786,6 +2813,12 @@ public class EmittedRuntime
 
     // DNS Resolver factory
     public MethodBuilder DnsResolverFactory { get; set; } = null!;
+    public MethodBuilder DnsResolverSetServers { get; set; } = null!;
+    public MethodBuilder DnsResolverGetServers { get; set; } = null!;
+    public MethodBuilder DnsResolverCancel { get; set; } = null!;
+    public MethodBuilder DnsResolverGetGeneration { get; set; } = null!;
+    public MethodBuilder DnsResolverSetLocalAddress { get; set; } = null!;
+    public MethodBuilder DnsResolverResolve { get; set; } = null!;
 
     // $Stats type - emitted for fs.stat() and related methods
     // Provides Node.js-compatible Stats object with methods like isFile(), isDirectory(), etc.

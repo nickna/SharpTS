@@ -199,7 +199,7 @@ public class DnsModuleTests
         Assert.Equal("error thrown\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Dns_Lookup_Callback_InvokedWithAddressAndFamily(ExecutionMode mode)
     {
         // #206: the callback form must invoke (err, address, family)
@@ -220,7 +220,7 @@ public class DnsModuleTests
         Assert.Equal("true\ntrue\ntrue\n", output);
     }
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Dns_Lookup_Callback_AllOption_ReceivesArray(ExecutionMode mode)
     {
         var files = new Dictionary<string, string>

@@ -44,7 +44,7 @@ For build automation, configure the same behavior with `SharpTSUseReferenceAssem
 | `SharpTS.dll` | Copied only when emitted soft-dependent features need the managed SharpTS runtime |
 
 Ordinary compiled TypeScript is self-contained inside `Library.dll`; `SharpTS.dll` is not an
-unconditional runtime dependency. Compiled `eval`, selected Proxy/Intl/`vm`/DNS paths, and dynamic
+unconditional runtime dependency. Compiled `eval`, selected Proxy/Intl/`vm` paths, and dynamic
 .NET event support can create a soft dependency. The compiler records those requirements and
 co-locates `SharpTS.dll` only when needed. `--standalone` suppresses the copy but does not make such
 a feature independent; the application must provide the runtime or accept the documented runtime

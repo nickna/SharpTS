@@ -4,7 +4,7 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.Emitters.Modules;
 
 /// <summary>
-/// Emits IL code for the Node.js 'dns' module.
+/// Emits IL code for the <c>primitive:dns</c> host seam.
 /// </summary>
 /// <remarks>
 /// Provides DNS resolution methods. The lookup method uses System.Net.Dns
@@ -12,7 +12,7 @@ namespace SharpTS.Compilation.Emitters.Modules;
 /// </remarks>
 public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
 {
-    public string ModuleName => "dns";
+    public string ModuleName => "primitive:dns";
 
     private static readonly string[] _exportedMembers =
     [
@@ -20,7 +20,8 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
         "resolve", "resolve4", "resolve6", "reverse",
         "resolveMx", "resolveTxt", "resolveSrv", "resolveCname", "resolveNs",
         "resolveSoa", "resolvePtr", "resolveCaa", "resolveNaptr",
-        "promises", "Resolver",
+        "promises", "Resolver", "createResolver",
+        "resolverSetServers", "resolverGetServers", "resolverCancel", "resolverGetGeneration", "resolverSetLocalAddress",
         "setDefaultResultOrder", "getDefaultResultOrder",
         "ADDRCONFIG", "V4MAPPED", "ALL",
         "NODATA", "FORMERR", "SERVFAIL", "NOTFOUND", "NOTIMP", "REFUSED",
@@ -39,8 +40,43 @@ public sealed class DnsModuleEmitter : IBuiltInModuleEmitter
             "lookupService" => EmitLookupService(emitter, arguments),
             "setDefaultResultOrder" => EmitSetDefaultResultOrder(emitter, arguments),
             "getDefaultResultOrder" => EmitGetDefaultResultOrder(emitter),
+            "createResolver" => EmitCreateResolver(emitter),
+            "resolverSetServers" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverSetServers, 2),
+            "resolverGetServers" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverGetServers, 1),
+            "resolverCancel" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverCancel, 1),
+            "resolverGetGeneration" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverGetGeneration, 1),
+            "resolverSetLocalAddress" => EmitPrimitiveCall(emitter, arguments, emitter.Context.Runtime!.DnsResolverSetLocalAddress, 3),
             _ => false
         };
+    }
+
+    private static bool EmitCreateResolver(IEmitterContext emitter)
+    {
+        emitter.Context.IL.Emit(OpCodes.Call, emitter.Context.Runtime!.DnsResolverFactory);
+        return true;
+    }
+
+    private static bool EmitPrimitiveCall(
+        IEmitterContext emitter,
+        List<Expr> arguments,
+        System.Reflection.MethodInfo method,
+        int arity)
+    {
+        var il = emitter.Context.IL;
+        for (int i = 0; i < arity; i++)
+        {
+            if (arguments.Count > i)
+            {
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
+        }
+        il.Emit(OpCodes.Call, method);
+        return true;
     }
 
     /// <summary>Emits: dns.setDefaultResultOrder(order) (#1072)</summary>

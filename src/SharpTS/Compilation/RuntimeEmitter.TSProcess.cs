@@ -21,10 +21,9 @@ namespace SharpTS.Compilation;
 /// dispatch path; the hot static-receiver form (<c>process.platform</c>)
 /// still compiles to direct IL in <see cref="Emitters.ProcessStaticEmitter"/>.
 ///
-/// Everything here is pure BCL — standalone DLLs keep working. The one
-/// late-bound member is ppid (NtQueryInformationProcess/getppid live in
-/// SharpTS.dll); it degrades to 0 without the runtime present, which is the
-/// documented graceful-fallback contract for process (see CLAUDE.md).
+/// Everything here is standalone: BCL-backed members emit directly and the
+/// small process-identity OS seam is represented by P/Invoke methods embedded
+/// in the generated assembly.
 /// </summary>
 public partial class RuntimeEmitter
 {
@@ -46,6 +45,17 @@ public partial class RuntimeEmitter
 
     // Closure type for deferred (event-loop-scheduled) process event emission
     private ConstructorBuilder _processEmitClosureCtor = null!;
+
+    // Standalone process-identity P/Invokes.
+    private MethodBuilder _processNtQueryInformationProcess = null!;
+    private MethodBuilder _processPosixGetPpid = null!;
+    private MethodBuilder _processPosixGetUid = null!;
+    private MethodBuilder _processPosixGetEuid = null!;
+    private MethodBuilder _processPosixGetGid = null!;
+    private MethodBuilder _processPosixGetEgid = null!;
+    private MethodBuilder _processPosixGetGroups = null!;
+    private MethodBuilder _processPosixSetUid = null!;
+    private MethodBuilder _processPosixSetGid = null!;
 
     private static readonly string[] _processTrappableSignals =
         ["SIGINT", "SIGTERM", "SIGHUP", "SIGQUIT", "SIGBREAK", "SIGWINCH"];
@@ -115,7 +125,7 @@ public partial class RuntimeEmitter
             _types.DictionaryStringObject, FieldAttributes.Private | FieldAttributes.Static);
 
         // ---- Value helpers (no $Process dependency) ----
-        EmitProcessGetPpid(runtimeTb, runtime);
+        EmitProcessIdentityHelpers(moduleBuilder, runtimeTb, runtime);
         EmitProcessTitleHelpers(runtimeTb, runtime);
         EmitProcessJsonInfoHelpers(runtimeTb, runtime);
         EmitProcessGetAllowedFlags(runtimeTb, runtime);
@@ -149,49 +159,278 @@ public partial class RuntimeEmitter
     // =====================================================================
 
     /// <summary>
-    /// ProcessGetPpid() → object (boxed double). Late-binds to
-    /// ProcessBuiltIns.GetParentPid when SharpTS.dll is present; 0 otherwise
-    /// (graceful-fallback member — see class remarks).
+    /// Emits standalone parent-process and POSIX identity helpers. The native
+    /// signatures become part of the generated program, so --standalone keeps
+    /// the same behavior without loading SharpTS.dll.
     /// </summary>
-    private void EmitProcessGetPpid(TypeBuilder tb, EmittedRuntime runtime)
+    private void EmitProcessIdentityHelpers(
+        ModuleBuilder moduleBuilder,
+        TypeBuilder tb,
+        EmittedRuntime runtime)
+    {
+        var processInfoType = moduleBuilder.DefineType(
+            "$ProcessBasicInformation",
+            TypeAttributes.NotPublic | TypeAttributes.Sealed |
+                TypeAttributes.SequentialLayout | TypeAttributes.BeforeFieldInit,
+            typeof(ValueType));
+        processInfoType.DefineField("ExitStatus", _types.IntPtr, FieldAttributes.Public);
+        processInfoType.DefineField("PebBaseAddress", _types.IntPtr, FieldAttributes.Public);
+        processInfoType.DefineField("AffinityMask", _types.IntPtr, FieldAttributes.Public);
+        processInfoType.DefineField("BasePriority", _types.IntPtr, FieldAttributes.Public);
+        processInfoType.DefineField("UniqueProcessId", _types.IntPtr, FieldAttributes.Public);
+        var parentPidField = processInfoType.DefineField(
+            "InheritedFromUniqueProcessId", _types.IntPtr, FieldAttributes.Public);
+
+        _processNtQueryInformationProcess = EmitTypeDefinitions.DefinePInvokeMethod(
+            tb, "NtQueryInformationProcess", "ntdll.dll",
+            MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.PinvokeImpl,
+            CallingConventions.Standard,
+            _types.Int32,
+            [_types.IntPtr, _types.Int32, processInfoType.MakeByRefType(),
+                _types.Int32, _types.Int32.MakeByRefType()],
+            CallingConvention.Winapi,
+            CharSet.Unicode);
+        _processNtQueryInformationProcess.SetImplementationFlags(MethodImplAttributes.PreserveSig);
+
+        MethodBuilder DefinePosix(
+            string entryPoint,
+            Type returnType,
+            Type[] parameterTypes)
+        {
+            var native = EmitTypeDefinitions.DefinePInvokeMethod(
+                tb, entryPoint, "libc",
+                MethodAttributes.Private | MethodAttributes.Static | MethodAttributes.PinvokeImpl,
+                CallingConventions.Standard,
+                returnType,
+                parameterTypes,
+                CallingConvention.Cdecl,
+                CharSet.Ansi);
+            native.SetImplementationFlags(MethodImplAttributes.PreserveSig);
+            return native;
+        }
+
+        _processPosixGetPpid = DefinePosix("getppid", _types.Int32, Type.EmptyTypes);
+        _processPosixGetUid = DefinePosix("getuid", _types.UInt32, Type.EmptyTypes);
+        _processPosixGetEuid = DefinePosix("geteuid", _types.UInt32, Type.EmptyTypes);
+        _processPosixGetGid = DefinePosix("getgid", _types.UInt32, Type.EmptyTypes);
+        _processPosixGetEgid = DefinePosix("getegid", _types.UInt32, Type.EmptyTypes);
+        _processPosixGetGroups = DefinePosix(
+            "getgroups", _types.Int32,
+            [_types.Int32, _types.MakeArrayType(_types.UInt32)]);
+        _processPosixSetUid = DefinePosix(
+            "setuid", _types.Int32, [_types.UInt32]);
+        _processPosixSetGid = DefinePosix(
+            "setgid", _types.Int32, [_types.UInt32]);
+
+        EmitProcessGetPpid(tb, runtime, processInfoType, parentPidField);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetUid", _processPosixGetUid,
+            m => runtime.ProcessGetUid = m);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetEuid", _processPosixGetEuid,
+            m => runtime.ProcessGetEuid = m);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetGid", _processPosixGetGid,
+            m => runtime.ProcessGetGid = m);
+        EmitProcessPosixNumberGetter(tb, "ProcessGetEgid", _processPosixGetEgid,
+            m => runtime.ProcessGetEgid = m);
+        EmitProcessGetGroups(tb, runtime);
+        EmitProcessSetIdentity(tb, runtime, "ProcessSetUid", "setuid",
+            _processPosixSetUid, m => runtime.ProcessSetUid = m);
+        EmitProcessSetIdentity(tb, runtime, "ProcessSetGid", "setgid",
+            _processPosixSetGid, m => runtime.ProcessSetGid = m);
+
+        processInfoType.CreateType();
+    }
+
+    private void EmitProcessGetPpid(
+        TypeBuilder tb,
+        EmittedRuntime runtime,
+        Type processInfoType,
+        FieldBuilder parentPidField)
     {
         var method = tb.DefineMethod("ProcessGetPpid",
             MethodAttributes.Public | MethodAttributes.Static, _types.Object, Type.EmptyTypes);
         runtime.ProcessGetPpid = method;
 
         var il = method.GetILGenerator();
+        var result = il.DeclareLocal(_types.Object);
+        var info = il.DeclareLocal(processInfoType);
+        var returnLength = il.DeclareLocal(_types.Int32);
+        var posix = il.DefineLabel();
+        var windowsSuccess = il.DefineLabel();
         var fallback = il.DefineLabel();
+        var done = il.DefineLabel();
 
-        il.Emit(OpCodes.Ldstr, "SharpTS.Runtime.BuiltIns.ProcessBuiltIns, SharpTS");
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Type, "GetType", _types.String));
-        var typeLocal = il.DeclareLocal(_types.Type);
-        il.Emit(OpCodes.Stloc, typeLocal);
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Brfalse, fallback);
+        il.Emit(OpCodes.Call, typeof(OperatingSystem).GetMethod(nameof(OperatingSystem.IsWindows))!);
+        il.Emit(OpCodes.Brfalse, posix);
 
-        il.Emit(OpCodes.Ldloc, typeLocal);
-        il.Emit(OpCodes.Ldstr, "GetParentPid");
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.Type, "GetMethod", _types.String));
-        var miLocal = il.DeclareLocal(_types.MethodInfo);
-        il.Emit(OpCodes.Stloc, miLocal);
-        il.Emit(OpCodes.Ldloc, miLocal);
-        il.Emit(OpCodes.Brfalse, fallback);
-
-        il.Emit(OpCodes.Ldloc, miLocal);
-        il.Emit(OpCodes.Ldnull);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Ldloca, info);
+        il.Emit(OpCodes.Initobj, processInfoType);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Process, "GetCurrentProcess"));
+        il.Emit(OpCodes.Callvirt, _types.GetPropertyGetter(_types.Process, "Handle"));
         il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Newarr, _types.Object);
-        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.MethodInfo, "Invoke", _types.Object, _types.ObjectArray));
-        // int (boxed) → double (boxed)
-        il.Emit(OpCodes.Unbox_Any, _types.Int32);
+        il.Emit(OpCodes.Ldloca, info);
+        il.Emit(OpCodes.Call, typeof(IntPtr).GetProperty(nameof(IntPtr.Size))!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldc_I4_6);
+        il.Emit(OpCodes.Mul);
+        il.Emit(OpCodes.Ldloca, returnLength);
+        il.Emit(OpCodes.Call, _processNtQueryInformationProcess);
+        il.Emit(OpCodes.Brfalse, windowsSuccess);
+        il.Emit(OpCodes.Leave, fallback);
+        il.MarkLabel(windowsSuccess);
+        il.Emit(OpCodes.Ldloca, info);
+        il.Emit(OpCodes.Ldfld, parentPidField);
+        il.Emit(OpCodes.Conv_I8);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Leave, done);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, fallback);
+        il.EndExceptionBlock();
+
+        il.MarkLabel(posix);
+        il.BeginExceptionBlock();
+        il.Emit(OpCodes.Call, _processPosixGetPpid);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Leave, done);
+        il.BeginCatchBlock(_types.Exception);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Leave, fallback);
+        il.EndExceptionBlock();
 
         il.MarkLabel(fallback);
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Stloc, result);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, result);
         il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitProcessPosixNumberGetter(
+        TypeBuilder tb,
+        string name,
+        MethodBuilder native,
+        Action<MethodBuilder> assign)
+    {
+        var method = tb.DefineMethod(name,
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        assign(method);
+        var il = method.GetILGenerator();
+        il.Emit(OpCodes.Call, native);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitProcessGetGroups(TypeBuilder tb, EmittedRuntime runtime)
+    {
+        var method = tb.DefineMethod("ProcessGetGroups",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        runtime.ProcessGetGroups = method;
+        var il = method.GetILGenerator();
+        var buffer = il.DeclareLocal(_types.MakeArrayType(_types.UInt32));
+        var count = il.DeclareLocal(_types.Int32);
+        var index = il.DeclareLocal(_types.Int32);
+        var groups = il.DeclareLocal(_types.ListOfObject);
+        var loop = il.DefineLabel();
+        var done = il.DefineLabel();
+        var success = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldc_I4, 128);
+        il.Emit(OpCodes.Newarr, _types.UInt32);
+        il.Emit(OpCodes.Stloc, buffer);
+        il.Emit(OpCodes.Ldc_I4, 128);
+        il.Emit(OpCodes.Ldloc, buffer);
+        il.Emit(OpCodes.Call, _processPosixGetGroups);
+        il.Emit(OpCodes.Stloc, count);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Bge, success);
+        EmitProcessPosixError(il, runtime, "getgroups");
+
+        il.MarkLabel(success);
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.ListOfObject));
+        il.Emit(OpCodes.Stloc, groups);
+        il.Emit(OpCodes.Br, done);
+        il.MarkLabel(loop);
+        il.Emit(OpCodes.Ldloc, groups);
+        il.Emit(OpCodes.Ldloc, buffer);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldelem_U4);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Box, _types.Double);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add", _types.Object));
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, index);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, count);
+        il.Emit(OpCodes.Blt, loop);
+        il.Emit(OpCodes.Ldloc, groups);
+        il.Emit(OpCodes.Newobj, runtime.TSArrayCtor);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitProcessSetIdentity(
+        TypeBuilder tb,
+        EmittedRuntime runtime,
+        string name,
+        string syscall,
+        MethodBuilder native,
+        Action<MethodBuilder> assign)
+    {
+        var method = tb.DefineMethod(name,
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        assign(method);
+        var il = method.GetILGenerator();
+        var valid = il.DefineLabel();
+        var success = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.Double);
+        il.Emit(OpCodes.Brtrue, valid);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "The \"id\" argument must be of type number.");
+        il.MarkLabel(valid);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_U4);
+        il.Emit(OpCodes.Call, native);
+        il.Emit(OpCodes.Brfalse, success);
+        EmitProcessPosixError(il, runtime, syscall);
+        il.MarkLabel(success);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+    }
+
+    private void EmitProcessPosixError(
+        ILGenerator il,
+        EmittedRuntime runtime,
+        string syscall)
+    {
+        var nullableInt = _types.MakeNullable(_types.Int32);
+        var errno = il.DeclareLocal(nullableInt);
+        il.Emit(OpCodes.Ldstr, "EPERM");
+        il.Emit(OpCodes.Ldstr, $"{syscall} EPERM");
+        il.Emit(OpCodes.Ldstr, syscall);
+        il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ldloca, errno);
+        il.Emit(OpCodes.Initobj, nullableInt);
+        il.Emit(OpCodes.Ldloc, errno);
+        il.Emit(OpCodes.Newobj, runtime.NodeErrorCtor);
+        il.Emit(OpCodes.Call, runtime.CreateException);
+        il.Emit(OpCodes.Throw);
     }
 
     /// <summary>
@@ -1268,7 +1507,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(noMethod);
 
-            il.Emit(OpCodes.Ldnull);
+            il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
             il.Emit(OpCodes.Ret);
         }
         tb.DefineMethodOverride(getProp, runtime.IHasFieldsGetProperty);
@@ -1631,6 +1870,33 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Stsfld, _processSourceMapsEnabledField);
             il.Emit(OpCodes.Ldnull);
         });
+
+        // Node omits these properties entirely on Windows. Because the emitted
+        // process type is built on the target host, defining the methods only on
+        // POSIX preserves both invocation behavior and `typeof`/`in` checks.
+        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            Define("Getuid", Type.EmptyTypes,
+                il => il.Emit(OpCodes.Call, runtime.ProcessGetUid));
+            Define("Geteuid", Type.EmptyTypes,
+                il => il.Emit(OpCodes.Call, runtime.ProcessGetEuid));
+            Define("Getgid", Type.EmptyTypes,
+                il => il.Emit(OpCodes.Call, runtime.ProcessGetGid));
+            Define("Getegid", Type.EmptyTypes,
+                il => il.Emit(OpCodes.Call, runtime.ProcessGetEgid));
+            Define("Getgroups", Type.EmptyTypes,
+                il => il.Emit(OpCodes.Call, runtime.ProcessGetGroups));
+            Define("Setuid", [_types.Object], il =>
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, runtime.ProcessSetUid);
+            });
+            Define("Setgid", [_types.Object], il =>
+            {
+                il.Emit(OpCodes.Ldarg_1);
+                il.Emit(OpCodes.Call, runtime.ProcessSetGid);
+            });
+        }
     }
 
     /// <summary>

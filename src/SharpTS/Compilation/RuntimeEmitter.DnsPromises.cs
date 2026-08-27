@@ -78,6 +78,15 @@ public partial class RuntimeEmitter
         });
         EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesLookup", lookupSync);
 
+        // lookupService(address, port)
+        var lookupServiceSync = EmitDnsSyncHelper2(typeBuilder, runtime, "DnsPromisesLookupService_Sync", il =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.DnsLookupService);
+        });
+        EmitDnsAsyncWrapper2(typeBuilder, runtime, "DnsPromisesLookupService", lookupServiceSync);
+
         // resolve(hostname, rrtype)
         var resolveSync = EmitDnsSyncHelper2(typeBuilder, runtime, "DnsPromisesResolve_Sync", il =>
         {
@@ -108,6 +117,11 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.ListOfObject, "Add")!);
         });
         EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsPromisesReverse", reverseSync);
+
+        // Resolver queries use the same event-loop-aware Task.Run path. The sync
+        // target late-binds to the shared DnsResolverInstance state in SharpTS.dll;
+        // its single object[] request carries state/method/identifier/rrtype.
+        EmitDnsAsyncWrapper1(typeBuilder, runtime, "DnsResolverResolveAsync", runtime.DnsResolverResolve);
 
         // Namespace getter for dns.promises sub-property
         EmitDnsGetPromisesNamespace(typeBuilder, runtime);
@@ -578,6 +592,7 @@ public partial class RuntimeEmitter
         var methodMap = new (string JsName, string WrapperKey)[]
         {
             ("lookup", "DnsPromisesLookup"),
+            ("lookupService", "DnsPromisesLookupService"),
             ("resolve", "DnsPromisesResolve"),
             ("resolve4", "DnsPromisesResolve4"),
             ("resolve6", "DnsPromisesResolve6"),

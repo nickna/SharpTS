@@ -71,14 +71,12 @@ public class DnsTransportParityTests
         Assert.Equal("v4 ok\nv4+v6 ok\nrejected true\nfunction\n", output);
     }
 
-    [Fact]
-    public void Dns_Resolver_Cancel_RejectsPendingResolve_Interpreted()
+    [Theory, ModeData]
+    public void Dns_Resolver_Cancel_RejectsPendingResolve(ExecutionMode mode)
     {
-        // Interpreted-only: compiled resolver callbacks run inline-synchronously,
-        // so a query can never be pending when guest code runs (documented
-        // deviation — cf. the tls/http compiled-deferral precedent). The resolver
-        // targets an in-script UDP blackhole that never answers; cancel() must
-        // reject promptly with ECANCELLED instead of waiting out the DNS timeout.
+        // The resolver targets an in-script UDP blackhole that never answers;
+        // cancel() must reject promptly with ECANCELLED instead of waiting out
+        // the DNS timeout in either execution mode.
         var files = new Dictionary<string, string>
         {
             ["main.ts"] = """
@@ -97,12 +95,12 @@ public class DnsTransportParityTests
                 });
                 """
         };
-        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Interpreted);
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("err ECANCELLED\n", output);
     }
 
-    [Fact]
-    public void Dns_Resolver_CancelledResolverStillUsable_Interpreted()
+    [Theory, ModeData]
+    public void Dns_Resolver_CancelledResolverStillUsable(ExecutionMode mode)
     {
         // Node semantics: cancel() aborts *outstanding* queries; the resolver
         // itself remains usable for new ones.
@@ -130,7 +128,7 @@ public class DnsTransportParityTests
                 });
                 """
         };
-        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Interpreted);
+        var output = TestHarness.RunModules(files, "main.ts", mode);
         Assert.Equal("first ECANCELLED\nsecond ECANCELLED\n", output);
     }
 }

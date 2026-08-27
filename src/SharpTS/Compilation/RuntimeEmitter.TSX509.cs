@@ -12,9 +12,8 @@ namespace SharpTS.Compilation;
 /// <summary>
 /// Emits the $X509Certificate class for standalone crypto.X509Certificate support (#1064).
 /// NOTE: Must stay in sync with SharpTS.Runtime.Types.SharpTSX509Certificate.
-/// Compiled-deferred members (clear runtime error): checkEmail, toLegacyObject;
-/// infoAccess returns undefined; subjectAltName omits rfc822/URI entries
-/// (the BCL SAN extension enumerates only DNS names and IP addresses).
+/// infoAccess remains undefined; the other public certificate inspection methods
+/// are emitted using only BCL APIs.
 /// All emitted IL is pure BCL — no SharpTS.dll reference.
 /// </summary>
 public partial class RuntimeEmitter
@@ -34,6 +33,7 @@ public partial class RuntimeEmitter
         var sanField = tb.DefineField("_san", _types.String, FieldAttributes.Private);
         var dnsField = tb.DefineField("_dnsNames", typeof(List<string>), FieldAttributes.Private);
         var ipsField = tb.DefineField("_ipNames", typeof(List<string>), FieldAttributes.Private);
+        var emailsField = tb.DefineField("_emailNames", typeof(List<string>), FieldAttributes.Private);
         var caField = tb.DefineField("_ca", _types.Boolean, FieldAttributes.Private);
 
         // Static helpers
@@ -42,10 +42,11 @@ public partial class RuntimeEmitter
         var colonHex = EmitX509ColonHex(tb);
         var hostMatches = EmitX509HostMatches(tb);
         var extractCn = EmitX509ExtractCn(tb);
+        var nameToObject = EmitX509NameToObject(tb);
         var verifyWithPem = EmitX509VerifyWithPem(tb);
 
         var ctor = EmitX509Ctor(tb, runtime, certField, subjectField, issuerField, cnField,
-            sanField, dnsField, ipsField, caField, formatName, extractCn);
+            sanField, dnsField, ipsField, emailsField, caField, formatName, extractCn);
         runtime.X509CertificateCtor = ctor;
 
         // --- simple string/bool property getters over precomputed fields ---
@@ -72,10 +73,11 @@ public partial class RuntimeEmitter
         EmitX509Verify(tb, certField, verifyWithPem);
         EmitX509CheckHost(tb, runtime, dnsField, cnField, hostMatches);
         EmitX509CheckIp(tb, runtime, ipsField);
+        EmitX509CheckEmail(tb, runtime, emailsField);
         EmitX509CheckIssued(tb, certField, subjectField, issuerField, verifyWithPem);
         EmitX509ToString(tb, certField);
-        EmitX509NotSupported(tb, "CheckEmail", "X509Certificate.checkEmail is not supported in compiled mode (interpreter only); see SharpTS #1064");
-        EmitX509NotSupported(tb, "ToLegacyObject", "X509Certificate.toLegacyObject is not supported in compiled mode (interpreter only); see SharpTS #1064");
+        EmitX509ToLegacyObject(tb, runtime, certField, subjectField, issuerField, sanField,
+            caField, formatValidity, colonHex, nameToObject);
 
         tb.CreateType();
     }
@@ -108,7 +110,7 @@ public partial class RuntimeEmitter
         TypeBuilder tb, EmittedRuntime runtime,
         FieldBuilder certField, FieldBuilder subjectField, FieldBuilder issuerField,
         FieldBuilder cnField, FieldBuilder sanField, FieldBuilder dnsField,
-        FieldBuilder ipsField, FieldBuilder caField,
+        FieldBuilder ipsField, FieldBuilder emailsField, FieldBuilder caField,
         MethodBuilder formatName, MethodBuilder extractCn)
     {
         var ctor = tb.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, [_types.Object]);
@@ -213,6 +215,9 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Newobj, listStringCtor);
         il.Emit(OpCodes.Stfld, ipsField);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Newobj, listStringCtor);
+        il.Emit(OpCodes.Stfld, emailsField);
 
         var partsLocal = il.DeclareLocal(typeof(List<string>));
         il.Emit(OpCodes.Newobj, listStringCtor);
@@ -364,6 +369,30 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, extsLocal);
         il.Emit(OpCodes.Callvirt, typeof(X509ExtensionCollection).GetProperty("Count")!.GetGetMethod()!);
         il.Emit(OpCodes.Blt, loopBody);
+
+        // The BCL exposes the selected rfc822Name (or subject email fallback)
+        // through GetNameInfo. Preserve it for checkEmail and SAN rendering.
+        var emailLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldloc, certLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)X509NameType.EmailName);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetMethod(
+            "GetNameInfo", [typeof(X509NameType), typeof(bool)])!);
+        il.Emit(OpCodes.Stloc, emailLocal);
+        var noEmailLabel = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, emailLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "IsNullOrEmpty", [_types.String])!);
+        il.Emit(OpCodes.Brtrue, noEmailLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, emailsField);
+        il.Emit(OpCodes.Ldloc, emailLocal);
+        il.Emit(OpCodes.Callvirt, listStringAdd);
+        il.Emit(OpCodes.Ldloc, partsLocal);
+        il.Emit(OpCodes.Ldstr, "email:");
+        il.Emit(OpCodes.Ldloc, emailLocal);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Concat", [_types.String, _types.String])!);
+        il.Emit(OpCodes.Callvirt, listStringAdd);
+        il.MarkLabel(noEmailLabel);
 
         // _san = parts.Count > 0 ? string.Join(", ", parts.ToArray()) : null
         var noSanLabel = il.DefineLabel();
@@ -775,6 +804,86 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Blt, body);
 
         il.Emit(OpCodes.Ldnull);
+        il.Emit(OpCodes.Ret);
+        return method;
+    }
+
+    /// <summary>Converts the multi-line X.500 rendering into a JavaScript object.</summary>
+    private MethodBuilder EmitX509NameToObject(TypeBuilder tb)
+    {
+        var method = tb.DefineMethod(
+            "NameToObject",
+            MethodAttributes.Private | MethodAttributes.Static,
+            _types.Object,
+            [_types.String]);
+        var il = method.GetILGenerator();
+
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var linesLocal = il.DeclareLocal(typeof(string[]));
+        var lineLocal = il.DeclareLocal(_types.String);
+        var indexLocal = il.DeclareLocal(_types.Int32);
+        var iLocal = il.DeclareLocal(_types.Int32);
+
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stloc, dictLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Newarr, typeof(char));
+        il.Emit(OpCodes.Dup);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldc_I4, (int)'\n');
+        il.Emit(OpCodes.Stelem_I2);
+        il.Emit(OpCodes.Ldc_I4_1); // StringSplitOptions.RemoveEmptyEntries
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "Split", [typeof(char[]), typeof(StringSplitOptions)])!);
+        il.Emit(OpCodes.Stloc, linesLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+
+        var check = il.DefineLabel();
+        var body = il.DefineLabel();
+        var next = il.DefineLabel();
+        il.Emit(OpCodes.Br, check);
+        il.MarkLabel(body);
+        il.Emit(OpCodes.Ldloc, linesLocal);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldelem_Ref);
+        il.Emit(OpCodes.Stloc, lineLocal);
+        il.Emit(OpCodes.Ldloc, lineLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)'=');
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "IndexOf", [typeof(char)])!);
+        il.Emit(OpCodes.Stloc, indexLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ble, next);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ldloc, lineLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "Substring", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Ldloc, lineLocal);
+        il.Emit(OpCodes.Ldloc, indexLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(
+            _types.String, "Substring", [_types.Int32])!);
+        il.Emit(OpCodes.Callvirt, _types.GetProperty(
+            _types.DictionaryStringObject, "Item")!.GetSetMethod()!);
+
+        il.MarkLabel(next);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.MarkLabel(check);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldloc, linesLocal);
+        il.Emit(OpCodes.Ldlen);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Blt, body);
+
+        il.Emit(OpCodes.Ldloc, dictLocal);
         il.Emit(OpCodes.Ret);
         return method;
     }
@@ -1480,6 +1589,55 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
     }
 
+    private void EmitX509CheckEmail(TypeBuilder tb, EmittedRuntime runtime, FieldBuilder emailsField)
+    {
+        var method = tb.DefineMethod("CheckEmail",
+            MethodAttributes.Public | MethodAttributes.HideBySig,
+            _types.Object, [_types.Object]);
+        var il = method.GetILGenerator();
+        var emailLocal = il.DeclareLocal(_types.String);
+        var iLocal = il.DeclareLocal(_types.Int32);
+        var returnEmail = il.DefineLabel();
+        var returnUndefined = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_1);
+        il.Emit(OpCodes.Callvirt, _types.GetMethodNoParams(_types.Object, "ToString"));
+        il.Emit(OpCodes.Stloc, emailLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, iLocal);
+        var check = il.DefineLabel();
+        var body = il.DefineLabel();
+        il.Emit(OpCodes.Br, check);
+        il.MarkLabel(body);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, emailsField);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetProperty("Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloc, emailLocal);
+        il.Emit(OpCodes.Ldc_I4, (int)StringComparison.OrdinalIgnoreCase);
+        il.Emit(OpCodes.Call, _types.GetMethod(_types.String, "Equals",
+            [_types.String, _types.String, typeof(StringComparison)])!);
+        il.Emit(OpCodes.Brtrue, returnEmail);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Add);
+        il.Emit(OpCodes.Stloc, iLocal);
+        il.MarkLabel(check);
+        il.Emit(OpCodes.Ldloc, iLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, emailsField);
+        il.Emit(OpCodes.Callvirt, typeof(List<string>).GetProperty("Count")!.GetGetMethod()!);
+        il.Emit(OpCodes.Blt, body);
+        il.Emit(OpCodes.Br, returnUndefined);
+
+        il.MarkLabel(returnEmail);
+        il.Emit(OpCodes.Ldloc, emailLocal);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(returnUndefined);
+        il.Emit(OpCodes.Ldsfld, runtime.UndefinedInstance);
+        il.Emit(OpCodes.Ret);
+    }
+
     private void EmitX509CheckIssued(TypeBuilder tb, FieldBuilder certField,
         FieldBuilder subjectField, FieldBuilder issuerField, MethodBuilder verifyWithPem)
     {
@@ -1547,14 +1705,155 @@ public partial class RuntimeEmitter
         jil.Emit(OpCodes.Ret);
     }
 
-    private void EmitX509NotSupported(TypeBuilder tb, string methodName, string message)
+    private void EmitX509ToLegacyObject(
+        TypeBuilder tb,
+        EmittedRuntime runtime,
+        FieldBuilder certField,
+        FieldBuilder subjectField,
+        FieldBuilder issuerField,
+        FieldBuilder sanField,
+        FieldBuilder caField,
+        MethodBuilder formatValidity,
+        MethodBuilder colonHex,
+        MethodBuilder nameToObject)
     {
-        var method = tb.DefineMethod(methodName,
+        var method = tb.DefineMethod("ToLegacyObject",
             MethodAttributes.Public | MethodAttributes.HideBySig,
-            _types.Object, [_types.Object]);
+            _types.Object, Type.EmptyTypes);
         var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldstr, message);
-        il.Emit(OpCodes.Newobj, _types.GetConstructor(_types.InvalidOperationException, [_types.String])!);
-        il.Emit(OpCodes.Throw);
+        var dictLocal = il.DeclareLocal(_types.DictionaryStringObject);
+        var rsaLocal = il.DeclareLocal(typeof(RSA));
+        var ecLocal = il.DeclareLocal(typeof(ECDsa));
+        var setItem = _types.GetProperty(_types.DictionaryStringObject, "Item")!.GetSetMethod()!;
+
+        il.Emit(OpCodes.Newobj, _types.GetDefaultConstructor(_types.DictionaryStringObject));
+        il.Emit(OpCodes.Stloc, dictLocal);
+
+        void EmitSet(string key, Action emitValue)
+        {
+            il.Emit(OpCodes.Ldloc, dictLocal);
+            il.Emit(OpCodes.Ldstr, key);
+            emitValue();
+            il.Emit(OpCodes.Callvirt, setItem);
+        }
+
+        EmitSet("subject", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, subjectField);
+            il.Emit(OpCodes.Call, nameToObject);
+        });
+        EmitSet("issuer", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, issuerField);
+            il.Emit(OpCodes.Call, nameToObject);
+        });
+        EmitSet("valid_from", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, certField);
+            il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("NotBefore")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, formatValidity);
+        });
+        EmitSet("valid_to", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, certField);
+            il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("NotAfter")!.GetGetMethod()!);
+            il.Emit(OpCodes.Call, formatValidity);
+        });
+
+        void EmitFingerprint(string key, string hashName)
+        {
+            EmitSet(key, () =>
+            {
+                il.Emit(OpCodes.Ldarg_0);
+                il.Emit(OpCodes.Ldfld, certField);
+                il.Emit(OpCodes.Call, _types.GetProperty(_types.HashAlgorithmName, hashName)!.GetGetMethod()!);
+                il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetMethod(
+                    "GetCertHash", [typeof(HashAlgorithmName)])!);
+                il.Emit(OpCodes.Call, colonHex);
+            });
+        }
+
+        EmitFingerprint("fingerprint", "SHA1");
+        EmitFingerprint("fingerprint256", "SHA256");
+        EmitFingerprint("fingerprint512", "SHA512");
+        EmitSet("serialNumber", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, certField);
+            il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("SerialNumber")!.GetGetMethod()!);
+        });
+        EmitSet("raw", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, certField);
+            il.Emit(OpCodes.Callvirt, typeof(X509Certificate2).GetProperty("RawData")!.GetGetMethod()!);
+            il.Emit(OpCodes.Newobj, runtime.TSBufferCtor);
+        });
+        EmitSet("ca", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, caField);
+            il.Emit(OpCodes.Box, _types.Boolean);
+        });
+
+        // subjectaltname is absent, rather than null, when the certificate has no SAN.
+        var noSan = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, sanField);
+        il.Emit(OpCodes.Brfalse, noSan);
+        EmitSet("subjectaltname", () =>
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldfld, sanField);
+        });
+        il.MarkLabel(noSan);
+
+        // Expose the public-key size as a JavaScript number.
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, certField);
+        il.Emit(OpCodes.Call, typeof(RSACertificateExtensions).GetMethod(
+            "GetRSAPublicKey", [typeof(X509Certificate2)])!);
+        il.Emit(OpCodes.Stloc, rsaLocal);
+        var tryEc = il.DefineLabel();
+        var bitsDone = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, rsaLocal);
+        il.Emit(OpCodes.Brfalse, tryEc);
+        EmitSet("bits", () =>
+        {
+            il.Emit(OpCodes.Ldloc, rsaLocal);
+            il.Emit(OpCodes.Callvirt, typeof(AsymmetricAlgorithm).GetProperty("KeySize")!.GetGetMethod()!);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+        });
+        il.Emit(OpCodes.Ldloc, rsaLocal);
+        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+        il.Emit(OpCodes.Br, bitsDone);
+
+        il.MarkLabel(tryEc);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldfld, certField);
+        il.Emit(OpCodes.Call, typeof(ECDsaCertificateExtensions).GetMethod(
+            "GetECDsaPublicKey", [typeof(X509Certificate2)])!);
+        il.Emit(OpCodes.Stloc, ecLocal);
+        il.Emit(OpCodes.Ldloc, ecLocal);
+        il.Emit(OpCodes.Brfalse, bitsDone);
+        EmitSet("bits", () =>
+        {
+            il.Emit(OpCodes.Ldloc, ecLocal);
+            il.Emit(OpCodes.Callvirt, typeof(AsymmetricAlgorithm).GetProperty("KeySize")!.GetGetMethod()!);
+            il.Emit(OpCodes.Conv_R8);
+            il.Emit(OpCodes.Box, _types.Double);
+        });
+        il.Emit(OpCodes.Ldloc, ecLocal);
+        il.Emit(OpCodes.Callvirt, typeof(IDisposable).GetMethod("Dispose")!);
+
+        il.MarkLabel(bitsDone);
+        il.Emit(OpCodes.Ldloc, dictLocal);
+        il.Emit(OpCodes.Ret);
     }
+
 }

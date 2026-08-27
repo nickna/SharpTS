@@ -210,6 +210,7 @@ public class ProcessSurfaceTests
     {
         var source = """
             console.log(typeof process.ppid, typeof process.title);
+            console.log(process.ppid > 0);
             console.log(process.title.length > 0);
             console.log(process.versions.node, typeof process.versions.sharpts);
             console.log(process.version === 'v' + process.versions.node);
@@ -222,7 +223,7 @@ public class ProcessSurfaceTests
 
         var output = TestHarness.Run(source, mode);
         Assert.Equal(
-            "number string\ntrue\n24.15.0 string\ntrue\nstring true\ntrue string\nnode object object\n9229\nfalse\n",
+            "number string\ntrue\ntrue\n24.15.0 string\ntrue\nstring true\ntrue string\nnode object object\n9229\nfalse\n",
             output);
     }
 
@@ -240,10 +241,9 @@ public class ProcessSurfaceTests
         Assert.Equal("sharpts-epic-1078\n", output);
     }
 
-    // ---- #1086: POSIX identity (platform-conditional; compiled POSIX is a
-    //      documented interpreter-first deferral, so interp-only) ----
+    // ---- #1086: POSIX identity (platform-conditional) ----
 
-    [Theory, InterpretedOnlyData]
+    [Theory, ModeData]
     public void Process_PosixIdentity_MatchesPlatform(ExecutionMode mode)
     {
         var source = """

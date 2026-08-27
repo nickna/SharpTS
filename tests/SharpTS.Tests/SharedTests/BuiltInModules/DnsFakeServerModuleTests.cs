@@ -67,9 +67,8 @@ public class DnsFakeServerModuleTests
             : DnsPackets.Response(request, 0, DnsPackets.Record(qtype, rdata));
     });
 
-    // Exactly one top-level dns call per program: dns callback wrappers invoked
-    // from inside another callback never fire in compiled mode (see issue filed
-    // from this work) — and concurrent top-level calls would interleave output.
+    // Exactly one top-level dns call per program so concurrent callbacks do not
+    // make the assertion output order nondeterministic.
     private static readonly (string Method, string Logs, string Expected)[] RecordTypeAssertions =
     [
         ("resolveMx", "console.log(r[0].exchange); console.log(r[0].priority);",

@@ -180,10 +180,29 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var pemLocal = il.DeclareLocal(_types.String);
+        var keyValueLocal = il.DeclareLocal(_types.Object);
+        var formatLocal = il.DeclareLocal(_types.String);
+        var typeLocal = il.DeclareLocal(_types.String);
+        var optionValueLocal = il.DeclareLocal(_types.Object);
+        var dictionaryTryGetValue = _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()]);
 
         // Extract PEM from key
         var notStringLabel = il.DefineLabel();
         var createKeyObjectLabel = il.DefineLabel();
+
+        // createPublicKey(private/public KeyObject) derives/copies the public key.
+        var notKeyObject = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, runtime.TSKeyObjectCtorAsym.DeclaringType!);
+        il.Emit(OpCodes.Brfalse, notKeyObject);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSKeyObjectCtorAsym.DeclaringType!);
+        il.Emit(OpCodes.Callvirt, runtime.TSKeyObjectToPublicKey);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(notKeyObject);
 
         // Check if key is string
         il.Emit(OpCodes.Ldarg_0);
@@ -206,9 +225,21 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldstr, "key");
         il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Stloc, pemLocal);
-        il.Emit(OpCodes.Br, createKeyObjectLabel);
+        il.Emit(OpCodes.Stloc, keyValueLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "format");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, formatLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "type");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, typeLocal);
+        var objectOptionReady = il.DefineLabel();
+        il.Emit(OpCodes.Br, objectOptionReady);
 
         // Check for Dictionary<string,object?> (compiled object literals)
         il.MarkLabel(tryDictLabel);
@@ -219,7 +250,53 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
         il.Emit(OpCodes.Ldstr, "key");
-        il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.DictionaryStringObject, "Item")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloca, optionValueLocal);
+        il.Emit(OpCodes.Callvirt, dictionaryTryGetValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, optionValueLocal);
+        il.Emit(OpCodes.Stloc, keyValueLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "format");
+        il.Emit(OpCodes.Ldloca, optionValueLocal);
+        il.Emit(OpCodes.Callvirt, dictionaryTryGetValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, optionValueLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, formatLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "type");
+        il.Emit(OpCodes.Ldloca, optionValueLocal);
+        il.Emit(OpCodes.Callvirt, dictionaryTryGetValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, optionValueLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        il.MarkLabel(objectOptionReady);
+        var optionIsDer = il.DefineLabel();
+        var optionIsPem = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, formatLocal);
+        il.Emit(OpCodes.Ldstr, "jwk");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, optionIsDer);
+        il.Emit(OpCodes.Ldloc, keyValueLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportJwk);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(optionIsDer);
+        il.Emit(OpCodes.Ldloc, formatLocal);
+        il.Emit(OpCodes.Ldstr, "der");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, optionIsPem);
+        il.Emit(OpCodes.Ldloc, keyValueLocal);
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportDer);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(optionIsPem);
+        il.Emit(OpCodes.Ldloc, keyValueLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, pemLocal);
         il.Emit(OpCodes.Br, createKeyObjectLabel);
@@ -253,6 +330,14 @@ public partial class RuntimeEmitter
         var il = method.GetILGenerator();
 
         var pemLocal = il.DeclareLocal(_types.String);
+        var keyValueLocal = il.DeclareLocal(_types.Object);
+        var formatLocal = il.DeclareLocal(_types.String);
+        var typeLocal = il.DeclareLocal(_types.String);
+        var optionValueLocal = il.DeclareLocal(_types.Object);
+        var dictionaryTryGetValue = _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()]);
 
         // Extract PEM from key
         var notStringLabel = il.DefineLabel();
@@ -272,11 +357,83 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Isinst, runtime.TSObjectType);
         var noGetPropertyLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brfalse, noGetPropertyLabel);
+        var tryDict = il.DefineLabel();
+        il.Emit(OpCodes.Brfalse, tryDict);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSObjectType);
         il.Emit(OpCodes.Ldstr, "key");
         il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Stloc, keyValueLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "format");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, formatLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, runtime.TSObjectType);
+        il.Emit(OpCodes.Ldstr, "type");
+        il.Emit(OpCodes.Callvirt, runtime.TSObjectGetProperty);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, typeLocal);
+        var optionReady = il.DefineLabel();
+        il.Emit(OpCodes.Br, optionReady);
+
+        il.MarkLabel(tryDict);
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, noGetPropertyLabel);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "key");
+        il.Emit(OpCodes.Ldloca, optionValueLocal);
+        il.Emit(OpCodes.Callvirt, dictionaryTryGetValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, optionValueLocal);
+        il.Emit(OpCodes.Stloc, keyValueLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "format");
+        il.Emit(OpCodes.Ldloca, optionValueLocal);
+        il.Emit(OpCodes.Callvirt, dictionaryTryGetValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, optionValueLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, formatLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "type");
+        il.Emit(OpCodes.Ldloca, optionValueLocal);
+        il.Emit(OpCodes.Callvirt, dictionaryTryGetValue);
+        il.Emit(OpCodes.Pop);
+        il.Emit(OpCodes.Ldloc, optionValueLocal);
+        il.Emit(OpCodes.Isinst, _types.String);
+        il.Emit(OpCodes.Stloc, typeLocal);
+
+        il.MarkLabel(optionReady);
+        var optionIsDer = il.DefineLabel();
+        var optionIsPem = il.DefineLabel();
+        il.Emit(OpCodes.Ldloc, formatLocal);
+        il.Emit(OpCodes.Ldstr, "jwk");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, optionIsDer);
+        il.Emit(OpCodes.Ldloc, keyValueLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportJwk);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(optionIsDer);
+        il.Emit(OpCodes.Ldloc, formatLocal);
+        il.Emit(OpCodes.Ldstr, "der");
+        il.Emit(OpCodes.Call, _types.StringOpEquality);
+        il.Emit(OpCodes.Brfalse, optionIsPem);
+        il.Emit(OpCodes.Ldloc, keyValueLocal);
+        il.Emit(OpCodes.Ldloc, typeLocal);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Call, runtime.TSKeyObjectImportDer);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(optionIsPem);
+        il.Emit(OpCodes.Ldloc, keyValueLocal);
         il.Emit(OpCodes.Castclass, _types.String);
         il.Emit(OpCodes.Stloc, pemLocal);
         il.Emit(OpCodes.Br, createKeyObjectLabel);
@@ -292,5 +449,50 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_1); // isPrivate = true
         il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorAsym);
         il.Emit(OpCodes.Ret);
+    }
+
+    /// <summary>crypto.diffieHellman({ privateKey, publicKey }) for EC KeyObjects.</summary>
+    private void EmitCryptoDiffieHellman(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    {
+        var method = typeBuilder.DefineMethod(
+            "CryptoWrapper_diffieHellman",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            [_types.Object]);
+        runtime.CryptoDiffieHellman = method;
+        var il = method.GetILGenerator();
+        var privateKeyLocal = il.DeclareLocal(_types.Object);
+        var publicKeyLocal = il.DeclareLocal(_types.Object);
+        var keyObjectType = runtime.TSKeyObjectCtorAsym.DeclaringType!;
+        var invalid = il.DefineLabel();
+
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "privateKey");
+        il.Emit(OpCodes.Call, runtime.TSKeyObjectGetOption);
+        il.Emit(OpCodes.Stloc, privateKeyLocal);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldstr, "publicKey");
+        il.Emit(OpCodes.Call, runtime.TSKeyObjectGetOption);
+        il.Emit(OpCodes.Stloc, publicKeyLocal);
+        il.Emit(OpCodes.Ldloc, privateKeyLocal);
+        il.Emit(OpCodes.Isinst, keyObjectType);
+        il.Emit(OpCodes.Brfalse, invalid);
+        il.Emit(OpCodes.Ldloc, publicKeyLocal);
+        il.Emit(OpCodes.Isinst, keyObjectType);
+        il.Emit(OpCodes.Brfalse, invalid);
+        il.Emit(OpCodes.Ldloc, privateKeyLocal);
+        il.Emit(OpCodes.Castclass, keyObjectType);
+        il.Emit(OpCodes.Ldloc, publicKeyLocal);
+        il.Emit(OpCodes.Callvirt, runtime.TSKeyObjectDeriveSecret);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(invalid);
+        il.Emit(OpCodes.Ldstr,
+            "crypto.diffieHellman requires an options object with privateKey and publicKey KeyObjects");
+        il.Emit(OpCodes.Newobj,
+            _types.GetConstructor(_types.ArgumentException, [_types.String])!);
+        il.Emit(OpCodes.Throw);
+
+        runtime.RegisterBuiltInModuleMethod("crypto", "diffieHellman", method);
     }
 }

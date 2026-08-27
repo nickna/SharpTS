@@ -66,6 +66,7 @@ public partial class RuntimeEmitter
         EmitCryptoCreateSecretKey(typeBuilder, runtime);
         EmitCryptoCreatePublicKey(typeBuilder, runtime);
         EmitCryptoCreatePrivateKey(typeBuilder, runtime);
+        EmitCryptoDiffieHellman(typeBuilder, runtime);
 
         // Epic #1054 additions (one-shot sign/verify/hash, constants, getCipherInfo,
         // getCurves, primes). $CryptoPrimitives is already emitted (RuntimeEmitter.cs);

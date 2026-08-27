@@ -4,19 +4,19 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.Emitters.Modules;
 
 /// <summary>
-/// Emits IL code for the Node.js 'dns/promises' module.
-/// Promise-based async DNS resolution operations.
+/// Emits IL code for the <c>primitive:dns/promises</c> host seam.
+/// The user-facing module lives in <c>stdlib/node/dns/promises.ts</c>.
 /// </summary>
 public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
 {
-    public string ModuleName => "dns/promises";
+    public string ModuleName => "primitive:dns/promises";
 
     private static readonly string[] _exportedMembers =
     [
-        "lookup", "resolve", "resolve4", "resolve6", "reverse",
+        "lookup", "lookupService", "resolve", "resolve4", "resolve6", "reverse",
         "resolveMx", "resolveTxt", "resolveSrv", "resolveCname",
         "resolveNs", "resolveSoa", "resolvePtr", "resolveCaa", "resolveNaptr",
-        "setDefaultResultOrder", "getDefaultResultOrder"
+        "setDefaultResultOrder", "getDefaultResultOrder", "resolverResolve"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -26,6 +26,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
         return methodName switch
         {
             "lookup" => EmitLookup(emitter, arguments),
+            "lookupService" => EmitLookupService(emitter, arguments),
             "resolve" => EmitResolve(emitter, arguments),
             "resolve4" => EmitSingleArg(emitter, arguments, "DnsPromisesResolve4"),
             "resolve6" => EmitSingleArg(emitter, arguments, "DnsPromisesResolve6"),
@@ -41,6 +42,7 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
             "resolveNaptr" => EmitSingleArg(emitter, arguments, "DnsPromisesResolveNaptr"),
             "setDefaultResultOrder" => EmitSetDefaultResultOrder(emitter, arguments),
             "getDefaultResultOrder" => EmitGetDefaultResultOrder(emitter),
+            "resolverResolve" => EmitResolverResolve(emitter, arguments),
             _ => false
         };
     }
@@ -121,6 +123,55 @@ public sealed class DnsPromisesModuleEmitter : IBuiltInModuleEmitter
 
         // Wrapper already calls WrapTaskAsPromise internally
         il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsPromisesLookup"]);
+        return true;
+    }
+
+    private static bool EmitLookupService(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        for (int i = 0; i < 2; i++)
+        {
+            if (arguments.Count > i)
+            {
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
+        }
+
+        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsPromisesLookupService"]);
+        return true;
+    }
+
+    private static bool EmitResolverResolve(IEmitterContext emitter, List<Expr> arguments)
+    {
+        var ctx = emitter.Context;
+        var il = ctx.IL;
+
+        il.Emit(OpCodes.Ldc_I4_5);
+        il.Emit(OpCodes.Newarr, ctx.Types.Object);
+        for (int i = 0; i < 5; i++)
+        {
+            il.Emit(OpCodes.Dup);
+            il.Emit(OpCodes.Ldc_I4, i);
+            if (arguments.Count > i)
+            {
+                emitter.EmitExpression(arguments[i]);
+                emitter.EmitBoxIfNeeded(arguments[i]);
+            }
+            else
+            {
+                il.Emit(OpCodes.Ldnull);
+            }
+            il.Emit(OpCodes.Stelem_Ref);
+        }
+
+        il.Emit(OpCodes.Call, ctx.Runtime!.DnsPromisesWrapperMethods["DnsResolverResolveAsync"]);
         return true;
     }
 

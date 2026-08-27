@@ -18,6 +18,45 @@ namespace SharpTS.Runtime.BuiltIns.Modules.Interpreter;
 public static class DnsModuleInterpreter
 {
     /// <summary>
+    /// Gets the host-backed exports consumed by the TypeScript dns facade.
+    /// Callback argument shaping lives in stdlib/node/dns.ts; this primitive
+    /// retains synchronous lookup compatibility plus the Resolver backing handle.
+    /// </summary>
+    public static Dictionary<string, object?> GetPrimitiveExports()
+    {
+        var exports = GetExports();
+        exports["createResolver"] = BuiltInMethod.CreateV2("createResolver", 0, 0, (_, _, _) =>
+            RuntimeValue.FromBoxed(new DnsResolverInstance()));
+        exports["resolverSetServers"] = BuiltInMethod.CreateV2("resolverSetServers", 2, 2, (_, _, args) =>
+        {
+            RequireResolver(args[0]).SetServers(ExtractStringArray(args[1].ToObject()));
+            return RuntimeValue.Undefined;
+        });
+        exports["resolverGetServers"] = BuiltInMethod.CreateV2("resolverGetServers", 1, 1, (_, _, args) =>
+            RuntimeValue.FromObject(new SharpTSArray(
+                RequireResolver(args[0]).GetServers().Select(server => (object?)server).ToList())));
+        exports["resolverCancel"] = BuiltInMethod.CreateV2("resolverCancel", 1, 1, (_, _, args) =>
+        {
+            RequireResolver(args[0]).Cancel();
+            return RuntimeValue.Undefined;
+        });
+        exports["resolverGetGeneration"] = BuiltInMethod.CreateV2("resolverGetGeneration", 1, 1, (_, _, args) =>
+            RuntimeValue.FromNumber(RequireResolver(args[0]).CancelGeneration));
+        exports["resolverSetLocalAddress"] = BuiltInMethod.CreateV2("resolverSetLocalAddress", 1, 3, (_, _, args) =>
+        {
+            var ipv4 = args.Length > 1 && args[1].IsString ? args[1].AsStringUnsafe() : null;
+            var ipv6 = args.Length > 2 && args[2].IsString ? args[2].AsStringUnsafe() : null;
+            RequireResolver(args[0]).SetLocalAddress(ipv4, ipv6);
+            return RuntimeValue.Undefined;
+        });
+        return exports;
+    }
+
+    private static DnsResolverInstance RequireResolver(RuntimeValue value)
+        => value.ToObject() as DnsResolverInstance
+           ?? throw new NodeError("ERR_INVALID_ARG_TYPE", "Invalid DNS Resolver state");
+
+    /// <summary>
     /// Gets all exported values for the dns module.
     /// </summary>
     public static Dictionary<string, object?> GetExports()
@@ -92,6 +131,8 @@ public static class DnsModuleInterpreter
         return new Dictionary<string, object?>
         {
             ["lookup"] = new BuiltInAsyncMethod("lookup", 1, 2, LookupPromise),
+            ["lookupService"] = new BuiltInAsyncMethod("lookupService", 2, 2, LookupServicePromise),
+            ["resolverResolve"] = new BuiltInAsyncMethod("resolverResolve", 5, 5, ResolverPromise),
             ["resolve"] = new BuiltInAsyncMethod("resolve", 1, 2, ResolvePromise),
             ["resolve4"] = new BuiltInAsyncMethod("resolve4", 1, 1, Resolve4Promise),
             ["resolve6"] = new BuiltInAsyncMethod("resolve6", 1, 1, Resolve6Promise),
@@ -751,29 +792,61 @@ public static class DnsModuleInterpreter
     {
         var hostname = args[0]?.ToString() ?? "";
         int family = 0;
+        bool all = false;
+        string? order = null;
         if (args.Count > 1 && args[1] is double f) family = (int)f;
         else if (args.Count > 1 && args[1] is SharpTSObject opts)
         {
             if (opts.Fields.TryGetValue("family", out var fv) && fv is double fd) family = (int)fd;
+            if (opts.Fields.TryGetValue("all", out var av)) all = IsTruthy(av);
+            if (opts.Fields.TryGetValue("order", out var ov) && ov is string o) order = o;
+            else if (opts.Fields.TryGetValue("verbatim", out var vv) && vv is bool verbatim)
+                order = verbatim ? "verbatim" : "ipv4first";
         }
 
-        return await RunRefed(interpreter, () =>
+        return await RunRefed(interpreter, () => LookupCore(hostname, family, all, order));
+    }
+
+    private static async Task<object?> LookupServicePromise(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var address = args[0]?.ToString() ?? "";
+        var port = args.Count > 1 ? Convert.ToInt32(args[1]) : 0;
+        return await RunRefed(interpreter, () => LookupServiceCore(address, port));
+    }
+
+    private static async Task<object?> ResolverPromise(Interp interpreter, object? receiver, List<object?> args)
+    {
+        var instance = args[0] as DnsResolverInstance
+            ?? throw new NodeError("ERR_INVALID_ARG_TYPE", "Invalid DNS Resolver state");
+        var method = args[1]?.ToString() ?? "";
+        var identifier = args[2]?.ToString() ?? "";
+        var rrtype = args[3]?.ToString();
+        var expectedGeneration = args[4] is double generation ? (long)generation : (long?)null;
+
+        interpreter.Ref();
+        try
         {
-            var hostEntry = Dns.GetHostEntry(hostname);
-            var addresses = hostEntry.AddressList;
-            if (family == 4) addresses = addresses.Where(a => a.AddressFamily == AddressFamily.InterNetwork).ToArray();
-            else if (family == 6) addresses = addresses.Where(a => a.AddressFamily == AddressFamily.InterNetworkV6).ToArray();
-
-            if (addresses.Length == 0)
-                throw new Exception($"dns.lookup ENOTFOUND {hostname}");
-
-            var addr = addresses[0];
-            return new SharpTSObject(new Dictionary<string, object?>
+            try
             {
-                ["address"] = addr.ToString(),
-                ["family"] = addr.AddressFamily == AddressFamily.InterNetwork ? 4.0 : 6.0
-            });
-        });
+                return WrapDnsResult(await instance.ResolveAsync(method, identifier, rrtype, expectedGeneration));
+            }
+            catch (Exception ex)
+            {
+                var code = ex is NodeError nodeError ? nodeError.Code : ExtractErrorCode(ex);
+                return new SharpTSObject(new Dictionary<string, object?>
+                {
+                    ["__dnsError"] = true,
+                    ["name"] = "Error",
+                    ["message"] = ex.Message,
+                    ["code"] = code,
+                    ["hostname"] = identifier
+                });
+            }
+        }
+        finally
+        {
+            interpreter.Unref();
+        }
     }
 
     private static async Task<object?> ResolvePromise(Interp interpreter, object? receiver, List<object?> args)

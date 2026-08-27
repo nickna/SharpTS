@@ -226,11 +226,15 @@ public sealed class ProcessModuleEmitter : IBuiltInModuleEmitter
                 il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
                 return true;
 
-            // POSIX identity: interpreter-only (undefined in compiled mode —
-            // Windows parity is exact; POSIX standalone is a documented ceiling).
+            // Resolve against the live process object. Its emitted type defines
+            // these methods only on POSIX, so Windows observes undefined exactly
+            // as Node does while POSIX gets a normal bound function value.
             case "getuid" or "geteuid" or "getgid" or "getegid"
                 or "getgroups" or "setuid" or "setgid":
-                il.Emit(OpCodes.Ldnull);
+                il.Emit(OpCodes.Call, ctx.Runtime!.GetProcessObject);
+                il.Emit(OpCodes.Castclass, ctx.Runtime!.IHasFieldsInterface);
+                il.Emit(OpCodes.Ldstr, propertyName);
+                il.Emit(OpCodes.Callvirt, ctx.Runtime!.IHasFieldsGetProperty);
                 return true;
 
             default:

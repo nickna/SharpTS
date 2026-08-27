@@ -12,6 +12,84 @@ namespace SharpTS.Compilation;
 /// </summary>
 public static partial class RuntimeTypes
 {
+    public static object DnsCreateResolverState() => new DnsResolverInstance();
+
+    public static object? DnsResolverSetServers(object? state, object? servers)
+    {
+        RequireResolver(state).SetServers(ExtractStringArray(servers));
+        return null;
+    }
+
+    public static object DnsResolverGetServers(object? state)
+        => RequireResolver(state).GetServers().Select(server => (object?)server).ToList();
+
+    public static object? DnsResolverCancel(object? state)
+    {
+        RequireResolver(state).Cancel();
+        return null;
+    }
+
+    public static object DnsResolverGetGeneration(object? state)
+        => (double)RequireResolver(state).CancelGeneration;
+
+    public static object? DnsResolverSetLocalAddress(object? state, object? ipv4, object? ipv6)
+    {
+        RequireResolver(state).SetLocalAddress(ipv4 as string, ipv6 as string);
+        return null;
+    }
+
+    /// <summary>
+    /// Reflection target for the emitted resolver Promise primitive. The single
+    /// request argument keeps the emitted async runner generic and standalone-safe.
+    /// </summary>
+    public static object? DnsResolverResolve(object? request)
+    {
+        var args = request switch
+        {
+            object?[] array => array,
+            List<object?> list => list.ToArray(),
+            _ => throw new NodeError("ERR_INVALID_ARG_TYPE", "Invalid DNS resolver request")
+        };
+        if (args.Length < 3)
+            throw new NodeError("ERR_INVALID_ARG_VALUE", "Invalid DNS resolver request");
+
+        var instance = RequireResolver(args[0]);
+        var method = args[1]?.ToString() ?? "";
+        var identifier = args[2]?.ToString() ?? "";
+        var rrtype = args.Length > 3 ? args[3]?.ToString() : null;
+        var expectedGeneration = args.Length > 4 && args[4] is not null
+            ? Convert.ToInt64(args[4])
+            : (long?)null;
+        try
+        {
+            return instance.ResolveAsync(method, identifier, rrtype, expectedGeneration).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            var code = ex is NodeError nodeError ? nodeError.Code : ExtractDnsErrorCode(ex);
+            return new Dictionary<string, object?>
+            {
+                ["__dnsError"] = true,
+                ["name"] = "Error",
+                ["message"] = ex.Message,
+                ["code"] = code,
+                ["hostname"] = identifier
+            };
+        }
+    }
+
+    private static DnsResolverInstance RequireResolver(object? state)
+        => state as DnsResolverInstance
+           ?? throw new NodeError("ERR_INVALID_ARG_TYPE", "Invalid DNS Resolver state");
+
+    private static string ExtractDnsErrorCode(Exception ex)
+    {
+        var message = ex.Message;
+        foreach (var code in new[] { "ECANCELLED", "ENOTFOUND", "ENODATA", "ETIMEOUT", "ECONNREFUSED" })
+            if (message.Contains(code, StringComparison.Ordinal)) return code;
+        return "EAI_FAIL";
+    }
+
     public static Task<object?> DnsPromisesLookup(object? hostname, object? options)
     {
         var h = hostname?.ToString() ?? "";

@@ -37,7 +37,6 @@ public class StandaloneDllTests
         // RuntimeEmitter.Intl.cs / .Date.cs / .AbortController.cs — pruned: migrated to the
         // RuntimeEmitter.ReflectionHelpers.cs canonical helpers (#1128); no inline literals remain.
         "Compilation/RuntimeEmitter.ProcessHelpers.cs",      // ProcessEventEmitterCall and ProcessEmitExit fallback (ProcessBuiltIns target via EmitReflectionCall)
-        "Compilation/RuntimeEmitter.TSProcess.cs",           // process.ppid late-binds to ProcessBuiltIns.GetParentPid (graceful 0 when SharpTS absent) — #1085
         // "Compilation/RuntimeEmitter.Net.cs" — now uses emitted $NetServer/$NetSocket directly (no reflection)
         "Compilation/RuntimeEmitter.ChildProcessHelpers.cs", // child_process.fork bridges to the interpreter's ForkForCompiledLoop (requires SharpTS.dll co-located; suppressed by --standalone) — #1017
         // ZlibHelpers.cs / DnsPromises.cs — pruned: now pure IL, no SharpTS late binding
@@ -1248,6 +1247,7 @@ public class StandaloneDllTests
         var source = """
             console.log(typeof process.platform);
             console.log(typeof process.pid);
+            console.log(process.ppid > 0);
             console.log(process.cwd().length > 0);
             """;
 
@@ -1255,7 +1255,7 @@ public class StandaloneDllTests
         try
         {
             var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000);
-            Assert.Equal("string\nnumber\ntrue\n", output);
+            Assert.Equal("string\nnumber\ntrue\ntrue\n", output);
         }
         finally
         {

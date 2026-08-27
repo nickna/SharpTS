@@ -1222,6 +1222,8 @@ public partial class ILCompiler
         _builtInModuleEmitterRegistry.Register(new StreamWebModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new HttpModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new WorkerThreadsModuleEmitter());
+        // "dns" / "dns/promises" migrated to stdlib TS facades. These emitters
+        // now serve only the stdlib-internal primitive:dns{,/promises} seams.
         _builtInModuleEmitterRegistry.Register(new DnsModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new DnsPromisesModuleEmitter());
         _builtInModuleEmitterRegistry.Register(new FsPromisesModuleEmitter());

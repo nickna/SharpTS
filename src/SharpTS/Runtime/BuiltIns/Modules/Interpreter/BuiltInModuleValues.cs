@@ -49,8 +49,8 @@ public static class BuiltInModuleValues
             "stream/web" => StreamWebModuleInterpreter.GetExports(),
             "http" => HttpModuleInterpreter.GetExports(),
             "worker_threads" => WorkerThreadsModuleInterpreter.GetExports(),
-            "dns" => DnsModuleInterpreter.GetExports(),
-            "dns/promises" => DnsModuleInterpreter.GetPromisesExports(),
+            // "dns" / "dns/promises" — migrated to stdlib TypeScript facades;
+            // DnsModuleInterpreter now backs primitive:dns{,/promises}.
             "net" => NetModuleInterpreter.GetExports(),
             "https" => HttpModuleInterpreter.GetHttpsExports(), // real TLS server (#1049) + client over TLS (#1050)
             "tls" => TlsModuleInterpreter.GetExports(),

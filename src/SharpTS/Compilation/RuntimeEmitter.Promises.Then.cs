@@ -138,9 +138,40 @@ public partial class RuntimeEmitter
     /// <summary>
     /// Emits the PromiseThen wrapper method that creates and starts the state machine.
     /// </summary>
-    private void EmitPromiseThenWrapper(ILGenerator il, PromiseThenStateMachine sm)
+    private void EmitPromiseThenWrapper(
+        ILGenerator il,
+        PromiseThenStateMachine sm,
+        EmittedRuntime runtime)
     {
         var smLocal = il.DeclareLocal(sm.Type);
+
+        // A callable onRejected marks the source promise handled at attachment
+        // time. This is deliberately done before starting the reaction state
+        // machine: Node emits rejectionHandled for a previously reported
+        // rejection even when the catch callback has not run yet.
+        var attachDone = il.DefineLabel();
+        var attachHandler = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Brfalse, attachDone);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.TSFunctionType);
+        il.Emit(OpCodes.Brtrue, attachHandler);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.BoundTSFunctionType);
+        il.Emit(OpCodes.Brtrue, attachHandler);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.BoundArrayMethodType);
+        il.Emit(OpCodes.Brtrue, attachHandler);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.PromiseResolveCallbackType);
+        il.Emit(OpCodes.Brtrue, attachHandler);
+        il.Emit(OpCodes.Ldarg_2);
+        il.Emit(OpCodes.Isinst, runtime.PromiseRejectCallbackType);
+        il.Emit(OpCodes.Brfalse, attachDone);
+        il.MarkLabel(attachHandler);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.NotifyPromiseRejectionHandler);
+        il.MarkLabel(attachDone);
 
         // Initialize state machine: var sm = default($PromiseThen_SM);
         il.Emit(OpCodes.Ldloca, smLocal);

@@ -164,6 +164,12 @@ public static partial class BuiltInModuleTypes
                 [stringType, anyType],
                 new TypeInfo.Promise(lookupResultType),
                 RequiredParams: 1),
+            ["lookupService"] = new TypeInfo.Function(
+                [stringType, numberType],
+                new TypeInfo.Promise(anyType)),
+            ["resolverResolve"] = new TypeInfo.Function(
+                [anyType, stringType, stringType, anyType, numberType],
+                new TypeInfo.Promise(anyType)),
             ["resolve"] = new TypeInfo.Function(
                 [stringType, stringType],
                 new TypeInfo.Promise(stringArrayType),
