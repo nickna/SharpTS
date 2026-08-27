@@ -228,6 +228,7 @@ public sealed class TypeScriptConformanceRunner
                     DirectiveBool(metadata, "exactoptionalpropertytypes") ?? false,
                 NoUncheckedIndexedAccess =
                     DirectiveBool(metadata, "nouncheckedindexedaccess") ?? false,
+                NoUnusedLocals = DirectiveBool(metadata, "nounusedlocals") ?? false,
                 MaxErrors = 1000,
             });
             checker.SetDecoratorMode(decoratorMode);
@@ -311,6 +312,15 @@ public sealed class TypeScriptConformanceRunner
             _ => JsxMode.None,
         };
         var options = new JsxParseOptions(mode);
+        if (metadata.RawDirectives.TryGetValue("reactnamespace", out string? reactNamespace) &&
+            !string.IsNullOrWhiteSpace(reactNamespace))
+        {
+            options = options with
+            {
+                Factory = reactNamespace.Trim() + ".createElement",
+                FragmentFactory = reactNamespace.Trim() + ".Fragment",
+            };
+        }
         if (metadata.RawDirectives.TryGetValue("jsxfactory", out string? factory) &&
             !string.IsNullOrWhiteSpace(factory))
             options = options with { Factory = factory.Trim() };

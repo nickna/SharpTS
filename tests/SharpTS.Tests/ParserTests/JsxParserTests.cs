@@ -85,6 +85,17 @@ public class JsxParserTests
     }
 
     [Fact]
+    public void LowercaseRootMemberAccessTagIsAComponent()
+    {
+        var parsed = ParseTsx("<this._tagName />;", new JsxParseOptions(JsxMode.Preserve));
+
+        Assert.True(parsed.IsSuccess, string.Join(Environment.NewLine, parsed.Diagnostics));
+        var statement = Assert.IsType<Stmt.Expression>(parsed.Statements.Single());
+        var call = Assert.IsType<Expr.Call>(statement.Expr);
+        Assert.Equal(JsxElementKind.Component, call.JsxOrigin?.Kind);
+    }
+
+    [Fact]
     public void CommaAttributeExpressionReportsExactTsCodes()
     {
         var parsed = ParseTsx("const view = <div value={left, right} />;",

@@ -1435,6 +1435,9 @@ public class ModuleResolver
                     {
                         IsScript = false,
                         IsAmbientModule = true,
+                        // A bodyless ambient module is TypeScript's wildcard declaration for an
+                        // untyped package. CJS-style `any` imports model that contract exactly.
+                        IsCommonJs = declaration.Members.Count == 0,
                     };
                     _moduleCache[virtualPath] = module;
                     _ambientModulePaths[declaration.ModulePath] = virtualPath;

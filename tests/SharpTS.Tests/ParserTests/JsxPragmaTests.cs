@@ -151,6 +151,10 @@ public class JsxPragmaTests
 
         Assert.False(parsed.IsSuccess);
         Assert.Contains(parsed.Diagnostics, d => d.TsCode == "TS17017");
+        var view = parsed.Statements.OfType<Stmt.Var>().First(v => v.Name.Lexeme == "view");
+        var call = Assert.IsType<Expr.Call>(view.Initializer);
+        Assert.Equal("React", ((Expr.Variable)((Expr.Get)call.Callee).Object).Name.Lexeme);
+        Assert.Equal("React", ((Expr.Variable)((Expr.Get)call.Arguments[0]).Object).Name.Lexeme);
     }
 
     [Fact]

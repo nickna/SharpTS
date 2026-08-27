@@ -225,6 +225,8 @@ public partial class TypeChecker
     private readonly bool _checkVariableUseBeforeAssignment;
     private readonly bool _exactOptionalPropertyTypes;
     private readonly bool _noUncheckedIndexedAccess;
+    private readonly bool _noUnusedLocals;
+    private readonly HashSet<(SourceDocument Document, string Name)> _synthesizedJsxUses = [];
 
     /// <summary>
     /// Non-zero while comparing members declared with method syntax — within such a comparison,
@@ -329,6 +331,7 @@ public partial class TypeChecker
         _checkVariableUseBeforeAssignment = Options.CheckVariableUseBeforeAssignment;
         _exactOptionalPropertyTypes = Options.ExactOptionalPropertyTypes;
         _noUncheckedIndexedAccess = Options.NoUncheckedIndexedAccess;
+        _noUnusedLocals = Options.NoUnusedLocals;
         _diagnostics.MaxErrors = Options.MaxErrors;
     }
 
@@ -1550,6 +1553,7 @@ public partial class TypeChecker
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
         Bindings.Clear();
+        _synthesizedJsxUses.Clear();
         _standaloneSourceDocument = null;
 
         // Clear compatibility cache for fresh check
@@ -1777,6 +1781,8 @@ public partial class TypeChecker
                                 _recoveryMode = previousRecoveryMode;
                             }
                         }
+
+                        ReportUnusedImports(module);
                     }
                 }
                 finally
@@ -1792,6 +1798,53 @@ public partial class TypeChecker
         _filePath = null;
         _currentStatementLine = null;
         return _typeMap;
+    }
+
+    private void ReportUnusedImports(ParsedModule module)
+    {
+        if (!_noUnusedLocals || module.Document is null)
+            return;
+
+        foreach (Stmt.Import import in module.Statements.OfType<Stmt.Import>())
+        {
+            if (import.IsSynthesizedJsxRuntime)
+                continue;
+
+            if (import.DefaultImport is { } defaultImport)
+                ReportUnusedImportBinding(module.Document, defaultImport, [defaultImport]);
+            if (import.NamespaceImport is { } namespaceImport)
+                ReportUnusedImportBinding(module.Document, namespaceImport, [namespaceImport]);
+            foreach (Stmt.ImportSpecifier specifier in import.NamedImports ?? [])
+            {
+                Token local = specifier.LocalName ?? specifier.Imported;
+                Token[] declarationTokens = specifier.LocalName is null
+                    ? [specifier.Imported]
+                    : [specifier.Imported, specifier.LocalName];
+                ReportUnusedImportBinding(module.Document, local, declarationTokens);
+            }
+        }
+    }
+
+    private void ReportUnusedImportBinding(
+        SourceDocument document,
+        Token local,
+        IReadOnlyCollection<Token> declarationTokens)
+    {
+        IReadOnlyList<BindingSymbol> symbols = Bindings.FindSymbols(document, local.Start);
+        if (symbols.Count == 0)
+            return;
+
+        bool used = Bindings.FindReferences(symbols, includeDeclarations: true).Any(occurrence =>
+            ReferenceEquals(occurrence.Document, document) &&
+            !declarationTokens.Contains(occurrence.Name, ReferenceEqualityComparer.Instance));
+        used |= _synthesizedJsxUses.Contains((document, local.Lexeme));
+        if (!used)
+        {
+            RecordTypeError(new TypeCheckException(
+                $"'{local.Lexeme}' is declared but its value is never read.",
+                local.Line,
+                tsCode: "TS6133"));
+        }
     }
 
     /// <summary>
@@ -2045,24 +2098,31 @@ public partial class TypeChecker
                         bool isTypeOnly = export.IsTypeOnly || spec.IsTypeOnly;
                         var type = _environment.Get(spec.LocalName.Lexeme)
                             ?? _environment.GetTypeBinding(spec.LocalName.Lexeme);
+                        string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                         if (type != null)
                         {
-                            string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
-                            module.ExportedTypes[exportedName] = type;
+                            if (exportedName == "default")
+                                module.DefaultExportType = type;
+                            else
+                                module.ExportedTypes[exportedName] = type;
                         }
 
                         string bindingName = spec.LocalName.Lexeme;
-                        string exportedBindingName =
-                            spec.ExportedName?.Lexeme ?? bindingName;
                         if (!isTypeOnly &&
                             _environment.GetValueBinding(bindingName) is { } valueBinding)
                         {
-                            module.ExportedValueBindings[exportedBindingName] = valueBinding;
+                            if (exportedName == "default")
+                                module.DefaultValueBinding = valueBinding;
+                            else
+                                module.ExportedValueBindings[exportedName] = valueBinding;
                             BindExportSpecifier(spec, valueBinding);
                         }
                         if (_environment.GetTypeSymbol(bindingName) is { } typeBinding)
                         {
-                            module.ExportedTypeBindings[exportedBindingName] = typeBinding;
+                            if (exportedName == "default")
+                                module.DefaultTypeBinding = typeBinding;
+                            else
+                                module.ExportedTypeBindings[exportedName] = typeBinding;
                             BindExportSpecifier(spec, typeBinding);
                         }
                     }
@@ -2269,6 +2329,24 @@ public partial class TypeChecker
             {
                 try
                 {
+                    if (import.IsSynthesizedJsxRuntime)
+                    {
+                        // Resolution already loaded a real runtime when one exists. For the
+                        // checker these names are emitter plumbing: TypeScript does not expose
+                        // missing-package/member diagnostics for a synthesized JSX import.
+                        foreach (var spec in import.NamedImports ?? [])
+                        {
+                            Token local = spec.LocalName ?? spec.Imported;
+                            env.Define(local.Lexeme, TypeInfo.Any.Shared);
+                            BindImportedDeclaration(
+                                env,
+                                local,
+                                BindingNamespace.Value,
+                                importedToken: spec.Imported);
+                        }
+                        continue;
+                    }
+
                     string importedPath = _moduleResolver!.ResolveModulePath(import.ModulePath, module.Path);
                     var importedModule = _moduleResolver.GetCachedModule(importedPath);
 

@@ -18,28 +18,23 @@ public partial class TypeChecker
     {
         var jsxNamespace = _environment.GetNamespace("JSX");
 
-        // A missing factory (classic mode with no `React` in scope → TS2304 from
-        // LookupVariable) must not mask attribute diagnostics: record and continue.
+        // A missing factory (classic mode with no `React` in scope) reports the JSX-specific
+        // TS2874 rather than exposing raw TS2304 from the lowered emitter expression.
         // tsc does not otherwise type-check the synthesized classic factory access:
         // an ambient `react` module may intentionally be empty while still making
         // `React.createElement(...)` a valid emit target.
+        bool factoryRootMissing = false;
         try
         {
-            CheckJsxFactoryReference(call.Callee, jsx.Mode);
+            CheckJsxFactoryReference(call.Callee, jsx);
         }
         catch (TypeCheckException ex)
         {
-            if (jsx.Mode == JsxMode.React && ex.Diagnostic.TsCode == "TS2304")
-            {
-                ReportJsx(new TypeCheckException(
-                    "This JSX tag requires the configured factory to be in scope.",
-                    jsx.Line,
-                    tsCode: "TS2874"));
-            }
-            else
-            {
-                ReportJsx(ex);
-            }
+            factoryRootMissing = ex.Diagnostic.TsCode == "TS2304" && jsx.Mode == JsxMode.React;
+            TypeCheckException diagnostic = ex.Diagnostic.TsCode == "TS2304" && jsx.Mode == JsxMode.React
+                ? MissingJsxRuntimeName(call.Callee, jsx, "TS2874", "factory")
+                : ex;
+            ReportJsx(diagnostic);
         }
 
         // Check every argument exactly once, structurally. The tag argument and the props
@@ -65,7 +60,28 @@ public partial class TypeChecker
                     componentType = TypeInfo.Any.Shared;
                 }
             }
-            else
+            else if (jsx.Kind == JsxElementKind.Fragment && jsx.Mode == JsxMode.React)
+            {
+                if (factoryRootMissing && SameJsxReferenceRoot(call.Callee, tagArgument))
+                {
+                    ReportJsx(MissingJsxRuntimeName(
+                        tagArgument, jsx, "TS2879", "fragment factory"));
+                }
+                else
+                {
+                    try
+                    {
+                        CheckJsxReferenceRoot(tagArgument);
+                    }
+                    catch (TypeCheckException ex)
+                    {
+                        ReportJsx(ex.Diagnostic.TsCode == "TS2304"
+                            ? MissingJsxRuntimeName(tagArgument, jsx, "TS2879", "fragment factory")
+                            : ex);
+                    }
+                }
+            }
+            else if (jsx.Kind == JsxElementKind.Intrinsic)
             {
                 CheckExpr(tagArgument);
             }
@@ -128,21 +144,51 @@ public partial class TypeChecker
         return ResolveJsxElementType(jsxNamespace);
     }
 
-    private TypeInfo CheckJsxFactoryReference(Expr callee, JsxMode mode)
+    private TypeInfo CheckJsxFactoryReference(Expr callee, JsxCallInfo jsx)
     {
-        // Preserve/react-native do not emit a factory call. The parser still lowers them to
-        // a JSX-origin call internally so the ordinary JSX checker can reuse the same AST,
-        // but that implementation detail must not invent a missing React diagnostic.
-        if (mode == JsxMode.Preserve)
+        // Automatic-runtime imports and preserve-mode calls are lowering details. Their
+        // synthesized identifiers must never leak TS2304/TS2305/TS2307 into diagnostics.
+        if (jsx.Mode != JsxMode.React)
             return TypeInfo.Any.Shared;
 
-        if (mode != JsxMode.React)
-            return CheckExpr(callee);
+        return CheckJsxReferenceRoot(callee);
+    }
 
-        Expr root = callee;
+    private TypeInfo CheckJsxReferenceRoot(Expr expression)
+    {
+        Expr root = expression;
         while (root is Expr.Get get)
             root = get.Object;
+        if (root is Expr.Variable { Name.Start: < 0 } synthesized &&
+            CurrentSourceDocument is { } document)
+        {
+            _synthesizedJsxUses.Add((document, synthesized.Name.Lexeme));
+        }
         return CheckExpr(root);
+    }
+
+    private static TypeCheckException MissingJsxRuntimeName(
+        Expr expression, JsxCallInfo jsx, string code, string role)
+    {
+        Expr root = expression;
+        while (root is Expr.Get get)
+            root = get.Object;
+        string name = root is Expr.Variable variable ? variable.Name.Lexeme : "the configured runtime";
+        return new TypeCheckException(
+            $"This JSX tag requires '{name}' to be in scope as the {role}.",
+            jsx.Line,
+            tsCode: code);
+    }
+
+    private static bool SameJsxReferenceRoot(Expr left, Expr right) =>
+        string.Equals(JsxReferenceRootName(left), JsxReferenceRootName(right), StringComparison.Ordinal);
+
+    private static string? JsxReferenceRootName(Expr expression)
+    {
+        Expr root = expression;
+        while (root is Expr.Get get)
+            root = get.Object;
+        return root is Expr.Variable variable ? variable.Name.Lexeme : null;
     }
 
     private void CheckJsxIntrinsic(JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo propsType)
@@ -194,8 +240,15 @@ public partial class TypeChecker
             // (`const t = { tag: 'h1' }; <t.tag />`). String-valued tag
             // expressions are valid JSX element constructors; a literal can
             // still use the matching IntrinsicElements entry for prop checks.
-            case TypeInfo.StringLiteral literal:
+            case TypeInfo.StringLiteral literal
+                when jsxNamespace?.Types.ContainsKey("IntrinsicElements") == true:
                 CheckJsxIntrinsic(jsx with { TagName = literal.Value }, jsxNamespace, propsType);
+                return;
+
+            case TypeInfo.StringLiteral:
+                // With no JSX.IntrinsicElements contract, a dynamic member whose value is a
+                // string literal is still a valid element constructor; there is no intrinsic
+                // declaration against which to check it and tsc does not report TS7026.
                 return;
 
             case TypeInfo.String when jsx.TagName?.Contains('.') == true ||

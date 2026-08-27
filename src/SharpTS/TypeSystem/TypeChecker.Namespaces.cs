@@ -9,6 +9,8 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private TypeInfo.Namespace? _currentMergedNamespace;
+
     /// <summary>
     /// Type-checks a namespace declaration, handling declaration merging.
     /// Uses two-pass checking: first collect types, then full check for values.
@@ -74,6 +76,8 @@ public partial class TypeChecker
             }
         }
 
+        TypeInfo.Namespace? previousMergedNamespace = _currentMergedNamespace;
+        _currentMergedNamespace = existingNs;
         _namespaceDepth++;
         try
         {
@@ -171,6 +175,7 @@ public partial class TypeChecker
         finally
         {
             _namespaceDepth--;
+            _currentMergedNamespace = previousMergedNamespace;
         }
 
         // Create namespace with frozen collections
