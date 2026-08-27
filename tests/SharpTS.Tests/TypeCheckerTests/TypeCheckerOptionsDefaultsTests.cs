@@ -33,6 +33,8 @@ public class TypeCheckerOptionsDefaultsTests
         Assert.True(d.StrictNullChecks);
         Assert.False(d.StrictFunctionTypes);
         Assert.False(d.NoImplicitAny);
+        Assert.False(d.UseUnknownInCatchVariables);
+        Assert.False(d.RespectLoadedLibraries);
         Assert.Equal(10, d.MaxErrors);
     }
 
@@ -62,6 +64,7 @@ public class TypeCheckerOptionsDefaultsTests
         Assert.True(s.StrictNullChecks);
         Assert.True(s.StrictFunctionTypes);
         Assert.True(s.NoImplicitAny);
+        Assert.True(s.UseUnknownInCatchVariables);
         Assert.Equal(10, s.MaxErrors); // the umbrella must not touch the error cap
     }
 

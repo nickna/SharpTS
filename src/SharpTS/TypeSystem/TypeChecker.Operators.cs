@@ -708,6 +708,14 @@ public partial class TypeChecker
             {
                 valueType = CheckExpr(logical.Value);
             }
+
+            // An uncontextualized empty-array operand has `never[]` as the value
+            // of the assignment expression. The target slot may still widen it
+            // (for example `number[] | undefined ||= []`), but nested `&&=` must
+            // preserve the bottom element type for a following call such as
+            // `(a &&= b &&= []).push(value)`.
+            if (logical.Value is Expr.ArrayLiteral { Elements.Count: 0 })
+                valueType = new TypeInfo.Array(TypeInfo.Never.Shared);
         }
         catch (TypeCheckException) when (
             _recoveryMode && logical.Operator.Type is

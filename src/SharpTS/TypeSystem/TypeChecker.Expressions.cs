@@ -157,7 +157,21 @@ public partial class TypeChecker
     // (TypeChecker.Properties.cs, TypeChecker.Operators.cs, TypeChecker.Calls.cs)
 
     // Comma (sequence) operator - evaluates all, returns type of last
-    internal TypeInfo VisitComma(Expr.Comma expr) { CheckExpr(expr.Left); return CheckExpr(expr.Right); }
+    internal TypeInfo VisitComma(Expr.Comma expr)
+    {
+        CheckExpr(expr.Left);
+        if (expr.Left is Expr.Variable)
+        {
+            var error = new TypeCheckException(
+                "Left side of comma operator is unused and has no side effects.",
+                TryGetExprLine(expr.Left),
+                tsCode: "TS2695");
+            if (!_recoveryMode)
+                throw error;
+            RecordTypeError(error);
+        }
+        return CheckExpr(expr.Right);
+    }
 
     // Assignment destructuring (#754): check the lowered statements (which declare the rhs temp and
     // validate each target write — e.g. assigning a number element to a `string` target raises TS2322),
@@ -259,7 +273,19 @@ public partial class TypeChecker
 
     private TypeInfo CheckImportMeta(Expr.ImportMeta im)
     {
-        // import.meta is an object with 'url', 'dirname', and 'filename' properties
+        // The parser already reports TS17012 for `import.foo`. Keep the malformed
+        // meta-property permissive during recovery so a following `.bar` does not
+        // manufacture a second, unrelated missing-property diagnostic.
+        if (im.IsInvalidProperty)
+            return TypeInfo.Any.Shared;
+
+        // lib.es5 declares the extensible ImportMeta interface; later libraries and
+        // user `declare global` blocks augment it. Prefer that authoritative merged
+        // shape whenever a program resolver supplied libraries.
+        if (_environment.GetTypeBinding("ImportMeta") is { } declaredImportMeta)
+            return declaredImportMeta;
+
+        // Standalone product checking keeps its historical runtime-oriented shape.
         return new TypeInfo.Record(
             new Dictionary<string, TypeInfo>
             {
@@ -1701,6 +1727,13 @@ public partial class TypeChecker
         {
             throw new TypeCheckException($" Cannot assign to 'undefined' because it is not a variable.", line: assign.Name.Line, tsCode: "TS2539");
         }
+        if (assign.Name.Lexeme == "import.meta")
+        {
+            throw new TypeCheckException(
+                "The left-hand side of an assignment expression must be a variable or a property access.",
+                line: assign.Name.Line,
+                tsCode: "TS2364");
+        }
 
         var declaredType = GetDeclaredType(assign.Name.Lexeme);
         if (declaredType == null)
@@ -1832,15 +1865,50 @@ public partial class TypeChecker
 
     private TypeInfo LookupVariable(Token name)
     {
+        if (name.Lexeme == "globalThis" && _hasDefaultLibraries)
+            return GetGlobalThisType();
+
         // Program declarations and local bindings take precedence over built-in
         // compatibility fallbacks. This both honors normal shadowing and lets
         // loaded lib.*.d.ts constructor/function declarations supply their
         // structural signatures.
         if (_environment.Get(name.Lexeme) is { } declared)
         {
+            if (_currentModule is { } currentModule &&
+                currentModule.Statements.OfType<Stmt.Export>().Any(export =>
+                    export.NamespaceExportName?.Lexeme == name.Lexeme) &&
+                currentModule.Statements.Select(statement => statement switch
+                    {
+                        Stmt.Var { IsVar: false } variable => variable.Name,
+                        Stmt.Const constant => constant.Name,
+                        _ => null,
+                    })
+                    .FirstOrDefault(declaration => declaration?.Lexeme == name.Lexeme)
+                    is { } lexicalDeclaration &&
+                name.Line < lexicalDeclaration.Line)
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"Block-scoped variable '{name.Lexeme}' used before its declaration.",
+                    name.Line,
+                    tsCode: "TS2448"));
+                RecordTypeError(new TypeCheckException(
+                    $"Variable '{name.Lexeme}' is used before being assigned.",
+                    name.Line,
+                    tsCode: "TS2454"));
+            }
             BindValueUse(name);
             if (_environment.GetValueBinding(name.Lexeme) is { } symbol)
                 ThrowIfUsedBeforeAssigned(name, symbol);
+            // Declaration merging replaces an interface binding as later lib files are
+            // loaded, while the `Object: ObjectConstructor` value retains the earlier
+            // interface instance it was declared with. Expose Object's latest merged
+            // shape through the value side as TypeScript does.
+            if (name.Lexeme == "Object" &&
+                declared is TypeInfo.Interface declaredInterface &&
+                _environment.GetTypeBinding(declaredInterface.Name) is TypeInfo.Interface mergedInterface)
+            {
+                declared = mergedInterface;
+            }
             var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
             return GetNarrowing(declaredPath) ?? declared;
         }
@@ -1857,7 +1925,12 @@ public partial class TypeChecker
 
         if (name.Lexeme == "console") return TypeInfo.Any.Shared;
         if (name.Lexeme == "Math") return TypeInfo.Any.Shared; // Math is a special global object
-        if (name.Lexeme == "Object") return TypeInfo.Any.Shared; // Object is a special global object
+        if (name.Lexeme == "Object")
+        {
+            if (_environment.GetTypeBinding("ObjectConstructor") is { } objectConstructor)
+                return objectConstructor;
+            return TypeInfo.Any.Shared; // Object is a special global object
+        }
         if (name.Lexeme == "Array") return TypeInfo.Any.Shared; // Array is a special global object
         if (name.Lexeme == "JSON") return TypeInfo.Any.Shared; // JSON is a special global object
         if (name.Lexeme == "Promise") return TypeInfo.Any.Shared; // Promise is a special global object
@@ -1885,7 +1958,7 @@ public partial class TypeChecker
         if (name.Lexeme == "isNaN") return TypeInfo.Any.Shared; // Global isNaN function
         if (name.Lexeme == "isFinite") return TypeInfo.Any.Shared; // Global isFinite function
         if (name.Lexeme == "eval") return TypeInfo.Any.Shared; // Global eval(): (s: string) => any
-        if (name.Lexeme == "globalThis") return TypeInfo.Any.Shared; // globalThis ES2020
+        if (name.Lexeme == "globalThis") return TypeInfo.Any.Shared; // standalone globalThis
         if (name.Lexeme == "fetch") return TypeInfo.Any.Shared; // fetch() global function
         if (name.Lexeme == "setTimeout") return TypeInfo.Any.Shared; // setTimeout() global function
         if (name.Lexeme == "setInterval") return TypeInfo.Any.Shared; // setInterval() global function
@@ -1919,7 +1992,9 @@ public partial class TypeChecker
             return TypeInfo.Any.Shared;
         // Worker Threads globals
         if (name.Lexeme == "structuredClone") return TypeInfo.Any.Shared; // structuredClone() global function
-        if (name.Lexeme == "SharedArrayBuffer") return TypeInfo.Any.Shared; // SharedArrayBuffer constructor
+        if (name.Lexeme == "SharedArrayBuffer" &&
+            (!_hasDefaultLibraries || !Options.RespectLoadedLibraries))
+            return TypeInfo.Any.Shared; // standalone execution compatibility fallback
         if (name.Lexeme == "ArrayBuffer") return TypeInfo.Any.Shared; // ArrayBuffer constructor
         if (name.Lexeme == "Atomics") return TypeInfo.Any.Shared; // Atomics static object
         if (name.Lexeme == "MessageChannel") return TypeInfo.Any.Shared; // MessageChannel constructor

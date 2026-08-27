@@ -89,7 +89,10 @@ public partial class Parser
                 // Shorthand: { x } or { x = default }
                 if (Match(TokenType.EQUAL))
                     defaultValue = Expression();
-                value = new IdentifierPattern(key, defaultValue);
+                Token bindingName = key.Type == TokenType.IDENTIFIER
+                    ? key
+                    : new Token(TokenType.IDENTIFIER, key.Lexeme, key.Literal, key.Line, key.Start);
+                value = new IdentifierPattern(bindingName, defaultValue);
             }
 
             properties.Add(new ObjectPatternProperty(key, value, defaultValue));

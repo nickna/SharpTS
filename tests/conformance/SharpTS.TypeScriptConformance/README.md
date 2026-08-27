@@ -39,8 +39,8 @@ committed baseline at `baselines/interpreted.txt`.
 ### Verified snapshot (2026-08-27)
 
 At TypeScript `050880ce59e30b356b686bd3144efe24f875ebc8`, the selected
-subset contains 534 tests: 335 `Pass` and 199 `Fail`, with zero parser failures,
-checker/harness errors, or skips. The pass rate is **62.73%**. Fourteen of the
+subset contains 534 tests: 389 `Pass` and 145 `Fail`, with zero parser failures,
+checker/harness errors, or skips. The pass rate is **72.85%**. Fourteen of the
 tests are explicit high-signal files used to expand coverage without pulling an
 entire large corpus directory into one untriaged rollout.
 

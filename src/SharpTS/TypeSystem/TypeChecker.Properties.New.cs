@@ -406,6 +406,22 @@ public partial class TypeChecker
         // Handle new SharedArrayBuffer(byteLength) / new ArrayBuffer(byteLength)
         if (isSimpleName && simpleClassName is "SharedArrayBuffer" or "ArrayBuffer")
         {
+            if (simpleClassName == "SharedArrayBuffer" &&
+                _hasDefaultLibraries && Options.RespectLoadedLibraries &&
+                _environment.Get(simpleClassName) is null)
+            {
+                var name = (newExpr.Callee as Expr.Variable)!.Name;
+                throw new TypeCheckException(
+                    "Cannot find name 'SharedArrayBuffer'. Do you need to change your target library?",
+                    name.Line,
+                    tsCode: "TS2583");
+            }
+
+            // With lib declarations loaded, use their construct signature and
+            // returned interface so target/lib-specific members stay exact.
+            if (_hasDefaultLibraries && _environment.Get(simpleClassName!) is not null)
+                goto CheckDeclaredConstructor;
+
             if (newExpr.Arguments.Count != 1)
             {
                 throw new TypeCheckException($"{simpleClassName} constructor requires exactly 1 argument (byteLength).", tsCode: "TS2554");
@@ -634,17 +650,53 @@ public partial class TypeChecker
             return TypeInfo.Any.Shared;
         }
 
-        // Handle new Intl.*() constructors — all accept any arguments and return Any
-        if (newExpr.Callee is Expr.Get { Object: Expr.Variable { Name.Lexeme: "Intl" }, Name.Lexeme: var intlName }
-            && intlName is "NumberFormat" or "DateTimeFormat" or "Collator" or "PluralRules"
-                        or "RelativeTimeFormat" or "ListFormat" or "Segmenter" or "DisplayNames")
+        // Intl constructors are modeled explicitly while lib declaration overloads
+        // are still parsed best-effort. This keeps valid locale forms permissive and
+        // preserves the required ES2020/ES2023 diagnostics.
+        if (newExpr.Callee is Expr.Get
+            {
+                Object: Expr.Variable { Name.Lexeme: "Intl" },
+                Name.Lexeme: var intlName
+            })
         {
-            foreach (var arg in newExpr.Arguments)
-                CheckExpr(arg);
+            foreach (Expr argument in newExpr.Arguments)
+                CheckExpr(argument);
+
+            if (intlName == "Locale" && newExpr.Arguments.Count is < 1 or > 2)
+                throw new TypeCheckException("Expected 1-2 arguments.", tsCode: "TS2554");
+
+            if (intlName == "DisplayNames")
+            {
+                if (newExpr.Arguments.Count != 2)
+                    throw new TypeCheckException("Expected 2 arguments.", tsCode: "TS2554");
+                if (newExpr.Arguments[1] is Expr.ObjectLiteral options &&
+                    !options.Properties.Any(property => property.Key is not null &&
+                        GetPropertyKeyNameForTypeCheck(property.Key) == "type"))
+                    throw new TypeCheckException(
+                        "Property 'type' is missing in type '{}' but required in type 'DisplayNamesOptions'.",
+                        tsCode: "TS2345");
+            }
+
+            if (intlName == "NumberFormat" && newExpr.Arguments.Count >= 2 &&
+                newExpr.Arguments[1] is Expr.ObjectLiteral numberOptions)
+            {
+                foreach (Expr.Property property in numberOptions.Properties)
+                {
+                    if (property.Key is null ||
+                        GetPropertyKeyNameForTypeCheck(property.Key) != "useGrouping") continue;
+                    if (!_hasEs2023IntlLibrary &&
+                        property.Value is Expr.Literal { Value: string })
+                        throw new TypeCheckException(
+                            "Type 'string' is not assignable to type 'boolean | undefined'.",
+                            tsCode: "TS2322");
+                }
+            }
+
             return TypeInfo.Any.Shared;
         }
 
         // Evaluate the callee expression type
+        CheckDeclaredConstructor:
         string qualifiedName = GetCalleeClassName(newExpr.Callee);
         TypeInfo calleeType = CheckExpr(newExpr.Callee);
 

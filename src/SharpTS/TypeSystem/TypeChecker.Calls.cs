@@ -307,7 +307,10 @@ public partial class TypeChecker
                             // Check against rest parameter element type
                             if (!IsCompatible(restElementType, argType))
                             {
-                                throw new TypeCheckException($"Argument {argIndex + 1} expected type '{restElementType}' but got '{argType}'.", tsCode: "TS2345");
+                                throw new TypeCheckException(
+                                    $"Argument {argIndex + 1} expected type '{restElementType}' but got '{argType}'.",
+                                    line: call.Paren.Line,
+                                    tsCode: "TS2345");
                             }
                         }
 
@@ -587,6 +590,16 @@ public partial class TypeChecker
             get.Object is Expr.Variable objVar &&
             objVar.Name.Lexeme == "Object")
         {
+            if (_hasDefaultLibraries && (get.Name.Lexeme is "values" or "entries") &&
+                (_environment.GetTypeBinding("ObjectConstructor") is not TypeInfo.Interface objectCtor ||
+                 !objectCtor.Members.ContainsKey(get.Name.Lexeme)))
+            {
+                throw new TypeCheckException(
+                    $"Property '{get.Name.Lexeme}' does not exist on type 'ObjectConstructor'. " +
+                    "Try changing the 'lib' compiler option to 'es2017' or later.",
+                    get.Name.Line,
+                    tsCode: "TS2550");
+            }
             var methodType = BuiltInTypes.GetObjectStaticMethodType(get.Name.Lexeme);
             if (methodType is TypeInfo.Function objMethodType)
             {

@@ -822,13 +822,11 @@ public partial class Parser
                 if (meta.Lexeme == "meta")
                     return new Expr.ImportMeta(keyword);
 
-                // Invalid `import.foo` forms are syntactically recoverable in
-                // tsc's corpus (and may be followed by more member access).
-                // Preserve a normal property expression so the checker can
-                // issue a diagnostic without aborting the entire program.
-                var importIdentifier = new Token(
-                    TokenType.IDENTIFIER, "import", null, keyword.Line);
-                return new Expr.Get(new Expr.Variable(importIdentifier), meta);
+                // Invalid `import.foo` forms are syntactically recoverable.
+                // Record tsc's dedicated diagnostic and retain import.meta's
+                // object shape so any following access is checked normally.
+                RecordErrorAt(meta.Line, "Import meta-property must be 'meta'.", "TS17012");
+                return new Expr.ImportMeta(keyword, IsInvalidProperty: true);
             }
 
             // Dynamic import: import(pathExpr)

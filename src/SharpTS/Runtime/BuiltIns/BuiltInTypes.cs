@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 
@@ -19,6 +20,21 @@ public static class BuiltInTypes
     private static readonly TypeInfo VoidType = TypeInfo.Void.Shared;
     private static readonly TypeInfo AnyType = TypeInfo.Any.Shared;
     private static readonly TypeInfo BigIntType = TypeInfo.BigInt.Shared;
+    private static readonly TypeInfo RegExpGroupsType = new TypeInfo.Interface(
+        "RegExpGroups",
+        FrozenDictionary<string, TypeInfo>.Empty,
+        FrozenSet<string>.Empty,
+        StringIndexType: StringType);
+    private static readonly TypeInfo RegExpMatchResultType = new TypeInfo.Interface(
+        "RegExpMatchArray",
+        new Dictionary<string, TypeInfo>
+        {
+            ["groups"] = new TypeInfo.Union([RegExpGroupsType, TypeInfo.Undefined.Shared]),
+        }.ToFrozenDictionary(StringComparer.Ordinal),
+        FrozenSet<string>.Empty,
+        NumberIndexType: StringType);
+    private static readonly TypeInfo NullableRegExpMatchResult = new TypeInfo.Union(
+        [RegExpMatchResultType, TypeInfo.Null.Shared]);
 
     /// <summary>
     /// Type signatures for static methods on the String namespace
@@ -97,7 +113,7 @@ public static class BuiltInTypes
             // locales/options args on top of ECMA-262's single `that` param.
             "localeCompare" => new TypeInfo.Function([StringType, AnyType, AnyType], NumberType, RequiredParams: 0),
             "toString" => new TypeInfo.Function([], StringType), // primitive wrapper method
-            "match" => new TypeInfo.Function([AnyType], AnyType),
+            "match" => new TypeInfo.Function([AnyType], NullableRegExpMatchResult),
             "matchAll" => new TypeInfo.Function([AnyType], new TypeInfo.Array(AnyType)),
             "search" => new TypeInfo.Function([AnyType], NumberType),
             _ => null
@@ -437,7 +453,7 @@ public static class BuiltInTypes
             // tests like S15.10.6.2_A1_T16 (/undefined/.exec()) and A12
             // (new RegExp('(.|\\r|\\n)*','').exec()) rely on the coercion.
             "test" => new TypeInfo.Function([StringType], BooleanType, RequiredParams: 0),
-            "exec" => new TypeInfo.Function([StringType], AnyType, RequiredParams: 0),
+            "exec" => new TypeInfo.Function([StringType], NullableRegExpMatchResult, RequiredParams: 0),
             "toString" => new TypeInfo.Function([], StringType),
 
             _ => null

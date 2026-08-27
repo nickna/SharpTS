@@ -54,6 +54,9 @@ internal sealed partial class TsConfigCompilerOptions
     [JsonPropertyName("noImplicitThis")]
     public bool? NoImplicitThis { get; set; }
 
+    [JsonPropertyName("useUnknownInCatchVariables")]
+    public bool? UseUnknownInCatchVariables { get; set; }
+
     [JsonPropertyName("strictPropertyInitialization")]
     public bool? StrictPropertyInitialization { get; set; }
 
@@ -122,6 +125,7 @@ internal sealed partial class TsConfigCompilerOptions
         StrictFunctionTypes = StrictFunctionTypes,
         NoImplicitAny = NoImplicitAny,
         NoImplicitThis = NoImplicitThis,
+        UseUnknownInCatchVariables = UseUnknownInCatchVariables,
         StrictPropertyInitialization = StrictPropertyInitialization,
         ExactOptionalPropertyTypes = ExactOptionalPropertyTypes,
         NoUncheckedIndexedAccess = NoUncheckedIndexedAccess,

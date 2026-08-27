@@ -209,6 +209,8 @@ public static class ProjectCommandRunner
                 StrictFunctionTypes = cli.Strictness.StrictFunctionTypes ?? project.Strictness.StrictFunctionTypes,
                 NoImplicitAny = cli.Strictness.NoImplicitAny ?? project.Strictness.NoImplicitAny,
                 NoImplicitThis = cli.Strictness.NoImplicitThis ?? project.Strictness.NoImplicitThis,
+                UseUnknownInCatchVariables = cli.Strictness.UseUnknownInCatchVariables
+                    ?? project.Strictness.UseUnknownInCatchVariables,
                 StrictPropertyInitialization = cli.Strictness.StrictPropertyInitialization
                     ?? project.Strictness.StrictPropertyInitialization,
                 ExactOptionalPropertyTypes = cli.Strictness.ExactOptionalPropertyTypes
@@ -313,6 +315,7 @@ public static class ProjectCommandRunner
             options.Strictness.StrictFunctionTypes?.ToString() ?? "",
             options.Strictness.NoImplicitAny?.ToString() ?? "",
             options.Strictness.NoImplicitThis?.ToString() ?? "",
+            options.Strictness.UseUnknownInCatchVariables?.ToString() ?? "",
             options.Strictness.StrictPropertyInitialization?.ToString() ?? "",
             options.Strictness.ExactOptionalPropertyTypes?.ToString() ?? "",
             options.Strictness.NoUncheckedIndexedAccess?.ToString() ?? "",

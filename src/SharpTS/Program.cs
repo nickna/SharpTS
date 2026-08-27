@@ -386,6 +386,8 @@ static (GlobalOptions Options, TsConfigResult? Config) ApplyTsConfig(
                 StrictFunctionTypes = cli.Strictness.StrictFunctionTypes ?? config.Strictness.StrictFunctionTypes,
                 NoImplicitAny = cli.Strictness.NoImplicitAny ?? config.Strictness.NoImplicitAny,
                 NoImplicitThis = cli.Strictness.NoImplicitThis ?? config.Strictness.NoImplicitThis,
+                UseUnknownInCatchVariables = cli.Strictness.UseUnknownInCatchVariables
+                    ?? config.Strictness.UseUnknownInCatchVariables,
                 StrictPropertyInitialization = cli.Strictness.StrictPropertyInitialization ?? config.Strictness.StrictPropertyInitialization,
                 ExactOptionalPropertyTypes = cli.Strictness.ExactOptionalPropertyTypes ?? config.Strictness.ExactOptionalPropertyTypes,
                 NoUncheckedIndexedAccess = cli.Strictness.NoUncheckedIndexedAccess ?? config.Strictness.NoUncheckedIndexedAccess,
@@ -460,6 +462,7 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
             ["strictFunctionTypes"] = effective.StrictFunctionTypes,
             ["noImplicitAny"] = effective.NoImplicitAny,
             ["noImplicitThis"] = effective.NoImplicitThis,
+            ["useUnknownInCatchVariables"] = effective.UseUnknownInCatchVariables,
             ["strictPropertyInitialization"] = effective.StrictPropertyInitialization,
             ["exactOptionalPropertyTypes"] = effective.ExactOptionalPropertyTypes,
             ["noUncheckedIndexedAccess"] = effective.NoUncheckedIndexedAccess,
@@ -509,6 +512,9 @@ static void PrintResolvedConfig(GlobalOptions options, StrictnessOptions cliStri
                 ["strictFunctionTypes"] = OriginVia(cliLayer.StrictFunctionTypes, configLayer.StrictFunctionTypes),
                 ["noImplicitAny"] = OriginVia(cliLayer.NoImplicitAny, configLayer.NoImplicitAny),
                 ["noImplicitThis"] = OriginVia(cliLayer.NoImplicitThis, configLayer.NoImplicitThis),
+                ["useUnknownInCatchVariables"] = OriginVia(
+                    cliLayer.UseUnknownInCatchVariables,
+                    configLayer.UseUnknownInCatchVariables),
                 ["strictPropertyInitialization"] = OriginVia(
                     cliLayer.StrictPropertyInitialization, configLayer.StrictPropertyInitialization),
                 ["exactOptionalPropertyTypes"] = Origin(
@@ -1650,6 +1656,7 @@ static void PrintHelp()
     Console.WriteLine("  --noImplicitAny               Report unannotated parameters of declared");
     Console.WriteLine("                                functions, methods and constructors");
     Console.WriteLine("  --noImplicitThis              Report untyped this expressions");
+    Console.WriteLine("  --useUnknownInCatchVariables  Type unannotated catch variables as unknown");
     Console.WriteLine("  --strictPropertyInitialization Require class fields to be initialized");
     Console.WriteLine("  --exactOptionalPropertyTypes  Keep optional properties distinct from | undefined");
     Console.WriteLine("  --noUncheckedIndexedAccess    Add undefined to unchecked indexed access");

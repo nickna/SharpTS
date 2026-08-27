@@ -32,6 +32,19 @@ public class StrictCheckerOptionTests
     }
 
     [Fact]
+    public void UseUnknownInCatchVariables_RejectsUncheckedPropertyAccess()
+    {
+        const string source = "try {} catch (error) { error.message; }";
+
+        Assert.DoesNotContain(
+            Diagnose(source, TypeCheckerOptions.Default),
+            d => d.TsCode == "TS18046");
+        Assert.Contains(
+            Diagnose(source, TypeCheckerOptions.Default with { UseUnknownInCatchVariables = true }),
+            d => d.TsCode == "TS18046");
+    }
+
+    [Fact]
     public void ExactOptionalPropertyTypes_ControlsPresentUndefined()
     {
         const string source = """

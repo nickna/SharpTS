@@ -254,6 +254,14 @@ public partial class TypeChecker
     /// globals in <see cref="LookupVariable"/>. Set via <see cref="AsWorkerContext"/>.
     /// </summary>
     private bool _isWorkerContext;
+    // CheckModules sets this when an authoritative lib.* graph was loaded. In
+    // that mode, absence from the selected libraries must not be hidden by the
+    // execution-oriented built-in fallbacks used by standalone checking.
+    private bool _hasDefaultLibraries;
+    private bool _hasEs2023IntlLibrary;
+    private readonly HashSet<string> _globalObjectLexicalNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _globalObjectVarNames = new(StringComparer.Ordinal);
+    private Dictionary<string, TypeInfo>? _globalObjectMembers;
 
     /// <summary>
     /// Parameters already reported by <see cref="ReportImplicitAnyParameters"/>, by reference
@@ -1574,6 +1582,31 @@ public partial class TypeChecker
         _compatibilityCache = null;
 
         _moduleResolver = resolver;
+        _hasDefaultLibraries = modules.Any(module => module.IsDefaultLibrary);
+        _hasEs2023IntlLibrary = modules.Any(module =>
+            module.IsDefaultLibrary &&
+            module.Path.Contains("lib.es2023.intl.d.ts", StringComparison.OrdinalIgnoreCase));
+        _globalObjectLexicalNames.Clear();
+        _globalObjectVarNames.Clear();
+        _globalObjectMembers = null;
+        foreach (ParsedModule script in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
+        {
+            foreach (Stmt statement in script.Statements)
+            {
+                switch (statement)
+                {
+                    case Stmt.Var { IsVar: false } lexical:
+                        _globalObjectLexicalNames.Add(lexical.Name.Lexeme);
+                        break;
+                    case Stmt.Var { IsVar: true } variable:
+                        _globalObjectVarNames.Add(variable.Name.Lexeme);
+                        break;
+                    case Stmt.Const constant:
+                        _globalObjectLexicalNames.Add(constant.Name.Lexeme);
+                        break;
+                }
+            }
+        }
 
         // Base declared-type frame for the whole run, mirroring Check()/CheckWithRecovery (#743) —
         // shared by all script files, which share global scope. With no frame on the stack,
@@ -1664,6 +1697,19 @@ public partial class TypeChecker
                 }
             }
         }
+
+        _globalObjectMembers = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+        for (TypeEnvironment? environment = scriptEnv; environment is not null; environment = environment.Enclosing)
+        {
+            foreach (string name in environment.Names)
+            {
+                if (_globalObjectLexicalNames.Contains(name) || _globalObjectMembers.ContainsKey(name))
+                    continue;
+                if (environment.Get(name) is { } value)
+                    _globalObjectMembers[name] = value;
+            }
+        }
+        _globalObjectMembers["globalThis"] = TypeInfo.Any.Shared;
 
         // Second pass: type-check each module with imports resolved.
         foreach (var module in modules)
@@ -1813,6 +1859,15 @@ public partial class TypeChecker
         _currentStatementLine = null;
         return _typeMap;
     }
+
+    private TypeInfo.Interface GetGlobalThisType() => new(
+        "typeof globalThis",
+        (_globalObjectMembers ?? new Dictionary<string, TypeInfo>
+        {
+            ["globalThis"] = TypeInfo.Any.Shared,
+        }).ToFrozenDictionary(StringComparer.Ordinal),
+        FrozenSet<string>.Empty,
+        ReadonlyMembers: new[] { "globalThis" }.ToFrozenSet(StringComparer.Ordinal));
 
     private void ReportUnusedImports(ParsedModule module)
     {
@@ -1971,6 +2026,7 @@ public partial class TypeChecker
     /// </summary>
     private void CollectModuleExports(ParsedModule module)
     {
+        var selfNamespaceExports = new HashSet<string>(StringComparer.Ordinal);
         module.ExportedValueBindings.Clear();
         module.ExportedTypeBindings.Clear();
         module.DefaultValueBinding = null;
@@ -2110,8 +2166,10 @@ public partial class TypeChecker
                     foreach (var spec in export.NamedExports)
                     {
                         bool isTypeOnly = export.IsTypeOnly || spec.IsTypeOnly;
-                        var type = _environment.Get(spec.LocalName.Lexeme)
-                            ?? _environment.GetTypeBinding(spec.LocalName.Lexeme);
+                        var type = isTypeOnly
+                            ? ResolveAnnotation(spec.LocalName.Lexeme, null)
+                            : _environment.Get(spec.LocalName.Lexeme)
+                                ?? _environment.GetTypeBinding(spec.LocalName.Lexeme);
                         string exportedName = spec.ExportedName?.Lexeme ?? spec.LocalName.Lexeme;
                         if (type != null)
                         {
@@ -2161,6 +2219,8 @@ public partial class TypeChecker
                     {
                         if (export.NamespaceExportName != null)
                         {
+                            if (ReferenceEquals(sourceModule, module))
+                                selfNamespaceExports.Add(export.NamespaceExportName.Lexeme);
                             var namespaceType = CreateModuleNamespaceType(
                                 export.NamespaceExportName.Lexeme, sourceModule);
                             var namespaceValueBinding = Bindings.Declare(
@@ -2266,6 +2326,11 @@ public partial class TypeChecker
                     module, declaration, exportedName, isDefault: false);
             }
         }
+
+        // Namespace exports are live views. Refresh self-reexports after later
+        // declarations have populated the module's complete export surface.
+        foreach (string exportedName in selfNamespaceExports)
+            module.ExportedTypes[exportedName] = CreateModuleNamespaceType(exportedName, module);
 
         // UMD declarations commonly pair `export = value` with
         // `export as namespace GlobalName`. Prefer the assignment type; for an
@@ -2471,7 +2536,22 @@ public partial class TypeChecker
 
                             if (!importedModule.ExportedTypes.TryGetValue(importedName, out var type))
                             {
-                                throw new TypeCheckException($"Module '{import.ModulePath}' has no export named '{importedName}'", import.Keyword.Line, tsCode: "TS2305");
+                                if (reportErrors)
+                                {
+                                    RecordTypeError(new TypeCheckException(
+                                        $"Module '{import.ModulePath}' has no exported member '{importedName}'.",
+                                        spec.Imported.Line,
+                                        tsCode: "TS2305"));
+                                }
+                                bool missingIsTypeOnly = import.IsTypeOnly || spec.IsTypeOnly;
+                                env.DefineImportAlias(localName, TypeInfo.Any.Shared, isValue: !missingIsTypeOnly);
+                                Token missingLocal = spec.LocalName ?? spec.Imported;
+                                BindImportedDeclaration(
+                                    env,
+                                    missingLocal,
+                                    missingIsTypeOnly ? BindingNamespace.Type : BindingNamespace.Value,
+                                    importedToken: spec.Imported);
+                                continue;
                             }
 
                             bool hasValueExport = importedModule.ExportedValueBindings.ContainsKey(importedName);
@@ -2621,6 +2701,7 @@ public partial class TypeChecker
         Stmt.Function f => f.Name.Line,
         Stmt.Class c => c.Name.Line,
         Stmt.Interface i => i.Name.Line,
+        Stmt.TypeAlias t => t.Name.Line,
         Stmt.Return r => r.Value is not null ? TryGetExprLine(r.Value) : null,
         Stmt.If i => TryGetExprLine(i.Condition),
         Stmt.While w => TryGetExprLine(w.Condition),
@@ -2631,6 +2712,8 @@ public partial class TypeChecker
     {
         Expr.Grouping g => TryGetExprLine(g.Expression),
         Expr.Variable v => v.Name.Line,
+        Expr.This t => t.Keyword.Line,
+        Expr.ImportMeta im => im.Keyword.Line,
         Expr.Set s => s.Name.Line,
         Expr.Get g => g.Name.Line,
         Expr.Assign a => a.Name.Line,
