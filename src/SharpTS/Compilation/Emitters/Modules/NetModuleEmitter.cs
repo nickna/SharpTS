@@ -4,34 +4,25 @@ using SharpTS.Parsing;
 namespace SharpTS.Compilation.Emitters.Modules;
 
 /// <summary>
-/// Emits IL code for the Node.js 'net' module.
+/// Emits IL code for the stdlib-internal <c>primitive:net</c> seam.
 /// </summary>
 /// <remarks>
 /// Provides TCP networking functionality:
 /// - createServer() - creates a TCP server
-/// - createConnection() / connect() - creates a TCP client socket
-/// - isIP(), isIPv4(), isIPv6() - IP address utility functions
+/// - createConnection() - creates a TCP client socket
+/// - createSocket() - creates an unconnected TCP socket
+/// - createBlockList() - creates the native server-filtering handle
 /// </remarks>
 public sealed class NetModuleEmitter : IBuiltInModuleEmitter
 {
-    public string ModuleName => "net";
+    public string ModuleName => "primitive:net";
 
     private static readonly string[] _exportedMembers =
     [
         "createServer",
         "createConnection",
-        "connect",
-        "isIP",
-        "isIPv4",
-        "isIPv6",
-        "Server",
-        "Socket",
-        "BlockList",
-        "SocketAddress",
-        "getDefaultAutoSelectFamily",
-        "setDefaultAutoSelectFamily",
-        "getDefaultAutoSelectFamilyAttemptTimeout",
-        "setDefaultAutoSelectFamilyAttemptTimeout"
+        "createSocket",
+        "createBlockList"
     ];
 
     public IReadOnlyList<string> GetExportedMembers() => _exportedMembers;
@@ -41,14 +32,9 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
         return methodName switch
         {
             "createServer" => EmitCreateServer(emitter, arguments),
-            "createConnection" or "connect" => EmitCreateConnection(emitter, arguments),
-            "isIP" => EmitIsIP(emitter, arguments),
-            "isIPv4" => EmitIsIPv4(emitter, arguments),
-            "isIPv6" => EmitIsIPv6(emitter, arguments),
-            "getDefaultAutoSelectFamily" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetGetDefaultAutoSelectFamily),
-            "setDefaultAutoSelectFamily" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetSetDefaultAutoSelectFamily),
-            "getDefaultAutoSelectFamilyAttemptTimeout" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetGetDefaultAutoSelectFamilyAttemptTimeout),
-            "setDefaultAutoSelectFamilyAttemptTimeout" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetSetDefaultAutoSelectFamilyAttemptTimeout),
+            "createConnection" => EmitCreateConnection(emitter, arguments),
+            "createSocket" => EmitOneArgCall(emitter, arguments, emitter.Context.Runtime!.NetCreateSocket),
+            "createBlockList" => EmitZeroArgCall(emitter, emitter.Context.Runtime!.NetCreateBlockList),
             _ => false
         };
     }
@@ -56,7 +42,6 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
     private static bool EmitZeroArgCall(IEmitterContext emitter, System.Reflection.MethodInfo method)
     {
         emitter.Context.IL.Emit(OpCodes.Call, method);
-        emitter.SetStackUnknown();
         return true;
     }
 
@@ -73,7 +58,6 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
             il.Emit(OpCodes.Ldnull);
         }
         il.Emit(OpCodes.Call, method);
-        emitter.SetStackUnknown();
         return true;
     }
 
@@ -105,7 +89,6 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
 
         // Call $Runtime.NetCreateServer(optionsOrCallback, callback)
         il.Emit(OpCodes.Call, ctx.Runtime!.NetCreateServer);
-        emitter.SetStackUnknown();
         return true;
     }
 
@@ -131,67 +114,6 @@ public sealed class NetModuleEmitter : IBuiltInModuleEmitter
 
         // Call $Runtime.NetCreateConnection(options, hostOrCallback, callback)
         il.Emit(OpCodes.Call, ctx.Runtime!.NetCreateConnection);
-        emitter.SetStackUnknown();
-        return true;
-    }
-
-    private static bool EmitIsIP(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-
-        il.Emit(OpCodes.Call, ctx.Runtime!.NetIsIP);
-        emitter.SetStackUnknown();
-        return true;
-    }
-
-    private static bool EmitIsIPv4(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-
-        il.Emit(OpCodes.Call, ctx.Runtime!.NetIsIPv4);
-        emitter.SetStackUnknown();
-        return true;
-    }
-
-    private static bool EmitIsIPv6(IEmitterContext emitter, List<Expr> arguments)
-    {
-        var ctx = emitter.Context;
-        var il = ctx.IL;
-
-        if (arguments.Count > 0)
-        {
-            emitter.EmitExpression(arguments[0]);
-            emitter.EmitBoxIfNeeded(arguments[0]);
-        }
-        else
-        {
-            il.Emit(OpCodes.Ldnull);
-        }
-
-        il.Emit(OpCodes.Call, ctx.Runtime!.NetIsIPv6);
-        emitter.SetStackUnknown();
         return true;
     }
 

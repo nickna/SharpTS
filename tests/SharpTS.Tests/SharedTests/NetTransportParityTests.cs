@@ -202,7 +202,7 @@ public class NetTransportParityTests
         var output = TestHarness.RunModules(files, "./main.ts", mode);
         Assert.Equal(
             "true\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\ntrue\nfalse\n4\n" +
-            "Address: IPv4 123.123.123.123\nRange: IPv4 10.0.0.1-10.0.0.10\nSubnet: IPv4 8.8.8.0/24\nAddress: IPv6 ::1\n",
+            "Address: IPv6 ::1\nSubnet: IPv4 8.8.8.0/24\nRange: IPv4 10.0.0.1-10.0.0.10\nAddress: IPv4 123.123.123.123\n",
             output);
     }
 
@@ -392,6 +392,89 @@ public class NetTransportParityTests
         };
         var output = TestHarness.RunModules(files, "./main.ts", mode);
         Assert.Equal("true\n5.6.7.8\n", output);
+    }
+
+    [Theory, ModeData]
+    public void NetFacade_StrictIpParsing_AndConnectIdentity(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as net from 'net';
+                const values = [
+                    '127.0.0.1', '127.00.0.1', '127.1', '0x7f000001', '2130706433',
+                    '::1', '1::2::3', '::ffff:192.0.2.128',
+                    '::ffff:192.168.001.1', 'fe80::1%eth0', 'fe80::1%', '[::1]'
+                ];
+                console.log(values.map((value: string) => net.isIP(value)).join(','));
+                console.log(net.isIPv4('255.255.255.255'));
+                console.log(net.isIPv6('2001:db8::1'));
+                console.log(net.connect === net.createConnection);
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal("4,0,0,0,0,6,0,6,0,6,0,0\ntrue\ntrue\ntrue\n", output);
+    }
+
+    [Theory, ModeData]
+    public void NetFacade_CallableConstructors_AndSocketAddressValidation(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as net from 'net';
+                const serverA = net.Server();
+                const serverB = new net.Server();
+                const socketA = net.Socket();
+                const socketB = new net.Socket({ allowHalfOpen: true, highWaterMark: 1234 });
+                console.log(typeof serverA.listen + ' ' + typeof serverB.listen);
+                console.log(typeof socketA.connect + ' ' + socketB.allowHalfOpen + ' ' + socketB.writableHighWaterMark);
+                try { net.createServer(123 as any); } catch (e) { console.log((e as any).code); }
+
+                const sa = new net.SocketAddress({
+                    family: 'IPv6', address: '2001:0db8:0:0:0:ff00:0042:8329',
+                    port: '80', flowlabel: 7
+                });
+                console.log(sa.address + ' ' + sa.family + ' ' + sa.port + ' ' + sa.flowlabel);
+                try { new net.SocketAddress({ address: '127.1' }); } catch (e) { console.log((e as any).code); }
+                try { new net.SocketAddress({ port: 1.5 }); } catch (e) { console.log((e as any).code); }
+                try { new net.SocketAddress({ family: 'ipv6', flowlabel: '3' }); } catch (e) { console.log((e as any).code); }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal(
+            "function function\nfunction true 1234\nERR_INVALID_ARG_TYPE\n2001:db8::ff00:42:8329 ipv6 80 7\n" +
+            "ERR_INVALID_ADDRESS\nERR_SOCKET_BAD_PORT\nERR_INVALID_ARG_TYPE\n",
+            output);
+    }
+
+    [Theory, ModeData]
+    public void NetFacade_BlockListOrderingFamilyAndErrorCodes(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["./main.ts"] = """
+                import * as net from 'net';
+                const list = new net.BlockList();
+                list.addAddress('127.0.0.1', 'IPv4');
+                list.addSubnet('2001:db8::', 32, 'IPV6');
+                console.log(list.rules.join('|'));
+                console.log(list.check('127.0.0.1', 'IPv4'));
+                console.log(list.check('bad-address'));
+                try { list.addAddress('127.1'); } catch (e) { console.log((e as any).code); }
+                try { list.addSubnet('127.0.0.1', 24.5); } catch (e) { console.log((e as any).code); }
+                try { net.setDefaultAutoSelectFamily('yes' as any); } catch (e) { console.log((e as any).code); }
+                try { net.setDefaultAutoSelectFamilyAttemptTimeout(0); } catch (e) { console.log((e as any).code); }
+                """
+        };
+
+        var output = TestHarness.RunModules(files, "./main.ts", mode);
+        Assert.Equal(
+            "Subnet: IPv6 2001:db8::/32|Address: IPv4 127.0.0.1\ntrue\nfalse\n" +
+            "ERR_INVALID_ADDRESS\nERR_OUT_OF_RANGE\nERR_INVALID_ARG_TYPE\nERR_OUT_OF_RANGE\n",
+            output);
     }
 
     #endregion

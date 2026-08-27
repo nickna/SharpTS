@@ -42,7 +42,8 @@ public static class BuiltInModuleRegistry
         // "dns" / "dns/promises" — migrated to stdlib/node/dns{,/promises}.ts.
         //   The public callback surface is derived from promise primitives so both
         //   execution modes share callback scheduling and argument shaping.
-        "net",
+        // "net" — migrated to stdlib/node/net.ts (TS facade over primitive:net;
+        //   Socket/Server and the accept-loop BlockList handle remain native).
         "https",
         "tls",
         "dgram",

@@ -1264,6 +1264,41 @@ public class StandaloneDllTests
     }
 
     /// <summary>
+    /// Phase 3 guardrail: the TypeScript net facade and its native enforcement
+    /// handle must remain executable without SharpTS.dll co-located.
+    /// </summary>
+    [Fact]
+    public void Isolated_NetFacade_ShouldExecuteWithoutSharpTsDll()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["main.ts"] = """
+                import * as net from 'net';
+                const list = new net.BlockList();
+                list.addAddress('127.0.0.1');
+                const address = new net.SocketAddress({ family: 'ipv6', address: '2001:db8::1' });
+                const socket = net.Socket({ highWaterMark: 2048 });
+                console.log(net.connect === net.createConnection);
+                console.log(list.check('127.0.0.1'));
+                console.log(address.address);
+                console.log(socket.writableHighWaterMark);
+                """
+        };
+
+        var (tempDir, dllPath) = CompileStandaloneModule(files, "main.ts");
+        try
+        {
+            Assert.DoesNotContain(GetAssemblyReferences(dllPath), r => r == "SharpTS");
+            var output = ExecuteCompiledDllIsolated(dllPath, timeoutMs: 15000);
+            Assert.Equal("true\ntrue\n2001:db8::1\n2048\n", output);
+        }
+        finally
+        {
+            CleanupTempDir(tempDir);
+        }
+    }
+
+    /// <summary>
     /// #1033 guardrail: a --compile'd tls client↔server program must complete a real SslStream
     /// handshake and exchange data with NO SharpTS.dll co-located. The handshake, introspection,
     /// and socket I/O are all emitted as pure-BCL IL, so the output DLL is genuinely standalone.

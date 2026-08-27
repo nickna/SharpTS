@@ -36,6 +36,7 @@ public static class PrimitiveRegistry
         Prefix + "zlib",
         Prefix + "dns",
         Prefix + "dns/promises",
+        Prefix + "net",
     };
 
     /// <summary>

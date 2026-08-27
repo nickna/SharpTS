@@ -1,5 +1,3 @@
-using System.Net;
-using System.Net.Sockets;
 using System.Reflection;
 using System.Reflection.Emit;
 
@@ -17,127 +15,13 @@ public partial class RuntimeEmitter
     {
         EmitNetCreateServer(typeBuilder, runtime);
         EmitNetCreateConnection(typeBuilder, runtime);
-        EmitNetIsIP(typeBuilder, runtime);
-        EmitNetIsIPv4(typeBuilder, runtime);
-        EmitNetIsIPv6(typeBuilder, runtime);
+        EmitNetCreateSocket(typeBuilder, runtime);
         EmitNetCreateBlockList(typeBuilder, runtime);
-        EmitNetCreateSocketAddress(typeBuilder, runtime);
-        EmitNetAutoSelectFamilyDefaults(typeBuilder, runtime);
     }
 
     /// <summary>
-    /// Emits the autoSelectFamily default knobs (#1070). Connection establishment
-    /// delegates to .NET's TcpClient (which already attempts every resolved address
-    /// sequentially), so the knobs are API-compatibility state. Static fields use
-    /// inverted defaults (disabled=false ⇒ true; timeout 0 ⇒ 250) so no type
-    /// initializer is required.
-    /// </summary>
-    private void EmitNetAutoSelectFamilyDefaults(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var disabledField = typeBuilder.DefineField("_netAutoSelectFamilyDisabled", _types.Boolean,
-            FieldAttributes.Private | FieldAttributes.Static);
-        var timeoutField = typeBuilder.DefineField("_netAutoSelectFamilyTimeout", _types.Double,
-            FieldAttributes.Private | FieldAttributes.Static);
-
-        // getDefaultAutoSelectFamily(): return !_disabled
-        {
-            var method = typeBuilder.DefineMethod(
-                "NetGetDefaultAutoSelectFamily",
-                MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object,
-                Type.EmptyTypes
-            );
-            runtime.NetGetDefaultAutoSelectFamily = method;
-            runtime.RegisterBuiltInModuleMethod("net", "getDefaultAutoSelectFamily", method);
-            var il = method.GetILGenerator();
-            il.Emit(OpCodes.Ldsfld, disabledField);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ceq);
-            il.Emit(OpCodes.Box, _types.Boolean);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // setDefaultAutoSelectFamily(v): if (v is bool) _disabled = !(bool)v
-        {
-            var method = typeBuilder.DefineMethod(
-                "NetSetDefaultAutoSelectFamily",
-                MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object,
-                [_types.Object]
-            );
-            runtime.NetSetDefaultAutoSelectFamily = method;
-            runtime.RegisterBuiltInModuleMethod("net", "setDefaultAutoSelectFamily", method);
-            var il = method.GetILGenerator();
-            var skip = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, typeof(bool));
-            il.Emit(OpCodes.Brfalse, skip);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Unbox_Any, _types.Boolean);
-            il.Emit(OpCodes.Ldc_I4_0);
-            il.Emit(OpCodes.Ceq);
-            il.Emit(OpCodes.Stsfld, disabledField);
-            il.MarkLabel(skip);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // getDefaultAutoSelectFamilyAttemptTimeout(): return _timeout > 0 ? _timeout : 250
-        {
-            var method = typeBuilder.DefineMethod(
-                "NetGetDefaultAutoSelectFamilyAttemptTimeout",
-                MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object,
-                Type.EmptyTypes
-            );
-            runtime.NetGetDefaultAutoSelectFamilyAttemptTimeout = method;
-            runtime.RegisterBuiltInModuleMethod("net", "getDefaultAutoSelectFamilyAttemptTimeout", method);
-            var il = method.GetILGenerator();
-            var useDefault = il.DefineLabel();
-            il.Emit(OpCodes.Ldsfld, timeoutField);
-            il.Emit(OpCodes.Ldc_R8, 0.0);
-            il.Emit(OpCodes.Ble_Un, useDefault);
-            il.Emit(OpCodes.Ldsfld, timeoutField);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(useDefault);
-            il.Emit(OpCodes.Ldc_R8, 250.0);
-            il.Emit(OpCodes.Box, _types.Double);
-            il.Emit(OpCodes.Ret);
-        }
-
-        // setDefaultAutoSelectFamilyAttemptTimeout(v): if (v is double && v > 0) _timeout = v
-        {
-            var method = typeBuilder.DefineMethod(
-                "NetSetDefaultAutoSelectFamilyAttemptTimeout",
-                MethodAttributes.Public | MethodAttributes.Static,
-                _types.Object,
-                [_types.Object]
-            );
-            runtime.NetSetDefaultAutoSelectFamilyAttemptTimeout = method;
-            runtime.RegisterBuiltInModuleMethod("net", "setDefaultAutoSelectFamilyAttemptTimeout", method);
-            var il = method.GetILGenerator();
-            var skip = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Isinst, typeof(double));
-            il.Emit(OpCodes.Brfalse, skip);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Unbox_Any, _types.Double);
-            il.Emit(OpCodes.Ldc_R8, 0.0);
-            il.Emit(OpCodes.Ble_Un, skip);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Unbox_Any, _types.Double);
-            il.Emit(OpCodes.Stsfld, timeoutField);
-            il.MarkLabel(skip);
-            il.Emit(OpCodes.Ldnull);
-            il.Emit(OpCodes.Ret);
-        }
-    }
-
-    /// <summary>
-    /// Emits: public static object NetCreateBlockList(object? unused) — factory
-    /// for the callable form / dynamic dispatch; `new net.BlockList()` compiles
-    /// directly to the $BlockList constructor.
+    /// Emits: public static object NetCreateBlockList() — creates the opaque
+    /// native handle used by the TypeScript BlockList facade.
     /// </summary>
     private void EmitNetCreateBlockList(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
@@ -145,31 +29,13 @@ public partial class RuntimeEmitter
             "NetCreateBlockList",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
-            [_types.Object]
+            Type.EmptyTypes
         );
-        runtime.RegisterBuiltInModuleMethod("net", "BlockList", method);
+        runtime.NetCreateBlockList = method;
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createBlockList", method);
 
         var il = method.GetILGenerator();
         il.Emit(OpCodes.Newobj, runtime.BlockListCtor!);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static object NetCreateSocketAddress(object? options)
-    /// </summary>
-    private void EmitNetCreateSocketAddress(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "NetCreateSocketAddress",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        runtime.RegisterBuiltInModuleMethod("net", "SocketAddress", method);
-
-        var il = method.GetILGenerator();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Newobj, runtime.SocketAddressCtor!);
         il.Emit(OpCodes.Ret);
     }
 
@@ -189,8 +55,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object]
         );
         runtime.NetCreateServer = method;
-        runtime.RegisterBuiltInModuleMethod("net", "createServer", method);
-        runtime.RegisterBuiltInModuleMethod("net", "Server", method); // alias
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createServer", method);
 
         var il = method.GetILGenerator();
         var serverLocal = il.DeclareLocal(_netServerTypeBuilder);
@@ -296,8 +161,7 @@ public partial class RuntimeEmitter
             [_types.Object, _types.Object, _types.Object]
         );
         runtime.NetCreateConnection = method;
-        runtime.RegisterBuiltInModuleMethod("net", "createConnection", method);
-        runtime.RegisterBuiltInModuleMethod("net", "connect", method); // alias
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createConnection", method);
 
         var il = method.GetILGenerator();
 
@@ -326,166 +190,83 @@ public partial class RuntimeEmitter
     }
 
     /// <summary>
-    /// Emits: public static object NetIsIP(object? input)
-    /// Returns 4 for IPv4, 6 for IPv6, 0 for invalid.
+    /// Creates an unconnected native Socket and applies constructor options.
+    /// The public callable/newable Socket export lives in stdlib/node/net.ts.
     /// </summary>
-    private void EmitNetIsIP(TypeBuilder typeBuilder, EmittedRuntime runtime)
+    private void EmitNetCreateSocket(TypeBuilder typeBuilder, EmittedRuntime runtime)
     {
         var method = typeBuilder.DefineMethod(
-            "NetIsIP",
+            "NetCreateSocket",
             MethodAttributes.Public | MethodAttributes.Static,
             _types.Object,
             [_types.Object]
         );
-        runtime.NetIsIP = method;
-        runtime.RegisterBuiltInModuleMethod("net", "isIP", method);
+        runtime.NetCreateSocket = method;
+        runtime.RegisterBuiltInModuleMethod("primitive:net", "createSocket", method);
 
         var il = method.GetILGenerator();
+        var socketLocal = il.DeclareLocal(runtime.NetSocketType);
+        il.Emit(OpCodes.Newobj, runtime.NetSocketCtor);
+        il.Emit(OpCodes.Stloc, socketLocal);
 
-        // if (input is not string) return 0.0
-        var isStringLabel = il.DefineLabel();
+        var done = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, isStringLabel);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
+        il.Emit(OpCodes.Isinst, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Brfalse, done);
 
-        il.MarkLabel(isStringLabel);
+        var valueLocal = il.DeclareLocal(_types.Object);
+        var applyHwm = il.DefineLabel();
+        var tryPlainHwm = il.DefineLabel();
+        var noHwm = il.DefineLabel();
 
-        // IPAddress.TryParse(input as string, out addr)
-        var addrLocal = il.DeclareLocal(typeof(IPAddress));
         il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldloca, addrLocal);
-        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("TryParse", [_types.String, typeof(IPAddress).MakeByRefType()])!);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "writableHighWaterMark");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, tryPlainHwm);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Brtrue, applyHwm);
 
-        var validLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, validLabel);
+        il.MarkLabel(tryPlainHwm);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "highWaterMark");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, noHwm);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, typeof(double));
+        il.Emit(OpCodes.Brfalse, noHwm);
 
-        // Not valid
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
+        il.MarkLabel(applyHwm);
+        il.Emit(OpCodes.Ldloc, socketLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Double);
+        il.Emit(OpCodes.Conv_I4);
+        il.Emit(OpCodes.Stfld, _netSocketWritableHwmField);
+        il.MarkLabel(noHwm);
 
-        il.MarkLabel(validLabel);
+        var noAllowHalfOpen = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Castclass, _types.DictionaryStringObject);
+        il.Emit(OpCodes.Ldstr, "allowHalfOpen");
+        il.Emit(OpCodes.Ldloca, valueLocal);
+        il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.DictionaryStringObject, "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!);
+        il.Emit(OpCodes.Brfalse, noAllowHalfOpen);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Isinst, typeof(bool));
+        il.Emit(OpCodes.Brfalse, noAllowHalfOpen);
+        il.Emit(OpCodes.Ldloc, socketLocal);
+        il.Emit(OpCodes.Ldloc, valueLocal);
+        il.Emit(OpCodes.Unbox_Any, _types.Boolean);
+        il.Emit(OpCodes.Stfld, _netSocketAllowHalfOpenField);
+        il.MarkLabel(noAllowHalfOpen);
 
-        // Check address family
-        il.Emit(OpCodes.Ldloc, addrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetworkV6);
-
-        var isV6Label = il.DefineLabel();
-        il.Emit(OpCodes.Beq, isV6Label);
-
-        // IPv4
-        il.Emit(OpCodes.Ldc_R8, 4.0);
-        il.Emit(OpCodes.Box, _types.Double);
-        il.Emit(OpCodes.Ret);
-
-        // IPv6
-        il.MarkLabel(isV6Label);
-        il.Emit(OpCodes.Ldc_R8, 6.0);
-        il.Emit(OpCodes.Box, _types.Double);
+        il.MarkLabel(done);
+        il.Emit(OpCodes.Ldloc, socketLocal);
         il.Emit(OpCodes.Ret);
     }
 
-    /// <summary>
-    /// Emits: public static object NetIsIPv4(object? input)
-    /// </summary>
-    private void EmitNetIsIPv4(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "NetIsIPv4",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        runtime.NetIsIPv4 = method;
-        runtime.RegisterBuiltInModuleMethod("net", "isIPv4", method);
-
-        var il = method.GetILGenerator();
-
-        // if (input is not string) return false
-        var isStringLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, isStringLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(isStringLabel);
-
-        var addrLocal = il.DeclareLocal(typeof(IPAddress));
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldloca, addrLocal);
-        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("TryParse", [_types.String, typeof(IPAddress).MakeByRefType()])!);
-
-        var validLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, validLabel);
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(validLabel);
-
-        il.Emit(OpCodes.Ldloc, addrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetwork);
-        il.Emit(OpCodes.Ceq);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
-    }
-
-    /// <summary>
-    /// Emits: public static object NetIsIPv6(object? input)
-    /// </summary>
-    private void EmitNetIsIPv6(TypeBuilder typeBuilder, EmittedRuntime runtime)
-    {
-        var method = typeBuilder.DefineMethod(
-            "NetIsIPv6",
-            MethodAttributes.Public | MethodAttributes.Static,
-            _types.Object,
-            [_types.Object]
-        );
-        runtime.NetIsIPv6 = method;
-        runtime.RegisterBuiltInModuleMethod("net", "isIPv6", method);
-
-        var il = method.GetILGenerator();
-
-        var isStringLabel = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Isinst, _types.String);
-        il.Emit(OpCodes.Brtrue, isStringLabel);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(isStringLabel);
-
-        var addrLocal = il.DeclareLocal(typeof(IPAddress));
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, _types.String);
-        il.Emit(OpCodes.Ldloca, addrLocal);
-        il.Emit(OpCodes.Call, typeof(IPAddress).GetMethod("TryParse", [_types.String, typeof(IPAddress).MakeByRefType()])!);
-
-        var validLabel = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, validLabel);
-
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
-
-        il.MarkLabel(validLabel);
-
-        il.Emit(OpCodes.Ldloc, addrLocal);
-        il.Emit(OpCodes.Callvirt, typeof(IPAddress).GetProperty("AddressFamily")!.GetGetMethod()!);
-        il.Emit(OpCodes.Ldc_I4, (int)AddressFamily.InterNetworkV6);
-        il.Emit(OpCodes.Ceq);
-        il.Emit(OpCodes.Box, _types.Boolean);
-        il.Emit(OpCodes.Ret);
-    }
 }
