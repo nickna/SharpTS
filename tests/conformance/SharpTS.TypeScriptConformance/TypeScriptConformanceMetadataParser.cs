@@ -13,8 +13,9 @@ namespace SharpTS.TypeScriptConformance;
 ///       as a global directive (TS's test harness behaves the same way).</item>
 /// <item><c>@filename:</c> additionally marks a virtual-file boundary. The
 ///       directive line itself is dropped from the resulting body.</item>
-/// <item>Other directive lines remain in the body as ordinary comments — this
-///       preserves source line numbers, which baselines reference.</item>
+/// <item>Directive lines are compiler settings, not virtual-file text, and are removed from
+///       every section. Leading blank lines are removed with them, matching TestCaseParser's
+///       per-file coordinates in <c>*.errors.txt</c>.</item>
 /// <item>If no <c>@filename:</c> is present, the whole source becomes one
 ///       virtual file named after the test's basename.</item>
 /// </list>
@@ -71,14 +72,7 @@ public static class TypeScriptConformanceMetadataParser
             // in this stripped coordinate space. Keeping the directives (they parse as comments)
             // shifts every diagnostic line on directive-headed tests.
             var basename = Path.GetFileName(testPath);
-            var bodyLines = new List<string>(lines.Length);
-            foreach (var line in lines)
-            {
-                if (DirectiveRegex.IsMatch(line)) continue;
-                if (bodyLines.Count == 0 && line.Trim().Length == 0) continue;
-                bodyLines.Add(line);
-            }
-            files.Add(new TypeScriptConformanceFile(basename, string.Join('\n', bodyLines)));
+            files.Add(new TypeScriptConformanceFile(basename, BuildBody(lines)));
         }
         else
         {
@@ -93,7 +87,7 @@ public static class TypeScriptConformanceMetadataParser
                     : lines.Length;
 
                 var body = endLine > startLine
-                    ? string.Join('\n', lines, startLine, endLine - startLine)
+                    ? BuildBody(lines.Skip(startLine).Take(endLine - startLine))
                     : string.Empty;
                 files.Add(new TypeScriptConformanceFile(filenameNames[f], body));
             }
@@ -119,6 +113,18 @@ public static class TypeScriptConformanceMetadataParser
             Lib: GetList(directives, "lib"),
             RawDirectives: directives,
             Files: files);
+    }
+
+    private static string BuildBody(IEnumerable<string> sourceLines)
+    {
+        var bodyLines = new List<string>();
+        foreach (string line in sourceLines)
+        {
+            if (DirectiveRegex.IsMatch(line)) continue;
+            if (bodyLines.Count == 0 && line.Trim().Length == 0) continue;
+            bodyLines.Add(line);
+        }
+        return string.Join('\n', bodyLines);
     }
 
     private static string? GetString(IReadOnlyDictionary<string, string> directives, string key) =>

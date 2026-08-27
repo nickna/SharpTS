@@ -44,6 +44,7 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
 
     // Error recovery support
     private readonly DiagnosticCollector _diagnostics = new();
+    private readonly List<Token> _uninitializedConstDeclarations = [];
     private string? _filePath = null;
 
     /// <summary>
@@ -58,6 +59,13 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
     public Parser AsDeclarationFile(bool isDeclarationFile = true)
     {
         _isDeclarationFile = isDeclarationFile;
+        return this;
+    }
+
+    /// <summary>Sets the parser diagnostic cap for recovery-oriented callers.</summary>
+    public Parser WithMaxErrors(int maxErrors)
+    {
+        _diagnostics.MaxErrors = maxErrors;
         return this;
     }
 
@@ -150,6 +158,23 @@ public partial class Parser(List<Token> tokens, DecoratorMode decoratorMode = De
         // existing generator-declaration IL pipeline handles them. No-op when the module
         // contains no `function*() {...}` expressions.
         statements = GeneratorArrowLifter.Lift(statements, _spans);
+
+        // TypeScript reports TS1155 as a grammar diagnostic from the checker. Checker
+        // diagnostics are skipped when the file already has a syntactic error, so defer
+        // this parser-owned equivalent until the rest of the file has been recovered.
+        // This is important for malformed JSX files: an earlier uninitialized const must
+        // not prevent the parser from reaching (or obscure) the JSX syntax diagnostics.
+        if (!_diagnostics.HasErrors)
+        {
+            foreach (Token name in _uninitializedConstDeclarations)
+            {
+                _diagnostics.AddError(
+                    DiagnosticCode.ParseError,
+                    "'const' declarations must be initialized.",
+                    new SourceLocation(_filePath, name.Line),
+                    "TS1155");
+            }
+        }
 
         return new ParseDiagnosticResult(statements, _diagnostics.Diagnostics);
     }

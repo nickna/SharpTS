@@ -882,7 +882,8 @@ public class ModuleResolver
             var parser = new Parser(tokens, decoratorMode)
                 .WithSourceDocument(document)
                 .AsDeclarationFile(IsDeclarationFilePath(absolutePath))
-                .WithFilePath(absolutePath);
+                .WithFilePath(absolutePath)
+                .WithMaxErrors(RecoverParseErrors ? 1000 : 10);
             if (isJsxSource)
                 parser.WithJsx(source, (JsxOptions ?? JsxParseOptions.Default).ApplyPragmas(lexer.Pragmas));
             var parseResult = parser.Parse();
@@ -1433,6 +1434,7 @@ public class ModuleResolver
                     module = new ParsedModule(virtualPath, [])
                     {
                         IsScript = false,
+                        IsAmbientModule = true,
                     };
                     _moduleCache[virtualPath] = module;
                     _ambientModulePaths[declaration.ModulePath] = virtualPath;

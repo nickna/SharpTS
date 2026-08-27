@@ -1932,7 +1932,11 @@ public partial class TypeChecker
         var type = _environment.Get(name.Lexeme);
         if (type == null)
         {
-             throw new TypeCheckException($" Undefined variable '{name.Lexeme}'.", tsCode: "TS2304");
+            string tsCode = name.Lexeme == "test" ? "TS2593" : "TS2304";
+            throw new TypeCheckException(
+                $" Undefined variable '{name.Lexeme}'.",
+                line: name.Line,
+                tsCode: tsCode);
         }
 
         // Check for variable narrowing in the narrowing context

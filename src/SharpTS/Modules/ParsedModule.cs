@@ -37,6 +37,12 @@ public class ParsedModule
     public List<Diagnostic> ParseDiagnostics { get; } = [];
 
     /// <summary>
+    /// True for a synthetic module created from <c>declare module "name"</c>.
+    /// Declarations inside these modules are implicitly exported by TypeScript.
+    /// </summary>
+    public bool IsAmbientModule { get; set; }
+
+    /// <summary>
     /// The text this module was parsed from, together with its line index, content checksum, and
     /// the source spans of <see cref="Statements"/>.
     /// </summary>

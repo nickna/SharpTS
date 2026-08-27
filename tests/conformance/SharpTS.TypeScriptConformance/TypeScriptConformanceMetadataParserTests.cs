@@ -85,7 +85,7 @@ public class TypeScriptConformanceMetadataParserTests
     }
 
     [Fact]
-    public void DirectiveAfterFilename_StillRecordedGlobally_AndKeptInBody()
+    public void DirectiveAfterFilename_IsRecordedGlobally_AndRemovedFromBody()
     {
         // Mirrors a real corpus pattern: @module appears AFTER @filename: main.ts.
         var src =
@@ -102,9 +102,7 @@ public class TypeScriptConformanceMetadataParserTests
 
         Assert.Single(meta.Files);
         Assert.Equal("main.ts", meta.Files[0].Name);
-        // Body preserves the @module: line as a comment so source line numbers
-        // line up with what TS baselines reference.
-        Assert.StartsWith("// @module: commonjs", meta.Files[0].Body);
+        Assert.Equal("import a from \"a\";\n", meta.Files[0].Body);
     }
 
     [Fact]

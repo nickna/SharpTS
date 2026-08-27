@@ -9,6 +9,12 @@ public enum JsxMode
 {
     /// <summary>JSX is a syntax error (tsc behavior for an unset --jsx flag, TS17004). Opt in via --jsx none.</summary>
     None,
+    /// <summary>
+    /// Diagnostics-only preserve mode. JSX is parsed and checked without requiring an emit
+    /// factory or automatic runtime. Product configuration still rejects preserve/react-native
+    /// because SharpTS executes the lowered program rather than emitting JSX.
+    /// </summary>
+    Preserve,
     /// <summary>Classic transform: lower to jsxFactory calls (default React.createElement).</summary>
     React,
     /// <summary>Automatic runtime: lower to jsx/jsxs imported from "&lt;jsxImportSource&gt;/jsx-runtime".</summary>

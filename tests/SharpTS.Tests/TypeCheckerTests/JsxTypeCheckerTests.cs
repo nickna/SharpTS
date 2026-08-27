@@ -284,7 +284,7 @@ public class JsxTypeCheckerTests
                 new Expr.Variable(Identifier("MissingReact")),
                 Identifier("createElement")),
         };
-        Assert.Contains(Check(missingRoot, "").Diagnostics, d => d.TsCode == "TS2304");
+        Assert.Contains(Check(missingRoot, "").Diagnostics, d => d.TsCode == "TS2874");
     }
 
     [Fact]

@@ -293,14 +293,19 @@ public sealed class TypeScriptConformanceRunner
     /// <summary>
     /// Maps the test's <c>@jsx:</c> family of directives onto parser jsx options. tsc's
     /// harness default for an unset <c>@jsx</c> is None (JSX in .tsx is TS17004);
-    /// <c>preserve</c>/<c>react-native</c> are checker-equivalent to the classic transform
-    /// here since the conformance runner never emits.
+    /// Comma-separated values are harness variants; as with target selection, use the final
+    /// variant for SharpTS's single-run world model. <c>preserve</c>/<c>react-native</c> parse
+    /// and check JSX without resolving an emit factory because this runner never emits.
     /// </summary>
     private static JsxParseOptions ResolveJsxOptions(TypeScriptConformanceMetadata metadata)
     {
-        JsxMode mode = metadata.Jsx?.Trim().ToLowerInvariant() switch
+        string? selectedJsx = metadata.Jsx?
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault();
+        JsxMode mode = selectedJsx?.ToLowerInvariant() switch
         {
-            "react" or "preserve" or "react-native" => JsxMode.React,
+            "preserve" or "react-native" => JsxMode.Preserve,
+            "react" => JsxMode.React,
             "react-jsx" => JsxMode.ReactJsx,
             "react-jsxdev" => JsxMode.ReactJsxDev,
             _ => JsxMode.None,

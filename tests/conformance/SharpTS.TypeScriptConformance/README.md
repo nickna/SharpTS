@@ -36,11 +36,11 @@ It builds each multi-file test as a program, diffs SharpTS diagnostics against
 `tsc`'s `*.errors.txt` baseline, and compares the bucket distribution against the
 committed baseline at `baselines/interpreted.txt`.
 
-### Verified snapshot (2026-08-18)
+### Verified snapshot (2026-08-26)
 
 At TypeScript `050880ce59e30b356b686bd3144efe24f875ebc8`, the selected
-subset contains 534 tests: 192 `Pass` and 342 `Fail`, with zero parser failures,
-checker/harness errors, or skips. The pass rate is **35.96%**. Fourteen of the
+subset contains 534 tests: 240 `Pass` and 294 `Fail`, with zero parser failures,
+checker/harness errors, or skips. The pass rate is **44.94%**. Fourteen of the
 tests are explicit high-signal files used to expand coverage without pulling an
 entire large corpus directory into one untriaged rollout.
 
