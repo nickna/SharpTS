@@ -7,6 +7,40 @@ import { jsx as _jsx, Fragment as _Fragment, isValidElement as _isValidElement }
 
 export { Fragment, isValidElement } from "react/jsx-runtime";
 
+// Minimal declaration-compatible component surface. The fallback is also used while
+// checking the pinned TypeScript JSX corpus, whose classic React fixtures use the
+// namespace import shape (`import React = require("react")`). Keep the public members
+// structurally useful even though the runtime implementation remains intentionally tiny.
+export class Component<P = {}, S = {}> {
+    props: P;
+    state: S;
+    refs: any;
+
+    constructor(props: P) {
+        this.props = props;
+        this.state = {} as S;
+        this.refs = {};
+    }
+
+    setState(state: any): void {}
+
+    forceUpdate(): void {}
+
+    render(): any {
+        return null;
+    }
+}
+
+export class PureComponent<P = {}, S = {}> extends Component<P, S> {}
+
+export type ReactElement<P = any> = JSX.Element;
+export type StatelessComponent<P = {}> = (props: P) => JSX.Element | null;
+export type SFC<P = {}> = StatelessComponent<P>;
+export interface ComponentClass<P = {}> {
+    new (props: P): Component<P, any>;
+    defaultProps?: any;
+}
+
 export function createElement(type: any, props?: any, ...children: any[]): JSX.Element {
     const normalized: any = {};
     let key: any = undefined;
@@ -35,6 +69,8 @@ export const version: string = "18.3.0-sharpts";
 // synthetic-default configuration.
 const React = {
     createElement: createElement,
+    Component: Component,
+    PureComponent: PureComponent,
     Fragment: _Fragment,
     isValidElement: _isValidElement,
     version: version,

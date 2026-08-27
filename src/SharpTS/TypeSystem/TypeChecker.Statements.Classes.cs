@@ -1413,10 +1413,11 @@ public partial class TypeChecker
 
         // Handle generic type parameters
         TypeEnvironment classTypeEnv = new(_environment);
+        List<TypeInfo.TypeParameter>? classTypeParams = null;
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
         {
             using (new EnvironmentScope(this, classTypeEnv))
-                BuildGenericTypeParameters(
+                classTypeParams = BuildGenericTypeParameters(
                     classStmt.TypeParams,
                     classTypeEnv);
         }
@@ -1593,14 +1594,21 @@ public partial class TypeChecker
             }
         }
 
-        // Freeze the mutable class into an immutable class type.
-        // Any TypeInfo.Instance that was created during signature collection
-        // (wrapping the MutableClass) will now resolve via ResolvedClassType.
+        // Publish the generic constructor surface for ambient classes too. Previously
+        // `declare class Component<P, S>` was always frozen as a non-generic Class, so
+        // consumers saw TS2315 and JSX could never recover the instantiated props type.
         TypeInfo.Class classType = mutableClass.Freeze();
-
-        // Register class in parent environment (not the classTypeEnv)
-        // This ensures the class is visible after the using block ends
-        parentEnv.Define(classStmt.Name.Lexeme, classType);
+        if (classTypeParams is { Count: > 0 })
+        {
+            TypeInfo.GenericClass genericClass = mutableClass.FreezeGeneric(classTypeParams);
+            parentEnv.Define(classStmt.Name.Lexeme, genericClass);
+            parentEnv.DefineType(classStmt.Name.Lexeme, genericClass);
+        }
+        else
+        {
+            parentEnv.Define(classStmt.Name.Lexeme, classType);
+            parentEnv.DefineType(classStmt.Name.Lexeme, classType);
+        }
         _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
 
         } // End EnvironmentScope

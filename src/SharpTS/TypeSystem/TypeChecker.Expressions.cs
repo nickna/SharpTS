@@ -653,7 +653,10 @@ public partial class TypeChecker
     /// Class-like and dynamic sources (Instance/Class/Any/Unknown) are accepted without merging
     /// concrete fields, mirroring the pre-existing Instance behavior.
     /// </summary>
-    private bool TryMergeSpreadFields(TypeInfo spreadType, Dictionary<string, TypeInfo> fields)
+    private bool TryMergeSpreadFields(
+        TypeInfo spreadType,
+        Dictionary<string, TypeInfo> fields,
+        HashSet<string>? optionalFields = null)
     {
         switch (spreadType)
         {
@@ -661,6 +664,10 @@ public partial class TypeChecker
                 foreach (var kv in record.Fields)
                 {
                     fields[kv.Key] = kv.Value;
+                    if (record.OptionalFields?.Contains(kv.Key) == true)
+                        optionalFields?.Add(kv.Key);
+                    else
+                        optionalFields?.Remove(kv.Key);
                 }
                 return true;
 
@@ -668,7 +675,22 @@ public partial class TypeChecker
                 foreach (var kv in iface.GetAllMembers())
                 {
                     fields[kv.Key] = kv.Value;
+                    if (iface.GetAllOptionalMembers().Contains(kv.Key))
+                        optionalFields?.Add(kv.Key);
+                    else
+                        optionalFields?.Remove(kv.Key);
                 }
+                return true;
+
+            case TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated
+                when FlattenInstantiatedInterface(instantiated) is { } flattened:
+                return TryMergeSpreadFields(flattened, fields, optionalFields);
+
+            case TypeInfo.TypeParameter { Constraint: { } constraint }:
+                return TryMergeSpreadFields(constraint, fields, optionalFields);
+
+            case TypeInfo.TypeParameter:
+                // An unconstrained generic can be spread, but contributes no statically known keys.
                 return true;
 
             case TypeInfo.Intersection intersection:
@@ -677,12 +699,57 @@ public partial class TypeChecker
                 bool anyObjectLike = false;
                 foreach (var part in intersection.Types)
                 {
-                    if (TryMergeSpreadFields(part, fields))
+                    if (TryMergeSpreadFields(part, fields, optionalFields))
                     {
                         anyObjectLike = true;
                     }
                 }
                 return anyObjectLike;
+
+            case TypeInfo.Union union:
+            {
+                List<TypeInfo> parts = union.FlattenedTypes
+                    .Where(part => part is not (TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Never))
+                    .ToList();
+                if (parts.Count == 0)
+                    return true;
+
+                var alternatives = new List<(Dictionary<string, TypeInfo> Fields, HashSet<string> Optional)>();
+                foreach (TypeInfo part in parts)
+                {
+                    var partFields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+                    var partOptional = new HashSet<string>(StringComparer.Ordinal);
+                    if (!TryMergeSpreadFields(part, partFields, partOptional))
+                        return false;
+                    alternatives.Add((partFields, partOptional));
+                }
+
+                foreach (string name in alternatives.SelectMany(alternative => alternative.Fields.Keys).Distinct(StringComparer.Ordinal))
+                {
+                    List<TypeInfo> valueTypes = alternatives
+                        .Where(alternative => alternative.Fields.ContainsKey(name))
+                        .Select(alternative => alternative.Fields[name])
+                        .ToList();
+                    TypeInfo valueType = CollapseOrCreateUnion(valueTypes);
+                    bool sourceOptional = alternatives.Any(alternative =>
+                        !alternative.Fields.ContainsKey(name) || alternative.Optional.Contains(name));
+
+                    if (sourceOptional && fields.TryGetValue(name, out TypeInfo? previous))
+                    {
+                        fields[name] = CreateUnion(previous, valueType);
+                        optionalFields?.Remove(name);
+                    }
+                    else
+                    {
+                        fields[name] = valueType;
+                        if (sourceOptional)
+                            optionalFields?.Add(name);
+                        else
+                            optionalFields?.Remove(name);
+                    }
+                }
+                return true;
+            }
 
             // Class-like / dynamic sources: accept but don't enumerate concrete fields here.
             case TypeInfo.Instance:
@@ -702,6 +769,7 @@ public partial class TypeChecker
     private TypeInfo CheckObject(Expr.ObjectLiteral obj)
     {
         Dictionary<string, TypeInfo> fields = [];
+        HashSet<string> optionalFields = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
@@ -721,7 +789,7 @@ public partial class TypeChecker
             {
                 // Spread property - merge fields from the spread object
                 TypeInfo spreadType = CheckExpr(prop.Value);
-                if (!TryMergeSpreadFields(spreadType, fields))
+                if (!TryMergeSpreadFields(spreadType, fields, optionalFields))
                 {
                     throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.", tsCode: "TS2698");
                 }
@@ -786,15 +854,18 @@ public partial class TypeChecker
                 {
                     case Expr.IdentifierKey ik:
                         fields[ik.Name.Lexeme] = valueType;
+                        optionalFields.Remove(ik.Name.Lexeme);
                         break;
 
                     case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
                         fields[(string)lk.Literal.Literal!] = valueType;
+                        optionalFields.Remove((string)lk.Literal.Literal!);
                         break;
 
                     case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
                         // Number keys are converted to strings in JS/TS
                         fields[lk.Literal.Literal!.ToString()!] = valueType;
+                        optionalFields.Remove(lk.Literal.Literal!.ToString()!);
                         numberIndexType = UnifyIndexTypes(numberIndexType, valueType);
                         break;
 
@@ -825,9 +896,15 @@ public partial class TypeChecker
                         else if (keyType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
                             symbolIndexType = UnifyIndexTypes(symbolIndexType, valueType);
                         else if (keyType is TypeInfo.StringLiteral sl)
+                        {
                             fields[sl.Value] = valueType;  // Known key at compile time
+                            optionalFields.Remove(sl.Value);
+                        }
                         else if (keyType is TypeInfo.NumberLiteral nl)
+                        {
                             fields[nl.Value.ToString()] = valueType;
+                            optionalFields.Remove(nl.Value.ToString());
+                        }
                         else if (keyType is TypeInfo.Any)
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Union)
@@ -910,6 +987,7 @@ public partial class TypeChecker
         // Properties with a getter but no setter are getter-only
         var getterOnly = getterNames.Except(setterNames).ToFrozenSet();
         return new TypeInfo.Record(fields.ToFrozenDictionary(), stringIndexType, numberIndexType, symbolIndexType,
+            OptionalFields: optionalFields.Count > 0 ? optionalFields.ToFrozenSet() : null,
             GetterOnlyFields: getterOnly.Count > 0 ? getterOnly : null);
     }
 
@@ -1172,6 +1250,13 @@ public partial class TypeChecker
             TypeInfo elemType;
             if (element is Expr.Spread spread)
             {
+                if (_jsxSpreadChildren.Contains(spread))
+                {
+                    // JSX spread children use array syntax only as an automatic-runtime
+                    // lowering detail. Their source type need not be iterable.
+                    elementTypes.Add(CheckExpr(spread.Expression));
+                    continue;
+                }
                 // Spread element - get element type from any iterable type
                 TypeInfo spreadType = CheckExpr(spread.Expression);
                 if (spreadType is TypeInfo.Tuple tupType)

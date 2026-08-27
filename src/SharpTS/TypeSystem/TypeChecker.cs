@@ -1604,7 +1604,7 @@ public partial class TypeChecker
         PushDeclaredVariableScope();
         try
         {
-            foreach (var module in modules)
+            void PrepareModule(ParsedModule module)
             {
                 ThrowIfCancellationRequested();
                 _currentModule = module;
@@ -1627,11 +1627,22 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    CollectModuleExports(module);
+                    CollectModuleExports(module, scriptEnv);
                     if (module.IsDeclarationFile)
                         module.IsTypeChecked = true;
                 }
             }
+
+            // Declaration roots can be appended after the entry graph by the TypeScript
+            // conformance/program loader. Collect every global surface before evaluating
+            // any module export assignment so `export = GlobalNamespace` is independent of
+            // incidental graph order (notably the classic React declaration shape).
+            foreach (var module in modules.Where(module => module.IsDefaultLibrary))
+                PrepareModule(module);
+            foreach (var module in modules.Where(module => !module.IsDefaultLibrary && module.IsScript))
+                PrepareModule(module);
+            foreach (var module in modules.Where(module => !module.IsDefaultLibrary && !module.IsScript))
+                PrepareModule(module);
         }
         finally
         {
@@ -1655,11 +1666,22 @@ public partial class TypeChecker
                 ThrowIfCancellationRequested();
                 foreach (var augmentation in module.GlobalAugmentations)
                 {
+                    bool previousRecoveryMode = _recoveryMode;
+                    _recoveryMode = previousRecoveryMode ||
+                        augmentation is Stmt.Namespace or Stmt.Export { Declaration: Stmt.Namespace };
+                    if (module.IsDeclarationFile)
+                        _suppressDiagnostics++;
                     try { CheckAndMergeGlobalMember(augmentation); }
                     catch (TypeCheckException ex)
                     {
                         if (!module.IsDeclarationFile)
                             RecordTypeError(ex);
+                    }
+                    finally
+                    {
+                        if (module.IsDeclarationFile)
+                            _suppressDiagnostics--;
+                        _recoveryMode = previousRecoveryMode;
                     }
                 }
             }
@@ -1932,6 +1954,12 @@ public partial class TypeChecker
             // only a preparatory pass; diagnostics and bodies are handled by the
             // authoritative recovery-enabled second pass below.
             _suppressDiagnostics++;
+            bool previousRecoveryMode = _recoveryMode;
+            // Declaration bundles are intentionally permissive during this preparatory
+            // collection pass: one unsupported member must not truncate a large ambient
+            // namespace. Ordinary scripts retain their existing namespace-local binding
+            // behavior (reopened namespaces may contain distinct non-exported symbols).
+            _recoveryMode = previousRecoveryMode || script.IsDeclarationFile;
             try
             {
                 foreach (var stmt in script.Statements)
@@ -1961,6 +1989,7 @@ public partial class TypeChecker
             }
             finally
             {
+                _recoveryMode = previousRecoveryMode;
                 _suppressDiagnostics--;
             }
         }
@@ -1969,14 +1998,17 @@ public partial class TypeChecker
     /// <summary>
     /// Collects exports from a module (first pass - just register export types).
     /// </summary>
-    private void CollectModuleExports(ParsedModule module)
+    private void CollectModuleExports(ParsedModule module, TypeEnvironment scriptEnv)
     {
         module.ExportedValueBindings.Clear();
         module.ExportedTypeBindings.Clear();
         module.DefaultValueBinding = null;
         module.DefaultTypeBinding = null;
 
-        var moduleEnv = new TypeEnvironment(_environment);
+        // Ambient `export = GlobalNamespace` declarations (the classic React shape) need
+        // the globals collected from referenced script declarations. The authoritative
+        // module pass already encloses `scriptEnv`; keep the preparatory export pass aligned.
+        var moduleEnv = new TypeEnvironment(scriptEnv);
 
         // CJS modules have module, exports, and global in scope
         if (module.IsCommonJs)
@@ -2034,10 +2066,9 @@ public partial class TypeChecker
                             }
                             else if (export.ExportAssignment != null)
                             {
-                                // CommonJS-style export = value
-                                var type = CheckExpr(export.ExportAssignment);
-                                module.HasExportAssignment = true;
-                                module.ExportAssignmentType = type;
+                                // Deferred until declarations have populated the environment.
+                                // DefinitelyTyped commonly places `export = React` before the
+                                // namespace declaration it names.
                             }
                             else if (export.Declaration != null)
                             {
@@ -2067,6 +2098,45 @@ public partial class TypeChecker
                     }
                     catch (TypeCheckException ex)
                     {
+                        if (module.IsAmbientModule &&
+                            stmt is Stmt.ImportAlias { IsExported: true } alias)
+                        {
+                            // An ambient `export import X = Namespace.X` is a public value/type
+                            // even when the aliased legacy namespace is too complex for the
+                            // preparatory declaration pass. Keep module consumers unblocked; the
+                            // authoritative declaration check still validates resolvable aliases.
+                            BindingSymbol valueBinding = RegisterValueDeclaration(alias.AliasName);
+                            BindingSymbol typeBinding = RegisterTypeDeclaration(alias.AliasName);
+                            _environment.DefineImportAlias(alias.AliasName.Lexeme, TypeInfo.Any.Shared, isValue: true);
+                            module.ExportedTypes[alias.AliasName.Lexeme] = TypeInfo.Any.Shared;
+                            module.ExportedValueBindings[alias.AliasName.Lexeme] = valueBinding;
+                            module.ExportedTypeBindings[alias.AliasName.Lexeme] = typeBinding;
+                        }
+                        RecordTypeError(ex);
+                    }
+                }
+
+                foreach (Stmt.Export assignment in module.Statements
+                             .OfType<Stmt.Export>()
+                             .Where(export => export.ExportAssignment is not null))
+                {
+                    try
+                    {
+                        module.HasExportAssignment = true;
+                        module.ExportAssignmentType = CheckExpr(assignment.ExportAssignment!);
+                    }
+                    catch (TypeCheckException ex)
+                    {
+                        if (module.IsAmbientModule)
+                        {
+                            // Legacy UMD declarations frequently put `export = React` before
+                            // the large namespace it names. If collection cannot complete that
+                            // namespace, retain the module's dynamic CommonJS/default surface;
+                            // consumers must not fall through to TS1192/TS2304 merely because a
+                            // declaration-only namespace contains unsupported detail.
+                            module.ExportAssignmentType = TypeInfo.Any.Shared;
+                            module.DefaultExportType = TypeInfo.Any.Shared;
+                        }
                         RecordTypeError(ex);
                     }
                 }

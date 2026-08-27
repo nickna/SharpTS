@@ -388,7 +388,8 @@ public partial class TypeChecker
 
         // Resolve the namespace path
         // First token should be a namespace
-        TypeInfo.Namespace? currentNs = _environment.GetNamespace(path[0].Lexeme);
+        TypeInfo.Namespace? currentNs = _environment.GetNamespace(path[0].Lexeme)
+            ?? _environment.GetImportAlias(path[0].Lexeme)?.Type as TypeInfo.Namespace;
         if (currentNs == null)
         {
             throw new TypeCheckException(
@@ -449,6 +450,15 @@ public partial class TypeChecker
         if (isValue)
             RegisterValueDeclaration(importAlias.AliasName);
         _environment.DefineImportAlias(aliasName, resolvedType, isValue);
+
+        if (importAlias.IsExported && _currentModule is not null)
+        {
+            _currentModule.ExportedTypes[aliasName] = resolvedType;
+            if (isValue && _environment.GetValueBinding(aliasName) is { } valueBinding)
+                _currentModule.ExportedValueBindings[aliasName] = valueBinding;
+            if (_environment.GetTypeSymbol(aliasName) is { } typeBinding)
+                _currentModule.ExportedTypeBindings[aliasName] = typeBinding;
+        }
     }
 
     private void BindNamespaceMemberFacets(

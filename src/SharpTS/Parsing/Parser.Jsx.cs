@@ -389,6 +389,7 @@ public partial class Parser
         }
 
         List<Expr> children = [];
+        List<int> childLines = [];
         int endOffset = childStart;
         bool trackedElement = !selfClosing && !isFragment;
         if (trackedElement)
@@ -411,7 +412,10 @@ public partial class Parser
                 }
                 string? text = JsxText.CookChildText(scan.Raw);
                 if (text is not null)
+                {
                     children.Add(new Expr.Literal(text));
+                    childLines.Add(LineAtOffset(childStart));
+                }
 
                 if (scan.Terminator == '\0')
                 {
@@ -458,11 +462,13 @@ public partial class Parser
                     // Empty JSX expressions ({} or {/* comment */} once lexed) contribute no child.
                     if (!Check(TokenType.RIGHT_BRACE))
                     {
+                        int expressionLine = Peek().Line;
                         bool isSpreadChild = Match(TokenType.DOT_DOT_DOT);
                         try
                         {
                             Expr child = Expression();
                             children.Add(isSpreadChild ? new Expr.Spread(child) : child);
+                            childLines.Add(expressionLine);
                         }
                         catch (ParseError ex)
                         {
@@ -518,8 +524,10 @@ public partial class Parser
                 }
 
                 ResyncAtTerminator(scan.EndOffset, TokenType.LESS);
+                int nestedChildLine = Peek().Line;
                 var (childExpr, childEnd) = ParseJsxElementCore();
                 children.Add(childExpr);
+                childLines.Add(nestedChildLine);
                 childStart = childEnd;
             }
 
@@ -574,7 +582,7 @@ public partial class Parser
             _jsxElementStack.RemoveAt(_jsxElementStack.Count - 1);
 
         return (LowerJsxElement(
-            open, isFragment, tagName, tagExpression, attributes, children,
+            open, isFragment, tagName, tagExpression, attributes, children, childLines,
             typeArgumentCount), endOffset);
     }
 
@@ -921,11 +929,12 @@ public partial class Parser
         Expr tagExpression,
         List<Expr.Property> attributes,
         List<Expr> children,
+        List<int> childLines,
         int typeArgumentCount)
     {
         return _jsx!.Mode is JsxMode.React or JsxMode.Preserve
-            ? LowerJsxClassic(open, isFragment, tagName, tagExpression, attributes, children, typeArgumentCount)
-            : LowerJsxAutomatic(open, isFragment, tagName, tagExpression, attributes, children, typeArgumentCount);
+            ? LowerJsxClassic(open, isFragment, tagName, tagExpression, attributes, children, childLines, typeArgumentCount)
+            : LowerJsxAutomatic(open, isFragment, tagName, tagExpression, attributes, children, childLines, typeArgumentCount);
     }
 
     /// <summary>
@@ -941,6 +950,7 @@ public partial class Parser
         Expr tagExpression,
         List<Expr.Property> attributes,
         List<Expr> children,
+        List<int> childLines,
         int typeArgumentCount)
     {
         bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
@@ -995,7 +1005,8 @@ public partial class Parser
                 KeyExpr: null,
                 _jsx!.Mode,
                 open.Line,
-                typeArgumentCount),
+                typeArgumentCount,
+                childLines),
         };
     }
 
@@ -1013,6 +1024,7 @@ public partial class Parser
         Expr tagExpression,
         List<Expr.Property> attributes,
         List<Expr> children,
+        List<int> childLines,
         int typeArgumentCount)
     {
         bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
@@ -1105,7 +1117,8 @@ public partial class Parser
                 keyExpr,
                 _jsx.Mode,
                 open.Line,
-                typeArgumentCount),
+                typeArgumentCount,
+                childLines),
         };
     }
 
