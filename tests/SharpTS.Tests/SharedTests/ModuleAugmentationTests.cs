@@ -92,6 +92,16 @@ public class ModuleAugmentationTests
     #region Ambient Module Declaration Tests
 
     [Theory, ModeData]
+    public void BodylessAmbientModule_ParsesAsUntypedPackage(ExecutionMode mode)
+    {
+        var source = "declare module 'untyped-package';\nconsole.log('parsed');";
+
+        var output = TestHarness.Run(source, mode);
+
+        Assert.Equal("parsed\n", output);
+    }
+
+    [Theory, ModeData]
     public void AmbientModule_IsTypeOnly(ExecutionMode mode)
     {
         var source = """

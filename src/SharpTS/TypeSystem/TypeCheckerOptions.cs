@@ -58,6 +58,12 @@ public sealed record TypeCheckerOptions
     public bool NoUncheckedIndexedAccess { get; init; } = false;
 
     /// <summary>
+    /// tsc's <c>noUnusedLocals</c>. The current implementation reports unused import bindings;
+    /// JSX factory/fragment lookups participate through the normal semantic binding index.
+    /// </summary>
+    public bool NoUnusedLocals { get; init; } = false;
+
+    /// <summary>
     /// Diagnostics collected before <c>CheckWithRecovery</c> stops. Default 10 — an ergonomics
     /// knob rather than a strictness one, and pinned by the user-visible "Too many errors,
     /// stopping." behavior. The conformance runner raises it to 1000.

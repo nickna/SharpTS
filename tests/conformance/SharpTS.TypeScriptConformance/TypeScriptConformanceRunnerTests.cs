@@ -139,6 +139,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/jsxParsingError4.tsx")]
     [InlineData("jsx/tsxDynamicTagName1.tsx")]
     [InlineData("jsx/tsxDynamicTagName6.tsx")]
+    [InlineData("jsx/tsxDynamicTagName9.tsx")]
     [InlineData("jsx/tsxElementResolution17.tsx")]
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
     public void RunOne_JsxRecoveryChanges_PreserveExistingPasses(string relativePath)
@@ -146,6 +147,36 @@ public class TypeScriptConformanceRunnerTests
         var root = TypeScriptConformancePaths.TryFindRoot();
         if (root is null) return;
         var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("jsx/correctlyMarkAliasAsReferences2.tsx")]
+    [InlineData("jsx/correctlyMarkAliasAsReferences4.tsx")]
+    [InlineData("jsx/inline/inlineJsxAndJsxFragPragma.tsx")]
+    [InlineData("jsx/inline/inlineJsxFactoryDeclarations.tsx")]
+    [InlineData("jsx/inline/inlineJsxFactoryWithFragmentIsError.tsx")]
+    [InlineData("jsx/jsxs/jsxJsxsCjsTransformChildren.tsx")]
+    [InlineData("jsx/jsxs/jsxJsxsCjsTransformSubstitutesNames.tsx")]
+    [InlineData("jsx/jsxs/jsxJsxsCjsTransformSubstitutesNamesFragment.tsx")]
+    [InlineData("jsx/tsxEmit2.tsx")]
+    [InlineData("jsx/tsxExternalModuleEmit1.tsx")]
+    [InlineData("jsx/tsxPreserveEmit1.tsx")]
+    [InlineData("jsx/tsxPreserveEmit2.tsx")]
+    [InlineData("jsx/tsxReactEmit6.tsx")]
+    [InlineData("jsx/tsxReactEmit7.tsx")]
+    [InlineData("jsx/tsxReactEmit8.tsx")]
+    public void RunOne_Issue1533ResolutionCohort_MatchesDiagnosticBaseline(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        string path = Path.Combine(
             TypeScriptConformancePaths.ConformanceDir(root),
             relativePath.Replace('/', Path.DirectorySeparatorChar));
 

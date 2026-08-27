@@ -401,7 +401,12 @@ public partial class TypeChecker
             importedType = new TypeInfo.Record(exports);
         }
 
-        _environment.Define(importReq.AliasName.Lexeme, importedType);
+        if (importedType is TypeInfo.Namespace importedNamespace)
+            _environment.DefineNamespace(
+                importReq.AliasName.Lexeme,
+                importedNamespace with { Name = importReq.AliasName.Lexeme });
+        else
+            _environment.Define(importReq.AliasName.Lexeme, importedType);
 
         // If this is a re-export (export import x = require('...')), register the export
         if (importReq.IsExported && _currentModule != null)

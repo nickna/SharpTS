@@ -898,6 +898,11 @@ public partial class Parser
         // Module path must be a string literal
         string modulePath = (string)Consume(TokenType.STRING, "Expect module path string after 'declare module'.").Literal!;
 
+        // TypeScript permits a bodyless ambient declaration as a wildcard declaration for an
+        // otherwise-untyped package: `declare module "package";`.
+        if (Match(TokenType.SEMICOLON))
+            return new Stmt.DeclareModule(declareKeyword, modulePath, []);
+
         Consume(TokenType.LEFT_BRACE, "Expect '{' before declare module body.");
 
         List<Stmt> members = [];
@@ -969,6 +974,14 @@ public partial class Parser
                 ConsumeSemicolon("Expect ';' after export assignment.");
                 return new Stmt.Export(
                     exportKeyword, null, null, null, null, false, exportValue);
+            }
+
+            if (Match(TokenType.DEFAULT))
+            {
+                Expr defaultValue = Expression();
+                ConsumeSemicolon("Expect ';' after default export.");
+                return new Stmt.Export(
+                    exportKeyword, null, null, defaultValue, null, IsDefaultExport: true);
             }
 
             if (Match(TokenType.IMPORT))
@@ -1107,6 +1120,16 @@ public partial class Parser
     /// </summary>
     private Stmt AmbientVarDeclaration(bool isConst)
     {
+        var declarations = new List<Stmt> { ParseSingleAmbientVarDeclaration(isConst) };
+        while (Match(TokenType.COMMA))
+            declarations.Add(ParseSingleAmbientVarDeclaration(isConst));
+
+        ConsumeSemicolon("Expect ';' after ambient variable declaration.");
+        return declarations.Count == 1 ? declarations[0] : new Stmt.Sequence(declarations);
+    }
+
+    private Stmt ParseSingleAmbientVarDeclaration(bool isConst)
+    {
         Token name = ConsumeIdentifierName("Expect variable name.");
 
         string? typeAnnotation = null;
@@ -1116,8 +1139,6 @@ public partial class Parser
             typeAnnotation = ParseTypeAnnotation();
             typeAnnotationNode = TakeTypeNode();
         }
-
-        ConsumeSemicolon("Expect ';' after ambient variable declaration.");
 
         // Ambient declarations have no initializer
         if (isConst)

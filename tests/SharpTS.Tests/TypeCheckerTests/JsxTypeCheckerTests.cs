@@ -1,4 +1,5 @@
 using SharpTS.Diagnostics;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.TypeSystem;
 using Xunit;
@@ -285,6 +286,75 @@ public class JsxTypeCheckerTests
                 Identifier("createElement")),
         };
         Assert.Contains(Check(missingRoot, "").Diagnostics, d => d.TsCode == "TS2874");
+    }
+
+    [Fact]
+    public void ClassicFragment_MissingSharedFactoryRoot_ReportsBothJsxDiagnostics()
+    {
+        var react = new Expr.Variable(Identifier("React"));
+        var call = new Expr.Call(
+            new Expr.Get(react, Identifier("createElement")),
+            Identifier("("),
+            null,
+            [
+                new Expr.Get(new Expr.Variable(Identifier("React")), Identifier("Fragment")),
+                new Expr.Literal(null),
+            ])
+        {
+            JsxOrigin = new JsxCallInfo(
+                JsxElementKind.Fragment,
+                null,
+                null,
+                [],
+                null,
+                JsxMode.React,
+                1),
+        };
+
+        var diagnostics = Check(call, "").Diagnostics;
+
+        Assert.Contains(diagnostics, d => d.TsCode == "TS2874");
+        Assert.Contains(diagnostics, d => d.TsCode == "TS2879");
+    }
+
+    [Fact]
+    public void InlineFactoryFragmentFallback_ReportsBothJsxDiagnosticsEndToEnd()
+    {
+        string root = Path.GetFullPath(Path.Combine(Path.GetTempPath(), "sharpts-jsx-fragment-fallback"));
+        string renderer = Path.Combine(root, "renderer.d.ts");
+        string entry = Path.Combine(root, "index.tsx");
+        var files = new Dictionary<string, string>
+        {
+            [renderer] = "export function dom(): void;",
+            [entry] = """
+                /** @jsx dom */
+                import { dom } from "./renderer";
+                <><h></h></>;
+                """,
+        };
+        var resolver = new ModuleResolver(entry, files, TypeScriptProgramOptions.Disabled)
+        {
+            JsxOptions = new JsxParseOptions(JsxMode.React),
+            RecoverParseErrors = true,
+        };
+        ParsedModule program = resolver.LoadProgram(entry);
+        var outerFragment = Assert.IsType<Expr.Call>(
+            Assert.IsType<Stmt.Expression>(program.Statements.Last()).Expr);
+        Assert.Equal(JsxElementKind.Fragment, outerFragment.JsxOrigin?.Kind);
+        Assert.Equal(
+            "React",
+            Assert.IsType<Expr.Variable>(Assert.IsType<Expr.Get>(outerFragment.Callee).Object).Name.Lexeme);
+        Assert.Equal(
+            "React",
+            Assert.IsType<Expr.Variable>(Assert.IsType<Expr.Get>(outerFragment.Arguments[0]).Object).Name.Lexeme);
+        var checker = new TypeChecker(new TypeCheckerOptions { MaxErrors = 50 });
+
+        checker.CheckModules(resolver.GetModulesInOrder(program), resolver);
+        var diagnostics = program.ParseDiagnostics.Concat(checker.GetDiagnostics()).ToList();
+
+        Assert.Contains(diagnostics, d => d.TsCode == "TS17017");
+        Assert.Contains(diagnostics, d => d.TsCode == "TS2874");
+        Assert.Contains(diagnostics, d => d.TsCode == "TS2879");
     }
 
     [Fact]

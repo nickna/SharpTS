@@ -944,13 +944,25 @@ public partial class Parser
         int typeArgumentCount)
     {
         bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
-        if (isFragment && _jsx!.FactoryFromPragma && !_jsx.FragmentFactoryFromPragma)
-            throw new ParseError(
-                "JSX fragment is not supported when using an inline JSX factory pragma.", "TS17017");
+        bool inlineFactoryWithoutFragment =
+            isFragment && _jsx!.FactoryFromPragma && !_jsx.FragmentFactoryFromPragma;
+        if (inlineFactoryWithoutFragment)
+        {
+            // TS17017 is recoverable: tsc still performs its semantic fallback lookup using
+            // React.createElement/React.Fragment, which can additionally produce TS2874/TS2879.
+            RecordErrorAt(
+                open.Line,
+                "JSX fragment is not supported when using an inline JSX factory pragma.",
+                "TS17017");
+        }
+
+        string factory = inlineFactoryWithoutFragment ? "React.createElement" : _jsx!.Factory;
         Expr tag = isFragment
-            ? _jsx!.Mode == JsxMode.Preserve
-                ? new Expr.Literal("Fragment")
-                : BuildFragmentFactoryExpr(open.Line)
+            ? inlineFactoryWithoutFragment
+                ? BuildDottedExpr("React.Fragment", open.Line)
+                : _jsx!.Mode == JsxMode.Preserve
+                    ? new Expr.Literal("Fragment")
+                    : BuildFragmentFactoryExpr(open.Line)
             : tagExpression;
 
         Expr.ObjectLiteral? propsLiteral = null;
@@ -969,7 +981,7 @@ public partial class Parser
         arguments.AddRange(children);
 
         return new Expr.Call(
-            BuildDottedExpr(_jsx!.Factory, open.Line),
+            BuildDottedExpr(factory, open.Line),
             SynthesizedToken(TokenType.LEFT_PAREN, "(", open.Line),
             null,
             arguments)
@@ -981,7 +993,7 @@ public partial class Parser
                 propsLiteral,
                 children,
                 KeyExpr: null,
-                _jsx.Mode,
+                _jsx!.Mode,
                 open.Line,
                 typeArgumentCount),
         };

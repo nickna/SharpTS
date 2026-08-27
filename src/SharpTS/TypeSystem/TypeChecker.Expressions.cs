@@ -1821,6 +1821,16 @@ public partial class TypeChecker
             return GetNarrowing(declaredPath) ?? declared;
         }
 
+        // A later declaration in a merged namespace can reference values exported by an
+        // earlier declaration with an unqualified name. They are not re-hoisted into the
+        // later declaration's lexical scope, so consult the merged namespace symbol here.
+        if (_currentMergedNamespace?.Values.GetValueOrDefault(name.Lexeme) is { } mergedMember)
+        {
+            if (_currentMergedNamespace.GetValueBinding(name.Lexeme) is { } binding)
+                Bindings.Bind(name, CurrentSourceDocument, binding);
+            return mergedMember;
+        }
+
         if (name.Lexeme == "console") return TypeInfo.Any.Shared;
         if (name.Lexeme == "Math") return TypeInfo.Any.Shared; // Math is a special global object
         if (name.Lexeme == "Object") return TypeInfo.Any.Shared; // Object is a special global object
