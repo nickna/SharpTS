@@ -18,7 +18,8 @@ public partial class RuntimeEmitter
         EmittedRuntime runtime)
     {
         var taskType = _types.TaskOfObject;
-        var trackerType = moduleBuilder.DefineType(
+        var trackerType = EmitTypeDefinitions.DefineType(
+            moduleBuilder,
             "$PromiseRejectionTracker",
             TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.BeforeFieldInit,
             _types.Object);

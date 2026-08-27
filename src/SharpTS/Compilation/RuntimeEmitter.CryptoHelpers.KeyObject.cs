@@ -184,8 +184,10 @@ public partial class RuntimeEmitter
         var formatLocal = il.DeclareLocal(_types.String);
         var typeLocal = il.DeclareLocal(_types.String);
         var optionValueLocal = il.DeclareLocal(_types.Object);
-        var dictionaryTryGetValue = _types.DictionaryStringObject.GetMethod(
-            "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var dictionaryTryGetValue = _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()]);
 
         // Extract PEM from key
         var notStringLabel = il.DefineLabel();
@@ -332,8 +334,10 @@ public partial class RuntimeEmitter
         var formatLocal = il.DeclareLocal(_types.String);
         var typeLocal = il.DeclareLocal(_types.String);
         var optionValueLocal = il.DeclareLocal(_types.Object);
-        var dictionaryTryGetValue = _types.DictionaryStringObject.GetMethod(
-            "TryGetValue", [_types.String, _types.Object.MakeByRefType()])!;
+        var dictionaryTryGetValue = _types.GetMethod(
+            _types.DictionaryStringObject,
+            "TryGetValue",
+            [_types.String, _types.Object.MakeByRefType()]);
 
         // Extract PEM from key
         var notStringLabel = il.DefineLabel();

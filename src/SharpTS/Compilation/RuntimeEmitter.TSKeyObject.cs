@@ -944,7 +944,7 @@ public partial class RuntimeEmitter
                 body.Emit(OpCodes.Ldarg_0);
             body.Emit(OpCodes.Ldfld, keyField);
             body.Emit(OpCodes.Callvirt,
-                algorithmType.GetMethod("ExportPkcs8PrivateKey", Type.EmptyTypes)!);
+                _types.GetMethod(algorithmType, "ExportPkcs8PrivateKey", Type.EmptyTypes));
             body.Emit(OpCodes.Br, done);
             body.MarkLabel(publicKey);
             if (loadOther)
@@ -953,7 +953,7 @@ public partial class RuntimeEmitter
                 body.Emit(OpCodes.Ldarg_0);
             body.Emit(OpCodes.Ldfld, keyField);
             body.Emit(OpCodes.Callvirt,
-                algorithmType.GetMethod("ExportSubjectPublicKeyInfo", Type.EmptyTypes)!);
+                _types.GetMethod(algorithmType, "ExportSubjectPublicKeyInfo", Type.EmptyTypes));
             body.MarkLabel(done);
             body.Emit(OpCodes.Stloc, target);
         }
@@ -1161,7 +1161,7 @@ public partial class RuntimeEmitter
         SetRsa("qi", nameof(RSAParameters.InverseQ));
         il.MarkLabel(rsaPublic);
         var rsa = il.DeclareLocal(typeof(RSA));
-        il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes));
         il.Emit(OpCodes.Stloc, rsa);
         il.Emit(OpCodes.Ldloc, rsa);
         il.Emit(OpCodes.Ldloc, rsaParams);
@@ -1239,7 +1239,7 @@ public partial class RuntimeEmitter
             typeof(ECParameters).GetField(nameof(ECParameters.D))!);
         il.MarkLabel(ecPublic);
         var ecdsa = il.DeclareLocal(typeof(ECDsa));
-        il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+        il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes));
         il.Emit(OpCodes.Stloc, ecdsa);
         il.Emit(OpCodes.Ldloc, ecdsa);
         il.Emit(OpCodes.Ldloc, ecParams);
@@ -1360,14 +1360,14 @@ public partial class RuntimeEmitter
             Label? leaveTarget = null)
         {
             var rsa = il.DeclareLocal(typeof(RSA));
-            il.Emit(OpCodes.Call, typeof(RSA).GetMethod("Create", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetMethod(typeof(RSA), "Create", Type.EmptyTypes));
             il.Emit(OpCodes.Stloc, rsa);
             il.Emit(OpCodes.Ldloc, rsa);
             il.Emit(OpCodes.Ldloc, span);
             il.Emit(OpCodes.Ldloca, read);
-            il.Emit(OpCodes.Callvirt, typeof(RSA).GetMethod(
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(RSA),
                 importName,
-                [typeof(ReadOnlySpan<byte>), _types.Int32.MakeByRefType()])!);
+                [typeof(ReadOnlySpan<byte>), _types.Int32.MakeByRefType()]));
             il.Emit(OpCodes.Ldloc, rsa);
             il.Emit(isPrivate ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorRsa);
@@ -1386,14 +1386,14 @@ public partial class RuntimeEmitter
             Label? leaveTarget = null)
         {
             var ec = il.DeclareLocal(typeof(ECDsa));
-            il.Emit(OpCodes.Call, typeof(ECDsa).GetMethod("Create", Type.EmptyTypes)!);
+            il.Emit(OpCodes.Call, _types.GetMethod(typeof(ECDsa), "Create", Type.EmptyTypes));
             il.Emit(OpCodes.Stloc, ec);
             il.Emit(OpCodes.Ldloc, ec);
             il.Emit(OpCodes.Ldloc, span);
             il.Emit(OpCodes.Ldloca, read);
-            il.Emit(OpCodes.Callvirt, typeof(ECDsa).GetMethod(
+            il.Emit(OpCodes.Callvirt, _types.GetMethod(typeof(ECDsa),
                 importName,
-                [typeof(ReadOnlySpan<byte>), _types.Int32.MakeByRefType()])!);
+                [typeof(ReadOnlySpan<byte>), _types.Int32.MakeByRefType()]));
             il.Emit(OpCodes.Ldloc, ec);
             il.Emit(isPrivate ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
             il.Emit(OpCodes.Newobj, runtime.TSKeyObjectCtorEc);
