@@ -73,6 +73,10 @@ public sealed class ReadTsConfigTask : Task
     [Output]
     public string DeclarationDir { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Executes the task to read and parse tsconfig.json.
+    /// </summary>
+    /// <returns>True if successful; otherwise, false.</returns>
     public override bool Execute()
     {
         // Validate input path
