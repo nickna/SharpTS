@@ -147,6 +147,39 @@ public sealed class LazyClassFieldStorageTests
     }
 
     [Fact]
+    public void ClassUsedAsSuperclass_RetainsDirectInstanceStoreAndInheritedAccess()
+    {
+        const string source = """
+            class Base {
+                value: number = 1;
+                read(): number { return this.value; }
+                write(value: number): void { this.value = value; }
+            }
+            class Derived extends Base {
+                extra: number = 2;
+            }
+
+            const direct = new Base();
+            direct.write(3);
+            console.log(direct.read());
+
+            const derived = new Derived();
+            derived.write(4);
+            console.log(derived.read(), derived.value, derived.extra);
+            """;
+
+        Assert.Equal("3\n4 4 2\n", TestHarness.RunCompiled(source));
+        Assert.Empty(TestHarness.CompileAndVerifyOnly(source));
+
+        Type baseType = Compile(source).GetType("Base")!;
+        FieldInfo fields = baseType.GetField(
+            "_fields", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Assert.Equal(typeof(Dictionary<string, object>), fields.FieldType);
+        Assert.Null(baseType.GetField(
+            "_fields", BindingFlags.Static | BindingFlags.NonPublic));
+    }
+
+    [Fact]
     public void DynamicSemantics_WorkForDeclarationsExpressionsAndInheritance()
     {
         const string source = """

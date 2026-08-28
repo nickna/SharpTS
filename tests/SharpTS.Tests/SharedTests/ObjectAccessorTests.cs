@@ -263,4 +263,50 @@ public class ObjectAccessorTests
         var output = TestHarness.Run(source, mode);
         Assert.Equal("42\n126\n", output);
     }
+
+    [Theory, ModeData]
+    public void Spread_SnapshotsSymbolKeysBeforeInvokingGetters(ExecutionMode mode)
+    {
+        var source = """
+            const removed = Symbol("removed");
+            const watched = Symbol("watched");
+            const hidden = Symbol("hidden");
+            const added = Symbol("added");
+            const events: string[] = [];
+            const source: any = {
+                get first(): number {
+                    events.push("string");
+                    delete source[removed];
+                    source[added] = 3;
+                    return 1;
+                }
+            };
+            source[removed] = 0;
+            Object.defineProperty(source, watched, {
+                get(): number {
+                    events.push("symbol");
+                    return 2;
+                },
+                enumerable: true,
+                configurable: true
+            });
+            Object.defineProperty(source, hidden, {
+                value: 4,
+                enumerable: false,
+                configurable: true
+            });
+
+            const copy: any = { ...source };
+            console.log(events.join(","));
+            console.log(copy.first, copy[watched], copy[hidden]);
+            console.log(
+                Object.prototype.hasOwnProperty.call(copy, removed),
+                Object.prototype.hasOwnProperty.call(copy, added),
+                Object.prototype.hasOwnProperty.call(copy, watched),
+                Object.prototype.hasOwnProperty.call(copy, hidden));
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal("string,symbol\n1 2 undefined\nfalse false true false\n", output);
+    }
 }

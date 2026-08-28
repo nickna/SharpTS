@@ -619,11 +619,21 @@ public partial class RuntimeEmitter
         }
         else
         {
-            var tsArrDelIndexLocal = il.DeclareLocal(_types.Int64);
+            var tsArrDelIndexLocal = il.DeclareLocal(_types.UInt32);
             il.Emit(OpCodes.Ldarg_1);
             il.Emit(OpCodes.Ldloca, tsArrDelIndexLocal);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Int64, "TryParse", _types.String, _types.Int64.MakeByRefType()));
+            il.Emit(OpCodes.Call, _types.GetMethod(_types.UInt32, "TryParse", _types.String, _types.UInt32.MakeByRefType()));
             var tsArrDelNonNumericLabel = il.DefineLabel();
+            il.Emit(OpCodes.Brfalse, tsArrDelNonNumericLabel);
+            il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
+            il.Emit(OpCodes.Ldc_I4_M1);
+            il.Emit(OpCodes.Conv_U4);
+            il.Emit(OpCodes.Beq, tsArrDelNonNumericLabel);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Ldloca, tsArrDelIndexLocal);
+            il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+            il.Emit(OpCodes.Call, _types.GetMethod(
+                _types.String, "op_Equality", _types.String, _types.String));
             il.Emit(OpCodes.Brfalse, tsArrDelNonNumericLabel);
 
             // A write routed through Proxy/Reflect can install attributes for
@@ -649,6 +659,7 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.TSArrayType);
             il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
+            il.Emit(OpCodes.Conv_U8);
             il.Emit(OpCodes.Callvirt, runtime.TSArrayHasIndex);
             il.Emit(OpCodes.Brfalse, tsArrIndexNotSealedLabel);
             il.MarkLabel(tsArrIndexSealedPropertyLabel);
@@ -673,16 +684,27 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Castclass, runtime.TSArrayType);
             il.Emit(OpCodes.Ldloc, tsArrDelIndexLocal);
+            il.Emit(OpCodes.Conv_U8);
             il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
             il.Emit(OpCodes.Ldc_I4_1);
             il.Emit(OpCodes.Ret);
 
             il.MarkLabel(tsArrDelNonNumericLabel);
-            // Non-numeric key. PDS-installed named property: honor frozen +
-            // descriptor.configurable (mirrors the Dict path's behavior).
+            // Non-index key. PDS-installed named property: deleting a missing
+            // property succeeds even on a sealed array; an existing property
+            // still honors the effective integrity level and configurability.
             // Pre-fix returned true unconditionally, allowing `delete arr.foo`
             // to silently succeed even when `Object.freeze(arr)` made the
             // property non-configurable.
+            var tsArrDelDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Ldarg_1);
+            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
+            il.Emit(OpCodes.Stloc, tsArrDelDescLocal);
+            var tsArrDelNoDescLabel = il.DefineLabel();
+            il.Emit(OpCodes.Ldloc, tsArrDelDescLocal);
+            il.Emit(OpCodes.Brfalse, tsArrDelNoDescLabel);
+
             var tsArrDelFrozenLabel = il.DefineLabel();
             il.Emit(OpCodes.Ldarg_0);
             il.Emit(OpCodes.Call, runtime.PDSIsFrozen);
@@ -698,14 +720,6 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
             il.MarkLabel(tsArrDelSealedLabel);
             // Check PDS descriptor configurable.
-            var tsArrDelDescLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-            il.Emit(OpCodes.Stloc, tsArrDelDescLocal);
-            var tsArrDelNoDescLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldloc, tsArrDelDescLocal);
-            il.Emit(OpCodes.Brfalse, tsArrDelNoDescLabel);
             il.Emit(OpCodes.Ldloc, tsArrDelDescLocal);
             il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
             var tsArrDelConfigurableLabel = il.DefineLabel();
