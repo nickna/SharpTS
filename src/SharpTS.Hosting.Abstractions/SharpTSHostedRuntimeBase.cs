@@ -58,25 +58,88 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         _errorSink = errorSink ?? throw new ArgumentNullException(nameof(errorSink));
     }
 
+    /// <summary>
+    /// Gets the current state of the hosted runtime.
+    /// </summary>
     public SharpTSHostedRuntimeState State =>
         (SharpTSHostedRuntimeState)Volatile.Read(ref _state);
 
+    /// <summary>
+    /// Gets the reason for shutdown, if the runtime is stopping or stopped.
+    /// </summary>
     public SharpTSHostedShutdownReason? ShutdownReason => _shutdownReason;
 
+    /// <summary>
+    /// Gets the managed thread ID of the owner thread, if captured.
+    /// </summary>
     public int? OwnerThreadId => _ownerThreadId;
 
+    /// <summary>
+    /// Initializes the guest runtime asynchronously.
+    /// </summary>
+    /// <returns>A task representing the guest initialization.</returns>
     protected abstract Task InitializeGuestAsync();
+
+    /// <summary>
+    /// Attempts to run one guest macrotask.
+    /// </summary>
+    /// <returns>True if a macrotask was run; otherwise, false.</returns>
     protected abstract bool TryRunOneGuestMacrotask();
+
+    /// <summary>
+    /// Gets whether the guest has pending macrotasks.
+    /// </summary>
     protected abstract bool HasGuestMacrotasks { get; }
+
+    /// <summary>
+    /// Drains all pending guest microtasks.
+    /// </summary>
     protected abstract void DrainGuestMicrotasks();
+
+    /// <summary>
+    /// Gets whether the guest has pending microtasks.
+    /// </summary>
     protected abstract bool HasGuestMicrotasks { get; }
+
+    /// <summary>
+    /// Attempts to run one guest timer callback.
+    /// </summary>
+    /// <returns>True if a timer was run; otherwise, false.</returns>
     protected abstract bool TryRunOneGuestTimer();
+
+    /// <summary>
+    /// Gets the delay until the next guest timer deadline.
+    /// </summary>
+    /// <returns>The delay, or null if no timers are pending.</returns>
     protected abstract TimeSpan? GetNextGuestTimerDelay();
+
+    /// <summary>
+    /// Rejects pending guest work during shutdown.
+    /// </summary>
     protected abstract void RejectGuestWork();
+
+    /// <summary>
+    /// Cancels guest resources during shutdown.
+    /// </summary>
     protected abstract void CancelGuestResources();
+
+    /// <summary>
+    /// Emits the guest beforeExit event.
+    /// </summary>
+    /// <param name="exitCode">The exit code for the program.</param>
     protected abstract void EmitGuestBeforeExit(int exitCode);
+
+    /// <summary>
+    /// Emits the guest exit event.
+    /// </summary>
+    /// <param name="exitCode">The exit code for the program.</param>
     protected abstract void EmitGuestExit(int exitCode);
 
+    /// <summary>
+    /// Initializes the hosted runtime asynchronously.
+    /// </summary>
+    /// <param name="cancellationToken">Optional cancellation token.</param>
+    /// <returns>A task that completes when initialization is finished.</returns>
     public Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
@@ -110,6 +173,12 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         return _initialization.Task;
     }
 
+    /// <summary>
+    /// Shuts down the hosted runtime asynchronously.
+    /// </summary>
+    /// <param name="reason">The reason for shutdown.</param>
+    /// <param name="exitCode">The exit code for the program.</param>
+    /// <returns>A task that completes when shutdown is finished.</returns>
     public Task ShutdownAsync(
         SharpTSHostedShutdownReason reason = SharpTSHostedShutdownReason.HostRequested,
         int exitCode = 0)
@@ -121,6 +190,10 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         return _shutdown.Task;
     }
 
+    /// <summary>
+    /// Registers a cleanup action to run during shutdown.
+    /// </summary>
+    /// <param name="cleanup">The cleanup action to register.</param>
     public void RegisterCleanup(Action cleanup)
     {
         ArgumentNullException.ThrowIfNull(cleanup);
@@ -133,6 +206,10 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         }
     }
 
+    /// <summary>
+    /// Notifies the guest runtime to execute an action as a macrotask.
+    /// </summary>
+    /// <param name="guestNotification">The action to execute.</param>
     public void Notify(Action guestNotification)
     {
         ArgumentNullException.ThrowIfNull(guestNotification);
@@ -147,6 +224,8 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     /// therefore obtain handled/cancel results without allowing rendering to
     /// re-enter the routed-event stack.
     /// </summary>
+    /// <param name="guestCallback">The callback to invoke.</param>
+    /// <returns>The result of the callback.</returns>
     public object? InvokeNativeCallback(Func<object?> guestCallback)
     {
         ArgumentNullException.ThrowIfNull(guestCallback);
@@ -170,6 +249,11 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         }
     }
 
+    /// <summary>
+    /// Invokes a guest callback synchronously on the owner thread and returns its result.
+    /// </summary>
+    /// <param name="guestCallback">The callback to invoke.</param>
+    /// <returns>The result of the callback.</returns>
     public object? Invoke(Func<object?> guestCallback)
     {
         ArgumentNullException.ThrowIfNull(guestCallback);
@@ -187,6 +271,10 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         return result;
     }
 
+    /// <summary>
+    /// Invokes a guest callback synchronously on the owner thread.
+    /// </summary>
+    /// <param name="guestCallback">The callback to invoke.</param>
     public void Invoke(Action guestCallback)
     {
         ArgumentNullException.ThrowIfNull(guestCallback);
@@ -198,6 +286,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     }
 
     /// <summary>Queues one external guest callback as a macrotask.</summary>
+    /// <param name="callback">The callback to enqueue.</param>
     public void EnqueueMacrotask(Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
@@ -208,6 +297,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     }
 
     /// <summary>Queues an await/promise continuation for the next microtask checkpoint.</summary>
+    /// <param name="callback">The callback to enqueue.</param>
     public void EnqueueMicrotask(Action callback)
     {
         ArgumentNullException.ThrowIfNull(callback);
@@ -217,6 +307,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         RequestTurn();
     }
 
+    /// <summary>
+    /// Wakes the runtime to process pending work.
+    /// </summary>
     public void Wake() => RequestTurn();
 
     /// <summary>
@@ -225,6 +318,8 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     /// inside the hosted microtask checkpoint, so the generated async state machine
     /// resumes there without installing a synchronization context.
     /// </summary>
+    /// <param name="task">The task to prepare for await.</param>
+    /// <returns>A task that completes on the owner thread.</returns>
     public Task<object?> PrepareAwait(Task<object?> task)
     {
         ArgumentNullException.ThrowIfNull(task);
@@ -245,6 +340,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     /// completes only after the capture has run. Generated module initializers
     /// use this to resume a declaration in a later hosted turn.
     /// </summary>
+    /// <param name="task">The task to await.</param>
+    /// <param name="capture">The action to invoke with the completed result.</param>
+    /// <returns>A task that completes when the capture has run.</returns>
     public Task CaptureAwait(Task<object?> task, Action<object?> capture)
     {
         ArgumentNullException.ThrowIfNull(task);
@@ -278,6 +376,11 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         return completion.Task;
     }
 
+    /// <summary>
+    /// Runs a sequence of initialization steps asynchronously.
+    /// </summary>
+    /// <param name="steps">The list of initialization steps to run.</param>
+    /// <returns>A task that completes when all steps have completed.</returns>
     public Task RunInitializationSteps(IReadOnlyList<Func<Task>> steps)
     {
         ArgumentNullException.ThrowIfNull(steps);
@@ -286,6 +389,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     }
 
     /// <summary>Registers a compiled module initializer under a runtime import alias.</summary>
+    /// <param name="alias">The import alias for the module.</param>
+    /// <param name="canonicalPath">The canonical path of the module.</param>
+    /// <param name="initializer">The module initializer function.</param>
     public void RegisterHostedModule(
         string alias,
         string canonicalPath,
@@ -302,6 +408,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     /// Initializes a compiled module once and returns its namespace. Active self-imports
     /// reject instead of awaiting their own initialization task indefinitely.
     /// </summary>
+    /// <param name="alias">The import alias for the module.</param>
+    /// <param name="namespaceFactory">Factory function to create the module namespace.</param>
+    /// <returns>A task that completes with the module namespace.</returns>
     public Task<object?> ImportHostedModule(string alias, Func<object?> namespaceFactory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(alias);
@@ -348,6 +457,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     /// Attributes an uncaught compiled module-initialization failure to its source
     /// module without changing errors handled by guest try/catch code.
     /// </summary>
+    /// <param name="task">The module initialization task to observe.</param>
+    /// <param name="modulePath">The path of the module being initialized.</param>
+    /// <returns>A task that completes when initialization succeeds or throws with attributed error.</returns>
     public static async Task AttributeModuleInitialization(Task task, string modulePath)
     {
         ArgumentNullException.ThrowIfNull(task);
@@ -364,6 +476,12 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         }
     }
 
+    /// <summary>
+    /// Observes a program main task and completes the program when it finishes.
+    /// </summary>
+    /// <param name="task">The main task to observe.</param>
+    /// <param name="useNumericResult">Whether to use numeric result as exit code.</param>
+    /// <returns>A task that completes when observation is finished.</returns>
     public Task ObserveProgramMain(Task<object?> task, bool useNumericResult)
     {
         ArgumentNullException.ThrowIfNull(task);
@@ -397,6 +515,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     }
 
     /// <summary>Implements the forced hosted process-exit boundary.</summary>
+    /// <param name="exitCode">The exit code for the process.</param>
     public void RequestProcessExit(int exitCode)
     {
         BeginShutdown(SharpTSHostedShutdownReason.ProcessExit, exitCode);
@@ -404,6 +523,7 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
     }
 
     /// <summary>Completes a numeric hosted main through the graceful lifecycle.</summary>
+    /// <param name="exitCode">The exit code for the program.</param>
     public void CompleteProgram(int exitCode)
     {
         if (State == SharpTSHostedRuntimeState.Initializing)
@@ -816,6 +936,10 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
             throw new ObjectDisposedException(GetType().Name);
     }
 
+    /// <summary>
+    /// Disposes the hosted runtime asynchronously.
+    /// </summary>
+    /// <returns>A task that completes when disposal is finished.</returns>
     public async ValueTask DisposeAsync()
     {
         if (_disposed)
@@ -825,6 +949,9 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         Dispose();
     }
 
+    /// <summary>
+    /// Disposes the hosted runtime synchronously.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed)
@@ -907,8 +1034,15 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         Func<Task> Initializer);
 }
 
+/// <summary>
+/// Exception thrown when a hosted SharpTS program requests immediate process exit.
+/// </summary>
+/// <param name="exitCode">The exit code for the process.</param>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public sealed class SharpTSHostedProcessExitException(int exitCode) : Exception
 {
+    /// <summary>
+    /// Gets the exit code for the process.
+    /// </summary>
     public int ExitCode { get; } = exitCode;
 }

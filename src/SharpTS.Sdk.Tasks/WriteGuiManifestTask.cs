@@ -8,29 +8,57 @@ using Microsoft.Build.Utilities;
 
 namespace SharpTS.Sdk.Tasks;
 
+/// <summary>
+/// MSBuild task that writes a GUI application manifest file for SharpTS GUI applications.
+/// </summary>
 public sealed class WriteGuiManifestTask : Task
 {
+    /// <summary>
+    /// Path where the manifest file will be written.
+    /// </summary>
     [Required]
     public string OutputPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Entry point path for the GUI application.
+    /// </summary>
     [Required]
     public string EntryPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Path to the compiled assembly.
+    /// </summary>
     [Required]
     public string CompiledAssembly { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Hosted ABI version number.
+    /// </summary>
     [Required]
     public string HostedAbiVersion { get; set; } = string.Empty;
 
+    /// <summary>
+    /// GUI API version number.
+    /// </summary>
     [Required]
     public string GuiApiVersion { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Descriptor schema version number.
+    /// </summary>
     [Required]
     public string DescriptorSchemaVersion { get; set; } = string.Empty;
 
+    /// <summary>
+    /// SHA-256 hash of the descriptor schema.
+    /// </summary>
     [Required]
     public string DescriptorSchemaHash { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Executes the task to write the GUI manifest file.
+    /// </summary>
+    /// <returns>True if successful; otherwise, false.</returns>
     public override bool Execute()
     {
         try

@@ -14,11 +14,21 @@ namespace SharpTS.Sdk.Tasks;
 /// </summary>
 public sealed class WriteGuiControlProviderRegistrationTask : Task
 {
+    /// <summary>
+    /// Path where the generated registration code will be written.
+    /// </summary>
     [Required]
     public string OutputPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Array of control provider types to register.
+    /// </summary>
     public ITaskItem[] ProviderTypes { get; set; } = [];
 
+    /// <summary>
+    /// Executes the task to generate control provider registration code.
+    /// </summary>
+    /// <returns>True if successful; otherwise, false.</returns>
     public override bool Execute()
     {
         try
