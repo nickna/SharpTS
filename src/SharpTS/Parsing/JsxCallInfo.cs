@@ -40,4 +40,5 @@ public sealed record JsxCallInfo(
     int TypeArgumentCount = 0,
     List<string>? TypeArguments = null,
     List<TypeNode?>? TypeArgumentNodes = null,
-    string? FactoryName = null);
+    string? FactoryName = null,
+    IReadOnlyList<int>? ChildLines = null);

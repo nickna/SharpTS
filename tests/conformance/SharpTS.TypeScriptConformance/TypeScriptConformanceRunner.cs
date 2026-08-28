@@ -194,6 +194,13 @@ public sealed class TypeScriptConformanceRunner
                         modules.Add(module);
                 }
             }
+
+            // Ambient modules discovered in referenced declaration fixtures are synthetic
+            // dependencies of those fixtures. Refresh the ordered union after all roots have
+            // registered their declarations so import-equals/default/named imports bind the
+            // populated ambient module rather than an earlier npm fallback.
+            resolver.RegisterAmbientModuleDeclarations(modules);
+            modules = resolver.GetModulesInOrder(modules);
         }
         catch (Exception ex)
         {
@@ -221,6 +228,8 @@ public sealed class TypeScriptConformanceRunner
                 StrictFunctionTypes = DirectiveBool(metadata, "strictfunctiontypes") ?? metadata.Strict,
                 NoImplicitAny = noImplicitAny,
                 NoImplicitThis = DirectiveBool(metadata, "noimplicitthis") ?? metadata.Strict,
+                UseUnknownInCatchVariables =
+                    DirectiveBool(metadata, "useunknownincatchvariables") ?? metadata.Strict,
                 StrictPropertyInitialization =
                     DirectiveBool(metadata, "strictpropertyinitialization") ?? metadata.Strict,
                 CheckVariableUseBeforeAssignment = strictNullChecks,
@@ -232,6 +241,8 @@ public sealed class TypeScriptConformanceRunner
                 AllowSyntheticDefaultImports =
                     DirectiveBool(metadata, "allowsyntheticdefaultimports") == true ||
                     DirectiveBool(metadata, "esmoduleinterop") == true,
+                ImportHelpers = DirectiveBool(metadata, "importhelpers") ?? false,
+                RespectLoadedLibraries = true,
                 MaxErrors = 1000,
             });
             checker.SetDecoratorMode(decoratorMode);
@@ -253,7 +264,7 @@ public sealed class TypeScriptConformanceRunner
 
         var actual = ToBaselineDiagnostics(diagnostics);
 
-        var baselinePath = ResolveBaselinePath(testFilePath);
+        var baselinePath = ResolveBaselinePath(testFilePath, metadata);
         IReadOnlyList<BaselineDiagnostic> expected;
         try
         {
@@ -373,69 +384,87 @@ public sealed class TypeScriptConformanceRunner
     /// no folder mirroring). Returns the expected path even if the file
     /// doesn't exist — caller treats absence as "no expected diagnostics."
     ///
-    /// Multi-target tests (<c>// @target: es2015, es2020, ...</c>) emit one
-    /// baseline per target — <c>name(target=X).errors.txt</c> — and no plain
-    /// file. SharpTS has a single always-latest world model (globals are always
-    /// available, no per-target lib), so we compare against the newest available
-    /// target variant. Without this, those tests are scored against an empty
-    /// baseline and every real diagnostic is mis-counted as spurious.
+    /// Harness-variant tests emit files such as
+    /// <c>name(module=esnext,target=es5).errors.txt</c> instead of a plain
+    /// baseline. Select the variant represented by this runner's single-run
+    /// model: the final value of a comma-separated directive, with <c>*</c>
+    /// represented by the modern <c>esnext</c> module form.
     /// </summary>
-    private string ResolveBaselinePath(string testFilePath)
+    internal string ResolveBaselinePath(
+        string testFilePath,
+        TypeScriptConformanceMetadata metadata)
     {
         var basename = Path.GetFileNameWithoutExtension(testFilePath);
         var dir = TypeScriptConformancePaths.BaselinesDir(_typescriptRoot);
         var plain = Path.Combine(dir, $"{basename}.errors.txt");
         if (File.Exists(plain)) return plain;
-        return ResolveNewestTargetBaseline(dir, basename) ?? plain;
+        return ResolveHarnessVariantBaseline(dir, basename, metadata) ?? plain;
     }
 
     /// <summary>
-    /// Newest-target <c>name(target=X).errors.txt</c> baseline for a multi-target
-    /// test, or null if none exist. "Newest" follows ES ordering
-    /// (<c>es3 &lt; es5 &lt; es2015 &lt; ... &lt; esnext</c>) so the chosen baseline
-    /// matches SharpTS's always-latest lib surface.
+    /// Finds the most specific target/module variant compatible with the values
+    /// selected by the runner. Other harness axes are deliberately ignored until
+    /// the runner models them; choosing one accidentally is worse than treating
+    /// the test as having no baseline.
     /// </summary>
-    private static string? ResolveNewestTargetBaseline(string baselinesDir, string basename)
+    private static string? ResolveHarnessVariantBaseline(
+        string baselinesDir,
+        string basename,
+        TypeScriptConformanceMetadata metadata)
     {
         // A missing baselines directory means "no baseline", not a crash. Without this an
         // uninitialized external/typescript submodule takes down the resolver with a
         // DirectoryNotFoundException instead of bucketing cleanly.
         if (!Directory.Exists(baselinesDir)) return null;
 
+        string selectedTarget = SelectHarnessValue(metadata.Target, "es5");
+        string selectedModule = SelectHarnessValue(
+            metadata.RawDirectives.TryGetValue("module", out string? module) ? module : null,
+            "esnext");
+
         string? best = null;
-        var bestRank = int.MinValue;
-        foreach (var path in Directory.EnumerateFiles(baselinesDir, $"{basename}(target=*).errors.txt"))
+        int bestSpecificity = -1;
+        foreach (var path in Directory.EnumerateFiles(baselinesDir, $"{basename}(*).errors.txt"))
         {
             var file = Path.GetFileName(path);
-            const string marker = "(target=";
-            var open = file.IndexOf(marker, StringComparison.Ordinal);
-            var close = file.IndexOf(").errors.txt", StringComparison.Ordinal);
-            if (open < 0 || close <= open + marker.Length) continue;
-            var target = file.Substring(open + marker.Length, close - (open + marker.Length));
-            var rank = TargetRank(target);
-            if (rank > bestRank) { bestRank = rank; best = path; }
+            int open = file.IndexOf('(');
+            int close = file.LastIndexOf(").errors.txt", StringComparison.Ordinal);
+            if (open < 0 || close <= open + 1) continue;
+
+            var axes = file[(open + 1)..close]
+                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => part.Split('=', 2, StringSplitOptions.TrimEntries))
+                .Where(parts => parts.Length == 2)
+                .ToDictionary(parts => parts[0].ToLowerInvariant(), parts => parts[1]);
+            if (axes.Keys.Any(key => key is not "target" and not "module")) continue;
+            if (axes.TryGetValue("target", out string? target) &&
+                NormalizeTarget(target) != NormalizeTarget(selectedTarget)) continue;
+            if (axes.TryGetValue("module", out string? candidateModule) &&
+                NormalizeModule(candidateModule) != NormalizeModule(selectedModule)) continue;
+
+            if (axes.Count > bestSpecificity)
+            {
+                bestSpecificity = axes.Count;
+                best = path;
+            }
         }
         return best;
     }
 
-    private static int TargetRank(string target) => target.Trim().ToLowerInvariant() switch
+    private static string SelectHarnessValue(string? values, string defaultValue)
     {
-        "es3" => 3,
-        "es5" => 5,
-        "es6" or "es2015" => 2015,
-        "es2016" => 2016,
-        "es2017" => 2017,
-        "es2018" => 2018,
-        "es2019" => 2019,
-        "es2020" => 2020,
-        "es2021" => 2021,
-        "es2022" => 2022,
-        "es2023" => 2023,
-        "es2024" => 2024,
-        "es2025" => 2025,
-        "esnext" => int.MaxValue,
-        _ => 0,
-    };
+        string selected = values?
+            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
+            .LastOrDefault()?
+            .ToLowerInvariant() ?? defaultValue;
+        return selected == "*" ? "esnext" : selected;
+    }
+
+    private static string NormalizeTarget(string target) =>
+        target.Trim().ToLowerInvariant() is "es6" ? "es2015" : target.Trim().ToLowerInvariant();
+
+    private static string NormalizeModule(string module) =>
+        module.Trim().ToLowerInvariant() is "es6" ? "es2015" : module.Trim().ToLowerInvariant();
 
     /// <summary>
     /// Converts SharpTS diagnostics into the (line, tsCode) match-key form.

@@ -236,7 +236,7 @@ public abstract record Expr
     // Dynamic import: import(pathExpr) - returns Promise of module namespace
     public record DynamicImport(Token Keyword, Expr PathExpression) : Expr;
     // import.meta expression - provides module metadata (url, etc.)
-    public record ImportMeta(Token Keyword) : Expr;
+    public record ImportMeta(Token Keyword, bool IsInvalidProperty = false) : Expr;
     // Yield expression: yield expr or yield* expr (only valid inside generator functions)
     public record Yield(Token Keyword, Expr? Value, bool IsDelegating) : Expr;
     // Regex literal: /pattern/flags

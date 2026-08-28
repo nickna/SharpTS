@@ -136,11 +136,71 @@ public class TypeScriptConformanceRunnerTests
     }
 
     [Theory]
+    [InlineData("Symbols/ES5SymbolProperty3.ts")]
+    [InlineData("Symbols/ES5SymbolProperty4.ts")]
+    [InlineData("Symbols/ES5SymbolProperty5.ts")]
+    [InlineData("Symbols/ES5SymbolProperty7.ts")]
+    [InlineData("es6/Symbols/symbolDeclarationEmit12.ts")]
+    [InlineData("es6/Symbols/symbolProperty11.ts")]
+    [InlineData("es6/Symbols/symbolProperty21.ts")]
+    [InlineData("es6/Symbols/symbolProperty24.ts")]
+    [InlineData("es6/Symbols/symbolProperty28.ts")]
+    [InlineData("es6/Symbols/symbolProperty40.ts")]
+    [InlineData("es6/Symbols/symbolProperty41.ts")]
+    [InlineData("es6/Symbols/symbolProperty46.ts")]
+    [InlineData("es6/Symbols/symbolProperty47.ts")]
+    [InlineData("es6/Symbols/symbolProperty55.ts")]
+    [InlineData("es6/Symbols/symbolProperty58.ts")]
+    [InlineData("es6/Symbols/symbolProperty59.ts")]
+    [InlineData("es6/Symbols/symbolProperty61.ts")]
+    [InlineData("es6/Symbols/symbolType1.ts")]
+    [InlineData("es6/Symbols/symbolType11.ts")]
+    [InlineData("es6/Symbols/symbolType15.ts")]
+    [InlineData("es6/Symbols/symbolType19.ts")]
+    [InlineData("es6/Symbols/symbolType3.ts")]
+    [InlineData("es6/Symbols/symbolType9.ts")]
+    public void RunOne_SymbolCampaign_MatchesPinnedDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("Symbols/ES5SymbolProperty1.ts")]
+    [InlineData("jsx/tsxElementResolution8.tsx")]
+    [InlineData("types/conditional/inferTypes1.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithCallSignatures.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithConstructSignatures.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints4.ts")]
+    public void RunOne_SymbolChanges_PreserveExistingPasses(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        var path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
     [InlineData("jsx/jsxParsingError4.tsx")]
     [InlineData("jsx/tsxDynamicTagName1.tsx")]
     [InlineData("jsx/tsxDynamicTagName6.tsx")]
     [InlineData("jsx/tsxDynamicTagName9.tsx")]
     [InlineData("jsx/tsxElementResolution17.tsx")]
+    [InlineData("jsx/tsxSpreadAttributesResolution16.tsx")]
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
     public void RunOne_JsxRecoveryChanges_PreserveExistingPasses(string relativePath)
     {
@@ -395,6 +455,105 @@ public class TypeScriptConformanceRunnerTests
         var result = runner.RunOne("/nonexistent/missing.ts");
         Assert.Equal(TypeScriptConformanceOutcome.HarnessError, result.Outcome);
         Assert.Contains("Failed to read", result.Message);
+    }
+
+    [Theory]
+    [InlineData("es2016/es2016IntlAPIs.ts")]
+    [InlineData("es2017/useObjectValuesAndEntries2.ts")]
+    [InlineData("es2017/useObjectValuesAndEntries3.ts")]
+    [InlineData("es2017/useSharedArrayBuffer2.ts")]
+    [InlineData("es2017/useSharedArrayBuffer3.ts")]
+    [InlineData("es2017/useSharedArrayBuffer6.ts")]
+    [InlineData("es2018/useRegexpGroups.ts")]
+    [InlineData("es2019/globalThisAmbientModules.ts")]
+    [InlineData("es2019/globalThisBlockscopedProperties.ts")]
+    [InlineData("es2019/globalThisCollision.ts")]
+    [InlineData("es2019/globalThisGlobalExportAsGlobal.ts")]
+    [InlineData("es2019/globalThisPropertyAssignment.ts")]
+    [InlineData("es2019/globalThisReadonlyProperties.ts")]
+    [InlineData("es2019/globalThisUnknown.ts")]
+    [InlineData("es2019/globalThisUnknownNoImplicitAny.ts")]
+    [InlineData("es2019/globalThisVarDeclaration.ts")]
+    [InlineData("es2019/importMeta/importMeta.ts")]
+    [InlineData("es2019/importMeta/importMetaNarrowing.ts")]
+    [InlineData("es2020/es2020IntlAPIs.ts")]
+    [InlineData("es2020/intlNumberFormatES2020.ts")]
+    [InlineData("es2020/localesObjectArgument.ts")]
+    [InlineData("es2020/modules/exportAsNamespace1.ts")]
+    [InlineData("es2020/modules/exportAsNamespace2.ts")]
+    [InlineData("es2020/modules/exportAsNamespace3.ts")]
+    [InlineData("es2020/modules/exportAsNamespace_exportAssignment.ts")]
+    [InlineData("es2020/modules/exportAsNamespace_missingEmitHelpers.ts")]
+    [InlineData("es2021/logicalAssignment/logicalAssignment4.ts")]
+    [InlineData("es2021/logicalAssignment/logicalAssignment6.ts")]
+    [InlineData("es2021/logicalAssignment/logicalAssignment7.ts")]
+    [InlineData("es2021/logicalAssignment/logicalAssignment8.ts")]
+    [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_importEmpty.ts")]
+    [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_module.ts")]
+    [InlineData("es2022/arbitraryModuleNamespaceIdentifiers/arbitraryModuleNamespaceIdentifiers_syntax.ts")]
+    [InlineData("es2022/es2024SharedMemory.ts")]
+    [InlineData("es2023/intlNumberFormatES5UseGrouping.ts")]
+    [InlineData("es2023/intlNumberFormatES2023.ts")]
+    [InlineData("esnext/esnextSharedMemory.ts")]
+    [InlineData("jsx/tsxEmit3.tsx")]
+    public void RunOne_Issue1540Candidate_MatchesPinnedTypeScript(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        string path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Outcome}: {result.Message}");
+    }
+
+    [Fact]
+    public void ResolveBaselinePath_SelectsFinalModuleAndTargetVariant()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"sharpts-ts-{Guid.NewGuid():N}");
+        string baselines = Path.Combine(root, "tests", "baselines", "reference");
+        Directory.CreateDirectory(baselines);
+        try
+        {
+            string expected = Path.Combine(baselines, "sample(module=es2020,target=es5).errors.txt");
+            File.WriteAllText(expected, "");
+            File.WriteAllText(Path.Combine(baselines, "sample(module=esnext,target=esnext).errors.txt"), "");
+            var metadata = TypeScriptConformanceMetadataParser.Parse(
+                "sample.ts",
+                "// @target: esnext, es5\n// @module: esnext, commonjs, es2020\n");
+
+            string actual = new TypeScriptConformanceRunner(root)
+                .ResolveBaselinePath("sample.ts", metadata);
+
+            Assert.Equal(expected, actual);
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public void ResolveBaselinePath_UsesEsNextForWildcardModuleVariant()
+    {
+        string root = Path.Combine(Path.GetTempPath(), $"sharpts-ts-{Guid.NewGuid():N}");
+        string baselines = Path.Combine(root, "tests", "baselines", "reference");
+        Directory.CreateDirectory(baselines);
+        try
+        {
+            string expected = Path.Combine(baselines, "sample(module=esnext).errors.txt");
+            File.WriteAllText(expected, "");
+            File.WriteAllText(Path.Combine(baselines, "sample(module=commonjs).errors.txt"), "");
+            var metadata = TypeScriptConformanceMetadataParser.Parse(
+                "sample.ts",
+                "// @module: *\n");
+
+            string actual = new TypeScriptConformanceRunner(root)
+                .ResolveBaselinePath("sample.ts", metadata);
+
+            Assert.Equal(expected, actual);
+        }
+        finally { Directory.Delete(root, recursive: true); }
     }
 
     [Fact]

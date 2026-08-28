@@ -163,7 +163,21 @@ public partial class TypeChecker
     // (TypeChecker.Properties.cs, TypeChecker.Operators.cs, TypeChecker.Calls.cs)
 
     // Comma (sequence) operator - evaluates all, returns type of last
-    internal TypeInfo VisitComma(Expr.Comma expr) { CheckExpr(expr.Left); return CheckExpr(expr.Right); }
+    internal TypeInfo VisitComma(Expr.Comma expr)
+    {
+        CheckExpr(expr.Left);
+        if (expr.Left is Expr.Variable)
+        {
+            var error = new TypeCheckException(
+                "Left side of comma operator is unused and has no side effects.",
+                TryGetExprLine(expr.Left),
+                tsCode: "TS2695");
+            if (!_recoveryMode)
+                throw error;
+            RecordTypeError(error);
+        }
+        return CheckExpr(expr.Right);
+    }
 
     // Assignment destructuring (#754): check the lowered statements (which declare the rhs temp and
     // validate each target write — e.g. assigning a number element to a `string` target raises TS2322),
@@ -265,7 +279,19 @@ public partial class TypeChecker
 
     private TypeInfo CheckImportMeta(Expr.ImportMeta im)
     {
-        // import.meta is an object with 'url', 'dirname', and 'filename' properties
+        // The parser already reports TS17012 for `import.foo`. Keep the malformed
+        // meta-property permissive during recovery so a following `.bar` does not
+        // manufacture a second, unrelated missing-property diagnostic.
+        if (im.IsInvalidProperty)
+            return TypeInfo.Any.Shared;
+
+        // lib.es5 declares the extensible ImportMeta interface; later libraries and
+        // user `declare global` blocks augment it. Prefer that authoritative merged
+        // shape whenever a program resolver supplied libraries.
+        if (_environment.GetTypeBinding("ImportMeta") is { } declaredImportMeta)
+            return declaredImportMeta;
+
+        // Standalone product checking keeps its historical runtime-oriented shape.
         return new TypeInfo.Record(
             new Dictionary<string, TypeInfo>
             {
@@ -457,6 +483,14 @@ public partial class TypeChecker
 
         // Allow any <-> anything (escape hatch)
         if (sourceType is TypeInfo.Any || targetType is TypeInfo.Any)
+            return targetType;
+
+        // An unconstrained type parameter can be instantiated with the source type, so the two
+        // types sufficiently overlap for an assertion (`null as T` is accepted by tsc). A
+        // constrained parameter is checked normally against its constraint and can still report
+        // TS2352 (`null as T extends Base`). This is assertion-only; assignability to a bare type
+        // parameter remains intentionally strict.
+        if (targetType is TypeInfo.TypeParameter { Constraint: null })
             return targetType;
 
         // Check if types are related (either direction)
@@ -651,7 +685,10 @@ public partial class TypeChecker
     /// Class-like and dynamic sources (Instance/Class/Any/Unknown) are accepted without merging
     /// concrete fields, mirroring the pre-existing Instance behavior.
     /// </summary>
-    private bool TryMergeSpreadFields(TypeInfo spreadType, Dictionary<string, TypeInfo> fields)
+    private bool TryMergeSpreadFields(
+        TypeInfo spreadType,
+        Dictionary<string, TypeInfo> fields,
+        HashSet<string>? optionalFields = null)
     {
         switch (spreadType)
         {
@@ -659,6 +696,10 @@ public partial class TypeChecker
                 foreach (var kv in record.Fields)
                 {
                     fields[kv.Key] = kv.Value;
+                    if (record.OptionalFields?.Contains(kv.Key) == true)
+                        optionalFields?.Add(kv.Key);
+                    else
+                        optionalFields?.Remove(kv.Key);
                 }
                 return true;
 
@@ -666,7 +707,22 @@ public partial class TypeChecker
                 foreach (var kv in iface.GetAllMembers())
                 {
                     fields[kv.Key] = kv.Value;
+                    if (iface.GetAllOptionalMembers().Contains(kv.Key))
+                        optionalFields?.Add(kv.Key);
+                    else
+                        optionalFields?.Remove(kv.Key);
                 }
+                return true;
+
+            case TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated
+                when FlattenInstantiatedInterface(instantiated) is { } flattened:
+                return TryMergeSpreadFields(flattened, fields, optionalFields);
+
+            case TypeInfo.TypeParameter { Constraint: { } constraint }:
+                return TryMergeSpreadFields(constraint, fields, optionalFields);
+
+            case TypeInfo.TypeParameter:
+                // An unconstrained generic can be spread, but contributes no statically known keys.
                 return true;
 
             case TypeInfo.Intersection intersection:
@@ -675,22 +731,60 @@ public partial class TypeChecker
                 bool anyObjectLike = false;
                 foreach (var part in intersection.Types)
                 {
-                    if (TryMergeSpreadFields(part, fields))
+                    if (TryMergeSpreadFields(part, fields, optionalFields))
                     {
                         anyObjectLike = true;
                     }
                 }
                 return anyObjectLike;
 
-            case TypeInfo.TypeParameter parameter:
-                // Object spread accepts generic parameters. A constraint contributes its known
-                // members (so `{ ...arg }` retains fields from `T extends { x: string }`); an
-                // unconstrained parameter is accepted as an opaque object-like source.
-                return parameter.Constraint is null ||
-                    TryMergeSpreadFields(parameter.Constraint, fields);
-
             case TypeInfo.SpreadType spread:
-                return TryMergeSpreadFields(spread.Inner, fields);
+                return TryMergeSpreadFields(spread.Inner, fields, optionalFields);
+
+            case TypeInfo.Union union:
+            {
+                List<TypeInfo> parts = union.FlattenedTypes
+                    .Where(part => part is not (TypeInfo.Null or TypeInfo.Undefined or TypeInfo.Never))
+                    .ToList();
+                if (parts.Count == 0)
+                    return true;
+
+                var alternatives = new List<(Dictionary<string, TypeInfo> Fields, HashSet<string> Optional)>();
+                foreach (TypeInfo part in parts)
+                {
+                    var partFields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+                    var partOptional = new HashSet<string>(StringComparer.Ordinal);
+                    if (!TryMergeSpreadFields(part, partFields, partOptional))
+                        return false;
+                    alternatives.Add((partFields, partOptional));
+                }
+
+                foreach (string name in alternatives.SelectMany(alternative => alternative.Fields.Keys).Distinct(StringComparer.Ordinal))
+                {
+                    List<TypeInfo> valueTypes = alternatives
+                        .Where(alternative => alternative.Fields.ContainsKey(name))
+                        .Select(alternative => alternative.Fields[name])
+                        .ToList();
+                    TypeInfo valueType = CollapseOrCreateUnion(valueTypes);
+                    bool sourceOptional = alternatives.Any(alternative =>
+                        !alternative.Fields.ContainsKey(name) || alternative.Optional.Contains(name));
+
+                    if (sourceOptional && fields.TryGetValue(name, out TypeInfo? previous))
+                    {
+                        fields[name] = CreateUnion(previous, valueType);
+                        optionalFields?.Remove(name);
+                    }
+                    else
+                    {
+                        fields[name] = valueType;
+                        if (sourceOptional)
+                            optionalFields?.Add(name);
+                        else
+                            optionalFields?.Remove(name);
+                    }
+                }
+                return true;
+            }
 
             // Class-like / dynamic sources: accept but don't enumerate concrete fields here.
             case TypeInfo.Instance:
@@ -710,6 +804,7 @@ public partial class TypeChecker
     private TypeInfo CheckObject(Expr.ObjectLiteral obj)
     {
         Dictionary<string, TypeInfo> fields = [];
+        HashSet<string> optionalFields = [];
         TypeInfo? stringIndexType = null;
         TypeInfo? numberIndexType = null;
         TypeInfo? symbolIndexType = null;
@@ -734,7 +829,7 @@ public partial class TypeChecker
                     stringIndexType = TypeInfo.Any.Shared;
                     continue;
                 }
-                if (!TryMergeSpreadFields(spreadType, fields))
+                if (!TryMergeSpreadFields(spreadType, fields, optionalFields))
                 {
                     throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.", tsCode: "TS2698");
                 }
@@ -799,15 +894,18 @@ public partial class TypeChecker
                 {
                     case Expr.IdentifierKey ik:
                         fields[ik.Name.Lexeme] = valueType;
+                        optionalFields.Remove(ik.Name.Lexeme);
                         break;
 
                     case Expr.LiteralKey lk when lk.Literal.Type == TokenType.STRING:
                         fields[(string)lk.Literal.Literal!] = valueType;
+                        optionalFields.Remove((string)lk.Literal.Literal!);
                         break;
 
                     case Expr.LiteralKey lk when lk.Literal.Type == TokenType.NUMBER:
                         // Number keys are converted to strings in JS/TS
                         fields[lk.Literal.Literal!.ToString()!] = valueType;
+                        optionalFields.Remove(lk.Literal.Literal!.ToString()!);
                         numberIndexType = UnifyIndexTypes(numberIndexType, valueType);
                         break;
 
@@ -838,9 +936,15 @@ public partial class TypeChecker
                         else if (keyType is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
                             symbolIndexType = UnifyIndexTypes(symbolIndexType, valueType);
                         else if (keyType is TypeInfo.StringLiteral sl)
+                        {
                             fields[sl.Value] = valueType;  // Known key at compile time
+                            optionalFields.Remove(sl.Value);
+                        }
                         else if (keyType is TypeInfo.NumberLiteral nl)
+                        {
                             fields[nl.Value.ToString()] = valueType;
+                            optionalFields.Remove(nl.Value.ToString());
+                        }
                         else if (keyType is TypeInfo.Any)
                             stringIndexType = UnifyIndexTypes(stringIndexType, valueType);
                         else if (keyType is TypeInfo.Union)
@@ -923,6 +1027,7 @@ public partial class TypeChecker
         // Properties with a getter but no setter are getter-only
         var getterOnly = getterNames.Except(setterNames).ToFrozenSet();
         return new TypeInfo.Record(fields.ToFrozenDictionary(), stringIndexType, numberIndexType, symbolIndexType,
+            OptionalFields: optionalFields.Count > 0 ? optionalFields.ToFrozenSet() : null,
             GetterOnlyFields: getterOnly.Count > 0 ? getterOnly : null);
     }
 
@@ -948,7 +1053,7 @@ public partial class TypeChecker
     /// — so it lands as a distinct named field instead of collapsing multiple accessors onto the
     /// literal string <c>"[computed]"</c>. Anything else falls back to <see cref="GetPropertyKeyNameForTypeCheck"/>.
     /// </summary>
-    private static string GetAccessorMemberName(Expr.PropertyKey key) =>
+    private string GetAccessorMemberName(Expr.PropertyKey key) =>
         key is Expr.ComputedKey ck && TryGetWellKnownSymbolMemberName(ck.Expression) is { } wellKnownName
             ? wellKnownName
             : GetPropertyKeyNameForTypeCheck(key);
@@ -1185,6 +1290,13 @@ public partial class TypeChecker
             TypeInfo elemType;
             if (element is Expr.Spread spread)
             {
+                if (_jsxSpreadChildren.Contains(spread))
+                {
+                    // JSX spread children use array syntax only as an automatic-runtime
+                    // lowering detail. Their source type need not be iterable.
+                    elementTypes.Add(CheckExpr(spread.Expression));
+                    continue;
+                }
                 // Spread element - get element type from any iterable type
                 TypeInfo spreadType = CheckExpr(spread.Expression);
                 if (spreadType is TypeInfo.Tuple tupType)
@@ -1400,7 +1512,10 @@ public partial class TypeChecker
         }
     }
 
-    private TypeInfo CheckArrowFunction(Expr.ArrowFunction arrow, TypeInfo? expectedType = null)
+    private TypeInfo CheckArrowFunction(
+        Expr.ArrowFunction arrow,
+        TypeInfo? expectedType = null,
+        string contextualReturnTsCode = "TS2322")
     {
         // Extract expected function type for parameter inference
         TypeInfo.Function? expectedFuncType = GetContextualFunctionType(expectedType);
@@ -1617,7 +1732,7 @@ public partial class TypeChecker
                     {
                         throw new TypeCheckException(
                             $"Arrow function expression evaluates to '{exprType}', but its contextual return type is '{expectedRetType}'.",
-                            tsCode: "TS2322");
+                            tsCode: contextualReturnTsCode);
                     }
                     // Context supplies parameter types and validates the result, but the arrow's
                     // own function type still reflects what its expression returns. Compiled code
@@ -1791,6 +1906,13 @@ public partial class TypeChecker
         {
             throw new TypeCheckException($" Cannot assign to 'undefined' because it is not a variable.", line: assign.Name.Line, tsCode: "TS2539");
         }
+        if (assign.Name.Lexeme == "import.meta")
+        {
+            throw new TypeCheckException(
+                "The left-hand side of an assignment expression must be a variable or a property access.",
+                line: assign.Name.Line,
+                tsCode: "TS2364");
+        }
 
         var declaredType = GetDeclaredType(assign.Name.Lexeme);
         if (declaredType == null)
@@ -1818,7 +1940,19 @@ public partial class TypeChecker
             return declaredType;
         }
 
-        TypeInfo valueType = CheckExpr(assign.Value);
+        TypeInfo valueType;
+        try
+        {
+            valueType = CheckExpr(assign.Value);
+        }
+        catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
+        {
+            // The write still definitely assigns its target even when reading the RHS reports
+            // TS2454. Preserve that flow fact before the statement boundary records the error;
+            // otherwise a following reverse assignment produces a cascading TS2454.
+            MarkDefinitelyAssigned(assign.Name);
+            throw;
+        }
 
         if (!IsCompatible(declaredType, valueType))
         {
@@ -1910,15 +2044,50 @@ public partial class TypeChecker
 
     private TypeInfo LookupVariable(Token name)
     {
+        if (name.Lexeme == "globalThis" && _hasDefaultLibraries)
+            return GetGlobalThisType();
+
         // Program declarations and local bindings take precedence over built-in
         // compatibility fallbacks. This both honors normal shadowing and lets
         // loaded lib.*.d.ts constructor/function declarations supply their
         // structural signatures.
         if (_environment.Get(name.Lexeme) is { } declared)
         {
+            if (_currentModule is { } currentModule &&
+                currentModule.Statements.OfType<Stmt.Export>().Any(export =>
+                    export.NamespaceExportName?.Lexeme == name.Lexeme) &&
+                currentModule.Statements.Select(statement => statement switch
+                    {
+                        Stmt.Var { IsVar: false } variable => variable.Name,
+                        Stmt.Const constant => constant.Name,
+                        _ => null,
+                    })
+                    .FirstOrDefault(declaration => declaration?.Lexeme == name.Lexeme)
+                    is { } lexicalDeclaration &&
+                name.Line < lexicalDeclaration.Line)
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"Block-scoped variable '{name.Lexeme}' used before its declaration.",
+                    name.Line,
+                    tsCode: "TS2448"));
+                RecordTypeError(new TypeCheckException(
+                    $"Variable '{name.Lexeme}' is used before being assigned.",
+                    name.Line,
+                    tsCode: "TS2454"));
+            }
             BindValueUse(name);
             if (_environment.GetValueBinding(name.Lexeme) is { } symbol)
                 ThrowIfUsedBeforeAssigned(name, symbol);
+            // Declaration merging replaces an interface binding as later lib files are
+            // loaded, while the `Object: ObjectConstructor` value retains the earlier
+            // interface instance it was declared with. Expose Object's latest merged
+            // shape through the value side as TypeScript does.
+            if (name.Lexeme == "Object" &&
+                declared is TypeInfo.Interface declaredInterface &&
+                _environment.GetTypeBinding(declaredInterface.Name) is TypeInfo.Interface mergedInterface)
+            {
+                declared = mergedInterface;
+            }
             var declaredPath = new Narrowing.NarrowingPath.Variable(name.Lexeme);
             return GetNarrowing(declaredPath) ?? declared;
         }
@@ -1935,7 +2104,12 @@ public partial class TypeChecker
 
         if (name.Lexeme == "console") return TypeInfo.Any.Shared;
         if (name.Lexeme == "Math") return TypeInfo.Any.Shared; // Math is a special global object
-        if (name.Lexeme == "Object") return TypeInfo.Any.Shared; // Object is a special global object
+        if (name.Lexeme == "Object")
+        {
+            if (_environment.GetTypeBinding("ObjectConstructor") is { } objectConstructor)
+                return objectConstructor;
+            return TypeInfo.Any.Shared; // Object is a special global object
+        }
         if (name.Lexeme == "Array") return TypeInfo.Any.Shared; // Array is a special global object
         if (name.Lexeme == "JSON") return TypeInfo.Any.Shared; // JSON is a special global object
         if (name.Lexeme == "Promise") return TypeInfo.Any.Shared; // Promise is a special global object
@@ -1963,7 +2137,7 @@ public partial class TypeChecker
         if (name.Lexeme == "isNaN") return TypeInfo.Any.Shared; // Global isNaN function
         if (name.Lexeme == "isFinite") return TypeInfo.Any.Shared; // Global isFinite function
         if (name.Lexeme == "eval") return TypeInfo.Any.Shared; // Global eval(): (s: string) => any
-        if (name.Lexeme == "globalThis") return TypeInfo.Any.Shared; // globalThis ES2020
+        if (name.Lexeme == "globalThis") return TypeInfo.Any.Shared; // standalone globalThis
         if (name.Lexeme == "fetch") return TypeInfo.Any.Shared; // fetch() global function
         if (name.Lexeme == "setTimeout") return TypeInfo.Any.Shared; // setTimeout() global function
         if (name.Lexeme == "setInterval") return TypeInfo.Any.Shared; // setInterval() global function
@@ -1997,7 +2171,9 @@ public partial class TypeChecker
             return TypeInfo.Any.Shared;
         // Worker Threads globals
         if (name.Lexeme == "structuredClone") return TypeInfo.Any.Shared; // structuredClone() global function
-        if (name.Lexeme == "SharedArrayBuffer") return TypeInfo.Any.Shared; // SharedArrayBuffer constructor
+        if (name.Lexeme == "SharedArrayBuffer" &&
+            (!_hasDefaultLibraries || !Options.RespectLoadedLibraries))
+            return TypeInfo.Any.Shared; // standalone execution compatibility fallback
         if (name.Lexeme == "ArrayBuffer") return TypeInfo.Any.Shared; // ArrayBuffer constructor
         if (name.Lexeme == "Atomics") return TypeInfo.Any.Shared; // Atomics static object
         if (name.Lexeme == "MessageChannel") return TypeInfo.Any.Shared; // MessageChannel constructor

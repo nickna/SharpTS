@@ -238,6 +238,16 @@ public class ModuleResolver
             return specifier;
         }
 
+        // Imports inside an embedded npm fallback are package-internal and must stay on
+        // that fallback graph. A program-level ambient declaration may shadow the package
+        // for user imports, but must not retarget the shim's own dependencies midway
+        // through checking.
+        if (currentModulePath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal) &&
+            _npmFallback.TryResolve(specifier, out var npmIntraShim) && npmIntraShim is not null)
+        {
+            return npmIntraShim.VirtualPath;
+        }
+
         if (preferDeclarations &&
             _ambientModulePaths.TryGetValue(specifier, out string? ambientPath))
             return ambientPath;
@@ -303,9 +313,9 @@ public class ModuleResolver
             // to probe node_modules from, so the npm-fallback shim answers immediately
             // (e.g. the react shim's own `react/jsx-runtime` re-exports).
             if (currentModulePath.StartsWith(EmbeddedStdlibProvider.VirtualPathPrefix, StringComparison.Ordinal) &&
-                _npmFallback.TryResolve(bareSpecifier, out var npmIntraShim) && npmIntraShim is not null)
+                _npmFallback.TryResolve(bareSpecifier, out var npmIntraPackage) && npmIntraPackage is not null)
             {
-                return npmIntraShim.VirtualPath;
+                return npmIntraPackage.VirtualPath;
             }
 
             if (_resolutionOptions.BaseUrl is not null)
@@ -1453,7 +1463,13 @@ public class ModuleResolver
                     _moduleCache[virtualPath] = module;
                     _ambientModulePaths[declaration.ModulePath] = virtualPath;
                 }
-                module.Statements.AddRange(declaration.Members);
+                foreach (Stmt member in declaration.Members)
+                {
+                    if (!module.Statements.Any(existing => ReferenceEquals(existing, member)))
+                        module.Statements.Add(member);
+                }
+                if (!declarationFile.Dependencies.Contains(module))
+                    declarationFile.Dependencies.Add(module);
             }
         }
     }

@@ -15,15 +15,11 @@ namespace SharpTS.TypeSystem;
 ///
 /// The model mirrors TypeScript's <c>signatureRelatedTo</c>:
 /// <list type="bullet">
-/// <item>Generic source → non-generic target: instantiate the source's type parameters by inferring
-/// them from the target's parameters (un-inferred ones default to <c>{}</c>), then relate the
-/// instantiated shape. This is why <c>aN = bN</c> (assign a generic fn to a concrete-typed slot)
-/// type-checks while a return-only type parameter that can't be inferred collapses to <c>{}</c> and
-/// fails the return check.</item>
-/// <item>Everything else (non-generic source, or a generic <em>target</em>): relate the shapes
-/// directly, leaving type parameters opaque. The existing type-parameter rules then correctly reject
-/// a concrete source against a bare type parameter — so <c>bN = aN</c> (assign a concrete fn to a
-/// generic-typed slot) is an error, since the target must hold for every instantiation.</item>
+/// <item>Generic source: instantiate the source's type parameters by inferring from the target's
+/// parameters (which remain rigid when the target is also generic), then relate the instantiated
+/// shape. Un-inferred source parameters default to their constraint or <c>{}</c>.</item>
+/// <item>Non-generic source: relate directly. A generic target's parameters remain opaque, so a
+/// concrete source cannot satisfy a target that must hold for every instantiation.</item>
 /// </list>
 /// </remarks>
 public partial class TypeChecker
@@ -52,8 +48,8 @@ public partial class TypeChecker
 
     /// <summary>
     /// True when <paramref name="source"/> is assignable to <paramref name="target"/> as a call
-    /// signature. Applies contextual signature instantiation for a generic source against a
-    /// non-generic target; otherwise relates the shapes with type parameters left opaque.
+    /// signature. Applies contextual signature instantiation for a generic source; target type
+    /// parameters, if present, remain rigid contextual types.
     /// </summary>
     private bool SignatureRelatedTo(NormalizedSignature source, NormalizedSignature target)
     {
@@ -82,22 +78,16 @@ public partial class TypeChecker
     }
 
     /// <summary>
-    /// Instantiates a generic source signature against a concrete target by inferring each source
+    /// Instantiates a generic source signature against a contextual target by inferring each source
     /// type parameter from the corresponding target type, then substituting. This is a dedicated
     /// inference path — deliberately separate from the call-argument inference (<c>InferFromType</c>)
     /// so changing it can't perturb generic call type-checking.
     /// </summary>
     /// <remarks>
     /// Inference is variance-aware. A type parameter is collected from every structural position it
-    /// occupies (recursing arrays, functions, objects, tuples, generic instantiations), and the
-    /// candidates are combined by the variance of those positions:
-    /// <list type="bullet">
-    /// <item>seen in any <em>contravariant</em> (parameter) position → intersection: the chosen type
-    /// must serve as every input it's used as, so <c>&lt;T&gt;(x: T, y: T)</c> matched against
-    /// <c>(x: {a}, y: {a;b})</c> yields <c>{a;b}</c>, not a first-wins <c>{a}</c> that then fails the
-    /// second parameter;</item>
-    /// <item>otherwise (purely covariant) → union.</item>
-    /// </list>
+    /// occupies (recursing arrays, functions, objects, tuples, and generic instantiations). Candidate
+    /// sets use TypeScript's common-subtype/common-supertype reductions; incomparable candidates keep
+    /// the leftmost choice and the final shape relation validates every occurrence.
     /// Un-inferred parameters default to their constraint, or <c>{}</c> when unconstrained — matching
     /// TypeScript, where an uninferable (typically return-only) type parameter collapses to <c>{}</c>.
     /// Returns null when an inferred type violates its parameter's (substituted) constraint — the
@@ -113,7 +103,10 @@ public partial class TypeChecker
 
         int positions = Math.Min(source.Func.ParamTypes.Count, target.ParamTypes.Count);
         for (int i = 0; i < positions; i++)
-            CollectInferenceCandidates(source.Func.ParamTypes[i], target.ParamTypes[i], contravariant: true, paramNames, candidates, sawContravariant);
+            // instantiateSignatureInContextOf infers FROM the contextual parameter type TO the
+            // generic source parameter type without flipping variance at this outer boundary.
+            // Variance flips only after descending into a nested function parameter.
+            CollectInferenceCandidates(source.Func.ParamTypes[i], target.ParamTypes[i], contravariant: false, paramNames, candidates, sawContravariant);
         // Return-position candidates are kept separate and only consulted when the parameter
         // positions yielded nothing — mirroring tsc's inference priorities, where a return-position
         // inference never overrides a parameter-position one (e.g. relating `<T>(x: T) => T` to
@@ -125,39 +118,33 @@ public partial class TypeChecker
         foreach (var tp in source.TypeParams!)
         {
             TypeInfo? combined = null;
-            bool conflicted = false;
             if (candidates.TryGetValue(tp.Name, out var cands) && cands.Count > 0)
             {
-                // Contravariant (parameter-position) candidates must combine to a type that serves
-                // as every input it's used as: the common subtype among the candidates. Distinct
-                // incomparable candidates (e.g. two different rigid type parameters, or string vs
-                // number) have none — a CONFLICT, not a default: tsc leaves the type parameter
-                // rigid in that case, so the relation fails against anything the parameter itself
-                // wouldn't relate to. Purely covariant candidates union.
+                // Combine candidates using tsc's getCommonSubtype/getCommonSupertype reductions.
+                // Those reductions deliberately retain the leftmost candidate when two candidates
+                // are incomparable; the instantiated shape comparison below then decides whether
+                // that choice actually relates at every occurrence.
                 combined = sawContravariant.Contains(tp.Name)
                     ? PickCommonSubtype(cands)
-                    : cands.Aggregate(CreateUnion);
-                conflicted = combined is null;
+                    : PickCommonSupertype(cands);
             }
             else if (returnCandidates.TryGetValue(tp.Name, out var retCands) && retCands.Count > 0)
             {
                 combined = returnSawContravariant.Contains(tp.Name)
                     ? PickCommonSubtype(retCands)
-                    : retCands.Aggregate(CreateUnion);
-                conflicted = combined is null;
+                    : PickCommonSupertype(retCands);
             }
             if (combined is not null)
             {
                 inferred[tp.Name] = combined;
                 inferredFromCandidates.Add(tp.Name);
             }
-            else if (!conflicted)
+            else
             {
                 // No inference site at all (typically a return-only parameter): default to the
                 // constraint, or {} when unconstrained — matching tsc.
                 inferred[tp.Name] = tp.Constraint ?? EmptyObjectType;
             }
-            // Conflicted parameters get no substitution: they stay rigid in the relating below.
         }
 
         // Inferred types must satisfy their parameter's constraint (with the inference substituted
@@ -174,27 +161,44 @@ public partial class TypeChecker
                 inferred[tp.Name] = constraint;
         }
 
-        var paramTypes = source.Func.ParamTypes.Select(p => Substitute(p, inferred)).ToList();
-        var returnType = Substitute(source.Func.ReturnType, inferred);
+        // A parameter may itself be a callable/constructable object. Those signatures are part of
+        // the parameter's shape and must survive contextual instantiation (notably the nested
+        // constructor overloads in assignmentCompatWithConstructSignatures3).
+        var paramTypes = source.Func.ParamTypes
+            .Select(p => SubstitutePreservingSignatures(p, inferred))
+            .ToList();
+        var returnType = SubstitutePreservingSignatures(source.Func.ReturnType, inferred);
         return new TypeInfo.Function(
             paramTypes, returnType, source.Func.RequiredParams, source.Func.HasRestParam,
-            source.Func.ThisType, source.Func.ParamNames);
+            source.Func.ThisType, source.Func.ParamNames,
+            MarkInstantiatedParamPositions(source.Func, inferred));
     }
 
     /// <summary>
-    /// The candidate assignable to every other candidate (the most specific one), or null when the
-    /// candidates are pairwise incomparable — an inference failure.
+    /// TypeScript's common-subtype reduction: take a later candidate when it is a subtype of the
+    /// current candidate, otherwise retain the current (including for incomparable candidates).
     /// </summary>
-    private TypeInfo? PickCommonSubtype(List<TypeInfo> candidates)
+    private TypeInfo PickCommonSubtype(List<TypeInfo> candidates)
     {
-        var distinct = candidates.Distinct().ToList();
-        if (distinct.Count == 1) return distinct[0];
-        foreach (var c in distinct)
-        {
-            if (distinct.All(other => ReferenceEquals(other, c) || Equals(other, c) || IsCompatible(other, c)))
-                return c;
-        }
-        return null;
+        TypeInfo result = candidates[0];
+        foreach (TypeInfo candidate in candidates.Skip(1))
+            if (IsCompatible(result, candidate))
+                result = candidate;
+        return result;
+    }
+
+    /// <summary>
+    /// TypeScript's common-supertype reduction: take a later candidate when the current candidate is
+    /// its subtype, otherwise retain the current. Thus Base/Derived infers Base, while incomparable
+    /// candidates retain the leftmost and are validated by the subsequent shape relation.
+    /// </summary>
+    private TypeInfo PickCommonSupertype(List<TypeInfo> candidates)
+    {
+        TypeInfo result = candidates[0];
+        foreach (TypeInfo candidate in candidates.Skip(1))
+            if (IsCompatible(candidate, result))
+                result = candidate;
+        return result;
     }
 
     /// <summary>
@@ -283,8 +287,8 @@ public partial class TypeChecker
                 var tp = sig.TypeParams[i];
                 renamed.Add(new TypeInfo.TypeParameter(
                     $"{prefix}{i}",
-                    tp.Constraint is null ? null : Substitute(tp.Constraint, map),
-                    tp.Default is null ? null : Substitute(tp.Default, map),
+                    tp.Constraint is null ? null : SubstituteWithoutConditionalEval(tp.Constraint, map),
+                    tp.Default is null ? null : SubstituteWithoutConditionalEval(tp.Default, map),
                     tp.IsConst, tp.Variance));
             }
             for (int i = 0; i < count; i++)
@@ -293,10 +297,10 @@ public partial class TypeChecker
 
         var f = sig.Func;
         return new NormalizedSignature(renamed, new TypeInfo.Function(
-            f.ParamTypes.Select(p => Substitute(p, map)).ToList(),
-            Substitute(f.ReturnType, map),
+            f.ParamTypes.Select(p => SubstituteWithoutConditionalEval(p, map)).ToList(),
+            SubstituteWithoutConditionalEval(f.ReturnType, map),
             f.RequiredParams, f.HasRestParam,
-            f.ThisType is null ? null : Substitute(f.ThisType, map),
+            f.ThisType is null ? null : SubstituteWithoutConditionalEval(f.ThisType, map),
             f.ParamNames));
     }
 
@@ -313,8 +317,8 @@ public partial class TypeChecker
         foreach (var tp in sig.TypeParams!) anyMap[tp.Name] = TypeInfo.Any.Shared;
         var f = sig.Func;
         return new NormalizedSignature(null, new TypeInfo.Function(
-            f.ParamTypes.Select(p => Substitute(p, anyMap)).ToList(),
-            Substitute(f.ReturnType, anyMap),
+            f.ParamTypes.Select(p => SubstitutePreservingSignatures(p, anyMap)).ToList(),
+            SubstitutePreservingSignatures(f.ReturnType, anyMap),
             f.RequiredParams, f.HasRestParam, f.ThisType, f.ParamNames));
     }
 

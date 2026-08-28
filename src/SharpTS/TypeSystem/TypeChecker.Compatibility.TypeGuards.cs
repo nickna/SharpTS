@@ -965,6 +965,15 @@ public partial class TypeChecker
             result.Add((new Narrowing.NarrowingPath.Variable(rhsVar.Name.Lexeme),
                 NarrowLogicalTruthy(rhsType), NarrowLogicalFalsy(rhsType)));
         }
+        else if (logical.Operator.Type == TokenType.QUESTION_QUESTION_EQUAL &&
+                 logical.Value is Expr.Variable nullishRhs)
+        {
+            // A truthy result says nothing about the RHS: the non-nullish LHS
+            // may have short-circuited before the RHS was evaluated.
+            TypeInfo rhsType = LookupVariable(nullishRhs.Name);
+            result.Add((new Narrowing.NarrowingPath.Variable(nullishRhs.Name.Lexeme),
+                rhsType, rhsType));
+        }
 
         return result;
     }

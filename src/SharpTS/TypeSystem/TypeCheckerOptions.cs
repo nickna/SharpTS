@@ -43,6 +43,13 @@ public sealed record TypeCheckerOptions
 
     public bool NoImplicitThis { get; init; } = false;
 
+    /// <summary>
+    /// tsc's <c>useUnknownInCatchVariables</c>. Unannotated catch bindings are
+    /// <c>unknown</c> when enabled and retain SharpTS's historical <c>any</c>
+    /// default otherwise.
+    /// </summary>
+    public bool UseUnknownInCatchVariables { get; init; } = false;
+
     public bool StrictPropertyInitialization { get; init; } = false;
 
     /// <summary>
@@ -65,6 +72,16 @@ public sealed record TypeCheckerOptions
 
     /// <summary>Allows a default import to bind a CommonJS <c>export =</c> declaration.</summary>
     public bool AllowSyntheticDefaultImports { get; init; } = false;
+
+    /// <summary>Whether emitted helpers must be imported from tslib.</summary>
+    public bool ImportHelpers { get; init; } = false;
+
+    /// <summary>
+    /// Treats the loaded lib declaration graph as authoritative for global availability.
+    /// The TypeScript conformance harness enables this; execution-oriented callers retain
+    /// SharpTS's runtime built-in fallbacks for custom standard libraries.
+    /// </summary>
+    public bool RespectLoadedLibraries { get; init; } = false;
 
     /// <summary>
     /// Diagnostics collected before <c>CheckWithRecovery</c> stops. Default 10 — an ergonomics
@@ -92,6 +109,7 @@ public sealed record TypeCheckerOptions
         StrictFunctionTypes = true,
         NoImplicitAny = true,
         NoImplicitThis = true,
+        UseUnknownInCatchVariables = true,
         StrictPropertyInitialization = true,
         CheckVariableUseBeforeAssignment = true,
     };

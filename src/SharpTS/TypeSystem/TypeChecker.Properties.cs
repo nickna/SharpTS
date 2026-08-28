@@ -88,6 +88,9 @@ public partial class TypeChecker
                     tsCode: "TS2683"));
                 return TypeInfo.Any.Shared;
             }
+            if (_hasDefaultLibraries && _currentFunctionReturnType is null &&
+                _currentModule?.IsScript == true)
+                return GetGlobalThisType();
             // Allow `this` in regular functions (JS constructor-function
             // pattern) and at module top level. Type it as Any so members
             // resolve permissively — matches how CJS code uses
@@ -109,6 +112,108 @@ public partial class TypeChecker
 
     private TypeInfo CheckGet(Expr.Get get)
     {
+        bool directGlobalObject = get.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
+            get.Object is Expr.This && _currentFunctionReturnType is null;
+        if (_hasDefaultLibraries && directGlobalObject &&
+            !GetGlobalThisType().Members.ContainsKey(get.Name.Lexeme))
+        {
+            if (_globalObjectLexicalNames.Contains(get.Name.Lexeme))
+                throw new TypeCheckException(
+                    $"Property '{get.Name.Lexeme}' does not exist on type 'typeof globalThis'.",
+                    get.Name.Line,
+                    tsCode: "TS2339");
+            if (!_noImplicitAny)
+                return TypeInfo.Any.Shared;
+            throw new TypeCheckException(
+                $"Element implicitly has an 'any' type because type 'typeof globalThis' has no index signature.",
+                get.Name.Line,
+                tsCode: "TS7017");
+        }
+
+        // The standard-library declaration grammar is intentionally best-effort;
+        // consult the type facet directly for Object's target-sensitive additions
+        // instead of allowing a hoisted `any` value to erase their absence.
+        if (_hasDefaultLibraries &&
+            get.Object is Expr.Variable { Name.Lexeme: "Object" } &&
+            get.Name.Lexeme is "values" or "entries")
+        {
+            if (_environment.GetTypeBinding("ObjectConstructor") is TypeInfo.Interface objectCtor &&
+                objectCtor.Members.TryGetValue(get.Name.Lexeme, out TypeInfo? member))
+                return member;
+            throw new TypeCheckException(
+                $"Property '{get.Name.Lexeme}' does not exist on type 'ObjectConstructor'. " +
+                "Try changing the 'lib' compiler option to 'es2017' or later.",
+                get.Name.Line,
+                tsCode: "TS2550");
+        }
+
+        if (_hasDefaultLibraries &&
+            get.Object is Expr.Variable { Name.Lexeme: "SharedArrayBuffer" } &&
+            get.Name.Lexeme == "length")
+            return TypeInfo.Primitive.Number;
+
+        // Runtime support for Intl is broader than the declaration parser's
+        // current overloaded namespace fidelity. Constructor calls below apply
+        // the diagnostics that matter; static members remain callable values.
+        if (_hasDefaultLibraries &&
+            get.Object is Expr.Variable { Name.Lexeme: "Intl" })
+            return TypeInfo.Any.Shared;
+
+        if (_hasDefaultLibraries &&
+            get.Object is Expr.Variable { Name.Lexeme: "Atomics" })
+        {
+            TypeInfo atomicsType = CheckExpr(get.Object);
+            if (get.Name.Lexeme == "waitAsync" &&
+                GetMemberType(atomicsType, get.Name.Lexeme) is null)
+            {
+                var error = new TypeCheckException(
+                    "Property 'waitAsync' does not exist on type 'Atomics'. Try changing the 'lib' compiler option to 'es2024' or later.",
+                    get.Name.Line,
+                    tsCode: "TS2550");
+                if (!_recoveryMode && _moduleResolver is null)
+                    throw error;
+                RecordTypeError(error);
+            }
+            return TypeInfo.Any.Shared;
+        }
+
+        if (_hasDefaultLibraries &&
+            get.Object is Expr.Variable { Name.Lexeme: "self" or "window" } &&
+            GetGlobalThisType().Members.TryGetValue(get.Name.Lexeme, out TypeInfo? windowGlobalMember))
+            return windowGlobalMember;
+
+        TypeInfo objType = CheckExpr(get.Object);
+
+        if (_hasDefaultLibraries &&
+            get.Object is Expr.Variable { Name.Lexeme: "top" } &&
+            objType is TypeInfo.Union topUnion && topUnion.ContainsNull &&
+            _globalObjectVarNames.Contains(get.Name.Lexeme))
+        {
+            RecordTypeError(NullableMemberAccessError(topUnion, get.Name, get.Object));
+            throw new TypeCheckException(
+                $"Property '{get.Name.Lexeme}' does not exist on type 'Window'.",
+                get.Name.Line,
+                tsCode: "TS2339");
+        }
+
+        if (_recoveryMode &&
+            get.Object is Expr.Get
+            {
+                Object: Expr.Variable { Name.Lexeme: var resultName },
+                Name.Lexeme: "groups"
+            } groupsAccess &&
+            objType is TypeInfo.Union groupsUnion && groupsUnion.ContainsUndefined)
+        {
+            RecordTypeError(new TypeCheckException(
+                $"'{resultName}.groups' is possibly 'undefined'.",
+                groupsAccess.Name.Line,
+                tsCode: "TS18048"));
+            TypeInfo? nonUndefined = groupsUnion.FlattenedTypes
+                .FirstOrDefault(type => type is not TypeInfo.Undefined);
+            if (nonUndefined is TypeInfo.Interface { StringIndexType: { } stringIndex })
+                return stringIndex;
+        }
+
         // Special case: Symbol.iterator, Symbol.asyncIterator, etc. return unique symbol types
         if (get.Object is Expr.Variable v && v.Name.Lexeme == "Symbol")
         {
@@ -130,6 +235,14 @@ public partial class TypeChecker
                 case "prototype":
                     return new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
             }
+
+            // A declaration-merged SymbolConstructor may add symbol-valued static members. Read
+            // the latest type binding instead of the earlier lib variable's frozen interface.
+            if (_environment.GetTypeBinding("SymbolConstructor") is TypeInfo.Interface symbolConstructor
+                && symbolConstructor.Members.TryGetValue(get.Name.Lexeme, out var augmentedMember))
+            {
+                return augmentedMember;
+            }
         }
 
         // Check for property narrowing (e.g., after "if (obj.prop !== null)" or nested "obj.a.b")
@@ -141,8 +254,6 @@ public partial class TypeChecker
             if (narrowedType != null)
                 return narrowedType;
         }
-
-        TypeInfo objType = CheckExpr(get.Object);
 
         // Expand recursive type aliases lazily before property access
         if (objType is TypeInfo.RecursiveTypeAlias rta)
@@ -164,7 +275,21 @@ public partial class TypeChecker
             }
         }
 
-        return ResolveMemberType(get, objType);
+        try
+        {
+            return ResolveMemberType(get, objType);
+        }
+        catch (TypeCheckException ex) when (
+            ex.Diagnostic.TsCode == "TS2339" &&
+            get.Object is Expr.Variable { Name.Lexeme: "Object" } &&
+            get.Name.Lexeme is "values" or "entries")
+        {
+            throw new TypeCheckException(
+                $"Property '{get.Name.Lexeme}' does not exist on type 'ObjectConstructor'. " +
+                "Try changing the 'lib' compiler option to 'es2017' or later.",
+                get.Name.Line,
+                tsCode: "TS2550");
+        }
     }
 
     /// <summary>
@@ -174,6 +299,14 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ResolveMemberType(Expr.Get get, TypeInfo objType)
     {
+        if (objType is TypeInfo.Unknown)
+        {
+            throw new TypeCheckException(
+                "Object is of type 'unknown'.",
+                get.Name.Line,
+                tsCode: "TS18046");
+        }
+
         // A bare `null`/`undefined` receiver has no properties — `tsc` rejects access on it (TS2339
         // for `undefined`, TS2531 for `null`), just as it does for a union containing them (see
         // CheckGetOnUnion). Optional chaining (`x?.p`) short-circuits to `undefined` instead. Without
@@ -306,7 +439,12 @@ public partial class TypeChecker
                     hasNullOrUndefined = true;
                     continue;
                 }
-                throw NullableMemberAccessError(union, memberName, receiver);
+                var nullableError = NullableMemberAccessError(union, memberName, receiver);
+                if (!_recoveryMode && _moduleResolver is null)
+                    throw nullableError;
+                RecordTypeError(nullableError);
+                hasNullOrUndefined = true;
+                continue;
             }
 
             try
@@ -334,7 +472,7 @@ public partial class TypeChecker
             memberTypes.Add(TypeInfo.Undefined.Shared);
         }
 
-        // If no members have the property at all, fall back to Any
+        // A union containing only nullish members has no value-side member.
         if (memberTypes.Count == 0)
         {
             return TypeInfo.Any.Shared;
@@ -357,7 +495,13 @@ public partial class TypeChecker
     {
         bool hasNull = union.ContainsNull;
         bool hasUndefined = union.ContainsUndefined;
-        string? ident = receiver is Expr.Variable v ? v.Name.Lexeme : null;
+        string? ident = receiver switch
+        {
+            Expr.Variable v => v.Name.Lexeme,
+            Expr.Get { Object: Expr.Variable root, Name: var property } =>
+                $"{root.Name.Lexeme}.{property.Lexeme}",
+            _ => null,
+        };
 
         // The subject clause matches tsc's wording; the code is picked to match too.
         // (SharpTS keeps the member name in the message — more actionable than tsc's
@@ -376,6 +520,15 @@ public partial class TypeChecker
         };
         return new TypeCheckException(
             $"Property '{memberName.Lexeme}' cannot be accessed. {subject}", memberName.Line, tsCode: code);
+    }
+
+    private static TypeCheckException NullableIndexAccessError(TypeInfo.Union union, Expr receiver)
+    {
+        int line = TryGetExprLine(receiver) ?? 0;
+        return NullableMemberAccessError(
+            union,
+            new Token(TokenType.IDENTIFIER, "[index]", null, line),
+            receiver);
     }
 
     /// <summary>
@@ -512,6 +665,25 @@ public partial class TypeChecker
 
     private TypeInfo CheckSet(Expr.Set set)
     {
+        bool directGlobalObject = set.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
+            set.Object is Expr.This && _currentFunctionReturnType is null;
+        if (_hasDefaultLibraries && directGlobalObject &&
+            !GetGlobalThisType().Members.ContainsKey(set.Name.Lexeme))
+        {
+            if (_globalObjectLexicalNames.Contains(set.Name.Lexeme))
+                throw new TypeCheckException(
+                    $"Property '{set.Name.Lexeme}' does not exist on type 'typeof globalThis'.",
+                    set.Name.Line,
+                    tsCode: "TS2339");
+            // Checked JavaScript permits creating globals through `this`/`globalThis`.
+            if (_filePath?.EndsWith(".js", StringComparison.OrdinalIgnoreCase) == true || !_noImplicitAny)
+                return CheckExpr(set.Value);
+            throw new TypeCheckException(
+                "Element implicitly has an 'any' type because type 'typeof globalThis' has no index signature.",
+                set.Name.Line,
+                tsCode: "TS7017");
+        }
+
         TypeInfo objType = CheckExpr(set.Object);
 
         // Expand recursive type aliases lazily before property assignment — mirrors CheckGet, so a

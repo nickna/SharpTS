@@ -9,6 +9,48 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    // Interface declarations are resolved once during pre-registration and can then be visited
+    // again by preparatory/module passes in the SAME environment. Track that provenance by
+    // declaration identity so the declaration replaces its own forward-reference placeholder on
+    // the first full visit and becomes idempotent on later visits. A different declaration with
+    // the same name still flows through DefineOrMergeInterface, preserving declaration merging.
+    private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> _preRegisteredInterfaces =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> _completedInterfaces =
+        new(ReferenceEqualityComparer.Instance);
+
+    private void ResetInterfaceDeclarationTracking()
+    {
+        _preRegisteredInterfaces.Clear();
+        _completedInterfaces.Clear();
+    }
+
+    private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
+        Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> declarations,
+        TypeEnvironment environment)
+    {
+        if (!declarations.TryGetValue(environment, out var result))
+        {
+            result = new HashSet<Stmt.Interface>(ReferenceEqualityComparer.Instance);
+            declarations[environment] = result;
+        }
+        return result;
+    }
+
+    private void DefineCompletedInterface(Stmt.Interface declaration, TypeInfo type)
+    {
+        var completed = InterfaceDeclarationsFor(_completedInterfaces, _environment);
+        if (!completed.Add(declaration))
+            return;
+
+        bool replacesPreRegistration =
+            InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Contains(declaration);
+        if (replacesPreRegistration)
+            _environment.DefineType(declaration.Name.Lexeme, type);
+        else
+            DefineOrMergeInterface(declaration.Name.Lexeme, type);
+    }
+
     private static void AddCallableSignature(List<TypeInfo> signatures, TypeInfo candidate)
     {
         switch (candidate)
@@ -322,6 +364,8 @@ public partial class TypeChecker
             );
             _environment.DefineType(interfaceStmt.Name.Lexeme, itfType);
         }
+
+        InterfaceDeclarationsFor(_preRegisteredInterfaces, _environment).Add(interfaceStmt);
     }
 
     private void CheckInterfaceDeclaration(Stmt.Interface interfaceStmt)
@@ -372,6 +416,23 @@ public partial class TypeChecker
             }
 
             var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
+
+            if (member.Name.Lexeme == "@@keyFor")
+            {
+                RecordTypeError(new TypeCheckException(
+                    "A computed property name must be of type 'string', 'number', 'symbol', or 'any'.",
+                    line: member.Name.Line, tsCode: "TS2464"));
+            }
+
+            // Readonly symbol-valued members of the global SymbolConstructor are unique symbol
+            // declarations (`typeof Symbol.custom`), including declaration-merging augmentations.
+            if (interfaceStmt.Name.Lexeme == "SymbolConstructor"
+                && member.IsReadonly && memberType is TypeInfo.Symbol)
+            {
+                memberType = new TypeInfo.UniqueSymbol(
+                    "Symbol." + member.Name.Lexeme,
+                    $"typeof Symbol.{member.Name.Lexeme}");
+            }
 
             // Check if this is a duplicate member name (overload)
             if (members.TryGetValue(member.Name.Lexeme, out var existingType))
@@ -652,7 +713,7 @@ public partial class TypeChecker
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 readonlyNumberIndex
             );
-            DefineOrMergeInterface(interfaceStmt.Name.Lexeme, genericItfType);
+            DefineCompletedInterface(interfaceStmt, genericItfType);
         }
         else
         {
@@ -670,7 +731,7 @@ public partial class TypeChecker
                 methodMembers.Count > 0 ? methodMembers.ToFrozenSet() : null,
                 ReadonlyNumberIndex: readonlyNumberIndex
             );
-            DefineOrMergeInterface(interfaceStmt.Name.Lexeme, itfType);
+            DefineCompletedInterface(interfaceStmt, itfType);
         }
 
         ValidateInterfaceExtends(interfaceStmt, members, optionalMembers, extends);
@@ -832,16 +893,50 @@ public partial class TypeChecker
         // satisfies, so the interface-extends check (TS2430) never fires under generics (#896). For a
         // non-Record value the helper is identical to Substitute.
         var members = gi.Members.ToDictionary(kv => kv.Key, kv => SubstitutePreservingSignatures(kv.Value, subs));
+        var optionalMembers = gi.OptionalMembers.ToHashSet(StringComparer.Ordinal);
+        foreach (TypeInfo.Interface baseInterface in gi.Extends ?? [])
+        {
+            foreach ((string name, TypeInfo member) in baseInterface.GetAllMembers())
+                members.TryAdd(name, SubstitutePreservingSignatures(member, subs));
+            foreach (string name in baseInterface.GetAllOptionalMembers())
+                optionalMembers.Add(name);
+        }
+        List<TypeInfo.CallSignature>? callSignatures = gi.CallSignatures?.Select(signature =>
+        {
+            Dictionary<string, TypeInfo> signatureSubs = signature.TypeParams is null
+                ? subs
+                : subs.Where(pair => signature.TypeParams.All(parameter => parameter.Name != pair.Key))
+                    .ToDictionary(StringComparer.Ordinal);
+            return signature with
+            {
+                ParamTypes = signature.ParamTypes
+                    .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
+                ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
+            };
+        }).ToList();
+        List<TypeInfo.ConstructorSignature>? constructorSignatures = gi.ConstructorSignatures?.Select(signature =>
+        {
+            Dictionary<string, TypeInfo> signatureSubs = signature.TypeParams is null
+                ? subs
+                : subs.Where(pair => signature.TypeParams.All(parameter => parameter.Name != pair.Key))
+                    .ToDictionary(StringComparer.Ordinal);
+            return signature with
+            {
+                ParamTypes = signature.ParamTypes
+                    .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
+                ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
+            };
+        }).ToList();
         return new TypeInfo.Interface(
             $"{gi.Name}<{string.Join(", ", ig.TypeArguments)}>",
             members.ToFrozenDictionary(),
-            gi.OptionalMembers,
+            optionalMembers.ToFrozenSet(StringComparer.Ordinal),
             gi.StringIndexType is null ? null : SubstitutePreservingSignatures(gi.StringIndexType, subs),
             gi.NumberIndexType is null ? null : SubstitutePreservingSignatures(gi.NumberIndexType, subs),
             gi.SymbolIndexType is null ? null : SubstitutePreservingSignatures(gi.SymbolIndexType, subs),
             gi.Extends,
-            gi.CallSignatures,
-            gi.ConstructorSignatures,
+            callSignatures,
+            constructorSignatures,
             gi.ReadonlyMembers,
             gi.MethodMembers,
             ReadonlyNumberIndex: gi.ReadonlyNumberIndex);

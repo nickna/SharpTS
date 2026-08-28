@@ -643,6 +643,10 @@ public class CommandLineParser
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     strictness = strictness with { NoImplicitThis = flag };
                     break;
+                case "--useUnknownInCatchVariables":
+                    if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
+                    strictness = strictness with { UseUnknownInCatchVariables = flag };
+                    break;
                 case "--strictPropertyInitialization":
                     if (!TryParseFlagBool(value, out flag)) return (default!, [], [], BadBool(name, value));
                     strictness = strictness with { StrictPropertyInitialization = flag };

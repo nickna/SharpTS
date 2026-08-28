@@ -23,8 +23,12 @@ public partial class TypeChecker
             .Where(f =>
             {
                 string name = GetFieldMemberName(f);
-                return classType.FieldTypes.TryGetValue(name, out var type) &&
-                       !CanBeUndefined(type);
+                if (!classType.FieldTypes.TryGetValue(name, out var type))
+                    return false;
+                TypeInfo currentType = type is TypeInfo.Any && f.TypeAnnotation != null
+                    ? ResolveAnnotation(f.TypeAnnotation, f.TypeAnnotationNode) ?? type
+                    : type;
+                return !CanBeUndefined(currentType);
             })
             .ToList();
 

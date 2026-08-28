@@ -91,6 +91,21 @@ public partial class TypeChecker
     /// <summary>Body of <see cref="ResolveTypeName"/> (which wraps it in the recursion guard).</summary>
     private TypeInfo ResolveTypeNameCore(string typeName)
     {
+        if (_hasDefaultLibraries && typeName == "Intl.NumberFormatPartTypes" &&
+            _environment.GetNamespace("Intl") is TypeInfo.Namespace intlNamespace &&
+            intlNamespace.Types.GetValueOrDefault("NumberFormatPartTypeRegistry") is TypeInfo.Interface registry)
+        {
+            var keys = registry.GetAllMembers()
+                .Select(member => (TypeInfo)new TypeInfo.StringLiteral(member.Key))
+                .ToList();
+            return keys.Count switch
+            {
+                0 => TypeInfo.Never.Shared,
+                1 => keys[0],
+                _ => new TypeInfo.Union(keys),
+            };
+        }
+
         // Check for type parameter in current scope first
         var typeParam = _environment.GetTypeParameter(typeName);
         if (typeParam != null)
@@ -325,6 +340,7 @@ public partial class TypeChecker
         // Collect object-like types for merging
         var records = types.OfType<TypeInfo.Record>().ToList();
         var interfaces = types.OfType<TypeInfo.Interface>().ToList();
+        bool containsGlobalThis = interfaces.Any(i => i.Name == "typeof globalThis");
         var classes = types.OfType<TypeInfo.Class>().ToList();
         var instances = types.OfType<TypeInfo.Instance>().ToList();
 
@@ -417,17 +433,20 @@ public partial class TypeChecker
             if (nonObjectTypes.Count == 0)
             {
                 // Use Interface if we have optional fields, otherwise Record
-                if (optionalFields.Count > 0)
+                if (optionalFields.Count > 0 || containsGlobalThis)
                 {
-                    return new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet());
+                    return new TypeInfo.Interface(
+                        containsGlobalThis ? "typeof globalThis" : "",
+                        mergedFields.ToFrozenDictionary(),
+                        optionalFields.ToFrozenSet());
                 }
                 return new TypeInfo.Record(mergedFields.ToFrozenDictionary());
             }
 
             // Otherwise, return an intersection with the merged object member. Preserve the
             // optional-property set here too: generic shapes such as `{ x?: boolean } & T`
-            // retain the open `T` arm, and silently rebuilding the concrete arm as a plain
-            // record made homomorphic mapped types (notably Readonly<T>) require `x`.
+            // retain the open `T` arm, while JSX shapes such as
+            // `(PropsA | PropsB) & { children?: ReactNode }` retain optional children.
             TypeInfo mergedObject = optionalFields.Count > 0
                 ? new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet())
                 : new TypeInfo.Record(mergedFields.ToFrozenDictionary());
@@ -565,7 +584,14 @@ public partial class TypeChecker
         // `typeof undefined` — the global undefined has no environment binding.
         if (firstName == "undefined" && accessors.Count == 1)
             return TypeInfo.Undefined.Shared;
-        TypeInfo? currentType = _environment.GetTypeBinding(firstName) ?? _environment.Get(firstName);
+        TypeInfo? currentType = firstName == "globalThis" && _hasDefaultLibraries
+            ? GetGlobalThisType()
+            : firstName == "Symbol" &&
+                                _environment.GetTypeBinding("SymbolConstructor") is TypeInfo.Interface symbolConstructor
+            // The lib value binding retains the pre-augmentation SymbolConstructor instance.
+            // A typeof Symbol.* query needs the current declaration-merged static side.
+            ? symbolConstructor
+            : _environment.GetTypeBinding(firstName) ?? _environment.Get(firstName);
 
         // `typeof globalThis` — the global object has no environment binding.
         // SharpTS models globals as `any`, so it (and any member access off it)

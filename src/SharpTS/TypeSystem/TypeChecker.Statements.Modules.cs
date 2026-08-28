@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using SharpTS.Modules;
 using SharpTS.Parsing;
 using SharpTS.Runtime.BuiltIns.Modules;
 using SharpTS.TypeSystem.Exceptions;
@@ -102,12 +103,10 @@ public partial class TypeChecker
             foreach (var spec in exportStmt.NamedExports)
             {
                 bool typeOnly = exportStmt.IsTypeOnly || spec.IsTypeOnly;
-                var type = typeOnly
-                    ? _environment.GetTypeBinding(spec.LocalName.Lexeme)
-                        ?? throw new TypeCheckException(
-                            $"Cannot find name '{spec.LocalName.Lexeme}'.",
-                            spec.LocalName.Line,
-                            tsCode: "TS2304")
+                var type = spec.LocalName.Type == TokenType.STRING
+                    ? TypeInfo.Any.Shared
+                    : typeOnly
+                    ? ResolveAnnotation(spec.LocalName.Lexeme, null) ?? TypeInfo.Any.Shared
                     : LookupVariable(spec.LocalName);
                 if (_currentModule != null)
                 {
@@ -126,9 +125,26 @@ public partial class TypeChecker
             {
                 try
                 {
-                    _moduleResolver.ResolveModulePath(
+                    string resolvedPath = _moduleResolver.ResolveModulePath(
                         exportStmt.FromModulePath, _currentModule.Path);
+                    ParsedModule? sourceModule = _moduleResolver.GetCachedModule(resolvedPath);
+                    if (exportStmt.NamespaceExportName is not null &&
+                        sourceModule?.HasExportAssignment == true)
+                    {
+                        throw new TypeCheckException(
+                            $"Module '{exportStmt.FromModulePath}' uses 'export =' and cannot be used with 'export *'.",
+                            exportStmt.NamespaceExportName.Line,
+                            tsCode: "TS2498");
+                    }
+                    if (exportStmt.NamespaceExportName is not null && Options.ImportHelpers)
+                    {
+                        throw new TypeCheckException(
+                            "This syntax requires an imported helper but module 'tslib' cannot be found.",
+                            exportStmt.Keyword.Line,
+                            tsCode: "TS2354");
+                    }
                 }
+                catch (TypeCheckException) { throw; }
                 catch
                 {
                     throw new TypeCheckException(
@@ -202,6 +218,28 @@ public partial class TypeChecker
     /// </summary>
     private void CheckDeclareGlobalStatement(Stmt.DeclareGlobal declareGlobal)
     {
+        if (_currentModule?.IsScript == true)
+        {
+            RecordTypeError(new TypeCheckException(
+                "Augmentations for the global scope can only be directly nested in external modules or ambient module declarations.",
+                declareGlobal.Keyword.Line,
+                tsCode: "TS2669"));
+        }
+
+        foreach (Stmt.Export export in declareGlobal.Members.OfType<Stmt.Export>())
+        {
+            foreach (Stmt.ExportSpecifier spec in export.NamedExports ?? [])
+            {
+                if (spec.LocalName.Lexeme == "globalThis")
+                {
+                    RecordTypeError(new TypeCheckException(
+                        "Cannot export 'globalThis'. Only local declarations can be exported from a module.",
+                        spec.LocalName.Line,
+                        tsCode: "TS2661"));
+                }
+            }
+        }
+
         // Store in the current module for processing during module type checking
         if (_currentModule != null)
         {
@@ -354,22 +392,33 @@ public partial class TypeChecker
                 // Merge the new members into the existing interface
                 var mergedMembers = new Dictionary<string, TypeInfo>(existingInterface.Members);
                 var mergedOptional = new HashSet<string>(existingInterface.OptionalMembers);
+                var mergedReadonly = existingInterface.ReadonlyMembers?.ToHashSet(StringComparer.Ordinal)
+                    ?? new HashSet<string>(StringComparer.Ordinal);
 
                 foreach (var member in interfaceStmt.Members)
                 {
                     var memberType = ResolveAnnotation(member.Type, member.TypeAnnotationNode)!;
+                    if (name == "SymbolConstructor" && member.IsReadonly && memberType is TypeInfo.Symbol)
+                    {
+                        memberType = new TypeInfo.UniqueSymbol(
+                            "Symbol." + member.Name.Lexeme,
+                            $"typeof Symbol.{member.Name.Lexeme}");
+                    }
                     mergedMembers[member.Name.Lexeme] = memberType;
                     if (member.IsOptional)
                     {
                         mergedOptional.Add(member.Name.Lexeme);
                     }
+                    if (member.IsReadonly)
+                        mergedReadonly.Add(member.Name.Lexeme);
                 }
 
                 // Create the merged interface
                 var mergedInterface = existingInterface with
                 {
                     Members = mergedMembers.ToFrozenDictionary(),
-                    OptionalMembers = mergedOptional.ToFrozenSet()
+                    OptionalMembers = mergedOptional.ToFrozenSet(),
+                    ReadonlyMembers = mergedReadonly.ToFrozenSet()
                 };
 
                 // Re-define the merged interface (replaces existing definition)

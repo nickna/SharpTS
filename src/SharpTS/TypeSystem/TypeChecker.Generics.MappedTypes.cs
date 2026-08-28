@@ -1,4 +1,5 @@
 using System.Collections.Frozen;
+using SharpTS.TypeSystem.Exceptions;
 
 namespace SharpTS.TypeSystem;
 
@@ -472,7 +473,12 @@ public partial class TypeChecker
         // Get the property type for the given key
         if (indexType is TypeInfo.StringLiteral sl)
         {
-            return GetPropertyType(objectType, sl.Value) ?? TypeInfo.Any.Shared;
+            TypeInfo? property = GetPropertyType(objectType, sl.Value);
+            if (property is null && objectType is TypeInfo.Interface { Name: "typeof globalThis" })
+                throw new TypeCheckException(
+                    $"Property '{sl.Value}' does not exist on type 'typeof globalThis'.",
+                    tsCode: "TS2339");
+            return property ?? TypeInfo.Any.Shared;
         }
 
         // For union of keys, return union of property types

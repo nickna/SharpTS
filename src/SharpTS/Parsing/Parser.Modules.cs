@@ -100,7 +100,8 @@ public partial class Parser
                 if (Check(TokenType.TYPE))
                 {
                     var nextType = PeekNext().Type;
-                    if (nextType != TokenType.AS && nextType != TokenType.COMMA && nextType != TokenType.RIGHT_BRACE)
+                    if ((nextType != TokenType.AS && nextType != TokenType.COMMA && nextType != TokenType.RIGHT_BRACE) ||
+                        (nextType == TokenType.AS && PeekAt(2).Type == TokenType.AS))
                     {
                         Advance();
                         isTypeOnly = true;
@@ -112,7 +113,20 @@ public partial class Parser
 
                 if (Match(TokenType.AS))
                 {
-                    localName = Consume(TokenType.IDENTIFIER, "Expect local name after 'as'.");
+                    if (Check(TokenType.STRING))
+                    {
+                        Token invalidLocal = Advance();
+                        RecordErrorAt(invalidLocal.Line, "Identifier expected.", "TS1003");
+                        localName = invalidLocal;
+                    }
+                    else
+                    {
+                        localName = ConsumeIdentifierName("Expect local name after 'as'.");
+                    }
+                }
+                else if (imported.Type == TokenType.STRING)
+                {
+                    RecordErrorAt(imported.Line, "Identifier expected.", "TS1003");
                 }
 
                 specifiers.Add(new Stmt.ImportSpecifier(imported, localName, isTypeOnly));
@@ -303,6 +317,15 @@ public partial class Parser
             if (Match(TokenType.FROM))
             {
                 fromPath = (string)Consume(TokenType.STRING, "Expect module path.").Literal!;
+            }
+
+            if (fromPath is null)
+            {
+                foreach (Stmt.ExportSpecifier specifier in namedExports)
+                {
+                    if (specifier.LocalName.Type == TokenType.STRING)
+                        RecordErrorAt(specifier.LocalName.Line, "Identifier expected.", "TS1003");
+                }
             }
 
             ConsumeSemicolon("Expect ';' after export.");

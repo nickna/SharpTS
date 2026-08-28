@@ -32,6 +32,10 @@ public static class NarrowingPathExtractor
             // "this" can't be a real identifier in TS source, so the name won't collide.
             Expr.This => new NarrowingPath.Variable("this"),
 
+            // import.meta is a stable per-module object and participates in
+            // control-flow narrowing exactly like a variable-backed property path.
+            Expr.ImportMeta => new NarrowingPath.Variable("import.meta"),
+
             Expr.Get get when TryExtract(get.Object) is NarrowingPath basePath =>
                 new NarrowingPath.PropertyAccess(basePath, get.Name.Lexeme),
 
