@@ -49,9 +49,11 @@ public partial class Parser
         if (Check(TokenType.THIS))
         {
             Advance(); // consume 'this'
-            Consume(TokenType.COLON, "Expect ':' after 'this' in this parameter.");
-            thisType = ParseTypeAnnotation();
-            thisTypeNode = TakeTypeNode();
+            if (Match(TokenType.COLON))
+            {
+                thisType = ParseTypeAnnotation();
+                thisTypeNode = TakeTypeNode();
+            }
             // If there are more parameters, consume the comma
             if (Check(TokenType.COMMA))
             {

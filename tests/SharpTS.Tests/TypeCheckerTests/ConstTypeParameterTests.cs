@@ -12,6 +12,22 @@ public class ConstTypeParameterTests
     #region Basic Parsing and Type Checking
 
     [Fact]
+    public void NonConstTypeParam_FreshObjectMembersAreWidened()
+    {
+        var source = """
+            function reference<T>(initial: T): { current: T } {
+                return { current: initial };
+            }
+            const value = reference({ alive: true });
+            value.current.alive = false;
+            console.log(value.current.alive);
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("false\n", result);
+    }
+
+    [Fact]
     public void ConstTypeParam_BasicFunction_Parses()
     {
         var source = """

@@ -37,6 +37,8 @@ public static class ErrorsBaselineParser
         foreach (var rawLine in content.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("==== ", StringComparison.Ordinal))
+                break;
             var m = HeaderRegex.Match(line);
             if (!m.Success) continue;
             var lineNum = int.Parse(m.Groups["line"].Value);

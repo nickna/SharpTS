@@ -72,7 +72,9 @@ public partial class TypeChecker
         if (decorator.Expression is not Expr.Call)
         {
             // Direct decorator: must be callable
-            if (decoratorType is not (TypeInfo.Function or TypeInfo.Any))
+            if (decoratorType is not (TypeInfo.Function or TypeInfo.GenericFunction or
+                TypeInfo.OverloadedFunction or TypeInfo.GenericOverloadedFunction or
+                TypeInfo.OverloadSet or TypeInfo.Any))
             {
                 throw new TypeCheckException($"Decorator must be a function, got '{decoratorType}'", decorator.AtToken.Line, tsCode: "TS1241");
             }

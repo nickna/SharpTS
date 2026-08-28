@@ -403,8 +403,9 @@ public class TypeCompatibilityTests
     {
         // A union with more members cannot be assigned to a narrower type
         var source = """
-            let x: number | string = 42;
-            let y: number = x;
+            function narrow(x: number | string): void {
+                let y: number = x;
+            }
             """;
 
         var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));

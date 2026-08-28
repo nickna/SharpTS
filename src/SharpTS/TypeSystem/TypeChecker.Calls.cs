@@ -26,17 +26,6 @@ public partial class TypeChecker
         if (TryCheckBuiltinCall(call, out var builtinCallResult))
             return builtinCallResult;
 
-        // Invalidate property narrowings for method calls on objects
-        // e.g., obj.mutate() should invalidate narrowings on obj's properties
-        if (call.Callee is Expr.Get methodGet)
-        {
-            var receiverPath = GetNarrowingPath(methodGet.Object);
-            if (receiverPath != null)
-            {
-                InvalidatePropertiesForFunctionArg(receiverPath);
-            }
-        }
-
         TypeInfo calleeType = CheckExpr(call.Callee);
         if (call.Callee is Expr.Get extensionGet &&
             calleeType is not (TypeInfo.Function or TypeInfo.OverloadedFunction or
@@ -51,6 +40,16 @@ public partial class TypeChecker
         {
             calleeType = extensionMember;
             _typeMap.Set(call.Callee, extensionMember);
+        }
+
+        // Resolve the callee before invalidating receiver-property narrowings. A guard may narrow
+        // the callable property itself (`obj.callback === undefined ? ... : obj.callback()`), and
+        // that narrowing is required to prove this invocation is safe. The call can still mutate
+        // the receiver, so invalidate its remaining property facts before checking arguments.
+        if (call.Callee is Expr.Get methodGet &&
+            GetNarrowingPath(methodGet.Object) is { } receiverPath)
+        {
+            InvalidatePropertiesForFunctionArg(receiverPath);
         }
 
         // Optional call: if callee could be nullish, strip null/undefined and check the rest.
@@ -110,13 +109,37 @@ public partial class TypeChecker
             }
             else
             {
-                // Infer type arguments from call arguments
-                typeArgs = InferTypeArguments(
-                    genericFunc, argTypes, contextualResultType);
+                // Infer type arguments from call arguments. Constraint failure during inference is
+                // a bad argument (TS2345), not a bad explicitly-written type argument (TS2344).
+                try
+                {
+                    typeArgs = InferTypeArguments(
+                        genericFunc,
+                        PrepareFreshCallArgumentsForInference(
+                            genericFunc.ParamTypes, call.Arguments, argTypes),
+                        contextualResultType);
+                }
+                catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2344")
+                {
+                    throw new TypeCheckException(ex.Message, call.Paren.Line, tsCode: "TS2345");
+                }
             }
 
             // Instantiate the function with the type arguments
-            var instantiatedFunc = InstantiateGenericFunction(genericFunc, typeArgs);
+            TypeInfo instantiatedFunc;
+            try
+            {
+                instantiatedFunc = InstantiateGenericFunction(genericFunc, typeArgs);
+            }
+            catch (TypeCheckException ex) when (
+                ex.Diagnostic.TsCode == "TS2344" &&
+                (call.TypeArgs is null || call.TypeArgs.Count == 0))
+            {
+                throw new TypeCheckException(
+                    ex.Message,
+                    call.Paren.Line,
+                    tsCode: "TS2345");
+            }
             if (instantiatedFunc is TypeInfo.Function instFunc)
             {
                 for (int i = 0; i < call.Arguments.Count && i < instFunc.ParamTypes.Count; i++)
@@ -372,10 +395,30 @@ public partial class TypeChecker
 
             if (functionMembers.Count > 0)
             {
-                // Check arguments - they must be compatible with all function signatures
-                foreach (var arg in call.Arguments)
+                // The effective parameters of a callable union are intersections: every
+                // constituent signature must accept each argument.
+                for (int argumentIndex = 0; argumentIndex < call.Arguments.Count; argumentIndex++)
                 {
-                    CheckExpr(arg);
+                    TypeInfo argumentType = CheckExpr(call.Arguments[argumentIndex]);
+                    foreach (var functionMember in functionMembers)
+                    {
+                        TypeInfo? parameterType = functionMember switch
+                        {
+                            TypeInfo.Function function when argumentIndex < function.ParamTypes.Count =>
+                                function.ParamTypes[argumentIndex],
+                            TypeInfo.GenericFunction generic when argumentIndex < generic.ParamTypes.Count =>
+                                generic.ParamTypes[argumentIndex],
+                            TypeInfo.OverloadedFunction overloaded when
+                                argumentIndex < overloaded.Implementation.ParamTypes.Count =>
+                                overloaded.Implementation.ParamTypes[argumentIndex],
+                            _ => null,
+                        };
+                        if (parameterType is not null && !IsCompatible(parameterType, argumentType))
+                            throw new TypeCheckException(
+                                $"Argument {argumentIndex + 1} is not accepted by every member of the callable union.",
+                                call.Paren.Line,
+                                tsCode: "TS2345");
+                    }
                 }
 
                 // Collect return types from all function members
@@ -899,7 +942,8 @@ public partial class TypeChecker
             if (callSig.IsGeneric)
             {
                 // Generic call signature - try to instantiate
-                var result = TryMatchGenericCallSignature(callSig, typeArgs, argTypes, typeArgNodes);
+                var result = TryMatchGenericCallSignature(
+                    callSig, typeArgs, argTypes, typeArgNodes, arguments);
                 if (result != null)
                     return result;
             }
@@ -961,7 +1005,8 @@ public partial class TypeChecker
         TypeInfo.CallSignature callSig,
         List<string>? explicitTypeArgs,
         List<TypeInfo> argTypes,
-        List<TypeNode?>? explicitTypeArgNodes = null)
+        List<TypeNode?>? explicitTypeArgNodes = null,
+        IReadOnlyList<Expr>? arguments = null)
     {
         if (callSig.TypeParams == null || callSig.TypeParams.Count == 0)
             return null;
@@ -981,7 +1026,11 @@ public partial class TypeChecker
             // Try to infer from argument types
             for (int i = 0; i < callSig.ParamTypes.Count && i < argTypes.Count; i++)
             {
-                InferFromType(callSig.ParamTypes[i], argTypes[i], inferred);
+                TypeInfo inferenceType = arguments is not null && i < arguments.Count
+                    ? PrepareFreshCallArgumentForInference(
+                        callSig.ParamTypes[i], arguments[i], argTypes[i])
+                    : argTypes[i];
+                InferFromType(callSig.ParamTypes[i], inferenceType, inferred);
             }
         }
 
@@ -1121,51 +1170,38 @@ public partial class TypeChecker
             }
         }
 
-        // Determine type arguments (explicit or inferred)
-        List<TypeInfo> typeArgs;
-        if (call.TypeArgs != null && call.TypeArgs.Count > 0)
-        {
-            // Explicit type arguments provided
-            typeArgs = call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList();
-        }
-        else
-        {
-            // Infer type arguments from call arguments
-            // Create a temporary GenericFunction to use the existing inference logic
-            // We use the implementation signature as a base for inference
-            var tempGenericFunc = new TypeInfo.GenericFunction(
-                genericOverloadedFunc.TypeParams,
-                genericOverloadedFunc.Implementation.ParamTypes,
-                genericOverloadedFunc.Implementation.ReturnType,
-                genericOverloadedFunc.Implementation.RequiredParams,
-                genericOverloadedFunc.Implementation.HasRestParam,
-                genericOverloadedFunc.Implementation.ThisType);
-            typeArgs = InferTypeArguments(tempGenericFunc, argTypes);
-        }
-
-        // Create substitution map
-        Dictionary<string, TypeInfo> substitutions = [];
-        for (int i = 0; i < typeArgs.Count && i < genericOverloadedFunc.TypeParams.Count; i++)
-        {
-            substitutions[genericOverloadedFunc.TypeParams[i].Name] = typeArgs[i];
-        }
-
-        // Instantiate each signature with the inferred type arguments and find matches
+        // Infer and instantiate each overload independently. The implementation signature is
+        // intentionally broad (`any`, rest args) and is not an inference source; using it once
+        // for the entire group loses literal key arguments and rejects otherwise-valid overloads.
         List<TypeInfo.Function> matchingSignatures = [];
 
         foreach (var signature in genericOverloadedFunc.Signatures)
         {
-            // Substitute type parameters in the signature
-            var instantiatedParams = signature.ParamTypes.Select(p => Substitute(p, substitutions)).ToList();
-            var instantiatedReturn = Substitute(signature.ReturnType, substitutions);
-            var instantiatedSig = new TypeInfo.Function(
-                instantiatedParams,
-                instantiatedReturn,
-                signature.RequiredParams,
-                signature.HasRestParam,
-                signature.ThisType);
+            TypeInfo.Function instantiatedSig;
+            try
+            {
+                var candidate = new TypeInfo.GenericFunction(
+                    genericOverloadedFunc.TypeParams,
+                    signature.ParamTypes,
+                    signature.ReturnType,
+                    signature.RequiredParams,
+                    signature.HasRestParam,
+                    signature.ThisType);
+                List<TypeInfo> typeArgs = call.TypeArgs is { Count: > 0 }
+                    ? call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList()
+                    : InferTypeArguments(
+                        candidate,
+                        PrepareFreshCallArgumentsForInference(
+                            candidate.ParamTypes, call.Arguments, argTypes));
+                instantiatedSig = (TypeInfo.Function)InstantiateGenericFunction(candidate, typeArgs);
+            }
+            catch (TypeCheckException)
+            {
+                continue;
+            }
 
-            if (TryMatchSignature(instantiatedSig, argTypes))
+            if (TryMatchSignature(instantiatedSig, argTypes) ||
+                TryMatchSpreadSignature(instantiatedSig, argTypes, call.Arguments))
             {
                 matchingSignatures.Add(instantiatedSig);
             }
@@ -1251,7 +1287,9 @@ public partial class TypeChecker
                 _ => null,
             };
 
-            if (signature is not null && TryMatchSignature(signature, argTypes))
+            if (signature is not null &&
+                (TryMatchSignature(signature, argTypes) ||
+                 TryMatchSpreadSignature(signature, argTypes, call.Arguments)))
                 matches.Add(signature);
         }
 
@@ -1273,8 +1311,42 @@ public partial class TypeChecker
     {
         List<TypeInfo> typeArgs = call.TypeArgs is { Count: > 0 }
             ? call.TypeArgs.Select((_, i) => ResolveTypeArg(call.TypeArgs, call.TypeArgNodes, i)).ToList()
-            : InferTypeArguments(generic, argTypes);
+            : InferTypeArguments(
+                generic,
+                PrepareFreshCallArgumentsForInference(
+                    generic.ParamTypes, call.Arguments, argTypes));
         return (TypeInfo.Function)InstantiateGenericFunction(generic, typeArgs);
+    }
+
+    private List<TypeInfo> PrepareFreshCallArgumentsForInference(
+        IReadOnlyList<TypeInfo> parameterTypes,
+        IReadOnlyList<Expr> arguments,
+        List<TypeInfo> argumentTypes)
+    {
+        var prepared = new List<TypeInfo>(argumentTypes.Count);
+        for (int i = 0; i < argumentTypes.Count; i++)
+        {
+            prepared.Add(i < parameterTypes.Count && i < arguments.Count
+                ? PrepareFreshCallArgumentForInference(
+                    parameterTypes[i], arguments[i], argumentTypes[i])
+                : argumentTypes[i]);
+        }
+        return prepared;
+    }
+
+    private TypeInfo PrepareFreshCallArgumentForInference(
+        TypeInfo parameterType,
+        Expr argument,
+        TypeInfo argumentType)
+    {
+        // A plain generic parameter preserves a top-level primitive literal, but a fresh mutable
+        // object literal widens its member literals (`useRef({ alive: true })` infers boolean).
+        // Const type parameters and `as const` records retain their literal members.
+        return parameterType is TypeInfo.TypeParameter { IsConst: false } &&
+               argument is Expr.ObjectLiteral &&
+               argumentType is TypeInfo.Record { IsReadonly: false }
+            ? WidenLiteralType(argumentType)
+            : argumentType;
     }
 
     /// <summary>
@@ -1324,6 +1396,51 @@ public partial class TypeChecker
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Matches the common spread-to-rest form after expression checking has represented the
+    /// spread operand as one Array/Tuple argument. Ordinary matching deliberately sees argument
+    /// positions only; this companion uses the AST to compare every spread element with the rest
+    /// element type (`fn(...xs)` where fn has `...args: T[]`).
+    /// </summary>
+    private bool TryMatchSpreadSignature(
+        TypeInfo.Function signature,
+        List<TypeInfo> argTypes,
+        List<Expr> arguments)
+    {
+        if (!signature.HasRestParam || !arguments.Any(argument => argument is Expr.Spread) ||
+            signature.ParamTypes.Count == 0)
+            return false;
+
+        int regularCount = signature.ParamTypes.Count - 1;
+        TypeInfo restType = signature.ParamTypes[^1] is TypeInfo.Array restArray
+            ? restArray.ElementType
+            : signature.ParamTypes[^1];
+
+        for (int i = 0; i < arguments.Count; i++)
+        {
+            if (arguments[i] is Expr.Spread)
+            {
+                TypeInfo spreadType = argTypes[i];
+                IEnumerable<TypeInfo> elements = spreadType switch
+                {
+                    TypeInfo.Array array => [array.ElementType],
+                    TypeInfo.Tuple tuple => tuple.ElementTypes,
+                    TypeInfo.Any => [TypeInfo.Any.Shared],
+                    _ => [],
+                };
+                if (!elements.Any() || elements.Any(element => !IsCompatible(restType, element)))
+                    return false;
+                continue;
+            }
+
+            TypeInfo expected = i < regularCount ? signature.ParamTypes[i] : restType;
+            if (!IsCompatible(expected, argTypes[i]))
+                return false;
+        }
+
+        return arguments.Take(regularCount).Count(argument => argument is not Expr.Spread) >= signature.MinArity;
     }
 
     private TypeInfo CheckClearTimerCall(Expr.Call call, string functionName)

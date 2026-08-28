@@ -121,7 +121,11 @@ public partial class TypeChecker
         // After defining (so the alias stays usable even when a clause is malformed): validate
         // the infer declarations of every conditional type in the alias body.
         var outerTypeParams = stmt.TypeParameters?.Select(tp => tp.Name.Lexeme).ToHashSet(StringComparer.Ordinal);
-        ValidateInferDeclarations(stmt.TypeDefinitionNode, outerTypeParams);
+        var declaredTypeVariables = outerTypeParams is null
+            ? new HashSet<string>(StringComparer.Ordinal)
+            : new HashSet<string>(outerTypeParams, StringComparer.Ordinal);
+        CollectDeclaredTypeVariables(stmt.TypeDefinitionNode, declaredTypeVariables);
+        ValidateInferDeclarations(stmt.TypeDefinitionNode, outerTypeParams, declaredTypeVariables);
         RecordAliasParamConstraints(stmt);
         ValidateAliasBody(stmt);
         return VoidResult.Instance;
@@ -166,12 +170,34 @@ public partial class TypeChecker
         BindingSymbol variableSymbol = RegisterValueDeclaration(
             stmt.Name,
             mergeWithLocal: stmt.IsVar);
+        if (stmt.TypeAnnotationNode is IntersectionTypeNode)
+            _intersectionDeclaredVariables.Add(variableSymbol);
 
         // Captured before any provisional Define overwrites it — used for the TS2403
         // redeclaration check once this declaration's type settles. Locally only: a same-named
         // var in an OUTER scope is shadowing, not redeclaration.
-        TypeInfo? preExistingType = stmt.IsVar && _environment.IsDefinedLocally(stmt.Name.Lexeme)
+        bool hasDeclarationInAnotherSource = CurrentSourceDocument is { } currentDocument &&
+            variableSymbol.Declarations.Any(declaration =>
+                !ReferenceEquals(declaration.Document, currentDocument));
+        TypeInfo? localPreExistingType = stmt.IsVar &&
+            _environment.IsDefinedLocally(stmt.Name.Lexeme)
             ? _environment.Get(stmt.Name.Lexeme) : null;
+        var sourceVarKey = CurrentSourceDocument is { } sourceDocument
+            ? (variableSymbol, sourceDocument)
+            : ((BindingSymbol, SourceDocument)?)null;
+        bool hasPreparedIncomingType = sourceVarKey is { } preparedKey &&
+            _crossSourceVarTypes.ContainsKey(preparedKey);
+        bool hasEarlierCheckedDeclaration =
+            !_checkedVarRedeclarationSymbols.Add(variableSymbol) ||
+            hasDeclarationInAnotherSource || hasPreparedIncomingType;
+        if (hasEarlierCheckedDeclaration && localPreExistingType is not null &&
+            sourceVarKey is { } incomingKey)
+            _crossSourceVarTypes.TryAdd(incomingKey, localPreExistingType);
+        TypeInfo? preExistingType = stmt.IsVar && hasEarlierCheckedDeclaration
+            ? (sourceVarKey is { } lookupKey
+                ? _crossSourceVarTypes.GetValueOrDefault(lookupKey)
+                : null) ?? localPreExistingType
+            : null;
 
         // Node-first annotation resolution (type-AST migration), string fallback.
         // Ambient `declare const x: unique symbol;` has no Symbol()-call initializer to validate —
@@ -183,11 +209,77 @@ public partial class TypeChecker
         TypeInfo? declaredType = stmt.TypeAnnotation == "unique symbol" && stmt.IsDeclare
             ? new TypeInfo.UniqueSymbol(stmt.Name.Lexeme, $"typeof {stmt.Name.Lexeme}")
             : ResolveAnnotation(stmt.TypeAnnotation, stmt.TypeAnnotationNode);
+        if (stmt.TypeAnnotationNode is NamedTypeNode { Name: var annotatedAlias } &&
+            _recursiveGenericIndexedAliases.Contains(annotatedAlias))
+            _excessivelyRecursiveVariables.Add(stmt.Name.Lexeme);
+        if (stmt.IsVar && string.Equals(stmt.TypeAnnotation?.Trim(), "any", StringComparison.Ordinal))
+            _explicitAnyVarSymbols.Add(variableSymbol);
+        bool isImplicitAnyDeclaration = _noImplicitAny && stmt.TypeAnnotation is null &&
+            stmt.TypeAnnotationNode is null && stmt.Initializer is null &&
+            stmt.HoistTypeInferenceInitializer is null;
+        if (!stmt.IsDeclare && stmt.TypeAnnotation is null && stmt.TypeAnnotationNode is null &&
+            stmt.Initializer is null && stmt.HoistTypeInferenceInitializer is null)
+        {
+            _uninitializedImplicitAnyVarSymbols.Add(variableSymbol);
+        }
+        if (isImplicitAnyDeclaration)
+        {
+            if (stmt.IsDeclare)
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"Variable '{stmt.Name.Lexeme}' implicitly has an 'any' type.",
+                    stmt.Name.Line,
+                    tsCode: "TS7005"));
+            }
+            else
+            {
+                _implicitAnyVarSymbols[variableSymbol] =
+                    (stmt.Name, _definiteAssignmentStack.Count);
+            }
+        }
 
         // TS2304: a bare annotation name that resolves to nothing (e.g. `var a: A;` where the
-        // only `A` lives in a nested module, invisible here). See ReportUnknownTypeName.
-        if (declaredType is TypeInfo.Any)
+        // only `A` lives in a nested module, invisible here). The preparatory module pass runs in
+        // source order, so preserve that result before later namespace declarations populate the
+        // shared environment used by the authoritative pass.
+        if (_suppressDiagnostics > 0 && declaredType is TypeInfo.Any)
+        {
+            try
+            {
+                ReportUnknownTypeName(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt.Name.Line);
+            }
+            catch (TypeCheckException error) when (error.Diagnostic.TsCode == "TS2304")
+            {
+                _unresolvedVarTypeAnnotations.Add(stmt.Name);
+            }
+        }
+
+        if (_unresolvedVarTypeAnnotations.Contains(stmt.Name))
+        {
+            declaredType = TypeInfo.Any.Shared;
+            if (_suppressDiagnostics == 0 &&
+                BareTypeReferenceName(stmt.TypeAnnotation, stmt.TypeAnnotationNode) is { } unknownName)
+            {
+                // Recovery must retain the value declaration as `any`. The preparatory pass can
+                // leave a more specific provisional value in the shared environment; throwing
+                // before restoring `any` would make following assignments report cascades.
+                _environment.Define(stmt.Name.Lexeme, declaredType);
+                RecordDeclaredType(stmt.Name.Lexeme, declaredType);
+                _escapeAnalyzer.DefineVariable(stmt.Name.Lexeme);
+                RecordDefiniteAssignmentDeclaration(
+                    variableSymbol,
+                    isAssigned: stmt.IsDeclare,
+                    declaredType);
+                throw new TypeCheckException(
+                    $" Cannot find name '{unknownName}'.",
+                    stmt.Name.Line,
+                    tsCode: "TS2304");
+            }
+        }
+        else if (declaredType is TypeInfo.Any)
+        {
             ReportUnknownTypeName(stmt.TypeAnnotation, stmt.TypeAnnotationNode, stmt.Name.Line);
+        }
 
         // VarHoister carries the first nested declaration's initializer onto the synthetic hoisted
         // `var` (which itself has no Initializer) when that declaration had no annotation. Infer the
@@ -212,6 +304,7 @@ public partial class TypeChecker
 
         if (stmt.Initializer != null)
         {
+            TypeInfo? initializerFlowType = null;
             var provisionalType = declaredType ?? TypeInfo.Any.Shared;
             _environment.Define(stmt.Name.Lexeme, provisionalType);
             // Register as local variable for escape analysis
@@ -268,6 +361,8 @@ public partial class TypeChecker
                     {
                         throw new TypeMismatchException(declaredType, initializerType, stmt.Name.Line, tsCode: AssignmentDiagnosticCode(declaredType, initializerType));
                     }
+
+                    initializerFlowType = NarrowToDeclaredSlot(declaredType, initializerType);
                 }
                 else
                 {
@@ -284,6 +379,7 @@ public partial class TypeChecker
 
                 declaredType ??= initializerType;
             }
+            _environment.Define(stmt.Name.Lexeme, initializerFlowType ?? declaredType!);
             CheckVarRedeclaration(stmt, preExistingType, declaredType!);
             // Record the declared type for assignment checking
             RecordDeclaredType(stmt.Name.Lexeme, declaredType!);
@@ -345,7 +441,7 @@ public partial class TypeChecker
         // `any` (the caller checked), so a name bound anywhere type-visible is a forward/known type:
         // a class/interface/enum/value binding or hoisted placeholder (Get), a type parameter, a type
         // alias, or a mapped-type parameter currently being parsed. None of those are "cannot find".
-        if (name == "any") return;
+        if (name is "any" or "this") return;
         if (_environment.Get(name) is not null) return;
         if (_environment.GetTypeParameter(name) is not null) return;
         if (_environment.GetTypeAlias(name) is not null) return;
@@ -414,7 +510,7 @@ public partial class TypeChecker
             && (stmt.Name.Lexeme == "Symbol" || HasNamedSymbolMembers(previousInterface));
 
         if (!sameSourceClassType && !sameNamedInterfaceType &&
-            !TypeInfoEqualityComparer.Instance.Equals(previous, newType))
+            !AreEquivalentVarDeclarationTypes(previous, newType))
         {
             // Keep the established declaration installed after a failed speculative/preparatory
             // check. Otherwise the rejected redeclaration poisons the authoritative pass.
@@ -423,6 +519,114 @@ public partial class TypeChecker
                 $" Subsequent variable declarations must have the same type. Variable '{stmt.Name.Lexeme}' must be of type '{previous}', but here has type '{newType}'.",
                 line: stmt.Name.Line, tsCode: "TS2403");
         }
+    }
+
+    /// <summary>
+    /// Compares the semantic type denoted by repeated <c>var</c> annotations. Mapped, keyof, and
+    /// indexed-access syntax can denote exactly the same object while retaining a different lazy
+    /// representation; TS2403 compares the denoted types, not those internal representations.
+    /// </summary>
+    private bool AreEquivalentVarDeclarationTypes(TypeInfo left, TypeInfo right)
+    {
+        left = NormalizeVarDeclarationType(left);
+        right = NormalizeVarDeclarationType(right);
+        if (TypeInfoEqualityComparer.Instance.Equals(left, right)) return true;
+
+        if (left is TypeInfo.Enum leftEnum && IsEnumObjectShape(leftEnum, right)) return true;
+        if (right is TypeInfo.Enum rightEnum && IsEnumObjectShape(rightEnum, left)) return true;
+
+        if (!TryGetExactObjectShape(left, out var leftShape) ||
+            !TryGetExactObjectShape(right, out var rightShape))
+            return false;
+        if (leftShape.Fields.Count != rightShape.Fields.Count ||
+            !leftShape.Optional.SetEquals(rightShape.Optional) ||
+            !SameNullableType(leftShape.StringIndex, rightShape.StringIndex) ||
+            !SameNullableType(leftShape.NumberIndex, rightShape.NumberIndex) ||
+            !SameNullableType(leftShape.SymbolIndex, rightShape.SymbolIndex))
+            return false;
+
+        foreach (var (name, leftType) in leftShape.Fields)
+            if (!rightShape.Fields.TryGetValue(name, out var rightType) ||
+                !AreEquivalentVarDeclarationTypes(leftType, rightType))
+                return false;
+        return true;
+    }
+
+    private TypeInfo NormalizeVarDeclarationType(TypeInfo type)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            TypeInfo next = type switch
+            {
+                TypeInfo.KeyOf keyOf when keyOf.SourceType is not TypeInfo.TypeParameter =>
+                    EvaluateKeyOf(keyOf.SourceType),
+                TypeInfo.MappedType mapped when !IsDeferredKeyDomain(ResolveMappedKeyDomain(mapped)) =>
+                    ExpandMappedType(mapped),
+                TypeInfo.IndexedAccess indexed =>
+                    ResolveIndexedAccess(indexed, new Dictionary<string, TypeInfo>()),
+                _ => type,
+            };
+            if (ReferenceEquals(next, type) || TypeInfoEqualityComparer.Instance.Equals(next, type))
+                return type;
+            type = next;
+        }
+        return type;
+    }
+
+    private bool SameNullableType(TypeInfo? left, TypeInfo? right) =>
+        left is null ? right is null : right is not null &&
+        AreEquivalentVarDeclarationTypes(left, right);
+
+    private static bool TryGetExactObjectShape(
+        TypeInfo type,
+        out (Dictionary<string, TypeInfo> Fields, HashSet<string> Optional,
+            HashSet<string> Readonly, TypeInfo? StringIndex, TypeInfo? NumberIndex,
+            TypeInfo? SymbolIndex) shape)
+    {
+        switch (type)
+        {
+            case TypeInfo.Record record when
+                record.CallSignatures is not { Count: > 0 } &&
+                record.ConstructorSignatures is not { Count: > 0 } &&
+                record.MethodMembers is not { Count: > 0 }:
+                var recordReadonly = record.IsReadonly
+                    ? record.Fields.Keys.ToHashSet(StringComparer.Ordinal)
+                    : record.GetterOnlyFields?.ToHashSet(StringComparer.Ordinal) ?? [];
+                shape = (record.Fields.ToDictionary(),
+                    record.OptionalFields?.ToHashSet(StringComparer.Ordinal) ?? [],
+                    recordReadonly, record.StringIndexType, record.NumberIndexType,
+                    record.SymbolIndexType);
+                return true;
+
+            case TypeInfo.Interface @interface when
+                @interface.CallSignatures is not { Count: > 0 } &&
+                @interface.ConstructorSignatures is not { Count: > 0 } &&
+                @interface.MethodMembers is not { Count: > 0 }:
+                shape = (@interface.GetAllMembers().ToDictionary(pair => pair.Key, pair => pair.Value),
+                    @interface.GetAllOptionalMembers().ToHashSet(StringComparer.Ordinal),
+                    @interface.GetAllReadonlyMembers().ToHashSet(StringComparer.Ordinal),
+                    @interface.StringIndexType, @interface.NumberIndexType,
+                    @interface.SymbolIndexType);
+                return true;
+
+            default:
+                shape = default;
+                return false;
+        }
+    }
+
+    private bool IsEnumObjectShape(TypeInfo.Enum enumType, TypeInfo candidate)
+    {
+        if (!TryGetExactObjectShape(candidate, out var shape) ||
+            shape.Fields.Count != enumType.Members.Count || shape.Optional.Count != 0 ||
+            shape.StringIndex is not null || shape.SymbolIndex is not null ||
+            shape.NumberIndex is not TypeInfo.String)
+            return false;
+        foreach (string member in enumType.Members.Keys)
+            if (!shape.Fields.TryGetValue(member, out var memberType) ||
+                memberType is not TypeInfo.Enum fieldEnum || fieldEnum.Name != enumType.Name)
+                return false;
+        return true;
     }
 
     /// <summary>
@@ -454,6 +658,7 @@ public partial class TypeChecker
         RegisterValueDeclaration(stmt.Name);
 
         TypeInfo constDeclaredType;
+        TypeInfo? initializerFlowType = null;
 
         // Track variable-to-variable aliases for narrowing invalidation
         // e.g., "const alias = obj" tracks that "alias" is an alias for "obj"
@@ -496,6 +701,7 @@ public partial class TypeChecker
             {
                 throw new TypeMismatchException(constDeclaredType, initType, stmt.Name.Line, tsCode: AssignmentDiagnosticCode(constDeclaredType, initType));
             }
+            initializerFlowType = NarrowToDeclaredSlot(constDeclaredType, initType);
         }
         else
         {
@@ -504,7 +710,12 @@ public partial class TypeChecker
             _environment.Define(stmt.Name.Lexeme, constDeclaredType);
         }
 
-        _environment.Define(stmt.Name.Lexeme, constDeclaredType);
+        // An annotated const keeps its declared type for compatibility, but its references are
+        // flow-narrowed by the initializer. This matters for union annotations such as `T | T[]`
+        // initialized with an array: array members are callable without a spurious possibly-
+        // undefined diagnostic.
+        _environment.Define(stmt.Name.Lexeme, initializerFlowType ?? constDeclaredType);
+        RecordDeclaredType(stmt.Name.Lexeme, constDeclaredType);
         // Register as local variable for escape analysis
         _escapeAnalyzer.DefineVariable(stmt.Name.Lexeme);
         return VoidResult.Instance;
@@ -563,7 +774,8 @@ public partial class TypeChecker
                 {
                     // Allow any return value in generators with no explicit return type
                 }
-                else if (!IsCompatible(expectedReturnType, actualReturnType))
+                else if (!IsCompatible(expectedReturnType, actualReturnType) &&
+                    !(!_strictNullChecks && actualReturnType is TypeInfo.Void))
                 {
                     throw new TypeMismatchException(_currentFunctionReturnType, actualReturnType, stmt.Keyword.Line, tsCode: "TS2322");
                 }
@@ -1207,7 +1419,14 @@ public partial class TypeChecker
                 line: stmt.Variable.Line, tsCode: "TS2407");
         }
 
-        if (objType is not (TypeInfo.Record or TypeInfo.Instance or TypeInfo.Array or TypeInfo.Any or TypeInfo.Class))
+        // Only reject types that are definitely primitive. Mapped types, interfaces, indexed
+        // accesses, conditional types and unconstrained type parameters can all denote objects and
+        // are valid `for...in` sources; a narrow object-shape whitelist incorrectly rejected them.
+        if (objType is TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or
+            TypeInfo.BooleanLiteral or TypeInfo.BigInt or TypeInfo.BigIntLiteral or TypeInfo.Null or
+            TypeInfo.Undefined or TypeInfo.Void ||
+            objType is TypeInfo.Primitive primitive &&
+                primitive.Type is TokenType.TYPE_NUMBER or TokenType.TYPE_BOOLEAN)
         {
             throw new TypeCheckException($"'for...in' requires an object, got {objType}", tsCode: "TS2549");
         }
@@ -1222,13 +1441,32 @@ public partial class TypeChecker
                 line: stmt.Variable.Line, tsCode: "TS2405");
         }
 
+        TypeInfo keyDomain = objType is TypeInfo.MappedType mapped
+            ? mapped.Constraint
+            : EvaluateKeyOf(objType);
+        TypeInfo loopKeyType = keyDomain switch
+        {
+            TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.TypeParameter or TypeInfo.KeyOf => keyDomain,
+            TypeInfo.Union keyUnion when keyUnion.FlattenedTypes
+                .Where(key => key is TypeInfo.String or TypeInfo.StringLiteral)
+                .ToList() is { Count: > 0 } stringKeys =>
+                    stringKeys.Count == 1 ? stringKeys[0] : new TypeInfo.Union(stringKeys),
+            _ => TypeInfo.String.Shared,
+        };
+
         TypeEnvironment forInEnv = new(_environment);
         if (stmt.IsDeclaration)
-            DeclareValue(forInEnv, stmt.Variable, TypeInfo.String.Shared);
+            DeclareValue(forInEnv, stmt.Variable, loopKeyType);
         else
         {
             BindValueUse(stmt.Variable);
-            forInEnv.Define(stmt.Variable.Lexeme, TypeInfo.String.Shared);
+            forInEnv.Define(
+                stmt.Variable.Lexeme,
+                GetDeclaredType(stmt.Variable.Lexeme) ?? loopKeyType);
+            // The iteration assignment happens before each body execution. Keep the incoming
+            // state snapshot for the post-loop path, but mark the target assigned while checking
+            // the body so reads such as `obj[k]` do not report TS2454.
+            MarkDefinitelyAssigned(stmt.Variable);
         }
 
         try
@@ -1621,6 +1859,8 @@ public partial class TypeChecker
     {
         Stmt.Return => true,
         Stmt.Throw => true,
+        Stmt.Break => true,
+        Stmt.Continue => true,
         Stmt.Block block => block.Statements.Count > 0 && AlwaysTerminates(block.Statements[^1]),
         Stmt.Sequence seq => seq.Statements.Count > 0 && AlwaysTerminates(seq.Statements[^1]),
         Stmt.If ifStmt => AlwaysTerminates(ifStmt.ThenBranch) &&
@@ -1635,16 +1875,22 @@ public partial class TypeChecker
     /// reference other infer parameters declared in the same extends clause (TS2304 — they are not
     /// in scope there). No-op when the annotation has no node (string fallback).
     /// </summary>
-    private void ValidateInferDeclarations(TypeNode? node, HashSet<string>? outerTypeParams)
+    private void ValidateInferDeclarations(
+        TypeNode? node,
+        HashSet<string>? outerTypeParams,
+        HashSet<string> declaredTypeVariables)
     {
         if (node is null) return;
         if (node is ConditionalTypeNode conditional)
-            ValidateInferClauseOf(conditional, outerTypeParams);
+            ValidateInferClauseOf(conditional, outerTypeParams, declaredTypeVariables);
         foreach (var child in TypeNodeChildren(node))
-            ValidateInferDeclarations(child, outerTypeParams);
+            ValidateInferDeclarations(child, outerTypeParams, declaredTypeVariables);
     }
 
-    private void ValidateInferClauseOf(ConditionalTypeNode conditional, HashSet<string>? outerTypeParams)
+    private void ValidateInferClauseOf(
+        ConditionalTypeNode conditional,
+        HashSet<string>? outerTypeParams,
+        HashSet<string> declaredTypeVariables)
     {
         List<InferTypeNode>? infers = null;
         CollectClauseInfers(conditional.ExtendsType, ref infers);
@@ -1679,6 +1925,12 @@ public partial class TypeChecker
             clauseNames.ExceptWith(outerTypeParams);
         foreach (var decl in infers)
         {
+            if (decl.Constraint is { } unknownConstraint &&
+                FindUnknownTypeReference(unknownConstraint, declaredTypeVariables) is { } unknown)
+            {
+                throw new TypeCheckException(
+                    $"Cannot find name '{unknown.Name}'.", unknown.Line, tsCode: "TS2304");
+            }
             if (decl.Constraint is { } constraintNode &&
                 FindReferenceTo(constraintNode, clauseNames) is { } reference)
             {
@@ -1686,6 +1938,38 @@ public partial class TypeChecker
                     $"Cannot find name '{reference.Name}'.", reference.Line, tsCode: "TS2304");
             }
         }
+    }
+
+    private static void CollectDeclaredTypeVariables(TypeNode? node, HashSet<string> names)
+    {
+        if (node is null) return;
+        switch (node)
+        {
+            case InferTypeNode infer: names.Add(infer.Name); break;
+            case MappedTypeNode mapped: names.Add(mapped.ParamName); break;
+        }
+        foreach (var child in TypeNodeChildren(node))
+            CollectDeclaredTypeVariables(child, names);
+    }
+
+    private NamedTypeNode? FindUnknownTypeReference(TypeNode node, HashSet<string> declaredTypeVariables)
+    {
+        if (node is ConditionalTypeNode) return null;
+        if (node is NamedTypeNode named &&
+            named.Name is not ("any" or "unknown" or "never" or "void" or "undefined" or
+                "null" or "object" or "string" or "number" or "boolean" or "symbol" or "bigint") &&
+            !declaredTypeVariables.Contains(named.Name) &&
+            _environment.Get(named.Name) is null &&
+            _environment.GetTypeBinding(named.Name) is null &&
+            _environment.GetTypeAlias(named.Name) is null &&
+            _environment.GetGenericTypeAlias(named.Name) is null &&
+            _environment.GetTypeParameter(named.Name) is null &&
+            _openTypeVariablesInScope?.Contains(named.Name) != true)
+            return named;
+        foreach (var child in TypeNodeChildren(node))
+            if (FindUnknownTypeReference(child, declaredTypeVariables) is { } found)
+                return found;
+        return null;
     }
 
     /// <summary>

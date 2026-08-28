@@ -152,6 +152,13 @@ public class ParsedModule
     public bool IsDeclarationFile { get; set; }
 
     /// <summary>
+    /// Whether diagnostics inside this declaration file belong to the user's root program.
+    /// Dependency and library declarations remain trusted inputs; explicit roots can opt into the
+    /// same authoritative diagnostic pass as ordinary source files.
+    /// </summary>
+    public bool ReportDeclarationDiagnostics { get; set; }
+
+    /// <summary>
     /// True for an embedded TypeScript <c>lib.*.d.ts</c>. These files are trusted
     /// compiler inputs and never emitted or executed.
     /// </summary>

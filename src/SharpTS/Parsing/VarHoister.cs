@@ -126,7 +126,12 @@ public static class VarHoister
                     {
                         return RewriteAnnotationOnlyDuplicate(v);
                     }
-                    return new Stmt.Expression(new Expr.Assign(v.Name, v.Initializer, IsVarRedeclaration: true));
+                    return new Stmt.Expression(new Expr.Assign(
+                        v.Name,
+                        v.Initializer,
+                        IsVarRedeclaration: true,
+                        RedeclarationTypeAnnotation: v.TypeAnnotation,
+                        RedeclarationTypeAnnotationNode: v.TypeAnnotationNode));
                 }
 
                 if (seen.Add(v.Name.Lexeme))
@@ -145,7 +150,12 @@ public static class VarHoister
                     return RewriteAnnotationOnlyDuplicate(v);
                 }
                 // `var x = expr` → `x = expr;`
-                return new Stmt.Expression(new Expr.Assign(v.Name, v.Initializer, IsVarRedeclaration: true));
+                return new Stmt.Expression(new Expr.Assign(
+                    v.Name,
+                    v.Initializer,
+                    IsVarRedeclaration: true,
+                    RedeclarationTypeAnnotation: v.TypeAnnotation,
+                    RedeclarationTypeAnnotationNode: v.TypeAnnotationNode));
             }
 
             case Stmt.Sequence seq:

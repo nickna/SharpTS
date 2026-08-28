@@ -124,7 +124,11 @@ public partial class TypeChecker
                 new TypeInfo.MappedType(
                     mapped.ParameterName,
                     Sub(mapped.Constraint),
-                    Sub(mapped.ValueType),
+                    // A mapped value may depend on the mapped parameter even while an
+                    // outer generic is being instantiated. Evaluating a conditional here
+                    // (before the mapped parameter has a concrete key) permanently selects
+                    // the wrong branch. Expansion substitutes the key and evaluates it.
+                    Substitute(mapped.ValueType, substitutions, evalConditionals: false),
                     mapped.Modifiers,
                     mapped.AsClause != null ? Sub(mapped.AsClause) : null),
             TypeInfo.IndexedAccess ia =>

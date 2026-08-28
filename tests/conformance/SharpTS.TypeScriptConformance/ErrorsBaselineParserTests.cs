@@ -5,6 +5,17 @@ namespace SharpTS.TypeScriptConformance;
 public class ErrorsBaselineParserTests
 {
     [Fact]
+    public void Parse_IgnoresDiagnosticLookingSourceTextAfterSummaryDivider()
+    {
+        const string src = "file.tsx(2,1): error TS7006: real\n\n==== file.tsx (1 errors) ====\n    // sample.tsx(23,22): error TS2322: example";
+
+        var diagnostic = Assert.Single(ErrorsBaselineParser.Parse(src));
+
+        Assert.Equal(2, diagnostic.Line);
+        Assert.Equal("TS7006", diagnostic.TsCode);
+    }
+
+    [Fact]
     public void ParsesSingleHeader()
     {
         var src = "foo.ts(3,5): error TS2322: Type 'string' is not assignable to type 'number'.\n";

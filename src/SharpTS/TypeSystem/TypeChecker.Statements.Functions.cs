@@ -531,6 +531,7 @@ public partial class TypeChecker
     private void CheckFunctionDeclaration(Stmt.Function funcStmt)
     {
         RegisterValueDeclaration(funcStmt.Name, mergeWithLocal: true);
+        ValidateCircularTypeParameterConstraints(funcStmt.TypeParams);
 
         string funcName = funcStmt.Name.Lexeme;
 
@@ -778,11 +779,11 @@ public partial class TypeChecker
         _loopDepth = 0;
         _switchDepth = 0;
         _activeLabels.Clear();
-        // Generic relationship suites commonly contain several independent assignments in one
-        // body. During module diagnostic checking, continue across those statements so each
-        // incompatible type-parameter direction is diagnosed. Standalone checks and ordinary
-        // functions remain statement-atomic, avoiding cascades after an earlier error.
-        if (suppress || (_currentModule != null && typeParams is { Count: > 0 }))
+        // Conformance/program checking collects diagnostics with recovery. Continue across
+        // independent statements in every function body so one property or assignment error does
+        // not hide later diagnostics in that body; standalone fail-fast checks retain their
+        // statement-atomic behavior.
+        if (suppress || _currentModule != null)
             _recoveryMode = true;
         if (suppress)
         {
@@ -891,7 +892,7 @@ public partial class TypeChecker
             // Validate that non-void functions return a value on all code paths
             // Skip for void, generators (which use yield), async functions (which return Promise),
             // assertion predicates, and inferred return types (which may legitimately be void)
-            if (!inferringReturnType &&
+            if (_strictNullChecks && !inferringReturnType &&
                 returnType is not TypeInfo.Void &&
                 returnType is not TypeInfo.Generator &&
                 returnType is not TypeInfo.AsyncGenerator &&

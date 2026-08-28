@@ -25,6 +25,9 @@ public partial class TypeChecker
                 string name = GetFieldMemberName(f);
                 if (!classType.FieldTypes.TryGetValue(name, out var type))
                     return false;
+                if (type is TypeInfo.Any && f.TypeAnnotationNode is IndexedAccessTypeNode indexed)
+                    return !ContainsSelfIndexedAccess(
+                        indexed, declaration.Name.Lexeme, requireLiteralIndex: true);
                 TypeInfo currentType = type is TypeInfo.Any && f.TypeAnnotation != null
                     ? ResolveAnnotation(f.TypeAnnotation, f.TypeAnnotationNode) ?? type
                     : type;
@@ -87,7 +90,7 @@ public partial class TypeChecker
 
     private static bool CanBeUndefined(TypeInfo type) => type switch
     {
-        TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Undefined => true,
+        TypeInfo.Any or TypeInfo.Unknown or TypeInfo.Undefined or TypeInfo.Void => true,
         TypeInfo.Union union => union.ContainsUndefined,
         _ => false,
     };

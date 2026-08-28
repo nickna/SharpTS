@@ -277,6 +277,58 @@ public class TypeNarrowingTests
         Assert.Contains("25", result);
     }
 
+    [Fact]
+    public void DiscriminatedUnion_SwitchCaseNarrowsSubject()
+    {
+        var source = """
+            type Action =
+                | { type: "digit"; digit: string }
+                | { type: "operator"; operator: string };
+
+            function value(action: Action): string {
+                switch (action.type) {
+                    case "digit": return action.digit;
+                    case "operator": return action.operator;
+                }
+                return "";
+            }
+
+            console.log(value({ type: "digit", digit: "7" }));
+            console.log(value({ type: "operator", operator: "+" }));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("7\n+\n", result);
+    }
+
+    [Fact]
+    public void DiscriminatedUnion_NegatedAndBooleanGuardsNarrowAfterContinueAndReturn()
+    {
+        var source = """
+            type Command = { kind: "text"; text: string } | { kind: "image"; source: string };
+            type Result = { changed: false } | { changed: true; image: string };
+
+            function images(commands: Command[]): string {
+                let output = "";
+                for (const command of commands) {
+                    if (command.kind !== "image") continue;
+                    output = output + command.source;
+                }
+                return output;
+            }
+            function changed(result: Result): string {
+                if (!result.changed) return "none";
+                return result.image;
+            }
+
+            console.log(images([{ kind: "text", text: "x" }, { kind: "image", source: "ok" }]));
+            console.log(changed({ changed: true, image: "yes" }));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("ok\nyes\n", result);
+    }
+
     #endregion
 
     #region Equality Narrowing

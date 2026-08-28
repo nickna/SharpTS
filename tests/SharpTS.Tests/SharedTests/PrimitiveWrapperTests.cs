@@ -186,7 +186,9 @@ public class PrimitiveWrapperTests
     [Theory, ModeData]
     public void Number_NewWrapper_ExplicitlyConvertsBigInt(ExecutionMode mode)
     {
-        var output = TestHarness.Run("console.log(+(new Number(0n)));", mode);
+        // Exercise the runtime wrapper coercion dynamically: statically applying unary `+` to a
+        // bigint is TS2736, which is covered by the diagnostic conformance suite.
+        var output = TestHarness.Run("console.log(+((new Number(0n)) as any));", mode);
         Assert.Equal("0\n", output);
     }
 

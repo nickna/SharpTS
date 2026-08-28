@@ -89,6 +89,13 @@ public partial class TypeChecker
                     if (TryToTypeInfo(member) is not { } resolved) return null;
                     members.Add(resolved);
                 }
+                // Keep an explicit intersection of keyof operands intact. Although
+                // `keyof T & keyof U` and `keyof (T & U)` print similarly, they have
+                // different generic assignability rules and must not be collapsed into the
+                // same KeyOf node before compatibility has a chance to apply those rules.
+                if (members.All(member => member is TypeInfo.KeyOf))
+                    return new TypeInfo.Intersection(members);
+
                 // Identical merge rules (primitive conflicts, object-member union, never/any
                 // absorption) as the string path's "A & B" split.
                 return SimplifyIntersection(members);

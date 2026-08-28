@@ -11,6 +11,9 @@ namespace SharpTS.TypeSystem;
 /// </summary>
 public partial class TypeChecker
 {
+    private readonly HashSet<string> _recursiveGenericIndexedAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _excessivelyRecursiveVariables = new(StringComparer.Ordinal);
+
     /// <summary>
     /// Declared constraint strings per generic-alias type parameter, keyed by alias name.
     /// <see cref="TypeEnvironment.DefineGenericTypeAlias"/> stores only parameter NAMES, and
@@ -35,6 +38,20 @@ public partial class TypeChecker
     private void ValidateAliasBody(Stmt.TypeAlias stmt)
     {
         if (stmt.TypeDefinitionNode is not { } body) return;
+
+        if (ContainsSelfIndexedAccess(body, stmt.Name.Lexeme, requireLiteralIndex: true))
+        {
+            RecordTypeError(new TypeCheckException(
+                $"'{stmt.Name.Lexeme}' is referenced directly or indirectly in its own type annotation.",
+                FindSelfIndexedAccessLine(body, stmt.Name.Lexeme) ?? stmt.Name.Line,
+                tsCode: "TS2502"));
+        }
+        if (stmt.TypeParameters is { Count: > 0 } &&
+            ContainsSelfIndexedAccess(body, stmt.Name.Lexeme, requireLiteralIndex: false) &&
+            !ContainsSelfIndexedAccess(body, stmt.Name.Lexeme, requireLiteralIndex: true))
+        {
+            _recursiveGenericIndexedAliases.Add(stmt.Name.Lexeme);
+        }
 
         // Bind the alias's own type parameters (with constraints) so references inside the
         // body resolve to TypeParameter — constraint checks then go through apparent types.
@@ -111,6 +128,28 @@ public partial class TypeChecker
                         mapped.Line, tsCode: "TS2322");
                 }
                 _ = TryResolveMappedType(mapped);
+                foreach (var child in TypeNodeChildren(node))
+                    ValidateAliasBodyNode(child, inferLegal, infersOutOfScope);
+                return;
+            }
+
+            case KeyofTypeNode keyofNode:
+            {
+                if (FindUnknownTypeReference(keyofNode.Operand, []) is { } unknown)
+                {
+                    RecordTypeError(new TypeCheckException(
+                        $" Cannot find name '{unknown.Name}'.",
+                        unknown.Line,
+                        tsCode: "TS2304"));
+                    return;
+                }
+                ValidateAliasBodyNode(keyofNode.Operand, inferLegal, infersOutOfScope);
+                return;
+            }
+
+            case IndexedAccessTypeNode indexed:
+            {
+                ValidateIndexedAccessAliasNode(indexed);
                 foreach (var child in TypeNodeChildren(node))
                     ValidateAliasBodyNode(child, inferLegal, infersOutOfScope);
                 return;
@@ -195,6 +234,188 @@ public partial class TypeChecker
                 return;
         }
     }
+
+    private static bool ContainsSelfIndexedAccess(
+        TypeNode node, string typeName, bool requireLiteralIndex)
+    {
+        if (node is IndexedAccessTypeNode indexed &&
+            indexed.ObjectType is NamedTypeNode { Name: var objectName } &&
+            objectName == typeName &&
+            (!requireLiteralIndex || indexed.IndexType is LiteralTypeNode))
+            return true;
+        foreach (TypeNode child in TypeNodeChildren(node))
+            if (ContainsSelfIndexedAccess(child, typeName, requireLiteralIndex))
+                return true;
+        return false;
+    }
+
+    private static int? FindSelfIndexedAccessLine(TypeNode node, string typeName)
+    {
+        if (node is IndexedAccessTypeNode indexed &&
+            indexed.ObjectType is NamedTypeNode { Name: var objectName } &&
+            objectName == typeName && indexed.IndexType is LiteralTypeNode)
+            return indexed.Line;
+        foreach (TypeNode child in TypeNodeChildren(node))
+            if (FindSelfIndexedAccessLine(child, typeName) is { } line)
+                return line;
+        return null;
+    }
+
+    private void ValidateCircularTypeParameterConstraints(List<TypeParam>? typeParameters)
+    {
+        if (typeParameters is null) return;
+        foreach (TypeParam parameter in typeParameters)
+        {
+            if (parameter.ConstraintNode is not { } constraint ||
+                !ContainsIndexedTypeParameterReference(constraint, parameter.Name.Lexeme))
+                continue;
+            RecordTypeError(new TypeCheckException(
+                $"Type parameter '{parameter.Name.Lexeme}' has a circular constraint.",
+                parameter.Name.Line,
+                tsCode: "TS2313"));
+            RecordTypeError(new TypeCheckException(
+                $"Type '{parameter.Name.Lexeme}' cannot be used to index itself in its constraint.",
+                parameter.Name.Line,
+                tsCode: "TS2536"));
+        }
+    }
+
+    private static bool ContainsIndexedTypeParameterReference(TypeNode node, string parameterName)
+    {
+        if (node is IndexedAccessTypeNode {
+                ObjectType: NamedTypeNode { Name: var objectName } } &&
+            objectName == parameterName)
+            return true;
+        foreach (TypeNode child in TypeNodeChildren(node))
+            if (ContainsIndexedTypeParameterReference(child, parameterName))
+                return true;
+        return false;
+    }
+
+    private void ValidateIndexedAccessAliasNode(IndexedAccessTypeNode indexed)
+    {
+        if (ContainsBoundTypeParameter(indexed.ObjectType) ||
+            ContainsBoundTypeParameter(indexed.IndexType) ||
+            !IsDirectIndexValidationSyntax(indexed.IndexType))
+            return;
+
+        TypeInfo? objectType = TryToTypeInfo(indexed.ObjectType);
+        TypeInfo? indexType = TryToTypeInfo(indexed.IndexType);
+        if (objectType is null || indexType is null || objectType is TypeInfo.Never || indexType is TypeInfo.Never)
+            return;
+        if (ContainsOpenTypeVariable(objectType) || ContainsOpenTypeVariable(indexType) ||
+            objectType is TypeInfo.ConditionalType or TypeInfo.MappedType or TypeInfo.IndexedAccess ||
+            indexType is TypeInfo.KeyOf or TypeInfo.ConditionalType or TypeInfo.MappedType or TypeInfo.IndexedAccess)
+            return;
+
+        IEnumerable<TypeInfo> keys = indexType is TypeInfo.Union union
+            ? union.FlattenedTypes
+            : [indexType];
+        foreach (TypeInfo key in keys)
+        {
+            string? code = null;
+            switch (key)
+            {
+                case TypeInfo.Any:
+                    if (objectType is not TypeInfo.Any && !HasAnyIndexSignature(objectType))
+                        code = "TS2538";
+                    break;
+
+                case TypeInfo.StringLiteral literal:
+                    if (objectType is not TypeInfo.Any &&
+                        !HasNamedIndexedProperty(objectType, literal.Value) &&
+                        ResolveObjectPrototypeMember(literal.Value) is null &&
+                        StringIndexOf(objectType) is null)
+                        code = "TS2339";
+                    break;
+
+                case TypeInfo.String:
+                    if (objectType is not TypeInfo.Any && StringIndexOf(objectType) is null)
+                        code = "TS2537";
+                    break;
+
+                case TypeInfo.NumberLiteral:
+                case TypeInfo.Primitive { Type: TokenType.TYPE_NUMBER }:
+                    if (objectType is not TypeInfo.Any && !HasNumberIndexSignature(objectType))
+                        code = "TS2537";
+                    break;
+
+                case TypeInfo.Symbol:
+                case TypeInfo.UniqueSymbol:
+                    if (objectType is not TypeInfo.Any && !HasSymbolIndexSignature(objectType))
+                        code = "TS2537";
+                    break;
+
+                default:
+                    code = "TS2538";
+                    break;
+            }
+
+            if (code is null) continue;
+            string message = code switch
+            {
+                "TS2339" => $" Property '{key}' does not exist on type '{objectType}'.",
+                "TS2537" => $" Type '{objectType}' has no matching index signature for type '{key}'.",
+                _ => $" Type '{key}' cannot be used as an index type.",
+            };
+            RecordTypeError(new TypeCheckException(message, indexed.Line, tsCode: code));
+        }
+    }
+
+    private bool ContainsBoundTypeParameter(TypeNode node)
+    {
+        if (node is NamedTypeNode named && _environment.GetTypeParameter(named.Name) is not null)
+            return true;
+        foreach (TypeNode child in TypeNodeChildren(node))
+            if (ContainsBoundTypeParameter(child))
+                return true;
+        return false;
+    }
+
+    private static bool IsDirectIndexValidationSyntax(TypeNode node) => node switch
+    {
+        LiteralTypeNode => true,
+        ObjectTypeNode => true,
+        NamedTypeNode { TypeArguments: null, Name: "any" or "string" or "number" or
+            "boolean" or "void" or "undefined" or "symbol" } => true,
+        UnionTypeNode union => union.Members.All(IsDirectIndexValidationSyntax),
+        IntersectionTypeNode intersection => intersection.Members.All(IsDirectIndexValidationSyntax),
+        _ => false,
+    };
+
+    private bool HasNamedIndexedProperty(TypeInfo objectType, string name) => objectType switch
+    {
+        TypeInfo.Tuple tuple when int.TryParse(name, out int index) =>
+            index >= 0 && (index < tuple.ElementTypes.Count || tuple.RestElementType is not null),
+        TypeInfo.Union union => union.FlattenedTypes.All(member => HasNamedIndexedProperty(member, name)),
+        TypeInfo.Intersection intersection => intersection.FlattenedTypes.Any(member => HasNamedIndexedProperty(member, name)),
+        _ => GetMemberType(objectType, name) is not null,
+    };
+
+    private static bool HasAnyIndexSignature(TypeInfo type) => type switch
+    {
+        TypeInfo.Record r => r.StringIndexType is not null || r.NumberIndexType is not null || r.SymbolIndexType is not null,
+        TypeInfo.Interface i => i.StringIndexType is not null || i.NumberIndexType is not null || i.SymbolIndexType is not null,
+        TypeInfo.Class c => c.StringIndexType is not null || c.NumberIndexType is not null || c.SymbolIndexType is not null,
+        _ => false,
+    };
+
+    private bool HasNumberIndexSignature(TypeInfo type) => type switch
+    {
+        TypeInfo.Array or TypeInfo.Tuple or TypeInfo.String or TypeInfo.StringLiteral => true,
+        TypeInfo.Record r => r.NumberIndexType is not null || r.StringIndexType is not null,
+        TypeInfo.Interface i => i.NumberIndexType is not null || i.StringIndexType is not null,
+        TypeInfo.Class c => c.NumberIndexType is not null || c.StringIndexType is not null,
+        _ => false,
+    };
+
+    private static bool HasSymbolIndexSignature(TypeInfo type) => type switch
+    {
+        TypeInfo.Record r => r.SymbolIndexType is not null,
+        TypeInfo.Interface i => i.SymbolIndexType is not null,
+        TypeInfo.Class c => c.SymbolIndexType is not null,
+        _ => false,
+    };
 
     private static readonly TypeInfo KeyLikeUnion = new TypeInfo.Union(
         [TypeInfo.String.Shared, TypeInfo.Primitive.Number, TypeInfo.Symbol.Shared]);

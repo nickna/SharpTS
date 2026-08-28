@@ -59,6 +59,16 @@ public class VariableDefiniteAssignmentTests
     }
 
     [Fact]
+    public void ConstantConditionalDoesNotReportUnreachableBranchRead()
+    {
+        var diagnostics = Check(
+            "let value: number; const first = true ? value : 0; const second = true ? 0 : value;");
+
+        var diagnostic = Assert.Single(diagnostics, d => d.TsCode == "TS2454");
+        Assert.Contains("'value'", diagnostic.Message);
+    }
+
+    [Fact]
     public void RepeatedUninitializedVarDeclarationStaysUnassigned()
     {
         Assert.Contains(
@@ -70,6 +80,7 @@ public class VariableDefiniteAssignmentTests
     [InlineData("let value: number | undefined; console.log(value);")]
     [InlineData("let value: unknown; console.log(value);")]
     [InlineData("let value: any; console.log(value);")]
+    [InlineData("let value: void; console.log(value);")]
     [InlineData("declare let value: number; console.log(value);")]
     [InlineData("let value!: number; console.log(value);")]
     public void UndefinedCapableOrExternallyAssignedBindingsDoNotReport(string source)

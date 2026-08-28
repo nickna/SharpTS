@@ -236,6 +236,29 @@ public partial class TypeChecker
                 foreach (var (fieldName, fieldType) in sr.Fields)
                     if (tr.Fields.TryGetValue(fieldName, out var targetFieldType))
                         CollectInferenceCandidates(fieldType, targetFieldType, contravariant, paramNames, candidates, sawContravariant);
+                if (sr.CallSignatures is { } sourceCalls && tr.CallSignatures is { } targetCalls)
+                {
+                    int callCount = Math.Min(sourceCalls.Count, targetCalls.Count);
+                    for (int signatureIndex = 0; signatureIndex < callCount; signatureIndex++)
+                        CollectSignatureInferenceCandidates(
+                            sourceCalls[signatureIndex].ParamTypes,
+                            sourceCalls[signatureIndex].ReturnType,
+                            targetCalls[signatureIndex].ParamTypes,
+                            targetCalls[signatureIndex].ReturnType,
+                            contravariant, paramNames, candidates, sawContravariant);
+                }
+                if (sr.ConstructorSignatures is { } sourceConstructors &&
+                    tr.ConstructorSignatures is { } targetConstructors)
+                {
+                    int constructorCount = Math.Min(sourceConstructors.Count, targetConstructors.Count);
+                    for (int signatureIndex = 0; signatureIndex < constructorCount; signatureIndex++)
+                        CollectSignatureInferenceCandidates(
+                            sourceConstructors[signatureIndex].ParamTypes,
+                            sourceConstructors[signatureIndex].ReturnType,
+                            targetConstructors[signatureIndex].ParamTypes,
+                            targetConstructors[signatureIndex].ReturnType,
+                            contravariant, paramNames, candidates, sawContravariant);
+                }
                 return;
 
             case TypeInfo.Tuple stup when targetType is TypeInfo.Tuple ttup:
@@ -250,6 +273,25 @@ public partial class TypeChecker
                     CollectInferenceCandidates(sg.TypeArguments[i], tg.TypeArguments[i], contravariant, paramNames, candidates, sawContravariant);
                 return;
         }
+    }
+
+    private void CollectSignatureInferenceCandidates(
+        IReadOnlyList<TypeInfo> sourceParameters,
+        TypeInfo sourceReturn,
+        IReadOnlyList<TypeInfo> targetParameters,
+        TypeInfo targetReturn,
+        bool contravariant,
+        HashSet<string> paramNames,
+        Dictionary<string, List<TypeInfo>> candidates,
+        HashSet<string> sawContravariant)
+    {
+        int parameterCount = Math.Min(sourceParameters.Count, targetParameters.Count);
+        for (int parameterIndex = 0; parameterIndex < parameterCount; parameterIndex++)
+            CollectInferenceCandidates(
+                sourceParameters[parameterIndex], targetParameters[parameterIndex],
+                !contravariant, paramNames, candidates, sawContravariant);
+        CollectInferenceCandidates(
+            sourceReturn, targetReturn, contravariant, paramNames, candidates, sawContravariant);
     }
 
     /// <summary>The empty object type <c>{}</c> — the default for an uninferable type parameter.</summary>

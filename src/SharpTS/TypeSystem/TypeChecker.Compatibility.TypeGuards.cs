@@ -136,20 +136,59 @@ public partial class TypeChecker
 
         // Pattern 9: x.kind === "literal" (discriminated union narrowing)
         if (condition is Expr.Binary bin9 &&
-            bin9.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin9.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL
+                or TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin9.Left is Expr.Get { Object: Expr.Variable v9, Name: var propToken } &&
             bin9.Right is Expr.Literal { Value: string literalValue })
         {
-            return AnalyzeDiscriminatedUnionGuard(v9.Name.Lexeme, propToken.Lexeme, literalValue);
+            var guard = AnalyzeDiscriminatedUnionGuard(
+                v9.Name.Lexeme, propToken.Lexeme, literalValue);
+            return bin9.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL
+                ? (guard.VarName, guard.ExcludedType, guard.NarrowedType)
+                : guard;
         }
 
         // Pattern 9b: "literal" === x.kind (reversed)
         if (condition is Expr.Binary bin9b &&
-            bin9b.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL &&
+            bin9b.Operator.Type is TokenType.EQUAL_EQUAL or TokenType.EQUAL_EQUAL_EQUAL
+                or TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL &&
             bin9b.Right is Expr.Get { Object: Expr.Variable v9b, Name: var propToken9b } &&
             bin9b.Left is Expr.Literal { Value: string literalValue9b })
         {
-            return AnalyzeDiscriminatedUnionGuard(v9b.Name.Lexeme, propToken9b.Lexeme, literalValue9b);
+            var guard = AnalyzeDiscriminatedUnionGuard(
+                v9b.Name.Lexeme, propToken9b.Lexeme, literalValue9b);
+            return bin9b.Operator.Type is TokenType.BANG_EQUAL or TokenType.BANG_EQUAL_EQUAL
+                ? (guard.VarName, guard.ExcludedType, guard.NarrowedType)
+                : guard;
+        }
+
+        // Pattern 9c: truthiness of a boolean-literal discriminant (`if (!result.changed)`).
+        // Narrow the containing union, not only the property path, so an early return/continue
+        // exposes members that exist solely on the surviving constituent.
+        bool propertyNegated = false;
+        Expr propertyCondition = condition;
+        while (propertyCondition is Expr.Grouping grouping)
+            propertyCondition = grouping.Expression;
+        if (propertyCondition is Expr.Unary { Operator.Type: TokenType.BANG } unary)
+        {
+            propertyNegated = true;
+            propertyCondition = unary.Right;
+            while (propertyCondition is Expr.Grouping grouping)
+                propertyCondition = grouping.Expression;
+        }
+        if (propertyCondition is Expr.Get
+            {
+                Object: Expr.Variable propertyVariable,
+                Name: var booleanProperty
+            })
+        {
+            var guard = AnalyzeBooleanDiscriminantTruthinessGuard(
+                propertyVariable.Name.Lexeme,
+                booleanProperty.Lexeme);
+            if (guard.VarName is not null)
+                return propertyNegated
+                    ? (guard.VarName, guard.ExcludedType, guard.NarrowedType)
+                    : guard;
         }
 
         // Pattern 10: Array.isArray(x)
@@ -918,20 +957,22 @@ public partial class TypeChecker
                 return;
             }
 
-            // Try to get a single type guard from this expression
-            var guard = AnalyzePathTypeGuard(expr);
-            if (guard.Path != null && guard.NarrowedType != null && guard.ExcludedType != null)
+            // Prefer a root-variable guard when a property discriminates its containing union.
+            // The general path guard would narrow only `result.changed`, leaving `result` as the
+            // full union and hiding constituent-only members after a terminating branch.
+            var legacyGuard = AnalyzeTypeGuard(expr);
+            if (legacyGuard.VarName != null && legacyGuard.NarrowedType != null &&
+                legacyGuard.ExcludedType != null)
             {
-                narrowings.Add((guard.Path, guard.NarrowedType, guard.ExcludedType));
+                var varPath = new Narrowing.NarrowingPath.Variable(legacyGuard.VarName);
+                narrowings.Add((varPath, legacyGuard.NarrowedType, legacyGuard.ExcludedType));
             }
             else
             {
-                // Fall back to legacy type guard analysis for variables
-                var legacyGuard = AnalyzeTypeGuard(expr);
-                if (legacyGuard.VarName != null && legacyGuard.NarrowedType != null && legacyGuard.ExcludedType != null)
+                var guard = AnalyzePathTypeGuard(expr);
+                if (guard.Path != null && guard.NarrowedType != null && guard.ExcludedType != null)
                 {
-                    var varPath = new Narrowing.NarrowingPath.Variable(legacyGuard.VarName);
-                    narrowings.Add((varPath, legacyGuard.NarrowedType, legacyGuard.ExcludedType));
+                    narrowings.Add((guard.Path, guard.NarrowedType, guard.ExcludedType));
                 }
             }
         }
@@ -1227,6 +1268,35 @@ public partial class TypeChecker
         }
 
         return (null, null, null);
+    }
+
+    private (string? VarName, TypeInfo? NarrowedType, TypeInfo? ExcludedType)
+        AnalyzeBooleanDiscriminantTruthinessGuard(string varName, string discriminantProp)
+    {
+        if (_environment.Get(varName) is not TypeInfo.Union union)
+            return (null, null, null);
+
+        var truthy = new List<TypeInfo>();
+        var falsy = new List<TypeInfo>();
+        foreach (TypeInfo member in union.FlattenedTypes)
+        {
+            TypeInfo? propertyType = GetDiscriminantPropertyType(member, discriminantProp);
+            if (propertyType is TypeInfo.BooleanLiteral { Value: true })
+                truthy.Add(member);
+            else if (propertyType is TypeInfo.BooleanLiteral { Value: false })
+                falsy.Add(member);
+            else
+            {
+                truthy.Add(member);
+                falsy.Add(member);
+            }
+        }
+
+        if (truthy.Count == 0 || falsy.Count == 0)
+            return (null, null, null);
+        TypeInfo truthyType = truthy.Count == 1 ? truthy[0] : new TypeInfo.Union(truthy);
+        TypeInfo falsyType = falsy.Count == 1 ? falsy[0] : new TypeInfo.Union(falsy);
+        return (varName, truthyType, falsyType);
     }
 
     /// <summary>

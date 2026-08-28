@@ -778,6 +778,107 @@ public class TypeScriptConformanceRunnerTests
         Assert.DoesNotContain("TS7006", ActualCodes("// @strict: false\n" + ImplicitAnyParam));
     }
 
+    [Theory]
+    [InlineData("enums/enumBasics.ts")]
+    [InlineData("expressions/assignmentOperator/assignmentTypeNarrowing.ts")]
+    [InlineData("types/conditional/inferTypesInvalidExtendsDeclaration.ts")]
+    [InlineData("types/conditional/inferTypesWithExtends1.ts")]
+    [InlineData("types/intersection/intersectionTypeAssignment.ts")]
+    [InlineData("types/mapped/mappedTypeModifiers.ts")]
+    [InlineData("types/typeAliases/typeAliasesForObjectTypes.ts")]
+    [InlineData("types/typeParameters/typeParameterAsBaseType.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/unionTypesAssignability.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithStringIndexer3.ts")]
+    [InlineData("types/union/unionTypeMembers.ts")]
+    [InlineData("types/conditional/conditionalTypes1.ts")]
+    [InlineData("types/conditional/conditionalTypes2.ts")]
+    [InlineData("types/keyof/circularIndexedAccessErrors.ts")]
+    [InlineData("types/keyof/keyofAndForIn.ts")]
+    [InlineData("types/keyof/keyofAndIndexedAccess.ts")]
+    [InlineData("types/keyof/keyofAndIndexedAccess2.ts")]
+    [InlineData("types/keyof/keyofAndIndexedAccessErrors.ts")]
+    [InlineData("types/thisType/thisTypeInFunctions.ts")]
+    public void RunOne_Epic1281CoreSemanticFixes_MatchPinnedDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        string path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("classes/classExpression.ts")]
+    [InlineData("jsx/checkJsxChildrenProperty15.tsx")]
+    [InlineData("jsx/checkJsxChildrenProperty7.tsx")]
+    [InlineData("decorators/class/decoratorOnClass1.ts")]
+    [InlineData("enums/enumBasics.ts")]
+    [InlineData("expressions/assignmentOperator/assignmentTypeNarrowing.ts")]
+    [InlineData("functions/functionImplementations.ts")]
+    [InlineData("jsx/checkJsxChildrenCanBeTupleType.tsx")]
+    [InlineData("jsx/checkJsxChildrenProperty13.tsx")]
+    [InlineData("jsx/checkJsxChildrenProperty2.tsx")]
+    [InlineData("jsx/checkJsxChildrenProperty4.tsx")]
+    [InlineData("jsx/checkJsxChildrenProperty5.tsx")]
+    [InlineData("jsx/correctlyMarkAliasAsReferences1.tsx")]
+    [InlineData("jsx/correctlyMarkAliasAsReferences3.tsx")]
+    [InlineData("jsx/jsxEsprimaFbTestSuite.tsx")]
+    [InlineData("jsx/jsxReactTestSuite.tsx")]
+    [InlineData("jsx/tsxAttributeResolution10.tsx")]
+    [InlineData("jsx/tsxAttributeResolution11.tsx")]
+    [InlineData("jsx/tsxAttributeResolution12.tsx")]
+    [InlineData("jsx/tsxAttributeResolution15.tsx")]
+    [InlineData("jsx/tsxAttributeResolution2.tsx")]
+    [InlineData("jsx/tsxAttributeResolution4.tsx")]
+    [InlineData("jsx/tsxAttributeResolution9.tsx")]
+    [InlineData("jsx/tsxCorrectlyParseLessThanComparison1.tsx")]
+    [InlineData("jsx/tsxDynamicTagName3.tsx")]
+    [InlineData("jsx/tsxDynamicTagName7.tsx")]
+    [InlineData("jsx/tsxElementResolution10.tsx")]
+    [InlineData("jsx/tsxElementResolution13.tsx")]
+    [InlineData("jsx/tsxElementResolution15.tsx")]
+    [InlineData("jsx/tsxElementResolution7.tsx")]
+    [InlineData("jsx/tsxEmit1.tsx")]
+    [InlineData("jsx/tsxExternalModuleEmit2.tsx")]
+    [InlineData("jsx/tsxFragmentErrors.tsx")]
+    [InlineData("jsx/tsxInArrowFunction.tsx")]
+    [InlineData("jsx/tsxIntrinsicAttributeErrors.tsx")]
+    [InlineData("jsx/tsxLibraryManagedAttributes.tsx")]
+    [InlineData("jsx/tsxPreserveEmit3.tsx")]
+    [InlineData("jsx/tsxReactEmit1.tsx")]
+    [InlineData("jsx/tsxReactEmit3.tsx")]
+    [InlineData("jsx/tsxReactEmit5.tsx")]
+    [InlineData("jsx/tsxReactEmitNesting.tsx")]
+    [InlineData("jsx/tsxSpreadAttributesResolution4.tsx")]
+    [InlineData("jsx/tsxSpreadAttributesResolution5.tsx")]
+    [InlineData("jsx/tsxSpreadAttributesResolution17.tsx")]
+    [InlineData("jsx/tsxSpreadChildrenInvalidType.tsx")]
+    [InlineData("jsx/tsxTypeErrors.tsx")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/everyTypeAssignableToAny.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithConstructSignatures5.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/unionTypesAssignability.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameter.ts")]
+    [InlineData("types/typeRelationships/subtypesAndSuperTypes/subtypesOfTypeParameterWithConstraints2.ts")]
+    public void RunOne_Epic1281ResidualFixes_MatchPinnedDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        string path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}; actual: " +
+            string.Join(", ", (result.ActualDiagnostics ?? []).Select(d => $"{d.TsCode}@L{d.Line}")));
+    }
+
     #endregion
 }
 

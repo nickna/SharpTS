@@ -241,6 +241,13 @@ public partial class TypeChecker
         if (source is TypeInfo.MappedType sourceMapped)
         {
             TypeInfo sourceDomain = ResolveMappedKeyDomain(sourceMapped);
+            if (sourceDomain is TypeInfo.String or TypeInfo.Symbol or
+                TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER })
+            {
+                // A primitive-domain mapping is an index signature. It does not prove that the
+                // required properties selected by an unresolved K are present.
+                return true;
+            }
             // keys(target) ⊆ keys(source)  ⟺  the target domain is assignable to the source domain.
             bool keysSubset = IsCompatible(sourceDomain, domain);
             // Align the two mapped parameters, then require source value → target value.
@@ -262,6 +269,12 @@ public partial class TypeChecker
             result = IsCompatible(new TypeInfo.KeyOf(source), domain);
             return true;
         }
+
+        // An ordinary object/index-signature source does not guarantee the properties named by
+        // an unresolved generic key domain. For example, `{ [key: string]: number }` is not
+        // assignable to `{ [P in K]: number }`: K may name required properties that are absent.
+        if (source is TypeInfo.Record or TypeInfo.Interface or TypeInfo.Class or TypeInfo.Instance)
+            return true;
 
         return false;
     }
@@ -535,6 +548,35 @@ public partial class TypeChecker
 
         if (TryRelateLiteralTypes(expected, actual, out var literalRel)) return literalRel;
 
+        // Preserve the generic keyof identities through the ordinary union/intersection
+        // short-circuits below. These are equivalent identities:
+        //   keyof (T | U)  == keyof T & keyof U
+        //   keyof (T & U)  == keyof T | keyof U
+        if (expected is TypeInfo.KeyOf { SourceType: TypeInfo.Union expectedKeySource } &&
+            actual is TypeInfo.Intersection actualKeyParts)
+        {
+            var actualSources = actualKeyParts.FlattenedTypes
+                .OfType<TypeInfo.KeyOf>()
+                .Select(key => key.SourceType)
+                .ToList();
+            if (actualSources.Count == expectedKeySource.FlattenedTypes.Count &&
+                expectedKeySource.FlattenedTypes.All(source => actualSources.Any(actualSource =>
+                    TypeInfoEqualityComparer.Instance.Equals(source, actualSource))))
+                return true;
+        }
+        if (expected is TypeInfo.Union expectedKeyParts &&
+            actual is TypeInfo.KeyOf { SourceType: TypeInfo.Intersection actualKeySource })
+        {
+            var expectedSources = expectedKeyParts.FlattenedTypes
+                .OfType<TypeInfo.KeyOf>()
+                .Select(key => key.SourceType)
+                .ToList();
+            if (expectedSources.Count == actualKeySource.FlattenedTypes.Count &&
+                actualKeySource.FlattenedTypes.All(source => expectedSources.Any(expectedSource =>
+                    TypeInfoEqualityComparer.Instance.Equals(source, expectedSource))))
+                return true;
+        }
+
         // Union-to-union: each type in actual must be compatible with at least one type in expected
         if (expected is TypeInfo.Union expectedUnion && actual is TypeInfo.Union actualUnion)
         {
@@ -596,19 +638,45 @@ public partial class TypeChecker
         // Special handling for keyof T where T is a type parameter - don't try to expand
         if (expected is TypeInfo.KeyOf expectedKeyOf)
         {
-            // If source is a type parameter, don't expand to avoid infinite recursion
-            if (expectedKeyOf.SourceType is TypeInfo.TypeParameter)
+            if (expectedKeyOf.SourceType is TypeInfo.Union expectedSourceUnion &&
+                actual is TypeInfo.Intersection actualKeyIntersection)
             {
-                // keyof T is compatible with string, number, symbol, or any
-                return actual is TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.Any or
-                       TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } or
-                       TypeInfo.NumberLiteral or TypeInfo.Symbol or TypeInfo.TypeParameter;
+                var actualSources = actualKeyIntersection.FlattenedTypes
+                    .OfType<TypeInfo.KeyOf>()
+                    .Select(key => key.SourceType)
+                    .ToList();
+                if (actualSources.Count == expectedSourceUnion.FlattenedTypes.Count)
+                    return true;
+            }
+            // If source is a type parameter, don't expand to avoid infinite recursion
+            if (expectedKeyOf.SourceType is TypeInfo.TypeParameter expectedSourceParameter)
+            {
+                if (ApparentTypeOf(expectedSourceParameter) is { } expectedSourceConstraint)
+                    return IsCompatible(EvaluateKeyOf(expectedSourceConstraint), actual);
+                return actual switch
+                {
+                    TypeInfo.KeyOf { SourceType: TypeInfo.TypeParameter actualSourceParameter } =>
+                        actualSourceParameter.Name == expectedSourceParameter.Name,
+                    TypeInfo.TypeParameter { Constraint: TypeInfo.KeyOf { SourceType: TypeInfo.TypeParameter actualSourceParameter } } =>
+                        actualSourceParameter.Name == expectedSourceParameter.Name,
+                    _ => false,
+                };
             }
             TypeInfo expandedExpected = EvaluateKeyOf(expectedKeyOf.SourceType);
             return IsCompatible(expandedExpected, actual);
         }
         if (actual is TypeInfo.KeyOf actualKeyOf)
         {
+            if (actualKeyOf.SourceType is TypeInfo.Intersection actualSourceIntersection &&
+                expected is TypeInfo.Union expectedKeyUnion)
+            {
+                var expectedSources = expectedKeyUnion.FlattenedTypes
+                    .OfType<TypeInfo.KeyOf>()
+                    .Select(key => key.SourceType)
+                    .ToList();
+                if (expectedSources.Count == actualSourceIntersection.FlattenedTypes.Count)
+                    return true;
+            }
             // If source is a type parameter, don't expand to avoid infinite recursion
             if (actualKeyOf.SourceType is TypeInfo.TypeParameter)
             {
@@ -635,13 +703,26 @@ public partial class TypeChecker
         }
 
         // Indexed access type compatibility - resolve then compare
+        if (expected is TypeInfo.IndexedAccess {
+                ObjectType: TypeInfo.TypeParameter } expectedSymbolic &&
+            actual is TypeInfo.IndexedAccess {
+                ObjectType: TypeInfo.TypeParameter } actualSymbolic)
+        {
+            return IsCompatible(expectedSymbolic.ObjectType, actualSymbolic.ObjectType) &&
+                IsCompatible(expectedSymbolic.IndexType, actualSymbolic.IndexType);
+        }
         if (expected is TypeInfo.IndexedAccess expectedIA)
         {
+            if (TryGetIndexedAccessWriteTargets(expectedIA, out var writeTargets))
+                return writeTargets.All(target => IsCompatible(target, actual));
             TypeInfo expandedExpected = ResolveIndexedAccess(expectedIA, new Dictionary<string, TypeInfo>());
             return IsCompatible(expandedExpected, actual);
         }
         if (actual is TypeInfo.IndexedAccess actualIA)
         {
+            if (actualIA.ObjectType is TypeInfo.TypeParameter && expected is TypeInfo.Object or
+                TypeInfo.Record { Fields.Count: 0 })
+                return false;
             TypeInfo expandedActual = ResolveIndexedAccess(actualIA, new Dictionary<string, TypeInfo>());
             return IsCompatible(expected, expandedActual);
         }
@@ -1267,6 +1348,45 @@ public partial class TypeChecker
         }
 
         return false;
+    }
+
+    private bool TryGetIndexedAccessWriteTargets(
+        TypeInfo.IndexedAccess access, out List<TypeInfo> targets)
+    {
+        targets = [];
+        if (access.IndexType is not TypeInfo.TypeParameter { Constraint: { } constraint })
+            return false;
+
+        TypeInfo domain = constraint is TypeInfo.KeyOf keyOf
+            ? EvaluateKeyOf(keyOf.SourceType)
+            : constraint;
+        IEnumerable<TypeInfo> keys = domain is TypeInfo.Union union
+            ? union.FlattenedTypes
+            : [domain];
+
+        foreach (TypeInfo key in keys)
+        {
+            TypeInfo? target = key switch
+            {
+                TypeInfo.StringLiteral literal => GetPropertyType(access.ObjectType, literal.Value),
+                TypeInfo.String when access.ObjectType is TypeInfo.Record record => record.StringIndexType,
+                TypeInfo.String when access.ObjectType is TypeInfo.Interface itf => itf.StringIndexType,
+                TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER }
+                    when access.ObjectType is TypeInfo.Array array => array.ElementType,
+                TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER }
+                    when access.ObjectType is TypeInfo.Record record => record.NumberIndexType ?? record.StringIndexType,
+                TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER }
+                    when access.ObjectType is TypeInfo.Interface itf => itf.NumberIndexType ?? itf.StringIndexType,
+                _ => null,
+            };
+            if (target is null)
+            {
+                targets.Clear();
+                return false;
+            }
+            targets.Add(target);
+        }
+        return targets.Count > 0;
     }
 
     /// <summary>
