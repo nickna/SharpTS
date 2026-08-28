@@ -165,6 +165,41 @@ public class RegExpExecSemanticsTests
     }
 
     [Theory, ModeData]
+    public void StringReplace_CustomExecDistinguishesNullAndUndefinedGroups(
+        ExecutionMode mode)
+    {
+        const string source = """
+            const withNull: any = /x/;
+            withNull.exec = function(input: string): any {
+                return { 0: "x", length: 1, index: 0, input: input, groups: null };
+            };
+            console.log("x".replace(withNull, function(): string {
+                console.log(arguments.length, arguments[3] === null);
+                return "present";
+            }));
+
+            const withoutGroups: any = /x/;
+            withoutGroups.exec = function(input: string): any {
+                return { 0: "x", length: 1, index: 0, input: input };
+            };
+            console.log("x".replace(withoutGroups, function(): string {
+                console.log(arguments.length, arguments[3] === undefined);
+                return "absent";
+            }));
+
+            try {
+                console.log("x".replace(withNull, "$<name>"));
+            } catch (error) {
+                console.log(error instanceof TypeError);
+            }
+            """;
+
+        Assert.Equal(
+            "4 true\npresent\n3 true\nabsent\ntrue\n",
+            TestHarness.Run(source, mode));
+    }
+
+    [Theory, ModeData]
     public void StringMatchAndReplace_InvokePrototypeSymbolOverrides(
         ExecutionMode mode)
     {

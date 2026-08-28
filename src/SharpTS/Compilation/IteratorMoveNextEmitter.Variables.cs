@@ -46,8 +46,14 @@ public partial class IteratorMoveNextEmitter
 
     protected override void EmitVarDeclaration(Stmt.Var v)
     {
+        bool stableNumeric = Ctx.TypeMap?.IsStableNumericStateMachineLocal(v) == true;
+
         if (BlockScopeRenames.TryGetValue(v, out var renamed))
+        {
             v = v with { Name = RenameToken(v.Name, renamed) };
+            if (stableNumeric)
+                Ctx.TypeMap!.MarkStableNumericStateMachineLocal(v);
+        }
 
         if (TryGetFunctionDCField(v.Name.Lexeme, out var dcField))
         {

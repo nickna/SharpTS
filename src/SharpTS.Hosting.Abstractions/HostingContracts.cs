@@ -4,31 +4,33 @@ using System.Reflection;
 namespace SharpTS.Hosting;
 
 /// <summary>
-/// Diagnostic codes for SharpTS hosting APIs.
+/// Diagnostic identifiers for SharpTS hosting APIs.
 /// </summary>
 public static class SharpTSHostingDiagnostics
 {
     /// <summary>
-    /// Experimental API diagnostic ID for SharpTS hosting features.
+    /// Diagnostic ID for experimental hosting APIs.
     /// </summary>
     public const string ExperimentalId = "SHARPTS_HOSTING001";
 }
 
 /// <summary>
-/// Defines the Application Binary Interface (ABI) version for SharpTS hosted programs.
+/// Constants for the SharpTS hosted application binary interface (ABI).
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public static class SharpTSHostedAbi
 {
     /// <summary>
-    /// The current ABI version for SharpTS hosted programs.
+    /// The current ABI version. Hosted applications and hosts must agree on this version.
     /// </summary>
     public const int CurrentVersion = 1;
 }
 
 /// <summary>
-/// Assembly-level attribute marking a SharpTS hosted program and specifying its ABI version and factory type.
+/// Marks an assembly as a SharpTS hosted program, specifying the ABI version and factory type.
 /// </summary>
+/// <param name="abiVersion">The ABI version this program was built for.</param>
+/// <param name="factoryType">The type implementing <see cref="ISharpTSHostedProgramFactory"/> that creates the runtime.</param>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false)]
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public sealed class SharpTSHostedProgramAttribute(
@@ -37,53 +39,58 @@ public sealed class SharpTSHostedProgramAttribute(
     Type factoryType) : Attribute
 {
     /// <summary>
-    /// The ABI version this hosted program conforms to.
+    /// Gets the ABI version this program declares.
     /// </summary>
     public int AbiVersion { get; } = abiVersion;
 
     /// <summary>
-    /// The factory type that creates instances of the hosted runtime.
+    /// Gets the factory type that creates the hosted runtime.
     /// </summary>
     [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicParameterlessConstructor)]
     public Type FactoryType { get; } = factoryType ?? throw new ArgumentNullException(nameof(factoryType));
 }
 
 /// <summary>
-/// Provides thread synchronization and scheduling services for a hosted SharpTS runtime.
+/// Provides thread-affinity and scheduling services for a hosted SharpTS runtime.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public interface ISharpTSHostDispatcher
 {
     /// <summary>
-    /// Checks whether the current thread has access to the dispatcher.
+    /// Determines whether the calling thread is the runtime's owner thread.
     /// </summary>
+    /// <returns>True if the caller is on the runtime's thread; otherwise false.</returns>
     bool CheckAccess();
 
     /// <summary>
-    /// Posts an action to be executed on the dispatcher thread.
+    /// Posts an action to run on the runtime's thread.
     /// </summary>
+    /// <param name="hostTurn">The action to execute.</param>
     void Post(Action hostTurn);
 
     /// <summary>
-    /// Schedules an action to be executed after a specified delay.
+    /// Schedules an action to run on the runtime's thread after a delay.
     /// </summary>
+    /// <param name="delay">The delay before executing the action.</param>
+    /// <param name="hostTurn">The action to execute.</param>
+    /// <returns>A handle that can cancel the scheduled work.</returns>
     ISharpTSScheduledWork Schedule(TimeSpan delay, Action hostTurn);
 }
 
 /// <summary>
-/// Represents a scheduled work item that can be canceled.
+/// Represents a scheduled work item that can be canceled or disposed.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public interface ISharpTSScheduledWork : IDisposable
 {
     /// <summary>
-    /// Cancels the scheduled work.
+    /// Cancels the scheduled work if it has not yet executed.
     /// </summary>
     void Cancel();
 }
 
 /// <summary>
-/// Provides lifetime management services for a hosted SharpTS runtime.
+/// Provides host lifetime management for a hosted SharpTS runtime.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public interface ISharpTSHostLifetime
@@ -91,72 +98,84 @@ public interface ISharpTSHostLifetime
     /// <summary>
     /// Requests the host to exit with the specified exit code.
     /// </summary>
+    /// <param name="exitCode">The exit code to return.</param>
     void RequestExit(int exitCode);
 }
 
 /// <summary>
-/// Receives and handles errors from a hosted SharpTS runtime.
+/// Receives error reports from a hosted SharpTS runtime.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public interface ISharpTSHostedErrorSink
 {
     /// <summary>
-    /// Reports an error that occurred in the hosted runtime.
+    /// Reports an error that occurred during runtime operation.
     /// </summary>
+    /// <param name="error">The error details.</param>
     void Report(SharpTSHostedError error);
 }
 
 /// <summary>
-/// Represents a hosted SharpTS runtime instance with lifecycle management and guest code invocation.
+/// Represents a hosted SharpTS runtime instance with lifecycle management and guest-host communication.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public interface ISharpTSHostedRuntime : IDisposable, IAsyncDisposable
 {
     /// <summary>
-    /// Gets the current state of the hosted runtime.
+    /// Gets the current state of the runtime.
     /// </summary>
     SharpTSHostedRuntimeState State { get; }
 
     /// <summary>
-    /// Gets the reason the runtime shut down, if it has shut down.
+    /// Gets the reason for shutdown, if the runtime has shut down.
     /// </summary>
     SharpTSHostedShutdownReason? ShutdownReason { get; }
 
     /// <summary>
-    /// Gets the ID of the thread that owns this runtime, if applicable.
+    /// Gets the managed thread ID that owns this runtime, or null if not yet initialized.
     /// </summary>
     int? OwnerThreadId { get; }
 
     /// <summary>
-    /// Initializes the hosted runtime asynchronously.
+    /// Initializes the runtime asynchronously.
     /// </summary>
+    /// <param name="cancellationToken">Cancellation token to abort initialization.</param>
+    /// <returns>A task that completes when initialization finishes.</returns>
     Task InitializeAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Shuts down the hosted runtime asynchronously with the specified reason and exit code.
+    /// Shuts down the runtime asynchronously.
     /// </summary>
+    /// <param name="reason">The reason for shutdown.</param>
+    /// <param name="exitCode">The exit code to report.</param>
+    /// <returns>A task that completes when shutdown finishes.</returns>
     Task ShutdownAsync(
         SharpTSHostedShutdownReason reason = SharpTSHostedShutdownReason.HostRequested,
         int exitCode = 0);
 
     /// <summary>
-    /// Registers a cleanup action to be executed during shutdown.
+    /// Registers an action to be run during cleanup.
     /// </summary>
+    /// <param name="cleanup">The cleanup action.</param>
     void RegisterCleanup(Action cleanup);
 
     /// <summary>
-    /// Posts a notification to the guest runtime without waiting for completion.
+    /// Posts a notification to the guest without waiting for a result (fire-and-forget).
     /// </summary>
+    /// <param name="guestNotification">The action to execute on the guest.</param>
     void Notify(Action guestNotification);
 
     /// <summary>
-    /// Invokes a guest callback synchronously.
+    /// Invokes an action on the guest and waits for it to complete.
     /// </summary>
+    /// <param name="guestCallback">The action to execute on the guest.</param>
     void Invoke(Action guestCallback);
 
     /// <summary>
-    /// Invokes a guest callback synchronously and returns its result.
+    /// Invokes a function on the guest and returns its result.
     /// </summary>
+    /// <param name="guestCallback">The function to execute on the guest.</param>
+    /// <returns>The result of the guest function.</returns>
     object? Invoke(Func<object?> guestCallback);
 }
 
@@ -172,8 +191,12 @@ public interface ISharpTSHostedProgramFactory
     int AbiVersion { get; }
 
     /// <summary>
-    /// Creates a hosted runtime instance with the specified host services.
+    /// Creates a new hosted runtime instance.
     /// </summary>
+    /// <param name="dispatcher">The dispatcher for thread-affinity and scheduling.</param>
+    /// <param name="lifetime">The host lifetime manager.</param>
+    /// <param name="errorSink">The error reporting sink.</param>
+    /// <returns>A new hosted runtime instance.</returns>
     ISharpTSHostedRuntime Create(
         ISharpTSHostDispatcher dispatcher,
         ISharpTSHostLifetime lifetime,
@@ -181,21 +204,29 @@ public interface ISharpTSHostedProgramFactory
 }
 
 /// <summary>
-/// Exception thrown when a hosted program violates the SharpTS hosting ABI contract.
+/// Exception thrown when there is an ABI version mismatch or other hosting contract violation.
 /// </summary>
+/// <param name="message">The error message.</param>
+/// <param name="innerException">The inner exception, if any.</param>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public sealed class SharpTSHostedAbiException(string message, Exception? innerException = null)
     : InvalidOperationException(message, innerException);
 
 /// <summary>
-/// Provides utility methods for loading and creating hosted SharpTS runtimes from assemblies.
+/// Utilities for loading and creating hosted runtimes from compiled assemblies.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public static class SharpTSHostedAssembly
 {
     /// <summary>
-    /// Creates a hosted runtime instance from the specified assembly with the provided host services.
+    /// Creates a hosted runtime from an assembly marked with <see cref="SharpTSHostedProgramAttribute"/>.
     /// </summary>
+    /// <param name="assembly">The assembly containing the hosted program.</param>
+    /// <param name="dispatcher">The dispatcher for thread-affinity and scheduling.</param>
+    /// <param name="lifetime">The host lifetime manager.</param>
+    /// <param name="errorSink">The error reporting sink.</param>
+    /// <returns>A new hosted runtime instance.</returns>
+    /// <exception cref="SharpTSHostedAbiException">Thrown if the assembly metadata is invalid or ABI version mismatches.</exception>
     public static ISharpTSHostedRuntime CreateRuntime(
         Assembly assembly,
         ISharpTSHostDispatcher dispatcher,
@@ -281,56 +312,56 @@ public static class SharpTSHostedAssembly
 }
 
 /// <summary>
-/// Indicates the phase of execution during which a hosted runtime error occurred.
+/// Indicates the lifecycle phase during which an error occurred.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public enum SharpTSHostedErrorPhase
 {
     /// <summary>Error occurred during runtime creation.</summary>
     Creation,
-    /// <summary>Error occurred during runtime initialization.</summary>
+    /// <summary>Error occurred during initialization.</summary>
     Initialization,
     /// <summary>Error occurred while the runtime was running.</summary>
     Running,
-    /// <summary>Error occurred during runtime shutdown.</summary>
+    /// <summary>Error occurred during shutdown.</summary>
     Shutdown,
-    /// <summary>Error occurred during cleanup operations.</summary>
+    /// <summary>Error occurred during cleanup.</summary>
     Cleanup,
 }
 
 /// <summary>
-/// Indicates the reason a hosted runtime shut down.
+/// Indicates why a hosted runtime shut down.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public enum SharpTSHostedShutdownReason
 {
-    /// <summary>Host requested shutdown.</summary>
+    /// <summary>The host requested shutdown.</summary>
     HostRequested,
-    /// <summary>Guest program completed normally.</summary>
+    /// <summary>The program completed normally.</summary>
     ProgramCompleted,
-    /// <summary>Process exit was initiated.</summary>
+    /// <summary>The process is exiting.</summary>
     ProcessExit,
     /// <summary>Startup failed.</summary>
     StartupFailure,
     /// <summary>An uncaught error occurred.</summary>
     UncaughtError,
-    /// <summary>Runtime was disposed.</summary>
+    /// <summary>The runtime was disposed.</summary>
     Disposed,
 }
 
 /// <summary>
-/// Represents the current state of a hosted SharpTS runtime.
+/// Indicates the current state of a hosted runtime.
 /// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public enum SharpTSHostedRuntimeState
 {
-    /// <summary>Runtime has been created but not initialized.</summary>
+    /// <summary>Runtime has been created but not yet initialized.</summary>
     Created,
     /// <summary>Runtime is currently initializing.</summary>
     Initializing,
-    /// <summary>Runtime is running.</summary>
+    /// <summary>Runtime is running normally.</summary>
     Running,
-    /// <summary>Runtime is stopping.</summary>
+    /// <summary>Runtime is in the process of stopping.</summary>
     Stopping,
     /// <summary>Runtime has stopped.</summary>
     Stopped,
@@ -341,8 +372,12 @@ public enum SharpTSHostedRuntimeState
 }
 
 /// <summary>
-/// Represents an error that occurred in a hosted SharpTS runtime.
+/// Contains details about an error that occurred in a hosted runtime.
 /// </summary>
+/// <param name="Exception">The exception that was thrown.</param>
+/// <param name="Phase">The lifecycle phase when the error occurred.</param>
+/// <param name="RuntimeState">The runtime state when the error occurred.</param>
+/// <param name="ShutdownReason">The shutdown reason, if applicable.</param>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public sealed record SharpTSHostedError(
     Exception Exception,

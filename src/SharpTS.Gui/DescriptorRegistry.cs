@@ -129,20 +129,66 @@ internal static class DescriptorRegistry
 /// Explicit, reflection-free managed adapter for one custom or built-in GUI control kind.
 /// Custom kinds must be prefixed with their provider ID followed by a dot.
 /// </summary>
+/// <param name="kind">The control kind identifier.</param>
+/// <param name="minimumChildren">Minimum number of child controls allowed.</param>
+/// <param name="maximumChildren">Maximum number of child controls allowed.</param>
 public abstract class NodeDescriptor(string kind, int minimumChildren, int maximumChildren)
 {
+    /// <summary>
+    /// Gets the control kind identifier.
+    /// </summary>
     public string Kind { get; } = kind;
+
+    /// <summary>
+    /// Gets the minimum number of child controls allowed.
+    /// </summary>
     public int MinimumChildren { get; } = minimumChildren;
+
+    /// <summary>
+    /// Gets the maximum number of child controls allowed.
+    /// </summary>
     public int MaximumChildren { get; } = maximumChildren;
+
+    /// <summary>
+    /// Validates the virtual node structure.
+    /// </summary>
+    /// <param name="node">The node to validate.</param>
     public virtual void Validate(GuiVNode node) { }
+
+    /// <summary>
+    /// Creates a new control instance from the virtual node.
+    /// </summary>
+    /// <param name="node">The virtual node containing control data.</param>
+    /// <returns>The created control.</returns>
     public abstract Control Create(GuiVNode node);
+
+    /// <summary>
+    /// Updates an existing control based on changes between previous and next virtual nodes.
+    /// </summary>
+    /// <param name="control">The control to update.</param>
+    /// <param name="previous">The previous virtual node state.</param>
+    /// <param name="next">The next virtual node state.</param>
+    /// <returns>True if the control was updated; otherwise false.</returns>
     public abstract bool Update(Control control, GuiVNode previous, GuiVNode next);
 }
 
-/// <summary>A statically registered set of managed GUI control descriptors.</summary>
+/// <summary>
+/// A statically registered set of managed GUI control descriptors.
+/// </summary>
 public interface IGuiControlProvider
 {
+    /// <summary>
+    /// Gets the contract version this provider implements.
+    /// </summary>
     int ContractVersion { get; }
+
+    /// <summary>
+    /// Gets the unique provider identifier.
+    /// </summary>
     string ProviderId { get; }
+
+    /// <summary>
+    /// Gets the list of control descriptors provided by this provider.
+    /// </summary>
     IReadOnlyList<NodeDescriptor> Descriptors { get; }
 }

@@ -3685,8 +3685,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4, (int)'<');
         il.Emit(OpCodes.Bne_Un, notNamedCapture);
         il.Emit(OpCodes.Ldarg_S, (byte)5);
-        il.Emit(OpCodes.Brfalse, notNamedCapture);
-        il.Emit(OpCodes.Ldarg_S, (byte)5);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, notNamedCapture);
         il.Emit(OpCodes.Ldarg_0);
@@ -3700,6 +3698,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, namedClose);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, notNamedCapture);
+        var namedCaptureReceiverReady = il.DefineLabel();
+        il.Emit(OpCodes.Ldarg_S, (byte)5);
+        il.Emit(OpCodes.Brtrue, namedCaptureReceiverReady);
+        GuestErrorEmitter.ThrowTypeError(
+            il, runtime, "Cannot read named capture from null groups");
+        il.MarkLabel(namedCaptureReceiverReady);
         il.Emit(OpCodes.Ldarg_S, (byte)5);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldloc, i);
@@ -4282,8 +4286,6 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Stloc, hasNamedCaptures);
         var namedCapturesReady = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, namedCaptures);
-        il.Emit(OpCodes.Brfalse, namedCapturesReady);
-        il.Emit(OpCodes.Ldloc, namedCaptures);
         il.Emit(OpCodes.Isinst, runtime.UndefinedType);
         il.Emit(OpCodes.Brtrue, namedCapturesReady);
         il.Emit(OpCodes.Ldc_I4_1);
@@ -4291,7 +4293,7 @@ public partial class RuntimeEmitter
         il.MarkLabel(namedCapturesReady);
 
         // Functional replacement: [matched, ...captures, position, S,
-        // groups?]. The final groups object is present only for named captures.
+        // groups?]. Only undefined omits the final groups value.
         il.Emit(OpCodes.Ldloc, replacementFunctionLocal);
         il.Emit(OpCodes.Brfalse, stringReplacement);
         var callArgs = il.DeclareLocal(_types.ObjectArray);
@@ -5092,6 +5094,9 @@ public partial class RuntimeEmitter
         var sLocal = il.DeclareLocal(_types.String);
         var resultLocal = il.DeclareLocal(_types.Object);
 
+        // ECMA-262 §22.2.6.16 validates the receiver before ToString(string).
+        EmitRequireObjectArg(il, runtime, method, argIndex: 0, "RegExp.prototype.test");
+
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Stloc, rxLocal);
 
@@ -5225,6 +5230,11 @@ public partial class RuntimeEmitter
         // "non-object" value and expects TypeError when passed as `this`.
         il.Emit(OpCodes.Ldarg, argIndex);
         il.Emit(OpCodes.Isinst, runtime.TSSymbolType);
+        il.Emit(OpCodes.Brtrue, throwLabel);
+
+        // Compiled BigInts use System.Numerics.BigInteger and remain primitive.
+        il.Emit(OpCodes.Ldarg, argIndex);
+        il.Emit(OpCodes.Isinst, _types.BigInteger);
         il.Emit(OpCodes.Brtrue, throwLabel);
 
         il.Emit(OpCodes.Br, okLabel);

@@ -994,7 +994,12 @@ public partial class ILEmitter
     /// running sum integral. Fractional/NaN/out-of-range bounds, non-integral accumulators,
     /// negative zero, or a sum that leaves Number's safe-integer range branch to the ordinary
     /// double loop at the exact next iteration.
+    /// <summary>
+    /// Emits an exact Int32 stencil-reduction loop when the loop satisfies the required optimization constraints.
     /// </summary>
+    /// <param name="loop">The loop to analyze and emit.</param>
+    /// <param name="counterName">The loop counter variable name.</param>
+    /// <returns><c>true</c> if the specialized loop was emitted; <c>false</c> if the loop is not eligible.</returns>
     private bool TryEmitExactInt32StencilReduction(Stmt.For loop, string counterName)
     {
         if (_ctx.ExceptionBlockDepth != 0
@@ -1127,14 +1132,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Conv_I4);
         IL.Emit(OpCodes.Stloc, centerIndex);
 
-        var inRange = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, centerIndex);
-        IL.Emit(OpCodes.Ldc_I4_1);
-        IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
-        IL.Emit(OpCodes.Ldc_I4_2);
-        IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Blt_Un, inRange);
+        var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
         EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
         IL.Emit(OpCodes.Throw);
@@ -3624,6 +3622,7 @@ public partial class ILEmitter
         _ctx.ExceptionBlockDepth--;
 
         builder.MarkLabel(catchBody);
+        SetStackUnknown();
         _ctx.Locals.EnterScope();
         try
         {
@@ -3637,6 +3636,7 @@ public partial class ILEmitter
             _ctx.Locals.ExitScope();
         }
         builder.MarkLabel(afterCatch);
+        SetStackUnknown();
     }
 
     /// <summary>
