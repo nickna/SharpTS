@@ -3617,6 +3617,7 @@ public partial class ILEmitter
         _ctx.ExceptionBlockDepth--;
 
         builder.MarkLabel(catchBody);
+        SetStackUnknown();
         _ctx.Locals.EnterScope();
         try
         {
@@ -3630,6 +3631,7 @@ public partial class ILEmitter
             _ctx.Locals.ExitScope();
         }
         builder.MarkLabel(afterCatch);
+        SetStackUnknown();
     }
 
     /// <summary>

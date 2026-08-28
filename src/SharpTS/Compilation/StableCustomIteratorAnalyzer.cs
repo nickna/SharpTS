@@ -63,7 +63,7 @@ internal static class StableCustomIteratorAnalyzer
     private static void MarkStableNumericAccumulator(
         Stmt.ForOf loop, object? owner, TypeMap typeMap)
     {
-        if (owner is not Stmt.Function { Body: { } body } ||
+        if (owner is not Stmt.Function { IsAsync: false, Body: { } body } ||
             loop.Body is not Stmt.Expression
             {
                 Expr: Expr.Assign assignment and
@@ -119,7 +119,7 @@ internal static class StableCustomIteratorAnalyzer
         ClosureAnalyzer closures,
         TypeMap typeMap)
     {
-        if (owner is not Stmt.Function source || source.Body is null)
+        if (owner is not Stmt.Function source || source.Body is null || source.IsAsync)
             return;
 
         int iteratorDeclaration = source.Body.FindIndex(statement => statement switch

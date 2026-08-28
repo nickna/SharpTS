@@ -7,6 +7,9 @@ namespace SharpTS.Compilation;
 
 public partial class AsyncMoveNextEmitter
 {
+    protected override string ResolveCaptureSourceName(Expr.ArrowFunction af, string capturedVar) =>
+        PivotCaptureSource(_analysis.BlockScopeCaptureRenames, af, capturedVar);
+
     protected override void EmitArrowFunction(Expr.ArrowFunction af)
     {
         if (af.IsAsync)
