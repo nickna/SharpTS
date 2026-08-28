@@ -87,18 +87,7 @@ public partial class TypeChecker
         if (calleeType is TypeInfo.GenericFunction genericFunc)
         {
             // Check each argument and collect their types
-            List<TypeInfo> argTypes = [];
-            foreach (var arg in call.Arguments)
-            {
-                if (arg is Expr.Spread spread)
-                {
-                    argTypes.Add(CheckExpr(spread.Expression));
-                }
-                else
-                {
-                    argTypes.Add(CheckExpr(arg));
-                }
-            }
+            List<TypeInfo> argTypes = CheckGenericInferenceArguments(call.Arguments);
 
             // Determine type arguments (explicit or inferred)
             List<TypeInfo> typeArgs;
@@ -149,26 +138,9 @@ public partial class TypeChecker
                         CheckExcessProperties(freshRecord, instFunc.ParamTypes[i], call.Arguments[i]);
                 }
 
-                // Re-contextualize callback arguments after inference. The first pass may
-                // infer T from an ordinary value (or from an explicitly annotated callback);
-                // this pass gives unannotated arrow parameters the now-concrete delegate
-                // signature and records that precise callable type for CLR generic inference.
-                for (int i = 0; i < call.Arguments.Count &&
-                                i < instFunc.ParamTypes.Count; i++)
-                {
-                    if (call.Arguments[i] is Expr.ArrowFunction arrow &&
-                        instFunc.ParamTypes[i] is TypeInfo.Function expectedCallback)
-                    {
-                        TypeInfo callbackType = CheckArrowFunction(
-                            arrow, expectedCallback);
-                        // The argument is converted to the declared CLR delegate shape. Keep
-                        // that contextual signature in the call-site map (not merely the
-                        // arrow's value-returning implementation type): a value-returning
-                        // expression arrow is valid for an Action/void sink, but must still
-                        // infer as Action<T>, not Func<T,T>.
-                        _typeMap.Set(arrow, expectedCallback);
-                    }
-                }
+                // Re-contextualize callbacks after inference. This includes callbacks nested in
+                // object/array arguments, whose parameter types depend on the instantiated props.
+                ContextualizeGenericCallArguments(call.Arguments, instFunc.ParamTypes);
                 return instFunc.ReturnType;
             }
             return TypeInfo.Any.Shared;
@@ -909,6 +881,152 @@ public partial class TypeChecker
         return false;
     }
 
+    /// <summary>
+    /// Checks generic-call arguments before inference while deferring the narrow JSX-arrow
+    /// implicit-any rule. A second pass supplies the instantiated contextual types.
+    /// </summary>
+    private List<TypeInfo> CheckGenericInferenceArguments(IReadOnlyList<Expr> arguments)
+    {
+        _deferGenericJsxArrowImplicitAnyDepth++;
+        try
+        {
+            return arguments.Select(argument => argument is Expr.Spread spread
+                ? CheckExpr(spread.Expression)
+                : CheckExpr(argument)).ToList();
+        }
+        finally
+        {
+            _deferGenericJsxArrowImplicitAnyDepth--;
+        }
+    }
+
+    /// <summary>
+    /// Applies instantiated generic parameter types to arrow functions nested inside fresh
+    /// object and array arguments. This is the contextual-typing pass needed by APIs shaped like
+    /// <c>&lt;T&gt;(props: Props&lt;T&gt;)</c>, where callbacks coexist with the values that infer T.
+    /// </summary>
+    private void ContextualizeGenericCallArguments(
+        IReadOnlyList<Expr> arguments,
+        IReadOnlyList<TypeInfo> parameterTypes)
+    {
+        for (int i = 0; i < arguments.Count && i < parameterTypes.Count; i++)
+            ContextualizeNestedGenericCallback(arguments[i], parameterTypes[i]);
+    }
+
+    private void ContextualizeNestedGenericCallback(Expr expression, TypeInfo? contextualType)
+    {
+        switch (expression)
+        {
+            case Expr.ArrowFunction arrow:
+            {
+                TypeInfo checkedType = CheckArrowFunction(arrow, contextualType);
+                // Preserve the declared callback shape for downstream delegate inference (not
+                // merely a value-returning implementation type accepted by a void sink).
+                _typeMap.Set(arrow, GetContextualFunctionType(contextualType) ?? checkedType);
+                return;
+            }
+
+            case Expr.Grouping grouping:
+                ContextualizeNestedGenericCallback(grouping.Expression, contextualType);
+                return;
+
+            case Expr.TypeAssertion assertion:
+                ContextualizeNestedGenericCallback(assertion.Expression, contextualType);
+                return;
+
+            case Expr.Satisfies satisfies:
+                ContextualizeNestedGenericCallback(satisfies.Expression, contextualType);
+                return;
+
+            case Expr.Ternary ternary:
+                ContextualizeNestedGenericCallback(ternary.ThenBranch, contextualType);
+                ContextualizeNestedGenericCallback(ternary.ElseBranch, contextualType);
+                return;
+
+            case Expr.ObjectLiteral obj:
+                foreach (Expr.Property property in obj.Properties)
+                {
+                    if (property.IsSpread)
+                    {
+                        ContextualizeNestedGenericCallback(property.Value, contextualType);
+                        continue;
+                    }
+                    if (property.Kind is not (Expr.ObjectPropertyKind.Value or Expr.ObjectPropertyKind.Method) ||
+                        property.Key is null)
+                        continue;
+
+                    string memberName = GetPropertyKeyNameForTypeCheck(property.Key);
+                    TypeInfo? memberType = GetContextualMemberType(contextualType, memberName);
+                    ContextualizeNestedGenericCallback(property.Value, memberType);
+                }
+                return;
+
+            case Expr.ArrayLiteral array:
+                for (int i = 0; i < array.Elements.Count; i++)
+                {
+                    Expr element = array.Elements[i];
+                    if (element is Expr.Spread spread)
+                    {
+                        ContextualizeNestedGenericCallback(spread.Expression, contextualType);
+                        continue;
+                    }
+                    ContextualizeNestedGenericCallback(
+                        element, GetContextualElementType(contextualType, i));
+                }
+                return;
+        }
+    }
+
+    private TypeInfo? GetContextualMemberType(TypeInfo? contextualType, string memberName)
+    {
+        if (contextualType is null) return null;
+        if (contextualType is TypeInfo.Union union)
+        {
+            List<TypeInfo> candidates = union.FlattenedTypes
+                .Select(type => GetContextualMemberType(type, memberName))
+                .Where(type => type is not null)
+                .Cast<TypeInfo>()
+                .Distinct(TypeInfoEqualityComparer.Instance)
+                .ToList();
+            return candidates.Count == 0 ? null : CollapseOrCreateUnion(candidates);
+        }
+        if (contextualType is TypeInfo.Intersection intersection)
+        {
+            List<TypeInfo> candidates = intersection.FlattenedTypes
+                .Select(type => GetContextualMemberType(type, memberName))
+                .Where(type => type is not null)
+                .Cast<TypeInfo>()
+                .Distinct(TypeInfoEqualityComparer.Instance)
+                .ToList();
+            return candidates.Count == 0 ? null : CollapseOrCreateUnion(candidates);
+        }
+        return GetMemberType(contextualType, memberName);
+    }
+
+    private TypeInfo? GetContextualElementType(TypeInfo? contextualType, int index)
+    {
+        return contextualType switch
+        {
+            TypeInfo.Array array => array.ElementType,
+            TypeInfo.Tuple tuple when index < tuple.Elements.Count => tuple.Elements[index].Type,
+            TypeInfo.Tuple { RestElementType: { } rest } => rest,
+            TypeInfo.Union union => CollapseContextualElementTypes(union.FlattenedTypes, index),
+            TypeInfo.Intersection intersection => CollapseContextualElementTypes(intersection.FlattenedTypes, index),
+            _ => null,
+        };
+    }
+
+    private TypeInfo? CollapseContextualElementTypes(IEnumerable<TypeInfo> types, int index)
+    {
+        List<TypeInfo> candidates = types
+            .Select(type => GetContextualElementType(type, index))
+            .Where(type => type is not null)
+            .Cast<TypeInfo>()
+            .Distinct(TypeInfoEqualityComparer.Instance)
+            .ToList();
+        return candidates.Count == 0 ? null : CollapseOrCreateUnion(candidates);
+    }
+
     private TypeInfo CheckCallableInterfaceCall(
         TypeInfo.Interface itf,
         List<string>? typeArgs,
@@ -934,7 +1052,9 @@ public partial class TypeChecker
         List<Expr> arguments,
         List<TypeNode?>? typeArgNodes = null)
     {
-        List<TypeInfo> argTypes = arguments.Select(CheckExpr).ToList();
+        List<TypeInfo> argTypes = callSignatures.Any(signature => signature.IsGeneric)
+            ? CheckGenericInferenceArguments(arguments)
+            : arguments.Select(CheckExpr).ToList();
 
         // Try each call signature
         foreach (var callSig in callSignatures)
@@ -1055,6 +1175,9 @@ public partial class TypeChecker
         if (!TryMatchSignature(new TypeInfo.Function(substitutedParamTypes, Substitute(callSig.ReturnType, inferred), callSig.MinArity, callSig.HasRestParam), argTypes))
             return null;
 
+        if (arguments is not null)
+            ContextualizeGenericCallArguments(arguments, substitutedParamTypes);
+
         return Substitute(callSig.ReturnType, inferred);
     }
 
@@ -1157,18 +1280,7 @@ public partial class TypeChecker
     private TypeInfo ResolveGenericOverloadedCall(Expr.Call call, TypeInfo.GenericOverloadedFunction genericOverloadedFunc)
     {
         // Collect argument types
-        List<TypeInfo> argTypes = [];
-        foreach (var arg in call.Arguments)
-        {
-            if (arg is Expr.Spread spread)
-            {
-                argTypes.Add(CheckExpr(spread.Expression));
-            }
-            else
-            {
-                argTypes.Add(CheckExpr(arg));
-            }
-        }
+        List<TypeInfo> argTypes = CheckGenericInferenceArguments(call.Arguments);
 
         // Infer and instantiate each overload independently. The implementation signature is
         // intentionally broad (`any`, rest args) and is not an inference source; using it once
@@ -1238,6 +1350,8 @@ public partial class TypeChecker
                 && HasNamedSymbolMembers(bestMatch.ParamTypes[i]))
                 CheckExcessProperties(freshRecord, bestMatch.ParamTypes[i], call.Arguments[i]);
         }
+
+        ContextualizeGenericCallArguments(call.Arguments, bestMatch.ParamTypes);
 
         return bestMatch.ReturnType;
     }

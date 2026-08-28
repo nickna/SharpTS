@@ -294,8 +294,11 @@ public class ReplCompletionProviderTests
     [Fact]
     public void Members_OfUnionTypedBinding_AreTheCommonMembersOnly()
     {
+        // Keep both constituents reachable. A direct `{ a, b }` initializer correctly flow-narrows
+        // the binding to that constituent, in which case offering `b` is expected.
         using var engine = Session(
-            "let u: { a: number; b: number } | { a: number; c: number } = { a: 1, b: 2 };");
+            "let u: { a: number; b: number } | { a: number; c: number } = " +
+            "Math.random() < 0.5 ? { a: 1, b: 2 } : { a: 1, c: 2 };");
 
         var names = Names(engine, "u.");
 

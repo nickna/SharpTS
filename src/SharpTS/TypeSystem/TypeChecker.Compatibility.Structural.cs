@@ -254,6 +254,15 @@ public partial class TypeChecker
             return null;
         }
 
+        if (type is TypeInfo.InstantiatedGeneric
+            {
+                GenericDefinition: TypeInfo.GenericInterface
+            } instantiatedInterface &&
+            FlattenInstantiatedInterface(instantiatedInterface) is { } flattenedInterface)
+        {
+            return GetMemberType(flattenedInterface, name);
+        }
+
         if (type is TypeInfo.Instance instance)
         {
             // A class instance — possibly a generic instantiation and/or extending a generic-class

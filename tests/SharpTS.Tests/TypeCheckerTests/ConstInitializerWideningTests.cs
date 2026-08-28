@@ -44,6 +44,27 @@ public class ConstInitializerWideningTests
         TestHarness.RunInterpreted("const arr = [1, 1, 1]; arr[0] = 9; console.log(arr[0]);");
     }
 
+    [Theory, ModeData]
+    public void ConstArray_NonFreshElementsPreserveDiscriminatedUnion(ExecutionMode mode)
+    {
+        // The array literal is fresh, but the types contributed by the spread and call are not.
+        // Widening those fixed Command types would turn `kind` into string and break narrowing.
+        const string source = """
+            type Command =
+                | { kind: "polyline"; composite?: "destinationOut" }
+                | { kind: "line"; x: number };
+            const existing: Command[] = [{ kind: "line", x: 1 }];
+            function make(): Command {
+                return { kind: "polyline", composite: "destinationOut" };
+            }
+            const preview = [...existing, make()];
+            const command = preview[preview.length - 1];
+            if (command.kind === "polyline") console.log(command.composite);
+            """;
+
+        Assert.Equal("destinationOut\n", TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void ConstObjectLiteral_SatisfiesObjectType_Reassign_Ok()
     {

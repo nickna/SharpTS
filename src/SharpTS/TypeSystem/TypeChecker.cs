@@ -272,6 +272,13 @@ public partial class TypeChecker
     private HashSet<Stmt.Parameter>? _implicitAnyReported;
 
     /// <summary>
+    /// Non-zero while a generic call performs its initial, pre-inference argument pass. Nested
+    /// JSX-returning arrows in object/array literals cannot be diagnosed yet: their contextual
+    /// parameter types become available only after the generic signature is instantiated.
+    /// </summary>
+    private int _deferGenericJsxArrowImplicitAnyDepth;
+
+    /// <summary>
     /// Reports TS7006 (TS7019 for rest parameters) for unannotated parameters of a DECLARED
     /// function, method or constructor, when <c>noImplicitAny</c> is on.
     /// </summary>

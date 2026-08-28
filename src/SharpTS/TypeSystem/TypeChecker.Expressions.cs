@@ -1178,10 +1178,11 @@ public partial class TypeChecker
             case Expr.ObjectLiteral obj when type is TypeInfo.Record rec:
                 return WidenConstObjectLiteralFields(obj, rec);
 
-            // A fresh array literal widens its element type. An `as const` *element* produced a
-            // readonly record/tuple, which WidenLiteralType leaves intact, so it survives (#493).
-            case Expr.ArrayLiteral when type is TypeInfo.Array arr:
-                return new TypeInfo.Array(WidenLiteralType(arr.ElementType));
+            // A fresh array literal widens only the elements that are themselves fresh. Types
+            // contributed by a variable/call/non-fresh spread are already fixed and must retain
+            // literal discriminants used for union narrowing.
+            case Expr.ArrayLiteral array when type is TypeInfo.Array arr:
+                return WidenConstArrayLiteralElements(array, arr);
 
             // A bare primitive literal: preserved at the binding top level, widened inside a literal.
             case Expr.Literal:
@@ -1253,6 +1254,67 @@ public partial class TypeChecker
             NumberIndexType = rec.NumberIndexType != null ? WidenLiteralType(rec.NumberIndexType) : null,
             SymbolIndexType = rec.SymbolIndexType != null ? WidenLiteralType(rec.SymbolIndexType) : null,
         };
+    }
+
+    /// <summary>
+    /// Widens fresh members of a const-bound array literal without recursively widening types
+    /// contributed by non-fresh expressions. For example, <c>const xs = [...commands, make()]</c>
+    /// must keep <c>Command</c>'s literal discriminants, while <c>const xs = [{ n: 1 }]</c> still
+    /// widens the fresh object's <c>n</c> member to <c>number</c>.
+    /// </summary>
+    private TypeInfo WidenConstArrayLiteralElements(Expr.ArrayLiteral array, TypeInfo.Array inferred)
+    {
+        List<TypeInfo> elementTypes = [];
+        foreach (Expr element in array.Elements)
+        {
+            if (element is Expr.Spread spread)
+            {
+                TypeInfo sourceType = CheckExpr(spread.Expression);
+                Expr source = UnwrapTransparentForWidening(spread.Expression);
+                TypeInfo widenedSource = source is Expr.ArrayLiteral
+                    ? WidenFreshLiteralsForConst(source, sourceType, topLevel: false)
+                    : sourceType;
+
+                if (widenedSource is TypeInfo.Tuple tuple)
+                {
+                    elementTypes.AddRange(tuple.ElementTypes);
+                    if (tuple.RestElementType is not null)
+                        elementTypes.Add(tuple.RestElementType);
+                }
+                else if (TryGetSpreadElementType(widenedSource, out TypeInfo spreadElementType))
+                {
+                    elementTypes.Add(spreadElementType);
+                }
+                else
+                {
+                    // CheckArray already validated this spread. Preserve its inferred element
+                    // type if a later specialized iterable view is unavailable here.
+                    return inferred;
+                }
+                continue;
+            }
+
+            TypeInfo elementType = CheckExpr(element);
+            elementTypes.Add(WidenFreshLiteralsForConst(element, elementType, topLevel: false));
+        }
+
+        if (elementTypes.Count == 0) return inferred;
+
+        TypeInfo commonType = elementTypes[0];
+        for (int i = 1; i < elementTypes.Count; i++)
+        {
+            TypeInfo next = elementTypes[i];
+            if (IsCompatible(commonType, next))
+                continue;
+            if (IsCompatible(next, commonType))
+            {
+                commonType = next;
+                continue;
+            }
+            commonType = CreateUnion(commonType, next);
+        }
+
+        return new TypeInfo.Array(commonType, inferred.IsReadonly);
     }
 
     /// <summary>
@@ -1533,7 +1595,8 @@ public partial class TypeChecker
         // JSX-returning arrows are common render callbacks, and their unannotated parameters
         // are genuine implicit-any errors when no contextual function type is available. Keep
         // the broader conservative arrow policy, but cover this syntax-directed case exactly.
-        if (expectedFuncType is null &&
+        if (_deferGenericJsxArrowImplicitAnyDepth == 0 &&
+            expectedFuncType is null &&
             arrow.ExpressionBody is Expr.Call { JsxOrigin: not null })
         {
             ReportImplicitAnyParameters(arrow.Parameters, isAmbient: false);
