@@ -87,6 +87,7 @@ public class EmitterSyncTests
             "get_Resolver",         // Abstract: provides IVariableResolver
             "GetThisField",         // Abstract: provides hoisted 'this' field
             "GetHoistedVariableField", // Hoisted variable fields on state machine
+            "ResolveCaptureSourceName", // #1517: typed Promise delegates honor block-shadow capture pivots
             "SharpTS.Compilation.Emitters.IEmitterContext.get_IL", // IEmitterContext impl
             "SharpTS.Compilation.Emitters.IEmitterContext.SetStackUnknown", // IEmitterContext impl
             "SharpTS.Compilation.Emitters.IEmitterContext.SetStackType",   // IEmitterContext impl

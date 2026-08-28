@@ -366,6 +366,7 @@ public sealed class StringEmitter : ITypeEmitterStrategy
         emitter.EmitBoxIfNeeded(literal);
         ctx.IL.Emit(OpCodes.Castclass, ctx.Runtime.TSRegExpType);
         emitter.EmitExpression(arguments[1]);
+        emitter.EmitConversionForParameter(arguments[1], ctx.Types.String);
         ctx.IL.Emit(literal.Flags.Contains('g') ? OpCodes.Ldc_I4_1 : OpCodes.Ldc_I4_0);
         ctx.IL.Emit(OpCodes.Call, ctx.Runtime.StableRegExpReplace);
         emitter.SetStackType(StackType.String);

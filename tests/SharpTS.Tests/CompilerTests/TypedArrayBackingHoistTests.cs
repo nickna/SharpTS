@@ -231,13 +231,45 @@ public sealed class TypedArrayBackingHoistTests
     }
 
     [Fact]
-    public void ExactInt32Stencil_OutOfRangeStillFaults()
+    public void ExactInt32Stencil_ShortBackingFaultsOnSpecializedAndFallbackPaths()
     {
         MethodInfo hot = CompileFunction("""
+            function hot(length: number, initial: number, bound: number): number {
+                const data = new Int32Array(length);
+                let sum: number = initial;
+                for (let i: number = 1; i < bound - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+            """, "hot");
+
+        Assert.Contains(ReadInstructions(hot), instruction =>
+            instruction.Operand is MethodBase { Name: "DoubleToInt64Bits" });
+
+        foreach (double length in new[] { 0d, 1d, 2d })
+        {
+            foreach (double initial in new[] { 0d, 0.5d })
+            {
+                var exception = Assert.Throws<TargetInvocationException>(() =>
+                    hot.Invoke(null, [length, initial, 3d]));
+                Assert.True(
+                    exception.InnerException is IndexOutOfRangeException,
+                    $"length={length}, initial={initial}: {exception.InnerException}");
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(2)]
+    public void ExactInt32Stencil_InvalidNeighborStillFaults(int center)
+    {
+        MethodInfo hot = CompileFunction($$"""
             function hot(n: number): number {
                 const data = new Int32Array(n);
                 let sum: number = 0;
-                for (let i: number = 0; i < 1; i++) {
+                for (let i: number = {{center}}; i < {{center + 1}}; i++) {
                     sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
                 }
                 return sum;

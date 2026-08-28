@@ -1011,7 +1011,7 @@ public static class RegExpBuiltIns
             }
 
             object? namedCaptures = interp.GetProperty(match, "groups");
-            bool hasNamedCaptures = namedCaptures is not (null or SharpTSUndefined);
+            bool hasNamedCaptures = namedCaptures is not SharpTSUndefined;
 
             string replacement;
             if (isCallable)
@@ -1032,7 +1032,7 @@ public static class RegExpBuiltIns
             {
                 replacement = ExpandReplacement(
                     interp, replaceStr, s, matchStr, position, captures,
-                    hasNamedCaptures ? namedCaptures : null);
+                    namedCaptures);
             }
 
             // Append the un-modified slice + replacement.
@@ -1088,7 +1088,7 @@ public static class RegExpBuiltIns
                     continue;
             }
 
-            if (next == '<' && namedCaptures is not null)
+            if (next == '<' && namedCaptures is not SharpTSUndefined)
             {
                 int close = replacement.IndexOf('>', i + 2);
                 if (close >= 0)

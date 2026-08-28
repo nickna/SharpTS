@@ -504,6 +504,8 @@ public partial class ILEmitter
                     _ctx.TryGetParameter(a.Name.Lexeme, out var numericParamSync))
                 {
                     IL.Emit(OpCodes.Ldloc, numericTemp);
+                    IL.Emit(OpCodes.Box, _ctx.Types.Double);
+                    _ctx.EmitConvertForParamSlot(IL, a.Name.Lexeme);
                     IL.Emit(OpCodes.Starg, numericParamSync);
                 }
                 SetStackType(StackType.Double);

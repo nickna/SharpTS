@@ -345,6 +345,31 @@ public abstract partial class ExpressionEmitterBase
             return false;
         }
 
+        // Hoisted state-machine storage is the resolver's source of truth. A
+        // same-named local may belong to a shadow and must never win here.
+        var field = GetHoistedVariableField(name);
+        if (field != null)
+        {
+            if (field.FieldType != Types.Double)
+                return false;
+
+            var original = IL.DeclareLocal(Types.Double);
+            var updated = IL.DeclareLocal(Types.Double);
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldfld, field);
+            IL.Emit(OpCodes.Stloc, original);
+            IL.Emit(OpCodes.Ldloc, original);
+            IL.Emit(OpCodes.Ldc_R8, delta);
+            IL.Emit(OpCodes.Add);
+            IL.Emit(OpCodes.Stloc, updated);
+            IL.Emit(OpCodes.Ldarg_0);
+            IL.Emit(OpCodes.Ldloc, updated);
+            IL.Emit(OpCodes.Stfld, field);
+            IL.Emit(OpCodes.Ldloc, isPrefix ? updated : original);
+            SetStackType(StackType.Double);
+            return true;
+        }
+
         if (Ctx.Locals.TryGetLocal(name, out var local)
             && local.LocalType == Types.Double)
         {
@@ -360,25 +385,7 @@ public abstract partial class ExpressionEmitterBase
             return true;
         }
 
-        var field = GetHoistedVariableField(name);
-        if (field == null || field.FieldType != Types.Double)
-            return false;
-
-        var original = IL.DeclareLocal(Types.Double);
-        var updated = IL.DeclareLocal(Types.Double);
-        IL.Emit(OpCodes.Ldarg_0);
-        IL.Emit(OpCodes.Ldfld, field);
-        IL.Emit(OpCodes.Stloc, original);
-        IL.Emit(OpCodes.Ldloc, original);
-        IL.Emit(OpCodes.Ldc_R8, delta);
-        IL.Emit(OpCodes.Add);
-        IL.Emit(OpCodes.Stloc, updated);
-        IL.Emit(OpCodes.Ldarg_0);
-        IL.Emit(OpCodes.Ldloc, updated);
-        IL.Emit(OpCodes.Stfld, field);
-        IL.Emit(OpCodes.Ldloc, isPrefix ? updated : original);
-        SetStackType(StackType.Double);
-        return true;
+        return false;
     }
 
     /// <summary>

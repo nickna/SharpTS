@@ -82,7 +82,13 @@ public partial class ILCompiler
             Type parameterType = i < emittedParameters.Length
                 ? emittedParameters[i].ParameterType
                 : typeof(object);
-            if (parameterType.IsValueType)
+            if (field.FieldType == _types.Double && parameterType != _types.Double)
+            {
+                if (parameterType.IsValueType)
+                    il.Emit(OpCodes.Box, parameterType);
+                il.Emit(OpCodes.Call, _runtime!.ConvertToNumber);
+            }
+            else if (field.FieldType == _types.Object && parameterType.IsValueType)
                 il.Emit(OpCodes.Box, parameterType);
             il.Emit(OpCodes.Stfld, field);
         }
