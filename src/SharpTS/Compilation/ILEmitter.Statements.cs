@@ -994,7 +994,12 @@ public partial class ILEmitter
     /// running sum integral. Fractional/NaN/out-of-range bounds, non-integral accumulators,
     /// negative zero, or a sum that leaves Number's safe-integer range branch to the ordinary
     /// double loop at the exact next iteration.
+    /// <summary>
+    /// Emits an exact Int32 stencil-reduction loop when the loop satisfies the required optimization constraints.
     /// </summary>
+    /// <param name="loop">The loop to analyze and emit.</param>
+    /// <param name="counterName">The loop counter variable name.</param>
+    /// <returns><c>true</c> if the specialized loop was emitted; <c>false</c> if the loop is not eligible.</returns>
     private bool TryEmitExactInt32StencilReduction(Stmt.For loop, string counterName)
     {
         if (_ctx.ExceptionBlockDepth != 0

@@ -1242,7 +1242,11 @@ public partial class ILEmitter
     /// <c>i + 1</c> against the byte array. For an exact non-escaping backing all three indexes and
     /// reads are pure, so one unsigned center/range check preserves the same first-fault behavior
     /// while letting RyuJIT use a single base-plus-scaled-index address in the hot body.
+    /// <summary>
+    /// Emits a direct Int32 typed-array stencil calculation for a supported expression.
     /// </summary>
+    /// <param name="expression">The binary expression to match and emit.</param>
+    /// <returns><c>true</c> if the expression was emitted, <c>false</c> if it is not a supported Int32 typed-array stencil.</returns>
     private bool TryEmitDirectInt32TypedArrayStencil(Expr.Binary expression)
     {
         if (!TryMatchExactInt32StencilShape(
@@ -1291,7 +1295,12 @@ public partial class ILEmitter
     /// Branches to the returned label when <paramref name="centerIndex"/> and both neighbors are
     /// valid element indexes. Lengths below the three-element stencil width are rejected before
     /// the unsigned comparison, whose <c>length - 2</c> operand would otherwise underflow.
+    /// <summary>
+    /// Emits a range check for a stencil center index and its neighboring elements.
     /// </summary>
+    /// <param name="backing">The typed-array backing storage whose length is checked.</param>
+    /// <param name="centerIndex">The index of the stencil's center element.</param>
+    /// <returns>A label reached when the center index and both neighbors are in range.</returns>
     private Label EmitInt32StencilRangeTest(
         HoistedTypedArrayBacking backing,
         LocalBuilder centerIndex)
