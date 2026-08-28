@@ -17,7 +17,9 @@ public partial class TypeChecker
     private List<TypeInfo> InferTypeArguments(
         TypeInfo.GenericFunction gf,
         List<TypeInfo> argTypes,
-        TypeInfo? contextualResultType = null)
+        TypeInfo? contextualResultType = null,
+        bool fallbackToConstraints = false,
+        bool combineCandidates = false)
     {
         Dictionary<string, TypeInfo> inferred = [];
 
@@ -25,7 +27,7 @@ public partial class TypeChecker
         int regularParams = gf.HasRestParam ? gf.ParamTypes.Count - 1 : gf.ParamTypes.Count;
         for (int i = 0; i < regularParams && i < argTypes.Count; i++)
         {
-            InferFromType(gf.ParamTypes[i], argTypes[i], inferred);
+            InferFromType(gf.ParamTypes[i], argTypes[i], inferred, combineCandidates);
         }
 
         // Rest parameter: `...args: T[]` infers the element from every remaining argument;
@@ -39,11 +41,11 @@ public partial class TypeChecker
             if (restDeclared is TypeInfo.Array restArr)
             {
                 foreach (var restArg in restArgs)
-                    InferFromType(restArr.ElementType, restArg, inferred);
+                    InferFromType(restArr.ElementType, restArg, inferred, combineCandidates);
             }
             else if (restDeclared is TypeInfo.TypeParameter && restArgs.Count > 0)
             {
-                InferFromType(restDeclared, TypeInfo.Tuple.FromTypes(restArgs, restArgs.Count), inferred);
+                InferFromType(restDeclared, TypeInfo.Tuple.FromTypes(restArgs, restArgs.Count), inferred, combineCandidates);
             }
         }
 
@@ -51,7 +53,7 @@ public partial class TypeChecker
         // that appear only in the result (`const n: number = host.create<T>()`).
         // Calls checked without a context retain the existing constraint/any fallback.
         if (contextualResultType is not null and not TypeInfo.Any)
-            InferFromType(gf.ReturnType, contextualResultType, inferred);
+            InferFromType(gf.ReturnType, contextualResultType, inferred, combineCandidates);
 
         // Build result list in order of type parameters
         List<TypeInfo> result = [];
@@ -69,25 +71,36 @@ public partial class TypeChecker
                     // For Record constraints, check that actual type has all required fields
                     if (substitutedConstraint is TypeInfo.Record constraintRecord && inferredType is TypeInfo.Record actualRecord)
                     {
+                        bool constraintFailed = false;
                         foreach (var (fieldName, _) in constraintRecord.Fields)
                         {
                             if (!actualRecord.Fields.ContainsKey(fieldName))
                             {
-                                throw new TypeCheckException($"Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}' - missing required property '{fieldName}'.", tsCode: "TS2344");
+                                if (!fallbackToConstraints)
+                                    throw new TypeCheckException($"Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}' - missing required property '{fieldName}'.", tsCode: "TS2344");
+                                constraintFailed = true;
+                                break;
                             }
                         }
+                        if (constraintFailed)
+                            inferredType = substitutedConstraint;
                     }
                     else if (!IsCompatible(substitutedConstraint, inferredType))
                     {
-                        throw new TypeCheckException($"Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.", tsCode: "TS2344");
+                        if (!fallbackToConstraints)
+                            throw new TypeCheckException($"Inferred type '{inferredType}' does not satisfy constraint '{tp.Constraint}' for type parameter '{tp.Name}'.", tsCode: "TS2344");
+                        inferredType = substitutedConstraint;
                     }
                 }
                 result.Add(inferredType);
             }
             else
             {
-                // Default to constraint or any if not inferred
-                result.Add(tp.Constraint ?? TypeInfo.Any.Shared);
+                // JSX instantiation applies defaults when inference produced no candidate. Keep
+                // ordinary call inference's established constraint/any fallback unchanged.
+                result.Add(fallbackToConstraints
+                    ? tp.Default ?? tp.Constraint ?? TypeInfo.Any.Shared
+                    : tp.Constraint ?? TypeInfo.Any.Shared);
             }
         }
 
@@ -137,7 +150,11 @@ public partial class TypeChecker
     /// Recursively infers type parameter bindings from a parameter type and an argument type.
     /// Supports const type parameters (TypeScript 5.0+) which preserve literal types during inference.
     /// </summary>
-    private void InferFromType(TypeInfo paramType, TypeInfo argType, Dictionary<string, TypeInfo> inferred)
+    private void InferFromType(
+        TypeInfo paramType,
+        TypeInfo argType,
+        Dictionary<string, TypeInfo> inferred,
+        bool combineCandidates = false)
     {
         if (paramType is TypeInfo.TypeParameter tp)
         {
@@ -146,10 +163,15 @@ public partial class TypeChecker
 
             if (inferred.TryGetValue(tp.Name, out var existing))
             {
-                // Multiple arguments with same type param: create union (for const params)
-                if (tp.IsConst && !TypesEqual(existing, inferredType))
+                // JSX attributes are collected into one props object before generic inference.
+                // Repeated occurrences of T must therefore contribute a best common candidate
+                // (`value="a"; repeated="b"` infers string), rather than letting the first
+                // property freeze T to the literal "a". Const parameters retain literal unions.
+                if (!TypesEqual(existing, inferredType) && (tp.IsConst || combineCandidates))
                 {
-                    inferred[tp.Name] = CreateUnion(existing, inferredType);
+                    inferred[tp.Name] = tp.IsConst
+                        ? CreateUnion(existing, inferredType)
+                        : CreateUnion(WidenLiteralType(existing), WidenLiteralType(inferredType));
                 }
                 // Non-const: keep existing behavior (first inferred type wins)
             }
@@ -161,7 +183,7 @@ public partial class TypeChecker
         else if (paramType is TypeInfo.Array paramArr && argType is TypeInfo.Array argArr)
         {
             // Recurse into array element types
-            InferFromType(paramArr.ElementType, argArr.ElementType, inferred);
+            InferFromType(paramArr.ElementType, argArr.ElementType, inferred, combineCandidates);
         }
         else if (paramType is TypeInfo.Array tupleParamArr && argType is TypeInfo.Tuple argTuple)
         {
@@ -169,25 +191,72 @@ public partial class TypeChecker
             // infers T from every fixed/rest tuple element rather than losing inference at
             // the tuple-vs-array representation boundary.
             foreach (var element in argTuple.ElementTypes)
-                InferFromType(tupleParamArr.ElementType, element, inferred);
+                InferFromType(tupleParamArr.ElementType, element, inferred, combineCandidates);
             if (argTuple.RestElementType != null)
-                InferFromType(tupleParamArr.ElementType, argTuple.RestElementType, inferred);
+                InferFromType(tupleParamArr.ElementType, argTuple.RestElementType, inferred, combineCandidates);
         }
         else if (paramType is TypeInfo.Function paramFunc && argType is TypeInfo.Function argFunc)
         {
-            // Recurse into function types
+            // Recurse into function types without merging candidates. Callback parameter and
+            // return positions have different inference priorities/variance from sibling JSX
+            // properties; treating them as co-equal candidates can incorrectly turn
+            // `{ x: string }` and `string` into a union and hide a bad callback return.
             for (int i = 0; i < paramFunc.ParamTypes.Count && i < argFunc.ParamTypes.Count; i++)
             {
                 InferFromType(paramFunc.ParamTypes[i], argFunc.ParamTypes[i], inferred);
             }
             InferFromType(paramFunc.ReturnType, argFunc.ReturnType, inferred);
         }
+        else if (paramType is TypeInfo.MappedType
+                 { Constraint: TypeInfo.KeyOf keyOf, AsClause: null })
+        {
+            // Homomorphic mapped types (Readonly<T>, Partial<T>, and their direct forms)
+            // preserve T's object shape and are inference sites for JSX/class arguments.
+            InferFromType(keyOf.SourceType, argType, inferred, combineCandidates);
+        }
+        else if (paramType is TypeInfo.Intersection intersection)
+        {
+            int inferredBefore = inferred.Count;
+            foreach (TypeInfo member in intersection.FlattenedTypes.Where(member =>
+                         member is not TypeInfo.TypeParameter))
+                InferFromType(member, argType, inferred, combineCandidates);
+            // A naked parameter in an intersection is a catch-all inference site. Prefer the
+            // structured constituents when they inferred anything (Props & BaseProps<Values>),
+            // but retain the catch-all for P & { children?: ... } when no structured inference
+            // was possible.
+            if (inferred.Count == inferredBefore)
+                foreach (TypeInfo member in intersection.FlattenedTypes.OfType<TypeInfo.TypeParameter>())
+                    InferFromType(member, argType, inferred, combineCandidates);
+        }
+        else if (paramType is TypeInfo.Record paramRecord && argType is TypeInfo.Record argRecord)
+        {
+            foreach ((string name, TypeInfo memberType) in paramRecord.Fields)
+                if (argRecord.Fields.TryGetValue(name, out TypeInfo? argumentMember))
+                    InferFromType(memberType, argumentMember, inferred, combineCandidates);
+        }
+        else if (paramType is TypeInfo.Interface paramInterface && argType is TypeInfo.Record interfaceArgument)
+        {
+            foreach ((string name, TypeInfo memberType) in paramInterface.GetAllMembers())
+                if (interfaceArgument.Fields.TryGetValue(name, out TypeInfo? argumentMember))
+                    InferFromType(memberType, argumentMember, inferred, combineCandidates);
+        }
+        else if (paramType is TypeInfo.InstantiatedGeneric
+                 {
+                     GenericDefinition: TypeInfo.GenericInterface genericInterface
+                 } instantiatedInterface && argType is TypeInfo.Record genericInterfaceArgument)
+        {
+            Dictionary<string, TypeInfo> substitutions =
+                GenericInterfaceSubs(genericInterface, instantiatedInterface.TypeArguments);
+            foreach ((string name, TypeInfo memberType) in genericInterface.Members)
+                if (genericInterfaceArgument.Fields.TryGetValue(name, out TypeInfo? argumentMember))
+                    InferFromType(Substitute(memberType, substitutions), argumentMember, inferred, combineCandidates);
+        }
         else if (paramType is TypeInfo.InstantiatedGeneric paramGen && argType is TypeInfo.InstantiatedGeneric argGen)
         {
             // Same generic base - infer from type arguments
             for (int i = 0; i < paramGen.TypeArguments.Count && i < argGen.TypeArguments.Count; i++)
             {
-                InferFromType(paramGen.TypeArguments[i], argGen.TypeArguments[i], inferred);
+                InferFromType(paramGen.TypeArguments[i], argGen.TypeArguments[i], inferred, combineCandidates);
             }
         }
     }

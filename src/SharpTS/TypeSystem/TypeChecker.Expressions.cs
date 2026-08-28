@@ -75,6 +75,12 @@ public partial class TypeChecker
                 _typeMap.Set(expr, result);
                 return result;
             }
+            case Expr.ArrowFunction arrow:
+            {
+                TypeInfo result = CheckArrowFunction(arrow, contextualType);
+                _typeMap.Set(expr, result);
+                return result;
+            }
             default:
                 return CheckExpr(expr);
         }
@@ -676,6 +682,16 @@ public partial class TypeChecker
                 }
                 return anyObjectLike;
 
+            case TypeInfo.TypeParameter parameter:
+                // Object spread accepts generic parameters. A constraint contributes its known
+                // members (so `{ ...arg }` retains fields from `T extends { x: string }`); an
+                // unconstrained parameter is accepted as an opaque object-like source.
+                return parameter.Constraint is null ||
+                    TryMergeSpreadFields(parameter.Constraint, fields);
+
+            case TypeInfo.SpreadType spread:
+                return TryMergeSpreadFields(spread.Inner, fields);
+
             // Class-like / dynamic sources: accept but don't enumerate concrete fields here.
             case TypeInfo.Instance:
             case TypeInfo.Class:
@@ -713,6 +729,11 @@ public partial class TypeChecker
             {
                 // Spread property - merge fields from the spread object
                 TypeInfo spreadType = CheckExpr(prop.Value);
+                if (spreadType is TypeInfo.Any)
+                {
+                    stringIndexType = TypeInfo.Any.Shared;
+                    continue;
+                }
                 if (!TryMergeSpreadFields(spreadType, fields))
                 {
                     throw new TypeCheckException($" Spread in object literal requires an object, got '{spreadType}'.", tsCode: "TS2698");
@@ -1382,12 +1403,7 @@ public partial class TypeChecker
     private TypeInfo CheckArrowFunction(Expr.ArrowFunction arrow, TypeInfo? expectedType = null)
     {
         // Extract expected function type for parameter inference
-        TypeInfo.Function? expectedFuncType = expectedType switch
-        {
-            TypeInfo.Function f => f,
-            TypeInfo.GenericFunction gf => new TypeInfo.Function(gf.ParamTypes, gf.ReturnType, gf.RequiredParams, gf.HasRestParam, gf.ThisType),
-            _ => null
-        };
+        TypeInfo.Function? expectedFuncType = GetContextualFunctionType(expectedType);
 
         // Set up generic type parameters (if any)
         TypeEnvironment typeParamEnv = _environment;
@@ -1422,7 +1438,6 @@ public partial class TypeChecker
             {
                 thisType = _pendingObjectThisType ?? TypeInfo.Any.Shared;
             }
-
             // A default value may reference any PRECEDING parameter (`(a, b = a * 2)`), so each
             // parameter is progressively defined in a dedicated scope and later defaults are checked
             // against it. Each parameter is defined AFTER its own default is checked, so a
@@ -1559,7 +1574,14 @@ public partial class TypeChecker
         {
             _currentFunctionReturnType = returnType;
         }
-        _currentFunctionThisType = thisType;
+        // A top-level arrow in an external module captures the module's lexical `this`, which
+        // is undefined. Use that only while checking the BODY; it is not an explicit `this`
+        // parameter and must not leak into the arrow's public function type.
+        _currentFunctionThisType = !arrow.HasOwnThis && thisType is null &&
+                                   previousThisType is null && _currentClass is null &&
+                                   _currentModule is not null
+            ? TypeInfo.Undefined.Shared
+            : thisType;
         _inAsyncFunction = arrow.IsAsync;
         // A generator function EXPRESSION establishes its own generator context so `yield` is valid in
         // its body and its element type is inferred from the yields. Reached only for generator arrows
@@ -1581,7 +1603,31 @@ public partial class TypeChecker
             {
                 // Expression body - infer return type if not specified
                 TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
-                if (arrow.ReturnType == null)
+                if (arrow.ReturnType == null && expectedFuncType is not null)
+                {
+                    TypeInfo expectedRetType = expectedFuncType.ReturnType;
+                    if (arrow.IsAsync && expectedRetType is TypeInfo.Promise expectedPromise)
+                        expectedRetType = expectedPromise.ValueType;
+                    // A value-returning synchronous callback is assignable to a void-returning
+                    // contextual signature; callers intentionally discard its result. Generic
+                    // inference can also leave a literal contextual result (`5`) where the
+                    // callback expression naturally widens to its primitive (`number`).
+                    bool discardsResult = !arrow.IsAsync && expectedFuncType.ReturnType is TypeInfo.Void;
+                    if (!discardsResult && !IsCompatible(WidenLiteralType(expectedRetType), exprType))
+                    {
+                        throw new TypeCheckException(
+                            $"Arrow function expression evaluates to '{exprType}', but its contextual return type is '{expectedRetType}'.",
+                            tsCode: "TS2322");
+                    }
+                    // Context supplies parameter types and validates the result, but the arrow's
+                    // own function type still reflects what its expression returns. Compiled code
+                    // relies on that distinction for value-returning callbacks passed to APIs that
+                    // contextually accept `void` (for example Array.forEach).
+                    returnType = arrow.IsAsync && exprType is not TypeInfo.Promise
+                        ? new TypeInfo.Promise(exprType)
+                        : exprType;
+                }
+                else if (arrow.ReturnType == null)
                 {
                     // For async arrow functions, wrap return type in Promise if not already
                     if (arrow.IsAsync && exprType is not TypeInfo.Promise)
@@ -1678,6 +1724,58 @@ public partial class TypeChecker
         return typeParams != null && typeParams.Count > 0
             ? new TypeInfo.GenericFunction(typeParams, paramTypes, returnType, requiredParams, hasRest, thisType, paramNames)
             : new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, thisType, paramNames);
+    }
+
+    private TypeInfo.Function? GetContextualFunctionType(TypeInfo? type)
+    {
+        switch (type)
+        {
+            case TypeInfo.Function function:
+                return function;
+            case TypeInfo.GenericFunction generic:
+                return new TypeInfo.Function(
+                    generic.ParamTypes, generic.ReturnType, generic.RequiredParams,
+                    generic.HasRestParam, generic.ThisType, generic.ParamNames);
+            case TypeInfo.Interface { CallSignatures: { Count: > 0 } signatures }:
+            {
+                TypeInfo.CallSignature signature = signatures[0];
+                return new TypeInfo.Function(
+                    signature.ParamTypes, signature.ReturnType, signature.RequiredParams,
+                    signature.HasRestParam, ParamNames: signature.ParamNames);
+            }
+            case TypeInfo.Record { CallSignatures: { Count: > 0 } signatures }:
+            {
+                TypeInfo.CallSignature signature = signatures[0];
+                return new TypeInfo.Function(
+                    signature.ParamTypes, signature.ReturnType, signature.RequiredParams,
+                    signature.HasRestParam, ParamNames: signature.ParamNames);
+            }
+            case TypeInfo.InstantiatedGeneric
+                 {
+                     GenericDefinition: TypeInfo.GenericInterface genericInterface
+                 } instantiated when genericInterface.CallSignatures is { Count: > 0 } signatures:
+            {
+                TypeInfo.CallSignature signature = signatures[0];
+                Dictionary<string, TypeInfo> substitutions =
+                    GenericInterfaceSubs(genericInterface, instantiated.TypeArguments);
+                return new TypeInfo.Function(
+                    signature.ParamTypes.Select(parameter => Substitute(parameter, substitutions)).ToList(),
+                    Substitute(signature.ReturnType, substitutions),
+                    signature.RequiredParams,
+                    signature.HasRestParam,
+                    ParamNames: signature.ParamNames);
+            }
+            case TypeInfo.Union union:
+                return union.FlattenedTypes
+                    .Select(GetContextualFunctionType)
+                    .FirstOrDefault(function => function is not null);
+            case TypeInfo.Intersection intersection:
+                return intersection.FlattenedTypes
+                    .Select(GetContextualFunctionType)
+                    .FirstOrDefault(function => function is not null);
+            default:
+                return null;
+        }
     }
 
     private TypeInfo CheckAssign(Expr.Assign assign)
@@ -1995,10 +2093,30 @@ public partial class TypeChecker
         if (classExpr.SuperclassExpr != null)
         {
             TypeInfo superType = CheckExpr(classExpr.SuperclassExpr);
+            if (classExpr.SuperclassTypeArgs is { Count: > 0 })
+            {
+                if (superType is TypeInfo.GenericClass genericSuperclass)
+                {
+                    List<TypeInfo> arguments = classExpr.SuperclassTypeArgs
+                        .Select((_, index) => ResolveTypeArg(
+                            classExpr.SuperclassTypeArgs, classExpr.SuperclassTypeArgNodes, index))
+                        .ToList();
+                    superType = InstantiateGenericClass(genericSuperclass, arguments);
+                }
+                else if (superType is not TypeInfo.Any)
+                {
+                    throw new TypeCheckException(
+                        $"Cannot use type arguments with non-generic class '{Expr.GetSuperclassLeafName(classExpr.SuperclassExpr)}'",
+                        tsCode: "TS2315");
+                }
+            }
             if (superType is TypeInfo.Instance si && si.ClassType is TypeInfo.Class sic)
                 superclass = sic;
             else if (superType is TypeInfo.Class sc)
                 superclass = sc;
+            else if (superType is TypeInfo.InstantiatedGeneric
+                     { GenericDefinition: TypeInfo.GenericClass })
+                superclass = superType;
             else if (superType is TypeInfo.Any)
             {
                 // Extending an `any`-typed expression (e.g. CJS-imported
@@ -2221,7 +2339,9 @@ public partial class TypeChecker
             for (int i = 0; i < classExpr.Interfaces.Count; i++)
             {
                 var interfaceToken = classExpr.Interfaces[i];
-                TypeInfo? itfTypeInfo = _environment.GetTypeBinding(interfaceToken.Lexeme);
+                TypeInfo? itfTypeInfo = interfaceToken.Lexeme.Contains('.', StringComparison.Ordinal)
+                    ? ResolveTypeName(interfaceToken.Lexeme)
+                    : _environment.GetTypeBinding(interfaceToken.Lexeme);
                 if (itfTypeInfo is TypeInfo.Interface interfaceType)
                 {
                     ValidateInterfaceImplementation(classTypeForBody, interfaceType, className, classExpr.Name?.Line);

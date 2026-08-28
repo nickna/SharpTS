@@ -82,10 +82,11 @@ public partial class TypeChecker
         {
             if (_noImplicitThis && _currentFunctionReturnType is not null)
             {
-                throw new TypeCheckException(
+                RecordTypeError(new TypeCheckException(
                     "'this' implicitly has type 'any' because it does not have a type annotation.",
                     line: expr.Keyword.Line,
-                    tsCode: "TS2683");
+                    tsCode: "TS2683"));
+                return TypeInfo.Any.Shared;
             }
             // Allow `this` in regular functions (JS constructor-function
             // pattern) and at module top level. Type it as Any so members
@@ -182,7 +183,15 @@ public partial class TypeChecker
         {
             case TypeInfo.Undefined:
                 if (get.Optional) return TypeInfo.Undefined.Shared;
-                throw new TypeCheckException($"Property '{get.Name.Lexeme}' does not exist on type 'undefined'.", get.Name.Line, tsCode: "TS2339");
+                if (get.Object is Expr.This)
+                    throw new TypeCheckException(
+                        "Object is possibly 'undefined'.",
+                        get.Name.Line,
+                        tsCode: "TS2532");
+                throw new TypeCheckException(
+                    $"Property '{get.Name.Lexeme}' does not exist on type 'undefined'.",
+                    get.Name.Line,
+                    tsCode: "TS2339");
             case TypeInfo.Null:
                 if (get.Optional) return TypeInfo.Undefined.Shared;
                 throw new TypeCheckException("Object is possibly 'null'.", get.Name.Line, tsCode: "TS2531");
@@ -196,6 +205,22 @@ public partial class TypeChecker
         {
             var memberType = ResolveBuiltInMemberType(category, objType, memberName);
             if (memberType != null) return memberType;
+            IReadOnlyList<string>? candidates = category switch
+            {
+                TypeCategory.String => BuiltInTypes.StringApparentMemberNames,
+                TypeCategory.Array or TypeCategory.Tuple => BuiltInTypes.ArrayApparentMemberNames,
+                _ => null,
+            };
+            string? suggestion = candidates is null
+                ? null
+                : ClosestMemberSuggestion(memberName, candidates);
+            if (suggestion is not null)
+            {
+                throw new TypeCheckException(
+                    $"Property '{memberName}' does not exist on type '{GetTypeDisplayName(category, objType)}'. Did you mean '{suggestion}'?",
+                    get.Name.Line,
+                    tsCode: "TS2551");
+            }
             throw new TypeCheckException($" Property '{memberName}' does not exist on type '{GetTypeDisplayName(category, objType)}'.", tsCode: "TS2339");
         }
 
@@ -222,6 +247,39 @@ public partial class TypeChecker
                 CheckGetOnIntersection(intersection, get.Name),
             _ => TypeInfo.Any.Shared
         };
+    }
+
+    private static string? ClosestMemberSuggestion(string name, IReadOnlyList<string> candidates)
+    {
+        string? best = null;
+        int bestDistance = int.MaxValue;
+        foreach (string candidate in candidates)
+        {
+            int distance = EditDistance(name, candidate);
+            if (distance < bestDistance)
+            {
+                best = candidate;
+                bestDistance = distance;
+            }
+        }
+        int threshold = name.Length <= 4 ? 1 : 2;
+        return bestDistance <= threshold ? best : null;
+    }
+
+    private static int EditDistance(string left, string right)
+    {
+        var previous = Enumerable.Range(0, right.Length + 1).ToArray();
+        var current = new int[right.Length + 1];
+        for (int i = 1; i <= left.Length; i++)
+        {
+            current[0] = i;
+            for (int j = 1; j <= right.Length; j++)
+                current[j] = Math.Min(
+                    Math.Min(current[j - 1] + 1, previous[j] + 1),
+                    previous[j - 1] + (left[i - 1] == right[j - 1] ? 0 : 1));
+            (previous, current) = (current, previous);
+        }
+        return previous[right.Length];
     }
 
     /// <summary>

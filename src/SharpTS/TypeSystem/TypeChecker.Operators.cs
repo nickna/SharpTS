@@ -274,6 +274,12 @@ public partial class TypeChecker
             return TypeInfo.Any.Shared;
         }
 
+        // Keep callable/class alternatives in source order. Collapsing one to the broader
+        // assignable signature loses the left-hand JSX signature that TypeScript uses when it
+        // synthesizes props for `const C = A || B; <C />`.
+        if (IsLogicalCallableCandidate(leftType) && IsLogicalCallableCandidate(rightType))
+            return new TypeInfo.Union([leftType, rightType]);
+
         // If one is assignable to the other, return the broader type
         if (IsCompatible(leftType, rightType))
         {
@@ -287,6 +293,16 @@ public partial class TypeChecker
         // Otherwise, return the union of both types
         return new TypeInfo.Union([leftType, rightType]);
     }
+
+    private static bool IsLogicalCallableCandidate(TypeInfo type) => type switch
+    {
+        TypeInfo.Function or TypeInfo.GenericFunction or TypeInfo.OverloadedFunction or
+            TypeInfo.GenericOverloadedFunction or TypeInfo.OverloadSet or TypeInfo.Class or
+            TypeInfo.MutableClass or TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric => true,
+        TypeInfo.Record { CallSignatures.Count: > 0 } or
+            TypeInfo.Interface { CallSignatures.Count: > 0 } => true,
+        _ => false,
+    };
 
     private TypeInfo CheckNullishCoalescing(Expr.NullishCoalescing nc)
     {

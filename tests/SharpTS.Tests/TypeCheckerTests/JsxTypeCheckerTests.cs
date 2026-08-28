@@ -420,6 +420,23 @@ public class JsxTypeCheckerTests
     }
 
     [Fact]
+    public void GenericFunctionComponent_CombinesRepeatedTypeParameterCandidates()
+    {
+        const string prelude = JsxPrelude + """
+
+            declare function GenericValue<T>(props: { value: T; repeated: T }): JSX.Element;
+            """;
+        var call = JsxCall(JsxElementKind.Component, "GenericValue",
+            new Expr.Variable(Identifier("GenericValue")),
+            new Expr.ObjectLiteral([
+                Attribute("value", new Expr.Literal("a")),
+                Attribute("repeated", new Expr.Literal("b")),
+            ]));
+
+        Assert.Empty(Check(call, prelude).Diagnostics);
+    }
+
+    [Fact]
     public void CallableObjectComponent_ChecksItsCallSignatureProps()
     {
         const string prelude = JsxPrelude + """

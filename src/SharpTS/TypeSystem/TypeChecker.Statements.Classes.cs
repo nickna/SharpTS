@@ -570,7 +570,9 @@ public partial class TypeChecker
             for (int i = 0; i < classStmt.Interfaces.Count; i++)
             {
                 var interfaceToken = classStmt.Interfaces[i];
-                TypeInfo? itfTypeInfo = _environment.GetTypeBinding(interfaceToken.Lexeme);
+                TypeInfo? itfTypeInfo = interfaceToken.Lexeme.Contains('.', StringComparison.Ordinal)
+                    ? ResolveTypeName(interfaceToken.Lexeme)
+                    : _environment.GetTypeBinding(interfaceToken.Lexeme);
 
                 // Get type arguments for this interface if provided
                 List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
@@ -1299,20 +1301,22 @@ public partial class TypeChecker
         // Save reference to current environment for later registration
         TypeEnvironment parentEnv = _environment;
 
-        // Resolve the `extends` clause in the enclosing environment (before the class's own type
-        // parameters enter scope), so inherited members are visible to consumers of this ambient
-        // type (member access, structural assignability, conditional `infer`) — #505.
-        TypeInfo? superclass = ResolveDeclaredSuperclass(classStmt);
-
         // Handle generic type parameters
         TypeEnvironment classTypeEnv = new(_environment);
+        List<TypeInfo.TypeParameter>? classTypeParams = null;
         if (classStmt.TypeParams != null && classStmt.TypeParams.Count > 0)
         {
             using (new EnvironmentScope(this, classTypeEnv))
-                BuildGenericTypeParameters(
+                classTypeParams = BuildGenericTypeParameters(
                     classStmt.TypeParams,
                     classTypeEnv);
         }
+
+        // Resolve the base with the ambient class's type parameters in scope. Consumers need the
+        // open parameterization preserved just as they do for an implemented generic class.
+        TypeInfo? superclass;
+        using (new EnvironmentScope(this, classTypeEnv))
+            superclass = ResolveDeclaredSuperclass(classStmt);
 
         // Create mutable class early so self-references in method return types work.
         // This allows methods like "fromSeconds(): TimeSpan" to correctly resolve the return type.
@@ -1486,15 +1490,19 @@ public partial class TypeChecker
             }
         }
 
-        // Freeze the mutable class into an immutable class type.
-        // Any TypeInfo.Instance that was created during signature collection
-        // (wrapping the MutableClass) will now resolve via ResolvedClassType.
-        TypeInfo.Class classType = mutableClass.Freeze();
+        // Preserve ambient generic classes as GenericClass values/types. The old path always
+        // froze a plain Class and discarded the type parameter list, making declarations such as
+        // React.Component<P, S> report TS2315 at every use.
+        TypeInfo.Class classTypeForMap = mutableClass.Freeze();
+        TypeInfo declaredClass = classTypeParams is { Count: > 0 }
+            ? mutableClass.FreezeGeneric(classTypeParams)
+            : classTypeForMap;
 
-        // Register class in parent environment (not the classTypeEnv)
-        // This ensures the class is visible after the using block ends
-        parentEnv.Define(classStmt.Name.Lexeme, classType);
-        _typeMap.SetClassType(classStmt.Name.Lexeme, classType);
+        // Register both value and type facets in the parent environment (not classTypeEnv), so
+        // the symbol remains visible after this scope and namespace collection sees the generic.
+        parentEnv.Define(classStmt.Name.Lexeme, declaredClass);
+        parentEnv.DefineType(classStmt.Name.Lexeme, declaredClass);
+        _typeMap.SetClassType(classStmt.Name.Lexeme, classTypeForMap);
 
         } // End EnvironmentScope
     }

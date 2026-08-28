@@ -945,6 +945,14 @@ public class ModuleResolver
                     string refPath = ResolveReferencePath(pathRef.Value, absolutePath);
                     var refModule = LoadScriptReference(refPath, decoratorMode, absolutePath);
 
+                    // A referenced declaration file can introduce ambient external modules
+                    // consumed later in this file (the TypeScript JSX corpus commonly
+                    // references react.d.ts and then imports `react`). Register those names
+                    // before resolving this module's import statements so a real declaration
+                    // wins over an executable fallback package.
+                    if (refModule.IsDeclarationFile)
+                        RegisterAmbientModuleDeclarations([refModule]);
+
                     if (!refModule.IsScript && !refModule.IsDeclarationFile)
                     {
                         throw new Exception($"Type Error: /// <reference path=\"{pathRef.Value}\"> cannot reference a module file. Referenced file '{refPath}' contains import/export statements.");
@@ -1435,6 +1443,9 @@ public class ModuleResolver
                     {
                         IsScript = false,
                         IsAmbientModule = true,
+                        // Synthetic ambient modules originate in declaration files and should
+                        // receive the same trusted-input/skip-lib-check treatment as their owner.
+                        IsDeclarationFile = true,
                         // A bodyless ambient module is TypeScript's wildcard declaration for an
                         // untyped package. CJS-style `any` imports model that contract exactly.
                         IsCommonJs = declaration.Members.Count == 0,

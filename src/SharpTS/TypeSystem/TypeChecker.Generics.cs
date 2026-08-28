@@ -308,7 +308,14 @@ public partial class TypeChecker
             else
             {
                 // Look up the generic definition
-                TypeInfo? genericDef = _environment.GetTypeBinding(baseName) ?? _environment.Get(baseName);
+                // Generic references can be namespace-qualified (`React.ReactElement<P>`,
+                // `React.Component<P, S>`, ...). The ordinary environment dictionaries are
+                // keyed by one segment, so asking them for the dotted spelling silently fell
+                // back to `any`. Resolve through the namespace type facet first, just like a
+                // non-generic qualified annotation does.
+                TypeInfo? genericDef = baseName.Contains('.', StringComparison.Ordinal)
+                    ? ResolveTypeName(baseName)
+                    : _environment.GetTypeBinding(baseName) ?? _environment.Get(baseName);
 
                 result = genericDef switch
                 {

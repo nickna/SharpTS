@@ -844,6 +844,12 @@ public partial class TypeChecker
         return type switch
         {
             TypeInfo.Interface itf => [.. itf.OptionalMembers],
+            TypeInfo.Record record => record.OptionalFields is null
+                ? []
+                : [.. record.OptionalFields],
+            TypeInfo.Intersection intersection => intersection.FlattenedTypes
+                .SelectMany(ExtractOptionalProperties)
+                .ToHashSet(StringComparer.Ordinal),
             TypeInfo.MappedType mapped => ExtractOptionalProperties(ExpandMappedType(mapped)),
             TypeInfo.InstantiatedGeneric ig => ExtractOptionalProperties(ExpandInstantiatedGenericForKeyOf(ig)),
             _ => []

@@ -1119,6 +1119,14 @@ public partial class Parser
                         IsShorthandDefault: isShorthandDefault));
                 } while (Match(TokenType.COMMA));
             }
+            if (Check(TokenType.SEMICOLON))
+            {
+                // Recover an object-literal property terminated with `;`: keep the TS1005
+                // grammar diagnostic, but consume the delimiter so declarations after the
+                // object remain in the AST (tsc also continues past this error).
+                RecordError("',' expected.", "TS1005");
+                Advance();
+            }
             Consume(TokenType.RIGHT_BRACE, "Expect '}' after object literal.");
             return new Expr.ObjectLiteral(properties);
         }

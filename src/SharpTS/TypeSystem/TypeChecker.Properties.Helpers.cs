@@ -301,21 +301,26 @@ public partial class TypeChecker
         // the class was frozen (e.g., method return types on @DotNetType shims).
         if (instance.ResolvedClassType is TypeInfo.Class instanceClassType)
         {
-            var regularMember = CheckGetOnRegularInstance(instanceClassType, memberName);
-            if (regularMember is TypeInfo.Any &&
-                _currentModule != null &&
-                DotNetTypeSynthesizer.TryGetClrType(instance, out var receiverClr) &&
-                Runtime.DotNet.DotNetTypeRegistry.GetMethods(
-                    receiverClr, memberNameStr, isStatic: false).Length == 0 &&
-                DotNetTypeSynthesizer.TryBuildExtensionMember(
-                    instance,
-                    memberNameStr,
-                    _currentModule.DotNetExtensionTypes,
-                    out var extensionMember))
+            try
             {
-                return extensionMember;
+                return CheckGetOnRegularInstance(instanceClassType, memberName);
             }
-            return regularMember;
+            catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2339")
+            {
+                if (_currentModule != null &&
+                    DotNetTypeSynthesizer.TryGetClrType(instance, out var receiverClr) &&
+                    Runtime.DotNet.DotNetTypeRegistry.GetMethods(
+                        receiverClr, memberNameStr, isStatic: false).Length == 0 &&
+                    DotNetTypeSynthesizer.TryBuildExtensionMember(
+                        instance,
+                        memberNameStr,
+                        _currentModule.DotNetExtensionTypes,
+                        out var extensionMember))
+                {
+                    return extensionMember;
+                }
+                throw;
+            }
         }
 
         return TypeInfo.Any.Shared;
@@ -408,6 +413,16 @@ public partial class TypeChecker
 
         while (current != null)
         {
+            // Built-in globals resolve to `any` in value position, so an `extends Error` /
+            // `extends Promise<T>` clause is represented by a name-only MutableClass placeholder.
+            // Preserve the real built-in member surface at that point in the hierarchy while still
+            // rejecting genuinely unknown properties on ordinary user classes.
+            if (current is TypeInfo.MutableClass placeholder &&
+                ResolveBuiltInSuperclassMember(placeholder.Name, memberNameStr) is { } builtInMember)
+            {
+                return builtInMember;
+            }
+
             // If current is an InstantiatedGeneric, build/extend the substitution map
             if (current is TypeInfo.InstantiatedGeneric igCurrent &&
                 igCurrent.GenericDefinition is TypeInfo.GenericClass gcCurrent)
@@ -460,6 +475,40 @@ public partial class TypeChecker
 
             current = GetSuperclass(current);
         }
-        return TypeInfo.Any.Shared;
+        if (memberNameStr == "constructor")
+            return startClass;
+        throw new TypeCheckException(
+            $"Property '{memberNameStr}' does not exist on type '{startClass.Name}'.",
+            memberName.Line,
+            tsCode: "TS2339");
+    }
+
+    private static TypeInfo? ResolveBuiltInSuperclassMember(string className, string memberName)
+    {
+        if (BuiltInNames.IsErrorTypeName(className))
+            return BuiltInTypes.GetErrorMemberType(memberName, className);
+
+        TypeInfo? builtIn = className switch
+        {
+            BuiltInNames.Promise => new TypeInfo.Promise(TypeInfo.Any.Shared),
+            BuiltInNames.Date => TypeInfo.Date.Shared,
+            BuiltInNames.RegExp => TypeInfo.RegExp.Shared,
+            BuiltInNames.Map => new TypeInfo.Map(TypeInfo.Any.Shared, TypeInfo.Any.Shared),
+            BuiltInNames.Set => new TypeInfo.Set(TypeInfo.Any.Shared),
+            BuiltInNames.WeakMap => new TypeInfo.WeakMap(TypeInfo.Any.Shared, TypeInfo.Any.Shared),
+            BuiltInNames.WeakSet => new TypeInfo.WeakSet(TypeInfo.Any.Shared),
+            BuiltInNames.WeakRef => new TypeInfo.WeakRef(TypeInfo.Any.Shared),
+            BuiltInNames.FinalizationRegistry => new TypeInfo.FinalizationRegistry(TypeInfo.Any.Shared),
+            BuiltInNames.EventEmitter => TypeInfo.EventEmitter.Shared,
+            BuiltInNames.AbortController => TypeInfo.AbortController.Shared,
+            BuiltInNames.AbortSignal => TypeInfo.AbortSignal.Shared,
+            _ => null,
+        };
+        if (builtIn is not null)
+            return BuiltInTypes.GetInstanceMemberType(builtIn, memberName);
+
+        if (className is BuiltInNames.Array or "ReadonlyArray")
+            return BuiltInTypes.GetArrayMemberType(memberName, TypeInfo.Any.Shared);
+        return BuiltInNames.IsTypedArrayName(className) ? TypeInfo.Any.Shared : null;
     }
 }

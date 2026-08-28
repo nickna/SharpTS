@@ -149,6 +149,15 @@ public partial class TypeChecker
         if (_environment.IsTypeDefinedLocally(interfaceStmt.Name.Lexeme))
             return;
 
+        // Bind a non-generic interface's own name before resolving its members. Without this
+        // placeholder, `interface Element { children: Element[] }` declared in a nested JSX
+        // namespace can capture an enclosing global DOM `Element` during the preparatory pass.
+        // Use `any`, rather than an empty interface, because this pass is speculative: an empty
+        // structural edge would make a recursive declaration such as `interface S { foo: S }`
+        // spuriously incompatible before the completed preregistration replaces it below.
+        if (interfaceStmt.TypeParams is null or { Count: 0 })
+            _environment.DefineType(interfaceStmt.Name.Lexeme, TypeInfo.Any.Shared);
+
         // Handle generic type parameters with two-pass approach to support recursive constraints
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);

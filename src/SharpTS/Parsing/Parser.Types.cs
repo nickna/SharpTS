@@ -1146,6 +1146,7 @@ public partial class Parser
 
                 string propertyType;
                 bool isMethodMember = Check(TokenType.LEFT_PAREN) || Check(TokenType.LESS);
+                bool hasExplicitType = isMethodMember;
                 if (isMethodMember)
                 {
                     // Method signature: methodName(params): returnType
@@ -1153,6 +1154,7 @@ public partial class Parser
                 }
                 else if (Match(TokenType.COLON))
                 {
+                    hasExplicitType = true;
                     // Member values may be conditional types: { x: T extends number ? T : string }
                     propertyType = ParseConditionalType();
                 }
@@ -1164,7 +1166,9 @@ public partial class Parser
                 }
 
                 if (TakeTypeNode() is { } propertyNode)
-                    memberNodes.Add(new PropertyMemberNode(propertyName.Lexeme, propertyNode, isOptional, isMethodMember, propertyName.Line));
+                    memberNodes.Add(new PropertyMemberNode(
+                        propertyName.Lexeme, propertyNode, isOptional, isMethodMember,
+                        propertyName.Line, hasExplicitType));
                 else
                     nodeComplete = false;
 

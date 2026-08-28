@@ -18,6 +18,15 @@ public partial class TypeChecker
     private void CheckNamespace(Stmt.Namespace ns)
     {
         string name = ns.Name.Lexeme;
+        // UMD declaration namespaces use `global { ... }` (without `declare`) to publish
+        // global augmentations from inside the exported namespace. Treat that contextual
+        // container as an augmentation block, not as a nested namespace named `global`.
+        // React 16 declares the global JSX namespace this way.
+        if (name == "global" && _namespaceDepth > 0 && _currentModule is not null)
+        {
+            CheckDeclareGlobalStatement(new Stmt.DeclareGlobal(ns.Name, ns.Members));
+            return;
+        }
         RegisterValueDeclaration(ns.Name, mergeWithLocal: true);
 
         // Get or create namespace - use mutable dictionaries for construction
@@ -110,8 +119,14 @@ public partial class TypeChecker
                 if (_recoveryMode)
                 {
                     try { CollectNamespaceMemberType(member, types); }
-                    catch (TypeMismatchException ex) { RecordTypeError(ex); }
-                    catch (TypeCheckException ex) { RecordTypeError(ex); }
+                    catch (TypeMismatchException ex)
+                    {
+                        RecordTypeError(ex);
+                    }
+                    catch (TypeCheckException ex)
+                    {
+                        RecordTypeError(ex);
+                    }
                 }
                 else
                 {
@@ -420,11 +435,20 @@ public partial class TypeChecker
             }
         }
 
-        // Get the final member
+        // A one-segment import aliases the namespace itself (`import React = __React`).
+        // Longer paths alias the final member inside the walked namespace.
         Token finalMember = path[^1];
-        BindNamespaceMemberFacets(currentNs, finalMember);
-        TypeInfo? resolvedType = currentNs.Values.GetValueOrDefault(finalMember.Lexeme)
-            ?? currentNs.Types.GetValueOrDefault(finalMember.Lexeme);
+        TypeInfo? resolvedType;
+        if (path.Count == 1)
+        {
+            resolvedType = currentNs;
+        }
+        else
+        {
+            BindNamespaceMemberFacets(currentNs, finalMember);
+            resolvedType = currentNs.Values.GetValueOrDefault(finalMember.Lexeme)
+                ?? currentNs.Types.GetValueOrDefault(finalMember.Lexeme);
+        }
 
         if (resolvedType == null)
         {
@@ -448,7 +472,18 @@ public partial class TypeChecker
         // Register the alias
         if (isValue)
             RegisterValueDeclaration(importAlias.AliasName);
-        _environment.DefineImportAlias(aliasName, resolvedType, isValue);
+        if (resolvedType is TypeInfo.Namespace importedNamespace)
+        {
+            _environment.DefineNamespace(
+                aliasName,
+                importedNamespace with { Name = aliasName });
+            if (isValue)
+                _environment.DefineImportAlias(aliasName, importedNamespace, isValue: true);
+        }
+        else
+        {
+            _environment.DefineImportAlias(aliasName, resolvedType, isValue);
+        }
     }
 
     private void BindNamespaceMemberFacets(

@@ -63,6 +63,9 @@ public sealed record TypeCheckerOptions
     /// </summary>
     public bool NoUnusedLocals { get; init; } = false;
 
+    /// <summary>Allows a default import to bind a CommonJS <c>export =</c> declaration.</summary>
+    public bool AllowSyntheticDefaultImports { get; init; } = false;
+
     /// <summary>
     /// Diagnostics collected before <c>CheckWithRecovery</c> stops. Default 10 — an ergonomics
     /// knob rather than a strictness one, and pinned by the user-visible "Too many errors,

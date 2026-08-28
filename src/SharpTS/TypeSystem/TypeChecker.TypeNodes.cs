@@ -305,6 +305,13 @@ public partial class TypeChecker
             switch (member)
             {
                 case PropertyMemberNode prop:
+                    if (_noImplicitAny && !prop.IsMethod && !prop.HasExplicitType)
+                    {
+                        RecordTypeError(new TypeCheckException(
+                            $"Member '{prop.Name}' implicitly has an 'any' type.",
+                            line: prop.Line,
+                            tsCode: "TS7008"));
+                    }
                     if (TryToTypeInfo(prop.Type) is not { } propType) return null;
                     if (prop.IsMethod) methodMembers.Add(prop.Name);
                     if (prop.IsOptional) optionalFields.Add(prop.Name);

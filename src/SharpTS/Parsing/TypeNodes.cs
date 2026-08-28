@@ -152,7 +152,13 @@ public abstract record ObjectTypeMemberNode(int Line);
 /// Computed names are carried in their string-path spelling (<c>@@iterator</c>). Method-syntax
 /// members keep <see cref="IsMethod"/> so bivariant parameter relating survives
 /// (the string path's <c>#m</c> marker).</summary>
-public sealed record PropertyMemberNode(string Name, TypeNode Type, bool IsOptional, bool IsMethod, int Line) : ObjectTypeMemberNode(Line);
+public sealed record PropertyMemberNode(
+    string Name,
+    TypeNode Type,
+    bool IsOptional,
+    bool IsMethod,
+    int Line,
+    bool HasExplicitType = true) : ObjectTypeMemberNode(Line);
 
 /// <summary>An index signature: <c>[k: string]: T</c>. <see cref="KeyKind"/> is
 /// <c>string</c>, <c>number</c>, or <c>symbol</c>.</summary>

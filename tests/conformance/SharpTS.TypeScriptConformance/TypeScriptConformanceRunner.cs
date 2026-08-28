@@ -229,6 +229,9 @@ public sealed class TypeScriptConformanceRunner
                 NoUncheckedIndexedAccess =
                     DirectiveBool(metadata, "nouncheckedindexedaccess") ?? false,
                 NoUnusedLocals = DirectiveBool(metadata, "nounusedlocals") ?? false,
+                AllowSyntheticDefaultImports =
+                    DirectiveBool(metadata, "allowsyntheticdefaultimports") == true ||
+                    DirectiveBool(metadata, "esmoduleinterop") == true,
                 MaxErrors = 1000,
             });
             checker.SetDecoratorMode(decoratorMode);

@@ -424,8 +424,14 @@ public partial class TypeChecker
                 return new TypeInfo.Record(mergedFields.ToFrozenDictionary());
             }
 
-            // Otherwise, return intersection with merged record/interface
-            var resultTypes = new List<TypeInfo>(nonObjectTypes) { new TypeInfo.Record(mergedFields.ToFrozenDictionary()) };
+            // Otherwise, return an intersection with the merged object member. Preserve the
+            // optional-property set here too: generic shapes such as `{ x?: boolean } & T`
+            // retain the open `T` arm, and silently rebuilding the concrete arm as a plain
+            // record made homomorphic mapped types (notably Readonly<T>) require `x`.
+            TypeInfo mergedObject = optionalFields.Count > 0
+                ? new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet())
+                : new TypeInfo.Record(mergedFields.ToFrozenDictionary());
+            var resultTypes = new List<TypeInfo>(nonObjectTypes) { mergedObject };
             return new TypeInfo.Intersection(resultTypes);
         }
 

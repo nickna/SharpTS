@@ -85,6 +85,8 @@ public partial class TypeChecker
                 new TypeInfo.SpreadType(Sub(spread.Inner)),
             TypeInfo.Union union =>
                 new TypeInfo.Union(union.Types.Select(Sub).ToList()),
+            TypeInfo.Intersection intersection =>
+                new TypeInfo.Intersection(intersection.Types.Select(Sub).ToList()),
             // Assignability path (evalConditionals): fields only. Preserving call/construct signatures here
             // would feed generic construct-signature *assignment* relating (which erases/instantiates via
             // Substitute) types it does not yet compare correctly, regressing
@@ -95,7 +97,11 @@ public partial class TypeChecker
                     ? new TypeInfo.Record(
                         rec.Fields.ToDictionary(
                             kvp => kvp.Key,
-                            kvp => Sub(kvp.Value)).ToFrozenDictionary())
+                            kvp => Sub(kvp.Value)).ToFrozenDictionary(),
+                        OptionalFields: rec.OptionalFields,
+                        IsReadonly: rec.IsReadonly,
+                        GetterOnlyFields: rec.GetterOnlyFields,
+                        MethodMembers: rec.MethodMembers)
                     : SubstituteRecordMembers(rec, Sub),
             TypeInfo.InstantiatedGeneric ig =>
                 new TypeInfo.InstantiatedGeneric(
