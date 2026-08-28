@@ -1053,13 +1053,35 @@ export interface DesktopWindow {
     readonly isDisposed: boolean;
     /** Promise completed after the native window closes. */
     readonly closed: Promise<void>;
-    /** Activates the window and requests foreground focus. */
+    /**
+     * Activates the window and requests foreground focus.
+     * @remarks Operating-system focus-stealing policies can prevent the window from receiving foreground focus.
+     * @example
+     * window.activate();
+     */
     activate(): void;
-    /** Requests that the native window close. */
+    /**
+     * Requests that the native window close.
+     * @remarks Await closed when work must continue only after native close processing finishes.
+     * @example
+     * window.close();
+     * await window.closed;
+     */
     close(): void;
-    /** Looks up a resource through the window and application dictionaries. @returns The resource value, or null when not found. */
+    /**
+     * Looks up a resource through the window and application dictionaries.
+     * @returns The resource value, or null when not found.
+     * @remarks Window resources take precedence over application resources.
+     * @example
+     * const accent = window.findResource("AccentColor");
+     */
     findResource(key: string): DesktopResourceValue | null;
-    /** Disposes the native window and its reactive tree. */
+    /**
+     * Disposes the native window and its reactive tree.
+     * @remarks Disposal is idempotent and completes the closed promise.
+     * @example
+     * window.dispose();
+     */
     dispose(): void;
 }
 /** Native tray menu entry. @category Desktop Services */
@@ -1096,9 +1118,16 @@ export interface DesktopTrayIcon {
      * Replaces the icon image, tooltip, menu, and callbacks.
      * @remarks Call dispose when the tray icon is no longer needed.
      * @throws When the icon is disposed or the replacement icon or menu is invalid.
+     * @example
+     * tray.update({ icon: "assets/ready.ico", toolTip: "Ready" });
      */
     update(options: TrayIconOptions): void;
-    /** Removes and disposes the native tray icon. */
+    /**
+     * Removes and disposes the native tray icon.
+     * @remarks Disposal is idempotent and releases all native menu callbacks.
+     * @example
+     * tray.dispose();
+     */
     dispose(): void;
 }
 /** Desktop application lifetime and window manager. @category Application Lifecycle */
@@ -1112,6 +1141,8 @@ export interface DesktopApplication {
      * @returns The live desktop window.
      * @remarks Await the window's closed promise when later work depends on its lifetime, and dispose the application when it is no longer needed.
      * @throws When the application is disposed, the owner belongs to another application, or the initial render fails.
+     * @example
+     * const window = app.createWindow(<Window title="Dashboard" />);
      */
     createWindow(element: GuiChild, options?: DesktopWindowOptions): DesktopWindow;
     /**
@@ -1119,13 +1150,22 @@ export interface DesktopApplication {
      * @returns The live tray icon.
      * @remarks The application owns the icon, but callers should dispose it as soon as it is no longer needed.
      * @throws When the application is disposed or the icon or menu configuration is invalid.
+     * @example
+     * const tray = app.createTrayIcon({ icon: "assets/app.ico", toolTip: "SharpTS" });
      */
     createTrayIcon(options: TrayIconOptions): DesktopTrayIcon;
-    /** Ends the desktop message loop with an optional process exit code. */
+    /**
+     * Ends the desktop message loop with an optional process exit code.
+     * @remarks Shutdown requests loop termination; dispose remains responsible for releasing application resources.
+     * @example
+     * app.shutdown(0);
+     */
     shutdown(exitCode?: number): void;
     /**
      * Disposes all windows, tray icons, and application resources.
      * @remarks Disposing the application is terminal; create a new application lifetime to open more windows.
+     * @example
+     * app.dispose();
      */
     dispose(): void;
 }
@@ -1520,6 +1560,14 @@ export function renderDrawingToImage(document: DrawingDocument, options: RenderD
  * @param document - Bounded drawing document to composite before sampling.
  * @param point - Pixel coordinate to sample from the composited image.
  * @returns The sampled red, green, blue, alpha, and normalized color values.
+ * @remarks Coordinates are floored to integer pixels after validation and are measured from the document's top-left corner.
+ * @throws When the document is invalid or the point is outside its pixel bounds.
+ * @example
+ * import { sampleDrawingPixel } from "@sharpts/gui";
+ *
+ * const document = { width: 16, height: 16, background: "#336699", layers: [] };
+ * const pixel = await sampleDrawingPixel(document, { x: 0, y: 0 });
+ * console.log(pixel.color);
  * @category Desktop Services
  */
 export function sampleDrawingPixel(document: DrawingDocument, point: DrawingPoint): Promise<DrawingPixel> {
@@ -1531,6 +1579,14 @@ export function sampleDrawingPixel(document: DrawingDocument, point: DrawingPoin
  * @param document - Bounded drawing document to composite before filling.
  * @param options - Seed coordinate, replacement color, and optional channel tolerance.
  * @returns Whether pixels changed and, when they did, the resulting rasterized image.
+ * @remarks The fill compares normalized color-channel differences and visits four-connected neighboring pixels. The source document is not mutated.
+ * @throws When the document, seed coordinate, replacement color, or tolerance is invalid or exceeds drawing safety limits.
+ * @example
+ * import { floodFillDrawing } from "@sharpts/gui";
+ *
+ * const document = { width: 16, height: 16, background: "#ffffff", layers: [] };
+ * const result = await floodFillDrawing(document, { x: 0, y: 0, color: "#0066cc" });
+ * if (result.changed) console.log(result.image.source);
  * @category Desktop Services
  */
 export function floodFillDrawing(document: DrawingDocument, options: DrawingFloodFillOptions): Promise<DrawingFloodFillResult> {
@@ -1558,6 +1614,13 @@ export function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise
  * Displays a native folder-selection dialog.
  * @param options - Dialog title options.
  * @returns The selected folder path, or null when canceled.
+ * @remarks The returned value is a local filesystem path. Folders exposed only through a virtual storage provider produce null.
+ * @throws When no desktop window is available or the native picker fails.
+ * @example
+ * import { showFolderDialog } from "@sharpts/gui";
+ *
+ * const folder = await showFolderDialog({ title: "Choose an export folder" });
+ * if (folder !== null) console.log(folder);
  * @category Desktop Services
  */
 export function showFolderDialog(options: FolderDialogOptions = {}): Promise<string | null> { return DesktopBridge.ShowFolderDialogAsync(options.title || "") as any; }
@@ -1587,16 +1650,51 @@ export function readClipboardText(): Promise<string> { return DesktopBridge.Read
  * @category Desktop Services
  */
 export function writeClipboardText(value: string): Promise<void> { return DesktopBridge.WriteClipboardTextAsync(value) as any; }
-/** Returns command-line arguments supplied when the desktop application launched. @returns Launch argument strings. @category Desktop Services */
+/**
+ * Returns command-line arguments supplied when the desktop application launched.
+ * @returns Launch argument strings.
+ * @remarks The returned array is a snapshot and can be modified without affecting the host process.
+ * @example
+ * import { getLaunchArguments } from "@sharpts/gui";
+ *
+ * for (const argument of getLaunchArguments()) console.log(argument);
+ * @category Desktop Services
+ */
 export function getLaunchArguments(): string[] { return DesktopBridge.GetDesktopLaunchArguments() as any; }
-/** Returns operating-system, runtime, and well-known directory information. @returns Current desktop platform information. @category Desktop Services */
+/**
+ * Returns operating-system, runtime, and well-known directory information.
+ * @returns Current desktop platform information.
+ * @remarks Directory values follow operating-system conventions and can be empty when the platform does not define a corresponding well-known folder.
+ * @example
+ * import { getDesktopPlatformInfo } from "@sharpts/gui";
+ *
+ * const platform = getDesktopPlatformInfo();
+ * console.log(platform.operatingSystem, platform.architecture);
+ * @category Desktop Services
+ */
 export function getDesktopPlatformInfo(): DesktopPlatformInfo { return JSON.parse(DesktopBridge.GetDesktopPlatformInfoJson()) as DesktopPlatformInfo; }
-/** Returns information about connected desktop displays. @returns Connected display records. @category Desktop Services */
+/**
+ * Returns information about connected desktop displays.
+ * @returns Connected display records.
+ * @remarks The result is a point-in-time snapshot. Call the function again after the desktop display configuration changes.
+ * @example
+ * import { getDesktopDisplays } from "@sharpts/gui";
+ *
+ * const primary = getDesktopDisplays().find(display => display.isPrimary);
+ * if (primary !== undefined) console.log(primary.workingAreaSize);
+ * @category Desktop Services
+ */
 export function getDesktopDisplays(): DesktopDisplayInfo[] { return JSON.parse(DesktopBridge.GetDesktopDisplaysJson()) as DesktopDisplayInfo[]; }
 /**
  * Opens a URI or file with the operating system's default application.
  * @param target - URI or file path to open.
  * @returns A promise completed after the native open request is submitted.
+ * @remarks Absolute HTTP, HTTPS, and mailto URIs are accepted directly. Other values must resolve to an existing file or directory relative to the application directory.
+ * @throws When the target is empty, a local path does not exist, or the operating system cannot launch its registered handler.
+ * @example
+ * import { openExternal } from "@sharpts/gui";
+ *
+ * await openExternal("https://sharpts.dev/docs");
  * @category Desktop Services
  */
 export function openExternal(target: string): Promise<void> { return DesktopBridge.OpenDesktopExternalAsync(target) as any; }
@@ -1604,6 +1702,12 @@ export function openExternal(target: string): Promise<void> { return DesktopBrid
  * Reveals a file or folder in the native file manager.
  * @param path - Local path to reveal.
  * @returns A promise completed after the native reveal request is submitted.
+ * @remarks This operation is currently supported only on Windows and resolves relative paths from the application directory.
+ * @throws When the platform is unsupported, the path is empty or missing, or Windows Explorer cannot be launched.
+ * @example
+ * import { showItemInFolder } from "@sharpts/gui";
+ *
+ * await showItemInFolder("output/preview.png");
  * @category Desktop Services
  */
 export function showItemInFolder(path: string): Promise<void> { return DesktopBridge.ShowDesktopItemInFolderAsync(path) as any; }
@@ -1611,6 +1715,12 @@ export function showItemInFolder(path: string): Promise<void> { return DesktopBr
  * Sends a local file to the operating system's print workflow.
  * @param path - Local file path to print.
  * @returns A promise completed after the native print request is submitted.
+ * @remarks This operation is currently supported only on Windows and uses the file type's registered print verb.
+ * @throws When the platform is unsupported, the path is empty or missing, or no application can handle the print request.
+ * @example
+ * import { printFile } from "@sharpts/gui";
+ *
+ * await printFile("output/report.pdf");
  * @category Desktop Services
  */
 export function printFile(path: string): Promise<void> { return DesktopBridge.PrintDesktopFileAsync(path) as any; }
