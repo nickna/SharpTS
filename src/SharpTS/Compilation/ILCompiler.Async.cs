@@ -126,7 +126,9 @@ public partial class ILCompiler
             _async.StableSuspensionFreePrimitiveCores,
             localBindings.Names,
             _typeMap,
-            _features?.UsesPromisePrototypeMutation != true);
+            _features?.UsesPromisePrototypeMutation != true
+                && !_promiseBindingScopes.Contains(
+                    PromiseBindingScopeKey(_modules.CurrentPath)));
         foreach (Stmt statement in function.Body)
             collector.Visit(statement);
         return collector.Awaits;
@@ -175,6 +177,105 @@ public partial class ILCompiler
 
         protected override void VisitClass(Stmt.Class statement) =>
             Names.Add(statement.Name.Lexeme);
+
+        protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
+        protected override void VisitClassExpr(Expr.ClassExpr expression) { }
+    }
+
+    private void RegisterPromiseBindingScope(
+        IReadOnlyList<Stmt> statements,
+        string? modulePath)
+    {
+        var collector = new ModulePromiseBindingCollector();
+        foreach (Stmt statement in statements)
+            collector.Visit(statement);
+        if (collector.HasBinding)
+            _promiseBindingScopes.Add(PromiseBindingScopeKey(modulePath));
+    }
+
+    private static string PromiseBindingScopeKey(string? modulePath) =>
+        modulePath ?? ClosureCompilationState.SingleFileKey;
+
+    /// <summary>
+    /// Finds value bindings visible from a module body without descending into
+    /// nested callables. The result is deliberately module-wide: a block-scoped
+    /// false positive only retains the ordinary await path, while a missed
+    /// module/import binding can bypass an observable Promise.resolve call.
+    /// </summary>
+    private sealed class ModulePromiseBindingCollector : AstVisitorBase
+    {
+        public bool HasBinding { get; private set; }
+
+        private void Add(string name)
+        {
+            if (name == "Promise")
+                HasBinding = true;
+        }
+
+        protected override void VisitVar(Stmt.Var statement) =>
+            Add(statement.Name.Lexeme);
+
+        protected override void VisitConst(Stmt.Const statement) =>
+            Add(statement.Name.Lexeme);
+
+        protected override void VisitFunction(Stmt.Function statement) =>
+            Add(statement.Name.Lexeme);
+
+        protected override void VisitClass(Stmt.Class statement) =>
+            Add(statement.Name.Lexeme);
+
+        protected override void VisitEnum(Stmt.Enum statement) =>
+            Add(statement.Name.Lexeme);
+
+        protected override void VisitNamespace(Stmt.Namespace statement)
+        {
+            Add(statement.Name.Lexeme);
+            base.VisitNamespace(statement);
+        }
+
+        protected override void VisitForOf(Stmt.ForOf statement)
+        {
+            Add(statement.Variable.Lexeme);
+            base.VisitForOf(statement);
+        }
+
+        protected override void VisitForIn(Stmt.ForIn statement)
+        {
+            if (statement.IsDeclaration)
+                Add(statement.Variable.Lexeme);
+            base.VisitForIn(statement);
+        }
+
+        protected override void VisitTryCatch(Stmt.TryCatch statement)
+        {
+            if (statement.CatchParam is not null)
+                Add(statement.CatchParam.Lexeme);
+            base.VisitTryCatch(statement);
+        }
+
+        protected override void VisitImport(Stmt.Import statement)
+        {
+            if (statement.IsTypeOnly)
+                return;
+            if (statement.DefaultImport is not null)
+                Add(statement.DefaultImport.Lexeme);
+            if (statement.NamespaceImport is not null)
+                Add(statement.NamespaceImport.Lexeme);
+            if (statement.NamedImports is not null)
+            {
+                foreach (var specifier in statement.NamedImports)
+                {
+                    if (!specifier.IsTypeOnly)
+                        Add((specifier.LocalName ?? specifier.Imported).Lexeme);
+                }
+            }
+        }
+
+        protected override void VisitImportAlias(Stmt.ImportAlias statement) =>
+            Add(statement.AliasName.Lexeme);
+
+        protected override void VisitImportRequire(Stmt.ImportRequire statement) =>
+            Add(statement.AliasName.Lexeme);
 
         protected override void VisitArrowFunction(Expr.ArrowFunction expression) { }
         protected override void VisitClassExpr(Expr.ClassExpr expression) { }

@@ -47,6 +47,16 @@ public sealed class RuntimeFeatureDetector
     };
     private readonly HashSet<string> _datePrototypeAliases = new(StringComparer.Ordinal);
     private readonly HashSet<string> _dateInstanceAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _regExpConstructorAliases = new(StringComparer.Ordinal)
+    {
+        "RegExp"
+    };
+    private readonly HashSet<string> _regExpPrototypeAliases = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _globalObjectAliases = new(StringComparer.Ordinal)
+    {
+        "globalThis",
+        "global"
+    };
     private readonly HashSet<(string Fingerprint, int Index)> _invalidCompactRecordSelfFields = [];
     private readonly Dictionary<string, JsonSerializationShape.Record> _canonicalCompactRecordShapes = [];
     private TypeMap? _typeMap;
@@ -693,10 +703,12 @@ public sealed class RuntimeFeatureDetector
             case Stmt.Var var:
                 if (var.Initializer is not null)
                 {
+                    TrackGlobalObjectAlias(var.Name.Lexeme, var.Initializer);
                     TrackNumberAlias(var.Name.Lexeme, var.Initializer);
                     TrackStringAlias(var.Name.Lexeme, var.Initializer);
                     TrackMathAlias(var.Name.Lexeme, var.Initializer);
                     TrackDateAlias(var.Name.Lexeme, var.Initializer);
+                    TrackRegExpAlias(var.Name.Lexeme, var.Initializer);
                     if (_opaqueValueBindings.Contains(var.Name.Lexeme))
                         MarkPotentiallyMaterialized(var.Initializer);
                     VisitExpr(var.Initializer);
@@ -704,10 +716,12 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Stmt.Const cst:
+                TrackGlobalObjectAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackNumberAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackStringAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackMathAlias(cst.Name.Lexeme, cst.Initializer);
                 TrackDateAlias(cst.Name.Lexeme, cst.Initializer);
+                TrackRegExpAlias(cst.Name.Lexeme, cst.Initializer);
                 if (_opaqueValueBindings.Contains(cst.Name.Lexeme))
                     MarkPotentiallyMaterialized(cst.Initializer);
                 VisitExpr(cst.Initializer);
@@ -873,6 +887,8 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Get g:
+                if (IsOpaqueEvaluator(g.Object, g.Name.Lexeme))
+                    MarkOpaqueEvaluatorMutation();
                 // crypto.X509Certificate exposes Date-valued accessors. Their
                 // receiver is nominally opaque to the feature walk, so retain
                 // Date support when either accessor is referenced.
@@ -980,6 +996,7 @@ public sealed class RuntimeFeatureDetector
 
             case Expr.Set s:
                 MarkMutationTarget(s.Object);
+                MarkGlobalPropertyMutation(s.Object, s.Name.Lexeme);
                 if (CouldTargetClassMethod(s.Object, s.Name.Lexeme))
                     _set.UsesClassPrototypeMutation = true;
                 if (IsDatePrototype(s.Object)
@@ -1017,6 +1034,9 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.GetIndex gi:
+                if (gi.Index is Expr.Literal { Value: string indexedMember }
+                    && IsOpaqueEvaluator(gi.Object, indexedMember))
+                    MarkOpaqueEvaluatorMutation();
                 if (gi.Index is Expr.Literal { Value: "validFromDate" or "validToDate" })
                     _set.UsesDate = true;
                 if (IsDatePrototype(gi))
@@ -1050,6 +1070,8 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.SetIndex si:
                 MarkMutationTarget(si.Object);
+                if (si.Index is Expr.Literal { Value: string setIndexMember })
+                    MarkGlobalPropertyMutation(si.Object, setIndexMember);
                 if (si.Index is Expr.Literal { Value: string methodName }
                         ? CouldTargetClassMethod(si.Object, methodName)
                         : IsClassInstance(si.Object))
@@ -1234,9 +1256,12 @@ public sealed class RuntimeFeatureDetector
                 break;
 
             case Expr.Assign asg:
+                TrackGlobalObjectAlias(asg.Name.Lexeme, asg.Value);
+                TrackNumberAlias(asg.Name.Lexeme, asg.Value);
                 TrackStringAlias(asg.Name.Lexeme, asg.Value);
                 TrackMathAlias(asg.Name.Lexeme, asg.Value);
                 TrackDateAlias(asg.Name.Lexeme, asg.Value);
+                TrackRegExpAlias(asg.Name.Lexeme, asg.Value);
                 if (asg.Name.Lexeme == "Promise")
                     _set.UsesPromisePrototypeMutation = true;
                 if (asg.Name.Lexeme == "Number")
@@ -1274,6 +1299,7 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.CompoundSet cs:
                 MarkMutationTarget(cs.Object);
+                MarkGlobalPropertyMutation(cs.Object, cs.Name.Lexeme);
                 if (IsPromiseMutationTarget(cs.Object)
                     || cs.Name.Lexeme is "then" or "constructor" or "__proto__")
                     _set.UsesPromisePrototypeMutation = true;
@@ -1303,6 +1329,8 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.CompoundSetIndex csi:
                 MarkMutationTarget(csi.Object);
+                if (csi.Index is Expr.Literal { Value: string compoundIndexMember })
+                    MarkGlobalPropertyMutation(csi.Object, compoundIndexMember);
                 if (IsPromiseMutationTarget(csi.Object)
                     || csi.Index is Expr.Literal
                     {
@@ -1362,6 +1390,7 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.LogicalSet ls:
                 MarkMutationTarget(ls.Object);
+                MarkGlobalPropertyMutation(ls.Object, ls.Name.Lexeme);
                 if (IsPromiseMutationTarget(ls.Object)
                     || ls.Name.Lexeme is "then" or "constructor" or "__proto__")
                     _set.UsesPromisePrototypeMutation = true;
@@ -1391,6 +1420,8 @@ public sealed class RuntimeFeatureDetector
                 break;
             case Expr.LogicalSetIndex lsi:
                 MarkMutationTarget(lsi.Object);
+                if (lsi.Index is Expr.Literal { Value: string logicalIndexMember })
+                    MarkGlobalPropertyMutation(lsi.Object, logicalIndexMember);
                 if (IsPromiseMutationTarget(lsi.Object)
                     || lsi.Index is Expr.Literal
                     {
@@ -1471,6 +1502,8 @@ public sealed class RuntimeFeatureDetector
                 if (d.Operand is Expr.Get deletedProperty)
                 {
                     MarkMutationTarget(deletedProperty.Object);
+                    MarkGlobalPropertyMutation(
+                        deletedProperty.Object, deletedProperty.Name.Lexeme);
                     if (IsPromiseMutationTarget(deletedProperty.Object)
                         || deletedProperty.Name.Lexeme is "then" or "constructor" or "__proto__")
                         _set.UsesPromisePrototypeMutation = true;
@@ -1497,6 +1530,8 @@ public sealed class RuntimeFeatureDetector
                 else if (d.Operand is Expr.GetIndex deletedIndex)
                 {
                     MarkMutationTarget(deletedIndex.Object);
+                    if (deletedIndex.Index is Expr.Literal { Value: string deletedMember })
+                        MarkGlobalPropertyMutation(deletedIndex.Object, deletedMember);
                     if (IsPromiseMutationTarget(deletedIndex.Object)
                         || deletedIndex.Index is Expr.Literal
                         {
@@ -1728,16 +1763,9 @@ public sealed class RuntimeFeatureDetector
     private bool IsDateConstructor(Expr expr) => expr switch
     {
         Expr.Variable variable => _dateConstructorAliases.Contains(variable.Name.Lexeme),
-        Expr.Get
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Name.Lexeme: "Date"
-        } => true,
-        Expr.GetIndex
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Index: Expr.Literal { Value: "Date" }
-        } => true,
+        Expr.Get { Object: var owner, Name.Lexeme: "Date" } => IsGlobalObject(owner),
+        Expr.GetIndex { Object: var owner, Index: Expr.Literal { Value: "Date" } } =>
+            IsGlobalObject(owner),
         Expr.Grouping grouping => IsDateConstructor(grouping.Expression),
         Expr.TypeAssertion assertion => IsDateConstructor(assertion.Expression),
         Expr.Satisfies satisfies => IsDateConstructor(satisfies.Expression),
@@ -1809,27 +1837,78 @@ public sealed class RuntimeFeatureDetector
         "toUTCString" or "toLocaleDateString" or "toLocaleTimeString" or
         "toLocaleString" or "toJSON" or "valueOf" or "toString" or "__proto__";
 
-    private static bool IsGlobalObject(Expr expr) => expr switch
+    private bool IsGlobalObject(Expr expr) => expr switch
     {
-        Expr.Variable { Name.Lexeme: "globalThis" } => true,
+        Expr.Variable variable => _globalObjectAliases.Contains(variable.Name.Lexeme),
         Expr.Grouping grouping => IsGlobalObject(grouping.Expression),
         Expr.TypeAssertion assertion => IsGlobalObject(assertion.Expression),
+        Expr.Satisfies satisfies => IsGlobalObject(satisfies.Expression),
+        Expr.NonNullAssertion nonNull => IsGlobalObject(nonNull.Expression),
         _ => false
     };
+
+    private void TrackGlobalObjectAlias(string name, Expr initializer)
+    {
+        if (IsGlobalObject(initializer))
+            _globalObjectAliases.Add(name);
+    }
+
+    private bool IsOpaqueEvaluator(Expr owner, string memberName) =>
+        IsGlobalObject(owner) && memberName is "eval" or "Function";
+
+    private void MarkOpaqueEvaluatorMutation()
+    {
+        _set.UsesObjectIntegrityMutation = true;
+        _set.UsesClassPrototypeMutation = true;
+        _set.UsesDatePrototypeMutation = true;
+        _set.UsesPromisePrototypeMutation = true;
+        _set.UsesArrayPrototypeMutation = true;
+        _set.UsesNumberPrototypeMutation = true;
+        _set.UsesNumberConstructorMutation = true;
+        _set.UsesRegExpPrototypeMutation = true;
+        _set.UsesStringPrototypeMutation = true;
+        _set.UsesMathMutation = true;
+        _set.UsesGlobalParseIntMutation = true;
+    }
+
+    private void MarkGlobalPropertyMutation(Expr owner, string propertyName)
+    {
+        if (!IsGlobalObject(owner))
+            return;
+
+        switch (propertyName)
+        {
+            case "Date":
+                _set.UsesDatePrototypeMutation = true;
+                break;
+            case "Promise":
+                _set.UsesPromisePrototypeMutation = true;
+                break;
+            case "Number":
+                _set.UsesNumberPrototypeMutation = true;
+                _set.UsesNumberConstructorMutation = true;
+                break;
+            case "RegExp":
+                _set.UsesRegExpPrototypeMutation = true;
+                break;
+            case "String":
+                _set.UsesStringPrototypeMutation = true;
+                break;
+            case "Math":
+                _set.UsesMathMutation = true;
+                break;
+            case "parseInt":
+                _set.UsesGlobalParseIntMutation = true;
+                break;
+        }
+    }
 
     private bool IsNumberConstructor(Expr expr) => expr switch
     {
         Expr.Variable variable => _numberConstructorAliases.Contains(variable.Name.Lexeme),
-        Expr.Get
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" },
-            Name.Lexeme: "Number"
-        } => true,
-        Expr.GetIndex
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" },
-            Index: Expr.Literal { Value: "Number" }
-        } => true,
+        Expr.Get { Object: var owner, Name.Lexeme: "Number" } => IsGlobalObject(owner),
+        Expr.GetIndex { Object: var owner, Index: Expr.Literal { Value: "Number" } } =>
+            IsGlobalObject(owner),
         Expr.Grouping grouping => IsNumberConstructor(grouping.Expression),
         Expr.TypeAssertion assertion => IsNumberConstructor(assertion.Expression),
         _ => false
@@ -1864,16 +1943,9 @@ public sealed class RuntimeFeatureDetector
     private bool IsStringConstructor(Expr expr) => expr switch
     {
         Expr.Variable variable => _stringConstructorAliases.Contains(variable.Name.Lexeme),
-        Expr.Get
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Name.Lexeme: "String"
-        } => true,
-        Expr.GetIndex
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Index: Expr.Literal { Value: "String" }
-        } => true,
+        Expr.Get { Object: var owner, Name.Lexeme: "String" } => IsGlobalObject(owner),
+        Expr.GetIndex { Object: var owner, Index: Expr.Literal { Value: "String" } } =>
+            IsGlobalObject(owner),
         Expr.Grouping grouping => IsStringConstructor(grouping.Expression),
         Expr.TypeAssertion assertion => IsStringConstructor(assertion.Expression),
         Expr.Satisfies satisfies => IsStringConstructor(satisfies.Expression),
@@ -1908,16 +1980,9 @@ public sealed class RuntimeFeatureDetector
     private bool IsMathObject(Expr expr) => expr switch
     {
         Expr.Variable variable => _mathAliases.Contains(variable.Name.Lexeme),
-        Expr.Get
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Name.Lexeme: "Math"
-        } => true,
-        Expr.GetIndex
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Index: Expr.Literal { Value: "Math" }
-        } => true,
+        Expr.Get { Object: var owner, Name.Lexeme: "Math" } => IsGlobalObject(owner),
+        Expr.GetIndex { Object: var owner, Index: Expr.Literal { Value: "Math" } } =>
+            IsGlobalObject(owner),
         Expr.Grouping grouping => IsMathObject(grouping.Expression),
         Expr.TypeAssertion assertion => IsMathObject(assertion.Expression),
         Expr.Satisfies satisfies => IsMathObject(satisfies.Expression),
@@ -1931,19 +1996,12 @@ public sealed class RuntimeFeatureDetector
             _mathAliases.Add(name);
     }
 
-    private static bool IsRegExpConstructor(Expr expr) => expr switch
+    private bool IsRegExpConstructor(Expr expr) => expr switch
     {
-        Expr.Variable { Name.Lexeme: "RegExp" } => true,
-        Expr.Get
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Name.Lexeme: "RegExp"
-        } => true,
-        Expr.GetIndex
-        {
-            Object: Expr.Variable { Name.Lexeme: "globalThis" or "global" },
-            Index: Expr.Literal { Value: "RegExp" }
-        } => true,
+        Expr.Variable variable => _regExpConstructorAliases.Contains(variable.Name.Lexeme),
+        Expr.Get { Object: var owner, Name.Lexeme: "RegExp" } => IsGlobalObject(owner),
+        Expr.GetIndex { Object: var owner, Index: Expr.Literal { Value: "RegExp" } } =>
+            IsGlobalObject(owner),
         Expr.Grouping grouping => IsRegExpConstructor(grouping.Expression),
         Expr.TypeAssertion assertion => IsRegExpConstructor(assertion.Expression),
         Expr.Satisfies satisfies => IsRegExpConstructor(satisfies.Expression),
@@ -1951,8 +2009,9 @@ public sealed class RuntimeFeatureDetector
         _ => false
     };
 
-    private static bool IsRegExpPrototype(Expr expr) => expr switch
+    private bool IsRegExpPrototype(Expr expr) => expr switch
     {
+        Expr.Variable variable => _regExpPrototypeAliases.Contains(variable.Name.Lexeme),
         Expr.Get { Name.Lexeme: "prototype" } get => IsRegExpConstructor(get.Object),
         Expr.GetIndex { Index: Expr.Literal { Value: "prototype" } } get =>
             IsRegExpConstructor(get.Object),
@@ -1963,8 +2022,16 @@ public sealed class RuntimeFeatureDetector
         _ => false
     };
 
-    private static bool IsRegExpMutationTarget(Expr expr) =>
+    private bool IsRegExpMutationTarget(Expr expr) =>
         IsRegExpConstructor(expr) || IsRegExpPrototype(expr);
+
+    private void TrackRegExpAlias(string name, Expr initializer)
+    {
+        if (IsRegExpConstructor(initializer))
+            _regExpConstructorAliases.Add(name);
+        if (IsRegExpPrototype(initializer))
+            _regExpPrototypeAliases.Add(name);
+    }
 
     private bool CouldTargetClassMethod(Expr receiver, string methodName) =>
         _typeMap?.Get(receiver) is TypeInfo.Instance instance
@@ -2095,6 +2162,15 @@ public sealed class RuntimeFeatureDetector
         if (operand is Expr.Get property)
         {
             MarkMutationTarget(property.Object);
+            MarkGlobalPropertyMutation(property.Object, property.Name.Lexeme);
+            if (IsDatePrototype(property.Object)
+                || (IsDateInstanceMethodName(property.Name.Lexeme)
+                    && CouldTargetDateInstance(property.Object))
+                || (property.Name.Lexeme == "prototype"
+                    && IsDateConstructor(property.Object)))
+            {
+                _set.UsesDatePrototypeMutation = true;
+            }
             if (IsNumberMutationTarget(property.Object)
                 || (IsGlobalObject(property.Object)
                     && property.Name.Lexeme == "Number"))
@@ -2108,6 +2184,15 @@ public sealed class RuntimeFeatureDetector
         else if (operand is Expr.GetIndex index)
         {
             MarkMutationTarget(index.Object);
+            if (index.Index is Expr.Literal { Value: string incrementMember })
+                MarkGlobalPropertyMutation(index.Object, incrementMember);
+            if (IsDatePrototype(index.Object)
+                || (CouldTargetDateInstance(index.Object)
+                    && (index.Index is not Expr.Literal { Value: string dateIncrementMember }
+                        || IsDateInstanceMethodName(dateIncrementMember))))
+            {
+                _set.UsesDatePrototypeMutation = true;
+            }
             if (IsNumberMutationTarget(index.Object)
                 || (IsGlobalObject(index.Object)
                     && index.Index is Expr.Literal { Value: "Number" }))

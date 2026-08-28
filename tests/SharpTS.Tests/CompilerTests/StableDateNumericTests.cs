@@ -173,6 +173,26 @@ public sealed class StableDateNumericTests
     }
 
     [Fact]
+    public void QualifiedOpaqueEvaluatorRetainsDynamicDateDispatch()
+    {
+        const string source = """
+            const evaluator: any = globalThis.eval;
+            function read(d: Date): number {
+                return d.getTime();
+            }
+            console.log(typeof evaluator, read(new Date(0)));
+            """;
+
+        Assembly assembly = Compile(source);
+        var instructions = ReadInstructions(FindFunction(assembly, "read")).ToArray();
+
+        Assert.Contains(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "InvokeMethodValue" });
+        Assert.DoesNotContain(instructions, instruction =>
+            instruction.Operand is MethodBase { Name: "DateGetTime" });
+    }
+
+    [Fact]
     public void OwnOverridesAccessorsAliasesAndAmbiguousReceiversRemainObservable()
     {
         const string source = """

@@ -420,8 +420,8 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             .OfType<MethodBase>()
             .ToArray();
 
-        Assert.Contains(calls, method =>
-            method.Name == "FromResult" && method.DeclaringType == typeof(Task));
+        Assert.Contains(calls, method => method.Name == "InvokeMethodValue");
+        Assert.Contains(calls, method => method.Name == "CoerceAwaitableToTask");
     }
 
     [Fact]
@@ -445,8 +445,8 @@ public sealed class SuspensionFreePrimitiveAsyncTests
             .OfType<MethodBase>()
             .ToArray();
 
-        Assert.Contains(calls, method =>
-            method.Name == "FromResult" && method.DeclaringType == typeof(Task));
+        Assert.Contains(calls, method => method.Name == "InvokeMethodValue");
+        Assert.Contains(calls, method => method.Name == "CoerceAwaitableToTask");
     }
 
     [Fact]

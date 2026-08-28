@@ -36,10 +36,7 @@ public record struct HoistedArrayEntry(LocalBuilder TypedLocal, ArrayElementsDes
 public readonly record struct HoistedPromotedBooleanSpan(LocalBuilder SpanLocal);
 
 /// <summary>
-/// Entry in the hoisted typed-array cache (#928): a loop-invariant variable statically typed as a
-/// numeric TypedArray, cast to its concrete <c>$XArray</c> type ONCE before the loop. The element
-/// index fast paths load <see cref="TypedLocal"/> directly instead of re-emitting
-/// <c>ldloc; castclass $XArray</c> on every access.
+/// Backing storage for a hoisted typed-array: buffer, byte offset, length, and element layout.
 /// </summary>
 public readonly record struct HoistedTypedArrayBacking(
     LocalBuilder BufferLocal,
@@ -47,12 +44,18 @@ public readonly record struct HoistedTypedArrayBacking(
     LocalBuilder LengthLocal,
     TypedArrayElementLayout Layout);
 
+/// <summary>
+/// Entry in the hoisted typed-array cache: a typed local, concrete type, element type, and optional backing storage.
+/// </summary>
 public record struct HoistedTypedArrayEntry(
     LocalBuilder TypedLocal,
     Type XArrayType,
     string ElementType,
     HoistedTypedArrayBacking? Backing);
 
+/// <summary>
+/// Entry in the hoisted compact-record cache: a typed local, fingerprint, exactness flag, and materialization guard requirement.
+/// </summary>
 public record struct HoistedCompactRecordEntry(
     LocalBuilder TypedLocal,
     string Fingerprint,
@@ -78,8 +81,19 @@ public partial class CompilationContext
     // Core Compilation Infrastructure
     // ============================================
 
+    /// <summary>
+    /// IL generator for emitting CIL instructions.
+    /// </summary>
     public ILGenerator IL { get; }
+
+    /// <summary>
+    /// Maps TypeScript types to .NET types for compilation.
+    /// </summary>
     public TypeMapper TypeMapper { get; }
+
+    /// <summary>
+    /// Manages local variable allocation and tracking.
+    /// </summary>
     public LocalsManager Locals { get; }
 
     /// <summary>
@@ -94,10 +108,11 @@ public partial class CompilationContext
     /// </summary>
     public TypeProvider Types { get; }
 
-    // Integer loop-counter prototype (#928, gated by SHARPTS_INT_LOOP_COUNTER): names of locals
-    // currently backed by a native Int64 slot because they are provably-integer monotonic loop
-    // counters. Reads convert to double on load; the increment and recognized index sites consume
-    // the int directly. Populated/cleared per loop scope by EmitFor/EmitVarStatement.
+    /// <summary>
+    /// Names of locals currently backed by a native Int64 slot because they are provably-integer
+    /// monotonic loop counters. Reads convert to double on load; the increment and recognized
+    /// index sites consume the int directly. Populated/cleared per loop scope by EmitFor/EmitVarStatement.
+    /// </summary>
     public HashSet<string> IntegerCounterLocals { get; } = new();
 
     /// <summary>
@@ -114,10 +129,14 @@ public partial class CompilationContext
     /// </summary>
     public HashSet<string> HoistedCompactRecordMaterializationGuards { get; } = [];
 
-    // Emitted runtime types and methods (for standalone DLLs)
+    /// <summary>
+    /// Emitted runtime types and methods for standalone DLLs.
+    /// </summary>
     public EmittedRuntime? Runtime { get; set; }
 
-    // Whole-program feature analysis used by semantic optimization guards.
+    /// <summary>
+    /// Whole-program feature analysis used by semantic optimization guards.
+    /// </summary>
     public RuntimeFeatureSet? RuntimeFeatures { get; set; }
 
     /// <summary>
@@ -131,27 +150,62 @@ public partial class CompilationContext
     /// <summary>Calls proven during discovery to use an unchanged top-level eval alias.</summary>
     internal HashSet<SharpTS.Parsing.Expr.Call>? StaticIndirectEvalCalls { get; set; }
 
-    // Type emitter registry for type-first method dispatch
+    /// <summary>
+    /// Type emitter registry for type-first method dispatch.
+    /// </summary>
     public TypeEmitterRegistry? TypeEmitterRegistry { get; set; }
 
-    // Built-in module emitter registry for fs, path, os, etc.
+    /// <summary>
+    /// Built-in module emitter registry for fs, path, os, etc.
+    /// </summary>
     public BuiltInModuleEmitterRegistry? BuiltInModuleEmitterRegistry { get; set; }
 
-    // Built-in module namespace variables (variable name -> module name)
-    // Tracks which local variables are built-in module namespaces for direct dispatch
+    /// <summary>
+    /// Built-in module namespace variables mapping variable name to module name.
+    /// Tracks which local variables are built-in module namespaces for direct dispatch.
+    /// </summary>
     public Dictionary<string, string>? BuiltInModuleNamespaces { get; set; }
 
-    // Built-in module method bindings (variable name -> (module name, method name))
-    // Tracks which local variables are bound to built-in module methods for direct dispatch
-    // Example: import { readFile } from 'fs/promises' -> readFile -> ("fs/promises", "readFile")
+    /// <summary>
+    /// Built-in module method bindings mapping variable name to (module name, method name).
+    /// Tracks which local variables are bound to built-in module methods for direct dispatch.
+    /// Example: import { readFile } from 'fs/promises' maps readFile to ("fs/promises", "readFile").
+    /// </summary>
     public Dictionary<string, (string ModuleName, string MethodName)>? BuiltInModuleMethodBindings { get; set; }
 
-    // All imported names from any module (builtin, primitive, stdlib TS, or user).
-    // Call handlers for globally-intercepted names (TimerHandler, FetchHandler, etc.)
-    // check this set to avoid shadowing imports. Stdlib TS modules like
-    // 'timers' re-export setTimeout/setInterval as TS functions that must
-    // win over the global handler.
+    /// <summary>
+    /// All imported names from any module (builtin, primitive, stdlib TS, or user).
+    /// Call handlers for globally-intercepted names (TimerHandler, FetchHandler, etc.)
+    /// check this set to avoid shadowing imports. Stdlib TS modules like 'timers'
+    /// re-export setTimeout/setInterval as TS functions that must win over the global handler.
+    /// </summary>
     public HashSet<string>? ImportedNames { get; set; }
+
+    /// <summary>
+    /// Returns whether a value binding visible to the current body shadows a global
+    /// built-in name. State-machine resolvers intentionally cover only locals and
+    /// hoisted fields, so semantic fast paths must also consult module/import maps.
+    /// </summary>
+    internal bool HasVisibleValueBinding(string name)
+    {
+        if (TopLevelStaticVars?.ContainsKey(name) == true
+            || CapturedTopLevelVars?.Contains(name) == true
+            || BuiltInModuleMethodBindings?.ContainsKey(name) == true)
+        {
+            return true;
+        }
+
+        // The legacy single-file compile path has no per-module import-field map.
+        // In module compilation TopLevelStaticVars is already scoped to the current
+        // module, so avoid letting another module's same-named import disable a fast path.
+        if (CurrentModulePath == null && ImportedNames?.Contains(name) == true)
+            return true;
+
+        return Functions.ContainsKey(GetQualifiedFunctionName(name))
+            || Classes.ContainsKey(GetQualifiedClassName(name))
+            || EnumMembers?.ContainsKey(GetQualifiedEnumName(name)) == true
+            || ResolveNamespaceField(name) is not null;
+    }
 
     // ============================================
     // Registry Services
@@ -168,20 +222,28 @@ public partial class CompilationContext
     // Enum Support
     // ============================================
 
-    // Enum support: enum name -> member name -> value (double or string)
+    /// <summary>
+    /// Enum support mapping enum name to member name to value (double or string).
+    /// </summary>
     public Dictionary<string, Dictionary<string, object>>? EnumMembers { get; set; }
 
-    // Enum reverse mapping: enum name -> value -> member name (only numeric values)
+    /// <summary>
+    /// Enum reverse mapping from enum name to value to member name (only numeric values).
+    /// </summary>
     public Dictionary<string, Dictionary<double, string>>? EnumReverse { get; set; }
 
-    // Enum kinds: enum name -> kind
+    /// <summary>
+    /// Enum kinds mapping enum name to kind.
+    /// </summary>
     public Dictionary<string, EnumKind>? EnumKinds { get; set; }
 
     // ============================================
     // Generic Type Parameters
     // ============================================
 
-    // Current scope's generic type parameters (name -> GenericTypeParameterBuilder or Type)
+    /// <summary>
+    /// Current scope's generic type parameters mapping name to GenericTypeParameterBuilder or Type.
+    /// </summary>
     public Dictionary<string, Type> GenericTypeParameters { get; set; } = [];
 
     // ============================================
@@ -269,7 +331,9 @@ public partial class CompilationContext
     /// </summary>
     public bool IsScriptTopLevel { get; set; }
 
-    // Namespace support: namespace path -> static field
+    /// <summary>
+    /// Namespace support mapping namespace path to static field.
+    /// </summary>
     public Dictionary<string, FieldBuilder>? NamespaceFields { get; set; }
 
     /// <summary>
@@ -283,20 +347,28 @@ public partial class CompilationContext
     /// </summary>
     public string? CurrentNamespacePath { get; set; }
 
-    // Namespace-level var/let/const backing fields: namespace path -> var name -> static field.
-    // A namespace member variable is stored in its namespace object (for external `N.x` access)
-    // AND in a static field so functions declared in the namespace can resolve the bare name —
-    // the namespace object is not visible inside the function bodies (#567). Mirrors how
-    // module top-level vars use TopLevelStaticVars.
+    /// <summary>
+    /// Namespace-level var/let/const backing fields mapping namespace path to var name to static field.
+    /// A namespace member variable is stored in its namespace object (for external `N.x` access)
+    /// AND in a static field so functions declared in the namespace can resolve the bare name.
+    /// The namespace object is not visible inside the function bodies. Mirrors how
+    /// module top-level vars use TopLevelStaticVars.
+    /// </summary>
     public Dictionary<string, Dictionary<string, FieldBuilder>>? NamespaceVarFields { get; set; }
 
-    // Top-level variables captured by async functions (stored as static fields)
+    /// <summary>
+    /// Top-level variables captured by async functions, stored as static fields.
+    /// </summary>
     public Dictionary<string, FieldBuilder>? TopLevelStaticVars { get; set; }
 
-    // Type information from static analysis
+    /// <summary>
+    /// Type information from static analysis.
+    /// </summary>
     public TypeMap? TypeMap { get; set; }
 
-    // Dead code analysis results
+    /// <summary>
+    /// Dead code analysis results.
+    /// </summary>
     public DeadCodeInfo? DeadCode { get; set; }
 
     // ============================================
@@ -311,9 +383,11 @@ public partial class CompilationContext
     // Loop and Exception Block Control
     // ============================================
 
-    // Loop control labels. LabelNames carries every label a labeled break/continue can target —
-    // usually zero or one, but a chain like `a: b: for` hands the loop both, so `continue a` and
-    // `continue b` resolve to the same loop. Empty (NoLabels) for an unlabeled loop.
+    /// <summary>
+    /// Loop control labels. LabelNames carries every label a labeled break/continue can target.
+    /// Usually zero or one, but a chain like `a: b: for` hands the loop both, so `continue a` and
+    /// `continue b` resolve to the same loop. Empty (NoLabels) for an unlabeled loop.
+    /// </summary>
     public Stack<(Label BreakLabel, Label ContinueLabel, IReadOnlyList<string> LabelNames)> LoopLabels { get; } = new();
 
     /// <summary>Shared empty label set for unlabeled loops (avoids per-loop allocation).</summary>
@@ -343,9 +417,11 @@ public partial class CompilationContext
         return labels;
     }
 
-    // Hoisted array type caches: stack of per-loop dictionaries mapping
-    // variable name → (typed local, descriptor) for arrays whose isinst
-    // check has been hoisted to the loop preamble.
+    /// <summary>
+    /// Hoisted array type caches: stack of per-loop dictionaries mapping
+    /// variable name to (typed local, descriptor) for arrays whose isinst
+    /// check has been hoisted to the loop preamble.
+    /// </summary>
     public Stack<Dictionary<string, HoistedArrayEntry>> HoistedArrayCaches { get; } = new();
 
     /// <summary>
@@ -369,6 +445,10 @@ public partial class CompilationContext
     public Stack<Dictionary<string, HoistedPromotedBooleanSpan>>
         HoistedPromotedBooleanSpans { get; } = new();
 
+    /// <summary>
+    /// Looks up a hoisted promoted boolean span for the given variable name,
+    /// searching from innermost to outermost loop scope.
+    /// </summary>
     public HoistedPromotedBooleanSpan? TryGetHoistedPromotedBooleanSpan(string variableName)
     {
         foreach (var cache in HoistedPromotedBooleanSpans)
@@ -468,10 +548,24 @@ public partial class CompilationContext
         return null;
     }
 
-    // Exception block tracking for proper return handling
+    /// <summary>
+    /// Exception block nesting depth for proper return handling.
+    /// </summary>
     public int ExceptionBlockDepth { get; set; } = 0;
+
+    /// <summary>
+    /// Local variable holding the return value when inside an exception block.
+    /// </summary>
     public LocalBuilder? ReturnValueLocal { get; set; }
+
+    /// <summary>
+    /// Label marking the unified return point for functions with exception blocks.
+    /// </summary>
     public Label ReturnLabel { get; set; }
+
+    /// <summary>
+    /// True if the function has a deferred void return (return without value in a try block).
+    /// </summary>
     public bool HasDeferredVoidReturn { get; set; }
 
     // ============================================
@@ -504,6 +598,9 @@ public partial class CompilationContext
         ILBuilder = new ValidatedILBuilder(il);
     }
 
+    /// <summary>
+    /// Defines a parameter with its name, argument index, and optional type.
+    /// </summary>
     public void DefineParameter(string name, int argIndex, Type? paramType = null)
     {
         _parameters[name] = argIndex;
@@ -513,11 +610,17 @@ public partial class CompilationContext
         }
     }
 
+    /// <summary>
+    /// Attempts to retrieve the argument index for a parameter by name.
+    /// </summary>
     public bool TryGetParameter(string name, out int argIndex)
     {
         return _parameters.TryGetValue(name, out argIndex);
     }
 
+    /// <summary>
+    /// Attempts to retrieve the type for a parameter by name.
+    /// </summary>
     public bool TryGetParameterType(string name, out Type? paramType)
     {
         if (_parameterTypes.TryGetValue(name, out var type))

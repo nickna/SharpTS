@@ -2860,7 +2860,9 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
 
         // Static type property dispatch via registry (Math.PI, Number.MAX_VALUE, Symbol.iterator, etc.)
         var ctx = (IEmitterContext)this;
-        if (g.Object is Expr.Variable staticVar && Ctx.TypeEmitterRegistry != null)
+        if (g.Object is Expr.Variable staticVar
+            && CanUseStaticTypeStrategy(staticVar.Name.Lexeme)
+            && Ctx.TypeEmitterRegistry != null)
         {
             var staticStrategy = Ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
             if (staticStrategy != null && staticStrategy.TryEmitStaticPropertyGet(ctx, g.Name.Lexeme))
@@ -2921,6 +2923,20 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
         }
         SetStackUnknown();
+    }
+
+    /// <summary>
+    /// Returns whether a bare built-in name may use its registry-backed static
+    /// property representation. Promise is special because primitive-await
+    /// lowering must preserve a shadowed or mutated <c>Promise.resolve</c> call
+    /// all the way through method materialization and receiver binding.
+    /// </summary>
+    protected bool CanUseStaticTypeStrategy(string name)
+    {
+        return name != "Promise"
+            || (Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation != true
+                && !Resolver.HasVariable(name)
+                && !Ctx.HasVisibleValueBinding(name));
     }
 
     #endregion

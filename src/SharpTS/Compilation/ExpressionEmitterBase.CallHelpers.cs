@@ -1815,7 +1815,9 @@ public abstract partial class ExpressionEmitterBase
     {
         if (Ctx.TypeEmitterRegistry == null)
             return false;
-        if (obj is Expr.Variable v && Ctx.TypeEmitterRegistry.GetStaticStrategy(v.Name.Lexeme) != null)
+        if (obj is Expr.Variable v
+            && CanUseStaticTypeStrategy(v.Name.Lexeme)
+            && Ctx.TypeEmitterRegistry.GetStaticStrategy(v.Name.Lexeme) != null)
             return true;
         var objType = Ctx.TypeMap?.Get(obj);
         return objType != null && Ctx.TypeEmitterRegistry.GetStrategy(objType) != null;

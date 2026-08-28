@@ -36,6 +36,13 @@ public class StaticTypeHandler : ICallHandler
         {
             return false;
         }
+        if (staticVar.Name.Lexeme == "Promise"
+            && (emitter.HasVariable("Promise")
+                || ctx.HasVisibleValueBinding("Promise")
+                || ctx.RuntimeFeatures?.UsesPromisePrototypeMutation == true))
+        {
+            return false;
+        }
 
         var staticStrategy = ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
         if (staticStrategy == null)

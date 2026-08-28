@@ -82,6 +82,7 @@ public abstract partial class AsyncFunctionMoveNextEmitter
         Expr expression = awaitExpression.Expression;
         if (Ctx.RuntimeFeatures?.UsesPromisePrototypeMutation == true
             || Resolver.HasVariable("Promise")
+            || Ctx.HasVisibleValueBinding("Promise")
             || expression is not Expr.Call
             {
                 Optional: false,

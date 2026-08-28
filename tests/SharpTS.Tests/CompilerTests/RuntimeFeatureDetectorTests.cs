@@ -134,6 +134,10 @@ public class RuntimeFeatureDetectorTests
     [InlineData("const d = new Date(0); const alias: any = d; alias.setTime = function() { return 1; };", true)]
     [InlineData("const d = new Date(0); Object.defineProperty(d, 'getTime', { value: function() { return 1; } });", true)]
     [InlineData("const d = new Date(0); Object.getPrototypeOf(d);", true)]
+    [InlineData("const root: any = globalThis; root.Date.prototype.getTime = function() { return 77; };", true)]
+    [InlineData("const d = new Date(0); (d as any).getTime++;", true)]
+    [InlineData("const d = new Date(0); ++(d as any)['getTime'];", true)]
+    [InlineData("const root = globalThis; new Date().getTime();", false)]
     [InlineData("new Date().toString();", false)]
     public void DetectsDateMethodMutationRisk(string source, bool expected)
     {
@@ -275,6 +279,11 @@ public class RuntimeFeatureDetectorTests
     [InlineData("const prototype = (/x/ as any).__proto__;", true)]
     [InlineData("const dynamicFunction = Function;", true)]
     [InlineData("globalThis.RegExp = RegExp;", true)]
+    [InlineData("const R: any = RegExp; R.prototype.test = function() { return false; };", true)]
+    [InlineData("let R: any; R = RegExp; R.prototype.exec = function() { return null; };", true)]
+    [InlineData("const R: any = RegExp; const p: any = R.prototype; p.test = function() { return false; };", true)]
+    [InlineData("const root: any = globalThis; root.RegExp.prototype.test = function() { return false; };", true)]
+    [InlineData("const R = RegExp; /x/.test('x');", false)]
     [InlineData("eval('void 0');", true)]
     public void DetectsRegExpPrototypeMutationRisk(string source, bool expected)
     {
@@ -289,6 +298,8 @@ public class RuntimeFeatureDetectorTests
     [InlineData("parseInt('10', 10);", false)]
     [InlineData("globalThis.parseInt = function() { return 1; };", true)]
     [InlineData("globalThis['parseInt'] = function() { return 1; };", true)]
+    [InlineData("global.parseInt = function() { return 1; };", true)]
+    [InlineData("const root: any = global; root['parseInt'] = function() { return 1; };", true)]
     [InlineData("parseInt = function() { return 1; };", true)]
     [InlineData("eval('void 0');", true)]
     public void DetectsGlobalParseIntMutationRisk(string source, bool expected)
@@ -297,6 +308,29 @@ public class RuntimeFeatureDetectorTests
         var features = new RuntimeFeatureDetector().Detect(statements);
 
         Assert.Equal(expected, features.UsesGlobalParseIntMutation);
+    }
+
+    [Theory]
+    [InlineData("globalThis.eval")]
+    [InlineData("global.eval")]
+    [InlineData("globalThis['Function']")]
+    public void DetectsQualifiedOpaqueEvaluatorMutationRisk(string evaluator)
+    {
+        string source = $"const evaluator: any = {evaluator};";
+        var statements = new Parser(new Lexer(source).ScanTokens()).ParseOrThrow();
+        var features = new RuntimeFeatureDetector().Detect(statements);
+
+        Assert.True(features.UsesObjectIntegrityMutation);
+        Assert.True(features.UsesClassPrototypeMutation);
+        Assert.True(features.UsesDatePrototypeMutation);
+        Assert.True(features.UsesPromisePrototypeMutation);
+        Assert.True(features.UsesArrayPrototypeMutation);
+        Assert.True(features.UsesNumberPrototypeMutation);
+        Assert.True(features.UsesNumberConstructorMutation);
+        Assert.True(features.UsesRegExpPrototypeMutation);
+        Assert.True(features.UsesStringPrototypeMutation);
+        Assert.True(features.UsesMathMutation);
+        Assert.True(features.UsesGlobalParseIntMutation);
     }
 
     [Theory]
