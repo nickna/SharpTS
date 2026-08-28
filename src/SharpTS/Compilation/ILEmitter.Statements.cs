@@ -1127,14 +1127,7 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Conv_I4);
         IL.Emit(OpCodes.Stloc, centerIndex);
 
-        var inRange = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, centerIndex);
-        IL.Emit(OpCodes.Ldc_I4_1);
-        IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
-        IL.Emit(OpCodes.Ldc_I4_2);
-        IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Blt_Un, inRange);
+        var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
         EmitInt64AccumulatorStore(accumulatorDouble, accumulatorInteger);
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
         IL.Emit(OpCodes.Throw);

@@ -64,4 +64,72 @@ public sealed class TypedArrayBackingHoistParityTests
 
         Assert.Equal("7\n", TestHarness.Run(source, mode));
     }
+
+    [Theory, ModeData]
+    public void ExactInt32Stencil_BoundsChecksMatchIndexedAccess(ExecutionMode mode)
+    {
+        const string source = """
+            function faults(action: () => number): boolean {
+                try {
+                    action();
+                    return false;
+                } catch {
+                    return true;
+                }
+            }
+
+            function reduction(length: number, initial: number, bound: number): number {
+                const data = new Int32Array(length);
+                let sum: number = initial;
+                for (let i: number = 1; i < bound - 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+
+            function leftEdge(): number {
+                const data = new Int32Array(3);
+                let sum: number = 0;
+                for (let i: number = 0; i < 1; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+
+            function rightEdge(): number {
+                const data = new Int32Array(3);
+                let sum: number = 0;
+                for (let i: number = 2; i < 3; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+
+            function valid(): number {
+                const data = new Int32Array(3);
+                data[0] = 1;
+                data[1] = 4;
+                data[2] = 9;
+                let sum: number = 0;
+                for (let i: number = 1; i < 2; i++) {
+                    sum = sum + (data[i - 1] - 2 * data[i] + data[i + 1]);
+                }
+                return sum;
+            }
+
+            console.log(faults(() => reduction(0, 0, 3)));
+            console.log(faults(() => reduction(1, 0, 3)));
+            console.log(faults(() => reduction(2, 0, 3)));
+            console.log(faults(() => reduction(0, 0.5, 3)));
+            console.log(faults(() => reduction(1, 0.5, 3)));
+            console.log(faults(() => reduction(2, 0.5, 3)));
+            console.log(faults(leftEdge));
+            console.log(faults(rightEdge));
+            console.log(valid());
+            """;
+
+        Assert.Equal(
+            "true\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\ntrue\n2\n",
+            TestHarness.Run(source, mode));
+    }
 }
