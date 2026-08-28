@@ -1027,7 +1027,7 @@ export interface DesktopStyle {
 }
 /** Options used to create a desktop application. @category Application Lifecycle */
 export interface DesktopApplicationOptions {
-    /** Condition that ends the application message loop. */
+    /** Condition that ends the application message loop. @defaultValue "onLastWindowClose" */
     shutdownMode?: DesktopShutdownMode;
     /** Handles render, effect, native commit, and event-callback failures not caught elsewhere. */
     onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
@@ -1040,9 +1040,9 @@ export interface DesktopApplicationOptions {
 export interface DesktopWindowOptions {
     /** Owner window used for native parent and modality behavior. */
     owner?: DesktopWindow;
-    /** Whether the window blocks interaction with its owner until closed. */
+    /** Whether the window blocks interaction with its owner until closed. @defaultValue false */
     modal?: boolean;
-    /** Whether this window is the application's main window. */
+    /** Whether this window is the application's main window. @defaultValue false */
     main?: boolean;
     /** Window-specific handler for render, effect, native commit, and event-callback failures. */
     onUnhandledError?: (error: unknown, window: DesktopWindow) => void;
@@ -1092,7 +1092,11 @@ export interface TrayIconOptions {
 export interface DesktopTrayIcon {
     /** Whether the native tray icon has been disposed. */
     readonly isDisposed: boolean;
-    /** Replaces the icon image, tooltip, menu, and callbacks. */
+    /**
+     * Replaces the icon image, tooltip, menu, and callbacks.
+     * @remarks Call dispose when the tray icon is no longer needed.
+     * @throws When the icon is disposed or the replacement icon or menu is invalid.
+     */
     update(options: TrayIconOptions): void;
     /** Removes and disposes the native tray icon. */
     dispose(): void;
@@ -1103,13 +1107,26 @@ export interface DesktopApplication {
     readonly isDisposed: boolean;
     /** Number of currently open application windows. */
     readonly windowCount: number;
-    /** Creates and renders a native window. @returns The live desktop window. */
+    /**
+     * Creates and synchronously performs the initial render of a native window.
+     * @returns The live desktop window.
+     * @remarks Await the window's closed promise when later work depends on its lifetime, and dispose the application when it is no longer needed.
+     * @throws When the application is disposed, the owner belongs to another application, or the initial render fails.
+     */
     createWindow(element: GuiChild, options?: DesktopWindowOptions): DesktopWindow;
-    /** Creates a native system tray icon. @returns The live tray icon. */
+    /**
+     * Creates a native system tray icon.
+     * @returns The live tray icon.
+     * @remarks The application owns the icon, but callers should dispose it as soon as it is no longer needed.
+     * @throws When the application is disposed or the icon or menu configuration is invalid.
+     */
     createTrayIcon(options: TrayIconOptions): DesktopTrayIcon;
     /** Ends the desktop message loop with an optional process exit code. */
     shutdown(exitCode?: number): void;
-    /** Disposes all windows, tray icons, and application resources. */
+    /**
+     * Disposes all windows, tray icons, and application resources.
+     * @remarks Disposing the application is terminal; create a new application lifetime to open more windows.
+     */
     dispose(): void;
 }
 
@@ -1117,6 +1134,14 @@ export interface DesktopApplication {
  * Creates the desktop application lifetime used to open windows and tray icons.
  * @param options - Shutdown, error handling, resource, and style options.
  * @returns The live desktop application.
+ * @remarks Only one desktop application lifetime should be active for a GUI host. Dispose it to release all native windows, tray icons, and resources.
+ * @throws When the desktop host is unavailable or the initial resource or style configuration is invalid.
+ * @example
+ * import { createDesktopApplication, Window } from "@sharpts/gui";
+ *
+ * const app = createDesktopApplication();
+ * const window = app.createWindow(<Window title="Hello, SharpTS" />);
+ * window.closed.finally(() => app.dispose());
  * @category Application Lifecycle
  */
 export function createDesktopApplication(options: DesktopApplicationOptions = {}): DesktopApplication {
@@ -1211,7 +1236,7 @@ export interface MessageDialogOptions {
     title?: string;
     /** Message displayed in the dialog body. */
     message: string;
-    /** Set of native buttons displayed by the dialog. */
+    /** Set of native buttons displayed by the dialog. @defaultValue "ok" */
     buttons?: "ok" | "okCancel" | "yesNo";
 }
 /** Named file-extension pattern group used by native file dialogs. @category Desktop Services */
@@ -1272,7 +1297,7 @@ export type DrawingEffect =
     { readonly kind: "hueSaturation"; readonly hue: number; readonly saturation: number };
 /** Options for renderDrawingToImage. @category Desktop Services */
 export interface RenderDrawingToImageOptions {
-    /** Ordered effects applied after the document is composited. */
+    /** Ordered effects applied after the document is composited. @defaultValue [] */
     readonly effects?: readonly DrawingEffect[];
 }
 /** Options for a contiguous flood-fill operation. @category Desktop Services */
@@ -1283,7 +1308,7 @@ export interface DrawingFloodFillOptions {
     readonly y: number;
     /** Replacement color. */
     readonly color: string;
-    /** Maximum normalized per-channel difference from zero to one. */
+    /** Maximum normalized per-channel difference from zero to one. @defaultValue 0 */
     readonly tolerance?: number;
 }
 /** Result of a flood-fill operation. @category Desktop Services */
@@ -1301,7 +1326,7 @@ export interface ImageDimensions {
 export interface OpenFileDialogOptions {
     /** Native dialog title. */
     title?: string;
-    /** Whether the user can choose multiple files. */
+    /** Whether the user can choose multiple files. @defaultValue false */
     allowMultiple?: boolean;
     /** File filters offered by the dialog. */
     filters?: readonly FileFilter[];
@@ -1393,6 +1418,17 @@ export interface DesktopNotificationOptions {
  * Displays a native message dialog.
  * @param options - Title, message, and button-set options.
  * @returns The button selected by the user.
+ * @remarks The dialog is owned by the active desktop window and blocks interaction with that window until dismissed. Labels and presentation are supplied by the operating system.
+ * @throws When no desktop window is available or the native dialog cannot be shown.
+ * @example
+ * import { showMessageDialog } from "@sharpts/gui";
+ *
+ * const result = await showMessageDialog({
+ *     title: "Discard changes?",
+ *     message: "Your unsaved changes will be lost.",
+ *     buttons: "yesNo"
+ * });
+ * if (result === "yes") console.log("Confirmed");
  * @category Desktop Services
  */
 export function showMessageDialog(options: MessageDialogOptions): Promise<MessageDialogResult> { return DesktopBridge.ShowMessageDialogAsync(options.title || "", options.message, options.buttons || "ok") as any; }
@@ -1400,6 +1436,16 @@ export function showMessageDialog(options: MessageDialogOptions): Promise<Messag
  * Displays a native open-file dialog.
  * @param options - Title, multi-select, and filter options.
  * @returns The selected file paths, or an empty array when canceled.
+ * @remarks Returned paths are local filesystem paths. Files exposed only through a virtual storage provider are omitted.
+ * @throws When no desktop window is available, filters are invalid, or the native picker fails.
+ * @example
+ * import { showOpenFileDialog } from "@sharpts/gui";
+ *
+ * const paths = await showOpenFileDialog({
+ *     allowMultiple: true,
+ *     filters: [{ name: "Images", patterns: ["*.png", "*.jpg"] }]
+ * });
+ * for (const path of paths) console.log(path);
  * @category Desktop Services
  */
 export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise<string[]> {
@@ -1413,6 +1459,13 @@ export function showOpenFileDialog(options: OpenFileDialogOptions = {}): Promise
  * Reads pixel dimensions from a packaged asset, local file, or PNG data URI.
  * @param source - Packaged asset URI, local file path, or PNG data URI to inspect.
  * @returns The decoded image width and height in pixels.
+ * @remarks Image payloads are validated without retaining the decoded image. Sources are limited to 8,192 pixels per dimension and 25 MiB of encoded data.
+ * @throws When the source cannot be read, is not a supported image, or exceeds the image safety limits.
+ * @example
+ * import { getImageDimensions } from "@sharpts/gui";
+ *
+ * const size = await getImageDimensions("assets/logo.png");
+ * console.log(`${size.width} x ${size.height}`);
  * @category Desktop Services
  */
 export function getImageDimensions(source: string): Promise<ImageDimensions> {
@@ -1425,6 +1478,17 @@ export function getImageDimensions(source: string): Promise<ImageDimensions> {
  * @param document - Bounded drawing document to composite and encode.
  * @param path - Local destination path for the PNG file.
  * @returns A promise completed after the PNG file is written.
+ * @remarks Rendering occurs off the UI thread. The destination is replaced atomically after the PNG has been encoded successfully.
+ * @throws When the document is invalid or exceeds 8,192 pixels per dimension, an image source is invalid, or the destination cannot be written.
+ * @example
+ * import { renderDrawingToPng } from "@sharpts/gui";
+ *
+ * await renderDrawingToPng({
+ *     width: 320,
+ *     height: 180,
+ *     background: "#ffffff",
+ *     layers: []
+ * }, "output/preview.png");
  * @category Desktop Services
  */
 export function renderDrawingToPng(document: DrawingDocument, path: string): Promise<void> {
@@ -1435,6 +1499,16 @@ export function renderDrawingToPng(document: DrawingDocument, path: string): Pro
  * @param document - Bounded drawing document to composite and encode.
  * @param options - Ordered post-composition effects; omitted options apply no effects.
  * @returns The encoded image, its PNG data URI, and pixel dimensions.
+ * @remarks Effects are applied in array order after all visible layers have been composited.
+ * @throws When the document, an image source, or an effect value is invalid or exceeds drawing safety limits.
+ * @example
+ * import { renderDrawingToImage } from "@sharpts/gui";
+ *
+ * const document = { width: 64, height: 64, layers: [] };
+ * const preview = await renderDrawingToImage(document, {
+ *     effects: [{ kind: "grayscale" }]
+ * });
+ * console.log(preview.source);
  * @category Desktop Services
  */
 export function renderDrawingToImage(document: DrawingDocument, options: RenderDrawingToImageOptions = {}): Promise<DrawingImage> {
@@ -1467,6 +1541,16 @@ export function floodFillDrawing(document: DrawingDocument, options: DrawingFloo
  * Displays a native save-file dialog.
  * @param options - Title, suggested name, extension, and filter options.
  * @returns The selected file path, or null when canceled.
+ * @remarks The returned value is a local filesystem path. The operating system controls overwrite confirmation and the final presentation.
+ * @throws When no desktop window is available, filters are invalid, or the native picker fails.
+ * @example
+ * import { showSaveFileDialog } from "@sharpts/gui";
+ *
+ * const path = await showSaveFileDialog({
+ *     suggestedFileName: "report.txt",
+ *     defaultExtension: "txt"
+ * });
+ * if (path !== null) console.log(path);
  * @category Desktop Services
  */
 export function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise<string | null> { return DesktopBridge.ShowSaveFileDialogAsync(options.title || "", options.suggestedFileName || "", options.defaultExtension || "", JSON.stringify(options.filters || [])) as any; }
@@ -1477,12 +1561,29 @@ export function showSaveFileDialog(options: SaveFileDialogOptions = {}): Promise
  * @category Desktop Services
  */
 export function showFolderDialog(options: FolderDialogOptions = {}): Promise<string | null> { return DesktopBridge.ShowFolderDialogAsync(options.title || "") as any; }
-/** Reads plain text from the desktop clipboard. @returns Clipboard text, or an empty string when no text is available. @category Desktop Services */
+/**
+ * Reads plain text from the desktop clipboard.
+ * @returns Clipboard text, or an empty string when no text is available.
+ * @remarks Clipboard access is scheduled through the active desktop window and may require platform permission.
+ * @throws When no desktop window or system clipboard is available, or the platform rejects clipboard access.
+ * @example
+ * import { readClipboardText } from "@sharpts/gui";
+ *
+ * const text = await readClipboardText();
+ * console.log(text);
+ * @category Desktop Services
+ */
 export function readClipboardText(): Promise<string> { return DesktopBridge.ReadClipboardTextAsync() as any; }
 /**
  * Writes plain text to the desktop clipboard.
  * @param value - Text to place on the clipboard.
  * @returns A promise completed after the clipboard is updated.
+ * @remarks Clipboard access is scheduled through the active desktop window and may require platform permission.
+ * @throws When no desktop window or system clipboard is available, or the platform rejects clipboard access.
+ * @example
+ * import { writeClipboardText } from "@sharpts/gui";
+ *
+ * await writeClipboardText("Copied from SharpTS");
  * @category Desktop Services
  */
 export function writeClipboardText(value: string): Promise<void> { return DesktopBridge.WriteClipboardTextAsync(value) as any; }
@@ -1517,6 +1618,15 @@ export function printFile(path: string): Promise<void> { return DesktopBridge.Pr
  * Displays a native desktop notification.
  * @param options - Notification title, body, and sound options.
  * @returns A promise completed after the notification request is submitted.
+ * @remarks Notifications are currently supported only for installed Windows MSIX applications. Headless hosts validate the request without displaying it.
+ * @throws When the title is empty or longer than 256 characters, the message exceeds 4,096 characters, the platform is unsupported, or Windows notification submission fails.
+ * @example
+ * import { showNotification } from "@sharpts/gui";
+ *
+ * await showNotification({
+ *     title: "Export complete",
+ *     message: "preview.png is ready"
+ * });
  * @category Desktop Services
  */
 export function showNotification(options: DesktopNotificationOptions): Promise<void> {
