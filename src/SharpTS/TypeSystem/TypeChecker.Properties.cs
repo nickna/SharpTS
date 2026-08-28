@@ -112,8 +112,16 @@ public partial class TypeChecker
 
     private TypeInfo CheckGet(Expr.Get get)
     {
+        if (get.Object is Expr.Variable variable &&
+            _excessivelyRecursiveVariables.Contains(variable.Name.Lexeme))
+            throw new TypeCheckException(
+                "Type instantiation is excessively deep and possibly infinite.",
+                get.Name.Line,
+                tsCode: "TS2589");
+
         bool directGlobalObject = get.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
-            get.Object is Expr.This && _currentFunctionReturnType is null;
+            get.Object is Expr.This &&
+                (_currentFunctionReturnType is null || _currentArrowCapturesScriptGlobalThis);
         if (_hasDefaultLibraries && directGlobalObject &&
             !GetGlobalThisType().Members.ContainsKey(get.Name.Lexeme))
         {
@@ -330,6 +338,13 @@ public partial class TypeChecker
                 throw new TypeCheckException("Object is possibly 'null'.", get.Name.Line, tsCode: "TS2531");
         }
 
+        // Preserve concrete type arguments while reading a member from an instantiated generic
+        // interface. Without flattening here, category dispatch recognizes an interface shape but
+        // cannot enter the TypeInfo.Interface arm, so reads such as `.isRequired` collapse to any.
+        if (objType is TypeInfo.InstantiatedGeneric instantiated &&
+            FlattenInstantiatedInterface(instantiated) is { } flattenedInterface)
+            objType = flattenedInterface;
+
         var category = TypeCategoryResolver.Classify(objType);
         string memberName = get.Name.Lexeme;
 
@@ -460,10 +475,13 @@ public partial class TypeChecker
             }
         }
 
-        // If property is missing on some members, add undefined to result
+        // A union exposes only properties present on every non-nullish constituent.
         if (hasMissingProperty)
         {
-            memberTypes.Add(TypeInfo.Undefined.Shared);
+            throw new TypeCheckException(
+                $"Property '{memberName.Lexeme}' does not exist on type '{union}'.",
+                memberName.Line,
+                tsCode: "TS2339");
         }
 
         // For optional chaining with null/undefined in the union, add undefined to result
@@ -606,7 +624,12 @@ public partial class TypeChecker
         {
             foreach (var rhs in rhsMembers)
             {
-                if (IsCompatible(declared, rhs))
+                // Weak object types can structurally accept an array solely because every field is
+                // optional. That does not make the object arm a possible runtime result of an
+                // array initializer; prefer the array/tuple arms for flow narrowing.
+                bool incompatibleRuntimeShape = rhs is TypeInfo.Array or TypeInfo.Tuple &&
+                    declared is not TypeInfo.Array and not TypeInfo.Tuple;
+                if (!incompatibleRuntimeShape && IsCompatible(declared, rhs))
                 {
                     if (seen.Add(declared))
                         surviving.Add(declared);
@@ -686,6 +709,28 @@ public partial class TypeChecker
 
         TypeInfo objType = CheckExpr(set.Object);
 
+        // A direct variable may have been flow-narrowed to one constituent by its initializer.
+        // For a property present on every declared constituent, TypeScript checks a write against
+        // the union of those declared member types (for example, writing `"a" | "b"` to a
+        // discriminant currently narrowed to `"a"`). Keep member-specific writes on the narrowed
+        // object type when the member is not common to the full declared union.
+        if (set.Object is Expr.Variable variable &&
+            GetDeclaredType(variable.Name.Lexeme) is TypeInfo.Union declaredUnion &&
+            declaredUnion.FlattenedTypes.All(constituent =>
+                constituent is TypeInfo.Any ||
+                GetMemberTypeWithOptionality(constituent, set.Name.Lexeme) is not null))
+        {
+            objType = declaredUnion;
+        }
+
+        if (objType is TypeInfo.Undefined && set.Object is Expr.This)
+        {
+            throw new TypeCheckException(
+                "Object is possibly 'undefined'.",
+                set.Name.Line,
+                tsCode: "TS2532");
+        }
+
         // Expand recursive type aliases lazily before property assignment — mirrors CheckGet, so a
         // write through a deferred alias (`part.subparts[0].id = …` where the element is the still
         // deferred `DeepReadonly<Part>`) sees the readonly `DeepReadonlyObject<Part>` shape and
@@ -734,8 +779,17 @@ public partial class TypeChecker
         {
             if (tp.Constraint != null)
             {
-                // Check that the property exists on the constraint
-                var propType = CheckGetOnType(tp.Constraint, set.Name);
+                // An index signature on a constraint permits reading an arbitrary named member,
+                // but not writing it through the type parameter: a concrete instantiation may
+                // declare that member with a narrower type. Only an explicitly declared member is
+                // a sound write target (`T extends { x: number }`, not merely
+                // `T extends { [key: string]: number }`).
+                var propType = GetMemberType(tp.Constraint, set.Name.Lexeme);
+                if (propType is null)
+                    throw new TypeCheckException(
+                        $" Property '{set.Name.Lexeme}' does not exist on type '{tp.Name}'.",
+                        set.Name.Line,
+                        tsCode: "TS2339");
                 TypeInfo valueType = CheckExpr(set.Value);
                 if (!IsCompatible(propType, valueType))
                 {
@@ -913,7 +967,10 @@ public partial class TypeChecker
                  // value-compatibility check below would otherwise report (#493).
                  if (record.IsReadonly)
                  {
-                     throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
+                     throw new TypeCheckException(
+                         $" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.",
+                         set.Name.Line,
+                         tsCode: "TS2540");
                  }
                  TypeInfo valueType = CheckExpr(set.Value);
                  // Getter-only properties: allow at type-check time, runtime handles sloppy/strict
@@ -931,7 +988,17 @@ public partial class TypeChecker
                  if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, fieldType, valueType);
                  return valueType;
              }
-             // For now, disallow adding new properties to records via assignment to mimic strictness
+             if (record.StringIndexType is { } recordStringIndex)
+             {
+                 TypeInfo valueType = CheckExpr(set.Value);
+                 if (!IsCompatible(recordStringIndex, valueType))
+                     throw new TypeCheckException(
+                         $" Cannot assign '{valueType}' to string index type '{recordStringIndex}'.",
+                         set.Name.Line,
+                         tsCode: "TS2322");
+                 return valueType;
+             }
+             // Without an index signature, adding a new property is not valid for a closed record.
              throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on type '{record}'.", tsCode: "TS2339");
         }
         else if (objType is TypeInfo.Interface itf)
@@ -944,7 +1011,10 @@ public partial class TypeChecker
                     // e.g. DeepReadonlyObject<T>) reject assignment — #337 item 2.
                     if (itf.IsMemberReadonly(set.Name.Lexeme))
                     {
-                        throw new TypeCheckException($" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.", tsCode: "TS2540");
+                        throw new TypeCheckException(
+                            $" Cannot assign to '{set.Name.Lexeme}' because it is a read-only property.",
+                            set.Name.Line,
+                            tsCode: "TS2540");
                     }
                     TypeInfo valueType = CheckExpr(set.Value);
                     TypeInfo writeType = itf.GetAllOptionalMembers().Contains(set.Name.Lexeme)
@@ -958,6 +1028,16 @@ public partial class TypeChecker
                     if (assignedPath != null) InstallPostAssignmentNarrowing(assignedPath, member.Value, valueType);
                     return valueType;
                 }
+            }
+            if (itf.StringIndexType is { } interfaceStringIndex)
+            {
+                TypeInfo valueType = CheckExpr(set.Value);
+                if (!IsCompatible(interfaceStringIndex, valueType))
+                    throw new TypeCheckException(
+                        $" Cannot assign '{valueType}' to string index type '{interfaceStringIndex}'.",
+                        set.Name.Line,
+                        tsCode: "TS2322");
+                return valueType;
             }
             throw new TypeCheckException($" Property '{set.Name.Lexeme}' does not exist on interface '{itf.Name}'.", line: set.Name.Line, tsCode: "TS2339");
         }
@@ -1073,6 +1153,10 @@ public partial class TypeChecker
             objType = ExpandRecursiveTypeAlias(rta);
         }
         objType = ResolveMappedTypeForAccess(objType);
+
+        if (objType is TypeInfo.InstantiatedGeneric instantiated &&
+            FlattenInstantiatedInterface(instantiated) is { } flattenedInterface)
+            objType = flattenedInterface;
 
         // Handle TypeParameter recursively - delegate to constraint
         if (objType is TypeInfo.TypeParameter tp)

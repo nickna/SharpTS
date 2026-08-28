@@ -132,12 +132,17 @@ public partial class TypeChecker
         // Create mutable class early so self-references in method return types work.
         // This allows methods like "next(): Node" to correctly resolve the return type.
         // The mutable class is populated during signature collection and frozen at the end.
-        var mutableClass = new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId)
-        {
-            Superclass = superclass,
-            IsAbstract = classStmt.IsAbstract
-        };
+        var mutableClass = _environment.GetTypeBinding(classStmt.Name.Lexeme) is
+            TypeInfo.MutableClass preregisteredClass
+                ? preregisteredClass
+                : new TypeInfo.MutableClass(classStmt.Name.Lexeme, declarationId);
+        mutableClass.Superclass = superclass;
+        mutableClass.IsAbstract = classStmt.IsAbstract;
         classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
+        // `this` in an instance method signature is the polymorphic instance type, not the
+        // global object. Make it visible while collecting signatures so `K extends keyof this`
+        // and `value: this[K]` retain their indexed-access relationship.
+        classTypeEnv.Define("this", new TypeInfo.Instance(mutableClass));
 
         using (new EnvironmentScope(this, classTypeEnv))
         {
@@ -183,7 +188,9 @@ public partial class TypeChecker
                 }
             }
 
-            return new TypeInfo.Function(paramTypes, returnType, requiredParams, hasRest, null, paramNames);
+            TypeInfo? explicitThisType = ResolveAnnotation(method.ThisType, method.ThisTypeNode);
+            return new TypeInfo.Function(
+                paramTypes, returnType, requiredParams, hasRest, explicitThisType, paramNames);
         }
 
         // Computed symbol-keyed methods (`[Symbol.iterator]() {...}`) are modeled under their canonical
@@ -369,6 +376,14 @@ public partial class TypeChecker
             CheckDecorators(field.Decorators, fieldTarget);
 
             string fieldName = GetFieldMemberName(field);
+            if (field.TypeAnnotationNode is { } fieldNode &&
+                ContainsSelfIndexedAccess(fieldNode, classStmt.Name.Lexeme, requireLiteralIndex: true))
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"'{fieldName}' is referenced directly or indirectly in its own type annotation.",
+                    field.Name.Line,
+                    tsCode: "TS2502"));
+            }
             TypeInfo fieldType = ResolveAnnotation(field.TypeAnnotation, field.TypeAnnotationNode)
                 ?? TypeInfo.Any.Shared;
 
@@ -613,7 +628,8 @@ public partial class TypeChecker
                 var interfaceToken = classStmt.Interfaces[i];
                 TypeInfo? itfTypeInfo = interfaceToken.Lexeme.Contains('.', StringComparison.Ordinal)
                     ? ResolveTypeName(interfaceToken.Lexeme)
-                    : _environment.GetTypeBinding(interfaceToken.Lexeme);
+                    : _environment.GetTypeBinding(interfaceToken.Lexeme)
+                        ?? ResolveAnnotation(interfaceToken.Lexeme, null);
 
                 // Get type arguments for this interface if provided
                 List<string>? typeArgs = classStmt.InterfaceTypeArgs != null && i < classStmt.InterfaceTypeArgs.Count
@@ -629,6 +645,11 @@ public partial class TypeChecker
                 {
                     // Non-generic interface
                     interfaceType = plainInterface;
+                }
+                else if (itfTypeInfo is TypeInfo.Record record &&
+                         (typeArgs == null || typeArgs.Count == 0))
+                {
+                    interfaceType = RecordAsInterfaceBase(interfaceToken.Lexeme, record);
                 }
                 else if (itfTypeInfo is TypeInfo.GenericInterface genericInterface)
                 {
@@ -661,7 +682,8 @@ public partial class TypeChecker
                         substitutedMembers,
                         genericInterface.OptionalMembers);
                 }
-                else if (itfTypeInfo == null && TryResolveIterableProtocolInterface(interfaceToken.Lexeme, typeArgs, out var protocolType, typeArgNodes))
+                else if (itfTypeInfo is null or TypeInfo.Any &&
+                         TryResolveIterableProtocolInterface(interfaceToken.Lexeme, typeArgs, out var protocolType, typeArgNodes))
                 {
                     // Built-in iterable-protocol interface (Iterable<T>, AsyncIterable<T>, …) — not a
                     // user-declared interface, so validate the class structurally implements it (#756).
@@ -743,6 +765,8 @@ public partial class TypeChecker
             }
         }
 
+        bool anyInferredFieldTypeResolved = false;
+
         // Second pass: check static property initializers at class scope
         foreach (var field in classStmt.Fields)
         {
@@ -753,6 +777,16 @@ public partial class TypeChecker
                 TypeInfo staticFieldDeclaredType = field.IsPrivate
                     ? classTypeForBody.StaticPrivateFieldTypes[GetFieldMemberName(field)]
                     : classTypeForBody.StaticProperties[GetFieldMemberName(field)];
+                if (field.TypeAnnotation is null)
+                {
+                    TypeInfo inferredFieldType = WidenLiteralType(initType);
+                    if (field.IsPrivate)
+                        mutableClass.StaticPrivateFields[GetFieldMemberName(field)] = inferredFieldType;
+                    else
+                        mutableClass.StaticProperties[GetFieldMemberName(field)] = inferredFieldType;
+                    anyInferredFieldTypeResolved = true;
+                    continue;
+                }
                 if (!IsCompatible(staticFieldDeclaredType, initType))
                 {
                     throw new TypeCheckException($" Cannot assign type '{initType}' to static property '{field.Name.Lexeme}' of type '{staticFieldDeclaredType}'.", tsCode: "TS2322");
@@ -941,6 +975,9 @@ public partial class TypeChecker
                     _ => throw new TypeCheckException($" Unexpected method type for '{method.Name.Lexeme}'.")
                 };
 
+                if (methodType.ThisType is { } explicitMethodThis)
+                    methodEnv.Define("this", explicitMethodThis);
+
                 // A script/namespace declaration can be checked once during module collection and
                 // again authoritatively. Re-resolve an explicit return annotation in the current
                 // pass so an earlier placeholder (notably a namespace-local interface) cannot leave
@@ -966,6 +1003,7 @@ public partial class TypeChecker
                 // Save and set context - method bodies are isolated from outer loop/switch/label context
                 TypeEnvironment previousEnvFunc = _environment;
                 TypeInfo? previousReturnFunc = _currentFunctionReturnType;
+                TypeInfo? previousThisTypeFunc = _currentFunctionThisType;
                 var previousInferredFunc = _inferredReturnTypes;
                 var previousInferredYieldFunc = _inferredYieldTypes;
                 bool previousInStatic = _inStaticMethod;
@@ -988,6 +1026,7 @@ public partial class TypeChecker
                 }
                 // Collect yield operand types only while inferring a generator method's type (#548).
                 _inferredYieldTypes = inferringMethodReturn && method.IsGenerator ? new List<TypeInfo>() : null;
+                _currentFunctionThisType = methodType.ThisType;
                 _inStaticMethod = method.IsStatic;
                 _inAsyncFunction = method.IsAsync;
                 _inGeneratorFunction = method.IsGenerator;
@@ -1070,6 +1109,21 @@ public partial class TypeChecker
                             anyInferredMethodReturnResolved = true;
                         }
                     }
+
+                    if (_strictNullChecks && !inferringMethodReturn && method.Body is not null &&
+                        methodType.ReturnType is not TypeInfo.Void &&
+                        methodType.ReturnType is not TypeInfo.Generator &&
+                        methodType.ReturnType is not TypeInfo.AsyncGenerator &&
+                        methodType.ReturnType is not TypeInfo.TypePredicate { IsAssertion: true } &&
+                        methodType.ReturnType is not TypeInfo.AssertsNonNull &&
+                        !method.IsGenerator && !method.IsAsync &&
+                        !DoesBlockDefinitelyReturn(method.Body))
+                    {
+                        throw new TypeCheckException(
+                            $"Function '{method.Name.Lexeme}' must return a value of type '{methodType.ReturnType}'.",
+                            method.Name.Line,
+                            tsCode: "TS2366");
+                    }
                 }
                 finally
                 {
@@ -1077,6 +1131,7 @@ public partial class TypeChecker
                     PopNarrowingScope();
                     _environment = previousEnvFunc;
                     _currentFunctionReturnType = previousReturnFunc;
+                    _currentFunctionThisType = previousThisTypeFunc;
                     _inferredReturnTypes = previousInferredFunc;
                     _inferredYieldTypes = previousInferredYieldFunc;
                     _inStaticMethod = previousInStatic;
@@ -1214,7 +1269,7 @@ public partial class TypeChecker
         // ordinary methods silently skip assignability checks and a generator method's result is
         // rejected as non-iterable by spread/for...of/yield* (#658/#661). `_environment` here is the
         // outer scope the class was originally defined in (the body pass restored it above).
-        if (anyInferredMethodReturnResolved)
+        if (anyInferredMethodReturnResolved || anyInferredFieldTypeResolved)
         {
             mutableClass.ResetFrozenCache();
             if (classTypeParams != null && classTypeParams.Count > 0)
@@ -1291,8 +1346,19 @@ public partial class TypeChecker
     {
         if (classStmt.SuperclassExpr == null) return null;
 
+        if (classStmt.SuperclassExpr is Expr.Variable typeParameterBase &&
+            classStmt.TypeParams?.Any(parameter =>
+                parameter.Name.Lexeme == typeParameterBase.Name.Lexeme) == true)
+        {
+            throw new TypeCheckException(
+                $"Cannot find name '{typeParameterBase.Name.Lexeme}'.",
+                typeParameterBase.Name.Line,
+                tsCode: "TS2304");
+        }
+
         TypeInfo superType = CheckExpr(classStmt.SuperclassExpr);
         TypeInfo? superclass = null;
+        List<TypeInfo>? unresolvedGenericSuperArguments = null;
 
         // Handle generic class with type arguments: extends Box<number>
         if (classStmt.SuperclassTypeArgs != null && classStmt.SuperclassTypeArgs.Count > 0)
@@ -1317,8 +1383,10 @@ public partial class TypeChecker
                 // Any in value position; `extends Promise<T>` must not be
                 // rejected as "non-generic" (#233). Validate the type args
                 // resolve, then fall through to the Any placeholder below.
-                for (int i = 0; i < classStmt.SuperclassTypeArgs.Count; i++)
-                    ResolveTypeArg(classStmt.SuperclassTypeArgs, classStmt.SuperclassTypeArgNodes, i);
+                unresolvedGenericSuperArguments = classStmt.SuperclassTypeArgs
+                    .Select((_, i) => ResolveTypeArg(
+                        classStmt.SuperclassTypeArgs, classStmt.SuperclassTypeArgNodes, i))
+                    .ToList();
             }
             else
             {
@@ -1333,8 +1401,8 @@ public partial class TypeChecker
                 superclass = sc;
             else if (superType is TypeInfo.GenericClass gc2)
             {
-                // Generic class without type arguments - error
-                throw new TypeCheckException($"Generic class '{gc2.Name}' requires type arguments", tsCode: "TS2314");
+                var defaultArguments = ResolveTypeArgumentsWithDefaults(gc2.TypeParams, [], gc2.Name);
+                superclass = InstantiateGenericClass(gc2, defaultArguments);
             }
             else if (superType is TypeInfo.Any)
             {
@@ -1344,8 +1412,27 @@ public partial class TypeChecker
                 // (accept any number of args).
                 var leafName = Expr.GetSuperclassLeafName(classStmt.SuperclassExpr)!;
                 var placeholder = new TypeInfo.MutableClass(leafName);
-                placeholder.Methods["constructor"] = new TypeInfo.Function(
+                var permissiveConstructor = new TypeInfo.Function(
                     [TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 0, HasRestParam: true);
+                placeholder.Methods["constructor"] = permissiveConstructor;
+                bool canRecoverQualifiedComponent = classStmt.SuperclassExpr is not Expr.Get
+                    {
+                        Object: Expr.Variable root
+                    } ||
+                    _environment.GetNamespace(root.Name.Lexeme) is not null ||
+                    _environment.IsImportAlias(root.Name.Lexeme);
+                if (canRecoverQualifiedComponent &&
+                    leafName.EndsWith("Component", StringComparison.Ordinal) &&
+                    unresolvedGenericSuperArguments is { Count: > 0 })
+                {
+                    TypeInfo props = unresolvedGenericSuperArguments[0];
+                    placeholder.FieldTypes["props"] = props;
+                    var propsOnly = new TypeInfo.Function([props], TypeInfo.Void.Shared, RequiredParams: 1);
+                    var propsAndContext = new TypeInfo.Function(
+                        [props, TypeInfo.Any.Shared], TypeInfo.Void.Shared, RequiredParams: 1);
+                    placeholder.Methods["constructor"] = new TypeInfo.OverloadedFunction(
+                        [propsOnly, propsAndContext], propsAndContext);
+                }
                 // When the base is a built-in iterable (`class C extends Array<number>`), record its
                 // element type as an @@iterator member. The global resolves to Any in value position so
                 // the type argument is otherwise dropped; recovering it lets an instance's for...of /
@@ -1434,6 +1521,7 @@ public partial class TypeChecker
             IsAbstract = classStmt.IsAbstract
         };
         classTypeEnv.Define(classStmt.Name.Lexeme, mutableClass);
+        classTypeEnv.Define("this", new TypeInfo.Instance(mutableClass));
 
         using (new EnvironmentScope(this, classTypeEnv))
         {

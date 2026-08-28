@@ -387,6 +387,9 @@ public partial class TypeChecker
             if (tp.Constraint != null)
             {
                 var substitutedConstraint = Substitute(tp.Constraint, substitutions);
+                if (resolvedTypeArgs[i] is TypeInfo.TypeParameter &&
+                    ContainsOpenTypeVariable(substitutedConstraint))
+                    continue;
                 if (!IsCompatible(substitutedConstraint, resolvedTypeArgs[i]))
                 {
                     if (ReportOrThrowConstraintViolation(resolvedTypeArgs[i], substitutedConstraint, tp))
@@ -441,6 +444,8 @@ public partial class TypeChecker
             {
                 // Substitute type parameters in the constraint (e.g., TreeNode<T> becomes TreeNode<MyNode>)
                 var substitutedConstraint = Substitute(tp.Constraint, substitutions);
+                if (resolvedTypeArgs[i] is TypeInfo.TypeParameter)
+                    continue;
                 if (!IsCompatible(substitutedConstraint, resolvedTypeArgs[i]))
                 {
                     if (ReportOrThrowConstraintViolation(resolvedTypeArgs[i], substitutedConstraint, tp))

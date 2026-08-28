@@ -30,8 +30,10 @@ public partial class TypeChecker
         {
             OperatorDescriptor.Plus => CheckPlusOperator(left, right, line),
             OperatorDescriptor.Arithmetic or OperatorDescriptor.Power => CheckArithmeticBinary(left, right, line),
-            OperatorDescriptor.Comparison => CheckComparisonBinary(left, right, binary.Operator.Lexeme, line),
-            OperatorDescriptor.Equality => CheckEqualityOperator(left, right, binary.Operator.Type, line),
+            OperatorDescriptor.Comparison => CheckComparisonBinary(
+                left, right, binary.Left, binary.Right, binary.Operator.Lexeme, line),
+            OperatorDescriptor.Equality => CheckEqualityOperator(
+                left, right, binary.Left, binary.Right, binary.Operator.Type, line),
             OperatorDescriptor.Bitwise or OperatorDescriptor.BitwiseShift => CheckBitwiseBinary(left, right, line),
             OperatorDescriptor.UnsignedRightShift => CheckUnsignedShiftBinary(left, right, line),
             OperatorDescriptor.In => CheckInOperator(right, line),
@@ -40,13 +42,27 @@ public partial class TypeChecker
         };
     }
 
-    private TypeInfo CheckEqualityOperator(TypeInfo left, TypeInfo right, TokenType operatorType, int line)
+    private TypeInfo CheckEqualityOperator(
+        TypeInfo left,
+        TypeInfo right,
+        Expr leftExpression,
+        Expr rightExpression,
+        TokenType operatorType,
+        int line)
     {
         // Check()/the execution harness intentionally permits JavaScript-valid comparisons that
         // tsc diagnoses. Compiler and conformance paths collect the stricter TS2367 diagnostics.
         bool collectingDiagnostics = _recoveryMode || _currentModule is not null;
         if (!collectingDiagnostics)
             return TypeInfo.Primitive.Boolean;
+
+        if (IsFreshReferenceExpression(leftExpression) || IsFreshReferenceExpression(rightExpression))
+        {
+            throw new TypeCheckException(
+                "This condition will always return 'false' since JavaScript compares objects by reference, not value.",
+                line > 0 ? line : null,
+                tsCode: "TS2839");
+        }
 
         bool leftSymbol = ContainsSymbolType(left);
         bool rightSymbol = ContainsSymbolType(right);
@@ -70,6 +86,13 @@ public partial class TypeChecker
         }
         return TypeInfo.Primitive.Boolean;
     }
+
+    private static bool IsFreshReferenceExpression(Expr expression) => expression switch
+    {
+        Expr.Grouping grouping => IsFreshReferenceExpression(grouping.Expression),
+        Expr.ObjectLiteral or Expr.ArrayLiteral or Expr.ArrowFunction => true,
+        _ => false,
+    };
 
     private static bool ContainsNullType(TypeInfo type) =>
         type is TypeInfo.Null || type is TypeInfo.Union { ContainsNull: true };
@@ -126,7 +149,8 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo CheckInOperator(TypeInfo right, int line)
     {
-        if (right is TypeInfo.Symbol or TypeInfo.UniqueSymbol)
+        if (right is TypeInfo.Symbol or TypeInfo.UniqueSymbol or
+            TypeInfo.IndexedAccess { ObjectType: TypeInfo.TypeParameter })
             throw new TypeCheckException($"Type '{right}' is not assignable to type 'object'.", line > 0 ? line : null, tsCode: "TS2322");
         return TypeInfo.Primitive.Boolean;
     }
@@ -213,8 +237,16 @@ public partial class TypeChecker
         throw new TypeCheckException(message, line > 0 ? line : null, tsCode: "TS2363");
     }
 
-    private TypeInfo CheckComparisonBinary(TypeInfo left, TypeInfo right, string op, int line = 0)
+    private TypeInfo CheckComparisonBinary(
+        TypeInfo left,
+        TypeInfo right,
+        Expr leftExpression,
+        Expr rightExpression,
+        string op,
+        int line = 0)
     {
+        ReportPossiblyUndefinedEvolvingAny(leftExpression);
+        ReportPossiblyUndefinedEvolvingAny(rightExpression);
         // Any/Inferred (incl. in unions) bypasses type checking
         if (IsAnyPermissive(left) || IsAnyPermissive(right))
             return TypeInfo.Primitive.Boolean;
@@ -231,6 +263,27 @@ public partial class TypeChecker
         if (ContainsSymbolType(left) || ContainsSymbolType(right))
             throw new TypeCheckException($"The '{op}' operator cannot be applied to type 'symbol'.", line > 0 ? line : null, tsCode: "TS2469");
         throw new TypeCheckException($"Comparison operands must be numbers, bigints, or strings of the same type. Got '{left}' and '{right}'.", line > 0 ? line : null, tsCode: "TS2365");
+    }
+
+    private void ReportPossiblyUndefinedEvolvingAny(Expr expression)
+    {
+        if (expression is Expr.Grouping grouping)
+        {
+            ReportPossiblyUndefinedEvolvingAny(grouping.Expression);
+            return;
+        }
+        if (expression is not Expr.Variable variable ||
+            _environment.GetValueBinding(variable.Name.Lexeme) is not { } symbol ||
+            !_implicitAnyVarSymbols.TryGetValue(symbol, out var declaration) ||
+            _definiteAssignmentStack.Count != declaration.FlowDepth)
+        {
+            return;
+        }
+
+        RecordTypeError(new TypeCheckException(
+            $"'{variable.Name.Lexeme}' is possibly 'undefined'.",
+            variable.Name.Line,
+            tsCode: "TS18048"));
     }
 
     private TypeInfo CheckBitwiseBinary(TypeInfo left, TypeInfo right, int line = 0)
@@ -373,18 +426,28 @@ public partial class TypeChecker
             return new TypeInfo.Union([leftType, rightType]);
         }
 
+        // Only the truthy part of the left operand can be the value of `a || b`; only its falsy
+        // part can be the value of `a && b`. This is especially visible after initializer flow
+        // narrowing (`const value: string | null = null`): `value || "default"` is just the RHS,
+        // not `null | "default"`.
+        TypeInfo resultLeftType = logical.Operator.Type == TokenType.OR_OR
+            ? NarrowLogicalTruthy(leftType)
+            : NarrowLogicalFalsy(leftType);
+        if (resultLeftType is TypeInfo.Never)
+            return rightType;
+
         // If one is assignable to the other, return the broader type
-        if (IsCompatible(leftType, rightType))
+        if (IsCompatible(resultLeftType, rightType))
         {
             return rightType;
         }
-        if (IsCompatible(rightType, leftType))
+        if (IsCompatible(rightType, resultLeftType))
         {
-            return leftType;
+            return resultLeftType;
         }
 
         // Otherwise, return the union of both types
-        return new TypeInfo.Union([leftType, rightType]);
+        return new TypeInfo.Union([resultLeftType, rightType]);
     }
 
     private static bool IsLogicalCallableCandidate(TypeInfo type) => type switch
@@ -526,8 +589,33 @@ public partial class TypeChecker
         }
         else
         {
-            thenType = CheckExprWithContext(ternary.ThenBranch, contextualType);
-            elseType = CheckExprWithContext(ternary.ElseBranch, contextualType);
+            bool? constantCondition = ternary.Condition is Expr.Literal { Value: bool value }
+                ? value
+                : null;
+
+            if (constantCondition == false)
+                _suppressVariableUseBeforeAssignment++;
+            try
+            {
+                thenType = CheckExprWithContext(ternary.ThenBranch, contextualType);
+            }
+            finally
+            {
+                if (constantCondition == false)
+                    _suppressVariableUseBeforeAssignment--;
+            }
+
+            if (constantCondition == true)
+                _suppressVariableUseBeforeAssignment++;
+            try
+            {
+                elseType = CheckExprWithContext(ternary.ElseBranch, contextualType);
+            }
+            finally
+            {
+                if (constantCondition == true)
+                    _suppressVariableUseBeforeAssignment--;
+            }
         }
 
         // Return whichever branch type is the wider of the two (the other is assignable to it),
@@ -686,6 +774,13 @@ public partial class TypeChecker
                 return clrResult;
             }
         }
+
+        if (objType is TypeInfo.TypeParameter genericObject &&
+            IndexDomainReferencesTypeParameter(indexType, genericObject))
+            throw new TypeCheckException(
+                $"Type 'number' is not assignable to type '{genericObject}[{indexType}]'.",
+                compound.Operator.Line,
+                tsCode: "TS2322");
 
         if (!IsNumber(indexType))
             throw new TypeCheckException("Array index must be a number.", tsCode: "TS7053");
@@ -1022,13 +1117,15 @@ public partial class TypeChecker
         }
         if (unary.Operator.Type == TokenType.PLUS)
         {
-            // Unary '+' had no check at all — any operand (including symbol) silently passed
-            // through unchanged. Add only the symbol-specific rejection tsc requires here;
-            // leave the (separately incorrect, pre-existing) passthrough for every other operand
-            // type alone rather than widen this fix into "unary + always coerces to number".
+            // IsBigInt(any) is permissively true, but unary plus on `any` is valid and yields number.
+            if (right is TypeInfo.Any) return TypeInfo.Primitive.Number;
             if (ContainsSymbolType(right))
                 throw new TypeCheckException("The '+' operator cannot be applied to type 'symbol'.", tsCode: "TS2469");
-            return right;
+            if (IsBigInt(right))
+                throw new TypeCheckException("Operator '+' cannot be applied to type 'bigint'.", tsCode: "TS2736");
+            // JavaScript's unary plus is numeric coercion, including for strings, booleans,
+            // null, undefined, and any. Its static result is therefore number.
+            return TypeInfo.Primitive.Number;
         }
 
         return right;

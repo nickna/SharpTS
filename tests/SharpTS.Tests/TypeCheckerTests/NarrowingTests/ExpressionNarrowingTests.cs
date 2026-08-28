@@ -189,6 +189,22 @@ public class ExpressionNarrowingTests
     }
 
     [Fact]
+    public void Ternary_OptionalFunctionPropertyNarrowing_AllowsCall()
+    {
+        var source = """
+            type Obj = { callback?: (value: string) => string };
+            function test(obj: Obj): string {
+                return obj.callback === undefined ? "none" : obj.callback("ok");
+            }
+            console.log(test({ callback: value => value.toUpperCase() }));
+            console.log(test({}));
+            """;
+
+        var result = TestHarness.RunInterpreted(source);
+        Assert.Equal("OK\nnone\n", result);
+    }
+
+    [Fact]
     public void Ternary_NestedNarrowing()
     {
         // Nested ternary with narrowing

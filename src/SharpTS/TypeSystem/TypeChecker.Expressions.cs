@@ -824,6 +824,15 @@ public partial class TypeChecker
             {
                 // Spread property - merge fields from the spread object
                 TypeInfo spreadType = CheckExpr(prop.Value);
+                if (prop.Value is Expr.Variable spreadVariable &&
+                    _environment.GetValueBinding(spreadVariable.Name.Lexeme) is { } spreadSymbol &&
+                    _uninitializedImplicitAnyVarSymbols.Contains(spreadSymbol))
+                {
+                    throw new TypeCheckException(
+                        "Spread types may only be created from object types.",
+                        spreadVariable.Name.Line,
+                        tsCode: "TS2698");
+                }
                 if (spreadType is TypeInfo.Any)
                 {
                     stringIndexType = TypeInfo.Any.Shared;
@@ -1169,10 +1178,11 @@ public partial class TypeChecker
             case Expr.ObjectLiteral obj when type is TypeInfo.Record rec:
                 return WidenConstObjectLiteralFields(obj, rec);
 
-            // A fresh array literal widens its element type. An `as const` *element* produced a
-            // readonly record/tuple, which WidenLiteralType leaves intact, so it survives (#493).
-            case Expr.ArrayLiteral when type is TypeInfo.Array arr:
-                return new TypeInfo.Array(WidenLiteralType(arr.ElementType));
+            // A fresh array literal widens only the elements that are themselves fresh. Types
+            // contributed by a variable/call/non-fresh spread are already fixed and must retain
+            // literal discriminants used for union narrowing.
+            case Expr.ArrayLiteral array when type is TypeInfo.Array arr:
+                return WidenConstArrayLiteralElements(array, arr);
 
             // A bare primitive literal: preserved at the binding top level, widened inside a literal.
             case Expr.Literal:
@@ -1244,6 +1254,67 @@ public partial class TypeChecker
             NumberIndexType = rec.NumberIndexType != null ? WidenLiteralType(rec.NumberIndexType) : null,
             SymbolIndexType = rec.SymbolIndexType != null ? WidenLiteralType(rec.SymbolIndexType) : null,
         };
+    }
+
+    /// <summary>
+    /// Widens fresh members of a const-bound array literal without recursively widening types
+    /// contributed by non-fresh expressions. For example, <c>const xs = [...commands, make()]</c>
+    /// must keep <c>Command</c>'s literal discriminants, while <c>const xs = [{ n: 1 }]</c> still
+    /// widens the fresh object's <c>n</c> member to <c>number</c>.
+    /// </summary>
+    private TypeInfo WidenConstArrayLiteralElements(Expr.ArrayLiteral array, TypeInfo.Array inferred)
+    {
+        List<TypeInfo> elementTypes = [];
+        foreach (Expr element in array.Elements)
+        {
+            if (element is Expr.Spread spread)
+            {
+                TypeInfo sourceType = CheckExpr(spread.Expression);
+                Expr source = UnwrapTransparentForWidening(spread.Expression);
+                TypeInfo widenedSource = source is Expr.ArrayLiteral
+                    ? WidenFreshLiteralsForConst(source, sourceType, topLevel: false)
+                    : sourceType;
+
+                if (widenedSource is TypeInfo.Tuple tuple)
+                {
+                    elementTypes.AddRange(tuple.ElementTypes);
+                    if (tuple.RestElementType is not null)
+                        elementTypes.Add(tuple.RestElementType);
+                }
+                else if (TryGetSpreadElementType(widenedSource, out TypeInfo spreadElementType))
+                {
+                    elementTypes.Add(spreadElementType);
+                }
+                else
+                {
+                    // CheckArray already validated this spread. Preserve its inferred element
+                    // type if a later specialized iterable view is unavailable here.
+                    return inferred;
+                }
+                continue;
+            }
+
+            TypeInfo elementType = CheckExpr(element);
+            elementTypes.Add(WidenFreshLiteralsForConst(element, elementType, topLevel: false));
+        }
+
+        if (elementTypes.Count == 0) return inferred;
+
+        TypeInfo commonType = elementTypes[0];
+        for (int i = 1; i < elementTypes.Count; i++)
+        {
+            TypeInfo next = elementTypes[i];
+            if (IsCompatible(commonType, next))
+                continue;
+            if (IsCompatible(next, commonType))
+            {
+                commonType = next;
+                continue;
+            }
+            commonType = CreateUnion(commonType, next);
+        }
+
+        return new TypeInfo.Array(commonType, inferred.IsReadonly);
     }
 
     /// <summary>
@@ -1515,10 +1586,21 @@ public partial class TypeChecker
     private TypeInfo CheckArrowFunction(
         Expr.ArrowFunction arrow,
         TypeInfo? expectedType = null,
-        string contextualReturnTsCode = "TS2322")
+        string contextualReturnTsCode = "TS2322",
+        bool useContextualReturnType = true)
     {
         // Extract expected function type for parameter inference
         TypeInfo.Function? expectedFuncType = GetContextualFunctionType(expectedType);
+
+        // JSX-returning arrows are common render callbacks, and their unannotated parameters
+        // are genuine implicit-any errors when no contextual function type is available. Keep
+        // the broader conservative arrow policy, but cover this syntax-directed case exactly.
+        if (_deferGenericJsxArrowImplicitAnyDepth == 0 &&
+            expectedFuncType is null &&
+            arrow.ExpressionBody is Expr.Call { JsxOrigin: not null })
+        {
+            ReportImplicitAnyParameters(arrow.Parameters, isAmbient: false);
+        }
 
         // Set up generic type parameters (if any)
         TypeEnvironment typeParamEnv = _environment;
@@ -1624,7 +1706,7 @@ public partial class TypeChecker
             {
                 returnType = ResolveAnnotation(arrow.ReturnType, arrow.ReturnTypeNode)!;
             }
-            else if (expectedFuncType != null)
+            else if (expectedFuncType != null && useContextualReturnType)
             {
                 returnType = expectedFuncType.ReturnType;
             }
@@ -1671,6 +1753,7 @@ public partial class TypeChecker
         TypeInfo? previousReturn = _currentFunctionReturnType;
         var previousInferredArrow = _inferredReturnTypes;
         TypeInfo? previousThisType = _currentFunctionThisType;
+        bool previousArrowCapturesScriptGlobalThis = _currentArrowCapturesScriptGlobalThis;
         bool previousInAsync = _inAsyncFunction;
         bool previousInGenerator = _inGeneratorFunction;
         var previousInferredYieldTypes = _inferredYieldTypes;
@@ -1692,11 +1775,21 @@ public partial class TypeChecker
         // A top-level arrow in an external module captures the module's lexical `this`, which
         // is undefined. Use that only while checking the BODY; it is not an explicit `this`
         // parameter and must not leak into the arrow's public function type.
-        _currentFunctionThisType = !arrow.HasOwnThis && thisType is null &&
-                                   previousThisType is null && _currentClass is null &&
-                                   _currentModule is not null
-            ? TypeInfo.Undefined.Shared
-            : thisType;
+        bool capturesScriptGlobalThis = !arrow.HasOwnThis &&
+            (previousArrowCapturesScriptGlobalThis ||
+             previousThisType is null && previousReturn is null && _currentClass is null &&
+             _currentModule?.IsScript == true);
+        _currentArrowCapturesScriptGlobalThis = capturesScriptGlobalThis;
+        _currentFunctionThisType = arrow.HasOwnThis
+            ? thisType
+            : previousThisType ??
+              (previousReturn is null && _currentClass is null
+                  ? _currentModule is { IsScript: false }
+                          ? TypeInfo.Undefined.Shared
+                          : capturesScriptGlobalThis
+                              ? TypeInfo.Any.Shared
+                              : null
+                  : null);
         _inAsyncFunction = arrow.IsAsync;
         // A generator function EXPRESSION establishes its own generator context so `yield` is valid in
         // its body and its element type is inferred from the yields. Reached only for generator arrows
@@ -1718,7 +1811,7 @@ public partial class TypeChecker
             {
                 // Expression body - infer return type if not specified
                 TypeInfo exprType = CheckExpr(arrow.ExpressionBody);
-                if (arrow.ReturnType == null && expectedFuncType is not null)
+                if (arrow.ReturnType == null && expectedFuncType is not null && useContextualReturnType)
                 {
                     TypeInfo expectedRetType = expectedFuncType.ReturnType;
                     if (arrow.IsAsync && expectedRetType is TypeInfo.Promise expectedPromise)
@@ -1826,6 +1919,7 @@ public partial class TypeChecker
             _currentFunctionReturnType = previousReturn;
             _inferredReturnTypes = previousInferredArrow;
             _currentFunctionThisType = previousThisType;
+            _currentArrowCapturesScriptGlobalThis = previousArrowCapturesScriptGlobalThis;
             _inAsyncFunction = previousInAsync;
             _inGeneratorFunction = previousInGenerator;
             _inferredYieldTypes = previousInferredYieldTypes;
@@ -1929,13 +2023,26 @@ public partial class TypeChecker
         if (assign.RedeclarationTypeAnnotation is not null || assign.RedeclarationTypeAnnotationNode is not null)
         {
             // `Any` covers the var-hoisting placeholder and explicit any-typed vars — neither participates.
-            if (declaredType is TypeInfo.Any) return declaredType;
+            if (declaredType is TypeInfo.Any)
+            {
+                if (assign.Value is not Expr.Variable { Name.Lexeme: var self } ||
+                    self != assign.Name.Lexeme)
+                {
+                    CheckExpr(assign.Value);
+                }
+                return declaredType;
+            }
             var redeclaredType = ResolveAnnotation(assign.RedeclarationTypeAnnotation, assign.RedeclarationTypeAnnotationNode) ?? TypeInfo.Any.Shared;
-            if (!TypeInfoEqualityComparer.Instance.Equals(declaredType, redeclaredType))
+            if (!AreEquivalentVarDeclarationTypes(declaredType, redeclaredType))
             {
                 throw new TypeCheckException(
                     $" Subsequent variable declarations must have the same type. Variable '{assign.Name.Lexeme}' must be of type '{declaredType}', but here has type '{redeclaredType}'.",
                     line: assign.Name.Line, tsCode: "TS2403");
+            }
+            if (assign.Value is not Expr.Variable { Name.Lexeme: var sameName } ||
+                sameName != assign.Name.Lexeme)
+            {
+                CheckExprWithContext(assign.Value, redeclaredType);
             }
             return declaredType;
         }
@@ -1947,11 +2054,29 @@ public partial class TypeChecker
         }
         catch (TypeCheckException ex) when (ex.Diagnostic.TsCode == "TS2454")
         {
-            // The write still definitely assigns its target even when reading the RHS reports
-            // TS2454. Preserve that flow fact before the statement boundary records the error;
-            // otherwise a following reverse assignment produces a cascading TS2454.
-            MarkDefinitelyAssigned(assign.Name);
-            throw;
+            // A simple unassigned RHS can produce both TS2454 on the read and an assignability
+            // diagnostic on the write. Recover its declared type so both are retained.
+            if (assign.Value is Expr.Variable rhs &&
+                (GetDeclaredType(rhs.Name.Lexeme) ?? _environment.Get(rhs.Name.Lexeme)) is { } rhsType)
+            {
+                RecordTypeError(ex);
+                valueType = rhsType;
+            }
+            else
+            {
+                MarkDefinitelyAssigned(assign.Name);
+                throw;
+            }
+        }
+
+        if (assign.IsVarRedeclaration && declaredType is TypeInfo.Any &&
+            _environment.GetValueBinding(assign.Name.Lexeme) is { } redeclaredSymbol &&
+            _explicitAnyVarSymbols.Contains(redeclaredSymbol) && valueType is not TypeInfo.Any)
+        {
+            throw new TypeCheckException(
+                $" Subsequent variable declarations must have the same type. Variable '{assign.Name.Lexeme}' must be of type 'any', but here has type '{valueType}'.",
+                line: assign.Name.Line,
+                tsCode: "TS2403");
         }
 
         if (!IsCompatible(declaredType, valueType))
@@ -1960,6 +2085,10 @@ public partial class TypeChecker
             // target assigned before reporting the mismatch so a later read does not gain a
             // cascading TS2454 that tsc does not emit.
             MarkDefinitelyAssigned(assign.Name);
+            var failedAssignmentPath = new Narrowing.NarrowingPath.Variable(assign.Name.Lexeme);
+            InvalidateNarrowingsFor(failedAssignmentPath);
+            WidenEnclosingNarrowing(assign.Name.Lexeme, declaredType);
+            _environment.Define(assign.Name.Lexeme, declaredType);
             // An assignment synthesized from a duplicate `var` declaration (VarHoister) that
             // fails against the established type is tsc's TS2403: subsequent variable
             // declarations must have the same type.
@@ -1972,7 +2101,11 @@ public partial class TypeChecker
             throw new TypeCheckException(
                 $" Cannot assign type '{valueType}' to variable '{assign.Name.Lexeme}' of type '{declaredType}'.",
                 line: assign.Name.Line,
-                tsCode: AssignmentDiagnosticCode(declaredType, valueType));
+                tsCode: declaredType is TypeInfo.Intersection ||
+                    _environment.GetValueBinding(assign.Name.Lexeme) is { } targetSymbol &&
+                    _intersectionDeclaredVariables.Contains(targetSymbol)
+                    ? "TS2322"
+                    : AssignmentDiagnosticCode(declaredType, valueType));
         }
 
         // A reassignment widens the variable's OWN narrowing only when the assigned value falls
@@ -2042,6 +2175,27 @@ public partial class TypeChecker
         return valueType;
     }
 
+    private void ReportImplicitAnyVariableCapture(Token use, BindingSymbol symbol)
+    {
+        if (!_implicitAnyVarSymbols.TryGetValue(symbol, out var declaration) ||
+            _definiteAssignmentStack.Count <= declaration.FlowDepth)
+        {
+            return;
+        }
+
+        if (_reportedImplicitAnyVarDeclarations.Add(symbol))
+        {
+            RecordTypeError(new TypeCheckException(
+                $"Variable '{symbol.Name}' implicitly has type 'any' in some locations where its type cannot be determined.",
+                declaration.Declaration.Line,
+                tsCode: "TS7034"));
+        }
+        RecordTypeError(new TypeCheckException(
+            $"Variable '{symbol.Name}' implicitly has an 'any' type.",
+            use.Line,
+            tsCode: "TS7005"));
+    }
+
     private TypeInfo LookupVariable(Token name)
     {
         if (name.Lexeme == "globalThis" && _hasDefaultLibraries)
@@ -2077,7 +2231,10 @@ public partial class TypeChecker
             }
             BindValueUse(name);
             if (_environment.GetValueBinding(name.Lexeme) is { } symbol)
+            {
+                ReportImplicitAnyVariableCapture(name, symbol);
                 ThrowIfUsedBeforeAssigned(name, symbol);
+            }
             // Declaration merging replaces an interface binding as later lib files are
             // loaded, while the `Object: ObjectConstructor` value retains the earlier
             // interface instance it was declared with. Expose Object's latest merged

@@ -941,18 +941,12 @@ public partial class TypeChecker
             }
             else
             {
-                // Type parameter could not be inferred
-                // If there's a default, we could use it, but for now return null
-                if (tp.Constraint != null)
-                {
-                    // Use constraint as fallback (similar to how we do for functions)
-                    result.Add(tp.Constraint);
-                }
-                else
-                {
-                    // Cannot infer this type parameter - return null
-                    return null;
-                }
+                // An omitted inference site does not make a generic constructor invocation
+                // invalid. TypeScript fills an uninferred parameter from its default, then its
+                // constraint, and finally the implicit unknown top type. This is especially
+                // common for optional constructor properties such as Options<Data, Computed>
+                // when only `data` is supplied.
+                result.Add(tp.Default ?? tp.Constraint ?? TypeInfo.Unknown.Shared);
             }
         }
 

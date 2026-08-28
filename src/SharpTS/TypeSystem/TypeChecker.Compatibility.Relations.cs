@@ -85,6 +85,14 @@ public partial class TypeChecker
         if (actual is TypeInfo.TypeParameter actualTpOnly)
         {
             if (expected is TypeInfo.Any or TypeInfo.Unknown) { result = true; return true; }
+            if (expected is TypeInfo.Union nullableObjectTop &&
+                nullableObjectTop.ContainsNull && nullableObjectTop.ContainsUndefined &&
+                nullableObjectTop.FlattenedTypes.Any(member =>
+                    member is TypeInfo.Record { Fields.Count: 0, HasIndexSignature: false }))
+            {
+                result = true;
+                return true;
+            }
             if (expected is TypeInfo.Union expUnionForTp &&
                 expUnionForTp.FlattenedTypes.Any(t =>
                     t is TypeInfo.TypeParameter unionTp && unionTp.Name == actualTpOnly.Name))
@@ -98,7 +106,7 @@ public partial class TypeChecker
                 // An unconstrained type parameter has no apparent (constraint) type. It can satisfy a
                 // genuinely empty structural target, but not a weak target that happens to make every
                 // declared property optional: T could later be instantiated with an unrelated shape.
-                result = expected switch
+                result = !_strictNullChecks && expected switch
                 {
                     TypeInfo.Record rec => rec.Fields.Count == 0 && !rec.HasIndexSignature &&
                         !rec.IsCallable && !rec.IsConstructable,

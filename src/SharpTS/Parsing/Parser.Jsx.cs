@@ -22,6 +22,7 @@ public partial class Parser
 {
     private readonly List<(string Name, int Line)> _jsxElementStack = [];
     private bool _jsxRecoveredExpressionFailure;
+    private bool _suppressNextFragmentMissingTagError;
 
     /// <summary>
     /// Records a parse error at an explicit line without throwing — for JSX text errors
@@ -197,6 +198,7 @@ public partial class Parser
         List<TypeNode?>? typeArgumentNodes = null;
         List<Expr.Property> attributes = [];
         bool selfClosing = false;
+        int? closingLine = null;
         int childStart;
 
         if (isFragment)
@@ -371,7 +373,7 @@ public partial class Parser
                     }
                 }
                 var attributeToken = new Token(
-                    TokenType.IDENTIFIER, attributeName, null, nameStart.Line);
+                    TokenType.IDENTIFIER, attributeName, null, nameStart.Line, nameStart.Start);
 
                 Expr value = new Expr.Literal(true);
                 if (Match(TokenType.EQUAL))
@@ -410,6 +412,7 @@ public partial class Parser
         if (!selfClosing)
         {
             bool recoveredWithoutClosingTag = false;
+            bool suppressNextSpreadRightBraceError = false;
             while (true)
             {
                 // A recovered child can end at EOF after trivia that produced no token;
@@ -418,11 +421,17 @@ public partial class Parser
                 var scan = JsxText.ScanText(_source!, childStart, LineAtOffset(childStart));
                 foreach (var error in scan.Errors ?? [])
                 {
+                    // The right brace immediately following a JSX spread child closes the
+                    // spread syntax consumed by ParseJsxExpressionChild; it is not JSX text.
+                    if (error.Character == '}' &&
+                        (suppressNextSpreadRightBraceError || children.LastOrDefault() is Expr.Spread))
+                        continue;
                     RecordErrorAt(error.Line, error.Character == '>'
                         ? "Unexpected token. Did you mean `{'>'}` or `&gt;`?"
                         : "Unexpected token. Did you mean `{'}'}` or `&rbrace;`?",
                         error.Character == '>' ? "TS1382" : "TS1381");
                 }
+                suppressNextSpreadRightBraceError = false;
                 string? text = JsxText.CookChildText(scan.Raw);
                 if (text is not null)
                 {
@@ -432,11 +441,16 @@ public partial class Parser
 
                 if (scan.Terminator == '\0')
                 {
-                    RecordErrorAt(open.Line,
-                        isFragment
-                            ? "JSX fragment has no corresponding closing tag."
-                            : $"JSX element '{tagName}' has no corresponding closing tag.",
-                        isFragment ? "TS17014" : "TS17008");
+                    bool suppressFragmentError = isFragment && _suppressNextFragmentMissingTagError;
+                    _suppressNextFragmentMissingTagError = false;
+                    if (!suppressFragmentError)
+                    {
+                        RecordErrorAt(open.Line,
+                            isFragment
+                                ? "JSX fragment has no corresponding closing tag."
+                                : $"JSX element '{tagName}' has no corresponding closing tag.",
+                            isFragment ? "TS17014" : "TS17008");
+                    }
                     // When a nested element consumes the rest of the file, tsc
                     // reports the missing closing tag for that innermost element
                     // and abandons the ancestor without a second EOF diagnostic.
@@ -473,10 +487,11 @@ public partial class Parser
                         continue;
                     }
                     // Empty JSX expressions ({} or {/* comment */} once lexed) contribute no child.
+                    bool isSpreadChild = false;
                     if (!Check(TokenType.RIGHT_BRACE))
                     {
-                        int expressionLine = Peek().Line;
-                        bool isSpreadChild = Match(TokenType.DOT_DOT_DOT);
+                        int expressionLine = LineAtOffset(childContentOffset);
+                        isSpreadChild = Match(TokenType.DOT_DOT_DOT);
                         try
                         {
                             Expr child = Expression();
@@ -485,6 +500,7 @@ public partial class Parser
                         }
                         catch (ParseError ex)
                         {
+                            suppressNextSpreadRightBraceError = isSpreadChild;
                             int offset = Peek().Start;
                             RecordErrorAt(offset >= 0 ? LineAtOffset(offset) : scan.EndLine,
                                 ex.Message, ex.TsCode);
@@ -493,6 +509,7 @@ public partial class Parser
                         }
                         catch
                         {
+                            suppressNextSpreadRightBraceError = isSpreadChild;
                             // Expression recovery inside JSX can fail after nested
                             // tags have already consumed a ternary delimiter or brace.
                             // The JSX text scanner owns those token diagnostics; keep
@@ -505,6 +522,7 @@ public partial class Parser
                     }
                     if (!Check(TokenType.RIGHT_BRACE))
                     {
+                        suppressNextSpreadRightBraceError = isSpreadChild;
                         // Keep the expression already parsed and resume JSX text
                         // scanning at the unexpected token. This mirrors tsc's
                         // recovery for `{ test: <span/> }`: `test` remains a child,
@@ -532,12 +550,35 @@ public partial class Parser
                 // as in tsc) or a nested child element.
                 if (scan.EndOffset + 1 < _source!.Length && _source[scan.EndOffset + 1] == '/')
                 {
+                    // A named closing tag cannot close a fragment. If no later fragment closer
+                    // exists, retain the fragment through EOF and report tsc's recovery cascade
+                    // at the malformed close and the end of the file.
+                    if (isFragment && scan.EndOffset + 2 < _source.Length &&
+                        _source[scan.EndOffset + 2] != '>' &&
+                        _source.IndexOf("</>", scan.EndOffset + 2, StringComparison.Ordinal) < 0)
+                    {
+                        ResyncAtTerminator(scan.EndOffset, TokenType.LESS);
+                        Advance();
+                        Advance();
+                        Token invalidName = ConsumeJsxIdentifierName("Expect JSX closing tag name.");
+                        RecordErrorAt(invalidName.Line,
+                            $"Cannot find name '{invalidName.Lexeme}'.", "TS2304");
+                        RecordErrorAt(invalidName.Line,
+                            "Expected corresponding closing tag for JSX fragment.", "TS17015");
+                        RecordErrorAt(invalidName.Line,
+                            "JSX fragment has no corresponding closing tag.", "TS17014");
+                        RecordErrorAt(LineAtOffset(_source.Length), "'</' expected.", "TS1005");
+                        _suppressNextFragmentMissingTagError = true;
+                        endOffset = _source.Length;
+                        recoveredWithoutClosingTag = true;
+                        break;
+                    }
                     ResyncAtTerminator(scan.EndOffset, TokenType.LESS);
                     break;
                 }
 
                 ResyncAtTerminator(scan.EndOffset, TokenType.LESS);
-                int nestedChildLine = Peek().Line;
+                int nestedChildLine = LineAtOffset(scan.EndOffset);
                 var (childExpr, childEnd) = ParseJsxElementCore();
                 children.Add(childExpr);
                 childLines.Add(nestedChildLine);
@@ -548,6 +589,7 @@ public partial class Parser
             {
                 int closingPosition = _current;
                 int closingOffset = Peek().Start;
+                closingLine = closingOffset >= 0 ? LineAtOffset(closingOffset) : Peek().Line;
                 Consume(TokenType.LESS, "Expect JSX closing tag.");
                 Consume(TokenType.SLASH, "Expect '/' in JSX closing tag.");
                 if (!isFragment)
@@ -596,7 +638,7 @@ public partial class Parser
 
         return (LowerJsxElement(
             open, isFragment, tagName, tagExpression, attributes, children,
-            childLines,
+            childLines, closingLine,
             typeArguments,
             typeArgumentNodes), endOffset);
     }
@@ -642,8 +684,10 @@ public partial class Parser
             return (tagName, new Expr.Literal(tagName));
 
         int firstLine = first.Start >= 0 ? LineAtOffset(first.Start) : first.Line;
-        Expr tagExpression = new Expr.Variable(new Token(
-            TokenType.IDENTIFIER, first.Lexeme, null, firstLine, first.Start));
+        Expr tagExpression = first.Lexeme == "this"
+            ? new Expr.This(new Token(TokenType.THIS, "this", null, firstLine, first.Start))
+            : new Expr.Variable(new Token(
+                TokenType.IDENTIFIER, first.Lexeme, null, firstLine, first.Start));
         bool hasMemberAccess = false;
         while (Match(TokenType.DOT))
         {
@@ -652,7 +696,7 @@ public partial class Parser
             tagName += "." + part.Lexeme;
             tagExpression = new Expr.Get(tagExpression, part);
         }
-        if (!hasMemberAccess && char.IsLower(tagName[0]))
+        if (!hasMemberAccess && char.IsLower(tagName[0]) && tagName != "this")
             return (tagName, new Expr.Literal(tagName));
         return (tagName, tagExpression);
     }
@@ -945,14 +989,15 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children,
         List<int> childLines,
+        int? closingLine,
         List<string>? typeArguments,
         List<TypeNode?>? typeArgumentNodes)
     {
         return _jsx!.Mode is JsxMode.React or JsxMode.Preserve
             ? LowerJsxClassic(open, isFragment, tagName, tagExpression, attributes, children,
-                childLines, typeArguments, typeArgumentNodes)
+                childLines, closingLine, typeArguments, typeArgumentNodes)
             : LowerJsxAutomatic(open, isFragment, tagName, tagExpression, attributes, children,
-                childLines, typeArguments, typeArgumentNodes);
+                childLines, closingLine, typeArguments, typeArgumentNodes);
     }
 
     /// <summary>
@@ -969,6 +1014,7 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children,
         List<int> childLines,
+        int? closingLine,
         List<string>? typeArguments,
         List<TypeNode?>? typeArgumentNodes)
     {
@@ -1028,7 +1074,8 @@ public partial class Parser
                 typeArguments,
                 typeArgumentNodes,
                 factory,
-                childLines),
+                childLines,
+                closingLine),
         };
     }
 
@@ -1047,6 +1094,7 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children,
         List<int> childLines,
+        int? closingLine,
         List<string>? typeArguments,
         List<TypeNode?>? typeArgumentNodes)
     {
@@ -1144,7 +1192,8 @@ public partial class Parser
                 typeArguments,
                 typeArgumentNodes,
                 _jsx.Factory,
-                childLines),
+                childLines,
+                closingLine),
         };
     }
 

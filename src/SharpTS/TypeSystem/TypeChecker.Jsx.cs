@@ -151,7 +151,8 @@ public partial class TypeChecker
             // (for example `this` is undefined), keep reporting the independent JSX spread-child
             // diagnostic without evaluating the same expression a second time.
             TypeInfo spreadType = _typeMap.Get(spreadChild.Expression) ?? TypeInfo.Unknown.Shared;
-            if (!IsValidJsxSpreadChild(spreadType) || IsOptionalJsxSpreadAccess(spreadChild.Expression))
+            if (jsx.Mode is JsxMode.React or JsxMode.Preserve &&
+                (!IsValidJsxSpreadChild(spreadType) || IsOptionalJsxSpreadAccess(spreadChild.Expression)))
             {
                 ReportJsx(new TypeCheckException(
                     "JSX spread child must be an array type.",
@@ -271,9 +272,17 @@ public partial class TypeChecker
             // TS7026 on otherwise valid emit-only inputs.
             if (_noImplicitAny &&
                 (jsx.Mode is JsxMode.React or JsxMode.Preserve || jsx.FactoryName is null))
+            {
                 ReportJsx(new TypeCheckException(
                     $"JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.",
                     jsx.Line, tsCode: "TS7026"));
+                if (jsx.ClosingLine is { } closingLine)
+                {
+                    ReportJsx(new TypeCheckException(
+                        "JSX element implicitly has type 'any' because no interface 'JSX.IntrinsicElements' exists.",
+                        closingLine, tsCode: "TS7026"));
+                }
+            }
             return;
         }
 
@@ -362,6 +371,13 @@ public partial class TypeChecker
             case TypeInfo.StringLiteral literal
                 when jsxNamespace?.Types.ContainsKey("IntrinsicElements") == true:
                 CheckJsxIntrinsic(jsx with { TagName = literal.Value }, jsxNamespace, propsType);
+                if (LookupJsxObjectMember(
+                        jsxNamespace.Types["IntrinsicElements"], literal.Value) is null)
+                {
+                    ReportJsx(new TypeCheckException(
+                        $"JSX element type '{jsx.TagName}' does not have any construct or call signatures.",
+                        jsx.Line, tsCode: "TS2604"));
+                }
                 return;
 
             case TypeInfo.StringLiteral:
@@ -488,14 +504,14 @@ public partial class TypeChecker
             case TypeInfo.Record { CallSignatures.Count: > 0 } record:
                 CheckJsxCallSignatures(jsx, jsxNamespace, record.CallSignatures!, propsType);
                 return;
-            case TypeInfo.Interface { CallSignatures.Count: > 0 } iface:
-                CheckJsxCallSignatures(jsx, jsxNamespace, iface.CallSignatures!, propsType);
+            case TypeInfo.Interface iface when GetAllJsxCallSignatures(iface) is { Count: > 0 } calls:
+                CheckJsxCallSignatures(jsx, jsxNamespace, calls, propsType);
                 return;
             case TypeInfo.Record { ConstructorSignatures.Count: > 0 } record:
                 CheckJsxConstructSignatures(jsx, jsxNamespace, record.ConstructorSignatures!, propsType);
                 return;
-            case TypeInfo.Interface { ConstructorSignatures.Count: > 0 } iface:
-                CheckJsxConstructSignatures(jsx, jsxNamespace, iface.ConstructorSignatures!, propsType);
+            case TypeInfo.Interface iface when GetAllJsxConstructorSignatures(iface) is { Count: > 0 } constructors:
+                CheckJsxConstructSignatures(jsx, jsxNamespace, constructors, propsType);
                 return;
 
             case TypeInfo.Union union:
@@ -518,11 +534,29 @@ public partial class TypeChecker
         TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface genericInterface } =>
             genericInterface.HasCallSignature || genericInterface.HasConstructorSignature,
         TypeInfo.Record { CallSignatures.Count: > 0 } => true,
-        TypeInfo.Interface { CallSignatures.Count: > 0 } => true,
+        TypeInfo.Interface iface when GetAllJsxCallSignatures(iface).Count > 0 => true,
         TypeInfo.Record { ConstructorSignatures.Count: > 0 } => true,
-        TypeInfo.Interface { ConstructorSignatures.Count: > 0 } => true,
+        TypeInfo.Interface iface when GetAllJsxConstructorSignatures(iface).Count > 0 => true,
         _ => false,
     };
+
+    private static List<TypeInfo.CallSignature> GetAllJsxCallSignatures(TypeInfo.Interface type)
+    {
+        var signatures = new List<TypeInfo.CallSignature>();
+        if (type.CallSignatures is { } own) signatures.AddRange(own);
+        foreach (TypeInfo.Interface parent in type.Extends ?? [])
+            signatures.AddRange(GetAllJsxCallSignatures(parent));
+        return signatures.Distinct().ToList();
+    }
+
+    private static List<TypeInfo.ConstructorSignature> GetAllJsxConstructorSignatures(TypeInfo.Interface type)
+    {
+        var signatures = new List<TypeInfo.ConstructorSignature>();
+        if (type.ConstructorSignatures is { } own) signatures.AddRange(own);
+        foreach (TypeInfo.Interface parent in type.Extends ?? [])
+            signatures.AddRange(GetAllJsxConstructorSignatures(parent));
+        return signatures.Distinct().ToList();
+    }
 
     private void CheckJsxComponentReturnType(JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo returnType)
     {
@@ -603,10 +637,12 @@ public partial class TypeChecker
         TypeInfo? elementClass = jsxNamespace?.Types.GetValueOrDefault("ElementClass");
         TypeInfo? attributesMarker = jsxNamespace?.Types.GetValueOrDefault("ElementAttributesProperty");
         string? attributesProperty = null;
-        bool hasAttributesMarker = attributesMarker is not null;
+        bool hasAttributesMarker = attributesMarker is not null &&
+            TryGetJsxMemberView(attributesMarker, out var allMarkerMembers, out _, out _) &&
+            allMarkerMembers.Count <= 1;
         if (attributesMarker is not null &&
             TryGetJsxMemberView(attributesMarker, out var markerMembers, out _, out _) &&
-            markerMembers.Count > 0)
+            markerMembers.Count == 1)
         {
             attributesProperty = markerMembers.Keys.First();
         }
@@ -633,7 +669,7 @@ public partial class TypeChecker
                 parameterTypes = signature.ParamTypes;
             }
 
-            if (!hasAttributesMarker &&
+            if (signatures.Count > 1 && !hasAttributesMarker &&
                 !AreJsxAttributesCompatible(
                     JsxFirstParameter(parameterTypes), propsType, jsxNamespace, jsx))
                 continue;
@@ -647,7 +683,6 @@ public partial class TypeChecker
                 ReportJsx(new TypeCheckException(
                     $"'{jsx.TagName}' cannot be used as a JSX component. Its instance type '{instanceType}' is not a valid JSX element class.",
                     jsx.Line, tsCode: "TS2786"));
-                return;
             }
 
             TypeInfo expected;
@@ -686,7 +721,7 @@ public partial class TypeChecker
 
         TypeInfo expectedProps = candidates.FirstOrDefault(candidate =>
             AreJsxAttributesCompatible(candidate, propsType, jsxNamespace)) ?? candidates[0];
-        CheckJsxAttributes(expectedProps, propsType, jsx, jsxNamespace);
+        CheckJsxAttributes(expectedProps, propsType, jsx, jsxNamespace, forceAssignmentDiagnostic: true);
     }
 
     private TypeInfo ApplyJsxKeyContract(JsxCallInfo jsx, TypeInfo propsType)
@@ -722,6 +757,13 @@ public partial class TypeChecker
             childrenName = members.Keys.First();
         }
 
+        if (IsDirectJsxAttribute(jsx, childrenName))
+        {
+            ReportJsx(new TypeCheckException(
+                $"'{childrenName}' are specified twice. The attribute named '{childrenName}' will be overwritten.",
+                jsx.Line, tsCode: "TS2710"));
+        }
+
         var fields = record.Fields.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
         var childTypes = jsx.ChildExprs.Select(child => _typeMap.Get(child) ?? TypeInfo.Any.Shared).ToList();
         TypeInfo childType = childTypes.Count == 1
@@ -749,6 +791,11 @@ public partial class TypeChecker
     private void CheckJsxClassComponent(
         JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace, TypeInfo classType, TypeInfo propsType)
     {
+        // Without a JSX namespace there is no ElementClass/attributes contract for a
+        // value-based element. Intrinsic names still report TS7026 in their dedicated path.
+        if (jsxNamespace is null)
+            return;
+
         TypeInfo instanceType = classType is TypeInfo.MutableClass mutable ? mutable.Freeze() : classType;
         if (classType is TypeInfo.GenericClass genericClass)
         {
@@ -804,11 +851,14 @@ public partial class TypeChecker
         TypeInfo expected;
         if (propertyName is null)
         {
-            expected = new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
+            expected = LookupJsxGenericBaseProps(instanceType) ??
+                new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty);
         }
         else
         {
             TypeInfo? declaredProps = LookupJsxClassInstanceMember(instanceType, propertyName);
+            if (declaredProps is null && propertyName == "props")
+                declaredProps = LookupJsxGenericBaseProps(instanceType);
             if (declaredProps is null)
             {
                 ReportJsx(new TypeCheckException(
@@ -819,7 +869,12 @@ public partial class TypeChecker
             expected = declaredProps;
         }
 
-        if (jsxNamespace?.Types.GetValueOrDefault("IntrinsicClassAttributes") is
+        bool usesLibraryManagedAttributes =
+            jsxNamespace?.Types.ContainsKey("LibraryManagedAttributes") == true;
+        expected = ApplyJsxLibraryManagedAttributes(jsxNamespace, classType, expected);
+
+        if (expected is not (TypeInfo.Any or TypeInfo.Unknown) &&
+            jsxNamespace?.Types.GetValueOrDefault("IntrinsicClassAttributes") is
             TypeInfo.GenericInterface intrinsicClassAttributes)
         {
             TypeInfo attributeInstanceType = instanceType switch
@@ -836,7 +891,163 @@ public partial class TypeChecker
             ]);
         }
 
-        CheckJsxAttributes(expected, propsType, jsx, jsxNamespace);
+        if (HasOverloadedJsxClassConstructor(instanceType) &&
+            !AreJsxAttributesCompatible(expected, propsType, jsxNamespace, jsx))
+        {
+            ReportJsx(new TypeCheckException(
+                "No overload matches this call.",
+                jsx.Line,
+                tsCode: "TS2769"));
+            return;
+        }
+
+        CheckJsxAttributes(
+            expected, propsType, jsx, jsxNamespace,
+            forceAssignmentDiagnostic: usesLibraryManagedAttributes);
+    }
+
+    private TypeInfo? LookupJsxGenericBaseProps(TypeInfo type)
+    {
+        TypeInfo? current = type;
+        for (int guard = 0; current is not null && guard < 128; guard++)
+        {
+            switch (current)
+            {
+                case TypeInfo.Class cls:
+                    current = cls.Superclass;
+                    break;
+                case TypeInfo.MutableClass mutable:
+                    if (mutable.FieldTypes.TryGetValue("props", out TypeInfo? mutableProps))
+                        return mutableProps;
+                    current = mutable.Superclass;
+                    break;
+                case TypeInfo.GenericClass generic:
+                    current = generic.Superclass;
+                    break;
+                case TypeInfo.InstantiatedGeneric
+                    { GenericDefinition: TypeInfo.GenericClass generic } instantiated:
+                    if ((generic.Name.EndsWith("Component", StringComparison.Ordinal) ||
+                         generic.Core.FieldTypes.ContainsKey("props")) &&
+                        instantiated.TypeArguments.Count > 0)
+                        return instantiated.TypeArguments[0];
+                    current = generic.Superclass is null
+                        ? null
+                        : Substitute(generic.Superclass, GenericClassSubs(generic, instantiated.TypeArguments));
+                    break;
+                case TypeInfo.Instance instance:
+                    current = instance.ResolvedClassType;
+                    break;
+                default:
+                    return null;
+            }
+        }
+        return null;
+    }
+
+    private TypeInfo ApplyJsxLibraryManagedAttributes(
+        TypeInfo.Namespace? jsxNamespace, TypeInfo componentType, TypeInfo declaredProps)
+    {
+        if (jsxNamespace is null || !jsxNamespace.Types.ContainsKey("LibraryManagedAttributes"))
+            return declaredProps;
+
+        ClassMetadataCore? core = componentType switch
+        {
+            TypeInfo.Class cls => cls.Core,
+            TypeInfo.MutableClass mutable => mutable.Frozen?.Core,
+            TypeInfo.GenericClass generic => generic.Core,
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } => generic.Core,
+            _ => null,
+        };
+        if (core is null)
+            return declaredProps;
+
+        Dictionary<string, TypeInfo> propTypeMembers = [];
+        Dictionary<string, TypeInfo> defaultMembers = [];
+        bool hasPropTypes = core.StaticProperties.TryGetValue("propTypes", out TypeInfo? propTypes) &&
+            TryGetJsxMemberView(propTypes, out propTypeMembers, out _, out _);
+        bool hasDefaults = core.StaticProperties.TryGetValue("defaultProps", out TypeInfo? defaults) &&
+            TryGetJsxMemberView(defaults, out defaultMembers, out _, out _);
+        if (!hasPropTypes && !hasDefaults)
+            return declaredProps;
+
+        var fields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+        var optional = new HashSet<string>(StringComparer.Ordinal);
+        if (TryGetJsxMemberView(declaredProps, out var declaredMembers, out var declaredOptional, out _))
+        {
+            foreach (var (name, type) in declaredMembers)
+                fields[name] = type;
+            optional.UnionWith(declaredOptional);
+        }
+
+        if (hasPropTypes)
+        {
+            foreach (var (name, checker) in propTypeMembers)
+            {
+                if (!fields.ContainsKey(name) && TryGetJsxPropType(checker, out TypeInfo? checkedType))
+                    fields[name] = checkedType;
+                // PropTypes keys are present members even when their value type includes
+                // null/undefined; only defaultProps changes presence to optional.
+                optional.Remove(name);
+            }
+        }
+
+        if (hasDefaults)
+        {
+            foreach (var (name, defaultType) in defaultMembers)
+            {
+                fields.TryAdd(name, defaultType);
+                optional.Add(name);
+            }
+        }
+
+        return new TypeInfo.Record(
+            fields.ToFrozenDictionary(StringComparer.Ordinal),
+            OptionalFields: optional.ToFrozenSet(StringComparer.Ordinal));
+    }
+
+    private static bool TryGetJsxPropType(TypeInfo checker, out TypeInfo checkedType)
+    {
+        if (checker is TypeInfo.InstantiatedGeneric
+            {
+                GenericDefinition: TypeInfo.GenericInterface { Name: "PropTypeChecker" },
+                TypeArguments: { Count: > 0 } arguments
+            })
+        {
+            checkedType = arguments[0];
+            bool required = arguments.Count > 1 && arguments[1] is TypeInfo.BooleanLiteral { Value: true };
+            if (required && checkedType is TypeInfo.Any)
+            {
+                // A forward ambient alias may remain structurally unresolved while its checker
+                // wrapper is known. Required checkers still exclude null and undefined.
+                checkedType = new TypeInfo.Union([
+                    TypeInfo.String.Shared,
+                    TypeInfo.Primitive.Number,
+                    TypeInfo.Primitive.Boolean,
+                    new TypeInfo.Record(FrozenDictionary<string, TypeInfo>.Empty),
+                ]);
+            }
+            if (!required)
+                checkedType = new TypeInfo.Union([checkedType, TypeInfo.Null.Shared, TypeInfo.Undefined.Shared]);
+            return true;
+        }
+        checkedType = TypeInfo.Any.Shared;
+        return false;
+    }
+
+    private bool HasOverloadedJsxClassConstructor(TypeInfo type)
+    {
+        TypeInfo? constructor = type switch
+        {
+            TypeInfo.Class cls => LookupJsxClassCoreMember(cls.Core, "constructor"),
+            TypeInfo.GenericClass generic => LookupJsxClassCoreMember(generic.Core, "constructor"),
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } instantiated =>
+                LookupJsxClassCoreMember(generic.Core, "constructor") is { } open
+                    ? Substitute(open, GenericClassSubs(generic, instantiated.TypeArguments))
+                    : null,
+            _ => null,
+        };
+        return constructor is TypeInfo.OverloadedFunction { Signatures.Count: > 1 } or
+            TypeInfo.OverloadSet { Signatures.Count: > 1 };
     }
 
     private TypeInfo.Namespace? ResolveJsxNamespace(JsxCallInfo jsx)
@@ -934,7 +1145,7 @@ public partial class TypeChecker
         jsx.PropsExpr is Expr.ObjectLiteral literal && literal.Properties.Any(property =>
             !property.IsSpread && (property.Key switch
             {
-                Expr.IdentifierKey identifier => identifier.Name.Lexeme == name,
+                Expr.IdentifierKey identifier => identifier.Name.Start >= 0 && identifier.Name.Lexeme == name,
                 Expr.LiteralKey { Literal.Literal: string text } => text == name,
                 _ => false,
             }));
@@ -958,7 +1169,7 @@ public partial class TypeChecker
     private string? GetJsxAttributesPropertyName(TypeInfo.Namespace? jsxNamespace)
     {
         if (jsxNamespace?.Types.GetValueOrDefault("ElementAttributesProperty") is { } marker &&
-            TryGetJsxMemberView(marker, out var markerMembers, out _, out _) && markerMembers.Count > 0)
+            TryGetJsxMemberView(marker, out var markerMembers, out _, out _) && markerMembers.Count == 1)
             return markerMembers.Keys.First();
         return null;
     }
@@ -996,6 +1207,8 @@ public partial class TypeChecker
     private TypeInfo? LookupJsxClassInstanceMember(TypeInfo type, string name) => type switch
     {
         TypeInfo.Class cls => CollectPublicInstanceMembers(cls).GetValueOrDefault(name),
+        TypeInfo.MutableClass mutable =>
+            CollectPublicInstanceMembers(mutable.Freeze()).GetValueOrDefault(name),
         TypeInfo.GenericClass generic => CollectGenericClassMembers(
             generic, generic.TypeParams.Cast<TypeInfo>().ToList()).GetValueOrDefault(name),
         TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } instantiated =>
@@ -1017,6 +1230,7 @@ public partial class TypeChecker
         return type switch
         {
             TypeInfo.Class cls => LookupJsxClassCoreMember(cls.Core, name),
+            TypeInfo.MutableClass mutable => LookupJsxClassCoreMember(mutable.Freeze().Core, name),
             TypeInfo.GenericClass generic => LookupJsxClassCoreMember(generic.Core, name),
             TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } instantiated =>
                 LookupJsxClassCoreMember(generic.Core, name) is { } member
@@ -1154,7 +1368,10 @@ public partial class TypeChecker
         if (expected is TypeInfo.Union union)
             return union.FlattenedTypes.Any(member =>
                 AreJsxAttributesCompatible(member, actual, jsxNamespace, jsx));
-        if (expected is TypeInfo.Any or TypeInfo.Unknown || actual is not TypeInfo.Record actualRecord)
+        if (expected is TypeInfo.Any or TypeInfo.Unknown ||
+            expected is TypeInfo.Intersection anyIntersection &&
+                anyIntersection.FlattenedTypes.Any(member => member is TypeInfo.Any) ||
+            actual is not TypeInfo.Record actualRecord)
             return true;
         if (!TryGetJsxMemberView(expected, out var members, out var optional, out TypeInfo? stringIndex))
             return false;
@@ -1237,14 +1454,35 @@ public partial class TypeChecker
     /// <c>any</c> degrades the props literal — tsc's behavior).
     /// </summary>
     private void CheckJsxAttributes(
-        TypeInfo expected, TypeInfo actual, JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace)
+        TypeInfo expected, TypeInfo actual, JsxCallInfo jsx, TypeInfo.Namespace? jsxNamespace,
+        bool forceAssignmentDiagnostic = false)
     {
         if (HasAnyJsxSpread(jsx))
             return;
-        if (expected is TypeInfo.Any or TypeInfo.Unknown)
+        if (expected is TypeInfo.Any or TypeInfo.Unknown ||
+            expected is TypeInfo.Intersection anyIntersection &&
+                anyIntersection.FlattenedTypes.Any(member => member is TypeInfo.Any))
             return;
         if (actual is not TypeInfo.Record actualRecord)
             return;
+
+        TypeInfo? intrinsicAttributes = jsxNamespace?.Types.GetValueOrDefault("IntrinsicAttributes");
+        if (jsx.Kind == JsxElementKind.Component && intrinsicAttributes is not null &&
+            TryGetJsxMemberView(intrinsicAttributes, out var intrinsicMembers, out var intrinsicOptional, out _))
+        {
+            List<string> missingIntrinsic = intrinsicMembers.Keys
+                .Where(name => !intrinsicOptional.Contains(name) && !actualRecord.Fields.ContainsKey(name))
+                .ToList();
+            if (missingIntrinsic.Count > 0)
+            {
+                ReportJsx(new TypeCheckException(
+                    missingIntrinsic.Count == 1
+                        ? $"Property '{missingIntrinsic[0]}' is missing in type '{actual}' but required in type '{intrinsicAttributes}'."
+                        : $"Type '{actual}' is missing the following properties from type '{intrinsicAttributes}': {string.Join(", ", missingIntrinsic)}",
+                    jsx.Line, tsCode: missingIntrinsic.Count == 1 ? "TS2741" : "TS2739"));
+                return;
+            }
+        }
 
         // Intersections distribute over union props for JSX assignment just as they do for
         // ordinary object assignment: `(Canadian | American) & Children` accepts either
@@ -1275,10 +1513,31 @@ public partial class TypeChecker
         }
         if (!TryGetJsxMemberView(expected, out var expectedMembers, out var expectedOptional,
                 out TypeInfo? stringIndexType))
+        {
+            ReportJsx(new TypeCheckException(
+                $"Type '{actual}' is not assignable to type '{expected}'.",
+                jsx.Line, tsCode: "TS2322"));
             return;
+        }
 
         actualRecord = ContextualizeJsxAttributeCallbacks(
             jsx, expectedMembers, stringIndexType, actualRecord);
+
+        string childrenAttributeName = "children";
+        Dictionary<string, TypeInfo> childrenMembers = [];
+        bool hasChildrenMarker = jsx.ChildExprs.Count > 0 &&
+            jsxNamespace?.Types.GetValueOrDefault("ElementChildrenAttribute") is { } childrenMarker &&
+            TryGetJsxMemberView(childrenMarker, out childrenMembers, out _, out _) &&
+            childrenMembers.Count > 0;
+        if (hasChildrenMarker)
+        {
+            childrenAttributeName = childrenMembers.Keys.First();
+        }
+        if (expectedMembers.TryGetValue(childrenAttributeName, out TypeInfo? expectedChildren))
+        {
+            actualRecord = ContextualizeJsxChildCallbacks(
+                jsx, childrenAttributeName, expectedChildren, actualRecord);
+        }
 
         HashSet<string> directAttributes = jsx.PropsExpr is Expr.ObjectLiteral literal
             ? literal.Properties
@@ -1286,29 +1545,29 @@ public partial class TypeChecker
                 .Select(property => ((Expr.IdentifierKey)property.Key!).Name.Lexeme)
                 .ToHashSet(StringComparer.Ordinal)
             : [];
-        string childrenAttributeName = "children";
         if (jsx.ChildExprs.Count > 0)
         {
-            if (jsxNamespace?.Types.GetValueOrDefault("ElementChildrenAttribute") is { } childrenMarker &&
-                TryGetJsxMemberView(childrenMarker, out var childrenMembers, out _, out _) &&
-                childrenMembers.Count > 0)
-            {
-                childrenAttributeName = childrenMembers.Keys.First();
-            }
             // Without ElementChildrenAttribute, children are not an excess attribute on
             // an empty props bag. Still validate them when the props type itself explicitly
             // declares the conventional `children` member.
-            if (expectedMembers.ContainsKey(childrenAttributeName))
+            if ((hasChildrenMarker && jsx.Kind == JsxElementKind.Component) ||
+                expectedMembers.ContainsKey(childrenAttributeName))
                 directAttributes.Add(childrenAttributeName);
         }
 
         // Weak-type failure is an assignment diagnostic for a spread source. Direct JSX
         // attributes instead receive the JSX TS2322 excess-property diagnostic.
+        bool checksChildren = hasChildrenMarker || expectedMembers.ContainsKey(childrenAttributeName) ||
+            IsDirectJsxAttribute(jsx, childrenAttributeName);
         var consideredFields = actualRecord.Fields
-            .Where(field => IsCheckedJsxAttribute(field.Key) || expectedMembers.ContainsKey(field.Key))
+            .Where(field =>
+                (field.Key != childrenAttributeName || checksChildren) &&
+                (IsCheckedJsxAttribute(field.Key) || expectedMembers.ContainsKey(field.Key)))
             .ToFrozenDictionary(StringComparer.Ordinal);
-        if (expectedMembers.Count == 0 && consideredFields.Count > 0 &&
-            consideredFields.Keys.All(name => !IsDirectJsxAttribute(jsx, name)) &&
+        if (consideredFields.Count > 0 &&
+            !consideredFields.ContainsKey(childrenAttributeName) &&
+            consideredFields.Keys.All(name => !directAttributes.Contains(name)) &&
+            consideredFields.Keys.All(name => !expectedMembers.ContainsKey(name)) &&
             jsxNamespace?.Types.GetValueOrDefault("IntrinsicAttributes") is not null)
         {
             bool childrenMismatch = consideredFields.ContainsKey("children");
@@ -1349,7 +1608,6 @@ public partial class TypeChecker
             if (!actualRecord.Fields.ContainsKey(required) && actualRecord.StringIndexType is not TypeInfo.Any)
                 missing.Add(required);
         }
-        TypeInfo? intrinsicAttributes = jsxNamespace?.Types.GetValueOrDefault("IntrinsicAttributes");
         bool hasDirectExcess = directAttributes.Any(name =>
             IsCheckedJsxAttribute(name) &&
             !expectedMembers.ContainsKey(name) &&
@@ -1362,7 +1620,7 @@ public partial class TypeChecker
         // A fresh direct excess property is the primary assignment failure, so don't also
         // report every required property it displaced. For a pure generic spread, tsc keeps
         // the source type in the diagnostic and uses TS2322 rather than literal TS2741/TS2739.
-        bool useAssignmentDiagnostic = genericSpreadSource || selectedAlternative;
+        bool useAssignmentDiagnostic = genericSpreadSource || selectedAlternative || forceAssignmentDiagnostic;
         bool hasDirectTypeMismatch = hasKnownTypeMismatch &&
             directAttributes.Any(name =>
                 expectedMembers.TryGetValue(name, out TypeInfo? member) &&
@@ -1405,7 +1663,10 @@ public partial class TypeChecker
         foreach (var (name, valueType) in actualRecord.Fields)
         {
             if (!IsCheckedJsxAttribute(name) && !expectedMembers.ContainsKey(name))
+            {
+                ReportImplicitAnyJsxAttributeCallback(jsx, name);
                 continue;
+            }
 
             TypeInfo? memberType = expectedMembers.TryGetValue(name, out var direct)
                 ? direct
@@ -1431,19 +1692,14 @@ public partial class TypeChecker
                 TryReportJsxChildMismatches(jsx, memberType, valueType))
                 continue;
 
-            if (!IsJsxAttributeValueCompatible(memberType, valueType))
+            bool compatible = name == childrenAttributeName
+                ? IsJsxChildValueCompatible(memberType, valueType)
+                : IsJsxAttributeValueCompatible(memberType, valueType);
+            if (!compatible)
             {
                 if (name == childrenAttributeName && jsx.ChildExprs.Count > 1)
                 {
-                    TypeInfo? repeatedChildType = memberType switch
-                    {
-                        TypeInfo.Array array => array.ElementType,
-                        TypeInfo.Union union => union.FlattenedTypes
-                            .OfType<TypeInfo.Array>()
-                            .Select(array => array.ElementType)
-                            .FirstOrDefault(),
-                        _ => null,
-                    };
+                    TypeInfo? repeatedChildType = JsxRepeatedChildElementType(memberType);
                     int invalidTextIndex = repeatedChildType is null
                         ? -1
                         : jsx.ChildExprs
@@ -1475,8 +1731,8 @@ public partial class TypeChecker
                 ReportJsx(new TypeCheckException(
                     $"Type '{valueType}' is not assignable to type '{memberType}'.",
                     JsxAttributeLine(jsx, name),
-                    tsCode: name == childrenAttributeName && JsxMissingRequiredMember(memberType, valueType)
-                        ? "TS2741"
+                    tsCode: name == childrenAttributeName
+                        ? JsxChildMismatchDiagnosticCode(memberType, valueType)
                         : "TS2322"));
             }
         }
@@ -1523,31 +1779,59 @@ public partial class TypeChecker
         // reports a diagnostic at each incompatible child. The lowered props record collapses
         // those children into one array/union, so recover the individual types from the type map
         // instead of emitting a single aggregate error and losing duplicate locations.
-        if (jsx.ChildExprs.Count <= 1 ||
-            expectedChildren is not TypeInfo.Array expectedArray ||
+        TypeInfo? expectedElement = JsxRepeatedChildElementType(expectedChildren);
+        if (jsx.ChildExprs.Count <= 1 || expectedElement is null ||
             actualChildren is not (TypeInfo.Array or TypeInfo.Tuple) ||
             jsx.ChildExprs.Any(child => child is Expr.Spread))
             return false;
 
         var mismatches = jsx.ChildExprs
-            .Select(child => (Child: child, Type: _typeMap.Get(child)))
+            .Select((child, index) => (Child: child, Index: index, Type: _typeMap.Get(child)))
             .Where(pair => pair.Type is not null &&
-                !IsCompatible(expectedArray.ElementType, pair.Type))
+                !IsCompatible(expectedElement, pair.Type))
             .ToList();
         if (mismatches.Count == 0)
             return false;
 
-        foreach ((Expr child, TypeInfo? childType) in mismatches)
+        foreach ((Expr child, int index, TypeInfo? childType) in mismatches)
         {
+            int line = jsx.ChildLines is { } lines && index < lines.Count
+                ? lines[index]
+                : TryGetExprLine(child) ?? jsx.Line;
+            if (childType is TypeInfo.StringLiteral)
+            {
+                ReportJsx(new TypeCheckException(
+                    $"'{jsx.TagName}' components don't accept text as child elements. Text in JSX has the type 'string', but the expected type of 'children' is '{expectedChildren}'.",
+                    line,
+                    tsCode: "TS2747"));
+                continue;
+            }
+
             ReportJsx(new TypeCheckException(
-                $"Type '{childType}' is not assignable to type '{expectedArray.ElementType}'.",
-                TryGetExprLine(child) ?? jsx.Line,
-                tsCode: JsxMissingRequiredMember(expectedArray.ElementType, childType!)
-                    ? "TS2741"
-                    : "TS2322"));
+                $"Type '{childType}' is not assignable to type '{expectedElement}'.",
+                line,
+                tsCode: JsxChildMismatchDiagnosticCode(expectedElement, childType!)));
         }
         return true;
     }
+
+    private TypeInfo? JsxRepeatedChildElementType(TypeInfo type) => type switch
+    {
+        TypeInfo.Array array => array.ElementType,
+        TypeInfo.Interface { NumberIndexType: { } element } => element,
+        TypeInfo.Record { NumberIndexType: { } element } => element,
+        TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericInterface } instantiated
+            when FlattenInstantiatedInterface(instantiated) is { } flattened =>
+                JsxRepeatedChildElementType(flattened),
+        TypeInfo.Union union => union.FlattenedTypes
+            .Select(JsxRepeatedChildElementType)
+            .FirstOrDefault(element => element is not null),
+        TypeInfo.Intersection intersection => intersection.FlattenedTypes
+            .Where(member => member is not (TypeInfo.Function or TypeInfo.GenericFunction))
+            .Select(JsxRepeatedChildElementType)
+            .FirstOrDefault(element => element is not null),
+        _ => null,
+    };
 
     private bool JsxMissingRequiredMember(TypeInfo expected, TypeInfo actual) =>
         (expected, actual) switch
@@ -1564,6 +1848,51 @@ public partial class TypeChecker
                 .Any(member => JsxMissingRequiredMember(expected, member)),
             _ => MissingRequiredMember(expected, actual),
         };
+
+    private bool IsJsxChildValueCompatible(TypeInfo expected, TypeInfo actual)
+    {
+        bool expectedIsClassInstance = expected is TypeInfo.Instance or TypeInfo.Class or
+            TypeInfo.MutableClass or TypeInfo.GenericClass or
+            TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass };
+        if (expectedIsClassInstance && actual is TypeInfo.Class or TypeInfo.MutableClass or
+            TypeInfo.GenericClass or TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass })
+            return false;
+        if (expected is TypeInfo.Class or TypeInfo.InstantiatedGeneric
+            { GenericDefinition: TypeInfo.GenericClass })
+            expected = new TypeInfo.Instance(expected);
+        return IsJsxAttributeValueCompatible(expected, actual);
+    }
+
+    private string JsxChildMismatchDiagnosticCode(TypeInfo expected, TypeInfo actual)
+    {
+        Dictionary<string, TypeInfo>? expectedMembers = expected switch
+        {
+            TypeInfo.Class cls => CollectPublicInstanceMembers(cls),
+            TypeInfo.InstantiatedGeneric
+                { GenericDefinition: TypeInfo.GenericClass generic } instantiated =>
+                CollectGenericClassMembers(generic, instantiated.TypeArguments),
+            TypeInfo.Instance { ResolvedClassType: TypeInfo.Class cls } => CollectPublicInstanceMembers(cls),
+            TypeInfo.Instance
+                { ResolvedClassType: TypeInfo.InstantiatedGeneric { GenericDefinition: TypeInfo.GenericClass generic } instantiated } =>
+                CollectGenericClassMembers(generic, instantiated.TypeArguments),
+            _ => null,
+        };
+        if (expectedMembers is not null)
+        {
+            IReadOnlyDictionary<string, TypeInfo> actualMembers = actual switch
+            {
+                TypeInfo.Instance { ResolvedClassType: TypeInfo.Class cls } => CollectPublicInstanceMembers(cls),
+                TypeInfo.Interface iface => iface.GetAllMembers().ToDictionary(pair => pair.Key, pair => pair.Value),
+                TypeInfo.Record record => record.Fields,
+                _ => FrozenDictionary<string, TypeInfo>.Empty,
+            };
+            int missing = expectedMembers.Keys.Count(name => !actualMembers.ContainsKey(name));
+            if (missing >= 4) return "TS2740";
+            if (missing >= 2) return "TS2739";
+            if (missing == 1) return "TS2741";
+        }
+        return JsxMissingRequiredMember(expected, actual) ? "TS2741" : "TS2322";
+    }
 
     private static IReadOnlyList<TypeInfo> JsxAttributeAlternatives(TypeInfo type)
     {
@@ -1712,34 +2041,23 @@ public partial class TypeChecker
             return actual;
 
         Dictionary<string, TypeInfo>? fields = null;
-        foreach (Expr.Property property in literal.Properties)
+        foreach ((string name, Expr.ArrowFunction arrow, int line) in
+                 EnumerateJsxAttributeCallbacks(literal))
         {
-            if (property.IsSpread ||
-                property.Key is not Expr.IdentifierKey key ||
-                property.Value is not Expr.ArrowFunction arrow)
-                continue;
-
-            TypeInfo? expected = expectedMembers.GetValueOrDefault(key.Name.Lexeme) ?? stringIndexType;
-            TypeInfo? contextualFunction = expected switch
-            {
-                TypeInfo.Function function => function,
-                TypeInfo.GenericFunction generic => generic,
-                TypeInfo.Union union => union.FlattenedTypes.FirstOrDefault(member =>
-                    member is TypeInfo.Function or TypeInfo.GenericFunction),
-                _ => null,
-            };
+            TypeInfo? expected = expectedMembers.GetValueOrDefault(name) ?? stringIndexType;
+            TypeInfo? contextualFunction = FindJsxContextualFunction(expected);
             if (contextualFunction is null) continue;
 
             try
             {
                 TypeInfo callback = CheckArrowFunction(arrow, contextualFunction);
                 (fields ??= actual.Fields.ToDictionary(
-                    pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))[key.Name.Lexeme] = callback;
+                    pair => pair.Key, pair => pair.Value, StringComparer.Ordinal))[name] = callback;
                 _typeMap.Set(arrow, callback);
             }
             catch (TypeCheckException ex)
             {
-                ReportJsx(WithJsxLine(ex, key.Name.Line));
+                ReportJsx(WithJsxLine(ex, line));
             }
         }
 
@@ -1756,6 +2074,83 @@ public partial class TypeChecker
                 actual.CallSignatures,
                 actual.ConstructorSignatures,
                 actual.MethodMembers);
+    }
+
+    private static IEnumerable<(string Name, Expr.ArrowFunction Arrow, int Line)>
+        EnumerateJsxAttributeCallbacks(Expr.ObjectLiteral literal)
+    {
+        foreach (Expr.Property property in literal.Properties)
+        {
+            if (property.IsSpread && property.Value is Expr.ObjectLiteral spreadLiteral)
+            {
+                foreach (var callback in EnumerateJsxAttributeCallbacks(spreadLiteral))
+                    yield return callback;
+                continue;
+            }
+
+            if (!property.IsSpread && property.Key is Expr.IdentifierKey key &&
+                property.Value is Expr.ArrowFunction arrow)
+            {
+                yield return (key.Name.Lexeme, arrow, key.Name.Line);
+            }
+        }
+    }
+
+    private static TypeInfo? FindJsxContextualFunction(TypeInfo? type) => type switch
+    {
+        TypeInfo.Function or TypeInfo.GenericFunction => type,
+        TypeInfo.Union union => union.FlattenedTypes
+            .Select(FindJsxContextualFunction)
+            .FirstOrDefault(candidate => candidate is not null),
+        TypeInfo.Intersection intersection => intersection.FlattenedTypes
+            .Select(FindJsxContextualFunction)
+            .FirstOrDefault(candidate => candidate is not null),
+        _ => null,
+    };
+
+    private TypeInfo.Record ContextualizeJsxChildCallbacks(
+        JsxCallInfo jsx,
+        string childrenName,
+        TypeInfo expectedChildren,
+        TypeInfo.Record actual)
+    {
+        TypeInfo? contextualFunction = FindJsxContextualFunction(expectedChildren);
+        if (contextualFunction is null || jsx.ChildExprs.Count == 0)
+            return actual;
+
+        var childTypes = new List<TypeInfo>(jsx.ChildExprs.Count);
+        bool changed = false;
+        foreach (Expr child in jsx.ChildExprs)
+        {
+            TypeInfo childType = _typeMap.Get(child) ?? TypeInfo.Any.Shared;
+            if (child is Expr.ArrowFunction arrow)
+            {
+                try
+                {
+                    childType = CheckArrowFunction(
+                        arrow, contextualFunction, useContextualReturnType: false);
+                    _typeMap.Set(arrow, childType);
+                    changed = true;
+                }
+                catch (TypeCheckException ex)
+                {
+                    ReportJsx(WithJsxLine(ex, TryGetExprLine(child) ?? jsx.Line));
+                }
+            }
+            childTypes.Add(childType);
+        }
+
+        if (!changed) return actual;
+        TypeInfo value = childTypes.Count == 1
+            ? childTypes[0]
+            : new TypeInfo.Tuple(
+                jsx.ChildExprs.Select((child, index) => new TypeInfo.TupleElement(
+                    childTypes[index],
+                    child is Expr.Spread ? TupleElementKind.Spread : TupleElementKind.Required)).ToList(),
+                jsx.ChildExprs.Count(child => child is not Expr.Spread));
+        var fields = actual.Fields.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+        fields[childrenName] = value;
+        return actual with { Fields = fields.ToFrozenDictionary(StringComparer.Ordinal) };
     }
 
     private bool TryInstantiateJsxGenericFunction(
@@ -1854,6 +2249,8 @@ public partial class TypeChecker
     /// <summary>Line of the written attribute (via the props object literal), else the element line.</summary>
     private static int JsxAttributeLine(JsxCallInfo jsx, string attributeName)
     {
+        if (attributeName == "children" && jsx.ChildLines is { Count: > 0 } childLines)
+            return childLines[0];
         if (jsx.PropsExpr is Expr.ObjectLiteral literal)
         {
             foreach (var property in literal.Properties)

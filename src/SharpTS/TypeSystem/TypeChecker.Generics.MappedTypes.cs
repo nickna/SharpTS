@@ -283,6 +283,9 @@ public partial class TypeChecker
         Dictionary<string, TypeInfo> fields = [];
         HashSet<string> optionalFields = [];
         HashSet<string> readonlyFields = [];
+        TypeInfo? stringIndexType = null;
+        TypeInfo? numberIndexType = null;
+        TypeInfo? symbolIndexType = null;
         bool addsReadonly = mapped.Modifiers.HasFlag(MappedTypeModifiers.AddReadonly);
 
         foreach (var key in keys)
@@ -294,11 +297,11 @@ public partial class TypeChecker
                 _ => null
             };
 
-            if (keyName == null) continue;
+            if (keyName == null && mapped.AsClause != null) continue;
 
             // Apply as clause for key remapping if present
-            string finalKeyName = keyName;
-            if (mapped.AsClause != null)
+            string? finalKeyName = keyName;
+            if (mapped.AsClause != null && keyName is not null)
             {
                 var remappedKey = ApplyKeyRemapping(keyName, mapped.AsClause, mapped.ParameterName, outerSubstitutions);
                 if (remappedKey == null) continue; // Key was filtered out (returned never)
@@ -317,14 +320,33 @@ public partial class TypeChecker
                 [mapped.ParameterName] = key
             };
             TypeInfo valueType = SubstituteWithoutConditionalEval(mapped.ValueType, localSubs);
-
             // Handle indexed access in value type (e.g., T[K])
             valueType = ResolveIndexedAccessTypes(valueType, localSubs);
 
             if (valueType is TypeInfo.ConditionalType valueCond && !ContainsOpenTypeVariable(valueCond))
             {
                 var resolvedCheck = ResolveIndexedAccessTypes(valueCond.CheckType, localSubs);
-                valueType = EvaluateConditionalType(valueCond with { CheckType = resolvedCheck });
+                var resolvedExtends = ResolveIndexedAccessTypes(valueCond.ExtendsType, localSubs);
+                valueType = EvaluateConditionalType(valueCond with
+                {
+                    CheckType = resolvedCheck,
+                    ExtendsType = resolvedExtends,
+                });
+            }
+            // A keyof domain can include primitive string/number/symbol keys for index
+            // signatures. They are not named fields, but the mapped value still defines the
+            // corresponding index result (for example Boxified<Foo>[string]).
+            if (finalKeyName is null)
+            {
+                switch (key)
+                {
+                    case TypeInfo.String: stringIndexType = valueType; break;
+                    case TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER }:
+                        numberIndexType = valueType;
+                        break;
+                    case TypeInfo.Symbol: symbolIndexType = valueType; break;
+                }
+                continue;
             }
 
             fields[finalKeyName] = valueType;
@@ -332,7 +354,7 @@ public partial class TypeChecker
             // Apply modifiers
             if (mapped.Modifiers.HasFlag(MappedTypeModifiers.AddOptional) ||
                 (!mapped.Modifiers.HasFlag(MappedTypeModifiers.RemoveOptional) &&
-                 homomorphicOptional?.Contains(keyName) == true))
+                 homomorphicOptional?.Contains(finalKeyName) == true))
             {
                 optionalFields.Add(finalKeyName);
             }
@@ -346,8 +368,14 @@ public partial class TypeChecker
         // Return as Interface to preserve optional / readonly info (a Record can carry neither).
         return optionalFields.Count > 0 || readonlyFields.Count > 0
             ? new TypeInfo.Interface("", fields.ToFrozenDictionary(), optionalFields.ToFrozenSet(),
+                StringIndexType: stringIndexType,
+                NumberIndexType: numberIndexType,
+                SymbolIndexType: symbolIndexType,
                 ReadonlyMembers: readonlyFields.Count > 0 ? readonlyFields.ToFrozenSet() : null)
-            : new TypeInfo.Record(fields.ToFrozenDictionary());
+            : new TypeInfo.Record(fields.ToFrozenDictionary(),
+                StringIndexType: stringIndexType,
+                NumberIndexType: numberIndexType,
+                SymbolIndexType: symbolIndexType);
     }
 
     /// <summary>
@@ -535,7 +563,10 @@ public partial class TypeChecker
     {
         return objectType switch
         {
-            TypeInfo.Interface itf => itf.Members.GetValueOrDefault(propertyName),
+            TypeInfo.Interface itf => itf.GetAllMembers()
+                .Where(member => member.Key == propertyName)
+                .Select(member => member.Value)
+                .FirstOrDefault(),
             TypeInfo.Record rec => rec.Fields.GetValueOrDefault(propertyName),
             TypeInfo.Class cls => cls.Methods.GetValueOrDefault(propertyName)
                                ?? cls.FieldTypes.GetValueOrDefault(propertyName)

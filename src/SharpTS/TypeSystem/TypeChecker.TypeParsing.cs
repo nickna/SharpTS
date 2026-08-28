@@ -192,6 +192,13 @@ public partial class TypeChecker
             }
         }
 
+        // `Function` is a language-level supertype of every callable. Resolve it before the
+        // declaration environment: lib.es5's `interface Function` describes its members but has
+        // no call signature of its own, so using that surface here makes Extract<T, Function>
+        // incorrectly erase actual function types.
+        if (typeName == "Function") return new TypeInfo.Function(
+            [new TypeInfo.Array(TypeInfo.Any.Shared)], TypeInfo.Any.Shared, RequiredParams: 0, HasRestParam: true);
+
         // A program-loaded declaration wins over SharpTS's compatibility fallbacks.
         // This is what lets lib.*.d.ts describe globals such as Function, Object,
         // Error, Date, and the primitive wrappers without changing runtime
@@ -211,11 +218,6 @@ public partial class TypeChecker
         if (typeName == "boolean") return TypeInfo.Primitive.Boolean;
         if (typeName == "symbol") return TypeInfo.Symbol.Shared;
         if (typeName == "bigint") return TypeInfo.BigInt.Shared;
-        // The global Function type: any callable, i.e. (...args: any[]) => any. Parsing it to
-        // Any made `T[K] extends Function` filters (FunctionPropertyNames et al.) match every
-        // property — `X extends any` is always true — emptying the mapped result (#185).
-        if (typeName == "Function") return new TypeInfo.Function(
-            [new TypeInfo.Array(TypeInfo.Any.Shared)], TypeInfo.Any.Shared, RequiredParams: 0, HasRestParam: true);
         if (typeName == "void") return TypeInfo.Void.Shared;
         if (typeName == "null") return TypeInfo.Null.Shared;
         if (typeName == "undefined") return TypeInfo.Undefined.Shared;

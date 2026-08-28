@@ -71,7 +71,50 @@ public partial class TypeChecker
                 }
                 else
                 {
-                    throw new TypeCheckException($" Enum member '{member.Name.Lexeme}' must be a literal value.", tsCode: "TS2553");
+                    // Non-const enums may use arbitrary computed numeric expressions. Their value
+                    // is produced at runtime, so the checker only needs to validate the expression
+                    // type and remember that subsequent initializer-free members cannot continue a
+                    // compile-time numeric sequence.
+                    // An enum initializer is still visited for its resulting type, but failures in
+                    // a subexpression (for example an arbitrary string index that resolves to
+                    // `any`) are not themselves enum-declaration diagnostics. Treat those as any
+                    // and let definite non-numeric results produce the enum-specific TS18033.
+                    TypeInfo computedType;
+                    _suppressDiagnostics++;
+                    try
+                    {
+                        var enumInitializerEnvironment = new TypeEnvironment(_environment);
+                        foreach (var (resolvedName, resolvedValue) in members)
+                        {
+                            enumInitializerEnvironment.Define(resolvedName, resolvedValue switch
+                            {
+                                string => TypeInfo.String.Shared,
+                                _ => new TypeInfo.Primitive(TokenType.TYPE_NUMBER),
+                            });
+                        }
+                        using (new EnvironmentScope(this, enumInitializerEnvironment))
+                            computedType = CheckExpr(member.Value);
+                    }
+                    catch (TypeCheckException)
+                    {
+                        computedType = TypeInfo.Any.Shared;
+                    }
+                    finally
+                    {
+                        _suppressDiagnostics--;
+                    }
+                    if (!IsNumber(computedType) && computedType is not TypeInfo.Any)
+                    {
+                        throw new TypeCheckException(
+                            $" Enum member '{member.Name.Lexeme}' must have a numeric computed value.",
+                            member.Name.Line,
+                            tsCode: "TS18033");
+                    }
+
+                    members[member.Name.Lexeme] = double.NaN;
+                    currentNumericValue = null;
+                    hasNumeric = true;
+                    autoIncrementActive = false;
                 }
             }
             else

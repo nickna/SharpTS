@@ -35,8 +35,9 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandPartial(TypeInfo sourceType)
     {
-        // If T is a type parameter, return a MappedType for lazy evaluation
-        if (sourceType is TypeInfo.TypeParameter)
+        // If the source shape is still abstract (including T & U), preserve the homomorphic
+        // mapping for substitution at instantiation time instead of flattening it to `{}`.
+        if (IsAbstractTypeReference(sourceType))
         {
             return new TypeInfo.MappedType(
                 "K",
@@ -80,8 +81,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandRequired(TypeInfo sourceType)
     {
-        // If T is a type parameter, return a MappedType for lazy evaluation
-        if (sourceType is TypeInfo.TypeParameter)
+        if (IsAbstractTypeReference(sourceType))
         {
             return new TypeInfo.MappedType(
                 "K",
@@ -124,8 +124,7 @@ public partial class TypeChecker
     /// </summary>
     private TypeInfo ExpandReadonly(TypeInfo sourceType)
     {
-        // If T is a type parameter, return a MappedType for lazy evaluation
-        if (sourceType is TypeInfo.TypeParameter)
+        if (IsAbstractTypeReference(sourceType))
         {
             return new TypeInfo.MappedType(
                 "K",
@@ -133,6 +132,33 @@ public partial class TypeChecker
                 new TypeInfo.IndexedAccess(sourceType, new TypeInfo.TypeParameter("K")),
                 MappedTypeModifiers.AddReadonly
             );
+        }
+
+        // Preserve index signatures even when there are no named properties. Readonly<Dict>
+        // remains a readonly string-indexed object; collapsing it to `{}` loses both the key
+        // domain and the write restriction.
+        if (sourceType is TypeInfo.Record record)
+            return record with { IsReadonly = true };
+
+        if (sourceType is TypeInfo.Interface itf)
+        {
+            var readonlyMembers = itf.GetAllMembers()
+                .Select(member => member.Key)
+                .ToFrozenSet(StringComparer.Ordinal);
+            return new TypeInfo.Interface(
+                itf.Name,
+                itf.Members,
+                itf.OptionalMembers,
+                StringIndexType: itf.StringIndexType,
+                NumberIndexType: itf.NumberIndexType,
+                SymbolIndexType: itf.SymbolIndexType,
+                Extends: itf.Extends,
+                CallSignatures: itf.CallSignatures,
+                ConstructorSignatures: itf.ConstructorSignatures,
+                ReadonlyMembers: readonlyMembers,
+                MethodMembers: itf.MethodMembers,
+                MemberBrands: itf.MemberBrands,
+                ReadonlyNumberIndex: itf.NumberIndexType is not null || itf.ReadonlyNumberIndex);
         }
 
         // Handle unions

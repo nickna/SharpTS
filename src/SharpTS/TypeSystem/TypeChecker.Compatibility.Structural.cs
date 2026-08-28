@@ -203,6 +203,14 @@ public partial class TypeChecker
             return record.Fields.TryGetValue(name, out var t) ? t : null;
         }
 
+        if (type is TypeInfo.Class cls)
+        {
+            if (cls.FieldTypes.TryGetValue(name, out var field)) return field;
+            if (cls.Methods.TryGetValue(name, out var method)) return method;
+            if (cls.Getters.TryGetValue(name, out var getter)) return getter;
+            return null;
+        }
+
         // Handle String type - has length property and string methods
         if (type is TypeInfo.String or TypeInfo.StringLiteral)
         {
@@ -244,6 +252,15 @@ public partial class TypeChecker
                 if (member.Key == name) return member.Value;
             }
             return null;
+        }
+
+        if (type is TypeInfo.InstantiatedGeneric
+            {
+                GenericDefinition: TypeInfo.GenericInterface
+            } instantiatedInterface &&
+            FlattenInstantiatedInterface(instantiatedInterface) is { } flattenedInterface)
+        {
+            return GetMemberType(flattenedInterface, name);
         }
 
         if (type is TypeInfo.Instance instance)

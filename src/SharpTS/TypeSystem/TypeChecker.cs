@@ -272,6 +272,13 @@ public partial class TypeChecker
     private HashSet<Stmt.Parameter>? _implicitAnyReported;
 
     /// <summary>
+    /// Non-zero while a generic call performs its initial, pre-inference argument pass. Nested
+    /// JSX-returning arrows in object/array literals cannot be diagnosed yet: their contextual
+    /// parameter types become available only after the generic signature is instantiated.
+    /// </summary>
+    private int _deferGenericJsxArrowImplicitAnyDepth;
+
+    /// <summary>
     /// Reports TS7006 (TS7019 for rest parameters) for unannotated parameters of a DECLARED
     /// function, method or constructor, when <c>noImplicitAny</c> is on.
     /// </summary>
@@ -381,6 +388,7 @@ public partial class TypeChecker
     private bool _inStaticBlock = false;
     // Track the declared 'this' type for explicit this parameter (e.g., function f(this: MyType) {})
     private TypeInfo? _currentFunctionThisType = null;
+    private bool _currentArrowCapturesScriptGlobalThis;
     // Contextual 'this' type for object literal accessor bodies (set during CheckObject two-pass)
     private TypeInfo? _pendingObjectThisType = null;
 
@@ -410,6 +418,36 @@ public partial class TypeChecker
     // not confused with an immediate read in the variable's declaring flow. Blocks deliberately
     // share their callable frame; assignments in them participate in the surrounding flow.
     private readonly Stack<Dictionary<BindingSymbol, bool>> _definiteAssignmentStack = new();
+    // Module checking has a preparatory declaration pass followed by an authoritative diagnostic
+    // pass. Track which merged var symbols have already reached VisitVar in the CURRENT pass so the
+    // prepared final type is not mistaken for a declaration preceding the first source declaration.
+    private readonly HashSet<BindingSymbol> _checkedVarRedeclarationSymbols =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _explicitAnyVarSymbols =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _uninitializedImplicitAnyVarSymbols =
+        new(ReferenceEqualityComparer.Instance);
+    // The type installed before each source file first contributes a merged global `var`.
+    // A single symbol can span several lib files plus the user's script, so this must be keyed by
+    // both symbol and document; keeping one value per symbol accidentally retained an early lib
+    // placeholder instead of the completed declaration type seen by the user source.
+    private readonly Dictionary<(BindingSymbol Symbol, SourceDocument Document), TypeInfo>
+        _crossSourceVarTypes = [];
+    private readonly Dictionary<BindingSymbol, (Token Declaration, int FlowDepth)> _implicitAnyVarSymbols =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _reportedImplicitAnyVarDeclarations =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<Token> _reportedDuplicateTypeAliasDeclarations =
+        new(ReferenceEqualityComparer.Instance);
+    // The module declaration pass is source ordered, while its completed environments are reused
+    // by the authoritative pass. Remember bare annotations that were unresolved at their actual
+    // declaration site so a type declared later inside a namespace cannot retroactively resolve
+    // an outer annotation on the second pass.
+    private readonly HashSet<Token> _unresolvedVarTypeAnnotations =
+        new(ReferenceEqualityComparer.Instance);
+    private readonly HashSet<BindingSymbol> _intersectionDeclaredVariables =
+        new(ReferenceEqualityComparer.Instance);
+    private int _suppressVariableUseBeforeAssignment;
     // A typeof guard can prove that a var has a runtime value in only one branch even though
     // evaluating the condition itself reports TS2454. Keep that branch-local fact separate from
     // the assignment map so it suppresses reads without leaking a synthetic assignment at joins.
@@ -541,10 +579,20 @@ public partial class TypeChecker
     /// </summary>
     private void WidenEnclosingNarrowing(string name, TypeInfo declaredType)
     {
+        BindingSymbol? assignedBinding = _environment.GetValueBinding(name);
         for (TypeEnvironment? env = _environment.Enclosing; env != null; env = env.Enclosing)
         {
             if (!env.IsDefinedLocally(name))
                 continue;
+
+            // A lexical declaration that shadows the assignment target is a hard boundary. Guard
+            // environments preserve their enclosing binding identity, while a source declaration
+            // installs a new symbol, so this remains reliable even when an initializer has already
+            // flow-narrowed the declaration's environment binding.
+            if (assignedBinding is not null &&
+                env.GetLocalValueBinding(name) is { } localBinding &&
+                !ReferenceEquals(localBinding, assignedBinding))
+                return;
 
             var local = env.Get(name);
 
@@ -612,8 +660,11 @@ public partial class TypeChecker
 
     private void MarkDefinitelyAssigned(Token name)
     {
+        if (_environment.GetValueBinding(name.Lexeme) is not { } symbol)
+            return;
+
+        _uninitializedImplicitAnyVarSymbols.Remove(symbol);
         if (!_definiteAssignmentStack.TryPeek(out var state) ||
-            _environment.GetValueBinding(name.Lexeme) is not { } symbol ||
             !state.ContainsKey(symbol))
         {
             return;
@@ -624,7 +675,8 @@ public partial class TypeChecker
 
     private void ThrowIfUsedBeforeAssigned(Token name, BindingSymbol symbol)
     {
-        if (_definiteAssignmentReadAssumptions.Contains(symbol))
+        if (_suppressVariableUseBeforeAssignment > 0 ||
+            _definiteAssignmentReadAssumptions.Contains(symbol))
             return;
 
         if (_definiteAssignmentStack.TryPeek(out var state) &&
@@ -1269,6 +1321,17 @@ public partial class TypeChecker
     public TypeMap Check(List<Stmt> statements, SourceDocument? sourceDocument)
     {
         Bindings.Clear();
+        _checkedVarRedeclarationSymbols.Clear();
+        _explicitAnyVarSymbols.Clear();
+        _uninitializedImplicitAnyVarSymbols.Clear();
+        _crossSourceVarTypes.Clear();
+        _implicitAnyVarSymbols.Clear();
+        _reportedImplicitAnyVarDeclarations.Clear();
+        _reportedDuplicateTypeAliasDeclarations.Clear();
+        _unresolvedVarTypeAnnotations.Clear();
+        _recursiveGenericIndexedAliases.Clear();
+        _excessivelyRecursiveVariables.Clear();
+        _intersectionDeclaredVariables.Clear();
         ResetInterfaceDeclarationTracking();
         ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = sourceDocument;
@@ -1277,7 +1340,6 @@ public partial class TypeChecker
         _compatibilityCache = null;
         _expandedTypeAliasCache = null;
         _compatibilityInProgress = null;
-        _ts2741Reported = null;
         _implicitAnyReported = null;
         _compatibilityCheckDepth = 0;
         _narrowingContextStack.Clear();
@@ -1338,6 +1400,17 @@ public partial class TypeChecker
         SourceDocument? sourceDocument)
     {
         Bindings.Clear();
+        _checkedVarRedeclarationSymbols.Clear();
+        _explicitAnyVarSymbols.Clear();
+        _uninitializedImplicitAnyVarSymbols.Clear();
+        _crossSourceVarTypes.Clear();
+        _implicitAnyVarSymbols.Clear();
+        _reportedImplicitAnyVarDeclarations.Clear();
+        _reportedDuplicateTypeAliasDeclarations.Clear();
+        _unresolvedVarTypeAnnotations.Clear();
+        _recursiveGenericIndexedAliases.Clear();
+        _excessivelyRecursiveVariables.Clear();
+        _intersectionDeclaredVariables.Clear();
         ResetInterfaceDeclarationTracking();
         ResetFunctionDeclarationTracking();
         _standaloneSourceDocument = sourceDocument;
@@ -1348,7 +1421,6 @@ public partial class TypeChecker
         _compatibilityCache = null;
         _expandedTypeAliasCache = null;
         _compatibilityInProgress = null;
-        _ts2741Reported = null;
         _implicitAnyReported = null;
         _compatibilityCheckDepth = 0;
         _narrowingContextStack.Clear();
@@ -1425,7 +1497,6 @@ public partial class TypeChecker
     private void RecordTypeError(TypeCheckException ex)
     {
         if (_suppressDiagnostics > 0) return;
-
         // Extract the core message by removing the "Type Error: " or "Type Error at line X: " prefix
         string message = ex.Message;
         if (message.StartsWith("Type Error at line"))
@@ -1501,7 +1572,57 @@ public partial class TypeChecker
     /// </summary>
     private void PreRegisterTypeDeclarations(IEnumerable<Stmt> statements)
     {
-        foreach (var stmt in statements)
+        var statementList = statements as IReadOnlyList<Stmt> ?? statements.ToList();
+        bool preRegisterForwardClasses =
+            _currentModule?.Path.EndsWith(".tsx", StringComparison.OrdinalIgnoreCase) == true ||
+            _currentModule?.Path.EndsWith(".jsx", StringComparison.OrdinalIgnoreCase) == true;
+
+        // Class names are available in type space before their declarations. Seed plain classes
+        // with one mutable placeholder before interfaces and aliases resolve member types; the
+        // declaration pass reuses and populates the same object. Value space remains untouched,
+        // so using the class value before its declaration still follows the TS2449 path.
+        foreach (Stmt statement in statementList)
+        {
+            Stmt.Class? classDeclaration = statement switch
+            {
+                Stmt.Class cls => cls,
+                Stmt.Export { Declaration: Stmt.Class cls } => cls,
+                _ => null,
+            };
+            if (!preRegisterForwardClasses || classDeclaration is null || classDeclaration.IsDeclare ||
+                classDeclaration.TypeParams is { Count: > 0 } ||
+                _environment.IsTypeDefinedLocally(classDeclaration.Name.Lexeme))
+                continue;
+
+            BindingSymbol typeSymbol = RegisterTypeDeclaration(classDeclaration.Name);
+            _environment.DefineType(
+                classDeclaration.Name.Lexeme,
+                new TypeInfo.MutableClass(classDeclaration.Name.Lexeme, -typeSymbol.Id));
+        }
+
+        if (_suppressDiagnostics == 0)
+        {
+            var aliases = statementList.Select(statement => statement switch
+            {
+                Stmt.TypeAlias alias => alias,
+                Stmt.Export { Declaration: Stmt.TypeAlias alias } => alias,
+                _ => null,
+            }).Where(alias => alias is not null).Cast<Stmt.TypeAlias>();
+            foreach (var group in aliases.GroupBy(alias => alias.Name.Lexeme, StringComparer.Ordinal)
+                         .Where(group => group.Count() > 1))
+            {
+                foreach (var alias in group)
+                {
+                    if (_reportedDuplicateTypeAliasDeclarations.Add(alias.Name))
+                        RecordTypeError(new TypeCheckException(
+                            $"Duplicate identifier '{alias.Name.Lexeme}'.",
+                            alias.Name.Line,
+                            tsCode: "TS2300"));
+                }
+            }
+        }
+
+        foreach (var stmt in statementList)
         {
             switch (stmt)
             {
@@ -1518,16 +1639,14 @@ public partial class TypeChecker
                     PreRegisterEnum(enumStmt);
                     break;
                 case Stmt.Class cls:
-                    // Register only the source identity here. The semantic class type is still
-                    // created by CheckClassDeclaration, preserving the existing inheritance order.
-                    RegisterTypeDeclaration(cls.Name);
+                    // Plain classes were seeded above; generic classes still register only their
+                    // source identity because their type parameters are built by the full pass.
+                    if (!preRegisterForwardClasses || cls.TypeParams is { Count: > 0 })
+                        RegisterTypeDeclaration(cls.Name);
                     break;
                 case Stmt.Namespace ns:
                     RegisterTypeDeclaration(ns.Name, mergeWithLocal: true);
                     break;
-                // Note: Classes are not pre-registered here because doing so creates MutableClass
-                // objects that break inheritance checking. Classes are properly registered during
-                // CheckClassDeclaration which handles inheritance correctly.
                 case Stmt.Export export when export.Declaration != null:
                     // Handle exported type declarations
                     PreRegisterTypeDeclarations([export.Declaration]);
@@ -1603,6 +1722,17 @@ public partial class TypeChecker
     public TypeMap CheckModules(List<ParsedModule> modules, ModuleResolver resolver)
     {
         Bindings.Clear();
+        _checkedVarRedeclarationSymbols.Clear();
+        _explicitAnyVarSymbols.Clear();
+        _uninitializedImplicitAnyVarSymbols.Clear();
+        _crossSourceVarTypes.Clear();
+        _implicitAnyVarSymbols.Clear();
+        _reportedImplicitAnyVarDeclarations.Clear();
+        _reportedDuplicateTypeAliasDeclarations.Clear();
+        _unresolvedVarTypeAnnotations.Clear();
+        _recursiveGenericIndexedAliases.Clear();
+        _excessivelyRecursiveVariables.Clear();
+        _intersectionDeclaredVariables.Clear();
         _synthesizedJsxUses.Clear();
         ResetInterfaceDeclarationTracking();
         ResetFunctionDeclarationTracking();
@@ -1771,6 +1901,15 @@ public partial class TypeChecker
         }
         _globalObjectMembers["globalThis"] = TypeInfo.Any.Shared;
 
+        // The declaration collection pass above intentionally leaves its resolved types in the
+        // shared environments. Start source-order redeclaration tracking afresh so the first
+        // authoritative declaration is compared only with later source declarations, not with the
+        // collection pass's final type for that merged symbol.
+        _checkedVarRedeclarationSymbols.Clear();
+        _implicitAnyVarSymbols.Clear();
+        _reportedImplicitAnyVarDeclarations.Clear();
+        _reportedDuplicateTypeAliasDeclarations.Clear();
+
         // Second pass: type-check each module with imports resolved.
         foreach (var module in modules)
         {
@@ -1914,10 +2053,58 @@ public partial class TypeChecker
             module.IsTypeChecked = true;
         }
 
+        // Explicit declaration roots participate in TypeScript's noImplicitAny diagnostics even
+        // though declaration dependencies are otherwise trusted compiler inputs. Scan only that
+        // narrow surface instead of semantically rechecking entire .d.ts roots, which would expose
+        // unsupported dependency constructs and disturb their already-collected namespaces.
+        foreach (var module in modules.Where(module =>
+                     module.IsDeclarationFile && module.ReportDeclarationDiagnostics))
+        {
+            _currentModule = module;
+            _filePath = module.Path;
+            ReportRootDeclarationImplicitAnyDiagnostics(module.Statements);
+        }
+
         _currentModule = null;
         _filePath = null;
         _currentStatementLine = null;
         return _typeMap;
+    }
+
+    private void ReportRootDeclarationImplicitAnyDiagnostics(IEnumerable<Stmt> statements)
+    {
+        foreach (Stmt statement in statements)
+        {
+            switch (statement)
+            {
+                case Stmt.Var variable when _noImplicitAny && variable.TypeAnnotation is null &&
+                    variable.TypeAnnotationNode is null && variable.Initializer is null:
+                    RecordTypeError(new TypeCheckException(
+                        $"Variable '{variable.Name.Lexeme}' implicitly has an 'any' type.",
+                        variable.Name.Line,
+                        tsCode: "TS7005"));
+                    break;
+                case Stmt.Interface @interface when _noImplicitAny:
+                    foreach (var member in @interface.Members.Where(member =>
+                                 !member.IsMethod && !member.HasExplicitType))
+                    {
+                        RecordTypeError(new TypeCheckException(
+                            $"Member '{member.Name.Lexeme}' implicitly has an 'any' type.",
+                            member.Name.Line,
+                            tsCode: "TS7008"));
+                    }
+                    break;
+                case Stmt.Namespace @namespace:
+                    ReportRootDeclarationImplicitAnyDiagnostics(@namespace.Members);
+                    break;
+                case Stmt.Export { Declaration: { } declaration }:
+                    ReportRootDeclarationImplicitAnyDiagnostics([declaration]);
+                    break;
+                case Stmt.Sequence sequence:
+                    ReportRootDeclarationImplicitAnyDiagnostics(sequence.Statements);
+                    break;
+            }
+        }
     }
 
     private TypeInfo.Interface GetGlobalThisType() => new(

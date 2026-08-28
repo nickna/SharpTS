@@ -211,7 +211,10 @@ public partial class TypeChecker
                     binding);
             return typeMember;
         }
-        throw new TypeCheckException($" '{memberName.Lexeme}' does not exist on namespace '{nsType.Name}'.", tsCode: "TS2694");
+        throw new TypeCheckException(
+            $" Property '{memberName.Lexeme}' does not exist on type 'typeof {nsType.Name}'.",
+            memberName.Line,
+            tsCode: "TS2339");
     }
 
     /// <summary>
@@ -275,6 +278,16 @@ public partial class TypeChecker
         if (itf.StringIndexType is { } stringIndexType)
         {
             return WithUncheckedUndefined(stringIndexType);
+        }
+        string? suggestion = ClosestMemberSuggestion(
+            memberName.Lexeme,
+            itf.GetAllMembers().Select(member => member.Key).Distinct(StringComparer.Ordinal).ToList());
+        if (suggestion is not null)
+        {
+            throw new TypeCheckException(
+                $"Property '{memberName.Lexeme}' does not exist on type '{itf.Name}'. Did you mean '{suggestion}'?",
+                memberName.Line,
+                tsCode: "TS2551");
         }
         throw new TypeCheckException($" Property '{memberName.Lexeme}' does not exist on interface '{itf.Name}'.", line: memberName.Line, tsCode: "TS2339");
     }

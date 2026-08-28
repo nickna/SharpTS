@@ -25,6 +25,20 @@ public partial class TypeChecker
         _completedInterfaces.Clear();
     }
 
+    private static TypeInfo.Interface RecordAsInterfaceBase(string name, TypeInfo.Record record) =>
+        new(name,
+            record.Fields,
+            record.OptionalFields ?? FrozenSet<string>.Empty,
+            record.StringIndexType,
+            record.NumberIndexType,
+            record.SymbolIndexType,
+            CallSignatures: record.CallSignatures,
+            ConstructorSignatures: record.ConstructorSignatures,
+            ReadonlyMembers: record.IsReadonly
+                ? record.Fields.Keys.ToFrozenSet(StringComparer.Ordinal)
+                : record.GetterOnlyFields,
+            MethodMembers: record.MethodMembers);
+
     private static HashSet<Stmt.Interface> InterfaceDeclarationsFor(
         Dictionary<TypeEnvironment, HashSet<Stmt.Interface>> declarations,
         TypeEnvironment environment)
@@ -377,6 +391,16 @@ public partial class TypeChecker
             throw new TypeCheckException("Interface name cannot be 'symbol'.", line: interfaceStmt.Name.Line, tsCode: "TS2427");
         }
 
+        if (interfaceStmt.Name.Lexeme == "ElementAttributesProperty" &&
+            interfaceStmt.Members.Count(member => !member.IsMethod) > 1 &&
+            _environment.IsTypeDefined("IntrinsicElements"))
+        {
+            RecordTypeError(new TypeCheckException(
+                "The global type 'JSX.ElementAttributesProperty' may not have more than one property.",
+                interfaceStmt.Name.Line,
+                tsCode: "TS2608"));
+        }
+
         // Handle generic type parameters with two-pass approach to support recursive constraints (e.g., T extends TreeNode<T>)
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
@@ -407,6 +431,14 @@ public partial class TypeChecker
         {
         foreach (var member in interfaceStmt.Members)
         {
+            if (member.TypeAnnotationNode is { } memberNode &&
+                ContainsSelfIndexedAccess(memberNode, interfaceStmt.Name.Lexeme, requireLiteralIndex: true))
+            {
+                RecordTypeError(new TypeCheckException(
+                    $"'{member.Name.Lexeme}' is referenced directly or indirectly in its own type annotation.",
+                    member.Name.Line,
+                    tsCode: "TS2502"));
+            }
             if (_noImplicitAny && !member.IsMethod && !member.HasExplicitType)
             {
                 RecordTypeError(new TypeCheckException(
@@ -605,6 +637,27 @@ public partial class TypeChecker
                     // position resolves to its Instance type, so unwrap that first.)
                     extendsList.Add(ClassAsInterfaceBase(extendClass));
                 }
+                else if (extendType is TypeInfo.InstantiatedGeneric
+                         { GenericDefinition: TypeInfo.GenericClass genericClass } instantiatedClass)
+                {
+                    var inheritedMembers = CollectGenericClassMembers(
+                        genericClass, instantiatedClass.TypeArguments);
+                    extendsList.Add(new TypeInfo.Interface(
+                        genericClass.Name,
+                        inheritedMembers.ToFrozenDictionary(StringComparer.Ordinal),
+                        FrozenSet<string>.Empty));
+                }
+                else if (extendType is TypeInfo.GenericClass genericClassWithDefaults)
+                {
+                    var defaultArguments = ResolveTypeArgumentsWithDefaults(
+                        genericClassWithDefaults.TypeParams, [], genericClassWithDefaults.Name);
+                    var inheritedMembers = CollectGenericClassMembers(
+                        genericClassWithDefaults, defaultArguments);
+                    extendsList.Add(new TypeInfo.Interface(
+                        genericClassWithDefaults.Name,
+                        inheritedMembers.ToFrozenDictionary(StringComparer.Ordinal),
+                        FrozenSet<string>.Empty));
+                }
                 else if (extendType is TypeInfo.Array extendArray)
                 {
                     // `interface I<T> extends ReadonlyArray<E>` (or Array<E>): model the array base
@@ -614,6 +667,12 @@ public partial class TypeChecker
                     // and is substituted at instantiation by FlattenInstantiatedInterface.
                     numberIndexType = extendArray.ElementType;
                     if (extendArray.IsReadonly) readonlyNumberIndex = true;
+                }
+                else if (extendType is TypeInfo.Record extendRecord)
+                {
+                    // An object-literal type alias has statically known members and is a legal
+                    // interface base. Adapt the internal Record shape to the inheritance pipeline.
+                    extendsList.Add(RecordAsInterfaceBase(extendTypeName, extendRecord));
                 }
                 else
                 {

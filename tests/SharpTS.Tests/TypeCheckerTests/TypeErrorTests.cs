@@ -459,8 +459,9 @@ public class TypeErrorTests
     public void UnionToNarrowerType_Fails()
     {
         var source = """
-            let x: string | number = "hello";
-            let y: string = x;
+            function narrow(x: string | number): void {
+                let y: string = x;
+            }
             """;
 
         var ex = Assert.ThrowsAny<Exception>(() => TestHarness.RunInterpreted(source));

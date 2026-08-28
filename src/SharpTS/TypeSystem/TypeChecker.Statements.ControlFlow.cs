@@ -26,16 +26,58 @@ public partial class TypeChecker
     {
         CheckExpr(switchStmt.Subject);
 
+        Expr.Variable? discriminatedVariable = null;
+        Token? discriminantProperty = null;
+        if (switchStmt.Subject is Expr.Get
+            {
+                Object: Expr.Variable variable,
+                Name: var property
+            })
+        {
+            discriminatedVariable = variable;
+            discriminantProperty = property;
+        }
+
+        TypeInfo? fallthroughType = null;
+
         _switchDepth++;
         try
         {
             foreach (var caseItem in switchStmt.Cases)
             {
                 CheckExpr(caseItem.Value);
-                foreach (var stmt in caseItem.Body)
+
+                TypeInfo? caseType = null;
+                if (discriminatedVariable is not null &&
+                    discriminantProperty is not null &&
+                    caseItem.Value is Expr.Literal { Value: string literalValue })
                 {
-                    CheckStmt(stmt);
+                    (_, caseType, _) = AnalyzeDiscriminatedUnionGuard(
+                        discriminatedVariable.Name.Lexeme,
+                        discriminantProperty.Lexeme,
+                        literalValue);
                 }
+
+                TypeInfo? effectiveCaseType = (fallthroughType, caseType) switch
+                {
+                    (null, { } current) => current,
+                    ({ } previous, null) => previous,
+                    ({ } previous, { } current) => new TypeInfo.Union([previous, current]),
+                    _ => null,
+                };
+                var caseEnvironment = new TypeEnvironment(_environment);
+                if (discriminatedVariable is not null && effectiveCaseType is not null)
+                    caseEnvironment.Define(discriminatedVariable.Name.Lexeme, effectiveCaseType);
+
+                using (new EnvironmentScope(this, caseEnvironment))
+                {
+                    foreach (var stmt in caseItem.Body)
+                        CheckStmt(stmt);
+                }
+
+                bool exitsCase = caseItem.Body.LastOrDefault() is Stmt.Break or Stmt.Continue ||
+                    caseItem.Body.Count > 0 && AlwaysTerminates(caseItem.Body[^1]);
+                fallthroughType = exitsCase ? null : effectiveCaseType;
             }
 
             if (switchStmt.DefaultBody != null)

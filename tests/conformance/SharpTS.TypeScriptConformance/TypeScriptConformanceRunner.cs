@@ -201,6 +201,10 @@ public sealed class TypeScriptConformanceRunner
             // populated ambient module rather than an earlier npm fallback.
             resolver.RegisterAmbientModuleDeclarations(modules);
             modules = resolver.GetModulesInOrder(modules);
+
+            var diagnosticRoots = rootFiles.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (ParsedModule module in modules)
+                module.ReportDeclarationDiagnostics = diagnosticRoots.Contains(module.Path);
         }
         catch (Exception ex)
         {

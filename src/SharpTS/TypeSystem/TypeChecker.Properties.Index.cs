@@ -34,11 +34,10 @@ public partial class TypeChecker
     {
         TypeInfo objType = CheckExpr(getIndex.Object);
         TypeInfo indexType = CheckExpr(getIndex.Index);
-
         if (_hasDefaultLibraries &&
             getIndex.Index is Expr.Literal { Value: string directGlobalProperty } &&
             (getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
-             getIndex.Object is Expr.This))
+             getIndex.Object is Expr.This && _currentClass is null))
         {
             if (GetGlobalThisType().Members.TryGetValue(directGlobalProperty, out TypeInfo? directMember))
                 return directMember;
@@ -61,7 +60,7 @@ public partial class TypeChecker
             !GetGlobalThisType().Members.TryGetValue(globalProperty, out TypeInfo? globalMember))
         {
             bool direct = getIndex.Object is Expr.Variable { Name.Lexeme: "globalThis" } ||
-                getIndex.Object is Expr.This;
+                getIndex.Object is Expr.This && _currentClass is null;
             if (!_noImplicitAny)
                 return TypeInfo.Any.Shared;
             throw new TypeCheckException(
@@ -116,6 +115,27 @@ public partial class TypeChecker
         if (objType is TypeInfo.RecursiveTypeAlias rtaObj)
             objType = ExpandRecursiveTypeAlias(rtaObj);
 
+        // Concrete mapped aliases are ordinary object/indexable types once their key domain is
+        // known. Property access already performs this materialization; bracket access must do the
+        // same so mapped string/number/symbol index signatures are visible.
+        objType = ResolveMappedTypeForAccess(objType);
+
+        // A mapped type whose generic key domain cannot yet be enumerated is still indexable by a
+        // key from that domain. Resolve its projected value directly instead of falling through to
+        // TS7053 (`obj[k]` for obj: { [P in K]: T }, k: K / keyof T).
+        if (objType is TypeInfo.MappedType deferredMapped &&
+            (TypeInfoEqualityComparer.Instance.Equals(indexType, deferredMapped.Constraint) ||
+             IsCompatible(deferredMapped.Constraint, indexType)))
+        {
+            var mappedSubs = new Dictionary<string, TypeInfo>
+            {
+                [deferredMapped.ParameterName] = indexType,
+            };
+            return ResolveIndexedAccessTypes(
+                Substitute(deferredMapped.ValueType, mappedSubs),
+                mappedSubs);
+        }
+
         // An instantiated generic interface flattens so its numeric index signature (substituted)
         // is reachable. The element type may itself be a still-deferred recursive alias (the
         // `DeepReadonly<Part>` element of `DeepReadonlyArray<Part>`) — that is intentionally kept
@@ -157,9 +177,30 @@ public partial class TypeChecker
             objType = nonNullish.Count == 1 ? nonNullish[0] : new TypeInfo.Union(nonNullish);
         }
 
+        // A value of intersection type has every constituent's members. Generic keyof domains
+        // over those constituents are therefore readable even when no single constituent alone
+        // represents the complete key set.
+        if (objType is TypeInfo.Intersection && ContainsKeyOfDomain(indexType))
+            return TypeInfo.Any.Shared;
+
+        if (objType is TypeInfo.Intersection objectIntersection)
+        {
+            List<TypeInfo> intersectionResults = [];
+            foreach (TypeInfo member in objectIntersection.FlattenedTypes)
+            {
+                if (CheckGetIndexOnType(member, indexType, getIndex) is { } memberResult)
+                    intersectionResults.Add(memberResult);
+            }
+            if (intersectionResults.Count > 0)
+                return intersectionResults.Distinct(TypeInfoEqualityComparer.Instance).Aggregate(CreateUnion);
+        }
+
         // Handle Union types - distribute index access across all union members
         if (objType is TypeInfo.Union union)
         {
+            if (IndexDomainIsKnownForUnion(indexType, union))
+                return TypeInfo.Any.Shared;
+
             List<TypeInfo> memberTypes = [];
             foreach (var member in union.FlattenedTypes)
             {
@@ -192,7 +233,14 @@ public partial class TypeChecker
                 }
                 catch (TypeCheckException)
                 {
-                    throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing all members of union type '{union}'.", tsCode: "TS7053");
+                    string code = union.FlattenedTypes.Any(member => member is TypeInfo.TypeParameter) &&
+                        ContainsKeyOfDomain(indexType)
+                            ? "TS2536"
+                            : "TS7053";
+                    throw new TypeCheckException(
+                        $" Index type '{indexType}' is not valid for indexing all members of union type '{union}'.",
+                        TryGetExprLine(getIndex.Index),
+                        tsCode: code);
                 }
             }
             // Return union of all member types
@@ -205,6 +253,19 @@ public partial class TypeChecker
         // Handle TypeParameter with constraint - delegate to constraint for indexing
         if (objType is TypeInfo.TypeParameter objTp)
         {
+            if (IndexDomainReferencesTypeParameter(indexType, objTp))
+            {
+                if (ApparentTypeOf(objTp) is { } apparentObject)
+                {
+                    if (StringIndexOf(apparentObject) is { } apparentStringIndex &&
+                        IsPropertyKeyDomain(indexType))
+                        return apparentStringIndex;
+                    if (apparentObject is TypeInfo.Array apparentArray)
+                        return apparentArray.ElementType;
+                }
+                return new TypeInfo.IndexedAccess(objTp, indexType);
+            }
+
             // If index is a TypeParameter with keyof constraint matching this type param, allow it
             if (indexType is TypeInfo.TypeParameter indexTp && indexTp.Constraint is TypeInfo.KeyOf keyOf)
             {
@@ -213,7 +274,7 @@ public partial class TypeChecker
                 {
                     // Return IndexedAccess type that will be resolved when concrete types are provided
                     // For now, return Any since we can't know the exact property type until instantiation
-                    return TypeInfo.Any.Shared;
+                    return new TypeInfo.IndexedAccess(objTp, indexType);
                 }
             }
 
@@ -231,7 +292,7 @@ public partial class TypeChecker
                 if (keyOf2.SourceType is TypeInfo.TypeParameter keyOfTp2 && keyOfTp2.Name == objTp.Name)
                 {
                     // K extends keyof T and we're indexing T with K - allow it
-                    return TypeInfo.Any.Shared;
+                    return new TypeInfo.IndexedAccess(objTp, indexType);
                 }
             }
 
@@ -270,6 +331,10 @@ public partial class TypeChecker
             {
                 return TypeInfo.Any.Shared;
             }
+
+            TypeInfo evaluatedKeyDomain = EvaluateKeyOf(keyOfSourceType);
+            if (CheckGetIndexOnType(objType, evaluatedKeyDomain, getIndex) is { } evaluatedResult)
+                return evaluatedResult;
         }
 
         // Allow indexing with 'any' type key (returns 'any')
@@ -287,6 +352,12 @@ public partial class TypeChecker
             if (objType is TypeInfo.Record { StringIndexType: { } recIdxType }) return WithUncheckedUndefined(recIdxType);
             if (objType is TypeInfo.Interface { StringIndexType: { } itfIdxType }) return WithUncheckedUndefined(itfIdxType);
         }
+
+        // Exclude<keyof T, symbol> remains a deferred conditional while T is open, but every
+        // possible result is a string-or-number property key. Such a domain can safely read a
+        // string index signature without inventing an implicit-any TS7053.
+        if (IsStringOrNumberIndexDomain(indexType) && StringIndexOf(objType) is { } domainIndex)
+            return WithUncheckedUndefined(domainIndex);
 
         // Handle string index on objects/interfaces
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -390,8 +461,12 @@ public partial class TypeChecker
             // Number index signature on interface/record
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
                 return WithUncheckedUndefined(itf3.NumberIndexType);
+            if (objType is TypeInfo.Interface itfNumString && itfNumString.StringIndexType != null)
+                return WithUncheckedUndefined(itfNumString.StringIndexType);
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)
                 return WithUncheckedUndefined(rec3.NumberIndexType);
+            if (objType is TypeInfo.Record recNumString && recNumString.StringIndexType != null)
+                return WithUncheckedUndefined(recNumString.StringIndexType);
             // A class with only a string index signature still accepts numeric keys (number keys
             // are a subset of string keys), matching TypeScript.
             if (GetClassIndexType(objType, TokenType.TYPE_NUMBER) is { } clsNum)
@@ -543,24 +618,169 @@ public partial class TypeChecker
             return valueType;
         }
 
-        // Resolve a deferred recursive alias one level (see the matching note in CheckGetIndex),
-        // then flatten an instantiated generic interface so its (substituted) numeric index
-        // signature — including its read-only flag — drives the checks below.
-        if (objType is TypeInfo.RecursiveTypeAlias rtaSet)
-            objType = ExpandRecursiveTypeAlias(rtaSet);
+        // Follow recursive aliases and resolved conditional branches until the writable
+        // container shape is exposed. DeepReadonly<T> commonly expands alias -> conditional ->
+        // alias before reaching ReadonlyArray<T>; stopping after the first alias silently made
+        // those writes permissive while the matching read path could see the array shape.
+        for (int guard = 0; guard < 16; guard++)
+        {
+            TypeInfo next = objType switch
+            {
+                TypeInfo.RecursiveTypeAlias recursive => ExpandRecursiveTypeAlias(recursive),
+                TypeInfo.ConditionalType conditional => EvaluateConditionalType(conditional),
+                _ => objType,
+            };
+            if (ReferenceEquals(next, objType) || TypeInfoEqualityComparer.Instance.Equals(next, objType))
+                break;
+            objType = next;
+        }
+        objType = ResolveMappedTypeForAccess(objType);
 
-        if (objType is TypeInfo.InstantiatedGeneric igSet && !ContainsOpenTypeVariable(igSet)
-            && FlattenInstantiatedInterface(igSet) is { } flatSet
-            && flatSet.NumberIndexType is not null)
-            objType = flatSet;
+        // A deferred mapped type is writable by a key from its mapped domain. Project the
+        // corresponding value slot directly, just as CheckGetIndex does for reads.
+        if (objType is TypeInfo.MappedType deferredMapped &&
+            (TypeInfoEqualityComparer.Instance.Equals(indexType, deferredMapped.Constraint) ||
+             IsCompatible(deferredMapped.Constraint, indexType)))
+        {
+            if (deferredMapped.Modifiers.HasFlag(MappedTypeModifiers.AddReadonly))
+                throw new TypeCheckException(
+                    $" Index signature in type '{objType}' only permits reading.",
+                    TryGetExprLine(setIndex.Index),
+                    tsCode: "TS2542");
 
-        // Writing through a read-only numeric index signature (an interface that extends
-        // ReadonlyArray<…>) is rejected — #337 item 2 (TS2542).
+            var mappedSubs = new Dictionary<string, TypeInfo>
+            {
+                [deferredMapped.ParameterName] = indexType,
+            };
+            TypeInfo mappedValue = ResolveIndexedAccessTypes(
+                Substitute(deferredMapped.ValueType, mappedSubs),
+                mappedSubs);
+            if (!IsCompatible(mappedValue, valueType))
+                throw new TypeCheckException(
+                    $" Cannot assign '{valueType}' to mapped property type '{mappedValue}'.",
+                    TryGetExprLine(setIndex.Value),
+                    tsCode: "TS2322");
+            return valueType;
+        }
+
+        if (objType is TypeInfo.InstantiatedGeneric igSet &&
+            FlattenInstantiatedInterface(igSet) is { } flatSet)
+        {
+            if (flatSet.NumberIndexType is not null)
+                objType = flatSet;
+        }
+
+        // Reject a readonly numeric slot before the generic index-signature write helper can
+        // accept its value type. Read and write signatures share the same value type; mutability
+        // is independent metadata and therefore must be checked first.
         if ((IsNumber(indexType) || indexType is TypeInfo.NumberLiteral) &&
             objType is TypeInfo.Interface { ReadonlyNumberIndex: true })
         {
             throw new TypeCheckException(
-                $" Index signature in type '{objType}' only permits reading.", tsCode: "TS2542");
+                $" Index signature in type '{objType}' only permits reading.",
+                TryGetExprLine(setIndex.Index),
+                tsCode: "TS2542");
+        }
+
+        // Writes through a type parameter are deliberately stricter than reads. Even when the
+        // constraint makes a key readable, an instantiation can narrow the selected property's
+        // type. TypeScript reports TS2322 for a key tied to T, TS2862 for a generic-only-read
+        // readonly constraint, and TS7053 only when the key is not in the constraint's domain.
+        if (objType is TypeInfo.TypeParameter writeTp)
+        {
+            if (valueType is TypeInfo.IndexedAccess sourceAccess &&
+                sourceAccess.ObjectType is TypeInfo.TypeParameter sourceObject &&
+                sourceObject.Name == writeTp.Name)
+            {
+                return valueType;
+            }
+
+            bool tiedToObject = IndexDomainReferencesTypeParameter(indexType, writeTp);
+            TypeInfo? apparent = writeTp.Constraint is { } rawConstraint
+                ? ResolveMappedTypeForAccess(rawConstraint)
+                : null;
+            bool validForConstraint = tiedToObject ||
+                apparent is not null && CanIndexType(apparent, indexType);
+
+            bool readonlyConstraint = apparent switch
+            {
+                TypeInfo.Record { IsReadonly: true } => true,
+                TypeInfo.Array { IsReadonly: true } => true,
+                TypeInfo.Tuple { IsReadonly: true } => true,
+                TypeInfo.Interface i when i.ReadonlyNumberIndex ||
+                    i.GetAllMembers().Any(member => i.IsMemberReadonly(member.Key)) => true,
+                _ => writeTp.Constraint is TypeInfo.MappedType m &&
+                    m.Modifiers.HasFlag(MappedTypeModifiers.AddReadonly),
+            };
+
+            if (readonlyConstraint && !tiedToObject && IsPropertyKeyDomain(indexType))
+                throw new TypeCheckException(
+                    $" Type '{writeTp.Name}' is generic and can only be indexed for reading.",
+                    TryGetExprLine(setIndex.Index),
+                    tsCode: "TS2862");
+
+            if (!validForConstraint)
+                throw new TypeCheckException(
+                    $" Type '{indexType}' cannot be used to index type '{writeTp.Name}'.",
+                    TryGetExprLine(setIndex.Index),
+                    tsCode: "TS7053");
+
+            string code = readonlyConstraint && !tiedToObject ? "TS2862" : "TS2322";
+            throw new TypeCheckException(
+                $" Type '{valueType}' is not assignable through generic index '{indexType}'.",
+                TryGetExprLine(setIndex.Value),
+                tsCode: code);
+        }
+
+        if (indexType is TypeInfo.TypeParameter {
+                Constraint: TypeInfo.KeyOf keyOfSource } &&
+            (valueType is TypeInfo.Any ||
+             valueType is TypeInfo.IndexedAccess sourceSlot &&
+             TypeInfoEqualityComparer.Instance.Equals(sourceSlot.IndexType, indexType)) &&
+            (keyOfSource.SourceType is TypeInfo.TypeParameter { Name: "this" } ||
+             TypeInfoEqualityComparer.Instance.Equals(keyOfSource.SourceType, objType) ||
+             IsCompatible(keyOfSource.SourceType, objType) ||
+             IsCompatible(objType, keyOfSource.SourceType)))
+            return valueType;
+
+        // A write through a known literal-key domain must be valid for every property that the
+        // key may select. Reads use a union of the property types; writes use their intersection,
+        // represented here by checking the assigned value against each candidate slot.
+        if (TryGetStringLiteralKeys(indexType, out var literalKeys) &&
+            objType is TypeInfo.Record or TypeInfo.Interface)
+        {
+            List<TypeInfo> propertyTypes = [];
+            foreach (string key in literalKeys)
+            {
+                if (GetMemberType(objType, key) is not { } propertyType)
+                {
+                    propertyTypes.Clear();
+                    break;
+                }
+                propertyTypes.Add(propertyType);
+            }
+            if (propertyTypes.Count > 0)
+            {
+                if (!propertyTypes.All(propertyType => IsCompatible(propertyType, valueType)))
+                    throw new TypeCheckException(
+                        $" Cannot assign '{valueType}' through index type '{indexType}'.",
+                        TryGetExprLine(setIndex.Value),
+                        tsCode: "TS2322");
+                return valueType;
+            }
+        }
+
+        // Index-signature objects also accept composite key domains such as `keyof Dict` and a
+        // type parameter constrained to that domain. Validate every possible key kind against
+        // the corresponding signature and every resulting slot against the assigned value.
+        if (TryGetIndexSignatureWriteTypes(objType, indexType, out var signatureTypes))
+        {
+            if (!signatureTypes.All(signatureType => IsCompatible(signatureType, valueType)))
+                throw new TypeCheckException(
+                    $" Cannot assign '{valueType}' through index type '{indexType}'.",
+                    TryGetExprLine(setIndex.Value),
+                    tsCode: "TS2322");
+            return valueType;
         }
 
         // Handle Union types - verify assignment is valid for all union members
@@ -796,12 +1016,198 @@ public partial class TypeChecker
         throw new TypeCheckException($" Index type '{indexType}' is not valid for assigning to '{objType}'.", tsCode: "TS7053");
     }
 
+    private static bool TryGetStringLiteralKeys(TypeInfo indexType, out List<string> keys)
+    {
+        keys = [];
+        if (indexType is TypeInfo.StringLiteral literal)
+        {
+            keys.Add(literal.Value);
+            return true;
+        }
+        if (indexType is not TypeInfo.Union union)
+            return false;
+        foreach (TypeInfo member in union.FlattenedTypes)
+        {
+            if (member is not TypeInfo.StringLiteral memberLiteral)
+            {
+                keys.Clear();
+                return false;
+            }
+            keys.Add(memberLiteral.Value);
+        }
+        return keys.Count > 0;
+    }
+
+    private bool TryGetIndexSignatureWriteTypes(
+        TypeInfo objectType, TypeInfo indexType, out List<TypeInfo> signatureTypes)
+    {
+        List<TypeInfo> collected = [];
+        TypeInfo? stringIndex = objectType switch
+        {
+            TypeInfo.Record r => r.StringIndexType,
+            TypeInfo.Interface i => i.StringIndexType,
+            _ => null,
+        };
+        TypeInfo? numberIndex = objectType switch
+        {
+            TypeInfo.Record r => r.NumberIndexType ?? r.StringIndexType,
+            TypeInfo.Interface i => i.NumberIndexType ?? i.StringIndexType,
+            _ => null,
+        };
+
+        bool Collect(TypeInfo key)
+        {
+            if (key is TypeInfo.KeyOf keyOf)
+                return Collect(EvaluateKeyOf(keyOf.SourceType));
+            if (key is TypeInfo.TypeParameter keyParameter && keyParameter.Constraint is { } keyConstraint)
+                return Collect(keyConstraint);
+            if (key is TypeInfo.Union union)
+                return union.FlattenedTypes.All(Collect);
+            if (IsString(key) || key is TypeInfo.StringLiteral)
+            {
+                if (stringIndex is null) return false;
+                collected.Add(stringIndex);
+                return true;
+            }
+            if (IsNumber(key) || key is TypeInfo.NumberLiteral)
+            {
+                if (numberIndex is null) return false;
+                collected.Add(numberIndex);
+                return true;
+            }
+            return false;
+        }
+
+        bool result = Collect(indexType) && collected.Count > 0;
+        signatureTypes = collected;
+        return result;
+    }
+
+    private bool CanIndexType(TypeInfo objectType, TypeInfo indexType)
+    {
+        if (indexType is TypeInfo.KeyOf keyOf)
+            return TypeInfoEqualityComparer.Instance.Equals(keyOf.SourceType, objectType) ||
+                CanIndexType(objectType, EvaluateKeyOf(keyOf.SourceType));
+        if (indexType is TypeInfo.TypeParameter keyParameter && keyParameter.Constraint is { } constraint)
+            return CanIndexType(objectType, constraint);
+        if (indexType is TypeInfo.Union union)
+            return union.FlattenedTypes.All(member => CanIndexType(objectType, member));
+        if (indexType is TypeInfo.StringLiteral literal)
+            return GetMemberType(objectType, literal.Value) is not null ||
+                objectType is TypeInfo.Record { StringIndexType: not null } or
+                    TypeInfo.Interface { StringIndexType: not null };
+        if (IsString(indexType))
+            return objectType is TypeInfo.Record { StringIndexType: not null } or
+                TypeInfo.Interface { StringIndexType: not null };
+        if (IsNumber(indexType) || indexType is TypeInfo.NumberLiteral)
+            return objectType is TypeInfo.Array or TypeInfo.Tuple or
+                TypeInfo.Record { NumberIndexType: not null } or
+                TypeInfo.Record { StringIndexType: not null } or
+                TypeInfo.Interface { NumberIndexType: not null } or
+                TypeInfo.Interface { StringIndexType: not null };
+        return false;
+    }
+
+    private static bool IndexDomainReferencesTypeParameter(
+        TypeInfo indexType, TypeInfo.TypeParameter objectParameter) => indexType switch
+    {
+        TypeInfo.KeyOf { SourceType: TypeInfo.TypeParameter source } =>
+            source.Name == objectParameter.Name,
+        TypeInfo.TypeParameter { Constraint: TypeInfo.KeyOf { SourceType: TypeInfo.TypeParameter source } } =>
+            source.Name == objectParameter.Name,
+        _ => false,
+    };
+
+    private static bool IsPropertyKeyDomain(TypeInfo type) => type switch
+    {
+        TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.NumberLiteral or
+            TypeInfo.Symbol or TypeInfo.UniqueSymbol => true,
+        TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } => true,
+        TypeInfo.KeyOf => true,
+        TypeInfo.TypeParameter { Constraint: { } constraint } => IsPropertyKeyDomain(constraint),
+        TypeInfo.Union union => union.FlattenedTypes.All(IsPropertyKeyDomain),
+        _ => false,
+    };
+
+    private static bool ContainsKeyOfDomain(TypeInfo type) => type switch
+    {
+        TypeInfo.KeyOf => true,
+        TypeInfo.TypeParameter { Constraint: { } constraint } => ContainsKeyOfDomain(constraint),
+        TypeInfo.Union union => union.FlattenedTypes.Any(ContainsKeyOfDomain),
+        TypeInfo.Intersection intersection => intersection.FlattenedTypes.Any(ContainsKeyOfDomain),
+        _ => false,
+    };
+
+    private bool IsStringOrNumberIndexDomain(TypeInfo type)
+    {
+        if (type is TypeInfo.IndexedAccess indexed)
+        {
+            if (indexed.ObjectType is TypeInfo.TypeParameter { Constraint: { } objectConstraint } &&
+                indexed.IndexType is TypeInfo.StringLiteral propertyKey &&
+                GetPropertyType(objectConstraint, propertyKey.Value) is { } constrainedProperty)
+                return IsStringOrNumberIndexDomain(constrainedProperty);
+            TypeInfo resolved = ResolveIndexedAccess(indexed, new Dictionary<string, TypeInfo>());
+            return resolved is not TypeInfo.IndexedAccess && IsStringOrNumberIndexDomain(resolved);
+        }
+        return type switch
+        {
+            TypeInfo.String or TypeInfo.StringLiteral or TypeInfo.NumberLiteral => true,
+            TypeInfo.Primitive { Type: Parsing.TokenType.TYPE_NUMBER } => true,
+            TypeInfo.TypeParameter { Constraint: { } constraint } => IsStringOrNumberIndexDomain(constraint),
+            TypeInfo.Union union => union.FlattenedTypes.All(IsStringOrNumberIndexDomain),
+            TypeInfo.ConditionalType {
+                ExtendsType: TypeInfo.Symbol,
+                TrueType: TypeInfo.Never,
+                FalseType: TypeInfo.KeyOf
+            } => true,
+            _ => false,
+        };
+    }
+
+    private static bool IndexDomainIsKnownForUnion(TypeInfo indexType, TypeInfo.Union objectUnion)
+    {
+        if (indexType is TypeInfo.KeyOf keyOf &&
+            TypeInfoEqualityComparer.Instance.Equals(keyOf.SourceType, objectUnion))
+            return true;
+
+        if (indexType is not TypeInfo.Intersection intersection)
+            return false;
+        var keyedSources = intersection.FlattenedTypes
+            .OfType<TypeInfo.KeyOf>()
+            .Select(key => key.SourceType)
+            .ToList();
+        return keyedSources.Count == objectUnion.FlattenedTypes.Count &&
+            objectUnion.FlattenedTypes.All(member =>
+                keyedSources.Any(source => TypeInfoEqualityComparer.Instance.Equals(source, member)));
+    }
+
     /// <summary>
     /// Checks index access on a given type (used for delegating from TypeParameter constraints).
     /// Returns null if the index type is not valid for the object type.
     /// </summary>
     private TypeInfo? CheckGetIndexOnType(TypeInfo objType, TypeInfo indexType, Expr.GetIndex getIndex)
     {
+        objType = ResolveMappedTypeForAccess(objType);
+        if (objType is TypeInfo.MappedType mapped &&
+            (TypeInfoEqualityComparer.Instance.Equals(indexType, mapped.Constraint) ||
+             IsCompatible(mapped.Constraint, indexType)))
+        {
+            var substitutions = new Dictionary<string, TypeInfo>
+            {
+                [mapped.ParameterName] = indexType,
+            };
+            return ResolveIndexedAccessTypes(
+                Substitute(mapped.ValueType, substitutions), substitutions);
+        }
+
+        if (objType is TypeInfo.Intersection intersection)
+        {
+            foreach (TypeInfo member in intersection.FlattenedTypes)
+                if (CheckGetIndexOnType(member, indexType, getIndex) is { } result)
+                    return result;
+            return null;
+        }
+
         // Recursive case for nested type parameters
         if (objType is TypeInfo.TypeParameter tp && tp.Constraint != null)
         {
@@ -810,6 +1216,9 @@ public partial class TypeChecker
 
         if (indexType is TypeInfo.Any)
             return TypeInfo.Any.Shared;
+
+        if (IsStringOrNumberIndexDomain(indexType) && StringIndexOf(objType) is { } domainIndex)
+            return WithUncheckedUndefined(domainIndex);
 
         // Handle string index
         if (IsString(indexType) || indexType is TypeInfo.StringLiteral)
@@ -864,8 +1273,12 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(TypeInfo.String.Shared);
             if (objType is TypeInfo.Interface itf3 && itf3.NumberIndexType != null)
                 return WithUncheckedUndefined(itf3.NumberIndexType);
+            if (objType is TypeInfo.Interface itfNumString && itfNumString.StringIndexType != null)
+                return WithUncheckedUndefined(itfNumString.StringIndexType);
             if (objType is TypeInfo.Record rec3 && rec3.NumberIndexType != null)
                 return WithUncheckedUndefined(rec3.NumberIndexType);
+            if (objType is TypeInfo.Record recNumString && recNumString.StringIndexType != null)
+                return WithUncheckedUndefined(recNumString.StringIndexType);
         }
 
         return null;
