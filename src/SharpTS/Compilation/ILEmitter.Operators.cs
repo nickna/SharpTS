@@ -1260,16 +1260,7 @@ public partial class ILEmitter
         var centerIndex = IL.DeclareLocal(_ctx.Types.Int32);
         IL.Emit(OpCodes.Stloc, centerIndex);
 
-        // (uint)(center - 1) < (uint)(length - 2) proves both neighboring indexes.
-        // The unsigned form also rejects negative centers and lengths below three.
-        var inRange = IL.DefineLabel();
-        IL.Emit(OpCodes.Ldloc, centerIndex);
-        IL.Emit(OpCodes.Ldc_I4_1);
-        IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
-        IL.Emit(OpCodes.Ldc_I4_2);
-        IL.Emit(OpCodes.Sub);
-        IL.Emit(OpCodes.Blt_Un, inRange);
+        var inRange = EmitInt32StencilRangeTest(backing, centerIndex);
         IL.Emit(OpCodes.Newobj, _ctx.Types.GetDefaultConstructor(typeof(IndexOutOfRangeException)));
         IL.Emit(OpCodes.Throw);
         IL.MarkLabel(inRange);
@@ -1294,6 +1285,33 @@ public partial class ILEmitter
         IL.Emit(OpCodes.Conv_R8);
         SetStackType(StackType.Double);
         return true;
+    }
+
+    /// <summary>
+    /// Branches to the returned label when <paramref name="centerIndex"/> and both neighbors are
+    /// valid element indexes. Lengths below the three-element stencil width are rejected before
+    /// the unsigned comparison, whose <c>length - 2</c> operand would otherwise underflow.
+    /// </summary>
+    private Label EmitInt32StencilRangeTest(
+        HoistedTypedArrayBacking backing,
+        LocalBuilder centerIndex)
+    {
+        var inRange = IL.DefineLabel();
+        var outOfRange = IL.DefineLabel();
+        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
+        IL.Emit(OpCodes.Ldc_I4_3);
+        IL.Emit(OpCodes.Blt, outOfRange);
+
+        // (uint)(center - 1) < (uint)(length - 2) proves both neighboring indexes.
+        IL.Emit(OpCodes.Ldloc, centerIndex);
+        IL.Emit(OpCodes.Ldc_I4_1);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Ldloc, backing.LengthLocal);
+        IL.Emit(OpCodes.Ldc_I4_2);
+        IL.Emit(OpCodes.Sub);
+        IL.Emit(OpCodes.Blt_Un, inRange);
+        IL.MarkLabel(outOfRange);
+        return inRange;
     }
 
     /// <summary>
