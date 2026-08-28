@@ -192,11 +192,33 @@ public abstract record ParsedCommand
     /// <summary>Display version and exit.</summary>
     public sealed record Version() : ParsedCommand;
 
+    /// <summary>
+    /// Create a new Avalonia GUI application project.
+    /// </summary>
+    /// <param name="Name">The name of the new project.</param>
+    /// <param name="OutputDirectory">The directory to create the project in.</param>
+    /// <param name="GuiSdkVersion">The version of the GUI SDK to use.</param>
     public sealed record NewAvalonia(
         string Name,
         string OutputDirectory,
         string GuiSdkVersion) : ParsedCommand;
 
+    /// <summary>
+    /// Application command for GUI applications (build, run, publish).
+    /// </summary>
+    /// <param name="Action">The action to perform (build, run, publish).</param>
+    /// <param name="Entry">The entry point file for the application.</param>
+    /// <param name="Host">The host type to use.</param>
+    /// <param name="RuntimeIdentifier">The .NET runtime identifier.</param>
+    /// <param name="SelfContained">Whether to publish a self-contained application.</param>
+    /// <param name="SingleFile">Whether to bundle as a single file.</param>
+    /// <param name="Configuration">Build configuration (Debug or Release).</param>
+    /// <param name="OutputDirectory">Output directory for build artifacts.</param>
+    /// <param name="GuiSdkVersion">GUI SDK version to use.</param>
+    /// <param name="GuiSdkSource">GUI SDK source location.</param>
+    /// <param name="Mode">Application mode.</param>
+    /// <param name="ApplicationArgs">Arguments to pass to the application.</param>
+    /// <param name="GcProfile">Garbage collection profile.</param>
     public sealed record Application(
         string Action,
         string? Entry,

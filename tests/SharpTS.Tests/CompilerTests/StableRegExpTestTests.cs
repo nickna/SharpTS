@@ -205,6 +205,33 @@ public sealed class StableRegExpTestTests
             TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void BorrowedTest_ValidatesReceiverBeforeCoercingArgument(ExecutionMode mode)
+    {
+        const string source = """
+            let coercions: number = 0;
+            const argument: any = {
+                toString: function(): string {
+                    coercions++;
+                    throw new Error("coerced");
+                }
+            };
+
+            function check(receiver: any): void {
+                try {
+                    RegExp.prototype.test.call(receiver, argument);
+                } catch (error) {
+                    console.log(error instanceof TypeError, coercions);
+                }
+            }
+
+            check(undefined);
+            check(1n);
+            """;
+
+        Assert.Equal("true 0\ntrue 0\n", TestHarness.Run(source, mode));
+    }
+
     [Fact]
     public void StableAndFallbackShapesPassIlVerification()
     {
