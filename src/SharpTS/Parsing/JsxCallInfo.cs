@@ -26,6 +26,9 @@ public enum JsxElementKind
 /// <param name="Mode">The jsx mode the element was lowered under.</param>
 /// <param name="Line">Source line of the opening tag (tokens carry no column).</param>
 /// <param name="TypeArgumentCount">Number of explicit JSX type arguments.</param>
+/// <param name="TypeArguments">Source spellings of explicit JSX type arguments.</param>
+/// <param name="TypeArgumentNodes">Parsed explicit JSX type arguments.</param>
+/// <param name="FactoryName">Configured classic JSX factory, used for factory-local JSX namespaces.</param>
 public sealed record JsxCallInfo(
     JsxElementKind Kind,
     string? TagName,
@@ -35,4 +38,7 @@ public sealed record JsxCallInfo(
     JsxMode Mode,
     int Line,
     int TypeArgumentCount = 0,
+    List<string>? TypeArguments = null,
+    List<TypeNode?>? TypeArgumentNodes = null,
+    string? FactoryName = null,
     IReadOnlyList<int>? ChildLines = null);

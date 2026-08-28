@@ -398,6 +398,9 @@ public partial class TypeChecker
                 return WithUncheckedUndefined(clsNum);
             if (GetClassIndexType(objType, TokenType.TYPE_STRING) is { } clsNumStr)
                 return WithUncheckedUndefined(clsNumStr);
+            if (objType is TypeInfo.Instance arraySubclass &&
+                TryGetBuiltInArraySubclassElement(arraySubclass, out TypeInfo arraySubclassElement))
+                return WithUncheckedUndefined(arraySubclassElement);
         }
 
         // Handle symbol index (Symbol and UniqueSymbol both qualify)
@@ -430,6 +433,27 @@ public partial class TypeChecker
         }
 
         throw new TypeCheckException($" Index type '{indexType}' is not valid for indexing '{objType}'.", tsCode: "TS7053");
+    }
+
+    private static bool TryGetBuiltInArraySubclassElement(
+        TypeInfo.Instance instance, out TypeInfo elementType)
+    {
+        TypeInfo? current = instance.ResolvedClassType;
+        for (int guard = 0; current is not null && guard < 64; guard++)
+        {
+            if (current is TypeInfo.MutableClass { Name: "Array" or "ReadonlyArray" } arrayBase)
+            {
+                elementType = arrayBase.Methods.GetValueOrDefault("@@iterator") switch
+                {
+                    TypeInfo.Function { ReturnType: TypeInfo.Iterator iterator } => iterator.ElementType,
+                    _ => TypeInfo.Any.Shared,
+                };
+                return true;
+            }
+            current = GetSuperclass(current);
+        }
+        elementType = null!;
+        return false;
     }
 
     private static bool ContainsGlobalThisType(TypeInfo type) =>

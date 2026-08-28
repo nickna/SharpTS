@@ -285,7 +285,10 @@ public partial class TypeChecker
                         if (arg is Expr.ArrowFunction arrowArg &&
                             (expectedParamType is TypeInfo.Function or TypeInfo.GenericFunction))
                         {
-                            argType = CheckArrowFunction(arrowArg, expectedParamType);
+                            argType = CheckArrowFunction(
+                                arrowArg,
+                                expectedParamType,
+                                contextualReturnTsCode: "TS2345");
                             _typeMap.Set(arg, argType);
                         }
                         else

@@ -243,13 +243,48 @@ public partial class TypeChecker
         // Store in the current module for processing during module type checking
         if (_currentModule != null)
         {
-            _currentModule.GlobalAugmentations.AddRange(declareGlobal.Members);
+            foreach (Stmt member in declareGlobal.Members)
+                if (!_currentModule.GlobalAugmentations.Contains(member))
+                    _currentModule.GlobalAugmentations.Add(member);
         }
 
-        // Type-check and merge each declaration into the global environment
-        foreach (var member in declareGlobal.Members)
+        // Type-check and merge each declaration into the actual global environment. This visitor
+        // can run while nested inside an exported UMD namespace (`namespace React { global {
+        // namespace JSX { ... } } }`); using the current environment there incorrectly publishes
+        // JSX as React.JSX-local state and a late preparatory pass can miss the deferred merge.
+        TypeEnvironment globalEnvironment = _environment;
+        // CheckModules keeps compiler built-ins in the root environment and creates one
+        // shared child for script/global declarations. Publish into that shared child, not
+        // the root: user modules are enclosed by the script scope and therefore see it.
+        // Standalone checking has no extra root child, so it naturally stays where it is.
+        while (globalEnvironment.Enclosing?.Enclosing is not null)
+            globalEnvironment = globalEnvironment.Enclosing;
+        // A contextual augmentation nested in `namespace React` may refer back to that namespace
+        // (`interface Element extends React.ReactElement<...>`). Seed the shared global scope with
+        // the partial namespace while its body is being built so those qualified bases resolve.
+        if (_environment.GetNamespace("React") is { } contextualReact &&
+            globalEnvironment.GetNamespace("React") is null)
         {
-            CheckAndMergeGlobalMember(member);
+            globalEnvironment.DefineNamespace("React", contextualReact);
+        }
+
+        bool previousRecovery = _recoveryMode;
+        if (_currentModule is { IsDeclarationFile: true } ||
+            _currentModule?.Path.StartsWith("ambient:", StringComparison.Ordinal) == true)
+        {
+            _recoveryMode = true;
+        }
+        try
+        {
+            using (new EnvironmentScope(this, globalEnvironment))
+            {
+                foreach (var member in declareGlobal.Members)
+                    CheckAndMergeGlobalMember(member);
+            }
+        }
+        finally
+        {
+            _recoveryMode = previousRecovery;
         }
     }
 
@@ -438,10 +473,11 @@ public partial class TypeChecker
         }
 
         TypeInfo importedType;
-        if (importedModule.HasExportAssignment && importedModule.ExportAssignmentType != null)
+        TypeInfo? exportAssignment = ResolveDeferredModuleExportAssignment(importedModule, _environment);
+        if (exportAssignment != null)
         {
             // Module uses export = value - import the assignment value directly
-            importedType = importedModule.ExportAssignmentType;
+            importedType = exportAssignment;
         }
         else
         {
@@ -451,9 +487,11 @@ public partial class TypeChecker
         }
 
         if (importedType is TypeInfo.Namespace importedNamespace)
+        {
             _environment.DefineNamespace(
                 importReq.AliasName.Lexeme,
                 importedNamespace with { Name = importReq.AliasName.Lexeme });
+        }
         else
             _environment.Define(importReq.AliasName.Lexeme, importedType);
 

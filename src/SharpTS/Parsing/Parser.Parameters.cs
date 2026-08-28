@@ -73,8 +73,22 @@ public partial class Parser
         TypeNode? paramTypeNode = paramType is not null ? TakeTypeNode() : null;
         Expr? defaultValue = Match(TokenType.EQUAL) ? Expression() : null;
 
+        List<Stmt.DestructuredParameterProperty>? destructuredProperties = pattern is ObjectPattern objectPattern
+            ? objectPattern.Properties.Select(property => property.Value switch
+                {
+                    IdentifierPattern identifier => new Stmt.DestructuredParameterProperty(
+                        property.Key, identifier.Name, property.DefaultValue ?? identifier.DefaultValue,
+                        identifier.Name.Lexeme != property.Key.Lexeme),
+                    RestPattern rest => new Stmt.DestructuredParameterProperty(
+                        property.Key, rest.Name, property.DefaultValue, IsRenamed: false),
+                    _ => new Stmt.DestructuredParameterProperty(
+                        property.Key, property.Key, property.DefaultValue, IsRenamed: false),
+                })
+                .ToList()
+            : null;
         var parameter = new Stmt.Parameter(synthName, paramType, defaultValue,
-            Decorators: decorators, TypeAnnotationNode: paramTypeNode);
+            Decorators: decorators, TypeAnnotationNode: paramTypeNode,
+            DestructuredProperties: destructuredProperties);
         return (parameter, pattern);
     }
 

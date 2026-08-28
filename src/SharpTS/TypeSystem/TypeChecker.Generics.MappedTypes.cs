@@ -252,10 +252,13 @@ public partial class TypeChecker
         // Get the keys from the constraint
         TypeInfo constraint = Substitute(mapped.Constraint, outerSubstitutions);
 
-        // Evaluate keyof if present
+        // Evaluate keyof if present. A homomorphic mapped type preserves optionality unless
+        // it explicitly adds/removes `?` (Readonly<T> is the common case).
+        HashSet<string>? homomorphicOptional = null;
         if (constraint is TypeInfo.KeyOf keyOf)
         {
             TypeInfo sourceType = Substitute(keyOf.SourceType, outerSubstitutions);
+            homomorphicOptional = ExtractOptionalProperties(sourceType).ToHashSet(StringComparer.Ordinal);
             constraint = EvaluateKeyOf(sourceType);
         }
 
@@ -327,7 +330,9 @@ public partial class TypeChecker
             fields[finalKeyName] = valueType;
 
             // Apply modifiers
-            if (mapped.Modifiers.HasFlag(MappedTypeModifiers.AddOptional))
+            if (mapped.Modifiers.HasFlag(MappedTypeModifiers.AddOptional) ||
+                (!mapped.Modifiers.HasFlag(MappedTypeModifiers.RemoveOptional) &&
+                 homomorphicOptional?.Contains(keyName) == true))
             {
                 optionalFields.Add(finalKeyName);
             }

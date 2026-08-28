@@ -756,6 +756,12 @@ public abstract record TypeInfo
                 ? $"{prefix}({ElementType})[]"
                 : $"{prefix}{ElementType}[]";
         }
+
+        // Named interfaces render as name-only in ToString. Arrays of two same-named JSX.Element
+        // interfaces from different factory namespaces must not share a compatibility-cache key.
+        internal override string CacheKey() =>
+            $"{(IsReadonly ? "readonly " : "")}{ElementType.CacheKey()}[]";
+
     }
 
     /// <summary>
@@ -929,6 +935,7 @@ public abstract record TypeInfo
             if (SymbolIndexType != null) parts.Add($"[x: symbol]: {SymbolIndexType}");
             return $"{prefix}{{ {string.Join(", ", parts)} }}";
         }
+
     }
     
     public record Void() : TypeInfo
@@ -1342,6 +1349,10 @@ public abstract record TypeInfo
         public bool ContainsUndefined => _containsUndefined ??= FlattenedTypes.Any(t => t is Undefined);
 
         public override string ToString() => string.Join(" | ", FlattenedTypes);
+
+        internal override string CacheKey() =>
+            string.Join(" | ", FlattenedTypes.Select(type => type.CacheKey()));
+
     }
 
     /// <summary>
@@ -1391,6 +1402,7 @@ public abstract record TypeInfo
         }
 
         public override string ToString() => string.Join(" & ", FlattenedTypes);
+
     }
 
     // Type parameter placeholder (T in <T>)

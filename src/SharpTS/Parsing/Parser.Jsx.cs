@@ -193,7 +193,8 @@ public partial class Parser
 
         string tagName;
         Expr tagExpression;
-        int typeArgumentCount = 0;
+        List<string>? typeArguments = null;
+        List<TypeNode?>? typeArgumentNodes = null;
         List<Expr.Property> attributes = [];
         bool selfClosing = false;
         int childStart;
@@ -247,10 +248,22 @@ public partial class Parser
                 return RecoverJsxTypeArgumentsInJavaScript(open);
             }
 
-            if (Check(TokenType.LESS) &&
-                TryParseTypeArguments(out _) is { } jsxTypeArguments)
+            if (Check(TokenType.LESS) && PeekNext().Type == TokenType.GREATER)
             {
-                typeArgumentCount = jsxTypeArguments.Count;
+                int emptyArgumentsLine = Peek().Line;
+                Advance();
+                Advance();
+                RecordErrorAt(
+                    emptyArgumentsLine,
+                    "Type argument list cannot be empty.",
+                    "TS1099");
+                typeArguments = [];
+                typeArgumentNodes = [];
+            }
+            else if (Check(TokenType.LESS) &&
+                TryParseTypeArguments(out typeArgumentNodes) is { } jsxTypeArguments)
+            {
+                typeArguments = jsxTypeArguments;
 
                 // Explicit type arguments make even a lowercase JSX tag a value
                 // reference. TypeScript resolves `<diddy<boolean>>` against the
@@ -288,7 +301,7 @@ public partial class Parser
                     // `<Name/>` as an attempted type argument during recovery.
                     // Once an attribute/type-argument list has started it instead
                     // reports the ordinary missing-identifier diagnostic.
-                    if (typeArgumentCount == 0 && attributes.Count == 0)
+                    if (typeArguments is null && attributes.Count == 0)
                     {
                         RecordErrorAt(recoveryLine,
                             "Expected 0 type arguments, but got 1.", "TS2558");
@@ -582,8 +595,10 @@ public partial class Parser
             _jsxElementStack.RemoveAt(_jsxElementStack.Count - 1);
 
         return (LowerJsxElement(
-            open, isFragment, tagName, tagExpression, attributes, children, childLines,
-            typeArgumentCount), endOffset);
+            open, isFragment, tagName, tagExpression, attributes, children,
+            childLines,
+            typeArguments,
+            typeArgumentNodes), endOffset);
     }
 
     /// <summary>
@@ -930,11 +945,14 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children,
         List<int> childLines,
-        int typeArgumentCount)
+        List<string>? typeArguments,
+        List<TypeNode?>? typeArgumentNodes)
     {
         return _jsx!.Mode is JsxMode.React or JsxMode.Preserve
-            ? LowerJsxClassic(open, isFragment, tagName, tagExpression, attributes, children, childLines, typeArgumentCount)
-            : LowerJsxAutomatic(open, isFragment, tagName, tagExpression, attributes, children, childLines, typeArgumentCount);
+            ? LowerJsxClassic(open, isFragment, tagName, tagExpression, attributes, children,
+                childLines, typeArguments, typeArgumentNodes)
+            : LowerJsxAutomatic(open, isFragment, tagName, tagExpression, attributes, children,
+                childLines, typeArguments, typeArgumentNodes);
     }
 
     /// <summary>
@@ -951,7 +969,8 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children,
         List<int> childLines,
-        int typeArgumentCount)
+        List<string>? typeArguments,
+        List<TypeNode?>? typeArgumentNodes)
     {
         bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
         bool inlineFactoryWithoutFragment =
@@ -1005,7 +1024,10 @@ public partial class Parser
                 KeyExpr: null,
                 _jsx!.Mode,
                 open.Line,
-                typeArgumentCount,
+                typeArguments?.Count ?? 0,
+                typeArguments,
+                typeArgumentNodes,
+                factory,
                 childLines),
         };
     }
@@ -1025,7 +1047,8 @@ public partial class Parser
         List<Expr.Property> attributes,
         List<Expr> children,
         List<int> childLines,
-        int typeArgumentCount)
+        List<string>? typeArguments,
+        List<TypeNode?>? typeArgumentNodes)
     {
         bool isIntrinsic = !isFragment && tagExpression is Expr.Literal;
         bool dev = _jsx!.Mode == JsxMode.ReactJsxDev;
@@ -1117,7 +1140,10 @@ public partial class Parser
                 keyExpr,
                 _jsx.Mode,
                 open.Line,
-                typeArgumentCount,
+                typeArguments?.Count ?? 0,
+                typeArguments,
+                typeArgumentNodes,
+                _jsx.Factory,
                 childLines),
         };
     }

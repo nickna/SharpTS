@@ -804,7 +804,9 @@ public partial class TypeChecker
             bool matched = false;
             foreach (var sig in overloadedCtor.Signatures)
             {
-                var paramTypes = subs != null ? sig.ParamTypes.Select(p => Substitute(p, subs)).ToList() : sig.ParamTypes;
+                var paramTypes = subs != null
+                    ? sig.ParamTypes.Select(p => ResolveConstructorParameter(Substitute(p, subs))).ToList()
+                    : sig.ParamTypes.Select(ResolveConstructorParameter).ToList();
                 if (TryMatchConstructorArgs(argTypes, paramTypes, sig.MinArity, sig.HasRestParam))
                 {
                     matched = true;
@@ -816,7 +818,9 @@ public partial class TypeChecker
         }
         else if (ctorTypeInfo is TypeInfo.Function ctorType)
         {
-            var paramTypes = subs != null ? ctorType.ParamTypes.Select(p => Substitute(p, subs)).ToList() : ctorType.ParamTypes;
+            var paramTypes = subs != null
+                ? ctorType.ParamTypes.Select(p => ResolveConstructorParameter(Substitute(p, subs))).ToList()
+                : ctorType.ParamTypes.Select(ResolveConstructorParameter).ToList();
 
             if (newExpr.Arguments.Count < ctorType.MinArity)
                 throw new TypeCheckException($" Constructor for '{qualifiedName}' expected at least {ctorType.MinArity} arguments but got {newExpr.Arguments.Count}.", tsCode: "TS2554");
@@ -840,20 +844,29 @@ public partial class TypeChecker
         }
     }
 
+    private TypeInfo ResolveConstructorParameter(TypeInfo type) =>
+        type is TypeInfo.MappedType mapped && !ContainsOpenTypeVariable(mapped)
+            ? ExpandMappedType(mapped)
+            : type;
+
     /// <summary>
     /// Infers type arguments for a generic class constructor from the provided argument types.
     /// Returns null if inference fails (no constructor or unable to infer all type parameters).
     /// </summary>
     private List<TypeInfo>? InferConstructorTypeArguments(TypeInfo.GenericClass genericClass, List<TypeInfo> argTypes)
     {
-        // Get the constructor - if no constructor, inference isn't possible
-        if (!genericClass.Methods.TryGetValue("constructor", out var ctorTypeInfo))
+        // Constructor inference follows inherited constructors too. Generic subclasses commonly
+        // expose their type parameter only through an instantiated base constructor.
+        var (ctorTypeInfo, owningClass) = FindInheritedConstructor(genericClass);
+        if (ctorTypeInfo is null)
         {
             // No constructor - can't infer type arguments without parameters
             // If the class has zero type parameters that need inference from constructor, this could succeed,
             // but that's an edge case. For safety, return null.
             return null;
         }
+
+        Dictionary<string, TypeInfo> inheritedSubs = ComposeConstructorSubs(owningClass, []);
 
         // Get the constructor parameter types (may be overloaded)
         List<TypeInfo> constructorParamTypes;
@@ -862,7 +875,8 @@ public partial class TypeChecker
             // Try each overload to find one that matches
             foreach (var sig in overloadedCtor.Signatures)
             {
-                var result = TryInferFromConstructorSignature(genericClass, sig.ParamTypes, argTypes);
+                var parameterTypes = sig.ParamTypes.Select(type => Substitute(type, inheritedSubs)).ToList();
+                var result = TryInferFromConstructorSignature(genericClass, parameterTypes, argTypes);
                 if (result != null)
                     return result;
             }
@@ -870,7 +884,7 @@ public partial class TypeChecker
         }
         else if (ctorTypeInfo is TypeInfo.Function ctorFunc)
         {
-            constructorParamTypes = ctorFunc.ParamTypes;
+            constructorParamTypes = ctorFunc.ParamTypes.Select(type => Substitute(type, inheritedSubs)).ToList();
         }
         else
         {
@@ -969,6 +983,18 @@ public partial class TypeChecker
                     // More sophisticated inference could find a common supertype
                 }
             }
+        }
+        else if (paramType is TypeInfo.MappedType
+                 { Constraint: TypeInfo.KeyOf keyOf, AsClause: null })
+        {
+            // Homomorphic utility types such as Readonly<T> preserve T's property shape and are
+            // inference sites for constructor arguments.
+            InferFromTypeForConstructor(keyOf.SourceType, argType, inferred);
+        }
+        else if (paramType is TypeInfo.Intersection intersection)
+        {
+            foreach (TypeInfo member in intersection.FlattenedTypes)
+                InferFromTypeForConstructor(member, argType, inferred);
         }
         else if (paramType is TypeInfo.Array paramArr && argType is TypeInfo.Array argArr)
         {

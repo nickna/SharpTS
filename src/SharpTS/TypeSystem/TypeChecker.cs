@@ -1090,7 +1090,37 @@ public partial class TypeChecker
 
         foreach (var param in parameters)
         {
-            TypeInfo paramType = ResolveAnnotation(param.Type, param.TypeAnnotationNode) ?? TypeInfo.Any.Shared;
+            TypeInfo? resolvedParameter = ResolveAnnotation(param.Type, param.TypeAnnotationNode);
+            if (resolvedParameter is null && param.DestructuredProperties is { Count: > 0 } properties)
+            {
+                var fields = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
+                var optional = new HashSet<string>(StringComparer.Ordinal);
+                foreach (Stmt.DestructuredParameterProperty property in properties)
+                {
+                    fields[property.Key.Lexeme] = property.DefaultValue is { } defaultExpression
+                        ? WidenLiteralType(CheckExpr(defaultExpression))
+                        : TypeInfo.Any.Shared;
+                    if (property.DefaultValue is not null) optional.Add(property.Key.Lexeme);
+
+                    if (property.IsRenamed && property.Binding.Lexeme is
+                        "string" or "number" or "boolean" or "object" or "symbol" or "bigint")
+                    {
+                        RecordTypeError(new TypeCheckException(
+                            $"'{property.Binding.Lexeme}' is an unused renaming of '{property.Key.Lexeme}'. Did you intend to use it as a type annotation?",
+                            property.Binding.Line, tsCode: "TS2842"));
+                        if (_noImplicitAny)
+                            RecordTypeError(new TypeCheckException(
+                                $"Binding element '{property.Binding.Lexeme}' implicitly has an 'any' type.",
+                                property.Binding.Line, tsCode: "TS7031"));
+                    }
+                }
+                resolvedParameter = new TypeInfo.Record(
+                    fields.ToFrozenDictionary(StringComparer.Ordinal),
+                    OptionalFields: optional.Count > 0
+                        ? optional.ToFrozenSet(StringComparer.Ordinal)
+                        : null);
+            }
+            TypeInfo paramType = resolvedParameter ?? TypeInfo.Any.Shared;
             paramTypes.Add(paramType);
             paramNames.Add(param.Name.Lexeme);
 
@@ -1720,6 +1750,14 @@ public partial class TypeChecker
             }
         }
 
+        // Global augmentation checking can relate partially-built ambient types. Those verdicts
+        // are preparatory and must not answer compatibility queries in the authoritative source
+        // pass (recursive class shapes are particularly sensitive to the incomplete identities).
+        _compatibilityCache = null;
+        _identityCompatibilityCache = null;
+        _compatibilityInProgress = null;
+        _compatibilityCheckDepth = 0;
+
         _globalObjectMembers = new Dictionary<string, TypeInfo>(StringComparer.Ordinal);
         for (TypeEnvironment? environment = scriptEnv; environment is not null; environment = environment.Enclosing)
         {
@@ -2061,9 +2099,11 @@ public partial class TypeChecker
         module.DefaultValueBinding = null;
         module.DefaultTypeBinding = null;
 
-        // Ambient `export = GlobalNamespace` declarations (the classic React shape) need
-        // the globals collected from referenced script declarations. The authoritative
-        // module pass already encloses `scriptEnv`; keep the preparatory export pass aligned.
+        // External modules can refer to declarations contributed by referenced scripts.
+        // This is especially common in UMD declaration files, where an ambient module
+        // exports a global namespace (for example `export = __React`). Use the same
+        // shared script environment as the authoritative module pass so the preparatory
+        // export surface does not collapse to an empty namespace.
         var moduleEnv = new TypeEnvironment(scriptEnv);
 
         // CJS modules have module, exports, and global in scope
@@ -2122,9 +2162,9 @@ public partial class TypeChecker
                             }
                             else if (export.ExportAssignment != null)
                             {
-                                // Deferred until declarations have populated the environment.
-                                // DefinitelyTyped commonly places `export = React` before the
-                                // namespace declaration it names.
+                                // Evaluate export assignments after declarations. Ambient UMD
+                                // packages commonly write `export = React` before the namespace
+                                // declaration which supplies that symbol.
                             }
                             else if (export.Declaration != null)
                             {
@@ -2202,6 +2242,32 @@ public partial class TypeChecker
                 _suppressDiagnostics--;
             }
 
+            _suppressDiagnostics++;
+            try
+            {
+                foreach (Stmt.Export assignment in module.Statements
+                             .OfType<Stmt.Export>()
+                             .Where(export => export.ExportAssignment != null))
+                {
+                    try
+                    {
+                        module.HasExportAssignment = true;
+                        module.ExportAssignmentType = assignment.ExportAssignment is Expr.Variable variable &&
+                                                      _environment.GetNamespace(variable.Name.Lexeme) is { } exportNamespace
+                            ? exportNamespace
+                            : CheckExpr(assignment.ExportAssignment!);
+                    }
+                    catch (TypeCheckException ex)
+                    {
+                        RecordTypeError(ex);
+                    }
+                }
+            }
+            finally
+            {
+                _suppressDiagnostics--;
+            }
+
         // Now collect exports
         foreach (var stmt in module.Statements)
         {
@@ -2224,7 +2290,12 @@ public partial class TypeChecker
                 {
                     string name = GetDeclarationName(export.Declaration);
                     var type = GetDeclaredType(export.Declaration);
-                    module.ExportedTypes[name] = type;
+                    // Function/namespace declaration merging carries the namespace as the type
+                    // facet and the function through its value binding. Retain the namespace so
+                    // factory-local qualified types such as `predom.JSX.Element` survive import.
+                    if (!module.ExportedTypes.TryGetValue(name, out TypeInfo? prior) ||
+                        prior is not TypeInfo.Namespace || type is TypeInfo.Namespace)
+                        module.ExportedTypes[name] = type;
                     RecordExportedDeclarationBindings(
                         module,
                         export.Declaration,
@@ -2466,6 +2537,25 @@ public partial class TypeChecker
                 : module.ExportedValueBindings.ToFrozenDictionary());
     }
 
+    private static TypeInfo? ResolveDeferredModuleExportAssignment(
+        ParsedModule module,
+        TypeEnvironment environment)
+    {
+        if (module.ExportAssignmentType is not null)
+            return module.ExportAssignmentType;
+
+        if (!module.HasExportAssignment || module.Statements
+                .OfType<Stmt.Export>()
+                .FirstOrDefault(export => export.ExportAssignment is Expr.Variable)
+            is not { ExportAssignment: Expr.Variable assignment })
+            return null;
+
+        TypeInfo? resolved = environment.GetNamespace(assignment.Name.Lexeme)
+            ?? module.ExportedTypes.GetValueOrDefault(assignment.Name.Lexeme);
+        module.ExportAssignmentType = resolved;
+        return resolved;
+    }
+
     /// <summary>
     /// Binds imported symbols from dependencies into the module's environment.
     /// </summary>
@@ -2521,11 +2611,15 @@ public partial class TypeChecker
                         }
                         else
                         {
-                            if (importedModule.DefaultExportType == null)
+                            TypeInfo? defaultImportType = importedModule.DefaultExportType;
+                            if (defaultImportType is null && Options.AllowSyntheticDefaultImports &&
+                                importedModule.HasExportAssignment)
+                                defaultImportType = ResolveDeferredModuleExportAssignment(importedModule, env);
+                            if (defaultImportType == null)
                             {
                                 throw new TypeCheckException($"Module '{import.ModulePath}' has no default export", import.Keyword.Line, tsCode: "TS1192");
                             }
-                            if (importedModule.DefaultExportType is TypeInfo.Namespace defaultNamespace)
+                            if (defaultImportType is TypeInfo.Namespace defaultNamespace)
                             {
                                 env.DefineNamespace(
                                     import.DefaultImport.Lexeme,
@@ -2535,7 +2629,7 @@ public partial class TypeChecker
                             {
                                 env.DefineImportAlias(
                                     import.DefaultImport.Lexeme,
-                                    importedModule.DefaultExportType,
+                                    defaultImportType,
                                     isValue: !import.IsTypeOnly);
                             }
 
@@ -2568,8 +2662,11 @@ public partial class TypeChecker
                         }
                         else
                         {
-                            var namespaceType = CreateModuleNamespaceType(
-                                import.NamespaceImport.Lexeme, importedModule);
+                            TypeInfo.Namespace namespaceType =
+                                importedModule.HasExportAssignment &&
+                                importedModule.ExportAssignmentType is TypeInfo.Namespace exportNamespace
+                                    ? exportNamespace with { Name = import.NamespaceImport.Lexeme }
+                                    : CreateModuleNamespaceType(import.NamespaceImport.Lexeme, importedModule);
                             env.DefineNamespace(import.NamespaceImport.Lexeme, namespaceType);
                             if (!import.IsTypeOnly)
                             {
@@ -2637,14 +2734,27 @@ public partial class TypeChecker
                                     tsCode: "TS18042"));
                             }
 
-                            env.DefineImportAlias(
-                                localName, type,
-                                // Some executable/embedded modules expose their value
-                                // surface without source binding provenance. Keep the
-                                // historical value alias for ordinary imports; the
-                                // binding map is still authoritative for the JSX-file
-                                // TS18042 diagnostic above.
-                                isValue: !isTypeOnly);
+                            if (type is TypeInfo.Namespace importedNamespace)
+                            {
+                                env.DefineNamespace(
+                                    localName,
+                                    importedNamespace with { Name = localName });
+                                // A namespace declaration has a runtime value facet even when an
+                                // ambient/export collection pass did not retain value-binding
+                                // provenance for it. Named namespace imports are therefore valid
+                                // JSX factory values unless explicitly type-only.
+                                if (!isTypeOnly)
+                                    env.DefineImportAlias(localName, importedNamespace, isValue: true);
+                            }
+                            else
+                                env.DefineImportAlias(
+                                    localName, type,
+                                    // Some executable/embedded modules expose their value
+                                    // surface without source binding provenance. Keep the
+                                    // historical value alias for ordinary imports; the
+                                    // binding map is still authoritative for the JSX-file
+                                    // TS18042 diagnostic above.
+                                    isValue: !isTypeOnly);
 
                             Token localToken = spec.LocalName ?? spec.Imported;
                             if (!isTypeOnly &&

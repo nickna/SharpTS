@@ -38,7 +38,7 @@ public sealed class GuiJsxDeclarationTests
         Assert.Equal(1, result.ExitCode);
         Assert.Contains("async components are not supported", result.Output, StringComparison.Ordinal);
         Assert.Contains("union constituent", result.Output, StringComparison.Ordinal);
-        Assert.Contains("No overload matches", result.Output, StringComparison.Ordinal);
+        Assert.Contains("not assignable to type '\"compact\" | \"full\"'", result.Output, StringComparison.Ordinal);
     }
 
     private static async Task<ProcessResult> CheckAsync(string fixture)

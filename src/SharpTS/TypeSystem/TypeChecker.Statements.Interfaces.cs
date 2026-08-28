@@ -191,6 +191,15 @@ public partial class TypeChecker
         if (_environment.IsTypeDefinedLocally(interfaceStmt.Name.Lexeme))
             return;
 
+        // Bind a non-generic interface's own name before resolving its members. Without this
+        // placeholder, `interface Element { children: Element[] }` declared in a nested JSX
+        // namespace can capture an enclosing global DOM `Element` during the preparatory pass.
+        // Use `any`, rather than an empty interface, because this pass is speculative: an empty
+        // structural edge would make a recursive declaration such as `interface S { foo: S }`
+        // spuriously incompatible before the completed preregistration replaces it below.
+        if (interfaceStmt.TypeParams is null or { Count: 0 })
+            _environment.DefineType(interfaceStmt.Name.Lexeme, TypeInfo.Any.Shared);
+
         // Handle generic type parameters with two-pass approach to support recursive constraints
         List<TypeInfo.TypeParameter>? interfaceTypeParams = null;
         TypeEnvironment interfaceTypeEnv = new(_environment);
@@ -884,16 +893,50 @@ public partial class TypeChecker
         // satisfies, so the interface-extends check (TS2430) never fires under generics (#896). For a
         // non-Record value the helper is identical to Substitute.
         var members = gi.Members.ToDictionary(kv => kv.Key, kv => SubstitutePreservingSignatures(kv.Value, subs));
+        var optionalMembers = gi.OptionalMembers.ToHashSet(StringComparer.Ordinal);
+        foreach (TypeInfo.Interface baseInterface in gi.Extends ?? [])
+        {
+            foreach ((string name, TypeInfo member) in baseInterface.GetAllMembers())
+                members.TryAdd(name, SubstitutePreservingSignatures(member, subs));
+            foreach (string name in baseInterface.GetAllOptionalMembers())
+                optionalMembers.Add(name);
+        }
+        List<TypeInfo.CallSignature>? callSignatures = gi.CallSignatures?.Select(signature =>
+        {
+            Dictionary<string, TypeInfo> signatureSubs = signature.TypeParams is null
+                ? subs
+                : subs.Where(pair => signature.TypeParams.All(parameter => parameter.Name != pair.Key))
+                    .ToDictionary(StringComparer.Ordinal);
+            return signature with
+            {
+                ParamTypes = signature.ParamTypes
+                    .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
+                ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
+            };
+        }).ToList();
+        List<TypeInfo.ConstructorSignature>? constructorSignatures = gi.ConstructorSignatures?.Select(signature =>
+        {
+            Dictionary<string, TypeInfo> signatureSubs = signature.TypeParams is null
+                ? subs
+                : subs.Where(pair => signature.TypeParams.All(parameter => parameter.Name != pair.Key))
+                    .ToDictionary(StringComparer.Ordinal);
+            return signature with
+            {
+                ParamTypes = signature.ParamTypes
+                    .Select(type => SubstitutePreservingSignatures(type, signatureSubs)).ToList(),
+                ReturnType = SubstitutePreservingSignatures(signature.ReturnType, signatureSubs),
+            };
+        }).ToList();
         return new TypeInfo.Interface(
             $"{gi.Name}<{string.Join(", ", ig.TypeArguments)}>",
             members.ToFrozenDictionary(),
-            gi.OptionalMembers,
+            optionalMembers.ToFrozenSet(StringComparer.Ordinal),
             gi.StringIndexType is null ? null : SubstitutePreservingSignatures(gi.StringIndexType, subs),
             gi.NumberIndexType is null ? null : SubstitutePreservingSignatures(gi.NumberIndexType, subs),
             gi.SymbolIndexType is null ? null : SubstitutePreservingSignatures(gi.SymbolIndexType, subs),
             gi.Extends,
-            gi.CallSignatures,
-            gi.ConstructorSignatures,
+            callSignatures,
+            constructorSignatures,
             gi.ReadonlyMembers,
             gi.MethodMembers,
             ReadonlyNumberIndex: gi.ReadonlyNumberIndex);

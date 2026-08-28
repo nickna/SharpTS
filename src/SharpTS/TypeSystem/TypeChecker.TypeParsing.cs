@@ -443,10 +443,10 @@ public partial class TypeChecker
                 return new TypeInfo.Record(mergedFields.ToFrozenDictionary());
             }
 
-            // Otherwise, return the non-object constituents intersected with the merged
-            // object shape. Preserve optionality here too: JSX commonly forms
-            // `(PropsA | PropsB) & { children?: ReactNode }`, and dropping the marker would
-            // incorrectly make `children` required after distributing the union branches.
+            // Otherwise, return an intersection with the merged object member. Preserve the
+            // optional-property set here too: generic shapes such as `{ x?: boolean } & T`
+            // retain the open `T` arm, while JSX shapes such as
+            // `(PropsA | PropsB) & { children?: ReactNode }` retain optional children.
             TypeInfo mergedObject = optionalFields.Count > 0
                 ? new TypeInfo.Interface("", mergedFields.ToFrozenDictionary(), optionalFields.ToFrozenSet())
                 : new TypeInfo.Record(mergedFields.ToFrozenDictionary());

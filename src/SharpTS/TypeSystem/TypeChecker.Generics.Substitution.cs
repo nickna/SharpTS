@@ -101,7 +101,11 @@ public partial class TypeChecker
                     ? new TypeInfo.Record(
                         rec.Fields.ToDictionary(
                             kvp => kvp.Key,
-                            kvp => Sub(kvp.Value)).ToFrozenDictionary())
+                            kvp => Sub(kvp.Value)).ToFrozenDictionary(),
+                        OptionalFields: rec.OptionalFields,
+                        IsReadonly: rec.IsReadonly,
+                        GetterOnlyFields: rec.GetterOnlyFields,
+                        MethodMembers: rec.MethodMembers)
                     : SubstituteRecordMembers(rec, Sub),
             TypeInfo.InstantiatedGeneric ig =>
                 new TypeInfo.InstantiatedGeneric(

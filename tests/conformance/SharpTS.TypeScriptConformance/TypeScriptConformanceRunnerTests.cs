@@ -200,6 +200,7 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/tsxDynamicTagName6.tsx")]
     [InlineData("jsx/tsxDynamicTagName9.tsx")]
     [InlineData("jsx/tsxElementResolution17.tsx")]
+    [InlineData("jsx/tsxSpreadAttributesResolution16.tsx")]
     [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
     public void RunOne_JsxRecoveryChanges_PreserveExistingPasses(string relativePath)
     {
@@ -232,6 +233,83 @@ public class TypeScriptConformanceRunnerTests
     [InlineData("jsx/tsxReactEmit7.tsx")]
     [InlineData("jsx/tsxReactEmit8.tsx")]
     public void RunOne_Issue1533ResolutionCohort_MatchesDiagnosticBaseline(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        string path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}");
+    }
+
+    [Theory]
+    [InlineData("jsx/checkJsxGenericTagHasCorrectInferences.tsx")]
+    [InlineData("jsx/checkJsxIntersectionElementPropsType.tsx")]
+    [InlineData("jsx/checkJsxSubtleSkipContextSensitiveBug.tsx")]
+    [InlineData("jsx/checkJsxUnionSFXContextualTypeInferredCorrectly.tsx")]
+    [InlineData("jsx/inline/inlineJsxFactoryDeclarationsLocalTypes.tsx")]
+    [InlineData("jsx/inline/inlineJsxFactoryLocalTypeGlobalFallback.tsx")]
+    [InlineData("jsx/tsxElementResolution9.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType1.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType3.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType4.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType5.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType6.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType7.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType8.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType9.tsx")]
+    [InlineData("jsx/tsxReactComponentWithDefaultTypeParameter1.tsx")]
+    [InlineData("jsx/tsxReactComponentWithDefaultTypeParameter2.tsx")]
+    [InlineData("jsx/tsxReactComponentWithDefaultTypeParameter3.tsx")]
+    [InlineData("jsx/tsxSfcReturnUndefinedStrictNullChecks.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentOverload1.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentOverload2.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentOverload3.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentOverload4.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentOverload5.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentOverload6.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponents1.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponents2.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponents3.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentsWithTypeArguments2.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentsWithTypeArguments3.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentsWithTypeArguments4.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentsWithTypeArguments5.tsx")]
+    [InlineData("jsx/tsxStatelessFunctionComponentWithDefaultTypeParameter2.tsx")]
+    [InlineData("jsx/tsxTypeArgumentResolution.tsx")]
+    [InlineData("jsx/tsxUnionElementType1.tsx")]
+    [InlineData("jsx/tsxUnionElementType2.tsx")]
+    [InlineData("jsx/tsxUnionElementType3.tsx")]
+    [InlineData("jsx/tsxUnionElementType4.tsx")]
+    [InlineData("jsx/tsxUnionElementType5.tsx")]
+    [InlineData("jsx/tsxUnionElementType6.tsx")]
+    [InlineData("jsx/tsxUnionTypeComponent1.tsx")]
+    [InlineData("jsx/tsxUnionTypeComponent2.tsx")]
+    public void RunOne_Issue1535GenericJsxCampaign_MatchesPinnedDiagnostics(string relativePath)
+    {
+        var root = TypeScriptConformancePaths.TryFindRoot();
+        if (root is null) return;
+        string path = Path.Combine(
+            TypeScriptConformancePaths.ConformanceDir(root),
+            relativePath.Replace('/', Path.DirectorySeparatorChar));
+
+        var result = new TypeScriptConformanceRunner(root).RunOne(path);
+
+        Assert.True(result.Outcome == TypeScriptConformanceOutcome.Pass,
+            $"{relativePath}: {result.Message ?? result.Outcome.ToString()}; actual: " +
+            string.Join(", ", (result.ActualDiagnostics ?? []).Select(d => $"{d.TsCode}@L{d.Line}")));
+    }
+
+    [Theory]
+    [InlineData("jsx/checkJsxChildrenProperty15.tsx")]
+    [InlineData("jsx/tsxGenericAttributesType2.tsx")]
+    [InlineData("types/conditional/inferTypes1.ts")]
+    [InlineData("types/typeRelationships/assignmentCompatibility/assignmentCompatWithObjectMembers.ts")]
+    public void RunOne_Issue1535GenericJsxCampaign_PreservesExistingPasses(string relativePath)
     {
         var root = TypeScriptConformancePaths.TryFindRoot();
         if (root is null) return;

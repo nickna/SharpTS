@@ -238,6 +238,9 @@ public sealed class TypeScriptConformanceRunner
                 NoUncheckedIndexedAccess =
                     DirectiveBool(metadata, "nouncheckedindexedaccess") ?? false,
                 NoUnusedLocals = DirectiveBool(metadata, "nounusedlocals") ?? false,
+                AllowSyntheticDefaultImports =
+                    DirectiveBool(metadata, "allowsyntheticdefaultimports") == true ||
+                    DirectiveBool(metadata, "esmoduleinterop") == true,
                 ImportHelpers = DirectiveBool(metadata, "importhelpers") ?? false,
                 RespectLoadedLibraries = true,
                 MaxErrors = 1000,

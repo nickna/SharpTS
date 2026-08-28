@@ -70,6 +70,9 @@ public sealed record TypeCheckerOptions
     /// </summary>
     public bool NoUnusedLocals { get; init; } = false;
 
+    /// <summary>Allows a default import to bind a CommonJS <c>export =</c> declaration.</summary>
+    public bool AllowSyntheticDefaultImports { get; init; } = false;
+
     /// <summary>Whether emitted helpers must be imported from tslib.</summary>
     public bool ImportHelpers { get; init; } = false;
 

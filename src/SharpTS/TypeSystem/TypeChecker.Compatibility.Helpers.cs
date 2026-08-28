@@ -452,6 +452,10 @@ public partial class TypeChecker
         // their first TS2741 (assignmentCompatWithObjectMembersOptionality2 pins this).
         if (MissingRequiredMember(target, source))
         {
+            // Preparatory module checking is diagnostic-suppressed and non-authoritative. It
+            // must not consume the pair's one TS2741 slot before the real source pass runs.
+            if (_suppressDiagnostics > 0)
+                return "TS2741";
             _ts2741Reported ??= new(IdentityPairComparer.Instance);
             if (_ts2741Reported.Add((target, source)))
                 return "TS2741";
@@ -834,6 +838,7 @@ public partial class TypeChecker
         // including the empty shape. An empty class is therefore compatible with
         // any non-nullish object-like source, not only interfaces/records.
         if (members.Count == 0 && !hasIndex) return true;
+
         return CheckStructuralCompatibility(members, source) && IndexSignaturesSatisfied(indexCarrier, source);
     }
 
