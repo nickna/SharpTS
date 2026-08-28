@@ -153,6 +153,32 @@ public partial class CompilationContext
     // win over the global handler.
     public HashSet<string>? ImportedNames { get; set; }
 
+    /// <summary>
+    /// Returns whether a value binding visible to the current body shadows a global
+    /// built-in name. State-machine resolvers intentionally cover only locals and
+    /// hoisted fields, so semantic fast paths must also consult module/import maps.
+    /// </summary>
+    internal bool HasVisibleValueBinding(string name)
+    {
+        if (TopLevelStaticVars?.ContainsKey(name) == true
+            || CapturedTopLevelVars?.Contains(name) == true
+            || BuiltInModuleMethodBindings?.ContainsKey(name) == true)
+        {
+            return true;
+        }
+
+        // The legacy single-file compile path has no per-module import-field map.
+        // In module compilation TopLevelStaticVars is already scoped to the current
+        // module, so avoid letting another module's same-named import disable a fast path.
+        if (CurrentModulePath == null && ImportedNames?.Contains(name) == true)
+            return true;
+
+        return Functions.ContainsKey(GetQualifiedFunctionName(name))
+            || Classes.ContainsKey(GetQualifiedClassName(name))
+            || EnumMembers?.ContainsKey(GetQualifiedEnumName(name)) == true
+            || ResolveNamespaceField(name) is not null;
+    }
+
     // ============================================
     // Registry Services
     // ============================================

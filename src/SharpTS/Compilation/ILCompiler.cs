@@ -60,6 +60,7 @@ public partial class ILCompiler
     private readonly Dictionary<string, Dictionary<string, (string ModuleName, string MethodName)>> _builtInModuleMethodBindingsByModule = [];
     private static readonly Dictionary<string, (string ModuleName, string MethodName)> _emptyBindings = [];
     private readonly HashSet<string> _importedNames = [];  // Every named / default / namespace import, any module source. Used to shadow global call handlers.
+    private readonly HashSet<string> _promiseBindingScopes = new(StringComparer.Ordinal);
 
     // Function AST nodes whose top-level binding is never reassigned in their owning module.
     // The emitter uses this only for recursive self-calls and keys the exception to the exact
@@ -688,6 +689,7 @@ public partial class ILCompiler
     private void AnalyzeSingleModuleBindings(List<Stmt> statements)
     {
         PreScanBuiltInModuleImports(statements);
+        RegisterPromiseBindingScope(statements, modulePath: null);
         StableFunctionBindingAnalyzer.Analyze(statements, _stableSelfCallFunctions);
         StableNumericRestFunctionAnalyzer.Analyze(
             statements, _typeMap, _stableSelfCallFunctions, _closures.Analyzer,
@@ -1375,6 +1377,8 @@ public partial class ILCompiler
         foreach (var m in modules)
         {
             PreScanBuiltInModuleImports(m.Statements, m.Path);
+            RegisterPromiseBindingScope(
+                m.Statements, m.IsScript ? null : m.Path);
             StableFunctionBindingAnalyzer.Analyze(m.Statements, _stableSelfCallFunctions);
             StableNumericRestFunctionAnalyzer.Analyze(
                 m.Statements, _typeMap, _stableSelfCallFunctions, _closures.Analyzer,

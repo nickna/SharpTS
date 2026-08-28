@@ -113,7 +113,9 @@ public partial class ILEmitter
         }
 
         // Static type property dispatch via registry (Math.PI, Number.MAX_VALUE, Symbol.iterator, etc.)
-        if (g.Object is Expr.Variable staticVar && _ctx.TypeEmitterRegistry != null)
+        if (g.Object is Expr.Variable staticVar
+            && CanUseStaticTypeStrategy(staticVar.Name.Lexeme)
+            && _ctx.TypeEmitterRegistry != null)
         {
             var staticStrategy = _ctx.TypeEmitterRegistry.GetStaticStrategy(staticVar.Name.Lexeme);
             if (staticStrategy != null && staticStrategy.TryEmitStaticPropertyGet(this, g.Name.Lexeme))

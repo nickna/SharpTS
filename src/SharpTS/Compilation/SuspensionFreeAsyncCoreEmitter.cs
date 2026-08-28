@@ -27,7 +27,8 @@ internal sealed class SuspensionFreeAsyncCoreEmitter(CompilationContext context)
                     Name.Lexeme: "resolve"
                 },
                 Arguments: [var resolvedValue]
-            })
+            }
+            && !Ctx.HasVisibleValueBinding("Promise"))
         {
             EmitExpression(resolvedValue);
             return;
