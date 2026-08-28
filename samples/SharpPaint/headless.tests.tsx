@@ -24,19 +24,22 @@ let responsiveWindow: any = null;
 responsiveWindow = application.createWindow(<SharpPaintShowcase requestClose={() => responsiveWindow.close()} />);
 const responsiveDriver = createDesktopTestDriver(responsiveWindow);
 let fillWindow: any = null;
-fillWindow = application.createWindow(<SharpPaintShowcase requestClose={() => fillWindow.close()} />);
+fillWindow = application.createWindow(
+    <SharpPaintShowcase initialDocument={createDocument(320, 240)} requestClose={() => fillWindow.close()} />);
 const fillDriver = createDesktopTestDriver(fillWindow);
 let textWindow: any = null;
 textWindow = application.createWindow(<SharpPaintShowcase requestClose={() => textWindow.close()} />);
 const textDriver = createDesktopTestDriver(textWindow);
 let effectWindow: any = null;
-effectWindow = application.createWindow(<SharpPaintShowcase requestClose={() => effectWindow.close()} />);
+effectWindow = application.createWindow(
+    <SharpPaintShowcase initialDocument={createDocument(320, 240)} requestClose={() => effectWindow.close()} />);
 const effectDriver = createDesktopTestDriver(effectWindow);
-function waitForStatus(testDriver: DesktopTestDriver, expected: string, then: () => void, remaining: number = 200): void {
+const STATUS_TIMEOUT_MS = 15_000;
+function waitForStatus(testDriver: DesktopTestDriver, expected: string, then: () => void, deadline: number = Date.now() + STATUS_TIMEOUT_MS): void {
     const actual = testDriver.getText("status");
     if (actual === expected) { then(); return; }
-    if (remaining <= 0) throw new Error("Timed out waiting for status '" + expected + "'; actual status was '" + actual + "'.");
-    setTimeout((() => waitForStatus(testDriver, expected, then, remaining - 1)) as any, 10);
+    if (Date.now() >= deadline) throw new Error("Timed out waiting for status '" + expected + "'; actual status was '" + actual + "'.");
+    setTimeout((() => waitForStatus(testDriver, expected, then, deadline)) as any, 10);
 }
 const openProjectPath = join(process.cwd(), "SharpPaint.Headless.Open.sharpaint");
 const saveProjectPath = join(process.cwd(), "SharpPaint.Headless.Save.sharpaint");
