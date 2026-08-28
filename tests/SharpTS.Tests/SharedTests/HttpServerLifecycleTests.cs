@@ -111,17 +111,19 @@ public class HttpServerLifecycleTests
     [Theory, ModeData]
     public void Server_ListenHost_UsesThirdArgumentCallbackAndReportsAddress(ExecutionMode mode)
     {
-        var port = TestPorts.GetAvailablePort();
+        // Allocate the ephemeral port at listen time. Selecting and releasing a
+        // port before compiling the guest leaves a large bind race under parallel test load.
         var files = new Dictionary<string, string>
         {
-            ["./main.ts"] = $$"""
+            ["./main.ts"] = """
                 import * as http from 'http';
                 const server = http.createServer((req: any, res: any) => res.end('ok'));
-                server.listen({{port}}, '127.0.0.1', () => {
+                server.listen(0, '127.0.0.1', () => {
                     const address = server.address();
                     console.log('callback');
                     console.log('address=' + address.address);
                     console.log('family=' + address.family);
+                    console.log('port=' + (address.port > 0));
                     server.close();
                 });
                 """
@@ -131,6 +133,7 @@ public class HttpServerLifecycleTests
         Assert.Contains("callback", output);
         Assert.Contains("address=127.0.0.1", output);
         Assert.Contains("family=IPv4", output);
+        Assert.Contains("port=true", output);
     }
 
     [Theory, ModeData]

@@ -175,8 +175,7 @@ type AppAction =
     | { type: "replaceLayer"; layerId: string; source: string; status: string; expectedRevision: number }
     | { type: "commitText"; command: DrawingCommand };
 
-function initialState(): AppState {
-    const document = createDocument();
+function initialState(document: PaintDocument = createDocument()): AppState {
     return {
         history: createHistory(document),
         selectedLayerId: document.layers[0].id,
@@ -414,10 +413,13 @@ function appReducer(state: AppState, action: any): AppState {
     return state;
 }
 
-export interface SharpPaintAppProps { readonly requestClose: () => void; }
+export interface SharpPaintAppProps {
+    readonly requestClose: () => void;
+    readonly initialDocument?: PaintDocument;
+}
 
 export function SharpPaintApp(props: SharpPaintAppProps): JSX.Element {
-    const statePair = useReducer<AppState, any>(appReducer, initialState());
+    const statePair = useReducer<AppState, any>(appReducer, initialState(props.initialDocument));
     const state = statePair[0];
     const dispatch = statePair[1];
     const closeState = useRef({ bypass: false, promptActive: false });
