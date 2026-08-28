@@ -33,10 +33,16 @@ public partial class AsyncMoveNextEmitter
     /// </summary>
     protected override void EmitVarDeclaration(Stmt.Var v)
     {
+        bool stableNumeric = Ctx.TypeMap?.IsStableNumericStateMachineLocal(v) == true;
+
         // Resolve a shadowing block-scoped binding to its own storage before any DC routing (#766);
         // a renamed binding is never a captured/DC name, so the DC check below correctly falls through.
         if (BlockScopeRenames.TryGetValue(v, out var renamed))
+        {
             v = v with { Name = RenameToken(v.Name, renamed) };
+            if (stableNumeric)
+                Ctx.TypeMap!.MarkStableNumericStateMachineLocal(v);
+        }
 
         string name = v.Name.Lexeme;
 

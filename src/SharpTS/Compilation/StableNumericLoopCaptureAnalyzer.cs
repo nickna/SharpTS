@@ -184,6 +184,7 @@ internal static class StableNumericLoopCaptureAnalyzer
                         IsGenerator: false
                     } function
                     && IsStableAsyncPromiseLoop(statement, declaration.Name.Lexeme)
+                    && !collector.BindingWritten
                     && collector.StablePromiseCaptures.Count > 0)
                 {
                     _typeMap.MarkStableNumericStateMachineLocal(declaration);
@@ -230,8 +231,15 @@ internal static class StableNumericLoopCaptureAnalyzer
 
             string boundName = right.Name.Lexeme;
 
-            var parameter = function.Parameters.SingleOrDefault(candidate =>
-                candidate.Name.Lexeme == boundName);
+            Stmt.Parameter? parameter = null;
+            foreach (var candidate in function.Parameters)
+            {
+                if (candidate.Name.Lexeme != boundName)
+                    continue;
+                if (parameter is not null)
+                    return;
+                parameter = candidate;
+            }
             if (parameter is not
                 {
                     Type: "number",
@@ -333,6 +341,7 @@ internal static class StableNumericLoopCaptureAnalyzer
             new(ReferenceEqualityComparer.Instance);
         public HashSet<Expr.ArrowFunction> StablePromiseCaptures { get; } =
             new(ReferenceEqualityComparer.Instance);
+        public bool BindingWritten => _bindingWritten;
 
         protected override void VisitArrowFunction(Expr.ArrowFunction arrow)
         {
@@ -378,18 +387,55 @@ internal static class StableNumericLoopCaptureAnalyzer
             base.VisitFor(statement);
         }
 
+        protected override void VisitSwitch(Stmt.Switch statement)
+        {
+            Visit(statement.Subject);
+
+            // A switch owns one lexical scope shared by every case. A declaration in
+            // any arm therefore shadows the loop binding throughout the case block.
+            if (statement.Cases.Any(@case => DeclaresBinding(@case.Body))
+                || statement.DefaultBody is not null
+                && DeclaresBinding(statement.DefaultBody))
+            {
+                return;
+            }
+
+            foreach (var @case in statement.Cases)
+            {
+                Visit(@case.Value);
+                foreach (var child in @case.Body)
+                    Visit(child);
+            }
+            if (statement.DefaultBody is not null)
+                foreach (var child in statement.DefaultBody)
+                    Visit(child);
+        }
+
         protected override void VisitForOf(Stmt.ForOf statement)
         {
             Visit(statement.Iterable);
-            if (statement.Variable.Lexeme != _bindingName)
-                Visit(statement.Body);
+            if (statement.Variable.Lexeme == _bindingName)
+            {
+                // ForOf does not retain whether the target came from a declaration
+                // or an existing-binding assignment. Conservatively reject both:
+                // one shadows this binding and the other writes it.
+                _bindingWritten = true;
+                return;
+            }
+            Visit(statement.Body);
         }
 
         protected override void VisitForIn(Stmt.ForIn statement)
         {
             Visit(statement.Object);
-            if (statement.Variable.Lexeme != _bindingName)
-                Visit(statement.Body);
+            if (statement.Variable.Lexeme == _bindingName)
+            {
+                // The declaration form can still be `var`, which reuses a
+                // function-scoped binding. Reject the name collision conservatively.
+                _bindingWritten = true;
+                return;
+            }
+            Visit(statement.Body);
         }
 
         protected override void VisitTryCatch(Stmt.TryCatch statement)
@@ -424,6 +470,8 @@ internal static class StableNumericLoopCaptureAnalyzer
 
         public void MarkSynchronousCaptures()
         {
+            if (_bindingWritten)
+                return;
             foreach (var arrow in _directCaptures)
                 _typeMap.MarkStableNumericCaptureField(arrow, _bindingName);
             foreach (var arrow in StablePromiseCaptures)
@@ -432,9 +480,13 @@ internal static class StableNumericLoopCaptureAnalyzer
 
         public void MarkStablePromiseCaptures()
         {
+            if (_bindingWritten)
+                return;
             foreach (var arrow in StablePromiseCaptures)
                 _typeMap.MarkStableNumericCaptureField(arrow, _bindingName);
         }
+
+        private bool _bindingWritten;
     }
 
     private sealed class StablePromiseHandlerVisitor(TypeMap typeMap) : AstVisitorBase
@@ -497,6 +549,28 @@ internal static class StableNumericLoopCaptureAnalyzer
                 Safe = false;
             base.VisitPostfixIncrement(expression);
         }
+
+        protected override void VisitForOf(Stmt.ForOf statement)
+        {
+            Visit(statement.Iterable);
+            if (statement.Variable.Lexeme == bindingName)
+            {
+                Safe = false;
+                return;
+            }
+            Visit(statement.Body);
+        }
+
+        protected override void VisitForIn(Stmt.ForIn statement)
+        {
+            Visit(statement.Object);
+            if (statement.Variable.Lexeme == bindingName)
+            {
+                Safe = false;
+                return;
+            }
+            Visit(statement.Body);
+        }
     }
 
     private sealed class BindingWriteVisitor(string bindingName) : AstVisitorBase
@@ -539,6 +613,30 @@ internal static class StableNumericLoopCaptureAnalyzer
                 Written = true;
             base.VisitPostfixIncrement(expression);
         }
+
+        protected override void VisitForOf(Stmt.ForOf statement)
+        {
+            Visit(statement.Iterable);
+            if (statement.Variable.Lexeme == bindingName)
+            {
+                // The AST cannot distinguish `for (name of ...)` from a declaration,
+                // so both forms conservatively disqualify a typed parameter field.
+                Written = true;
+                return;
+            }
+            Visit(statement.Body);
+        }
+
+        protected override void VisitForIn(Stmt.ForIn statement)
+        {
+            Visit(statement.Object);
+            if (statement.Variable.Lexeme == bindingName)
+            {
+                Written = true;
+                return;
+            }
+            Visit(statement.Body);
+        }
     }
 
     private sealed class DirectEvalVisitor : AstVisitorBase
@@ -548,7 +646,7 @@ internal static class StableNumericLoopCaptureAnalyzer
         protected override void VisitCall(Expr.Call expression)
         {
             if (!expression.Optional
-                && expression.Callee is Expr.Variable { Name.Lexeme: "eval" })
+                && Unwrap(expression.Callee) is Expr.Variable { Name.Lexeme: "eval" })
             {
                 ContainsDirectEval = true;
             }
