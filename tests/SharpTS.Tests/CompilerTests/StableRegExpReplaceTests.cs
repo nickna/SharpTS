@@ -89,6 +89,45 @@ public sealed class StableRegExpReplaceTests
         Assert.Equal("a a 0 ab a\nb b 1 ab b\nAB\n", TestHarness.Run(source, mode));
     }
 
+    [Theory, ModeData]
+    public void StableLiteralReplace_AcceptsObjectBackedStringReplacements(ExecutionMode mode)
+    {
+        const string source = """
+            const topLevelReplacement: string = "[$&]";
+            function replaceTopLevel(input: string): string {
+                return input.replace(/x/, topLevelReplacement);
+            }
+
+            function makeReplacer(replacement: string): any {
+                return function(input: string): string {
+                    return input.replace(/x/, replacement);
+                };
+            }
+
+            console.log(replaceTopLevel("x"));
+            const replaceCaptured: any = makeReplacer("<$&>");
+            console.log(replaceCaptured("x"));
+            """;
+
+        Assert.Equal("[x]\n<x>\n", TestHarness.Run(source, mode));
+    }
+
+    [Fact]
+    public void StableLiteralReplace_ObjectBackedStringValuesPassIlVerification()
+    {
+        const string source = """
+            const replacement: string = "[$&]";
+            function replace(input: string): string {
+                return input.replace(/x/, replacement);
+            }
+            console.log(replace("x"));
+            """;
+
+        var (errors, output) = TestHarness.CompileVerifyAndRun(source);
+        Assert.Empty(errors);
+        Assert.Equal("[x]\n", output);
+    }
+
     [Fact]
     public void RegExpPrototypeMutation_DisablesStableHelperAndRemainsObservable()
     {
