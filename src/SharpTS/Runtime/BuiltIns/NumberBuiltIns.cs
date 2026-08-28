@@ -306,7 +306,7 @@ public static class NumberBuiltIns
     /// </summary>
     public static double ParseInt(string str, int radix)
     {
-        if (radix == 10)
+        if (radix == 10 || (radix == 0 && !HasHexPrefixAfterSign(str)))
             return ParseIntDecimal(str);
 
         str = str.Trim();
@@ -354,6 +354,9 @@ public static class NumberBuiltIns
     /// </summary>
     public static double ParseIntDecimal(string str)
     {
+        const ulong maxBeforeMultiply = ulong.MaxValue / 10;
+        const int maxLastDigit = (int)(ulong.MaxValue % 10);
+
         int index = 0;
         while (index < str.Length && IsEcmaParseWhitespace(str[index]))
             index++;
@@ -373,17 +376,70 @@ public static class NumberBuiltIns
         }
 
         int digitStart = index;
-        double result = 0;
+        ulong magnitude = 0;
+        bool overflowed = false;
         while (index < str.Length)
         {
             int digit = str[index] - '0';
             if ((uint)digit > 9)
                 break;
-            result = result * 10 + digit;
+
+            if (!overflowed)
+            {
+                if (magnitude > maxBeforeMultiply
+                    || magnitude == maxBeforeMultiply && digit > maxLastDigit)
+                {
+                    overflowed = true;
+                }
+                else
+                {
+                    magnitude = magnitude * 10 + (uint)digit;
+                }
+            }
             index++;
         }
 
-        return index == digitStart ? double.NaN : sign * result;
+        if (index == digitStart)
+            return double.NaN;
+
+        double result;
+        if (!overflowed)
+        {
+            // Integral-to-double conversion performs the one final IEEE-754 rounding
+            // required by ECMA-262, instead of rounding after every input digit.
+            result = magnitude;
+        }
+        else
+        {
+            // Overflow is uncommon and necessarily requires at least 20 significant
+            // digits. Keep the ordinary path allocation-free, and let the framework's
+            // correctly-rounded decimal parser handle the full magnitude here.
+            string digits = digitStart == 0 && index == str.Length
+                ? str
+                : str.Substring(digitStart, index - digitStart);
+            if (!double.TryParse(
+                    digits,
+                    NumberStyles.None,
+                    CultureInfo.InvariantCulture,
+                    out result))
+            {
+                return double.NaN;
+            }
+        }
+
+        return sign * result;
+    }
+
+    private static bool HasHexPrefixAfterSign(string str)
+    {
+        int index = 0;
+        while (index < str.Length && IsEcmaParseWhitespace(str[index]))
+            index++;
+        if (index < str.Length && (str[index] == '+' || str[index] == '-'))
+            index++;
+        return index + 1 < str.Length
+            && str[index] == '0'
+            && (str[index + 1] == 'x' || str[index + 1] == 'X');
     }
 
     private static bool IsEcmaParseWhitespace(char value)

@@ -191,6 +191,36 @@ public sealed class StableNumericStringConversionTests
     }
 
     [Fact]
+    public void CompiledDecimalParseIntPaths_UseTheSameFinalRounding()
+    {
+        Assembly assembly = Compile("""
+            function optimized(value: string): number {
+                return parseInt(value, 10);
+            }
+            function typedFallback(value: string): number {
+                return parseInt(value);
+            }
+            function dynamicFallback(value: any, radix: any): number {
+                return parseInt(value, radix);
+            }
+            """);
+        Type runtime = assembly.GetType("$Runtime")!;
+        var optimized = runtime.GetMethod("NumberParseIntDecimalString")!
+            .CreateDelegate<Func<string, double>>();
+        var typedFallback = runtime.GetMethod("NumberParseIntString")!
+            .CreateDelegate<Func<string, int, double>>();
+        var dynamicFallback = runtime.GetMethod("NumberParseInt")!
+            .CreateDelegate<Func<object, object, double>>();
+
+        const string input = "100000000000000070";
+        const double expected = 100000000000000064d;
+        Assert.Equal(expected, optimized(input));
+        Assert.Equal(expected, typedFallback(input, 10));
+        Assert.Equal(expected, typedFallback(input, 0));
+        Assert.Equal(expected, dynamicFallback(input, 10d));
+    }
+
+    [Fact]
     public void TypedToFixedLoop_AllocatesOnlyResultStrings()
     {
         Assembly assembly = Compile("""

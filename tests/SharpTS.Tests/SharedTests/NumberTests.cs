@@ -158,6 +158,82 @@ public class NumberTests
     }
 
     [Theory, ModeData]
+    public void RadixTenParseInt_MatchesNodeRoundingForLongIntegers(ExecutionMode mode)
+    {
+        const string source = """
+            const inputs: string[] = [
+                "9007199254740991",
+                "9007199254740992",
+                "9007199254740993",
+                "9007199254740995",
+                "72057594037927943",
+                "72057594037927944",
+                "72057594037927945",
+                "72057594037927960",
+                "100000000000000070",
+                "-100000000000000070",
+                " \uFEFF+000000100000000000000070junk",
+                "18446744073709551615",
+                "18446744073709551616",
+                "100000000000000070000",
+                "9".repeat(400)
+            ];
+            const expected: number[] = [
+                9007199254740991,
+                9007199254740992,
+                9007199254740992,
+                9007199254740996,
+                72057594037927936,
+                72057594037927936,
+                72057594037927952,
+                72057594037927968,
+                100000000000000064,
+                -100000000000000064,
+                100000000000000064,
+                18446744073709551616,
+                18446744073709551616,
+                100000000000000065536,
+                Infinity
+            ];
+
+            function globalFast(value: string): number {
+                return parseInt(value, 10);
+            }
+            function globalDefault(value: string): number {
+                return parseInt(value);
+            }
+            function globalAuto(value: string): number {
+                return parseInt(value, 0);
+            }
+            function globalDynamic(value: any, radix: any): number {
+                return parseInt(value, radix);
+            }
+            function numberFast(value: string): number {
+                return Number.parseInt(value, 10);
+            }
+            function numberDynamic(value: any, radix: any): number {
+                return Number.parseInt(value, radix);
+            }
+
+            for (let i = 0; i < inputs.length; i++) {
+                console.log(
+                    Object.is(globalFast(inputs[i]), expected[i]),
+                    Object.is(globalDefault(inputs[i]), expected[i]),
+                    Object.is(globalAuto(inputs[i]), expected[i]),
+                    Object.is(globalDynamic(inputs[i], 10), expected[i]),
+                    Object.is(numberFast(inputs[i]), expected[i]),
+                    Object.is(numberDynamic(inputs[i], 10), expected[i]));
+            }
+            """;
+
+        string output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            string.Concat(Enumerable.Repeat(
+                "true true true true true true\n", 15)),
+            output);
+    }
+
+    [Theory, ModeData]
     public void Number_parseFloat_ParsesFloats(ExecutionMode mode)
     {
         var source = """

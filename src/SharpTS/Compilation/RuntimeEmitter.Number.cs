@@ -180,6 +180,9 @@ public partial class RuntimeEmitter
         TypeBuilder typeBuilder,
         EmittedRuntime runtime)
     {
+        const long maxBeforeMultiply = (long)(ulong.MaxValue / 10);
+        const int maxLastDigit = (int)(ulong.MaxValue % 10);
+
         var method = typeBuilder.DefineMethod(
             "NumberParseIntDecimalString",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -195,6 +198,9 @@ public partial class RuntimeEmitter
         var sign = il.DeclareLocal(_types.Int32);
         var digit = il.DeclareLocal(_types.Int32);
         var current = il.DeclareLocal(_types.Char);
+        var magnitude = il.DeclareLocal(_types.UInt64);
+        var overflowed = il.DeclareLocal(_types.Boolean);
+        var digitsText = il.DeclareLocal(_types.String);
         var result = il.DeclareLocal(_types.Double);
 
         var whitespaceLoop = il.DefineLabel();
@@ -204,8 +210,16 @@ public partial class RuntimeEmitter
         var notMinus = il.DefineLabel();
         var afterSign = il.DefineLabel();
         var digitLoop = il.DefineLabel();
+        var accumulateDigit = il.DefineLabel();
+        var markOverflow = il.DefineLabel();
+        var afterAccumulate = il.DefineLabel();
         var endDigits = il.DefineLabel();
         var noDigits = il.DefineLabel();
+        var parseOverflow = il.DefineLabel();
+        var sliceDigits = il.DefineLabel();
+        var digitsReady = il.DefineLabel();
+        var parseSucceeded = il.DefineLabel();
+        var applySign = il.DefineLabel();
 
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Callvirt,
@@ -286,8 +300,10 @@ public partial class RuntimeEmitter
         il.MarkLabel(afterSign);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Stloc, digitStart);
-        il.Emit(OpCodes.Ldc_R8, 0.0);
-        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Ldc_I8, 0L);
+        il.Emit(OpCodes.Stloc, magnitude);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Stloc, overflowed);
 
         il.MarkLabel(digitLoop);
         il.Emit(OpCodes.Ldloc, index);
@@ -304,13 +320,37 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_S, (sbyte)9);
         il.Emit(OpCodes.Bgt_Un, endDigits);
 
-        il.Emit(OpCodes.Ldloc, result);
-        il.Emit(OpCodes.Ldc_R8, 10.0);
+        // Keep the magnitude exact through UInt64. Only the uncommon overflow
+        // path needs the framework decimal parser; ordinary inputs round once
+        // when the completed integer is converted to Double.
+        il.Emit(OpCodes.Ldloc, overflowed);
+        il.Emit(OpCodes.Brtrue, afterAccumulate);
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Ldc_I8, maxBeforeMultiply);
+        il.Emit(OpCodes.Bgt_Un, markOverflow);
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Ldc_I8, maxBeforeMultiply);
+        il.Emit(OpCodes.Bne_Un, accumulateDigit);
+        il.Emit(OpCodes.Ldloc, digit);
+        il.Emit(OpCodes.Ldc_I4, maxLastDigit);
+        il.Emit(OpCodes.Bgt_Un, markOverflow);
+
+        il.MarkLabel(accumulateDigit);
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Mul);
         il.Emit(OpCodes.Ldloc, digit);
-        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Conv_U8);
         il.Emit(OpCodes.Add);
-        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Stloc, magnitude);
+        il.Emit(OpCodes.Br, afterAccumulate);
+
+        il.MarkLabel(markOverflow);
+        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Stloc, overflowed);
+
+        il.MarkLabel(afterAccumulate);
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldc_I4_1);
         il.Emit(OpCodes.Add);
@@ -321,6 +361,52 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, index);
         il.Emit(OpCodes.Ldloc, digitStart);
         il.Emit(OpCodes.Beq, noDigits);
+
+        il.Emit(OpCodes.Ldloc, overflowed);
+        il.Emit(OpCodes.Brtrue, parseOverflow);
+        il.Emit(OpCodes.Ldloc, magnitude);
+        il.Emit(OpCodes.Conv_R_Un);
+        il.Emit(OpCodes.Conv_R8);
+        il.Emit(OpCodes.Stloc, result);
+        il.Emit(OpCodes.Br, applySign);
+
+        il.MarkLabel(parseOverflow);
+        il.Emit(OpCodes.Ldloc, digitStart);
+        il.Emit(OpCodes.Brtrue, sliceDigits);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, length);
+        il.Emit(OpCodes.Bne_Un, sliceDigits);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Stloc, digitsText);
+        il.Emit(OpCodes.Br, digitsReady);
+
+        il.MarkLabel(sliceDigits);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Ldloc, digitStart);
+        il.Emit(OpCodes.Ldloc, index);
+        il.Emit(OpCodes.Ldloc, digitStart);
+        il.Emit(OpCodes.Sub);
+        il.Emit(OpCodes.Callvirt,
+            _types.GetMethod(_types.String, "Substring", [_types.Int32, _types.Int32])!);
+        il.Emit(OpCodes.Stloc, digitsText);
+
+        il.MarkLabel(digitsReady);
+        il.Emit(OpCodes.Ldloc, digitsText);
+        il.Emit(OpCodes.Ldc_I4, (int)NumberStyles.None);
+        il.Emit(OpCodes.Call,
+            typeof(CultureInfo).GetProperty("InvariantCulture")!.GetGetMethod()!);
+        il.Emit(OpCodes.Ldloca, result);
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.Double,
+            "TryParse",
+            [_types.String, typeof(NumberStyles), typeof(IFormatProvider),
+                _types.Double.MakeByRefType()])!);
+        il.Emit(OpCodes.Brtrue, parseSucceeded);
+        il.Emit(OpCodes.Ldc_R8, double.NaN);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(parseSucceeded);
+        il.MarkLabel(applySign);
         il.Emit(OpCodes.Ldloc, sign);
         il.Emit(OpCodes.Conv_R8);
         il.Emit(OpCodes.Ldloc, result);
@@ -367,6 +453,7 @@ public partial class RuntimeEmitter
         var validateRadix = il.DefineLabel();
         var radixAtLeastTwo = il.DefineLabel();
         var radixValid = il.DefineLabel();
+        var nonDecimalRadix = il.DefineLabel();
         var loop = il.DefineLabel();
         var endLoop = il.DefineLabel();
         var returnResult = il.DefineLabel();
@@ -472,6 +559,17 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ret);
         il.MarkLabel(radixValid);
 
+        // Reuse the correctly-rounded, allocation-free decimal scanner after
+        // radix inference. Pass the original string so its ECMAScript whitespace
+        // boundary is not broadened by String.Trim above.
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Bne_Un, nonDecimalRadix);
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, runtime.NumberParseIntDecimalString);
+        il.Emit(OpCodes.Ret);
+        il.MarkLabel(nonDecimalRadix);
+
         il.Emit(OpCodes.Ldc_R8, 0.0);
         il.Emit(OpCodes.Stloc, resultLocal);
         il.Emit(OpCodes.Ldc_I4_0);
@@ -558,6 +656,7 @@ public partial class RuntimeEmitter
         runtime.ParseIntHelper = method;
 
         var il = method.GetILGenerator();
+        var rawStrLocal = il.DeclareLocal(_types.String);
         var strLocal = il.DeclareLocal(_types.String);
         var radixLocal = il.DeclareLocal(_types.Int32);
         var signLocal = il.DeclareLocal(_types.Int32);
@@ -575,12 +674,15 @@ public partial class RuntimeEmitter
         var loopBodyLabel = il.DefineLabel();
         var endLoopLabel = il.DefineLabel();
         var returnResultLabel = il.DefineLabel();
+        var nonDecimalRadixLabel = il.DefineLabel();
 
         // Apply ECMAScript ToString before parsing. In particular, JavaScript
         // stringifies negative zero as "0" (where Double.ToString() yields
         // "-0"), and object arguments must observe their coercion hooks.
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Call, runtime.ToJsString);
+        il.Emit(OpCodes.Stloc, rawStrLocal);
+        il.Emit(OpCodes.Ldloc, rawStrLocal);
         il.Emit(OpCodes.Callvirt, _types.GetMethod(_types.String, "Trim", Type.EmptyTypes)!);
         il.Emit(OpCodes.Stloc, strLocal);
 
@@ -728,6 +830,14 @@ public partial class RuntimeEmitter
 
         // Parse digits: result = 0, iterate through string
         il.MarkLabel(radixNotTooLargeLabel);
+        il.Emit(OpCodes.Ldloc, radixLocal);
+        il.Emit(OpCodes.Ldc_I4_S, (sbyte)10);
+        il.Emit(OpCodes.Bne_Un, nonDecimalRadixLabel);
+        il.Emit(OpCodes.Ldloc, rawStrLocal);
+        il.Emit(OpCodes.Call, runtime.NumberParseIntDecimalString);
+        il.Emit(OpCodes.Ret);
+
+        il.MarkLabel(nonDecimalRadixLabel);
         il.Emit(OpCodes.Ldc_I8, 0L);
         il.Emit(OpCodes.Stloc, resultLocal);
 

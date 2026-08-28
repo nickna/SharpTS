@@ -20,6 +20,8 @@ public class ParseIntDecimalBenchmarks
 
     [Params(
         "123456789012345",
+        "100000000000000070",
+        "18446744073709551616",
         "  -12345suffix",
         "\u00A0+9007199254740991tail")]
     public string Input { get; set; } = null!;
