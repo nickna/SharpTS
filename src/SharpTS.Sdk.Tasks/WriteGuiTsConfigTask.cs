@@ -7,19 +7,38 @@ using Microsoft.Build.Utilities;
 
 namespace SharpTS.Sdk.Tasks;
 
+/// <summary>
+/// MSBuild task that generates a tsconfig.json file for SharpTS GUI applications.
+/// </summary>
 public sealed class WriteGuiTsConfigTask : Task
 {
+    /// <summary>
+    /// Path where the tsconfig.json file will be written.
+    /// </summary>
     [Required]
     public string OutputPath { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Project directory path.
+    /// </summary>
     [Required]
     public string ProjectDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// GUI package directory path.
+    /// </summary>
     [Required]
     public string GuiPackageDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Optional path to a base tsconfig.json file to extend.
+    /// </summary>
     public string? BaseTsConfigPath { get; set; }
 
+    /// <summary>
+    /// Executes the task to write the tsconfig.json file.
+    /// </summary>
+    /// <returns>True if successful; otherwise, false.</returns>
     public override bool Execute()
     {
         try

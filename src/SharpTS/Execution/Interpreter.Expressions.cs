@@ -812,14 +812,18 @@ public partial class Interpreter
 
         if (spreadValue is SharpTSObject spreadObj)
         {
-            // CopyDataProperties snapshots own keys, filters enumerability, then performs a live
-            // [[Get]]. This invokes getters exactly once and includes enumerable Symbols after the
-            // string-key section of OrdinaryOwnPropertyKeys.
-            foreach (string key in spreadObj.OwnEnumerableKeys())
+            // CopyDataProperties obtains one complete [[OwnPropertyKeys]] snapshot before
+            // consulting descriptors or invoking getters. Descriptor and value reads remain
+            // live, but getter-driven string/Symbol additions cannot join this spread.
+            var stringKeys = spreadObj.OwnVisibleStringKeys().ToList();
+            var symbolKeys = spreadObj.GetSymbolPropertyNames().ToList();
+            foreach (string key in stringKeys)
             {
+                if (spreadObj.GetOwnPropertyDescriptor(key)?.Enumerable != true)
+                    continue;
                 stringFields[key] = GetPropertyValue(spreadObj, key);
             }
-            foreach (SharpTSSymbol symbol in spreadObj.GetSymbolPropertyNames())
+            foreach (SharpTSSymbol symbol in symbolKeys)
             {
                 if (spreadObj.GetOwnPropertyDescriptor(symbol)?.Enumerable != true)
                     continue;
@@ -828,11 +832,15 @@ public partial class Interpreter
         }
         else if (spreadValue is SharpTSInstance inst)
         {
-            foreach (string key in inst.OwnEnumerableKeys())
+            var stringKeys = inst.GetFieldNames().ToList();
+            var symbolKeys = inst.GetSymbolPropertyNames().ToList();
+            foreach (string key in stringKeys)
             {
+                if (inst.GetOwnPropertyDescriptor(key)?.Enumerable != true)
+                    continue;
                 stringFields[key] = GetPropertyValue(inst, key);
             }
-            foreach (SharpTSSymbol symbol in inst.GetSymbolPropertyNames())
+            foreach (SharpTSSymbol symbol in symbolKeys)
                 (symbolFields ??= [])[symbol] = GetSymbolPropertyValue(inst, symbol);
         }
         else if (spreadValue is SharpTSProxy proxy)

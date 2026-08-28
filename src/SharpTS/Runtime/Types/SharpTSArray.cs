@@ -459,15 +459,8 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         {
             foreach (string key in _descriptors.Keys)
             {
-                if (uint.TryParse(
-                        key,
-                        System.Globalization.NumberStyles.None,
-                        System.Globalization.CultureInfo.InvariantCulture,
-                        out uint index)
-                    && index < uint.MaxValue
-                    && index < expectedLength
-                    && key == index.ToString(
-                        System.Globalization.CultureInfo.InvariantCulture))
+                if (TryGetArrayIndex(key, out uint index)
+                    && index < expectedLength)
                 {
                     return false;
                 }
@@ -789,11 +782,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
                 {
                     if (!pair.Value.HasExplicitDescriptor || pair.Value.Configurable)
                         continue;
-                    if (!uint.TryParse(pair.Key,
-                            System.Globalization.NumberStyles.None,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            out uint index)
-                        || index == uint.MaxValue
+                    if (!TryGetArrayIndex(pair.Key, out uint index)
                         || index < newLength
                         || !HasIndex(index))
                     {
@@ -831,11 +820,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             {
                 foreach (var key in _descriptors.Keys.Where(key =>
                 {
-                    return uint.TryParse(key,
-                            System.Globalization.NumberStyles.None,
-                            System.Globalization.CultureInfo.InvariantCulture,
-                            out uint index)
-                        && index != uint.MaxValue
+                    return TryGetArrayIndex(key, out uint index)
                         && index >= effectiveLength;
                 }).ToArray())
                 {
@@ -1134,7 +1119,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
     internal bool HasOwnProperty(string name)
     {
         if (name == "length") return true;
-        if (uint.TryParse(name, out uint index) && index < uint.MaxValue)
+        if (TryGetArrayIndex(name, out uint index))
             return HasIndex(index)
                 || (_indexAccessors?.ContainsKey(index) ?? false)
                 || HasNamedProperty(name);
@@ -1229,9 +1214,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             return false;
         }
 
-        if (uint.TryParse(name, System.Globalization.NumberStyles.None,
-                System.Globalization.CultureInfo.InvariantCulture, out uint index)
-            && index < uint.MaxValue)
+        if (TryGetArrayIndex(name, out uint index))
         {
             DeleteAt(index);
         }
@@ -1308,7 +1291,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         // Numeric index path — accept full uint32 range per ECMA-262.
-        if (uint.TryParse(name, out uint uindex) && uindex < uint.MaxValue)
+        if (TryGetArrayIndex(name, out uint uindex))
         {
             long index = uindex;
             bool hasExisting = HasIndex(index);
@@ -1521,7 +1504,7 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
             };
         }
 
-        if (uint.TryParse(name, out uint uindex) && (long)uindex < _length)
+        if (TryGetArrayIndex(name, out uint uindex) && (long)uindex < _length)
         {
             long index = uindex;
             if (TryGetIndexAccessor(index, out var getter, out var setter))
@@ -1606,6 +1589,27 @@ public class SharpTSArray : ITypeCategorized, IReadOnlyList<object?>
         }
 
         return null;
+    }
+
+    private static bool TryGetArrayIndex(string key, out uint index)
+    {
+        // ECMA-262 array indices use the canonical decimal spelling of a
+        // uint32 other than 2^32-1. Keep ordinary names such as "01", "+1",
+        // and whitespace-padded numbers out of indexed storage.
+        if (key.Length == 0
+            || key[0] is < '0' or > '9'
+            || (key.Length > 1 && key[0] == '0'))
+        {
+            index = 0;
+            return false;
+        }
+
+        return uint.TryParse(
+                key,
+                System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out index)
+            && index < uint.MaxValue;
     }
 
     /// <summary>

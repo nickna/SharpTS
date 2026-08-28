@@ -82,6 +82,52 @@ public class DeleteOperatorTests
     }
 
     [Theory, ModeData]
+    public void Delete_SealedArray_UsesCanonicalArrayIndexKeys(ExecutionMode mode)
+    {
+        var source = """
+            const aliases: string[] = ["01", "+1", " 1 "];
+            const values: any = ["zero", "one"];
+            for (const key of aliases) {
+                Object.defineProperty(values, key, {
+                    value: key,
+                    writable: true,
+                    enumerable: true,
+                    configurable: true
+                });
+            }
+
+            console.log(values[1]);
+            for (const key of aliases) {
+                const descriptor = Object.getOwnPropertyDescriptor(values, key)!;
+                console.log(values[key] === key,
+                    descriptor.value === key,
+                    descriptor.enumerable,
+                    descriptor.configurable);
+            }
+
+            const sealed: any = ["zero", "one"];
+            Object.seal(sealed);
+            for (const key of aliases) {
+                console.log(
+                    Object.getOwnPropertyDescriptor(sealed, key) === undefined,
+                    delete sealed[key],
+                    sealed[1]);
+            }
+            """;
+
+        var output = TestHarness.Run(source, mode);
+        Assert.Equal(
+            "one\n" +
+            "true true true true\n" +
+            "true true true true\n" +
+            "true true true true\n" +
+            "true true one\n" +
+            "true true one\n" +
+            "true true one\n",
+            output);
+    }
+
+    [Theory, ModeData]
     public void Delete_MultipleProperties(ExecutionMode mode)
     {
         var source = """

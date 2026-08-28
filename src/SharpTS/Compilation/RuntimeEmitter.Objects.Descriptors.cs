@@ -847,6 +847,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Beq, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, synthArrayIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, synthArrayIndexLocal);
@@ -872,6 +878,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, synthListIndexLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, skipSynthExistingLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, synthListIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, skipSynthExistingLabel);
         il.Emit(OpCodes.Ldloc, synthListIndexLocal);
         il.Emit(OpCodes.Ldloc, synthListLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
@@ -1290,6 +1302,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Beq, skipArrayIndexLengthGrowth); // 2^32-1 is not an array index
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, definedArrayIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, skipArrayIndexLengthGrowth);
         var arrayLengthAlreadyCoversIndex = il.DefineLabel();
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
@@ -1406,6 +1424,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Beq, accessorCleanupNotArrayIndex);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, accessorArrayIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, accessorCleanupNotArrayIndex);
         il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Castclass, runtime.TSArrayType);
         il.Emit(OpCodes.Ldloc, accessorArrayIndexLocal);
@@ -1431,6 +1455,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, accessorListIndexLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, accessorCleanupReturn);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, accessorListIndexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, accessorCleanupReturn);
         il.Emit(OpCodes.Ldloc, accessorListIndexLocal);
         il.Emit(OpCodes.Ldloc, accessorListLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
@@ -1584,6 +1614,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldc_I4_M1);
         il.Emit(OpCodes.Conv_U4);
         il.Emit(OpCodes.Beq, notArrayIdxLabel); // 2^32-1 is an ordinary property name
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, arrIdxLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.UInt32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notArrayIdxLabel);
 
         var writeArrayIdxLabel = il.DefineLabel();
         il.Emit(OpCodes.Ldloc, wasGenericLocal);
@@ -1623,6 +1659,12 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
         il.Emit(OpCodes.Ldc_I4_0);
         il.Emit(OpCodes.Blt, notListIdxLabel);
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, listIdxWriteLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
+        il.Emit(OpCodes.Brfalse, notListIdxLabel);
         il.Emit(OpCodes.Ldloc, listIdxWriteLocal);
         il.Emit(OpCodes.Ldloc, listIdxReceiverLocal);
         il.Emit(OpCodes.Callvirt, _types.GetProperty(_types.ListOfObject, "Count").GetGetMethod()!);
@@ -2545,6 +2587,15 @@ public partial class RuntimeEmitter
         il.Emit(OpCodes.Ldloc, propNameLocal);
         il.Emit(OpCodes.Ldloca, indexLocal);
         il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
+        il.Emit(OpCodes.Brfalse, notNumericIndexLabel);
+
+        // Array and arguments carriers reach indexed storage only when the
+        // property key uses its canonical decimal spelling.
+        il.Emit(OpCodes.Ldloc, propNameLocal);
+        il.Emit(OpCodes.Ldloca, indexLocal);
+        il.Emit(OpCodes.Call, _types.GetMethodNoParams(_types.Int32, "ToString"));
+        il.Emit(OpCodes.Call, _types.GetMethod(
+            _types.String, "op_Equality", _types.String, _types.String));
         il.Emit(OpCodes.Brfalse, notNumericIndexLabel);
 
         // Check if index is in bounds

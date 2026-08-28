@@ -1968,68 +1968,24 @@ public partial class RuntimeEmitter
             il.Emit(OpCodes.Ret);
         }
 
-        // $Array handler: convert index to long, call DeleteAt, return true.
-        // DeleteAt silently no-ops for frozen arrays / OOB indices (JS-spec).
-        // Non-numeric string keys route to DeleteProperty for PDS-stored named
-        // properties — pre-fix Convert.ToInt64("foo") threw FormatException,
-        // crashing propertyHelper.js's isConfigurable check on frozen arrays.
+        // $Array handler: coerce the computed key once, then reuse the named
+        // property path. DeleteProperty is responsible for distinguishing
+        // canonical array indices from named properties; keeping that decision
+        // in one place prevents strings such as "01" and "+1" from deleting
+        // index 1 here while descriptor operations treat them as named keys.
         il.MarkLabel(tsArrayDeleteIdxLabel);
-        {
-            var tsArrDelStrLabel = il.DefineLabel();
-            var tsArrDelProceedLabel = il.DefineLabel();
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Isinst, _types.String);
-            il.Emit(OpCodes.Brfalse, tsArrDelProceedLabel);
-            var tsArrDelStrParsed = il.DeclareLocal(_types.Int32);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, _types.String);
-            il.Emit(OpCodes.Ldloca, tsArrDelStrParsed);
-            il.Emit(OpCodes.Call, _types.GetMethod(_types.Int32, "TryParse", _types.String, _types.Int32.MakeByRefType()));
-            il.Emit(OpCodes.Brtrue, tsArrDelProceedLabel);
-            il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Ldarg_1);
-            il.Emit(OpCodes.Castclass, _types.String);
-            il.Emit(OpCodes.Call, runtime.DeleteProperty);
-            il.Emit(OpCodes.Ret);
-            il.MarkLabel(tsArrDelProceedLabel);
-        }
-        il.Emit(OpCodes.Ldarg_1);
-        il.Emit(OpCodes.Call, _types.GetMethod(_types.Convert, "ToInt64", _types.Object));
-        var tsArrayDeleteIndexLocal = il.DeclareLocal(_types.Int64);
-        il.Emit(OpCodes.Stloc, tsArrayDeleteIndexLocal);
-        var tsArrayDeleteKeyLocal = il.DeclareLocal(_types.String);
+        il.Emit(OpCodes.Ldarg_0);
         il.Emit(OpCodes.Ldarg_1);
         il.Emit(OpCodes.Call, runtime.ToJsString);
-        il.Emit(OpCodes.Stloc, tsArrayDeleteKeyLocal);
-
-        // An indexed descriptor governs configurability even though the array
-        // element itself is backed by dense/sparse storage.
-        var tsArrayDeleteDescriptorLocal = il.DeclareLocal(runtime.CompiledPropertyDescriptorType);
-        var tsArrayDeleteStorage = il.DefineLabel();
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, tsArrayDeleteKeyLocal);
-        il.Emit(OpCodes.Call, runtime.PDSGetPropertyDescriptor);
-        il.Emit(OpCodes.Stloc, tsArrayDeleteDescriptorLocal);
-        il.Emit(OpCodes.Ldloc, tsArrayDeleteDescriptorLocal);
-        il.Emit(OpCodes.Brfalse, tsArrayDeleteStorage);
-        il.Emit(OpCodes.Ldloc, tsArrayDeleteDescriptorLocal);
-        il.Emit(OpCodes.Callvirt, runtime.CompiledPropertyDescriptorConfigurable.GetGetMethod()!);
-        var tsArrayDeleteConfigurable = il.DefineLabel();
-        il.Emit(OpCodes.Brtrue, tsArrayDeleteConfigurable);
-        il.Emit(OpCodes.Ldc_I4_0);
-        il.Emit(OpCodes.Ret);
-        il.MarkLabel(tsArrayDeleteConfigurable);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Ldloc, tsArrayDeleteKeyLocal);
-        il.Emit(OpCodes.Call, runtime.PDSDeleteProperty);
-        il.Emit(OpCodes.Pop);
-
-        il.MarkLabel(tsArrayDeleteStorage);
-        il.Emit(OpCodes.Ldarg_0);
-        il.Emit(OpCodes.Castclass, runtime.TSArrayType);
-        il.Emit(OpCodes.Ldloc, tsArrayDeleteIndexLocal);
-        il.Emit(OpCodes.Callvirt, runtime.TSArrayDeleteAt);
-        il.Emit(OpCodes.Ldc_I4_1);
+        if (strict)
+        {
+            il.Emit(OpCodes.Ldarg_2);
+            il.Emit(OpCodes.Call, runtime.DeletePropertyStrict);
+        }
+        else
+        {
+            il.Emit(OpCodes.Call, runtime.DeleteProperty);
+        }
         il.Emit(OpCodes.Ret);
 
         // List<object> handler: honor an indexed PDS descriptor, then replace

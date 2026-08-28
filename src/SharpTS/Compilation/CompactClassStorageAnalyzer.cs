@@ -136,6 +136,17 @@ internal static class CompactClassStorageAnalyzer
         protected override void VisitArrowFunction(Expr.ArrowFunction expression) =>
             InScope(() => base.VisitArrowFunction(expression));
 
+        protected override void VisitClass(Stmt.Class statement)
+        {
+            // AstVisitorBase intentionally visits only the class body. A class
+            // reference in an extends clause is nevertheless a value use, and
+            // selecting that base for weak side storage would give its derived
+            // instances two incompatible dynamic-property stores.
+            if (statement.SuperclassExpr is not null)
+                Visit(statement.SuperclassExpr);
+            base.VisitClass(statement);
+        }
+
         private void InScope(Action visit)
         {
             int saved = _scope;

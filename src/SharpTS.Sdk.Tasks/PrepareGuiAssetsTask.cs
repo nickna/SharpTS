@@ -9,22 +9,49 @@ using Microsoft.Build.Utilities;
 
 namespace SharpTS.Sdk.Tasks;
 
+/// <summary>
+/// MSBuild task that prepares local and remote assets for SharpTS GUI applications,
+/// including downloading and validating remote assets.
+/// </summary>
 public sealed class PrepareGuiAssetsTask : Microsoft.Build.Utilities.Task
 {
+    /// <summary>
+    /// Local asset items to prepare.
+    /// </summary>
     public ITaskItem[] LocalAssets { get; set; } = [];
+
+    /// <summary>
+    /// Remote asset items to download and prepare.
+    /// </summary>
     public ITaskItem[] RemoteAssets { get; set; } = [];
 
+    /// <summary>
+    /// Project directory path.
+    /// </summary>
     [Required]
     public string ProjectDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Output directory where prepared assets will be stored.
+    /// </summary>
     [Required]
     public string OutputDirectory { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Maximum size in bytes for remote assets. Default is 25 MB.
+    /// </summary>
     public long MaximumRemoteAssetBytes { get; set; } = 25 * 1024 * 1024;
 
+    /// <summary>
+    /// Output: Array of prepared asset items with logical names.
+    /// </summary>
     [Output]
     public ITaskItem[] PreparedAssets { get; private set; } = [];
 
+    /// <summary>
+    /// Executes the task to prepare GUI assets.
+    /// </summary>
+    /// <returns>True if successful; otherwise, false.</returns>
     public override bool Execute()
     {
         try
