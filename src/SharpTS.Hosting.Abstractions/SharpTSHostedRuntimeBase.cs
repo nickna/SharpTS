@@ -65,16 +65,59 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
 
     public int? OwnerThreadId => _ownerThreadId;
 
+    /// <summary>
+    /// Initializes the guest runtime asynchronously.
+    /// </summary>
     protected abstract Task InitializeGuestAsync();
+
+    /// <summary>
+    /// Attempts to run one guest macrotask. Returns true if a task was run.
+    /// </summary>
     protected abstract bool TryRunOneGuestMacrotask();
+
+    /// <summary>
+    /// Gets whether the guest runtime has pending macrotasks.
+    /// </summary>
     protected abstract bool HasGuestMacrotasks { get; }
+
+    /// <summary>
+    /// Drains all pending guest microtasks.
+    /// </summary>
     protected abstract void DrainGuestMicrotasks();
+
+    /// <summary>
+    /// Gets whether the guest runtime has pending microtasks.
+    /// </summary>
     protected abstract bool HasGuestMicrotasks { get; }
+
+    /// <summary>
+    /// Attempts to run one guest timer. Returns true if a timer was run.
+    /// </summary>
     protected abstract bool TryRunOneGuestTimer();
+
+    /// <summary>
+    /// Gets the delay until the next guest timer should fire.
+    /// </summary>
     protected abstract TimeSpan? GetNextGuestTimerDelay();
+
+    /// <summary>
+    /// Rejects any pending guest work (called during shutdown).
+    /// </summary>
     protected abstract void RejectGuestWork();
+
+    /// <summary>
+    /// Cancels guest-owned resources (called during shutdown).
+    /// </summary>
     protected abstract void CancelGuestResources();
+
+    /// <summary>
+    /// Emits guest before-exit hooks with the specified exit code.
+    /// </summary>
     protected abstract void EmitGuestBeforeExit(int exitCode);
+
+    /// <summary>
+    /// Emits guest exit event with the specified exit code.
+    /// </summary>
     protected abstract void EmitGuestExit(int exitCode);
 
     public Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -907,8 +950,14 @@ public abstract class SharpTSHostedRuntimeBase : ISharpTSHostedRuntime
         Func<Task> Initializer);
 }
 
+/// <summary>
+/// Exception thrown when a hosted program requests an immediate process exit.
+/// </summary>
 [Experimental(SharpTSHostingDiagnostics.ExperimentalId)]
 public sealed class SharpTSHostedProcessExitException(int exitCode) : Exception
 {
+    /// <summary>
+    /// Gets the exit code requested by the guest program.
+    /// </summary>
     public int ExitCode { get; } = exitCode;
 }
