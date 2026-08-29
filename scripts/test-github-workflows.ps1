@@ -9,6 +9,16 @@ $workflowRoot = Join-Path $repositoryRoot '.github\workflows'
 $errors = [System.Collections.Generic.List[string]]::new()
 $workflowFiles = @(Get-ChildItem -LiteralPath $workflowRoot -Filter '*.yml' -File)
 
+function Get-WorkflowJob([string]$Content, [string]$Name, [string]$WorkflowName) {
+    $escapedName = [regex]::Escape($Name)
+    $match = [regex]::Match($Content, "(?ms)^  ${escapedName}:\r?\n.*?(?=^  [A-Za-z0-9_-]+:\r?\n|\z)")
+    if (-not $match.Success) {
+        $errors.Add("$WorkflowName is missing the '$Name' job.")
+        return ''
+    }
+    return $match.Value
+}
+
 foreach ($file in $workflowFiles) {
     $relativePath = [IO.Path]::GetRelativePath($repositoryRoot, $file.FullName).Replace('\', '/')
     $content = Get-Content -LiteralPath $file.FullName -Raw
@@ -55,15 +65,64 @@ if ($benchmark -notmatch 'bun-version-file:\s*\.bun-version') {
     $errors.Add('benchmarks.yml must use .bun-version.')
 }
 
+$ci = Get-Content -LiteralPath (Join-Path $workflowRoot 'ci.yml') -Raw
+foreach ($requiredText in @(
+    'scripts/get-ci-change-scope.ps1',
+    'scripts/test-ci-change-scope.ps1',
+    'fetch-depth: 0',
+    "mode: `${{ steps.scope.outputs.mode }}",
+    "reason: `${{ steps.scope.outputs.reason }}",
+    'name: Lightweight C# validation',
+    'name: Gate'
+)) {
+    if (-not $ci.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml is missing change-routing contract text: $requiredText")
+    }
+}
+foreach ($jobName in @('build', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')) {
+    $job = Get-WorkflowJob $ci $jobName 'ci.yml'
+    if (-not $job.Contains('needs: workflow-policy', [StringComparison]::Ordinal) -or
+        -not $job.Contains("if: needs.workflow-policy.outputs.mode == 'full'", [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml '$jobName' must run only after full change classification.")
+    }
+}
+$lightweightJob = Get-WorkflowJob $ci 'lightweight-validation' 'ci.yml'
+if (-not $lightweightJob.Contains("if: needs.workflow-policy.outputs.mode == 'csharp-trivia-only'", [StringComparison]::Ordinal)) {
+    $errors.Add('ci.yml lightweight-validation must run only for C# trivia changes.')
+}
+$ciGateJob = Get-WorkflowJob $ci 'gate' 'ci.yml'
+foreach ($requiredText in @('CHANGE_MODE:', "'csharp-trivia-only'", "'docs-only'", "'lightweight-validation'")) {
+    if (-not $ciGateJob.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("ci.yml Gate is missing routed-result validation text: $requiredText")
+    }
+}
+
+$ciScopeScript = Get-Content -LiteralPath (Join-Path $repositoryRoot 'scripts\get-ci-change-scope.ps1') -Raw
+foreach ($requiredText in @(
+    "difftasticVersion = '0.70.0'",
+    '2997d2bbe620534edbd79b0049f00ce84eef3fedb15c7822456d58e38d8b05c9',
+    'b563ae76e22ce28c7080a8b628cfabf6fa86f9ee114a0f5697bc2ca26f9ce1d7',
+    'Get-FileHash -LiteralPath $archivePath -Algorithm SHA256',
+    '--ignore-comments --check-only --exit-code',
+    "return New-ScopeResult 'full'"
+)) {
+    if (-not $ciScopeScript.Contains($requiredText, [StringComparison]::Ordinal)) {
+        $errors.Add("get-ci-change-scope.ps1 is missing pinned or fail-safe routing text: $requiredText")
+    }
+}
+
 $desktop = Get-Content -LiteralPath (Join-Path $workflowRoot 'desktop-gui.yml') -Raw
 foreach ($requiredText in @(
     'name: Desktop GUI',
     'cancel-in-progress: ${{ github.event_name == ''pull_request'' }}',
+    'scripts/get-ci-change-scope.ps1',
     'scripts/get-desktop-gui-ci-scope.ps1',
+    '-ChangedPath $changeScope.BuildAffectingPaths',
     'runs-on: ubuntu-24.04',
     'retention-days: 3',
     'retention-days: 7',
     'runs-on: windows-11-vs2026-arm',
+    'RUN_WINDOWS_ARM64_NATIVE:',
     'name: Gate'
 )) {
     if (-not $desktop.Contains($requiredText, [StringComparison]::Ordinal)) {

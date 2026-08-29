@@ -34,6 +34,7 @@ jobs:
     outputs:
       windows: ${{ steps.scope.outputs.windows }}
       macos: ${{ steps.scope.outputs.macos }}
+      mode: ${{ steps.scope.outputs.mode }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -48,15 +49,34 @@ jobs:
           DISPATCH_TARGET: ${{ inputs.platform }}
         run: |
           if ('${{ github.event_name }}' -eq 'workflow_dispatch') {
-            $scope = ./scripts/get-desktop-gui-ci-scope.ps1 -Target $env:DISPATCH_TARGET
+            $desktopScope = ./scripts/get-desktop-gui-ci-scope.ps1 -Target $env:DISPATCH_TARGET
+            $mode = 'full'
+            $reason = 'Manual desktop dispatch always runs the selected platform scope.'
           }
           else {
-            $paths = @(git diff --name-only $env:BASE_SHA $env:HEAD_SHA)
-            if ($LASTEXITCODE -ne 0) { throw 'Unable to determine changed paths.' }
-            $scope = ./scripts/get-desktop-gui-ci-scope.ps1 -ChangedPath $paths
+            $changeScope = ./scripts/get-ci-change-scope.ps1 `
+              -BaseSha $env:BASE_SHA -HeadSha $env:HEAD_SHA
+            $mode = $changeScope.Mode
+            $reason = $changeScope.Reason -replace '[\r\n]', ' '
+            if ($mode -eq 'full') {
+              $desktopScope = ./scripts/get-desktop-gui-ci-scope.ps1 `
+                -ChangedPath $changeScope.BuildAffectingPaths
+            }
+            else {
+              $desktopScope = [pscustomobject]@{ Windows = $false; MacOS = $false }
+            }
           }
-          "windows=$($scope.Windows.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          "macos=$($scope.MacOS.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "windows=$($desktopScope.Windows.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "macos=$($desktopScope.MacOS.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "mode=$mode" >> $env:GITHUB_OUTPUT
+          @(
+            '### Desktop GUI change scope'
+            ''
+            "- Mode: ``$mode``"
+            "- Reason: $reason"
+            "- Windows: ``$($desktopScope.Windows.ToString().ToLowerInvariant())``"
+            "- macOS: ``$($desktopScope.MacOS.ToString().ToLowerInvariant())``"
+          ) >> $env:GITHUB_STEP_SUMMARY
 
   gui-sdk-candidate:
     name: Build shared GUI SDK candidate
@@ -275,9 +295,28 @@ jobs:
         shell: pwsh
         env:
           JOB_RESULTS: ${{ toJson(needs) }}
+          RUN_WINDOWS: ${{ needs.scope.outputs.windows }}
+          RUN_MACOS: ${{ needs.scope.outputs.macos }}
+          RUN_WINDOWS_ARM64_NATIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.run_windows_arm64_native && needs.scope.outputs.windows == 'true' }}
         run: |
           $needs = $env:JOB_RESULTS | ConvertFrom-Json
-          $bad = @($needs.PSObject.Properties | Where-Object { $_.Value.result -in @('failure', 'cancelled') })
+          if ($needs.scope.result -ne 'success') {
+            throw 'Desktop GUI change classification did not pass.'
+          }
+
+          $expected = @{
+            'gui-sdk-candidate' = $env:RUN_WINDOWS -eq 'true' -or $env:RUN_MACOS -eq 'true'
+            'windows-x64' = $env:RUN_WINDOWS -eq 'true'
+            'windows-arm64-cross-publish' = $env:RUN_WINDOWS -eq 'true'
+            'windows-arm64-native' = $env:RUN_WINDOWS_ARM64_NATIVE -eq 'true'
+            'macos-native' = $env:RUN_MACOS -eq 'true'
+          }
+          $bad = [System.Collections.Generic.List[string]]::new()
+          foreach ($job in $expected.Keys) {
+            $wanted = if ($expected[$job]) { 'success' } else { 'skipped' }
+            $actual = $needs.PSObject.Properties[$job].Value.result
+            if ($actual -ne $wanted) { $bad.Add("$job=$actual (expected $wanted)") }
+          }
           if ($bad.Count -gt 0) {
-            throw "Desktop GUI jobs did not pass: $($bad.Name -join ', ')"
+            throw "Desktop GUI jobs did not follow the selected scope: $($bad -join ', ')"
           }

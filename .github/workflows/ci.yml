@@ -24,14 +24,48 @@ jobs:
   workflow-policy:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    outputs:
+      mode: ${{ steps.scope.outputs.mode }}
+      reason: ${{ steps.scope.outputs.reason }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+
+      - name: Classify changes
+        id: scope
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          $scope = ./scripts/get-ci-change-scope.ps1 `
+            -BaseSha $env:BASE_SHA -HeadSha $env:HEAD_SHA
+          $reason = $scope.Reason -replace '[\r\n]', ' '
+          "mode=$($scope.Mode)" >> $env:GITHUB_OUTPUT
+          "reason=$reason" >> $env:GITHUB_OUTPUT
+          @(
+            '### CI change scope'
+            ''
+            "- Mode: ``$($scope.Mode)``"
+            "- Reason: $reason"
+          ) >> $env:GITHUB_STEP_SUMMARY
+
+      - name: Check diff whitespace
+        shell: pwsh
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          git diff --check $env:BASE_SHA $env:HEAD_SHA
+          if ($LASTEXITCODE -ne 0) { throw 'git diff --check failed.' }
 
       - name: Enforce workflow policy
         shell: pwsh
-        run: ./scripts/test-github-workflows.ps1
+        run: |
+          ./scripts/test-ci-change-scope.ps1
+          ./scripts/test-github-workflows.ps1
 
       - name: Install and run actionlint 1.7.12
         shell: bash
@@ -44,6 +78,8 @@ jobs:
           ./actionlint
 
   build:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     strategy:
@@ -170,6 +206,8 @@ jobs:
   # tool and its product contract requires a real package/install/launch smoke on every supported
   # desktop platform.
   dap-macos-smoke:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: macos-15
     timeout-minutes: 20
     steps:
@@ -207,6 +245,8 @@ jobs:
   # Counts are OS-independent (Roslyn analyzers over the same sources), so one
   # ubuntu job suffices.
   aot-ratchet:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -239,6 +279,8 @@ jobs:
   # outputs under CoreCLR. This permanently covers the Reflection.Emit fallbacks that only
   # execute when RuntimeFeature.IsDynamicCodeSupported is false (#1324 gate).
   native-aot-compile-smoke:
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'full'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
 
@@ -462,20 +504,66 @@ jobs:
             artifacts/native-aot-publish-warning-summary.json
           retention-days: 7
 
+  lightweight-validation:
+    name: Lightweight C# validation
+    needs: workflow-policy
+    if: needs.workflow-policy.outputs.mode == 'csharp-trivia-only'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Setup .NET
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+      - name: Restore dependencies
+        run: dotnet restore
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
   gate:
     name: Gate
     if: always()
-    needs: [workflow-policy, build, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke]
+    needs: [workflow-policy, build, dap-macos-smoke, aot-ratchet, native-aot-compile-smoke, lightweight-validation]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Require every CI job to pass
+      - name: Require the selected CI route to pass
         shell: pwsh
         env:
           JOB_RESULTS: ${{ toJson(needs) }}
+          CHANGE_MODE: ${{ needs.workflow-policy.outputs.mode }}
         run: |
           $needs = $env:JOB_RESULTS | ConvertFrom-Json
-          $bad = @($needs.PSObject.Properties | Where-Object { $_.Value.result -ne 'success' })
+          if ($needs.'workflow-policy'.result -ne 'success') {
+            throw "CI change classification or workflow policy did not pass."
+          }
+
+          $heavy = @('build', 'dap-macos-smoke', 'aot-ratchet', 'native-aot-compile-smoke')
+          if ($env:CHANGE_MODE -eq 'full') {
+            $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'success' })
+            if ($needs.'lightweight-validation'.result -ne 'skipped') {
+              $bad += 'lightweight-validation'
+            }
+          }
+          elseif ($env:CHANGE_MODE -eq 'csharp-trivia-only') {
+            $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'skipped' })
+            if ($needs.'lightweight-validation'.result -ne 'success') {
+              $bad += 'lightweight-validation'
+            }
+          }
+          elseif ($env:CHANGE_MODE -eq 'docs-only') {
+            $bad = @($heavy | Where-Object { $needs.PSObject.Properties[$_].Value.result -ne 'skipped' })
+            if ($needs.'lightweight-validation'.result -ne 'skipped') {
+              $bad += 'lightweight-validation'
+            }
+          }
+          else {
+            throw "CI reported an unknown change mode: '$($env:CHANGE_MODE)'."
+          }
+
           if ($bad.Count -gt 0) {
-            throw "CI jobs did not pass: $($bad.Name -join ', ')"
+            throw "CI jobs did not follow the '$($env:CHANGE_MODE)' route: $($bad -join ', ')"
           }
