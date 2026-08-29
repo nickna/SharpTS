@@ -1,0 +1,19 @@
+//// [tests/cases/conformance/modules/multi.ts] ////
+
+=== ./a.ts ===
+export const value = 1;
+>value : 1
+>      : ^
+>1 : 1
+>  : ^
+
+=== b.ts ===
+import { value } from "./a";
+>value : 1
+>      : ^
+
+const copy = value;
+>copy : 1
+>     : ^
+>value : 1
+>      : ^

@@ -2,7 +2,9 @@
 
 Runs SharpTS's type checker against the canonical [microsoft/TypeScript](https://github.com/microsoft/TypeScript) conformance corpus and diffs our diagnostics against `tsc`'s `*.errors.txt` baselines. Mirrors the shape of `tests/conformance/SharpTS.Test262/`.
 
-Standing tracking issue: [#1281](https://github.com/nickna/SharpTS/issues/1281).
+The diagnostic-parity campaign in [#1281](https://github.com/nickna/SharpTS/issues/1281)
+is complete. Per-node inferred-type baseline work is tracked separately in
+[#88](https://github.com/nickna/SharpTS/issues/88).
 
 ## Pinned TypeScript version
 
@@ -108,6 +110,29 @@ Diagnostics match on `(line, tsCode)` tuples. Column is intentionally dropped �
 
 Diagnostics with no `tsCode` (SharpTS-only — e.g. `@DotNetType` integration errors) are excluded from baseline matching for that test rather than forcing a fail.
 
+## Inferred-type baseline infrastructure
+
+Phase 1 of [#88](https://github.com/nickna/SharpTS/issues/88) provides the
+non-semantic infrastructure for the future `*.types` track:
+
+- `TypeScriptBaselineResolver` selects plain or target/module-configured
+  `.errors.txt` and `.types` files through the same deterministic algorithm.
+  A missing compatible file is a typed `NoBaseline` result; unsupported
+  harness axes are not guessed, and equally specific matches are reported as
+  ambiguous.
+- `TypesBaselineParser` reads the pinned writer format into ordered,
+  source-backed observations containing virtual filename, one-based source
+  line, source-line text, observed node text, occurrence ordinal, expected type
+  text, and optional underline metadata.
+- The parser receives the metadata parser's virtual source files as the
+  coordinate authority. This distinguishes real blank source lines from blank
+  separators inserted only for baseline readability.
+
+This infrastructure does not yet produce SharpTS observations or compare
+inferred types. Those semantic query, display, walking, and pilot-runner steps
+remain later phases of #88. Neither parser nor resolver invokes `tsc` at test
+time.
+
 ## JavaScript inputs
 
 Selected tests that opt into `@allowJs` / `@checkJs` are measured. Their
@@ -146,5 +171,5 @@ resolver gaps rather than harness skips.
 ## See also
 
 - `tests/conformance/SharpTS.Test262/` — equivalent project for the ECMA-262 / JavaScript spec; this one mirrors its harness shape.
-- [#1281](https://github.com/nickna/SharpTS/issues/1281) — standing TypeScript conformance work,
-  corpus growth, and diagnostic-alignment tracking.
+- [#1281](https://github.com/nickna/SharpTS/issues/1281) — completed diagnostic-parity campaign.
+- [#88](https://github.com/nickna/SharpTS/issues/88) — per-node inferred-type baseline parity.

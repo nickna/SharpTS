@@ -268,10 +268,22 @@ public sealed class TypeScriptConformanceRunner
 
         var actual = ToBaselineDiagnostics(diagnostics);
 
-        var baselinePath = ResolveBaselinePath(testFilePath, metadata);
         IReadOnlyList<BaselineDiagnostic> expected;
+        string baselinePath = "<unresolved>";
         try
         {
+            TypeScriptBaselineResolution resolution = TypeScriptBaselineResolver.Resolve(
+                _typescriptRoot,
+                testFilePath,
+                metadata,
+                TypeScriptBaselineKind.Errors);
+            if (resolution.Status == TypeScriptBaselineResolutionStatus.Ambiguous)
+            {
+                throw new InvalidOperationException(
+                    $"Ambiguous TypeScript error baselines: {string.Join(", ", resolution.Candidates.Select(Path.GetFileName))}");
+            }
+
+            baselinePath = resolution.Path ?? resolution.ExpectedPath;
             expected = File.Exists(baselinePath)
                 ? ErrorsBaselineParser.Parse(File.ReadAllText(baselinePath))
                 : Array.Empty<BaselineDiagnostic>();
@@ -398,77 +410,20 @@ public sealed class TypeScriptConformanceRunner
         string testFilePath,
         TypeScriptConformanceMetadata metadata)
     {
-        var basename = Path.GetFileNameWithoutExtension(testFilePath);
-        var dir = TypeScriptConformancePaths.BaselinesDir(_typescriptRoot);
-        var plain = Path.Combine(dir, $"{basename}.errors.txt");
-        if (File.Exists(plain)) return plain;
-        return ResolveHarnessVariantBaseline(dir, basename, metadata) ?? plain;
-    }
-
-    /// <summary>
-    /// Finds the most specific target/module variant compatible with the values
-    /// selected by the runner. Other harness axes are deliberately ignored until
-    /// the runner models them; choosing one accidentally is worse than treating
-    /// the test as having no baseline.
-    /// </summary>
-    private static string? ResolveHarnessVariantBaseline(
-        string baselinesDir,
-        string basename,
-        TypeScriptConformanceMetadata metadata)
-    {
-        // A missing baselines directory means "no baseline", not a crash. Without this an
-        // uninitialized external/typescript submodule takes down the resolver with a
-        // DirectoryNotFoundException instead of bucketing cleanly.
-        if (!Directory.Exists(baselinesDir)) return null;
-
-        string selectedTarget = SelectHarnessValue(metadata.Target, "es5");
-        string selectedModule = SelectHarnessValue(
-            metadata.RawDirectives.TryGetValue("module", out string? module) ? module : null,
-            "esnext");
-
-        string? best = null;
-        int bestSpecificity = -1;
-        foreach (var path in Directory.EnumerateFiles(baselinesDir, $"{basename}(*).errors.txt"))
+        TypeScriptBaselineResolution resolution = TypeScriptBaselineResolver.Resolve(
+            _typescriptRoot,
+            testFilePath,
+            metadata,
+            TypeScriptBaselineKind.Errors);
+        return resolution.Status switch
         {
-            var file = Path.GetFileName(path);
-            int open = file.IndexOf('(');
-            int close = file.LastIndexOf(").errors.txt", StringComparison.Ordinal);
-            if (open < 0 || close <= open + 1) continue;
-
-            var axes = file[(open + 1)..close]
-                .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                .Select(part => part.Split('=', 2, StringSplitOptions.TrimEntries))
-                .Where(parts => parts.Length == 2)
-                .ToDictionary(parts => parts[0].ToLowerInvariant(), parts => parts[1]);
-            if (axes.Keys.Any(key => key is not "target" and not "module")) continue;
-            if (axes.TryGetValue("target", out string? target) &&
-                NormalizeTarget(target) != NormalizeTarget(selectedTarget)) continue;
-            if (axes.TryGetValue("module", out string? candidateModule) &&
-                NormalizeModule(candidateModule) != NormalizeModule(selectedModule)) continue;
-
-            if (axes.Count > bestSpecificity)
-            {
-                bestSpecificity = axes.Count;
-                best = path;
-            }
-        }
-        return best;
+            TypeScriptBaselineResolutionStatus.Found => resolution.Path!,
+            TypeScriptBaselineResolutionStatus.NoBaseline => resolution.ExpectedPath,
+            TypeScriptBaselineResolutionStatus.Ambiguous => throw new InvalidOperationException(
+                $"Ambiguous TypeScript error baselines: {string.Join(", ", resolution.Candidates.Select(Path.GetFileName))}"),
+            _ => throw new ArgumentOutOfRangeException(),
+        };
     }
-
-    private static string SelectHarnessValue(string? values, string defaultValue)
-    {
-        string selected = values?
-            .Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-            .LastOrDefault()?
-            .ToLowerInvariant() ?? defaultValue;
-        return selected == "*" ? "esnext" : selected;
-    }
-
-    private static string NormalizeTarget(string target) =>
-        target.Trim().ToLowerInvariant() is "es6" ? "es2015" : target.Trim().ToLowerInvariant();
-
-    private static string NormalizeModule(string module) =>
-        module.Trim().ToLowerInvariant() is "es6" ? "es2015" : module.Trim().ToLowerInvariant();
 
     /// <summary>
     /// Converts SharpTS diagnostics into the (line, tsCode) match-key form.
