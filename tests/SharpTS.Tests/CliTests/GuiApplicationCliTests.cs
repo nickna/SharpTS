@@ -15,12 +15,13 @@ public sealed class GuiApplicationCliTests
         using var directory = CliTestHelper.CreateTempDirectory();
         string root = directory.GetPath("quoted app");
 
-        Assert.Equal(0, GuiApplicationCli.Create(new ParsedCommand.NewAvalonia(
+        Assert.Equal(0, GuiApplicationCli.Create(new ParsedCommand.NewDesktop(
             "A \"quoted\" app", root, TestSdkVersion)));
 
         SharpTsApplication application = SharpTsManifestLoader.Load(
             Path.Combine(root, "sharpts.json")).Application!;
-        Assert.Equal("avalonia", application.Type);
+        Assert.Equal("desktop", application.Type);
+        Assert.Equal("avalonia", application.Host);
         Assert.Equal("main.tsx", application.Entry);
         Assert.Equal(TestSdkVersion, application.GuiSdkVersion);
         string source = File.ReadAllText(Path.Combine(root, "main.tsx"));
@@ -87,6 +88,21 @@ public sealed class GuiApplicationCliTests
             """);
 
         Assert.Throws<InvalidOperationException>(() => GuiApplicationCli.ResolveHost(null, null, entry));
+    }
+
+    [Fact]
+    public void ValidateApplicationType_AcceptsDesktopAvaloniaOnly()
+    {
+        GuiApplicationCli.ValidateApplicationType(" DESKTOP ", "avalonia");
+        GuiApplicationCli.ValidateApplicationType(null, "console");
+
+        var wrongHost = Assert.Throws<InvalidOperationException>(
+            () => GuiApplicationCli.ValidateApplicationType("desktop", "console"));
+        Assert.Contains("requires the avalonia host", wrongHost.Message, StringComparison.OrdinalIgnoreCase);
+
+        var unknownType = Assert.Throws<InvalidOperationException>(
+            () => GuiApplicationCli.ValidateApplicationType("avalonia", "avalonia"));
+        Assert.Contains("expected desktop", unknownType.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

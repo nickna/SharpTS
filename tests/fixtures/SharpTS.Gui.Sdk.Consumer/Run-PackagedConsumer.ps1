@@ -619,8 +619,13 @@ if (-not (Test-Path -LiteralPath $sharpTsCli)) {
     throw "SharpTS CLI was not built: $sharpTsCli"
 }
 Invoke-DotNet @(
-    $sharpTsCli, "new", "avalonia", "-n", "PackagedCliApp", "-o", $cliRoot,
+    $sharpTsCli, "new", "desktop", "-n", "PackagedCliApp", "-o", $cliRoot,
     "--sdk-version", $version)
+$cliProjectManifest = Get-Content -LiteralPath (Join-Path $cliRoot "sharpts.json") -Raw | ConvertFrom-Json
+if ($cliProjectManifest.application.type -ne "desktop" -or
+    $cliProjectManifest.application.host -ne "avalonia") {
+    throw "TypeScript-only CLI did not separate the desktop application type from the Avalonia host."
+}
 [IO.File]::WriteAllText((Join-Path $cliRoot "Directory.Build.props"), "<Project />")
 [IO.File]::WriteAllText((Join-Path $cliRoot "NuGet.config"), $nugetConfig)
 

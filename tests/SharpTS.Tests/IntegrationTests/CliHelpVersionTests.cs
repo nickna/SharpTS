@@ -59,6 +59,16 @@ public class CliHelpVersionTests
     }
 
     [Fact]
+    public void Help_AdvertisesDesktopScaffolding()
+    {
+        var result = CliTestHelper.RunCli("--help");
+
+        Assert.Equal(0, result.ExitCode);
+        Assert.Contains("sharpts new desktop", result.StandardOutput);
+        Assert.DoesNotContain("sharpts new avalonia", result.StandardOutput);
+    }
+
+    [Fact]
     public void Version_LongFlag_PrintsVersion()
     {
         var result = CliTestHelper.RunCli("--version");

@@ -13,7 +13,7 @@ claim. macOS Intel is not supported.
 With the SharpTS tool installed:
 
 ```powershell
-sharpts new avalonia -n CounterApp
+sharpts new desktop -n CounterApp
 cd CounterApp
 sharpts app run
 sharpts app run --mode compiled
