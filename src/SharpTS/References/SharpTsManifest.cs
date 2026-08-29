@@ -40,6 +40,9 @@ public sealed class SharpTsApplication
     [JsonPropertyName("type")]
     public string? Type { get; set; }
 
+    [JsonPropertyName("host")]
+    public string? Host { get; set; }
+
     [JsonPropertyName("entry")]
     public string? Entry { get; set; }
 

@@ -85,13 +85,14 @@ public class SharpTsManifestLoaderTests
     }
 
     [Fact]
-    public void Load_ApplicationHostMetadata()
+    public void Load_ApplicationMetadata()
     {
         using var dir = CliTestHelper.CreateTempDirectory();
         var path = dir.CreateFile("sharpts.json", """
             {
               "application": {
-                "type": "avalonia",
+                "type": "desktop",
+                "host": "avalonia",
                 "entry": "main.tsx",
                 "guiSdkVersion": "2.3.4-test.1",
                 "guiSdkSource": "./feed"
@@ -100,7 +101,8 @@ public class SharpTsManifestLoaderTests
             """);
 
         var application = SharpTsManifestLoader.Load(path).Application!;
-        Assert.Equal("avalonia", application.Type);
+        Assert.Equal("desktop", application.Type);
+        Assert.Equal("avalonia", application.Host);
         Assert.Equal("main.tsx", application.Entry);
         Assert.Equal("./feed", application.GuiSdkSource);
     }

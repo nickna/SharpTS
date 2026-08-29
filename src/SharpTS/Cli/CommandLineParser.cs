@@ -193,12 +193,12 @@ public abstract record ParsedCommand
     public sealed record Version() : ParsedCommand;
 
     /// <summary>
-    /// Create a new Avalonia GUI application project.
+    /// Create a new desktop GUI application project.
     /// </summary>
     /// <param name="Name">The name of the new project.</param>
     /// <param name="OutputDirectory">The directory to create the project in.</param>
     /// <param name="GuiSdkVersion">The version of the GUI SDK to use.</param>
-    public sealed record NewAvalonia(
+    public sealed record NewDesktop(
         string Name,
         string OutputDirectory,
         string GuiSdkVersion) : ParsedCommand;
@@ -427,8 +427,8 @@ public class CommandLineParser
 
     private static ParsedCommand ParseNewCommand(string[] args)
     {
-        if (args.Length < 2 || args[1] != "avalonia")
-            return new ParsedCommand.Error("Usage: sharpts new avalonia -n <name> [-o directory]", 64);
+        if (args.Length < 2 || args[1] != "desktop")
+            return new ParsedCommand.Error("Usage: sharpts new desktop -n <name> [-o directory]", 64);
         string? name = null;
         string? output = null;
         string version = GuiApplicationCli.DefaultSdkVersion;
@@ -440,8 +440,8 @@ public class CommandLineParser
             else return new ParsedCommand.Error($"Error: Unknown or incomplete new option '{args[i]}'.", 64);
         }
         if (string.IsNullOrWhiteSpace(name))
-            return new ParsedCommand.Error("Error: sharpts new avalonia requires -n <name>.", 64);
-        return new ParsedCommand.NewAvalonia(name, output ?? name, version);
+            return new ParsedCommand.Error("Error: sharpts new desktop requires -n <name>.", 64);
+        return new ParsedCommand.NewDesktop(name, output ?? name, version);
     }
 
     private static ParsedCommand ParseApplicationCommand(string[] args, string[] applicationArgs)

@@ -89,7 +89,7 @@ switch (command)
         Console.WriteLine($"sharpts {GetVersion()}");
         return 0;
 
-    case ParsedCommand.NewAvalonia create:
+    case ParsedCommand.NewDesktop create:
         try { return GuiApplicationCli.Create(create); }
         catch (Exception exception) { Console.Error.WriteLine($"Error: {exception.Message}"); return 1; }
 
@@ -1627,7 +1627,7 @@ static void PrintHelp()
     Console.WriteLine("  sharpts -p <tsconfig> [--watch] [--incremental]");
     Console.WriteLine("  sharpts --build [project ...] [--watch] [--force]");
     Console.WriteLine("  sharpts --compile <script.ts> [compile-options]");
-    Console.WriteLine("  sharpts new avalonia -n <name> [-o directory] [--sdk-version version]");
+    Console.WriteLine("  sharpts new desktop -n <name> [-o directory] [--sdk-version version]");
     Console.WriteLine("  sharpts app run [entry.tsx] [--host avalonia|console] [--mode mode] [--gc-profile profile] [-- args]");
     Console.WriteLine("  sharpts app build [entry.tsx] [--host avalonia|console] [--gc-profile profile]");
     Console.WriteLine("  sharpts app publish [entry.tsx] [--rid rid] [--self-contained true|false]");

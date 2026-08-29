@@ -14,7 +14,7 @@ The SharpTS CLI creates a TypeScript-only application and drives the SDK through
 project:
 
 ```powershell
-sharpts new avalonia -n CounterApp
+sharpts new desktop -n CounterApp
 cd CounterApp
 sharpts app run
 sharpts app run --mode compiled
@@ -22,10 +22,11 @@ sharpts app build
 sharpts app publish --rid win-x64 --self-contained true --single-file true
 ```
 
-`sharpts.json` records `application.type`, the entry module, and the pinned GUI SDK version. Host
-selection uses an explicit `--host avalonia|console`, then the manifest, conservative import
-inference, and finally the console default. Mixed GUI and another JSX runtime require an explicit
-host.
+`sharpts.json` records the `desktop` application type, the `avalonia` implementation host, the
+entry module, and the pinned GUI SDK version. Host selection uses an explicit
+`--host avalonia|console`, then `application.host`, conservative import inference, and finally the
+console default. Mixed GUI and another JSX runtime require an explicit host. The application type
+is a separate lifecycle and deployment contract; it is not inferred from imports.
 
 The CLI writes `.sharpts-gui.generated.csproj`, keeps generated build state under `.sharpts/gui`,
 and invokes `SharpTS.Gui.Sdk` for restore, compilation, launcher generation, native asset

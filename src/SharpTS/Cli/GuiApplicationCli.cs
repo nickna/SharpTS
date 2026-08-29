@@ -11,7 +11,7 @@ internal static class GuiApplicationCli
 {
     internal const string DefaultSdkVersion = GuiVersion.Value;
 
-    public static int Create(ParsedCommand.NewAvalonia command)
+    public static int Create(ParsedCommand.NewDesktop command)
     {
         string root = Path.GetFullPath(command.OutputDirectory);
         if (Directory.Exists(root) && Directory.EnumerateFileSystemEntries(root).Any())
@@ -22,7 +22,8 @@ internal static class GuiApplicationCli
         File.WriteAllText(Path.Combine(root, "sharpts.json"), $$"""
             {
               "application": {
-                "type": "avalonia",
+                "type": "desktop",
+                "host": "avalonia",
                 "entry": "main.tsx",
                 "guiSdkVersion": {{serializedVersion}}
               }
@@ -62,7 +63,7 @@ internal static class GuiApplicationCli
             """);
         File.WriteAllText(Path.Combine(root, "Assets", "README.txt"),
             "Files in this directory are embedded under asset:/// paths." + Environment.NewLine);
-        Console.WriteLine($"Created SharpTS Avalonia application '{command.Name}' in {root}");
+        Console.WriteLine($"Created SharpTS desktop application '{command.Name}' in {root}");
         return 0;
     }
 
@@ -75,7 +76,8 @@ internal static class GuiApplicationCli
         SharpTsManifest? manifest = SharpTsManifestLoader.FindAndLoad(start);
         string root = manifest?.ManifestDirectory ?? start;
         string entry = ResolveEntry(root, command.Entry ?? manifest?.Application?.Entry);
-        string host = ResolveHost(command.Host, manifest?.Application?.Type, entry);
+        string host = ResolveHost(command.Host, manifest?.Application?.Host, entry);
+        ValidateApplicationType(manifest?.Application?.Type, host);
         if (host == "console")
         {
             if (command.Action != "run")
@@ -216,6 +218,18 @@ internal static class GuiApplicationCli
             throw new InvalidOperationException(
                 "Application host inference is ambiguous; pass --host avalonia or --host console.");
         return guiImport ? "avalonia" : "console";
+    }
+
+    internal static void ValidateApplicationType(string? applicationType, string host)
+    {
+        if (string.IsNullOrWhiteSpace(applicationType)) return;
+        string normalizedType = applicationType.Trim().ToLowerInvariant();
+        if (normalizedType != "desktop")
+            throw new InvalidOperationException(
+                $"Unknown application type '{normalizedType}'; expected desktop.");
+        if (host != "avalonia")
+            throw new InvalidOperationException(
+                $"Application type 'desktop' requires the avalonia host, not '{host}'.");
     }
 
     private static (bool GuiImport, bool OtherJsxRuntime) InspectRuntimeImports(string source)

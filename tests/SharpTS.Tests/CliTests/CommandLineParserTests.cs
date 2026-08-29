@@ -634,13 +634,22 @@ public class CommandLineParserTests
     }
 
     [Fact]
-    public void Parse_NewAvaloniaApplication()
+    public void Parse_NewDesktopApplication()
     {
-        var command = Assert.IsType<ParsedCommand.NewAvalonia>(
-            _parser.Parse(["new", "avalonia", "-n", "Counter", "-o", "apps/Counter"]));
+        var command = Assert.IsType<ParsedCommand.NewDesktop>(
+            _parser.Parse(["new", "desktop", "-n", "Counter", "-o", "apps/Counter"]));
         Assert.Equal("Counter", command.Name);
         Assert.Equal("apps/Counter", command.OutputDirectory);
         Assert.Equal(GuiApplicationCli.DefaultSdkVersion, command.GuiSdkVersion);
+    }
+
+    [Fact]
+    public void Parse_NewAvaloniaApplication_IsRejected()
+    {
+        var error = Assert.IsType<ParsedCommand.Error>(
+            _parser.Parse(["new", "avalonia", "-n", "Counter"]));
+
+        Assert.Contains("sharpts new desktop", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
