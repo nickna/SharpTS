@@ -414,8 +414,8 @@ public sealed class DesktopRendererTests : IDisposable
         double observedPressure = -1;
         IPointer? nativePointer = null;
         using DesktopRoot root = CreateRoot();
-        GuiVNode Surface(string version) => new(
-            "Border", Key: "pointer", Width: 100, Height: 80, Background: "#ffffff", CapturePointerOnPress: true,
+        GuiVNode Surface(string version, bool capture = true) => new(
+            "Border", Key: "pointer", Width: 100, Height: 80, Background: "#ffffff", CapturePointerOnPress: capture,
             PointerDown: (id, type, x, y, button, buttons, pressure, ctrl, alt, shift, meta) =>
             {
                 modifiersObserved = ctrl && shift && !alt && !meta;
@@ -485,8 +485,18 @@ public sealed class DesktopRendererTests : IDisposable
 
         events.Clear();
         root.Window.MouseDown(press, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        Assert.Same(original, nativePointer!.Captured);
+        root.Render(Window(Surface("capture-disabled", capture: false), width: 240, height: 180));
+        Assert.Null(nativePointer.Captured);
+        DrainGuestMicrotasks();
+        Assert.Contains(events, item => item.StartsWith("capture-disabled-cancel", StringComparison.Ordinal));
+
+        events.Clear();
+        root.Render(Window(Surface("capture-restored"), width: 240, height: 180));
+        root.Window.MouseDown(press, MouseButton.Left, RawInputModifiers.LeftMouseButton);
+        Assert.Same(original, nativePointer.Captured);
         root.Render(Window(Text("replacement", "replacement"), width: 240, height: 180));
-        Assert.DoesNotContain(events, item => item.StartsWith("new-cancel", StringComparison.Ordinal));
+        Assert.DoesNotContain(events, item => item.StartsWith("capture-restored-cancel", StringComparison.Ordinal));
         root.Dispose();
         Assert.Equal(0, root.ActiveSubscriptions);
     }
@@ -1380,7 +1390,9 @@ public sealed class DesktopRendererTests : IDisposable
         }
         Assert.Equal(1, root.ActiveSubscriptions);
 
+        root.ResetOperationCounts();
         root.Render(MetricsWindow(latest.Add));
+        Assert.Equal(new RendererOperationCounts(0, 0, 0, 0), root.OperationCounts);
         DesktopTestingBridge.SetWindowClientSize(root, 520, 360);
         Dispatcher.UIThread.RunJobs();
 

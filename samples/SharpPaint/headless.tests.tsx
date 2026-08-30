@@ -1,6 +1,6 @@
 import { createDesktopApplication } from "@sharpts/gui";
 import { createDesktopTestDriver, DesktopTestDriver } from "@sharpts/gui/testing";
-import { existsSync, writeFileSync } from "fs";
+import { existsSync, unlinkSync, writeFileSync } from "fs";
 import { join } from "path";
 import { SharpPaintShowcase } from "./SharpPaintApp";
 import { createDocument, serializeProject } from "./document";
@@ -43,6 +43,12 @@ function waitForStatus(testDriver: DesktopTestDriver, expected: string, then: ()
 }
 const openProjectPath = join(process.cwd(), "SharpPaint.Headless.Open.sharpaint");
 const saveProjectPath = join(process.cwd(), "SharpPaint.Headless.Save.sharpaint");
+function cleanupProjectArtifacts(): void {
+    for (const path of [openProjectPath, saveProjectPath]) {
+        try { if (existsSync(path)) unlinkSync(path); } catch (_) { }
+    }
+}
+process.on("exit", cleanupProjectArtifacts);
 writeFileSync(openProjectPath, serializeProject(createDocument(320, 240)), "utf8");
 
 expect("initial canvas", driver.getText("command-count") === "1 commands · 1 layers");
@@ -211,18 +217,34 @@ function runFileScenario(): void {
             driver.afterRender(() => {
                 expect("open button loads project (" + driver.getText("status") + ")",
                     driver.getText("status") === "Opened SharpPaint.Headless.Open.sharpaint");
-                driver.click("save");
+                driver.dragPointer("paint-surface", [{ x: 12, y: 14 }, { x: 40, y: 42 }]);
                 driver.afterRender(() => {
-                    expect("save button reports success",
-                        driver.getText("status") === "Saved SharpPaint.Headless.Open.sharpaint");
-                    driver.queueSaveFileDialogResult(saveProjectPath);
-                    driver.clickMenuItem("menu-save-as");
+                    expect("pre-save edit is retained", driver.getText("command-count") === "2 commands · 1 layers");
+                    driver.click("save");
                     driver.afterRender(() => {
-                        expect("save-as menu writes project", existsSync(saveProjectPath));
-                        driver.clickMenuItem("menu-new");
+                        expect("save button reports success",
+                            driver.getText("status") === "Saved SharpPaint.Headless.Open.sharpaint");
+                        expect("save preserves undo", driver.getProperty("undo", "isEnabled") === "True");
+                        driver.click("undo");
                         driver.afterRender(() => {
-                            expect("new menu item opens dialog", driver.getText("new-width") === "1024");
-                            setTimeout((() => application.dispose()) as any, 25);
+                            expect("undo remains functional after save", driver.getText("command-count") === "1 commands · 1 layers");
+                            driver.click("redo");
+                            driver.afterRender(() => {
+                                expect("redo remains functional after save", driver.getText("command-count") === "2 commands · 1 layers");
+                                driver.queueSaveFileDialogResult(saveProjectPath);
+                                driver.clickMenuItem("menu-save-as");
+                                driver.afterRender(() => {
+                                    expect("save-as menu writes project", existsSync(saveProjectPath));
+                                    driver.clickMenuItem("menu-new");
+                                    driver.afterRender(() => {
+                                        expect("new menu item opens dialog", driver.getText("new-width") === "1024");
+                                        setTimeout((() => {
+                                            try { application.dispose(); }
+                                            finally { cleanupProjectArtifacts(); }
+                                        }) as any, 25);
+                                    });
+                                });
+                            });
                         });
                     });
                 });

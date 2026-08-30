@@ -35,9 +35,19 @@ if ($LASTEXITCODE -ne 0) { throw 'Failed to restore SharpPaint.' }
 dotnet build $project --no-restore --no-incremental
 if ($LASTEXITCODE -ne 0) { throw 'Failed to rebuild SharpPaint against the local GUI SDK.' }
 $arguments = @('run', '--project', $project, '--no-restore', '--no-build', '--', '--mode', $Mode)
+$hadSmokeClose = Test-Path -LiteralPath 'Env:\SHARPTS_GUI_SMOKE_CLOSE'
+$previousSmokeClose = $env:SHARPTS_GUI_SMOKE_CLOSE
 if ($Headless) {
     $env:SHARPTS_GUI_SMOKE_CLOSE = '1'
     $arguments += '--headless'
 }
-dotnet @arguments
-if ($LASTEXITCODE -ne 0) { throw "SharpPaint exited with code $LASTEXITCODE." }
+try {
+    dotnet @arguments
+    if ($LASTEXITCODE -ne 0) { throw "SharpPaint exited with code $LASTEXITCODE." }
+}
+finally {
+    if ($Headless) {
+        if ($hadSmokeClose) { $env:SHARPTS_GUI_SMOKE_CLOSE = $previousSmokeClose }
+        else { Remove-Item -LiteralPath 'Env:\SHARPTS_GUI_SMOKE_CLOSE' -ErrorAction SilentlyContinue }
+    }
+}

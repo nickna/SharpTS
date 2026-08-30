@@ -7,6 +7,25 @@ namespace SharpTS.Gui.Conformance.Tests;
 public sealed class ProductizationContractTests
 {
     [Fact]
+    public void SharpPaintLocalToolingUsesPortableFeedAndRestoresSmokeCloseState()
+    {
+        string root = FindRepositoryRoot();
+        string sampleRoot = Path.Combine(root, "samples", "SharpPaint");
+        XDocument config = XDocument.Load(Path.Combine(sampleRoot, "NuGet.Config"));
+        XElement localFeed = Assert.Single(
+            config.Descendants("add"),
+            item => item.Attribute("key")?.Value == "local-sharpts-gui");
+        Assert.Equal("../../artifacts/tsx-api-feed", localFeed.Attribute("value")?.Value);
+
+        string runLocal = File.ReadAllText(Path.Combine(sampleRoot, "run-local.ps1"));
+        Assert.Contains("$hadSmokeClose = Test-Path", runLocal, StringComparison.Ordinal);
+        Assert.Contains("$previousSmokeClose = $env:SHARPTS_GUI_SMOKE_CLOSE", runLocal, StringComparison.Ordinal);
+        Assert.Contains("finally {", runLocal, StringComparison.Ordinal);
+        Assert.Contains("$env:SHARPTS_GUI_SMOKE_CLOSE = $previousSmokeClose", runLocal, StringComparison.Ordinal);
+        Assert.Contains("Remove-Item -LiteralPath 'Env:\\SHARPTS_GUI_SMOKE_CLOSE'", runLocal, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void SupportedPlatforms_DriveSdkAndAreCoveredByTheWorkflow()
     {
         string root = FindRepositoryRoot();

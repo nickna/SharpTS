@@ -56,6 +56,7 @@ import {
     deleteLayer,
     duplicateLayer,
     extendDraft,
+    markSaved,
     moveLayer,
     parseProject,
     replaceLayerCommands,
@@ -327,7 +328,7 @@ function appReducer(state: AppState, action: any): AppState {
             const loaded = action.document as PaintDocument;
             return { ...state, history: createHistory(loaded), selectedLayerId: loaded.layers[loaded.layers.length - 1].id, filePath: action.filePath as string | null, revision: state.revision + 1, draft: null, textDraft: null, effectDialog: null, effectPreview: null, busy: null, status: action.status as string, newDialog: false };
         }
-        case "saved": return { ...state, history: createHistory(state.history.document), filePath: action.filePath as string, status: action.status as string };
+        case "saved": return { ...state, history: markSaved(state.history), filePath: action.filePath as string, status: action.status as string };
         case "status": return { ...state, status: action.status as string };
         case "showNew": return { ...state, newDialog: action.value as boolean };
         case "newWidth": return { ...state, newWidth: action.value as string };

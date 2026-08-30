@@ -309,6 +309,10 @@ function validateCommand(command: any): void {
     else if (command.kind === "ellipse") numbers.push(command.centerX, command.centerY, command.radiusX, command.radiusY);
     else numbers.push(command.x, command.y, command.width, command.height);
     for (const number of numbers) if (!finite(number)) throw new Error("Drawing coordinates must be finite.");
+    if (command.kind === "rectangle" && (command.width < 0 || command.height < 0))
+        throw new Error("Rectangle dimensions must not be negative.");
+    if (command.kind === "ellipse" && (command.radiusX < 0 || command.radiusY < 0))
+        throw new Error("Ellipse radii must not be negative.");
     if (command.kind === "image") {
         if (typeof command.source !== "string" || !command.source.startsWith("data:image/png;base64,") || command.source.length > 35_000_000)
             throw new Error("Saved image layers must contain embedded PNG data.");

@@ -125,6 +125,8 @@ public sealed class SharpPaintHeadlessTests
             Assert.True(process.ExitCode == 0,
                 $"SharpPaint {mode} Headless run failed with {process.ExitCode}.{Environment.NewLine}" +
                 $"stdout:{Environment.NewLine}{output}{Environment.NewLine}stderr:{Environment.NewLine}{errors}");
+            Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Open.sharpaint")));
+            Assert.False(File.Exists(Path.Combine(stage, "SharpPaint.Headless.Save.sharpaint")));
 
             using JsonDocument trace = JsonDocument.Parse(await File.ReadAllTextAsync(tracePath));
             return trace.RootElement.EnumerateArray().Select(item => new TraceEvent(
