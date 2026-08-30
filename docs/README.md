@@ -27,6 +27,8 @@ known gaps, use [STATUS.md](../STATUS.md).
 ## Node and JavaScript APIs
 
 - [Node built-in API reference](node-modules-api.md) — supported user-facing module exports
+- [Worker threads](worker-threads.md) — interpreted/compiled isolation, lifecycle contract,
+  current gaps, and multi-core benchmark methodology
 - [Node capability status](../STATUS.md#4-nodejs-built-in-modules) — implementation breadth,
   deviations, and current gaps
 - [Embedded standard-library contribution guide](../src/SharpTS/stdlib/CONTRIBUTING.md) — maintaining the

@@ -2137,6 +2137,10 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
             return true;
         }
 
+        // Worker-scoped ambient globals are a fallback after every user binding so lexical
+        // declarations with the same spelling retain normal JavaScript shadowing semantics.
+        if (TryEmitWorkerGlobal(name)) return true;
+
         // Built-in constructor identifiers used as values (#232): without these
         // arms, state-machine bodies (async/generator MoveNext emitters, which
         // don't run ILEmitter's EmitVariable) emit null for `Error`, `Date`,
@@ -2148,6 +2152,44 @@ public abstract partial class ExpressionEmitterBase : IEmitterContext
         if (TryEmitNamespaceSingleton(name)) return true;
 
         return false;
+    }
+
+    /// <summary>
+    /// Emits worker-scoped globals from the realm bootstrap. The type checker exposes these
+    /// names only while compiling a worker entry, while the runtime getters safely retain
+    /// main-thread defaults for ordinary compiled assemblies.
+    /// </summary>
+    protected bool TryEmitWorkerGlobal(string name)
+    {
+        switch (name)
+        {
+            case "isMainThread":
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsIsMainThread);
+                IL.Emit(OpCodes.Box, Types.Boolean);
+                SetStackUnknown();
+                return true;
+            case "threadId":
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsThreadId);
+                IL.Emit(OpCodes.Box, Types.Double);
+                SetStackUnknown();
+                return true;
+            case "workerData":
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsWorkerData);
+                SetStackUnknown();
+                return true;
+            case "parentPort":
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsParentPort);
+                SetStackUnknown();
+                return true;
+            case "postMessage":
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.WorkerThreadsParentPort);
+                IL.Emit(OpCodes.Ldstr, "postMessage");
+                IL.Emit(OpCodes.Call, Ctx.Runtime!.GetProperty);
+                SetStackUnknown();
+                return true;
+            default:
+                return false;
+        }
     }
 
     /// <summary>

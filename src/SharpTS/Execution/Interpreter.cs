@@ -261,6 +261,22 @@ public partial class Interpreter : IDisposable
     public CancellationToken WorkerTerminationToken => _workerTerminationToken;
 
     /// <summary>
+    /// Checks host-controlled execution cancellation at interpreter safe points. Worker
+    /// termination is deliberately not a guest exception and therefore bypasses guest catch
+    /// blocks; VM timeouts retain their existing catchable Error value.
+    /// </summary>
+    private void ThrowIfExecutionCancelled()
+    {
+        if (_workerTerminationToken.IsCancellationRequested)
+            throw new Runtime.Exceptions.WorkerTerminatedException();
+        if (_vmTimeoutToken.IsCancellationRequested)
+        {
+            throw new Runtime.Exceptions.ThrowException(
+                new Runtime.Types.SharpTSError("Script execution timed out."));
+        }
+    }
+
+    /// <summary>
     /// Represents a scheduled timer callback that will be executed by the main thread.
     /// </summary>
     internal class VirtualTimer
@@ -714,9 +730,7 @@ public partial class Interpreter : IDisposable
 
         while (!promise.Task.IsCompleted)
         {
-            if (_vmTimeoutToken.IsCancellationRequested)
-                throw new Runtime.Exceptions.ThrowException(
-                    new Runtime.Types.SharpTSError("Script execution timed out."));
+            ThrowIfExecutionCancelled();
 
             TickEventLoop();
             if (promise.Task.IsCompleted) break;
@@ -1326,9 +1340,7 @@ public partial class Interpreter : IDisposable
         foreach (Stmt statement in statements)
         {
             // Check vm timeout token before each statement
-            if (_vmTimeoutToken.IsCancellationRequested)
-                throw new Runtime.Exceptions.ThrowException(
-                    new Runtime.Types.SharpTSError("Script execution timed out."));
+            ThrowIfExecutionCancelled();
 
             if (statement is Stmt.Expression exprStmt)
             {

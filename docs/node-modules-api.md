@@ -329,8 +329,12 @@ isolation are not identical to Node processes.
 
 `worker_threads` exports `Worker`, `MessageChannel`, `MessagePort`, `BroadcastChannel`,
 `isMainThread`, `parentPort`, `workerData`, `threadId`, environment-data helpers, transfer helpers,
-and synchronous port receive. Workers share the parent's console; Node `resourceLimits` and
-per-worker stdio options do not have equivalent isolation here.
+and synchronous port receive. Workers use dedicated OS threads in both modes; compiled parents run
+eligible worker graphs as compiled IL inside isolated collectible realms. Graphs using a
+not-yet-ported cross-realm feature retain an interpreter-backed compatibility path.
+See the [worker-thread compatibility contract](worker-threads.md) for lifecycle behavior, supported
+stdio isolation, deployment requirements, and remaining transfer/shared-memory gaps. Node
+`resourceLimits` are reported but cannot be enforced as V8 heap limits by the .NET runtime.
 
 ## vm
 

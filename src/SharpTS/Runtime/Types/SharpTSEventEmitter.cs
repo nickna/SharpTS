@@ -652,4 +652,5 @@ public class SharpTSEventEmitter : ITypeCategorized, IMemberProvider
             }
         }
     }
+
 }

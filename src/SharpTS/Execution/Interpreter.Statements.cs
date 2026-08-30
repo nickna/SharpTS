@@ -189,9 +189,7 @@ public partial class Interpreter
                 foreach (Stmt statement in statements)
                 {
                     // Check vm timeout token before each statement in a block
-                    if (_vmTimeoutToken.IsCancellationRequested)
-                        throw new Runtime.Exceptions.ThrowException(
-                            new Runtime.Types.SharpTSError("Script execution timed out."));
+                    ThrowIfExecutionCancelled();
 
                     var result = Execute(statement);
                     if (result.IsAbrupt)
@@ -1008,8 +1006,7 @@ public partial class Interpreter
                 // baseline non-deterministic under load. Checking here unwinds the
                 // enumerator (it is consumed via .ToList()/foreach by spread,
                 // Array.from, yield*, etc.) so the thread actually exits.
-                if (_vmTimeoutToken.IsCancellationRequested)
-                    throw new ThrowException(new SharpTSError("Script execution timed out."));
+                ThrowIfExecutionCancelled();
 
                 // Get the next() method
                 object? nextMethod = null;
@@ -1317,9 +1314,7 @@ public partial class Interpreter
         while ((await ctx.EvaluateExprAsync(whileStmt.Condition)).IsTruthy())
         {
             // Check vm timeout token on each loop iteration
-            if (_vmTimeoutToken.IsCancellationRequested)
-                throw new Runtime.Exceptions.ThrowException(
-                    new Runtime.Types.SharpTSError("Script execution timed out."));
+            ThrowIfExecutionCancelled();
 
             var result = await ctx.ExecuteStmtAsync(whileStmt.Body);
             var (shouldBreak, shouldContinue, abruptResult) = HandleLoopResult(result, labels);

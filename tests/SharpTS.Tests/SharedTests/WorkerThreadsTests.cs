@@ -1,3 +1,5 @@
+using SharpTS.Compilation;
+using SharpTS.Runtime.Types;
 using SharpTS.Tests.Infrastructure;
 using Xunit;
 
@@ -683,14 +685,14 @@ public class WorkerThreadsTests
                 const w = new Worker(__dirname + "/worker_wait.ts");
                 w.on("exit", (code: any) => { console.log("exit:" + code); });
                 w.on("message", (e: any) => {
-                    if (e.data === "parked") {
+                    if (e === "parked") {
                         // Give the worker a beat to actually enter the wait, then terminate.
                         setTimeout(async () => {
                             await w.terminate();
                             console.log("terminated");
                         }, 50);
                     } else {
-                        console.log("got:" + e.data);
+                        console.log("got:" + e);
                     }
                 });
                 """
@@ -725,7 +727,7 @@ public class WorkerThreadsTests
                 const w = new Worker(__dirname + "/worker_idle.ts");
                 w.on("exit", (code: any) => { console.log("exit:" + code); });
                 w.on("message", (e: any) => {
-                    if (e.data === "ready") {
+                    if (e === "ready") {
                         setTimeout(async () => {
                             await w.terminate();
                             console.log("terminated");
@@ -736,6 +738,35 @@ public class WorkerThreadsTests
         };
 
         var output = TestHarness.RunModules(files, "main.ts", mode);
+        Assert.Contains("exit:1", output);
+        Assert.Contains("terminated", output);
+    }
+
+    [Theory, ModeData]
+    public void Worker_Terminate_InterruptsCpuBoundCode(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_cpu.ts"] = """
+                import { parentPort } from "worker_threads";
+                parentPort!.postMessage("ready");
+                while (true) { }
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_cpu.ts");
+                worker.on("exit", (code: any) => console.log("exit:" + code));
+                worker.on("message", async (value: any) => {
+                    if (value === "ready") {
+                        await worker.terminate();
+                        console.log("terminated");
+                    }
+                });
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+
         Assert.Contains("exit:1", output);
         Assert.Contains("terminated", output);
     }
@@ -761,7 +792,7 @@ public class WorkerThreadsTests
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_post.ts");
                 w.on("online", () => { console.log("online"); });
-                w.on("message", (e: any) => { console.log("message:" + e.data); });
+                w.on("message", (e: any) => { console.log("message:" + e); });
                 """
         };
 
@@ -799,7 +830,7 @@ public class WorkerThreadsTests
                 const w = new Worker(__dirname + "/worker_ok.ts", { workerData: "go", transferList: [buf] });
                 // Transfer happened synchronously during construction — source is detached.
                 console.log("len:" + buf.byteLength);
-                w.on("message", (e: any) => { console.log("worker:" + e.data); });
+                w.on("message", (e: any) => { console.log("worker:" + e); });
                 """
         };
 
@@ -827,7 +858,7 @@ public class WorkerThreadsTests
                 const buf = new ArrayBuffer(8);
                 const w = new Worker(__dirname + "/worker_ok.ts", { workerData: buf });
                 console.log("len:" + buf.byteLength);
-                w.on("message", (e: any) => { console.log("worker:" + e.data); });
+                w.on("message", (e: any) => { console.log("worker:" + e); });
                 """
         };
 
@@ -860,7 +891,7 @@ public class WorkerThreadsTests
                 u[0] = 9; u[1] = 8;
                 const w = new Worker(__dirname + "/worker_read.ts", { workerData: buf, transferList: [buf] });
                 console.log("src:" + buf.byteLength);
-                w.on("message", (e: any) => { console.log("got:" + e.data); });
+                w.on("message", (e: any) => { console.log("got:" + e); });
                 """
         };
 
@@ -895,7 +926,7 @@ public class WorkerThreadsTests
                 import { Worker, setEnvironmentData } from "worker_threads";
                 setEnvironmentData("ed_k1000", "ed_val");
                 const w = new Worker(__dirname + "/worker_env.ts");
-                w.on("message", (e: any) => { console.log(e.data); });
+                w.on("message", (e: any) => { console.log(e); });
                 """
         };
 
@@ -978,7 +1009,7 @@ public class WorkerThreadsTests
                 const w: any = new Worker(__dirname + "/worker_ok.ts", { workerData: "go" });
                 const elu: any = w.performance.eventLoopUtilization();
                 console.log("elu:" + typeof elu.idle + "," + typeof elu.active + "," + typeof elu.utilization);
-                w.on("message", (e: any) => { console.log("worker:" + e.data); });
+                w.on("message", (e: any) => { console.log("worker:" + e); });
                 """
         };
 
@@ -1008,7 +1039,7 @@ public class WorkerThreadsTests
                 } catch (e: any) {
                     console.log("heap-err:" + (("" + (e && e.message ? e.message : e)).indexOf("not supported") >= 0));
                 }
-                w.on("message", (e: any) => { console.log("worker:" + e.data); });
+                w.on("message", (e: any) => { console.log("worker:" + e); });
                 """
         };
 
@@ -1068,7 +1099,7 @@ public class WorkerThreadsTests
                     resourceLimits: { maxOldGenerationSizeMb: 24, stackSizeMb: 4 },
                 });
                 console.log("rl:" + w.resourceLimits.maxOldGenerationSizeMb + "," + w.resourceLimits.stackSizeMb);
-                w.on("message", (e: any) => { console.log("worker:" + e.data); });
+                w.on("message", (e: any) => { console.log("worker:" + e); });
                 """
         };
 
@@ -1130,8 +1161,8 @@ public class WorkerThreadsTests
                 import { Worker } from "worker_threads";
                 const w: any = new Worker(__dirname + "/worker_in.ts", { stdin: true });
                 w.on("message", (e: any) => {
-                    if (e.data === "ready") { w.stdin.write("ping"); w.stdin.end(); }
-                    else { console.log(e.data); }
+                    if (e === "ready") { w.stdin.write("ping"); w.stdin.end(); }
+                    else { console.log(e); }
                 });
                 """
         };
@@ -1162,8 +1193,8 @@ public class WorkerThreadsTests
                 import { Worker } from "worker_threads";
                 const w: any = new Worker(__dirname + "/worker_acc.ts", { stdin: true });
                 w.on("message", (e: any) => {
-                    if (e.data === "ready") { w.stdin.write("a"); w.stdin.write("b"); w.stdin.write("c"); w.stdin.end(); }
-                    else { console.log(e.data); }
+                    if (e === "ready") { w.stdin.write("a"); w.stdin.write("b"); w.stdin.write("c"); w.stdin.end(); }
+                    else { console.log(e); }
                 });
                 """
         };
@@ -1225,7 +1256,7 @@ public class WorkerThreadsTests
                 // buf is in the transfer list but marked untransferable → ignored, not detached.
                 const w = new Worker(__dirname + "/worker_ok.ts", { workerData: "go", transferList: [buf] });
                 console.log("len:" + buf.byteLength);
-                w.on("message", (e: any) => { console.log("worker:" + e.data); });
+                w.on("message", (e: any) => { console.log("worker:" + e); });
                 """
         };
 
@@ -1257,7 +1288,7 @@ public class WorkerThreadsTests
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_msgerr.ts");
                 w.on("messageerror", () => { console.log("parent-messageerror"); });
-                w.on("message", (e: any) => { console.log("message:" + e.data); });
+                w.on("message", (e: any) => { console.log("message:" + e); });
                 """
         };
 
@@ -1278,17 +1309,16 @@ public class WorkerThreadsTests
         {
             ["worker_pw.ts"] = """
                 import { parentPort } from "worker_threads";
-                parentPort.on("messageerror", () => { postMessage("saw-err"); });
-                parentPort.on("message", () => { postMessage("saw-msg"); });
+                parentPort.on("messageerror", () => { postMessage("saw-err"); parentPort.close(); });
+                parentPort.on("message", () => { postMessage("saw-msg"); parentPort.close(); });
                 postMessage("ready");
-                setTimeout(() => {}, 500); // stay alive to receive the parent's post
                 """,
             ["main.ts"] = """
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_pw.ts");
                 w.on("message", (e: any) => {
-                    if (e.data === "ready") { w.postMessage(() => {}); }
-                    else { console.log(e.data); }
+                    if (e === "ready") { w.postMessage(() => {}); }
+                    else { console.log(e); }
                 });
                 """
         };
@@ -1393,7 +1423,7 @@ public class WorkerThreadsTests
                 // The 'message' listener is the parent's ONLY pending work — the
                 // running worker must keep the loop alive long enough to deliver.
                 w.on("message", (e: any) => {
-                    console.log("received:" + e.data);
+                    console.log("received:" + e);
                 });
                 """
         };
@@ -1419,7 +1449,7 @@ public class WorkerThreadsTests
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_delayed.ts");
                 w.on("message", (e: any) => {
-                    console.log("received:" + e.data);
+                    console.log("received:" + e);
                 });
                 w.unref(); // opt out of keep-alive...
                 w.ref();   // ...then opt back in — message must still arrive.
@@ -1467,7 +1497,7 @@ public class WorkerThreadsTests
                 // construction; resourceLimits echoes and the worker still runs.
                 console.log("rl:" + w.resourceLimits.maxOldGenerationSizeMb);
                 w.on("message", (e: any) => {
-                    console.log("received:" + e.data);
+                    console.log("received:" + e);
                 });
                 """
         };
@@ -1490,9 +1520,8 @@ public class WorkerThreadsTests
     /// dropped, so a compiled worker saw <c>workerData === undefined</c>.
     /// </summary>
     /// <remarks>
-    /// The worker child script always runs under the interpreter, so it reads
-    /// workerData through <c>env.Define</c>; the fix is purely in how the parent
-    /// (compiled or interpreted) marshals the options bag into <c>SharpTSWorker</c>.
+    /// Interpreted workers bind workerData through <c>env.Define</c>; compiled workers
+    /// receive it through the emitted runtime's per-realm bootstrap fields.
     /// <c>__dirname</c> routes the harness through the real-disk path so the worker
     /// can load its script.
     /// </remarks>
@@ -1509,7 +1538,7 @@ public class WorkerThreadsTests
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_data.ts", { workerData: 123 });
                 w.on("message", (e: any) => {
-                    console.log("received:" + e.data);
+                    console.log("received:" + e);
                 });
                 """
         };
@@ -1539,7 +1568,7 @@ public class WorkerThreadsTests
                     workerData: { name: "alice", count: 7 }
                 });
                 w.on("message", (e: any) => {
-                    console.log("received:" + e.data);
+                    console.log("received:" + e);
                 });
                 """
         };
@@ -1886,6 +1915,164 @@ public class WorkerThreadsTests
 
     #region Worker scripts in module mode (#410)
 
+    [Fact]
+    public void CompiledWorker_ExecutesCompiledArtifactWithWorkerBindings()
+    {
+        long executionsBefore = CompiledWorkerCompilationService.ExecutionCount;
+        var files = new Dictionary<string, string>
+        {
+            ["worker_compiled.ts"] = """
+                import { isMainThread, threadId, workerData, parentPort } from "worker_threads";
+                parentPort!.postMessage(
+                    "main=" + isMainThread + " id=" + (threadId > 0) + " data=" + workerData);
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_compiled.ts", { workerData: "alpha" });
+                worker.on("message", (value: any) => console.log(value));
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("main=false id=true data=alpha", output);
+        Assert.True(CompiledWorkerCompilationService.ExecutionCount > executionsBefore,
+            "The worker must execute through the compiled-worker bootstrap, not the interpreter fallback.");
+    }
+
+    [Theory, ModeData]
+    public void Worker_ParentPortReceivesMessagesAndKeepsWorkerAlive(ExecutionMode mode)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["worker_echo.ts"] = """
+                import { parentPort } from "worker_threads";
+                parentPort!.on("message", (value: any) => {
+                    parentPort!.postMessage("echo:" + value);
+                    parentPort!.close();
+                });
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                const worker = new Worker(__dirname + "/worker_echo.ts");
+                worker.on("message", (value: any) => console.log(value));
+                worker.postMessage("ping");
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", mode);
+
+        Assert.Contains("echo:ping", output);
+    }
+
+    [Fact]
+    public void CompiledWorkers_HaveIndependentModuleState()
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["counter.ts"] = """
+                let count = 0;
+                export function next(): number { count++; return count; }
+                """,
+            ["worker_isolated.ts"] = """
+                import { parentPort, workerData } from "worker_threads";
+                import { next } from "./counter";
+                parentPort!.postMessage(workerData + ":" + next());
+                """,
+            ["main.ts"] = """
+                import { Worker } from "worker_threads";
+                for (const name of ["first", "second"]) {
+                    const worker = new Worker(__dirname + "/worker_isolated.ts", { workerData: name });
+                    worker.on("message", (value: any) => console.log(value));
+                }
+                """,
+        };
+
+        var output = TestHarness.RunModules(files, "main.ts", ExecutionMode.Compiled);
+
+        Assert.Contains("first:1", output);
+        Assert.Contains("second:1", output);
+        Assert.DoesNotContain(":2", output);
+    }
+
+    [Fact]
+    public async Task CompiledWorker_TerminateDuringRealmBootstrap_DoesNotMissCancellation()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+        File.WriteAllText(workerPath, "while (true) { }");
+
+        try
+        {
+            // Populate the artifact cache so the worker proceeds directly into its realm-load
+            // window. CompiledRealmReference is published after the initial token check but
+            // before the emitted cancellation bridge, which recreates the cold-start race.
+            CompiledWorkerCompilationService.Compile(workerPath);
+
+            using var worker = SharpTSWorker.CreateForCompiledLoop(
+                workerPath, options: null, static () => { }, static () => { }, static action => action());
+            Assert.True(
+                SpinWait.SpinUntil(
+                    () => worker.CompiledRealmReference is not null || !worker.IsRunning,
+                    TimeSpan.FromSeconds(30)),
+                "Compiled worker did not begin loading its isolated realm.");
+
+            SharpTSPromise termination = worker.Terminate();
+            object? exitCode = await termination.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(1)),
+                "Compiled worker remained running after terminate().");
+            Assert.Equal(1d, exitCode);
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    [Fact]
+    public void CompiledWorker_CollectibleRealmUnloadsAfterExit()
+    {
+        string directory = Path.Combine(Path.GetTempPath(), $"sharpts_compiled_worker_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(directory);
+        string workerPath = Path.Combine(directory, "worker.ts");
+        File.WriteAllText(workerPath, """
+            import { isMainThread } from "worker_threads";
+            if (isMainThread) throw new Error("worker context was not configured");
+            """);
+
+        WeakReference realm;
+        try
+        {
+            byte[] firstArtifact = CompiledWorkerCompilationService.Compile(workerPath);
+            byte[] cachedArtifact = CompiledWorkerCompilationService.Compile(workerPath);
+            Assert.Same(firstArtifact, cachedArtifact);
+
+            using (var worker = SharpTSWorker.CreateForCompiledLoop(
+                       workerPath, options: null, static () => { }, static () => { }, static action => action()))
+            {
+                Assert.True(SpinWait.SpinUntil(() => !worker.IsRunning, TimeSpan.FromSeconds(30)),
+                    "Compiled worker did not exit.");
+                realm = worker.CompiledRealmReference
+                    ?? throw new Xunit.Sdk.XunitException("Compiled worker did not create an isolated realm.");
+            }
+
+            for (int i = 0; i < 10 && realm.IsAlive; i++)
+            {
+                GC.Collect();
+                GC.WaitForPendingFinalizers();
+                GC.Collect();
+                Thread.Sleep(20);
+            }
+
+            Assert.False(realm.IsAlive, "The compiled worker AssemblyLoadContext remained rooted after exit.");
+        }
+        finally
+        {
+            try { Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
     /// <summary>
     /// Regression for #410: a worker script that uses the canonical Node import form
     /// <c>import { workerData, parentPort, ... } from "worker_threads"</c> must run —
@@ -1898,8 +2085,8 @@ public class WorkerThreadsTests
     /// main-thread <c>null</c> placeholders.
     /// </summary>
     /// <remarks>
-    /// The worker child script always runs under the interpreter, so this exercises
-    /// the same worker-side module pipeline regardless of the parent's mode.
+    /// This exercises the interpreter module pipeline in interpreted mode and the
+    /// isolated compiled-worker artifact pipeline in compiled mode.
     /// <c>__dirname</c> routes the harness through the real-disk path so the worker can
     /// load its script. Load-independent positive assertion (output present).
     /// </remarks>
@@ -1916,7 +2103,7 @@ public class WorkerThreadsTests
             ["main.ts"] = """
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_import.ts", { workerData: 123 });
-                w.on("message", (e: any) => { console.log("received:" + e.data); });
+                w.on("message", (e: any) => { console.log("received:" + e); });
                 """
         };
 
@@ -1946,7 +2133,7 @@ public class WorkerThreadsTests
             ["main.ts"] = """
                 import { Worker } from "worker_threads";
                 const w = new Worker(__dirname + "/worker_rel.ts", { workerData: "alice" });
-                w.on("message", (e: any) => { console.log("received:" + e.data); });
+                w.on("message", (e: any) => { console.log("received:" + e); });
                 """
         };
 
@@ -2013,10 +2200,9 @@ public class WorkerThreadsTests
 
     /// <summary>
     /// On the MAIN thread, <c>worker_threads.parentPort</c> is <c>null</c> in Node — and that is the
-    /// correct value the compiled <c>EmitParentPort</c> emits (#1109). A worker's body runs under a fresh
-    /// interpreter (SharpTSWorker.RunWorkerScript), which binds the real parentPort via SetupWorkerGlobals,
-    /// so the compiled path is only ever reached on the main thread. This locks in that both modes agree
-    /// and that the canonical <c>if (parentPort)</c> main-thread guard keeps working (not a throw).
+    /// default value emitted for an unconfigured main-thread realm. Worker realms are configured with
+    /// a live parentPort before execution. This locks in that both modes agree and that the canonical
+    /// <c>if (parentPort)</c> main-thread guard keeps working.
     /// </summary>
     [Theory, ModeData]
     public void ParentPort_OnMainThread_IsNull(ExecutionMode mode)

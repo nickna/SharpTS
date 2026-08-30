@@ -117,6 +117,9 @@ public partial class AsyncArrowMoveNextEmitter
             return;
         }
 
+        if (TryEmitWorkerGlobal(name))
+            return;
+
         // Not found - push null
         _il.Emit(OpCodes.Ldnull);
         SetStackType(StackType.Null);

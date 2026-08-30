@@ -1348,8 +1348,9 @@ public partial class RuntimeEmitter
         // singleton's Ref/Unref as the worker's keep-alive handle, so a running
         // worker holds the compiled event loop open by default — Node semantics,
         // and the compiled-mode half of the #329 premature-exit fix (#354). The
-        // worker itself runs an interpreter for its child script, so SharpTS.dll
-        // must be co-located; the emit site records that via RequireSharpTSRuntime.
+        // worker compiles and loads its child module graph into an isolated realm, so
+        // SharpTS.dll and its managed dependency closure must be co-located; the emit site
+        // records those deployment capabilities via RequireSharpTSRuntime.
         var method = runtimeType.DefineMethod(
             "CreateWorker",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -2055,7 +2056,55 @@ public partial class RuntimeEmitter
     /// </summary>
     private void EmitWorkerThreadsModuleHelpers(TypeBuilder runtimeType, EmittedRuntime runtime)
     {
-        // isMainThread getter
+        // Every compiled worker is loaded into its own AssemblyLoadContext. These static
+        // fields are therefore realm-local even though the emitted runtime uses statics for
+        // module state and intrinsics. The worker host configures them before $Program.Main.
+        var isWorkerField = runtimeType.DefineField(
+            "_workerContextEnabled", _types.Boolean, FieldAttributes.Private | FieldAttributes.Static);
+        var workerThreadIdField = runtimeType.DefineField(
+            "_workerThreadId", _types.Double, FieldAttributes.Private | FieldAttributes.Static);
+        var workerDataField = runtimeType.DefineField(
+            "_workerData", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+        var parentPortField = runtimeType.DefineField(
+            "_workerParentPort", _types.Object, FieldAttributes.Private | FieldAttributes.Static);
+
+        // Called reflectively by SharpTSWorker after loading the worker artifact.
+        var configureContext = runtimeType.DefineMethod(
+            "ConfigureWorkerContext",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            [_types.Double, _types.Object, _types.Object]);
+        var cil = configureContext.GetILGenerator();
+        cil.Emit(OpCodes.Ldc_I4_1);
+        cil.Emit(OpCodes.Stsfld, isWorkerField);
+        cil.Emit(OpCodes.Ldarg_0);
+        cil.Emit(OpCodes.Stsfld, workerThreadIdField);
+        cil.Emit(OpCodes.Ldarg_1);
+        cil.Emit(OpCodes.Stsfld, workerDataField);
+        cil.Emit(OpCodes.Ldarg_2);
+        cil.Emit(OpCodes.Stsfld, parentPortField);
+        cil.Emit(OpCodes.Ret);
+
+        // Clears host objects before the collectible realm is unloaded. This is primarily
+        // hygiene for failed unload diagnostics; the fields belong to the collectible type.
+        var clearContext = runtimeType.DefineMethod(
+            "ClearWorkerContext",
+            MethodAttributes.Public | MethodAttributes.Static,
+            typeof(void),
+            Type.EmptyTypes);
+        var ccil = clearContext.GetILGenerator();
+        ccil.Emit(OpCodes.Ldc_I4_0);
+        ccil.Emit(OpCodes.Stsfld, isWorkerField);
+        ccil.Emit(OpCodes.Ldc_R8, 0.0);
+        ccil.Emit(OpCodes.Stsfld, workerThreadIdField);
+        ccil.Emit(OpCodes.Ldnull);
+        ccil.Emit(OpCodes.Stsfld, workerDataField);
+        ccil.Emit(OpCodes.Ldnull);
+        ccil.Emit(OpCodes.Stsfld, parentPortField);
+        ccil.Emit(OpCodes.Ret);
+
+        // isMainThread getter: true for an ordinary compiled program, false only after
+        // ConfigureWorkerContext has initialized this isolated worker realm.
         var isMainThreadMethod = runtimeType.DefineMethod(
             "WorkerThreadsIsMainThread",
             MethodAttributes.Public | MethodAttributes.Static,
@@ -2064,7 +2113,9 @@ public partial class RuntimeEmitter
         );
 
         var il = isMainThreadMethod.GetILGenerator();
-        il.Emit(OpCodes.Ldc_I4_1);
+        il.Emit(OpCodes.Ldsfld, isWorkerField);
+        il.Emit(OpCodes.Ldc_I4_0);
+        il.Emit(OpCodes.Ceq);
         il.Emit(OpCodes.Ret);
         runtime.WorkerThreadsIsMainThread = isMainThreadMethod;
 
@@ -2077,9 +2128,35 @@ public partial class RuntimeEmitter
         );
 
         var il2 = threadIdMethod.GetILGenerator();
+        var hasWorkerContext = il2.DefineLabel();
+        il2.Emit(OpCodes.Ldsfld, isWorkerField);
+        il2.Emit(OpCodes.Brtrue, hasWorkerContext);
         il2.Emit(OpCodes.Ldc_R8, 0.0);
         il2.Emit(OpCodes.Ret);
+        il2.MarkLabel(hasWorkerContext);
+        il2.Emit(OpCodes.Ldsfld, workerThreadIdField);
+        il2.Emit(OpCodes.Ret);
         runtime.WorkerThreadsThreadId = threadIdMethod;
+
+        var workerDataMethod = runtimeType.DefineMethod(
+            "WorkerThreadsWorkerData",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        var wdil = workerDataMethod.GetILGenerator();
+        wdil.Emit(OpCodes.Ldsfld, workerDataField);
+        wdil.Emit(OpCodes.Ret);
+        runtime.WorkerThreadsWorkerData = workerDataMethod;
+
+        var parentPortMethod = runtimeType.DefineMethod(
+            "WorkerThreadsParentPort",
+            MethodAttributes.Public | MethodAttributes.Static,
+            _types.Object,
+            Type.EmptyTypes);
+        var ppil = parentPortMethod.GetILGenerator();
+        ppil.Emit(OpCodes.Ldsfld, parentPortField);
+        ppil.Emit(OpCodes.Ret);
+        runtime.WorkerThreadsParentPort = parentPortMethod;
 
         // receiveMessageOnPort — synchronous main-thread drain (#1077). The method is DEFINED
         // here (so callers can bind runtime.WorkerThreadsReceiveMessageOnPort) but its body is
