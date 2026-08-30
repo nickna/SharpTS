@@ -15,7 +15,7 @@ namespace SharpTS.Tests.CompilerTests;
 /// </summary>
 public class RuntimeDependencySignalTests
 {
-    private static IReadOnlyCollection<string> ReasonsFor(string source)
+    private static ILCompiler CompilerFor(string source)
     {
         var tokens = new Lexer(source).ScanTokens();
         var statements = new Parser(tokens).ParseOrThrow();
@@ -24,8 +24,11 @@ public class RuntimeDependencySignalTests
 
         var compiler = new ILCompiler("runtime_signal_test");
         compiler.Compile(statements, typeMap, deadCodeInfo);
-        return compiler.RequiredSharpTSRuntimeReasons;
+        return compiler;
     }
+
+    private static IReadOnlyCollection<string> ReasonsFor(string source) =>
+        CompilerFor(source).RequiredSharpTSRuntimeReasons;
 
     [Fact]
     public void TrivialProgram_RequiresNoRuntime()
@@ -145,5 +148,22 @@ public class RuntimeDependencySignalTests
         {
             try { Directory.Delete(tempDir, recursive: true); } catch { }
         }
+    }
+
+    [Fact]
+    public void Worker_RequiresManagedHostAndFullDependencyClosure()
+    {
+        var compiler = CompilerFor("""
+            const worker = new Worker("worker.ts");
+            worker.on("message", value => console.log(value));
+            """);
+
+        Assert.Contains("Worker", compiler.RequiredSharpTSRuntimeReasons);
+        Assert.True(compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+            SharpTSRuntimeRequirements.RuntimeAssembly));
+        Assert.True(compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+            SharpTSRuntimeRequirements.FullDependencyClosure));
+        Assert.True(compiler.RequiredSharpTSRuntimeRequirements.HasFlag(
+            SharpTSRuntimeRequirements.ManagedCompilerHost));
     }
 }

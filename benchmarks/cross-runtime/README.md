@@ -35,6 +35,8 @@ important but are not mixed into the workload metric.
 | `scripts/*.ts` | One workload per file (fibonacci, sort, json, regex, async/promises, …). |
 | `scripts/lib/bench.ts` | Shared synchronous and asynchronous timing harnesses (auto-batching, warmup, mean/min/stdev). |
 | `scripts/lib/algorithms.ts` | Algorithm bodies **shared byte-identical** with the microbenchmark suite (embedded there as a resource). |
+| `scripts/worker-scaling.ts` | Fixed-total-work CPU comparison using direct execution and persistent pools of 1, 2, and 4 workers. |
+| `scripts/workers/*.ts` | Worker entry points and worker-specific shared kernels; these are dependencies, not standalone workloads. |
 
 The schema-v1 file remains the versioned contract for this one suite. The
 [schema-v2 public snapshot](../snapshots/README.md) embeds it as an independent
@@ -104,6 +106,15 @@ Each workload calls `bench(name, param, fn)` from `scripts/lib/bench.ts`, which:
 `performance.now()` (sub-microsecond, monotonic) is used everywhere so the
 methodology is identical across runtimes. A `guard` accumulator defeats
 dead-code elimination in both SharpTS modes and the JS engines.
+
+The `worker-scaling` workload uses the same parent, worker, and CPU-kernel
+TypeScript verbatim in every runtime. It keeps the total amount of CPU work
+fixed while varying the persistent pool size from 1 to 4 workers. Pool startup,
+worker readiness, shutdown, and a deterministic checksum validation occur
+outside the timed region, so the reported cases measure steady-state dispatch
+and parallel execution rather than startup or compilation. The direct case
+shows the messaging overhead floor; compare each runtime's 2- and 4-worker
+times with its 1-worker time to calculate parallel speedup and efficiency.
 
 Each JSON measurement preserves the reported mean, minimum, sample standard
 deviation, sample count, calibrated inner-iteration count, sampled duration,

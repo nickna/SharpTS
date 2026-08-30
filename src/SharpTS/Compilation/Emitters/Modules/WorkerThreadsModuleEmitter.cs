@@ -92,12 +92,9 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // workerData is only defined in worker context, and worker child scripts
-        // always run under the interpreter (SharpTSWorker.RunWorkerScript news up an
-        // Interpreter), which binds the cloned workerData via env.Define. This
-        // compiled path is therefore only ever reached on the MAIN thread, where
-        // Node's workerData is null — so null is the correct value here (#380).
-        il.Emit(OpCodes.Ldnull);
+        // The host configures this realm's emitted $Runtime before invoking a compiled
+        // worker entry point. Main-thread assemblies retain the default null value.
+        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsWorkerData);
         return true;
     }
 
@@ -106,14 +103,9 @@ public sealed class WorkerThreadsModuleEmitter : IBuiltInModuleEmitter
         var ctx = emitter.Context;
         var il = ctx.IL;
 
-        // null is the CORRECT value here, not a stub (#1109). parentPort is the worker→parent port and
-        // is null on the main thread in Node. A worker's body never runs as compiled code: even when the
-        // main program is compiled, SharpTSWorker.RunWorkerScript spins up a fresh INTERPRETER for the
-        // worker file, and that interpreter binds the real WorkerParentPort via SetupWorkerGlobals. So
-        // this compiled path is only ever reached on the MAIN thread — exactly the EmitWorkerData case —
-        // where parentPort is null. Wiring a "$MessagePort" would be wrong (none exists in compiled mode),
-        // and throwing would break the canonical `if (parentPort) { ... }` main-thread guard.
-        il.Emit(OpCodes.Ldnull);
+        // Compiled worker realms receive a host-backed parentPort during bootstrap.
+        // Main-thread assemblies are never configured and therefore return null.
+        il.Emit(OpCodes.Call, ctx.Runtime!.WorkerThreadsParentPort);
         return true;
     }
 

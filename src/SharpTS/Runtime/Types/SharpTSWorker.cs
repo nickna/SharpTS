@@ -1,4 +1,8 @@
 using System.Collections.Concurrent;
+using System.Reflection;
+using System.Runtime.ExceptionServices;
+using System.Runtime.Loader;
+using SharpTS.Compilation;
 using SharpTS.Diagnostics;
 using SharpTS.Execution;
 using SharpTS.Execution.Debugging;
@@ -14,7 +18,9 @@ namespace SharpTS.Runtime.Types;
 /// Represents a Worker thread for parallel execution.
 /// </summary>
 /// <remarks>
-/// Workers run TypeScript code in a separate thread with their own isolated interpreter.
+/// Workers run TypeScript code in a separate thread with their own isolated runtime realm.
+/// Interpreted parents create an interpreter realm; compiled parents load a compiled artifact
+/// into a collectible AssemblyLoadContext.
 /// Communication happens through message passing via postMessage/onmessage, using the
 /// structured clone algorithm. SharedArrayBuffer is shared by reference, enabling
 /// shared memory access with Atomics for synchronization.
@@ -39,6 +45,20 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     private volatile bool _isRunning;
     private volatile bool _isTerminated;
     private Interpreter? _parentInterpreter;
+    private readonly bool _runCompiledWorker;
+    private readonly WorkerParentPort _parentPort;
+
+    // Compiled-worker realm bridge. The delegates point into the collectible assembly only
+    // while its thread is running and are cleared before unload.
+    private volatile Action<Action>? _compiledWorkerSchedule;
+    private volatile Action? _compiledWorkerCancel;
+    private volatile Action? _compiledWorkerWake;
+    private volatile Action? _compiledWorkerRef;
+    private volatile Action? _compiledWorkerUnref;
+    private int _compiledDeliveryScheduled;
+    private WeakReference? _compiledRealmReference;
+
+    internal WeakReference? CompiledRealmReference => _compiledRealmReference;
 
     // The worker's own (isolated) interpreter, captured once it starts so terminate()
     // can Shutdown() its event loop promptly (mirrors SharpTSClusterWorker._workerInterpreter).
@@ -135,11 +155,21 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// </param>
     public SharpTSWorker(string filename, object? options, Interpreter? parentInterpreter,
         Action? eventLoopRef = null, Action? eventLoopUnref = null, Action<Action>? eventLoopSchedule = null)
+        : this(filename, options, parentInterpreter, eventLoopRef, eventLoopUnref,
+            eventLoopSchedule, runCompiledWorker: false)
+    {
+    }
+
+    private SharpTSWorker(string filename, object? options, Interpreter? parentInterpreter,
+        Action? eventLoopRef, Action? eventLoopUnref, Action<Action>? eventLoopSchedule,
+        bool runCompiledWorker)
     {
         _loopSchedule = eventLoopSchedule;
         ThreadId = Interlocked.Increment(ref _nextThreadId);
         _scriptPath = filename;
         _parentInterpreter = parentInterpreter;
+        _runCompiledWorker = runCompiledWorker;
+        _parentPort = new WorkerParentPort(this);
 
         // Resolve the keep-alive handle once: explicit delegates (compiled mode)
         // win over the parent interpreter (interpreter mode). Both arms feed the
@@ -188,6 +218,9 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
             if (ReadOption(options, "stdin") is true)
                 _stdin = CreateStdinWritable();
         }
+
+        if (_runCompiledWorker && (_stdout is not null || _stderr is not null))
+            WorkerConsoleRouter.EnsureInstalled();
 
         // Clone workerData for transfer to worker
         if (_workerData != null)
@@ -268,7 +301,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         Action<Action> eventLoopSchedule)
     {
         return new SharpTSWorker(filename, options, parentInterpreter: null,
-            eventLoopRef, eventLoopUnref, eventLoopSchedule);
+            eventLoopRef, eventLoopUnref, eventLoopSchedule, runCompiledWorker: true);
     }
 
     /// <summary>
@@ -300,7 +333,11 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         int exitCode = 0;
         try
         {
-            RunWorkerScript();
+            if (_runCompiledWorker && CompiledWorkerCompilationService.CanExecuteCompiled(
+                    _scriptPath, _workerData, _stdin is not null))
+                RunCompiledWorkerScript();
+            else
+                RunWorkerScript();
 
             // A guest-level uncaught error is printed by the interpreter and surfaced via
             // LastUncaughtError rather than thrown back here; Node exits such a worker with 1.
@@ -441,6 +478,113 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     }
 
     /// <summary>
+    /// Compiles and executes the worker module as IL in a dedicated collectible realm.
+    /// The generated runtime's static module cache and event loop are isolated by the
+    /// AssemblyLoadContext, while the host-backed parentPort crosses the boundary as data.
+    /// </summary>
+    private void RunCompiledWorkerScript()
+    {
+        string absolutePath = Path.GetFullPath(_scriptPath);
+        if (!File.Exists(absolutePath))
+            throw new Exception($"Worker script not found: {absolutePath}");
+
+        byte[] artifact = CompiledWorkerCompilationService.Compile(absolutePath);
+        _cts.Token.ThrowIfCancellationRequested();
+
+        var loadContext = new AssemblyLoadContext(
+            $"SharpTS.Worker.{ThreadId}.{Guid.NewGuid():N}", isCollectible: true);
+        _compiledRealmReference = new WeakReference(loadContext);
+
+        MethodInfo? clearContext = null;
+        try
+        {
+            using var stream = new MemoryStream(artifact, writable: false);
+            Assembly assembly = loadContext.LoadFromStream(stream);
+            Type runtimeType = assembly.GetType("$Runtime")
+                ?? throw new InvalidOperationException("Compiled worker has no $Runtime type.");
+            Type programType = assembly.GetType("$Program")
+                ?? throw new InvalidOperationException("Compiled worker has no $Program type.");
+            Type eventLoopType = assembly.GetType("$EventLoop")
+                ?? throw new InvalidOperationException("Compiled worker has no $EventLoop type.");
+
+            MethodInfo configureContext = runtimeType.GetMethod(
+                    "ConfigureWorkerContext", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new InvalidOperationException("Compiled worker runtime has no worker bootstrap.");
+            clearContext = runtimeType.GetMethod(
+                "ClearWorkerContext", BindingFlags.Public | BindingFlags.Static);
+            MethodInfo main = programType.GetMethod("Main", BindingFlags.Public | BindingFlags.Static)
+                ?? throw new InvalidOperationException("Compiled worker has no public static Main method.");
+
+            object eventLoop = eventLoopType.GetMethod(
+                    "GetInstance", BindingFlags.Public | BindingFlags.Static)!
+                .Invoke(null, null)!;
+            MethodInfo schedule = eventLoopType.GetMethod(
+                    "Schedule", BindingFlags.Public | BindingFlags.Instance)!
+                ?? throw new InvalidOperationException("Compiled worker event loop has no Schedule method.");
+            MethodInfo wake = eventLoopType.GetMethod(
+                    "Wake", BindingFlags.Public | BindingFlags.Instance)!
+                ?? throw new InvalidOperationException("Compiled worker event loop has no Wake method.");
+            MethodInfo loopRef = eventLoopType.GetMethod(
+                    "Ref", BindingFlags.Public | BindingFlags.Instance)!
+                ?? throw new InvalidOperationException("Compiled worker event loop has no Ref method.");
+            MethodInfo loopUnref = eventLoopType.GetMethod(
+                    "Unref", BindingFlags.Public | BindingFlags.Instance)!
+                ?? throw new InvalidOperationException("Compiled worker event loop has no Unref method.");
+            FieldInfo? cancelField = runtimeType.GetField(
+                "_cancelRequested", BindingFlags.Public | BindingFlags.Static);
+
+            configureContext.Invoke(null, [ThreadId, _workerData, _parentPort]);
+
+            _compiledWorkerSchedule = action => schedule.Invoke(eventLoop, [action]);
+            _compiledWorkerCancel = () => cancelField?.SetValue(null, true);
+            _compiledWorkerWake = () => wake.Invoke(eventLoop, null);
+            _compiledWorkerRef = () => loopRef.Invoke(eventLoop, null);
+            _compiledWorkerUnref = () => loopUnref.Invoke(eventLoop, null);
+
+            // Messages sent immediately after construction remain queued until the realm and
+            // its event loop exist, then are delivered on the worker thread.
+            ScheduleCompiledWorkerDelivery();
+            EnqueueOnlineToParent();
+            CompiledWorkerCompilationService.RecordExecution();
+
+            using IDisposable? stdoutScope = _stdout is not null
+                ? WorkerConsoleRouter.PushOut(new WorkerStreamWriter(this, _stdout))
+                : null;
+            using IDisposable? stderrScope = _stderr is not null
+                ? WorkerConsoleRouter.PushError(new WorkerStreamWriter(this, _stderr))
+                : null;
+            var priorSyncContext = SynchronizationContext.Current;
+            try
+            {
+                main.Invoke(null, null);
+            }
+            catch (TargetInvocationException tie) when (tie.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Capture(tie.InnerException).Throw();
+            }
+            finally
+            {
+                // $Program.Main installs an emitted event-loop SynchronizationContext.
+                // The host retains the Thread object after exit, so leaving that context on
+                // the thread would strongly root the entire collectible worker assembly.
+                SynchronizationContext.SetSynchronizationContext(priorSyncContext);
+            }
+        }
+        finally
+        {
+            _compiledWorkerSchedule = null;
+            _compiledWorkerCancel = null;
+            _compiledWorkerWake = null;
+            _compiledWorkerRef = null;
+            _compiledWorkerUnref = null;
+            _parentPort.RemoveAllListenersDirect();
+            try { clearContext?.Invoke(null, null); }
+            catch { /* teardown is best-effort; the entire realm is being unloaded */ }
+            loadContext.Unload();
+        }
+    }
+
+    /// <summary>
     /// Decides whether the worker script must be run in module mode. Mirrors the
     /// trigger the CLI uses for the parent (<c>Program.RunFile</c>): an
     /// <c>import</c>/<c>export</c> statement, a triple-slash path reference, or a
@@ -567,8 +711,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         env.Define("workerData", _workerData);
 
         // parentPort - MessagePort for communicating with parent
-        var parentPort = new WorkerParentPort(this);
-        env.Define("parentPort", parentPort);
+        env.Define("parentPort", _parentPort);
 
         // postMessage - convenience function (same as parentPort.postMessage)
         env.Define("postMessage", BuiltInMethod.CreateV2("postMessage", 1, 2, (_, _, args) =>
@@ -586,7 +729,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         // The very same parentPort instance is reused so a listener attached via the
         // import receives the messages WorkerMessageHandler delivers to the bare global.
         interpreter.WorkerThreadsContext =
-            new Interpreter.WorkerThreadsBindings(_workerData, parentPort, ThreadId);
+            new Interpreter.WorkerThreadsBindings(_workerData, _parentPort, ThreadId);
     }
 
     /// <summary>
@@ -641,12 +784,9 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
                 continue;
             }
 
-            var eventData = new SharpTSObject(new Dictionary<string, object?>
-            {
-                ["data"] = message.Data
-            });
-
-            EmitEventOnMainThread("message", eventData);
+            // Node's Worker EventEmitter passes the cloned value itself. The { data }
+            // wrapper belongs to browser MessageEvent APIs, not node:worker_threads.
+            EmitEventOnMainThread("message", message.Data);
         }
     }
 
@@ -792,6 +932,7 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
                 delivery = new SharpTSMessagePort.ClonedMessage(null, null, IsError: true);
             }
             _parentToWorkerQueue.Add(delivery);
+            ScheduleCompiledWorkerDelivery();
         }
         catch (InvalidOperationException)
         {
@@ -812,6 +953,14 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
         _isTerminated = true;
         _cts.Cancel();
         _parentToWorkerQueue.CompleteAdding();
+
+        // Compiled workers poll the emitted runtime's cooperative-cancellation flag at
+        // loop backedges and event-loop turns. Wake an idle loop so it observes the flag
+        // without waiting for the ordinary 100ms poll.
+        try { _compiledWorkerCancel?.Invoke(); }
+        catch { /* the collectible realm may be between teardown stages */ }
+        try { _compiledWorkerWake?.Invoke(); }
+        catch { /* best-effort wake during teardown */ }
 
         // Stop an idle/event-loop worker cooperatively at its next blocking point instead of
         // waiting out the 5s join (mirrors SharpTSClusterWorker Kill/Disconnect). A worker
@@ -1062,6 +1211,52 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     }
 
     /// <summary>
+    /// Schedules queued parent messages onto the compiled worker's emitted event loop.
+    /// Before bootstrap the queue is left intact; bootstrap calls this method again once
+    /// the realm scheduler exists.
+    /// </summary>
+    private void ScheduleCompiledWorkerDelivery()
+    {
+        if (!_runCompiledWorker || _parentToWorkerQueue.Count == 0 || _isTerminated)
+            return;
+
+        var schedule = _compiledWorkerSchedule;
+        if (schedule is null || Interlocked.Exchange(ref _compiledDeliveryScheduled, 1) != 0)
+            return;
+
+        try
+        {
+            schedule(DeliverMessagesToCompiledWorker);
+        }
+        catch
+        {
+            Volatile.Write(ref _compiledDeliveryScheduled, 0);
+            if (!_isTerminated)
+                throw;
+        }
+    }
+
+    private void DeliverMessagesToCompiledWorker()
+    {
+        try
+        {
+            while (_parentToWorkerQueue.TryTake(out var message))
+            {
+                if (message.IsError)
+                    _parentPort.EmitDirect("messageerror");
+                else
+                    _parentPort.EmitDirect("message", message.Data);
+            }
+        }
+        finally
+        {
+            Volatile.Write(ref _compiledDeliveryScheduled, 0);
+            if (_parentToWorkerQueue.Count > 0)
+                ScheduleCompiledWorkerDelivery();
+        }
+    }
+
+    /// <summary>
     /// Gets whether the worker is terminated.
     /// </summary>
     internal bool IsTerminated => _isTerminated;
@@ -1070,6 +1265,29 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
     /// Gets the cancellation token for the worker.
     /// </summary>
     internal CancellationToken CancellationToken => _cts.Token;
+
+    /// <summary>
+    /// Keeps the worker realm's own event loop alive for a listening parentPort.
+    /// This is distinct from the Worker's Ref on its parent's event loop.
+    /// </summary>
+    internal void RefWorkerEventLoop()
+    {
+        if (_runCompiledWorker)
+            _compiledWorkerRef?.Invoke();
+        else
+            _workerInterpreter?.Ref();
+    }
+
+    /// <summary>
+    /// Releases the parentPort keep-alive against the worker realm's event loop.
+    /// </summary>
+    internal void UnrefWorkerEventLoop()
+    {
+        if (_runCompiledWorker)
+            _compiledWorkerUnref?.Invoke();
+        else
+            _workerInterpreter?.Unref();
+    }
 
     public void Dispose()
     {
@@ -1090,6 +1308,10 @@ public class SharpTSWorker : SharpTSEventEmitter, IDisposable
 internal class WorkerParentPort : SharpTSEventEmitter
 {
     private readonly SharpTSWorker _worker;
+    private readonly object _stateLock = new();
+    private bool _started;
+    private bool _refed;
+    private bool _closed;
 
     // RuntimeCategory deliberately not overridden — see SharpTSMessagePort.
     // The EventEmitter category dispatched through a base-typed cast that
@@ -1103,7 +1325,66 @@ internal class WorkerParentPort : SharpTSEventEmitter
 
     public void PostMessage(object? message, SharpTSArray? transfer = null)
     {
+        if (_closed)
+            return;
         _worker.PostMessageToParent(message, transfer);
+    }
+
+    private void Start()
+    {
+        lock (_stateLock)
+        {
+            if (_closed || _started)
+                return;
+            _started = true;
+            _refed = true;
+            _worker.RefWorkerEventLoop();
+        }
+    }
+
+    private WorkerParentPort Ref()
+    {
+        lock (_stateLock)
+        {
+            if (_closed || _refed)
+                return this;
+            _refed = true;
+            _worker.RefWorkerEventLoop();
+            return this;
+        }
+    }
+
+    private void Unref()
+    {
+        lock (_stateLock)
+        {
+            if (!_refed)
+                return;
+            _refed = false;
+            _worker.UnrefWorkerEventLoop();
+        }
+    }
+
+    private void Close()
+    {
+        lock (_stateLock)
+        {
+            if (_closed)
+                return;
+            _closed = true;
+            if (_refed)
+            {
+                _refed = false;
+                _worker.UnrefWorkerEventLoop();
+            }
+        }
+        RemoveAllListenersDirect();
+    }
+
+    protected override void OnListenerAdded(string eventName)
+    {
+        if (eventName == "message")
+            Start();
     }
 
     public override object? GetMember(string name)
@@ -1117,6 +1398,27 @@ internal class WorkerParentPort : SharpTSEventEmitter
                 var transfer = args.Length > 1 ? args[1].ToObject() as SharpTSArray : null;
                 PostMessage(args[0].ToObject(), transfer);
                 return RuntimeValue.Null;
+            }),
+            "start" => BuiltInMethod.CreateV2("start", 0, (_, _, _) =>
+            {
+                Start();
+                return RuntimeValue.Null;
+            }),
+            "close" => BuiltInMethod.CreateV2("close", 0, (_, _, _) =>
+            {
+                Close();
+                return RuntimeValue.Null;
+            }),
+            "ref" => BuiltInMethod.CreateV2("ref", 0, (_, _, _) => RuntimeValue.FromObject(Ref())),
+            "unref" => BuiltInMethod.CreateV2("unref", 0, (_, _, _) =>
+            {
+                Unref();
+                return RuntimeValue.Null;
+            }),
+            "hasRef" => BuiltInMethod.CreateV2("hasRef", 0, (_, _, _) =>
+            {
+                lock (_stateLock)
+                    return RuntimeValue.FromBoolean(_refed);
             }),
 
             // Inherit EventEmitter methods
@@ -1184,11 +1486,7 @@ internal class WorkerMessageHandler
                     }
                     else
                     {
-                        var eventData = new SharpTSObject(new Dictionary<string, object?>
-                        {
-                            ["data"] = message.Data
-                        });
-                        emitMethod?.Call(_interpreter, ["message", eventData]);
+                        emitMethod?.Call(_interpreter, ["message", message.Data]);
                     }
                 }
             }

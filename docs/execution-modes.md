@@ -36,8 +36,10 @@ the same project discovery, external-reference configuration, TypeScript strictn
 settings, and module resolver used by compilation. `-r/--reference` and the nearest `sharpts.json`
 apply in this mode too.
 
-Interpretation is also used by the REPL and by some Node-compatible operations that start source
-workers. It ships no output artifact.
+Interpretation is also used by the REPL. An interpreted program's workers receive isolated
+interpreters; a compiled program runs eligible worker graphs as newly compiled IL in isolated
+collectible realms and retains a documented compatibility fallback for cross-realm features still
+being ported. See [Worker threads](worker-threads.md). Interpretation ships no output artifact.
 
 ## Compiled output
 

@@ -2763,6 +2763,8 @@ public class EmittedRuntime
     // worker_threads module methods
     public MethodBuilder WorkerThreadsIsMainThread { get; set; } = null!;
     public MethodBuilder WorkerThreadsThreadId { get; set; } = null!;
+    public MethodBuilder WorkerThreadsWorkerData { get; set; } = null!;
+    public MethodBuilder WorkerThreadsParentPort { get; set; } = null!;
     public MethodBuilder WorkerThreadsReceiveMessageOnPort { get; set; } = null!;
     public MethodBuilder WorkerThreadsGetEnvironmentData { get; set; } = null!;
     public MethodBuilder WorkerThreadsSetEnvironmentData { get; set; } = null!;
